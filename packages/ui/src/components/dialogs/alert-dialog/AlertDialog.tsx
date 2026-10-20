@@ -1,0 +1,98 @@
+import { AlertDialog as BaseAlertDialog } from '@base-ui/react/alert-dialog';
+import type { ReactNode } from 'react';
+import { cn } from '../../../lib/cn';
+
+export interface AlertDialogProps {
+  children: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  defaultOpen?: boolean;
+}
+
+export function AlertDialog({ children, open, onOpenChange, defaultOpen }: AlertDialogProps) {
+  return (
+    <BaseAlertDialog.Root open={open} onOpenChange={onOpenChange} defaultOpen={defaultOpen}>
+      {children}
+    </BaseAlertDialog.Root>
+  );
+}
+
+export interface AlertDialogTriggerProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function AlertDialogTrigger({ children, className }: AlertDialogTriggerProps) {
+  return <BaseAlertDialog.Trigger className={className}>{children}</BaseAlertDialog.Trigger>;
+}
+
+export interface AlertDialogContentProps {
+  title: string;
+  description?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  destructive?: boolean;
+  onConfirm?: () => void;
+  children?: ReactNode;
+  className?: string;
+}
+
+export function AlertDialogContent({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  destructive = false,
+  onConfirm,
+  children,
+  className,
+}: AlertDialogContentProps) {
+  return (
+    <BaseAlertDialog.Portal>
+      <BaseAlertDialog.Backdrop className="fixed inset-0 bg-scrim z-[var(--z-scrim)]" />
+      <BaseAlertDialog.Popup
+        aria-modal="true"
+        className={cn(
+          'fixed inset-0 m-auto h-fit w-[min(calc(100%-2rem),37rem)] max-h-[min(85vh,52rem)] overflow-auto',
+          'rounded-modal border border-border-subtle bg-surface p-8 pointer-coarse:p-6 shadow-modal z-[var(--z-dialog)]',
+          className,
+        )}
+      >
+        <BaseAlertDialog.Title className="type-section-title mb-5">
+          {title}
+        </BaseAlertDialog.Title>
+        {description ? (
+          <BaseAlertDialog.Description className="text-text-secondary mb-4">
+            {description}
+          </BaseAlertDialog.Description>
+        ) : null}
+        {children}
+        <div className="flex flex-wrap justify-end gap-3 mt-7">
+          <BaseAlertDialog.Close
+            className={cn(
+              'inline-flex items-center justify-center gap-2 rounded-control border font-[var(--font-weight-label)] leading-normal min-h-11 px-5 py-2.5',
+              'border-border-control bg-surface text-primary hover:bg-tint',
+              'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'pointer-coarse:min-h-12',
+            )}
+          >
+            {cancelLabel}
+          </BaseAlertDialog.Close>
+          <BaseAlertDialog.Close
+            onClick={onConfirm}
+            className={cn(
+              'inline-flex items-center justify-center gap-2 rounded-control border border-transparent font-[var(--font-weight-label)] leading-normal min-h-11 px-5 py-2.5',
+              destructive
+                ? 'btn-danger bg-danger text-surface hover:brightness-95'
+                : 'bg-primary text-on-primary hover:bg-primary-hover',
+              'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'pointer-coarse:min-h-12',
+            )}
+          >
+            {confirmLabel}
+          </BaseAlertDialog.Close>
+        </div>
+      </BaseAlertDialog.Popup>
+    </BaseAlertDialog.Portal>
+  );
+}

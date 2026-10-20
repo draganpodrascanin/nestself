@@ -2488,3 +2488,16 @@ After the app's dev server runs, the implementer must:
 5. Report the list of screenshots taken and what was changed because of them.
 
 Spec and quality reviewers for 3.1–3.3 must capture and view their own screenshots of at least the home screen at both viewports and state in `verified` what they saw. A review that did not look at the rendered page is incomplete.
+
+### Task 2.5: consolidate the patterns onto the shared components (runs alone, before Phase 3)
+
+Added after the Phase 2b reviews. Task 2.3 was allowed local stand-ins because Task 2.2 was in flight; both are now merged, so the stand-ins are replaced. Public props and behaviour of every exported component stay unchanged unless listed here; all existing tests and stories must still pass (update tests only where a label prop is added).
+
+**Files (modify only):** `packages/ui/src/components/patterns/booking-demo/*`, `patterns/event-request-summary/*`, `patterns/cost-breakdown/*`, `patterns/photo-figure/*`, `feedback/toast/*`, and the apps' consumers do not exist yet.
+
+- [ ] **BookingDemo** uses the shared `AlertDialog` from `../../dialogs` for the change-and-cancellation terms step instead of importing `@base-ui/react/alert-dialog` directly, and the shared `Avatar` from `../avatar` for the advisor card if it does not already. Behaviour unchanged: terms open from the review step, close returns focus to the terms control, confirm label keeps the amount, step headings keep receiving focus, done state still says nothing was created.
+- [ ] **EventRequestSummary** renders the shared `Table`/`Th`/`Td` from `../../tables` (default density) instead of a plain `<table>`; the four rows and the `labels` prop are unchanged.
+- [ ] **CostBreakdown** renders the shared `DataList` from `../../tables` when its API supports an emphasised last row and right-aligned tabular numbers (read `tables/data-list/DataList.tsx`); if it does not, extend `DataList` with the minimal props needed (for example `emphasiseLast?: boolean`, item `numeric?: boolean`) rather than keeping a parallel implementation. The price-clarity test keeps passing (three amounts, time zone, terms control, dev-mode consistency guard).
+- [ ] **PhotoFigure** renders a single `<figcaption>` that contains the caption text and, when present, the credit (`credit.photoBy` + link) in a `type-metadata text-text-secondary` span, instead of two figcaptions.
+- [ ] **Toast**: remove the duplicate `ToastData` interface in `useToast.ts` (import the type from `ToastProvider.tsx`), and add a required `labels: { dismiss: string }` prop to `ToastProvider` used for the close button's `aria-label` (no hard-coded English); update its tests and stories and the `renderWithTheme` helper if it mounts a `ToastProvider`.
+- [ ] Verify: `pnpm --filter @nestself/ui lint && pnpm --filter @nestself/ui typecheck && pnpm --filter @nestself/ui test && pnpm --filter @nestself/ui storybook:build` all pass; `grep -rn "@base-ui/react/alert-dialog" packages/ui/src/components/patterns` returns nothing; no `<table` or `<dl` element remains in `patterns/` outside the shared components.
