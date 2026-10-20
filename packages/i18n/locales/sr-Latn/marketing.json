@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "NestSelf — podrška za posao i sve oko njega",
+    "description": "Blagostanje na radnom mestu koje zaposlenima pruža pristup psihološkom, pravnom i finansijskom savetovanju kroz jasan doživljaj."
+  },
+  "nav": {
+    "findSupport": "Pronađi podršku",
+    "howItWorks": "Kako funkcioniše",
+    "lifeBeyondWork": "Život van posla",
+    "forEmployers": "Za poslodavce"
+  },
+  "hero": {
+    "eyebrow": "Blagostanje kroz radno mesto",
+    "titleLine1": "Podrška za posao.",
+    "titleLine2": "I sve oko njega.",
+    "lead": "Život ne staje u opis posla. Pronađi razgovor, praktičan savet i jasniji sledeći korak za stvari koje ti zaokupljaju misli.",
+    "ctaPrimary": "Istraži podršku",
+    "ctaSecondary": "Za tvoj tim",
+    "note": "Proveri pokrivenost pre nego što potvrdiš.",
+    "caption": "Svakodnevni trenuci koji čine ceo život.",
+    "altLead": "Porodica provodi vreme zajedno na travi u parku",
+    "altFriends": "Prijatelji razgovaraju i smeju se napolju",
+    "altCare": "Dve žene dele trenutak zajedno u dnevnoj sobi"
+  },
+  "support": {
+    "eyebrow": "Pronađi podršku",
+    "title": "Ne treba ti savršen razlog da počneš.",
+    "lead": "Težak nedelja. Pitanje koje stalno odlažeš. Odluka koja deluje veće kada si sam. Izaberi vrstu savetovanja koja pomaže.",
+    "alt": "Dva prijatelja razgovaraju na klupi napolju",
+    "psychological": {
+      "title": "Malo prostora za razgovor",
+      "body": "Psihološka podrška za ono što nosiš, na poslu ili van njega."
+    },
+    "legal": {
+      "title": "Jasniji put napred",
+      "body": "Pravno savetovanje da razumeš pitanje i opcije koje su pred tobom."
+    },
+    "financial": {
+      "title": "Više jasnoće oko novca",
+      "body": "Praktično finansijsko savetovanje za svakodnevne odluke i sledeći korak."
+    }
+  },
+  "how": {
+    "eyebrow": "Kako funkcioniše",
+    "title": "Tvoj prvi korak može biti mali.",
+    "lead": "Jasan put od izbora podrške do razumevanja šta sledi.",
+    "step1": {
+      "title": "Počni odatle gde jesi.",
+      "body": "Izaberi oblast podrške i vidi ko može pomoći. Ne moraš sve unapred da rešiš."
+    },
+    "step2": {
+      "title": "Pogledaj detalje.",
+      "body": "Proveri format, dostupnost i pokrivenost tvog poslodavca pre nego što napraviš izbor."
+    },
+    "step3": {
+      "title": "Napravi sledeći korak.",
+      "body": "Započni razgovor ili potvrdi termin, sa važnim detaljima pred sobom."
+    }
+  },
+  "life": {
+    "eyebrow": "Ljudi, pre zvanja",
+    "title": "Oko radnog dana postoji ceo život.",
+    "lead": "Odnosi, nove odgovornosti, obični dani i neočekivani obrti. Podrška treba da ostavi prostora za sve to.",
+    "alt1": "Starija osoba i dvoje dece razgovaraju na klupi u parku",
+    "caption1": "Vreme sa ljudima koji su važni.",
+    "alt2": "Roditelji i dete igraju se napolju u parku",
+    "caption2": "Prostor za male, lepe trenutke.",
+    "alt3": "Par priprema hranu zajedno u kuhinji",
+    "caption3": "Život u svom svakodnevnom obliku."
+  },
+  "employer": {
+    "eyebrow": "Za poslodavce",
+    "title": "Pogodnost na radnom mestu sa ljudima u centru.",
+    "body": "Spoji psihološko, pravno i finansijsko savetovanje u jedan razumljiv doživljaj zaposlenog, sa posebnim prostorom za upravljanje programom.",
+    "cta": "Istraži iskustvo poslodavca",
+    "alt": "Porodica zajedno napolju među jesenjim drvećem"
+  },
+  "privacy": {
+    "title": "Znaj šta deliš. Znaj ko može da vidi.",
+    "body": "Razumi kako su razgovori, termini i izveštavanje za poslodavca razdvojeni pre nego što podeliš nešto lično.",
+    "cta": "Pročitaj model privatnosti",
+    "dialogTitle": "Kako pristup treba da bude razdvojen",
+    "dialogLead": "Tvoja sopstvena istorija podrške, pristup dodeljenog stručnjaka i pregled programa poslodavca imaju različite svrhe.",
+    "rows": {
+      "employee": "Zaposleni: tvoji sopstveni razgovori i termini.",
+      "advisor": "Dodeljeni savetnik: opseg potreban za tvoj dodeljeni slučaj.",
+      "employer": "Poslodavac: administracija podobnosti, budžet programa i zaštićeno zbirno izveštavanje, bez sadržaja individualne podrške.",
+      "exceptional": "Izuzetni pristup: definisan, odobren i evidentiran operativni proces."
+    },
+    "disclaimer": "Ovo je predloženi model dizajna, a ne aktivno obaveštenje o privatnosti ili dokaz implementirane kontrole pristupa."
+  },
+  "footer": {
+    "photography": "Fotografski pravac",
+    "credits": "Zasluge za fotografije",
+    "designSystem": "Sistem dizajna"
+  },
+  "credits": {
+    "title": "Ljudi i fotografije",
+    "lead": "Pexels fotografije životnog stila korišćene kao konceptualne slike. Nijedna saglasnost, identitet kupca, profesionalna uloga ili podobnost porodice nije podrazumevana.",
+    "licence": "Pexels licenca"
+  },
+  "pages": {
+    "support": {
+      "title": "Pronađi podršku koja odgovara",
+      "lead": "Psihološko, pravno i finansijsko savetovanje dostupno kroz tvoje radno mesto."
+    },
+    "employers": {
+      "title": "Pogodnost osmišljena oko ljudi",
+      "lead": "Pruži svom timu pristup psihološkom, pravnom i finansijskom savetovanju na jednom mestu."
+    },
+    "privacyModel": {
+      "title": "Kako je pristup razdvojen",
+      "lead": "Razumi ko vidi šta pre nego što podeliš nešto lično."
+    },
+    "credits": {
+      "title": "Ljudi i fotografije"
+    }
+  },
+  "notFound": {
+    "title": "Ova stranica ne postoji",
+    "body": "Adresa se možda promenila ili je stranica uklonjena.",
+    "cta": "Nazad na početnu stranicu"
+  }
+}

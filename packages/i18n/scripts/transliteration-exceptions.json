@@ -1,0 +1,15 @@
+{
+  "protected": [
+    "NestSelf",
+    "Pexels",
+    "Phosphor",
+    "Onest",
+    "Europe/Belgrade",
+    "English"
+  ],
+  "wordOverrides": {
+    "injekcija": "инјекција",
+    "konjunktura": "конјунктура",
+    "nadživeti": "надживети"
+  }
+}

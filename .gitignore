@@ -46,3 +46,6 @@ e2e/playwright-report/
 # design deliverables kept out of git (the extracted package lives in docs/design-handoff)
 NestSelf_Web_Handoff.zip
 NestSelf_Design_System.html
+
+# e2e ad-hoc screenshots
+e2e/snaps/

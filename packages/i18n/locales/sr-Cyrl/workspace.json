@@ -1,0 +1,84 @@
+{
+  "home": {
+    "greeting": "Здраво, {{name}}",
+    "upcoming": "Твој следећи термин",
+    "noAppointments": "Нема предстојећих термина",
+    "supportAreas": "Области подршке",
+    "recentMessages": "Недавне поруке",
+    "noMessages": "Нема нових порука"
+  },
+  "categories": {
+    "psychological": "Психолошка подршка",
+    "legal": "Правно саветовање",
+    "financial": "Финансијско саветовање"
+  },
+  "appointment": {
+    "with": "Са {{name}}",
+    "date": "Датум",
+    "time": "Време",
+    "format": "Формат",
+    "online": "Онлајн",
+    "inPerson": "Уживо",
+    "status": "Статус",
+    "confirmed": "Потврђен",
+    "pending": "На чекању",
+    "cancelled": "Отказан",
+    "completed": "Завршен"
+  },
+  "channels": {
+    "title": "Канали",
+    "general": "Општи",
+    "wellbeing": "Благостање",
+    "announcements": "Обавештења",
+    "newMessage": "Нова порука",
+    "noChannels": "Нема доступних канала"
+  },
+  "booking": {
+    "step": "Корак {{current}} од {{total}}",
+    "chooseAdvisor": "Изабери саветника",
+    "chooseTime": "Изабери термин",
+    "review": "Прегледај свој термин",
+    "price": "Цена термина",
+    "employerCovers": "Послодавац покрива",
+    "youPay": "Ти плаћаш",
+    "timeZone": "Временска зона: {{zone}}",
+    "terms": "Услови измене и отказивања",
+    "confirmPay": "Потврди и плати {{amount}}",
+    "done": {
+      "title": "Пример потврђен",
+      "body": "У производу би потврда приказала време, цену и услове отказивања. Ниједан термин или плаћање није креирано овде."
+    }
+  },
+  "messages": {
+    "title": "Поруке",
+    "compose": "Нова порука",
+    "noConversations": "Још нема разговора",
+    "typeMessage": "Напиши поруку",
+    "encrypted": "Шифровано од краја до краја"
+  },
+  "polls": {
+    "title": "Анкете",
+    "active": "Активне",
+    "closed": "Затворене",
+    "vote": "Гласај",
+    "results": "Резултати",
+    "noPollsActive": "Нема активних анкета"
+  },
+  "settings": {
+    "title": "Подешавања",
+    "profile": "Профил",
+    "notifications": "Обавештења",
+    "language": "Језик",
+    "theme": "Тема",
+    "about": "О апликацији"
+  },
+  "hr": {
+    "programme": "Програм подршке",
+    "eligible": "Подобни запослени",
+    "fund": "Расположиви фонд",
+    "reserved": "Резервисано",
+    "activated": "Активирани налози",
+    "teamBreakdown": "Преглед по тиму",
+    "protectedNote": "Заштићено није исто што и нула."
+  }
+}

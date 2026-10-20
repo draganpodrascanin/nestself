@@ -1,0 +1,39 @@
+{
+  "experts": {
+    "title": "Experts",
+    "realPortraitNote": "Portraits appear only for approved experts; initials are used until then.",
+    "name": "Name",
+    "specialisation": "Specialisation",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "pending": "Pending"
+  },
+  "organizations": {
+    "title": "Organisations",
+    "name": "Name",
+    "plan": "Plan",
+    "employees": "Employees",
+    "status": "Status",
+    "active": "Active",
+    "suspended": "Suspended"
+  },
+  "tables": {
+    "id": "ID",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "view": "View details",
+    "noResults": "No results found",
+    "showing": "Showing {{from}} to {{to}} of {{total}}"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview",
+    "totalUsers": "Total users",
+    "activeExperts": "Active experts",
+    "totalOrganizations": "Total organisations"
+  }
+}

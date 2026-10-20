@@ -1,0 +1,39 @@
+{
+  "experts": {
+    "title": "Стручњаци",
+    "realPortraitNote": "Портрете имају само одобрени стручњаци; иницијали се користе до тада.",
+    "name": "Име",
+    "specialisation": "Специјализација",
+    "status": "Статус",
+    "active": "Активан",
+    "inactive": "Неактиван",
+    "pending": "На чекању"
+  },
+  "organizations": {
+    "title": "Организације",
+    "name": "Назив",
+    "plan": "План",
+    "employees": "Запослени",
+    "status": "Статус",
+    "active": "Активна",
+    "suspended": "Суспендована"
+  },
+  "tables": {
+    "id": "ИД",
+    "createdAt": "Креирано",
+    "updatedAt": "Ажурирано",
+    "actions": "Акције",
+    "edit": "Уреди",
+    "delete": "Обриши",
+    "view": "Прикажи детаље",
+    "noResults": "Нема резултата",
+    "showing": "Приказано {{from}} до {{to}} од {{total}}"
+  },
+  "dashboard": {
+    "title": "Контролна табла",
+    "overview": "Преглед",
+    "totalUsers": "Укупно корисника",
+    "activeExperts": "Активни стручњаци",
+    "totalOrganizations": "Укупно организација"
+  }
+}

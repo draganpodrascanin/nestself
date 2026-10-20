@@ -1,0 +1,36 @@
+{
+  "tabs": {
+    "home": "Почетна",
+    "support": "Подршка",
+    "appointments": "Термини",
+    "messages": "Поруке"
+  },
+  "home": {
+    "greeting": "Здраво, {{name}}",
+    "upcoming": "Твој следећи термин",
+    "quickActions": "Брзе акције"
+  },
+  "support": {
+    "title": "Пронађи подршку",
+    "categories": "Области подршке",
+    "psychological": "Психолошка",
+    "legal": "Правна",
+    "financial": "Финансијска"
+  },
+  "appointments": {
+    "title": "Термини",
+    "upcoming": "Предстојећи",
+    "past": "Прошли",
+    "noUpcoming": "Нема предстојећих термина",
+    "noPast": "Нема прошлих термина"
+  },
+  "messages": {
+    "title": "Поруке",
+    "noConversations": "Још нема разговора"
+  },
+  "notifications": {
+    "title": "Обавештења",
+    "noNotifications": "Нема нових обавештења",
+    "markAllRead": "Означи све као прочитано"
+  }
+}

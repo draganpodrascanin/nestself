@@ -1,0 +1,140 @@
+import { describe, expect, it } from 'vitest';
+import {
+  OrgRoleSchema,
+  SessionSchema,
+  canAccessHr,
+  canManageTeam,
+} from './roles.js';
+import { LocaleSchema, defaultLocale, locales } from './locale.js';
+import { SupportAreaSchema, supportAreaIcon, supportAreas } from './support.js';
+import { HealthResponseSchema } from './health.js';
+import { accessModel } from './access-model.js';
+
+describe('roles', () => {
+  it('parses a valid OrgRole', () => {
+    expect(OrgRoleSchema.parse('hr_admin')).toBe('hr_admin');
+    expect(OrgRoleSchema.parse('employee')).toBe('employee');
+    expect(OrgRoleSchema.parse('manager')).toBe('manager');
+  });
+
+  it('rejects an invalid OrgRole', () => {
+    expect(() => OrgRoleSchema.parse('owner')).toThrow();
+  });
+
+  it('SessionSchema defaults locale to en', () => {
+    const session = SessionSchema.parse({
+      userId: 'u1',
+      displayName: 'Test User',
+      initials: 'TU',
+      orgId: null,
+      orgRole: null,
+      platformRole: null,
+    });
+    expect(session.locale).toBe('en');
+  });
+
+  it('SessionSchema accepts a complete session', () => {
+    const session = SessionSchema.parse({
+      userId: 'u1',
+      displayName: 'Test User',
+      initials: 'TU',
+      orgId: 'org1',
+      orgRole: 'manager',
+      platformRole: 'expert',
+      locale: 'sr-Latn',
+    });
+    expect(session.orgRole).toBe('manager');
+    expect(session.locale).toBe('sr-Latn');
+  });
+
+  it('canAccessHr returns true only for hr_admin', () => {
+    expect(canAccessHr({ orgRole: 'hr_admin' })).toBe(true);
+    expect(canAccessHr({ orgRole: 'manager' })).toBe(false);
+    expect(canAccessHr({ orgRole: 'employee' })).toBe(false);
+    expect(canAccessHr({ orgRole: null })).toBe(false);
+  });
+
+  it('canManageTeam returns true for manager and hr_admin', () => {
+    expect(canManageTeam({ orgRole: 'manager' })).toBe(true);
+    expect(canManageTeam({ orgRole: 'hr_admin' })).toBe(true);
+    expect(canManageTeam({ orgRole: 'employee' })).toBe(false);
+    expect(canManageTeam({ orgRole: null })).toBe(false);
+  });
+});
+
+describe('locale', () => {
+  it('has three locales', () => {
+    expect(locales).toEqual(['en', 'sr-Latn', 'sr-Cyrl']);
+  });
+
+  it('defaults to en', () => {
+    expect(defaultLocale).toBe('en');
+  });
+
+  it('parses valid locales', () => {
+    expect(LocaleSchema.parse('en')).toBe('en');
+    expect(LocaleSchema.parse('sr-Latn')).toBe('sr-Latn');
+    expect(LocaleSchema.parse('sr-Cyrl')).toBe('sr-Cyrl');
+  });
+
+  it('rejects invalid locales', () => {
+    expect(() => LocaleSchema.parse('fr')).toThrow();
+  });
+});
+
+describe('support', () => {
+  it('has three support areas', () => {
+    expect(supportAreas).toEqual(['psychological', 'legal', 'financial']);
+  });
+
+  it('parses valid support area', () => {
+    expect(SupportAreaSchema.parse('psychological')).toBe('psychological');
+  });
+
+  it('maps support areas to icon tokens', () => {
+    expect(supportAreaIcon.psychological).toBe('mentalSupport');
+    expect(supportAreaIcon.legal).toBe('legal');
+    expect(supportAreaIcon.financial).toBe('financial');
+  });
+});
+
+describe('health', () => {
+  it('accepts a valid health response with info and details', () => {
+    const result = HealthResponseSchema.parse({
+      status: 'ok',
+      info: { database: { status: 'up' } },
+      details: {},
+    });
+    expect(result.status).toBe('ok');
+    expect(result.info).toEqual({ database: { status: 'up' } });
+    expect(result.details).toEqual({});
+  });
+
+  it('accepts a minimal health response', () => {
+    const result = HealthResponseSchema.parse({ status: 'ok' });
+    expect(result.status).toBe('ok');
+  });
+
+  it('accepts error status with error info', () => {
+    const result = HealthResponseSchema.parse({
+      status: 'error',
+      error: { database: { status: 'down', message: 'Connection refused' } },
+    });
+    expect(result.status).toBe('error');
+  });
+
+  it('rejects unknown status', () => {
+    expect(() => HealthResponseSchema.parse({ status: 'unknown' })).toThrow();
+  });
+});
+
+describe('access-model', () => {
+  it('has a note and rows', () => {
+    expect(accessModel.note).toBeDefined();
+    expect(accessModel.rows).toHaveLength(5);
+  });
+
+  it('first row is Conversation content', () => {
+    expect(accessModel.rows[0]?.data).toBe('Conversation content');
+  });
+});

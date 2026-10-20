@@ -1,0 +1,84 @@
+{
+  "home": {
+    "greeting": "Hello, {{name}}",
+    "upcoming": "Your next appointment",
+    "noAppointments": "No upcoming appointments",
+    "supportAreas": "Support areas",
+    "recentMessages": "Recent messages",
+    "noMessages": "No new messages"
+  },
+  "categories": {
+    "psychological": "Psychological support",
+    "legal": "Legal guidance",
+    "financial": "Financial guidance"
+  },
+  "appointment": {
+    "with": "With {{name}}",
+    "date": "Date",
+    "time": "Time",
+    "format": "Format",
+    "online": "Online",
+    "inPerson": "In person",
+    "status": "Status",
+    "confirmed": "Confirmed",
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "completed": "Completed"
+  },
+  "channels": {
+    "title": "Channels",
+    "general": "General",
+    "wellbeing": "Wellbeing",
+    "announcements": "Announcements",
+    "newMessage": "New message",
+    "noChannels": "No channels available"
+  },
+  "booking": {
+    "step": "Step {{current}} of {{total}}",
+    "chooseAdvisor": "Choose an advisor",
+    "chooseTime": "Choose a time",
+    "review": "Review your appointment",
+    "price": "Appointment price",
+    "employerCovers": "Employer covers",
+    "youPay": "You pay",
+    "timeZone": "Time zone: {{zone}}",
+    "terms": "Change and cancellation terms",
+    "confirmPay": "Confirm and pay {{amount}}",
+    "done": {
+      "title": "Example confirmed",
+      "body": "In the product, the confirmation would show the time, cost and cancellation details. No appointment or payment was created here."
+    }
+  },
+  "messages": {
+    "title": "Messages",
+    "compose": "New message",
+    "noConversations": "No conversations yet",
+    "typeMessage": "Type a message",
+    "encrypted": "End-to-end encrypted"
+  },
+  "polls": {
+    "title": "Polls",
+    "active": "Active",
+    "closed": "Closed",
+    "vote": "Vote",
+    "results": "Results",
+    "noPollsActive": "No active polls"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "notifications": "Notifications",
+    "language": "Language",
+    "theme": "Theme",
+    "about": "About"
+  },
+  "hr": {
+    "programme": "Support programme",
+    "eligible": "Eligible employees",
+    "fund": "Available fund",
+    "reserved": "Reserved",
+    "activated": "Activated accounts",
+    "teamBreakdown": "Team breakdown",
+    "protectedNote": "Protected is not the same as zero."
+  }
+}

@@ -12,7 +12,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check": "turbo run check",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build",
+    "verify": "pnpm lint && pnpm lint:root && pnpm typecheck && pnpm test && pnpm check && pnpm build",
     "e2e": "playwright test",
     "e2e:update": "playwright test --update-snapshots",
     "storybook": "pnpm --filter @nestself/ui dev",
@@ -22,12 +22,16 @@
     "format:check": "prettier --check .",
     "check:deps": "sherif",
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
-    "db:down": "docker compose -f docker/docker-compose.yml down"
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "lint:root": "eslint e2e playwright.config.ts eslint.config.js"
   },
   "devDependencies": {
     "@axe-core/playwright": "catalog:",
+    "@nestself/eslint-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
     "prettier": "catalog:",
     "prettier-plugin-tailwindcss": "catalog:",
     "sherif": "catalog:",
@@ -51,5 +55,6 @@
       "sharp",
       "@scarf/scarf"
     ]
-  }
+  },
+  "type": "module"
 }

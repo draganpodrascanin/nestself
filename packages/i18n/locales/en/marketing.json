@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "NestSelf — support for work, and everything around it",
+    "description": "Workplace wellbeing that gives employees access to psychological, legal and financial guidance through one clear experience."
+  },
+  "nav": {
+    "findSupport": "Find support",
+    "howItWorks": "How it works",
+    "lifeBeyondWork": "Life beyond work",
+    "forEmployers": "For employers"
+  },
+  "hero": {
+    "eyebrow": "Wellbeing through your workplace",
+    "titleLine1": "Support for work.",
+    "titleLine2": "And everything around it.",
+    "lead": "Life does not fit into a job description. Find a conversation, practical advice and a clearer next step for the things on your mind.",
+    "ctaPrimary": "Explore support",
+    "ctaSecondary": "For your team",
+    "note": "Know your coverage before you confirm.",
+    "caption": "The everyday moments that make up a whole life.",
+    "altLead": "A family spending time together on the grass in a park",
+    "altFriends": "Friends talking and laughing outdoors",
+    "altCare": "Two women sharing a moment together in a living room"
+  },
+  "support": {
+    "eyebrow": "Find support",
+    "title": "You do not need a perfect reason to start.",
+    "lead": "A difficult week. A question you keep putting off. A decision that feels bigger on your own. Choose the kind of guidance that helps.",
+    "alt": "Two friends having a conversation on a bench outdoors",
+    "psychological": {
+      "title": "A little space to talk",
+      "body": "Psychological support for what you are carrying, at work or outside it."
+    },
+    "legal": {
+      "title": "A clearer way through",
+      "body": "Legal guidance to understand a question and the options in front of you."
+    },
+    "financial": {
+      "title": "More clarity about money",
+      "body": "Practical financial guidance for everyday decisions and the next step."
+    }
+  },
+  "how": {
+    "eyebrow": "How it works",
+    "title": "Your first step can be small.",
+    "lead": "A clear path from choosing support to understanding what happens next.",
+    "step1": {
+      "title": "Start where you are.",
+      "body": "Choose a support area and see who can help. You do not have to work out everything first."
+    },
+    "step2": {
+      "title": "See the details.",
+      "body": "Check the format, availability and your workplace coverage before making a choice."
+    },
+    "step3": {
+      "title": "Take the next step.",
+      "body": "Begin a conversation or confirm an appointment, with the important details in front of you."
+    }
+  },
+  "life": {
+    "eyebrow": "People, before job titles",
+    "title": "There is a whole life around the workday.",
+    "lead": "Relationships, new responsibilities, ordinary days and unexpected turns. Support should leave room for all of it.",
+    "alt1": "An older adult and two children talking together on a park bench",
+    "caption1": "Time with the people who matter.",
+    "alt2": "Parents and a child playing outside in a park",
+    "caption2": "Room for small, good moments.",
+    "alt3": "A couple preparing food together in a kitchen",
+    "caption3": "Life, in its everyday shape."
+  },
+  "employer": {
+    "eyebrow": "For employers",
+    "title": "A workplace benefit with people at its centre.",
+    "body": "Bring psychological, legal and financial guidance into one understandable employee experience, with a separate space to manage the programme.",
+    "cta": "Explore the employer experience",
+    "alt": "A family together outdoors among autumn trees"
+  },
+  "privacy": {
+    "title": "Know what you share. Know who can see it.",
+    "body": "Understand how conversations, appointments and employer reporting are separated before you share something personal.",
+    "cta": "Read the privacy model",
+    "dialogTitle": "How access should be separated",
+    "dialogLead": "Your own support history, assigned professional access and the employer's programme view have different purposes.",
+    "rows": {
+      "employee": "Employee: your own conversations and appointments.",
+      "advisor": "Assigned advisor: the scope needed for your assigned case.",
+      "employer": "Employer: eligibility administration, programme budget and protected aggregate reporting, without individual support content.",
+      "exceptional": "Exceptional access: a defined, authorised and recorded operational process."
+    },
+    "disclaimer": "This is the proposed design model, not a live privacy notice or proof of implemented access control."
+  },
+  "footer": {
+    "photography": "Photography direction",
+    "credits": "Photo credits",
+    "designSystem": "Design system"
+  },
+  "credits": {
+    "title": "People and photographs",
+    "lead": "Pexels lifestyle photographs used as conceptual imagery. No endorsement, customer identity, professional role or family eligibility is implied.",
+    "licence": "Pexels licence"
+  },
+  "pages": {
+    "support": {
+      "title": "Find the support that fits",
+      "lead": "Psychological, legal and financial guidance available through your workplace."
+    },
+    "employers": {
+      "title": "A benefit built around people",
+      "lead": "Give your team access to psychological, legal and financial guidance in one place."
+    },
+    "privacyModel": {
+      "title": "How access is separated",
+      "lead": "Understand who sees what before you share something personal."
+    },
+    "credits": {
+      "title": "People and photographs"
+    }
+  },
+  "notFound": {
+    "title": "This page does not exist",
+    "body": "The address may have changed, or the page was removed.",
+    "cta": "Back to the homepage"
+  }
+}

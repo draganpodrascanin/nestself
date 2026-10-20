@@ -1,1 +1,1 @@
-{ "extends": "@nestself/typescript-config/base.json", "compilerOptions": { "types": ["node"] }, "include": ["src", "locales/**/*.json"] }
+{ "extends": "@nestself/typescript-config/base.json", "compilerOptions": { "types": ["node"] }, "include": ["src", "scripts", "locales/**/*.json"] }

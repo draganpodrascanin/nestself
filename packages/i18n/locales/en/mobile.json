@@ -1,0 +1,36 @@
+{
+  "tabs": {
+    "home": "Home",
+    "support": "Support",
+    "appointments": "Appointments",
+    "messages": "Messages"
+  },
+  "home": {
+    "greeting": "Hello, {{name}}",
+    "upcoming": "Your next appointment",
+    "quickActions": "Quick actions"
+  },
+  "support": {
+    "title": "Find support",
+    "categories": "Support areas",
+    "psychological": "Psychological",
+    "legal": "Legal",
+    "financial": "Financial"
+  },
+  "appointments": {
+    "title": "Appointments",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "noUpcoming": "No upcoming appointments",
+    "noPast": "No past appointments"
+  },
+  "messages": {
+    "title": "Messages",
+    "noConversations": "No conversations yet"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "noNotifications": "No new notifications",
+    "markAllRead": "Mark all as read"
+  }
+}
