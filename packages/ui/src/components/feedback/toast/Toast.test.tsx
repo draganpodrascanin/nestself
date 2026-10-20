@@ -14,11 +14,13 @@ function ToastTrigger({ title, description, tone }: { title: string; description
   );
 }
 
+const toastLabels = { dismiss: 'Dismiss' };
+
 describe('Toast', () => {
   it('shows a toast when triggered', async () => {
     const user = userEvent.setup();
     render(
-      <ToastProvider>
+      <ToastProvider labels={toastLabels}>
         <ToastTrigger title="Saved" description="Changes saved." />
       </ToastProvider>,
     );
@@ -30,7 +32,7 @@ describe('Toast', () => {
   it('can be dismissed via Escape key', async () => {
     const user = userEvent.setup();
     render(
-      <ToastProvider>
+      <ToastProvider labels={toastLabels}>
         <ToastTrigger title="Dismissable toast" />
       </ToastProvider>,
     );
@@ -41,7 +43,7 @@ describe('Toast', () => {
 
   it('passes axe a11y check', async () => {
     const { container } = render(
-      <ToastProvider>
+      <ToastProvider labels={toastLabels}>
         <ToastTrigger title="Accessible toast" />
       </ToastProvider>,
     );

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { AlertDialog } from '@base-ui/react/alert-dialog';
 import { cn } from '../../../lib/cn';
+import { AlertDialog, AlertDialogContent } from '../../dialogs/alert-dialog';
 import { Avatar } from '../avatar/Avatar';
 import { TimeSlotGrid } from '../time-slot-grid/TimeSlotGrid';
 import { CostBreakdown } from '../cost-breakdown/CostBreakdown';
@@ -243,46 +243,14 @@ export function BookingDemo({
           </div>
 
           {/* Terms AlertDialog */}
-          <AlertDialog.Root open={termsOpen} onOpenChange={setTermsOpen}>
-            <AlertDialog.Portal>
-              <AlertDialog.Backdrop className="fixed inset-0 bg-scrim z-50" />
-              <AlertDialog.Popup
-                className={cn(
-                  'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-                  'w-[min(calc(100%-2rem),37rem)] max-h-[min(85vh,52rem)] overflow-auto',
-                  'p-8 border border-border-subtle rounded-modal bg-surface text-text shadow-modal',
-                )}
-              >
-                <AlertDialog.Title className="type-section-title mb-5">
-                  {labels.termsTitle}
-                </AlertDialog.Title>
-                <AlertDialog.Description className="text-text-secondary type-body">
-                  {labels.termsBody}
-                </AlertDialog.Description>
-                <div className="flex justify-end gap-3 flex-wrap mt-7">
-                  <AlertDialog.Close
-                    className={cn(
-                      'inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-control border border-border-control bg-surface text-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
-                      'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-                      'hover:bg-tint',
-                      'pointer-coarse:min-h-12',
-                    )}
-                  >
-                    {labels.termsCancel}
-                  </AlertDialog.Close>
-                  <AlertDialog.Close
-                    className={cn(
-                      'inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-control border border-transparent bg-primary text-on-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
-                      'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-                      'pointer-coarse:min-h-12',
-                    )}
-                  >
-                    {labels.termsAccept}
-                  </AlertDialog.Close>
-                </div>
-              </AlertDialog.Popup>
-            </AlertDialog.Portal>
-          </AlertDialog.Root>
+          <AlertDialog open={termsOpen} onOpenChange={setTermsOpen}>
+            <AlertDialogContent
+              title={labels.termsTitle}
+              description={labels.termsBody}
+              confirmLabel={labels.termsAccept}
+              cancelLabel={labels.termsCancel}
+            />
+          </AlertDialog>
         </div>
       ) : null}
     </div>

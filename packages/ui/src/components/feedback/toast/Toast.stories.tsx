@@ -30,7 +30,7 @@ function ToastDemo() {
 
 const meta: Meta = {
   title: 'Feedback/Toast',
-  decorators: [(Story) => <ToastProvider><Story /></ToastProvider>],
+  decorators: [(Story) => <ToastProvider labels={{ dismiss: 'Dismiss' }}><Story /></ToastProvider>],
 };
 export default meta;
 

@@ -82,22 +82,22 @@ export function PhotoFigure({
           className="object-cover"
         />
       </picture>
-      {caption ? (
+      {caption || credit ? (
         <figcaption className="mt-3 type-metadata text-text-secondary">
           {caption}
-        </figcaption>
-      ) : null}
-      {credit ? (
-        <figcaption className="mt-1 type-metadata text-text-secondary">
-          {credit.photoBy}{' '}
-          <a
-            href={credit.href}
-            className="text-primary underline underline-offset-[0.2em]"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {credit.author}
-          </a>
+          {credit ? (
+            <span className={cn('type-metadata text-text-secondary', caption && 'block mt-1')}>
+              {credit.photoBy}{' '}
+              <a
+                href={credit.href}
+                className="text-primary underline underline-offset-[0.2em]"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {credit.author}
+              </a>
+            </span>
+          ) : null}
         </figcaption>
       ) : null}
     </figure>

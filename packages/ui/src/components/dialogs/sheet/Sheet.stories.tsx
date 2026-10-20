@@ -23,3 +23,17 @@ export const States: StoryObj = {
     </Sheet>
   ),
 };
+
+/** Open by default so the bottom sheet, scrim and safe-area padding are visible in the catalogue. */
+export const Open: StoryObj = {
+  render: () => (
+    <Sheet defaultOpen>
+      <SheetTrigger>
+        <button className="rounded-control border border-border-control px-4 py-2">Open sheet</button>
+      </SheetTrigger>
+      <SheetContent title="Who can see this?" description="Your own conversations and appointments are yours. Your employer sees eligibility administration, programme budget and protected aggregate reporting, never individual support content.">
+        <p>Sheet body content goes here.</p>
+      </SheetContent>
+    </Sheet>
+  ),
+};

@@ -1,9 +1,5 @@
 import { Toast as BaseToast } from '@base-ui/react/toast';
-import type { ToastTone } from './ToastProvider';
-
-export interface ToastData {
-  tone?: ToastTone;
-}
+import type { ToastData, ToastTone } from './ToastProvider';
 
 /**
  * Returns `{ add }` to queue a toast from inside a `<ToastProvider>`.

@@ -8,16 +8,21 @@ export interface ToastData {
   tone?: ToastTone;
 }
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export interface ToastProviderProps {
+  children: React.ReactNode;
+  labels: { dismiss: string };
+}
+
+export function ToastProvider({ children, labels }: ToastProviderProps) {
   return (
     <BaseToast.Provider>
       {children}
-      <ToastViewport />
+      <ToastViewport dismissLabel={labels.dismiss} />
     </BaseToast.Provider>
   );
 }
 
-function ToastViewport() {
+function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
   const manager = BaseToast.useToastManager<ToastData>();
   return (
     <BaseToast.Viewport
@@ -45,7 +50,7 @@ function ToastViewport() {
               'text-on-primary opacity-70 hover:opacity-100',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             )}
-            aria-label="Dismiss"
+            aria-label={dismissLabel}
           >
             <X size={16} aria-hidden />
           </BaseToast.Close>

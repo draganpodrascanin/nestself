@@ -73,7 +73,7 @@ export function StatusBlock({
       ) : (
         <>
           {IconComponent ? (
-            <div className="text-primary mb-4">
+            <div className="text-primary mb-4 flex justify-center">
               <Icon icon={IconComponent} size={48} />
             </div>
           ) : null}

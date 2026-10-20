@@ -1,4 +1,5 @@
 import { cn } from '../../../lib/cn';
+import { Table, Th, Td } from '../../tables/table';
 
 export interface EventRequest {
   participants: string;
@@ -39,52 +40,44 @@ export function EventRequestSummary({ request, labels, className }: EventRequest
   ];
 
   return (
-    <div className={cn('overflow-x-auto border border-border-subtle rounded-card bg-surface mt-6', className)}>
-      <table className="w-full border-collapse text-left min-w-[42rem] type-table">
-        <thead>
-          <tr>
-            <th className="h-14 px-4 py-3 bg-tint font-[var(--font-weight-label)] border-b border-border-subtle">
-              {labels.field}
-            </th>
-            <th className="h-14 px-4 py-3 bg-tint font-[var(--font-weight-label)] border-b border-border-subtle">
-              {labels.example}
-            </th>
-            <th className="h-14 px-4 py-3 bg-tint font-[var(--font-weight-label)] border-b border-border-subtle">
-              {labels.required}
-            </th>
+    <Table className={cn('mt-6', className)}>
+      <thead>
+        <tr>
+          <Th className="bg-tint border-b border-border-subtle">{labels.field}</Th>
+          <Th className="bg-tint border-b border-border-subtle">{labels.example}</Th>
+          <Th className="bg-tint border-b border-border-subtle">{labels.required}</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={row.field}>
+            <Td
+              className={cn(
+                'align-top',
+                index < rows.length - 1 && 'border-b border-border-subtle',
+              )}
+            >
+              {row.field}
+            </Td>
+            <Td
+              className={cn(
+                'align-top',
+                index < rows.length - 1 && 'border-b border-border-subtle',
+              )}
+            >
+              {row.example}
+            </Td>
+            <Td
+              className={cn(
+                'align-top',
+                index < rows.length - 1 && 'border-b border-border-subtle',
+              )}
+            >
+              {row.required}
+            </Td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.field}>
-              <td
-                className={cn(
-                  'h-14 px-4 py-3 align-top',
-                  index < rows.length - 1 && 'border-b border-border-subtle',
-                )}
-              >
-                {row.field}
-              </td>
-              <td
-                className={cn(
-                  'h-14 px-4 py-3 align-top',
-                  index < rows.length - 1 && 'border-b border-border-subtle',
-                )}
-              >
-                {row.example}
-              </td>
-              <td
-                className={cn(
-                  'h-14 px-4 py-3 align-top',
-                  index < rows.length - 1 && 'border-b border-border-subtle',
-                )}
-              >
-                {row.required}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </Table>
   );
 }

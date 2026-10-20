@@ -1,4 +1,5 @@
 import { cn } from '../../../lib/cn';
+import { DataList } from '../../tables/data-list';
 
 export interface CostBreakdownRows {
   price: number;
@@ -45,23 +46,14 @@ export function CostBreakdown({
 
   return (
     <div className={cn('mt-6', className)}>
-      <dl>
-        {/* Price row */}
-        <div className="flex items-baseline justify-between gap-4 py-[0.55rem]">
-          <dt className="text-text-secondary">{labels.price}</dt>
-          <dd className="m-0 tabular-nums">{formatCurrency(rows.price)}</dd>
-        </div>
-        {/* Employer covers row */}
-        <div className="flex items-baseline justify-between gap-4 py-[0.55rem]">
-          <dt className="text-text-secondary">{labels.employerCovers}</dt>
-          <dd className="m-0 tabular-nums">{formatCurrency(rows.employerCovers)}</dd>
-        </div>
-        {/* You pay row (emphasised) */}
-        <div className="flex items-baseline justify-between gap-4 py-[0.55rem] border-t border-border-subtle mt-2 pt-[0.9rem] font-[var(--font-weight-label)]">
-          <dt className="text-text">{labels.youPay}</dt>
-          <dd className="m-0 tabular-nums">{formatCurrency(rows.youPay)}</dd>
-        </div>
-      </dl>
+      <DataList
+        items={[
+          { term: labels.price, description: formatCurrency(rows.price) },
+          { term: labels.employerCovers, description: formatCurrency(rows.employerCovers) },
+        ]}
+        total={{ term: labels.youPay, description: formatCurrency(rows.youPay) }}
+        className="mt-0"
+      />
       <p className="mt-4 type-metadata text-text-secondary">{labels.timeZone}: {timeZone}</p>
       <button
         type="button"

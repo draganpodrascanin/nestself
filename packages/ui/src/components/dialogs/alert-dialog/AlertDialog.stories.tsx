@@ -35,3 +35,21 @@ export const States: StoryObj = {
     </div>
   ),
 };
+
+/** Open by default so the confirmation layout is visible in the catalogue. */
+export const Open: StoryObj = {
+  render: () => (
+    <AlertDialog defaultOpen>
+      <AlertDialogTrigger>
+        <button className="rounded-control border border-border-control px-4 py-2">Cancel appointment</button>
+      </AlertDialogTrigger>
+      <AlertDialogContent
+        title="Cancel this appointment?"
+        description="Cancelling frees this time. Review the cancellation terms that apply to your coverage before continuing."
+        confirmLabel="Cancel example"
+        cancelLabel="Keep appointment"
+        destructive
+      />
+    </AlertDialog>
+  ),
+};

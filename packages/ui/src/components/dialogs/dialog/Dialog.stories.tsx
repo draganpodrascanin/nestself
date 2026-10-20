@@ -22,3 +22,20 @@ export const States: StoryObj = {
     </Dialog>
   ),
 };
+
+/** Open by default so the modal, scrim, close control and actions row are visible in the catalogue. */
+export const Open: StoryObj = {
+  render: () => (
+    <Dialog defaultOpen>
+      <DialogTrigger>
+        <button className="rounded-control border border-border-control px-4 py-2">Open Dialog</button>
+      </DialogTrigger>
+      <DialogContent title="Cancel this appointment?" description="Cancelling frees this time. Review the cancellation terms that apply to your coverage before continuing.">
+        <DialogActions>
+          <button className="rounded-control border border-border-control px-4 py-2">Keep appointment</button>
+          <button className="rounded-control border border-transparent bg-primary text-on-primary px-4 py-2">Cancel example</button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  ),
+};
