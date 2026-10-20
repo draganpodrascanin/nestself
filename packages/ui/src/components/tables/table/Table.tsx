@@ -19,10 +19,13 @@ export function Table({
   return (
     <div
       className={cn('overflow-x-auto rounded-card border border-border-subtle bg-surface', className)}
-      /* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */
-      tabIndex={0}
-      role="region"
-      aria-label={caption}
+      {...(caption
+        ? {
+            role: 'region' as const,
+            tabIndex: 0,
+            'aria-label': caption,
+          }
+        : undefined)}
     >
       <table className="w-full type-table" data-density={density}>
         {caption ? <caption className="sr-only">{caption}</caption> : null}

@@ -1,2 +1,8 @@
-export { EventRequestSummary } from './EventRequestSummary';
-export type { EventRequestSummaryProps, EventRequest, EventRequestSummaryLabels } from './EventRequestSummary';
+export { EventRequestSummary, eventRequestRows } from './EventRequestSummary';
+export type {
+  EventRequestSummaryProps,
+  EventRequestSummaryLabels,
+  EventRequest,
+  EventRequestRow,
+  EventRequestRowLabels,
+} from './EventRequestSummary';

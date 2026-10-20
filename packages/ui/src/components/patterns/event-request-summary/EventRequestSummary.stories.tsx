@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { EventRequestSummary } from './EventRequestSummary';
+import { EventRequestSummary, eventRequestRows } from './EventRequestSummary';
 
 const meta: Meta<typeof EventRequestSummary> = {
   title: 'Patterns/EventRequestSummary',
@@ -7,28 +7,36 @@ const meta: Meta<typeof EventRequestSummary> = {
 };
 export default meta;
 
+const sampleRequest = {
+  participants: 25,
+  location: 'Novi Sad',
+  options: ['bowling', 'karting', 'outdoor day'] as const,
+};
+
+const rowLabels = {
+  participantsLocation: 'Participants / location',
+  datesBudget: 'Dates / budget',
+  options: 'Options',
+  workflow: 'Workflow',
+  exampleDatesBudget: 'Chosen range / amount and currency',
+  exampleWorkflow: 'Requested → offers ready → selected',
+  compareParticipantsLocation: 'Capacity, transport and accessibility',
+  compareDatesBudget: 'Included items, availability and conditions',
+  compareOptions: 'Price, duration, venue, food and cancellation terms',
+  compareWorkflow: 'Owner, status and a real response deadline',
+};
+
+const columnLabels = {
+  field: 'Request field',
+  example: 'Example',
+  comparison: 'Required comparison',
+};
+
 export const Default: StoryObj = {
   render: () => (
     <EventRequestSummary
-      request={{
-        participants: '15 people',
-        location: 'Belgrade, Serbia',
-        dates: 'March 2027',
-        budget: '€2,000',
-        options: ['Cooking class', 'Escape room'],
-        workflow: ['Request', 'Approve', 'Book'],
-      }}
-      labels={{
-        field: 'Request field',
-        example: 'Example',
-        required: 'Required',
-        participants: 'Participants',
-        location: 'Location',
-        dates: 'Dates',
-        budget: 'Budget',
-        yes: 'Yes',
-        no: 'No',
-      }}
+      rows={eventRequestRows(sampleRequest, rowLabels)}
+      labels={columnLabels}
     />
   ),
 };
@@ -37,25 +45,11 @@ export const States: StoryObj = {
   render: () => (
     <div className="flex flex-col gap-8">
       <EventRequestSummary
-        request={{
-          participants: '15 people',
-          location: 'Belgrade, Serbia',
-          dates: 'March 2027',
-          budget: '€2,000',
-          options: ['Cooking class'],
-          workflow: ['Request', 'Approve', 'Book'],
-        }}
-        labels={{
-          field: 'Request field',
-          example: 'Example',
-          required: 'Required',
-          participants: 'Participants',
-          location: 'Location',
-          dates: 'Dates',
-          budget: 'Budget',
-          yes: 'Yes',
-          no: 'No',
-        }}
+        rows={eventRequestRows(
+          { participants: 10, location: 'Belgrade', options: ['cooking class'] },
+          rowLabels,
+        )}
+        labels={columnLabels}
       />
     </div>
   ),

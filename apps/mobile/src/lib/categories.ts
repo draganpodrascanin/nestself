@@ -1,4 +1,13 @@
-import { Books, CalendarCheck, ChatCircleText, Heart, LockKey, Scales, UsersThree, Wallet } from 'phosphor-react-native';
+import {
+  Books,
+  CalendarCheck,
+  ChatCircleText,
+  Heart,
+  LockKey,
+  Scales,
+  UsersThree,
+  Wallet,
+} from 'phosphor-react-native';
 import type { ComponentType } from 'react';
 import type { IconProps as PhosphorIconProps } from 'phosphor-react-native';
 import type { CategoryKey } from '@nestself/ui-native';

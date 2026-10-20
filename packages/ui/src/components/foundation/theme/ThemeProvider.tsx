@@ -5,14 +5,10 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import type { ReactNode } from 'react';
-import {
-  DEFAULT_THEME,
-  palettes,
-  modes,
-  fonts,
-} from '@nestself/tokens';
+import { DEFAULT_THEME, palettes, modes, fonts } from '@nestself/tokens';
 import type { Palette, Mode, FontId, ThemeSelection } from '@nestself/tokens';
 import { applyTheme, persistTheme, loadPersistedTheme } from '@nestself/tokens/theme';
 
@@ -34,7 +30,9 @@ export interface ThemeProviderProps {
 
 export function ThemeProvider({ initial, storage, children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeSelection>(() => {
-    const persisted = loadPersistedTheme(storage ?? (typeof localStorage !== 'undefined' ? localStorage : { getItem: () => null }));
+    const persisted = loadPersistedTheme(
+      storage ?? (typeof localStorage !== 'undefined' ? localStorage : { getItem: () => null }),
+    );
     return {
       palette: initial?.palette ?? persisted?.palette ?? DEFAULT_THEME.palette,
       mode: initial?.mode ?? persisted?.mode ?? DEFAULT_THEME.mode,
@@ -78,9 +76,7 @@ export function ThemeProvider({ initial, storage, children }: ThemeProviderProps
     [theme, setPalette, setMode, setFont, toggleMode],
   );
 
-  return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
@@ -101,6 +97,13 @@ export interface ThemeStudioProps {
   };
 }
 
+function subscribeNever() {
+  return () => {};
+}
+function readWebdriver() {
+  return typeof navigator !== 'undefined' && navigator.webdriver === true;
+}
+
 /**
  * Dev-only floating panel for switching palette, mode and font.
  *
@@ -112,25 +115,22 @@ export interface ThemeStudioProps {
  */
 export function ThemeStudio({ enabled, labels }: ThemeStudioProps) {
   const { theme, setPalette, setMode, setFont } = useTheme();
+  // Hydration-safe automation check: the server snapshot is always false, the client reads navigator.webdriver.
+  const automated = useSyncExternalStore(subscribeNever, readWebdriver, () => false);
 
-  if (!enabled) return null;
-  if (typeof navigator !== 'undefined' && navigator.webdriver === true) return null;
+  if (!enabled || automated) return null;
 
   return (
-    <details
-      className="fixed bottom-4 right-4 z-[var(--z-sticky)] rounded-control bg-surface p-4 shadow-menu border border-border-control"
-    >
-      <summary className="cursor-pointer type-label">
-        Theme Studio
-      </summary>
+    <details className="bottom-4 right-4 p-4 fixed z-[var(--z-sticky)] rounded-control border border-border-control bg-surface shadow-menu">
+      <summary className="cursor-pointer type-label">Theme Studio</summary>
       <h2 className="sr-only">{labels?.heading ?? 'Theme Studio'}</h2>
-      <div className="mt-3 flex flex-col gap-3">
-        <label className="flex flex-col gap-1 type-metadata">
+      <div className="mt-3 gap-3 flex flex-col">
+        <label className="gap-1 flex flex-col type-metadata">
           {labels?.palette ?? 'Palette'}
           <select
             value={theme.palette}
             onChange={(e) => setPalette(e.target.value as Palette)}
-            className="rounded-control border border-border-control bg-surface px-2 py-1"
+            className="px-2 py-1 rounded-control border border-border-control bg-surface"
           >
             {palettes.map((p) => (
               <option key={p} value={p}>
@@ -139,12 +139,12 @@ export function ThemeStudio({ enabled, labels }: ThemeStudioProps) {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 type-metadata">
+        <label className="gap-1 flex flex-col type-metadata">
           {labels?.mode ?? 'Mode'}
           <select
             value={theme.mode}
             onChange={(e) => setMode(e.target.value as Mode)}
-            className="rounded-control border border-border-control bg-surface px-2 py-1"
+            className="px-2 py-1 rounded-control border border-border-control bg-surface"
           >
             {modes.map((m) => (
               <option key={m} value={m}>
@@ -153,12 +153,12 @@ export function ThemeStudio({ enabled, labels }: ThemeStudioProps) {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 type-metadata">
+        <label className="gap-1 flex flex-col type-metadata">
           {labels?.font ?? 'Font'}
           <select
             value={theme.font}
             onChange={(e) => setFont(e.target.value as FontId)}
-            className="rounded-control border border-border-control bg-surface px-2 py-1"
+            className="px-2 py-1 rounded-control border border-border-control bg-surface"
           >
             {fonts.map((f) => (
               <option key={f} value={f}>

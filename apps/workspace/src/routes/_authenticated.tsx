@@ -64,20 +64,20 @@ function AuthenticatedLayout() {
     { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
   ];
 
-  const renderNavItemList = (items: typeof allNavItems) =>
+  const renderNavItemList = (
+    items: typeof allNavItems,
+    variant: 'sidebar' | 'bottom' = 'sidebar',
+  ) =>
     items.map((item) => (
       <NavItem
         key={item.to}
+        variant={variant}
         href={item.to}
         icon={item.icon}
         label={item.label}
         active={item.to === '/' ? matches[matches.length - 1]?.pathname === '/' : isActive(item.to)}
         render={(props) => (
-          <Link
-            to={item.to}
-            className={props.className}
-            aria-current={props['aria-current']}
-          >
+          <Link to={item.to} className={props.className} aria-current={props['aria-current']}>
             {props.children}
           </Link>
         )}
@@ -85,22 +85,22 @@ function AuthenticatedLayout() {
     ));
 
   const sidebar = (
-    <nav aria-label={t('nav.menu')} className="flex flex-col gap-1 p-4">
-      <p className="type-label text-primary px-2 py-3">NestSelf</p>
+    <nav aria-label={t('nav.menu')} className="gap-1 p-4 flex flex-col">
+      <p className="px-2 py-3 type-label text-primary">NestSelf</p>
       {renderNavItemList(allNavItems)}
     </nav>
   );
 
   const topbar = (
-    <div className="flex items-center justify-between w-full">
+    <div className="flex w-full items-center justify-between">
       <p className="type-label text-primary">NestSelf</p>
       <ApiStatus />
     </div>
   );
 
   const bottomBar = (
-    <nav aria-label={t('nav.menu')} className="flex justify-around items-center py-1">
-      {renderNavItemList(bottomBarItems)}
+    <nav aria-label={t('nav.menu')} className="py-1 flex items-center justify-around">
+      {renderNavItemList(bottomBarItems, 'bottom')}
     </nav>
   );
 

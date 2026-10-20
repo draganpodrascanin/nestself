@@ -1,13 +1,6 @@
 import { createFileRoute, Outlet, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import {
-  House,
-  Users,
-  Buildings,
-  Article,
-  CalendarCheck,
-  GearSix,
-} from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { ApiStatus } from './__root';
 
@@ -15,7 +8,7 @@ function PermissionBlock() {
   const { t } = useTranslation('common');
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-6">
+    <div className="p-6 flex min-h-screen items-center justify-center">
       <StatusBlock
         state="permission"
         title={t('state.permission.title')}
@@ -46,7 +39,7 @@ function AuthenticatedLayout() {
     <AppShell
       maxWidth="hr"
       sidebar={
-        <nav className="flex flex-col gap-1 p-4" aria-label="Admin navigation">
+        <nav className="gap-1 p-4 flex flex-col" aria-label="Admin navigation">
           {navItems.map((item) => (
             <NavItem
               key={item.to}
@@ -68,16 +61,17 @@ function AuthenticatedLayout() {
         </nav>
       }
       topbar={
-        <div className="flex items-center justify-between w-full">
+        <div className="flex w-full items-center justify-between">
           <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
           <ApiStatus />
         </div>
       }
       bottomBar={
-        <nav className="flex items-center justify-around h-full" aria-label="Admin navigation">
+        <nav className="flex h-full items-center justify-around" aria-label={t('common:nav.menu')}>
           {navItems.slice(0, 4).map((item) => (
             <NavItem
               key={item.to}
+              variant="bottom"
               href={item.to}
               icon={item.icon}
               label={item.label}

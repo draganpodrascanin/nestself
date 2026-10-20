@@ -9,8 +9,10 @@ import {
   Th,
   Td,
   ProtectedValue,
+  EventRequestSummary,
+  eventRequestRows,
 } from '@nestself/ui';
-import { SAMPLE_HR_PROGRAMME } from '@nestself/sample-data';
+import { SAMPLE_HR_PROGRAMME, SAMPLE_EVENT_REQUEST } from '@nestself/sample-data';
 import { formatCurrency } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 
@@ -124,37 +126,25 @@ function HrIndexPage() {
         <Text className="text-text-secondary">
           {t('workspace:hr.teamExperiencesLead')}
         </Text>
-        <Table density="default">
-          <thead>
-            <tr>
-              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.field')}</Th>
-              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.example')}</Th>
-              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.comparison')}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <Td className="border-b border-border-subtle">{t('workspace:events.participantsLocation')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.exampleParticipantsLocation')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.compareParticipantsLocation')}</Td>
-            </tr>
-            <tr>
-              <Td className="border-b border-border-subtle">{t('workspace:events.datesBudget')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.exampleDatesBudget')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.compareDatesBudget')}</Td>
-            </tr>
-            <tr>
-              <Td className="border-b border-border-subtle">{t('workspace:events.options')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.exampleOptions')}</Td>
-              <Td className="border-b border-border-subtle">{t('workspace:events.compareOptions')}</Td>
-            </tr>
-            <tr>
-              <Td>{t('workspace:events.workflow')}</Td>
-              <Td>{t('workspace:events.exampleWorkflow')}</Td>
-              <Td>{t('workspace:events.compareWorkflow')}</Td>
-            </tr>
-          </tbody>
-        </Table>
+        <EventRequestSummary
+          rows={eventRequestRows(SAMPLE_EVENT_REQUEST, {
+            participantsLocation: t('common:events.participantsLocation'),
+            datesBudget: t('common:events.datesBudget'),
+            options: t('common:events.options'),
+            workflow: t('common:events.workflow'),
+            exampleDatesBudget: t('common:events.exampleDatesBudget'),
+            exampleWorkflow: t('common:events.exampleWorkflow'),
+            compareParticipantsLocation: t('common:events.compareParticipantsLocation'),
+            compareDatesBudget: t('common:events.compareDatesBudget'),
+            compareOptions: t('common:events.compareOptions'),
+            compareWorkflow: t('common:events.compareWorkflow'),
+          })}
+          labels={{
+            field: t('common:events.field'),
+            example: t('common:events.example'),
+            comparison: t('common:events.comparison'),
+          }}
+        />
       </section>
     </div>
   );

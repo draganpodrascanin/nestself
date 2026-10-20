@@ -15,6 +15,8 @@ export interface NavItemProps {
     'aria-current': 'page' | undefined;
     children: ReactNode;
   }) => ReactNode;
+  /** `bottom` items share the bar width equally, shrink below their content width and use the 0.6875rem label. */
+  variant?: 'sidebar' | 'bottom';
   className?: string;
 }
 
@@ -24,19 +26,23 @@ export function NavItem({
   label,
   active = false,
   render,
+  variant = 'sidebar',
   className,
 }: NavItemProps) {
   const classes = cn(
-    'flex flex-col items-center gap-1 min-h-12 px-2 py-1.5 text-text-secondary type-metadata no-underline',
+    'gap-1 min-h-12 py-1.5 flex flex-col items-center text-text-secondary no-underline',
+    variant === 'bottom'
+      ? 'basis-0 min-w-0 px-1 leading-tight flex-1 text-center text-[0.6875rem]'
+      : 'px-2 type-metadata',
     'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-    active && 'text-primary font-[var(--font-weight-label)]',
+    active && 'font-[var(--font-weight-label)] text-primary',
     className,
   );
   const ariaCurrent = active ? ('page' as const) : undefined;
   const children = (
     <>
       <NavIcon icon={icon} active={active} size={20} />
-      <span>{label}</span>
+      <span className={cn(variant === 'bottom' && 'max-w-full truncate')}>{label}</span>
     </>
   );
 

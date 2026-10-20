@@ -118,5 +118,20 @@
     "participant_one": "{{count}} учесник",
     "participant_few": "{{count}} учесника",
     "participant_other": "{{count}} учесника"
+  },
+  "events": {
+    "field": "Поље захтева",
+    "example": "Пример",
+    "comparison": "Обавезно поређење",
+    "participantsLocation": "Учесници / локација",
+    "datesBudget": "Датуми / буџет",
+    "options": "Опције",
+    "workflow": "Ток рада",
+    "exampleDatesBudget": "Изабрани опсег / износ и валута",
+    "exampleWorkflow": "Затражено → понуде спремне → одабрано",
+    "compareParticipantsLocation": "Капацитет, превоз и приступачност",
+    "compareDatesBudget": "Укључене ставке, доступност и услови",
+    "compareOptions": "Цена, трајање, место, храна и услови отказивања",
+    "compareWorkflow": "Власник, статус и реалан рок за одговор"
   }
 }

@@ -10,5 +10,20 @@
   "locale": { "label": "Jezik", "en": "English", "sr-Latn": "Srpski (latinica)", "sr-Cyrl": "Српски (ћирилица)" },
   "sample": { "banner": "Ogledni podaci. Ništa ovde nije stvarno, sačuvano ili poslato.", "demoNoop": "Ovo je demonstracija. Nijedan termin, plaćanje ili poruka nije kreiran." },
   "privacy": { "whoCanSee": "Ko može da vidi ovo?", "pointOfUse": "Tvoji razgovori i termini su tvoji. Tvoj poslodavac vidi administraciju podobnosti, budžet programa i zaštićeno zbirno izveštavanje, nikada sadržaj individualne podrške." },
-  "count": { "participant_one": "{{count}} učesnik", "participant_few": "{{count}} učesnika", "participant_other": "{{count}} učesnika" }
+  "count": { "participant_one": "{{count}} učesnik", "participant_few": "{{count}} učesnika", "participant_other": "{{count}} učesnika" },
+  "events": {
+    "field": "Polje zahteva",
+    "example": "Primer",
+    "comparison": "Obavezno poređenje",
+    "participantsLocation": "Učesnici / lokacija",
+    "datesBudget": "Datumi / budžet",
+    "options": "Opcije",
+    "workflow": "Tok rada",
+    "exampleDatesBudget": "Izabrani opseg / iznos i valuta",
+    "exampleWorkflow": "Zatraženo → ponude spremne → odabrano",
+    "compareParticipantsLocation": "Kapacitet, prevoz i pristupačnost",
+    "compareDatesBudget": "Uključene stavke, dostupnost i uslovi",
+    "compareOptions": "Cena, trajanje, mesto, hrana i uslovi otkazivanja",
+    "compareWorkflow": "Vlasnik, status i realan rok za odgovor"
+  }
 }

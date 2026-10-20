@@ -1,6 +1,6 @@
-import { Button as BaseButton } from '@base-ui/react/button';
 import type { ReactNode, ComponentPropsWithoutRef } from 'react';
 import { cn } from '../../../lib/cn';
+import { buttonClassNames, type ButtonSize, type ButtonVariant } from '../button/buttonClasses';
 
 export interface TextLinkProps {
   href: string;
@@ -9,12 +9,7 @@ export interface TextLinkProps {
   className?: string;
 }
 
-export function TextLink({
-  href,
-  trailingArrow,
-  children,
-  className,
-}: TextLinkProps) {
+export function TextLink({ href, trailingArrow, children, className }: TextLinkProps) {
   return (
     <a
       href={href}
@@ -25,36 +20,41 @@ export function TextLink({
       )}
     >
       {children}
-      {trailingArrow ? <span aria-hidden className="ml-1">&rarr;</span> : null}
+      {trailingArrow ? (
+        <span aria-hidden className="ml-1">
+          &rarr;
+        </span>
+      ) : null}
     </a>
   );
 }
 
-export interface LinkButtonProps extends Omit<ComponentPropsWithoutRef<typeof BaseButton>, 'className' | 'render'> {
+export interface LinkButtonProps extends Omit<ComponentPropsWithoutRef<'a'>, 'className' | 'href'> {
   href: string;
   children: ReactNode;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  fullWidth?: boolean;
   className?: string;
 }
 
+/** A navigation link that looks like a button. It stays a real anchor (role link), never a button. */
 export function LinkButton({
   href,
   children,
   className,
+  variant = 'primary',
+  size = 'md',
+  fullWidth,
   ...rest
 }: LinkButtonProps) {
   return (
-    <BaseButton
+    <a
+      href={href}
+      className={cn(buttonClassNames({ variant, size, fullWidth }), className)}
       {...rest}
-      // eslint-disable-next-line jsx-a11y/anchor-has-content -- Base UI renders children into the anchor
-      render={<a href={href} />}
-      className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-control border border-transparent bg-primary text-on-primary px-5 py-2.5 min-h-11 font-[var(--font-weight-label)] leading-normal no-underline transition-[background-color,border-color,color] duration-[var(--motion-fast)] ease-standard hover:bg-primary-hover',
-        'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-        'pointer-coarse:min-h-12',
-        className,
-      )}
     >
       {children}
-    </BaseButton>
+    </a>
   );
 }

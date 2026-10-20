@@ -1,14 +1,7 @@
 import { View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import {
-  Screen,
-  Text,
-  Avatar,
-  Card,
-  ListRow,
-  CategoryIcon,
-} from '@nestself/ui-native';
+import { Screen, Text, Avatar, Card, ListRow, CategoryIcon } from '@nestself/ui-native';
 import { useTheme } from '@nestself/ui-native';
 import { SAMPLE_BOOKING } from '@nestself/sample-data';
 import { supportAreas } from '@nestself/contracts';
@@ -24,9 +17,7 @@ export default function HomeScreen() {
   const session = useSession();
   const router = useRouter();
 
-  const appointmentDate = new Date(
-    SAMPLE_BOOKING.appointmentAt,
-  );
+  const appointmentDate = new Date(SAMPLE_BOOKING.appointmentAt);
 
   return (
     <Screen>
@@ -105,11 +96,7 @@ export default function HomeScreen() {
                     : undefined
                 }
               >
-                <CategoryIcon
-                  category={areaToCategory[area]}
-                  iconMap={categoryIconMap}
-                  size={28}
-                />
+                <CategoryIcon category={areaToCategory[area]} iconMap={categoryIconMap} size={28} />
                 <Text role="body" style={{ flex: 1 }}>
                   {t(`mobile:support.${area}`)}
                 </Text>

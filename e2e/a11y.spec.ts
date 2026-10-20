@@ -56,10 +56,15 @@ test.describe('keyboard navigation: marketing-home', () => {
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
-    const stillInDialog = await page.evaluate(() =>
-      document.activeElement?.closest('[role="dialog"]') !== null,
-    );
-    expect(stillInDialog).toBe(true);
+    // Base UI wraps focus through a guard element for one tick; poll until focus settles inside the dialog.
+    await expect
+      .poll(
+        () => page.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null),
+        {
+          timeout: 2_000,
+        },
+      )
+      .toBe(true);
 
     // Escape should close dialog and return focus to the trigger
     await page.keyboard.press('Escape');

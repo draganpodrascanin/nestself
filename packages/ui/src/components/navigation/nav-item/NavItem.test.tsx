@@ -38,4 +38,13 @@ describe('NavItem', () => {
     );
     await expectNoA11yViolations(container);
   });
+
+  it('bottom variant shares the bar width and truncates the label', () => {
+    render(<NavItem href="/channels" icon={House} label="Channels" variant="bottom" />);
+    const link = screen.getByRole('link', { name: 'Channels' });
+    expect(link.className).toContain('flex-1');
+    expect(link.className).toContain('min-w-0');
+    expect(link.className).toContain('text-[0.6875rem]');
+    expect(link.querySelector('span')?.className).toContain('truncate');
+  });
 });

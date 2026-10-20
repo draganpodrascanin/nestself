@@ -10,5 +10,20 @@
   "locale": { "label": "Language", "en": "English", "sr-Latn": "Srpski (latinica)", "sr-Cyrl": "Српски (ћирилица)" },
   "sample": { "banner": "Sample data. Nothing here is real, saved or sent.", "demoNoop": "This is a demonstration. No appointment, payment or message was created." },
   "privacy": { "whoCanSee": "Who can see this?", "pointOfUse": "Your own conversations and appointments are yours. Your employer sees eligibility administration, programme budget and protected aggregate reporting, never individual support content." },
-  "count": { "participant_one": "{{count}} participant", "participant_few": "{{count}} participants", "participant_other": "{{count}} participants" }
+  "count": { "participant_one": "{{count}} participant", "participant_few": "{{count}} participants", "participant_other": "{{count}} participants" },
+  "events": {
+    "field": "Request field",
+    "example": "Example",
+    "comparison": "Required comparison",
+    "participantsLocation": "Participants / location",
+    "datesBudget": "Dates / budget",
+    "options": "Options",
+    "workflow": "Workflow",
+    "exampleDatesBudget": "Chosen range / amount and currency",
+    "exampleWorkflow": "Requested → offers ready → selected",
+    "compareParticipantsLocation": "Capacity, transport and accessibility",
+    "compareDatesBudget": "Included items, availability and conditions",
+    "compareOptions": "Price, duration, venue, food and cancellation terms",
+    "compareWorkflow": "Owner, status and a real response deadline"
+  }
 }

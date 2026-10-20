@@ -67,7 +67,7 @@ describe('Table', () => {
     expect(screen.getByText('Employee list')).toBeInTheDocument();
   });
 
-  it('scroll wrapper is a focusable region with aria-label from caption', () => {
+  it('scroll wrapper is a focusable region with aria-label when caption is provided', () => {
     render(
       <Table caption="Scrollable table">
         <tbody>
@@ -78,6 +78,20 @@ describe('Table', () => {
     const region = screen.getByRole('region', { name: 'Scrollable table' });
     expect(region).toBeInTheDocument();
     expect(region).toHaveAttribute('tabindex', '0');
+  });
+
+  it('scroll wrapper has no role, tabIndex or aria-label when caption is omitted', () => {
+    const { container } = render(
+      <Table>
+        <tbody>
+          <tr><Td>Data</Td></tr>
+        </tbody>
+      </Table>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper).not.toHaveAttribute('role');
+    expect(wrapper).not.toHaveAttribute('tabindex');
+    expect(wrapper).not.toHaveAttribute('aria-label');
   });
 
   it('passes axe a11y check', async () => {
