@@ -2411,3 +2411,80 @@ Barrier after Phase 3 (orchestrator): `pnpm lint && pnpm typecheck && pnpm test 
 
 - Spec coverage: §4 layout → Task 0.1/0.4; §5 tooling → 0.1–0.5; §6 tokens → 1.1; §7 assets → 1.2; §8 ui → 2.1–2.3; §9 native → 2.4; §10 i18n → 1.4; §11 apps → 3.1–3.5; §12 roles → 1.3 + 3.5; §13 sample data → 1.5 + apps; §14 accessibility → 2.x tests + 4.1; §15 checks → 0.5, 1.1, 1.4, 4.1, 4.2; §16 docs/git → 4.1 + barriers; §17 unimplemented → README; §18 risks → onlyBuiltDependencies (0.1), catalog pins (0.1), TTF fonts (1.2), metro defaults (3.4), Storybook (2.1), watchman note (3.4), transliteration exceptions (1.4).
 - Deviations from the spec: Base UI package is `@base-ui/react` (renamed upstream); TypeScript 5.9.3 instead of "5.x latest" wording; Vitest 5 on jsdom with Playwright for real-browser checks instead of Vitest browser mode; `routeTree.gen.ts` committed; the Tailwind bridge lives in `@nestself/tokens/tailwind.css`.
+
+---
+
+## Appendix A — added 2026-10-20 after the user asked for Playwright e2e, Vitest unit tests and screenshot-driven verification
+
+### Task 1.7: Playwright e2e scaffold and the screenshot helper (runs in Phase 1, in parallel with 1.1–1.6)
+
+**Files:** `playwright.config.ts` (root), `e2e/helpers.ts`, `e2e/pages.ts`, `e2e/screenshots.spec.ts`, `e2e/a11y.spec.ts`, `e2e/reflow.spec.ts`, `e2e/snap.mjs`, `e2e/README.md`. Unit tests everywhere else stay on Vitest (already configured per package in Phase 0).
+
+- [ ] **Step 1: `playwright.config.ts`**
+
+```ts
+import { defineConfig } from '@playwright/test';
+
+const CI = !!process.env.CI;
+export default defineConfig({
+  testDir: './e2e',
+  snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',
+  fullyParallel: true,
+  forbidOnly: CI,
+  retries: CI ? 2 : 0,
+  workers: CI ? 2 : undefined,
+  reporter: CI ? 'github' : [['list'], ['html', { open: 'never', outputFolder: 'e2e/playwright-report' }]],
+  outputDir: 'e2e/test-results',
+  timeout: 60_000,
+  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled' } },
+  use: { baseURL: 'http://localhost:3000', locale: 'en-GB', timezoneId: 'Europe/Belgrade', reducedMotion: 'reduce', trace: 'retain-on-failure' },
+  projects: [
+    { name: 'mobile-390', use: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } },
+    { name: 'desktop-1440', use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } },
+    { name: 'reflow-320', use: { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }, testMatch: /reflow\.spec\.ts/ },
+  ],
+  webServer: [
+    { command: 'pnpm --filter @nestself/marketing dev', url: 'http://localhost:3000', reuseExistingServer: !CI, timeout: 180_000 },
+    { command: 'pnpm --filter @nestself/workspace dev', url: 'http://localhost:5173', reuseExistingServer: !CI, timeout: 180_000 },
+    { command: 'pnpm --filter @nestself/admin dev', url: 'http://localhost:5174', reuseExistingServer: !CI, timeout: 180_000 },
+  ],
+});
+```
+The `mobile-390` and `desktop-1440` projects run `screenshots.spec.ts` and `a11y.spec.ts`; `reflow-320` runs only `reflow.spec.ts` (use `testIgnore` on the first two projects so reflow does not run there).
+
+- [ ] **Step 2: `e2e/pages.ts`** — the registry every spec iterates. Start with the three roots; app tasks append their representative routes.
+```ts
+export interface PageEntry { name: string; url: string; theme?: { palette: 'forest' | 'ink' | 'plum' | 'azure'; mode: 'light' | 'dark' }; locale?: 'en' | 'sr-Latn' | 'sr-Cyrl'; prepare?: string; }
+export const pages: PageEntry[] = [
+  { name: 'marketing-home', url: 'http://localhost:3000/en' },
+  { name: 'marketing-home-sr-cyrl', url: 'http://localhost:3000/sr-Cyrl' },
+  { name: 'marketing-home-dark', url: 'http://localhost:3000/en', theme: { palette: 'forest', mode: 'dark' } },
+  { name: 'workspace-home', url: 'http://localhost:5173/' },
+  { name: 'admin-home', url: 'http://localhost:5174/' },
+];
+```
+`prepare` is an optional named interaction implemented in `helpers.ts` (`prepareActions` map, e.g. `'booking-review'` clicks through the booking demo to the review step).
+
+- [ ] **Step 3: `e2e/helpers.ts`** — `applyTheme(page, theme)` and `applyLocale(page, locale)` via `page.addInitScript` writing `localStorage['nestself-theme']` (JSON `{palette,mode,font:'onest'}`) and `localStorage['nestself-locale']`; `settle(page)` awaits `networkidle`, `document.fonts.ready` and two animation frames; `collectConsoleErrors(page)` returning an array that specs assert empty; `prepareActions`.
+
+- [ ] **Step 4: Specs** — `screenshots.spec.ts`: for each page entry, apply theme/locale, goto, run `prepare`, `settle`, `expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true })`, and expect no console errors. `a11y.spec.ts`: `AxeBuilder.withTags(['wcag2a','wcag2aa','wcag22aa'])` per page, `expect(violations).toEqual([])`; plus keyboard checks on `marketing-home` (first Tab focuses the skip link; the privacy dialog traps focus and Escape returns it to its trigger — mark this test `test.fixme` until Task 3.1 ships the dialog, and remove the fixme in 3.1). `reflow.spec.ts`: for every page, `document.documentElement.scrollWidth <= 320`.
+
+- [ ] **Step 5: `e2e/snap.mjs` — the ad-hoc screenshot tool used during implementation**
+
+```
+node e2e/snap.mjs <url> [--out <dir>] [--name <base>] [--palette forest] [--mode dark] [--locale sr-Cyrl] [--viewport mobile|desktop|both] [--selector <css>] [--no-full]
+```
+Uses `import { chromium } from '@playwright/test'`; captures `mobile` (390×844, dpr 2, touch) and/or `desktop` (1440×900) full-page PNGs named `<base>-mobile.png` / `<base>-desktop.png` into `--out` (default `./e2e/snaps`, git-ignored), applying theme/locale through the same `localStorage` keys before navigation, waiting for `networkidle` and `document.fonts.ready`, printing each saved path, printing console errors and failed requests, and exiting 1 when the main response status is ≥ 400 or any console error occurred (so a blank page is never mistaken for success). `--selector` screenshots only that element.
+
+- [ ] **Step 6: Verify** — `pnpm exec playwright test --list` lists the tests across the three projects; `node e2e/snap.mjs https://example.com --out /private/tmp/claude-501/-Users-draganpodrascanin-Desktop-projects-Nestself/3841c7b3-c734-41e5-ae5f-cb494614968e/scratchpad/snaps --name example` writes two PNGs (open one with the Read tool to confirm it is a rendered page); `pnpm lint` passes for `e2e` (add `e2e/eslint.config.js` re-exporting the node preset with browser globals for the page-evaluated code, and `e2e/**` to the root lint via a root `eslint.config.js` that re-exports the node preset); `pnpm exec tsc -p e2e/tsconfig.json --noEmit` passes. Add `e2e/snaps/` to `.gitignore`. Do not generate screenshot baselines now (the apps are stubs); Phase 4 runs `pnpm e2e:update` once the apps exist. `e2e/README.md` documents the three commands.
+
+### Phase 3 addendum — screenshot-driven verification for every app task (3.1, 3.2, 3.3; 3.4 uses the simulator in Phase 4)
+
+After the app's dev server runs, the implementer must:
+1. Capture every representative screen with `node e2e/snap.mjs http://localhost:<port>/<route> --out <scratchpad>/snaps/<app> --name <route-name>` at both viewports, plus the home screen in `--mode dark` and `--locale sr-Cyrl`.
+2. Open each PNG with the Read tool and compare against the handoff composition (`docs/design-handoff/index.html` rendered in a browser is the reference; the section hierarchy, spacing, image placement and type scale must match at 1440 px and the stacked order at 390 px). Check: no horizontal overflow, no clipped text, focus ring visible on the first Tab, images at the right crops, no placeholder text left, sample banner present in sample mode.
+3. Fix defects at the source and re-capture until the screens look right.
+4. Append the app's representative routes to `e2e/pages.ts` (with any `prepare` action needed) so Phase 4 baselines include them.
+5. Report the list of screenshots taken and what was changed because of them.
+
+Spec and quality reviewers for 3.1–3.3 must capture and view their own screenshots of at least the home screen at both viewports and state in `verified` what they saw. A review that did not look at the rendered page is incomplete.
