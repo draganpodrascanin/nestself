@@ -80,5 +80,9 @@
     "activated": "Activated accounts",
     "teamBreakdown": "Team breakdown",
     "protectedNote": "Protected is not the same as zero."
+  },
+  "api": {
+    "connected": "API connected",
+    "sampleMode": "API not connected (sample mode)"
   }
 }

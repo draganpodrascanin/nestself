@@ -1,13 +1,28 @@
 {
+  "nav": {
+    "overview": "Преглед",
+    "experts": "Стручњаци",
+    "organizations": "Организације",
+    "content": "Садржај",
+    "eventRequests": "Захтеви за догађаје",
+    "settings": "Подешавања"
+  },
   "experts": {
     "title": "Стручњаци",
     "realPortraitNote": "Портрете имају само одобрени стручњаци; иницијали се користе до тада.",
     "name": "Име",
     "specialisation": "Специјализација",
+    "area": "Област",
+    "languages": "Језици",
+    "format": "Формат",
     "status": "Статус",
     "active": "Активан",
     "inactive": "Неактиван",
-    "pending": "На чекању"
+    "pending": "На чекању",
+    "density": "Густина",
+    "densityDefault": "Подразумевана",
+    "densityCompact": "Компактна",
+    "detail": "Детаљи стручњака"
   },
   "organizations": {
     "title": "Организације",
@@ -16,7 +31,11 @@
     "employees": "Запослени",
     "status": "Статус",
     "active": "Активна",
-    "suspended": "Суспендована"
+    "suspended": "Суспендована",
+    "teams": "Тимови",
+    "members": "Чланови",
+    "detail": "Детаљи организације",
+    "programme": "Програм"
   },
   "tables": {
     "id": "ИД",
@@ -34,6 +53,36 @@
     "overview": "Преглед",
     "totalUsers": "Укупно корисника",
     "activeExperts": "Активни стручњаци",
-    "totalOrganizations": "Укупно организација"
+    "totalOrganizations": "Укупно организација",
+    "openEventRequests": "Отворени захтеви за догађаје",
+    "sampleLabel": "Узорак"
+  },
+  "content": {
+    "title": "Садржај",
+    "area": "Област",
+    "locale": "Језик"
+  },
+  "eventRequests": {
+    "title": "Захтеви за догађаје",
+    "field": "Поље",
+    "example": "Пример вредности",
+    "required": "Обавезно",
+    "participants": "Учесници",
+    "location": "Локација",
+    "dates": "Датуми",
+    "budget": "Буџет",
+    "yes": "Да",
+    "no": "Не"
+  },
+  "settings": {
+    "title": "Подешавања",
+    "locale": "Језик",
+    "appearance": "Изглед",
+    "modeLight": "Светли",
+    "modeDark": "Тамни"
+  },
+  "api": {
+    "connected": "АПИ повезан",
+    "notConnected": "АПИ није повезан (режим узорка)"
   }
 }

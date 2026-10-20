@@ -92,12 +92,12 @@ export function Button({
       accessibilityLabel={label}
       disabled={isDisabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={(state) => [
         {
           minHeight: 48,
           paddingHorizontal: 20,
           borderRadius: radius.control,
-          backgroundColor: pressed ? pressedBg : bg,
+          backgroundColor: state.pressed ? pressedBg : bg,
           borderWidth: variant === 'secondary' ? 1 : 0,
           borderColor,
           flexDirection: 'row',
@@ -106,7 +106,7 @@ export function Button({
           gap: 8,
           opacity: isDisabled ? 1 : undefined,
         },
-        typeof style === 'function' ? style({ pressed }) : style,
+        typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}
     >

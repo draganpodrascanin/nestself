@@ -90,6 +90,7 @@
     "disclaimer": "This is the proposed design model, not a live privacy notice or proof of implemented access control."
   },
   "footer": {
+    "navLabel": "Footer",
     "photography": "Photography direction",
     "credits": "Photo credits",
     "designSystem": "Design system"
@@ -97,20 +98,80 @@
   "credits": {
     "title": "People and photographs",
     "lead": "Pexels lifestyle photographs used as conceptual imagery. No endorsement, customer identity, professional role or family eligibility is implied.",
-    "licence": "Pexels licence"
+    "licence": "Pexels licence",
+    "photographyHeading": "Photography",
+    "fontsHeading": "Fonts",
+    "iconsHeading": "Icons",
+    "fontsBody": "Onest by onest.md, licensed under the SIL Open Font License 1.1.",
+    "iconsBody": "Phosphor Icons by phosphoricons.com, licensed under the MIT License.",
+    "colPhoto": "Photo",
+    "colPhotographer": "Photographer",
+    "colSource": "Source",
+    "colLicence": "Licence",
+    "photographyCaption": "Photographs used in this project",
+    "dialogCaption": "Photographers"
   },
   "pages": {
     "support": {
       "title": "Find the support that fits",
-      "lead": "Psychological, legal and financial guidance available through your workplace."
+      "lead": "Psychological, legal and financial guidance available through your workplace.",
+      "workspaceNote": "Content and booking live in the employee app.",
+      "workspaceLink": "Sign in to the workspace"
     },
     "employers": {
       "title": "A benefit built around people",
-      "lead": "Give your team access to psychological, legal and financial guidance in one place."
+      "lead": "Give your team access to psychological, legal and financial guidance in one place.",
+      "hrTitle": "HR visibility principles",
+      "hrAggregates": "Aggregates only: the employer view shows programme-level totals, not individual support details.",
+      "hrProtected": "Protected is not zero: when a group is too small to report safely, the value is protected rather than suppressed.",
+      "hrRoles": "Roles enforced server-side: UI visibility follows the role model, but access control is determined by the server, not the client."
     },
     "privacyModel": {
       "title": "How access is separated",
-      "lead": "Understand who sees what before you share something personal."
+      "lead": "Understand who sees what before you share something personal.",
+      "colData": "Data",
+      "colEmployee": "Employee",
+      "colAdvisor": "Advisor",
+      "colHr": "HR",
+      "colOperations": "Operations",
+      "caption": "Access model",
+      "rows": {
+        "conversationContent": {
+          "data": "Conversation content",
+          "employee": "Own",
+          "advisor": "Assigned case only",
+          "hr": "No view",
+          "operations": "Exceptional, specifically authorised access only"
+        },
+        "appointmentsHistory": {
+          "data": "Appointments / support history",
+          "employee": "Own",
+          "advisor": "Needed scope",
+          "hr": "No individual view",
+          "operations": "Needed operational scope"
+        },
+        "benefitEligibility": {
+          "data": "Benefit eligibility",
+          "employee": "Own",
+          "advisor": "As needed",
+          "hr": "Eligibility administration",
+          "operations": "Authorised administration"
+        },
+        "companyFund": {
+          "data": "Company fund",
+          "employee": "Relevant coverage",
+          "advisor": "As needed for billing",
+          "hr": "Programme total",
+          "operations": "Authorised administration"
+        },
+        "usageReporting": {
+          "data": "Usage reporting",
+          "employee": "Own history",
+          "advisor": "Professional scope",
+          "hr": "Protected aggregates",
+          "operations": "Authorised scope"
+        }
+      }
     },
     "credits": {
       "title": "People and photographs"

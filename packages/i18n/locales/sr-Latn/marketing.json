@@ -90,6 +90,7 @@
     "disclaimer": "Ovo je predloženi model dizajna, a ne aktivno obaveštenje o privatnosti ili dokaz implementirane kontrole pristupa."
   },
   "footer": {
+    "navLabel": "Podnožje stranice",
     "photography": "Fotografski pravac",
     "credits": "Zasluge za fotografije",
     "designSystem": "Sistem dizajna"
@@ -97,20 +98,80 @@
   "credits": {
     "title": "Ljudi i fotografije",
     "lead": "Pexels fotografije životnog stila korišćene kao konceptualne slike. Nijedna saglasnost, identitet kupca, profesionalna uloga ili podobnost porodice nije podrazumevana.",
-    "licence": "Pexels licenca"
+    "licence": "Pexels licenca",
+    "photographyHeading": "Fotografija",
+    "fontsHeading": "Fontovi",
+    "iconsHeading": "Ikone",
+    "fontsBody": "Onest od onest.md, licenciran pod SIL Open Font License 1.1.",
+    "iconsBody": "Phosphor Icons od phosphoricons.com, licencirani pod MIT licencom.",
+    "colPhoto": "Fotografija",
+    "colPhotographer": "Fotograf",
+    "colSource": "Izvor",
+    "colLicence": "Licenca",
+    "photographyCaption": "Fotografije korišćene u ovom projektu",
+    "dialogCaption": "Fotografi"
   },
   "pages": {
     "support": {
       "title": "Pronađi podršku koja odgovara",
-      "lead": "Psihološko, pravno i finansijsko savetovanje dostupno kroz tvoje radno mesto."
+      "lead": "Psihološko, pravno i finansijsko savetovanje dostupno kroz tvoje radno mesto.",
+      "workspaceNote": "Sadržaj i zakazivanje su u aplikaciji za zaposlene.",
+      "workspaceLink": "Prijavi se u radni prostor"
     },
     "employers": {
       "title": "Pogodnost osmišljena oko ljudi",
-      "lead": "Pruži svom timu pristup psihološkom, pravnom i finansijskom savetovanju na jednom mestu."
+      "lead": "Pruži svom timu pristup psihološkom, pravnom i finansijskom savetovanju na jednom mestu.",
+      "hrTitle": "Principi vidljivosti za HR",
+      "hrAggregates": "Samo zbirni podaci: prikaz za poslodavca pokazuje ukupne vrednosti programa, a ne detalje individualne podrške.",
+      "hrProtected": "Zaštićeno nije nula: kada je grupa premala za bezbedno izveštavanje, vrednost je zaštićena, a ne izostavljena.",
+      "hrRoles": "Uloge se proveravaju na serveru: vidljivost u interfejsu prati model uloga, ali kontrolu pristupa određuje server, a ne klijent."
     },
     "privacyModel": {
       "title": "Kako je pristup razdvojen",
-      "lead": "Razumi ko vidi šta pre nego što podeliš nešto lično."
+      "lead": "Razumi ko vidi šta pre nego što podeliš nešto lično.",
+      "colData": "Podaci",
+      "colEmployee": "Zaposleni",
+      "colAdvisor": "Savetnik",
+      "colHr": "HR",
+      "colOperations": "Operacije",
+      "caption": "Model pristupa",
+      "rows": {
+        "conversationContent": {
+          "data": "Sadržaj razgovora",
+          "employee": "Sopstveni",
+          "advisor": "Samo dodeljeni slučaj",
+          "hr": "Bez pristupa",
+          "operations": "Izuzetan, posebno odobren pristup"
+        },
+        "appointmentsHistory": {
+          "data": "Termini / istorija podrške",
+          "employee": "Sopstveni",
+          "advisor": "Potreban opseg",
+          "hr": "Bez individualnog pristupa",
+          "operations": "Potreban operativni opseg"
+        },
+        "benefitEligibility": {
+          "data": "Podobnost za pogodnosti",
+          "employee": "Sopstveni",
+          "advisor": "Po potrebi",
+          "hr": "Administracija podobnosti",
+          "operations": "Ovlašćena administracija"
+        },
+        "companyFund": {
+          "data": "Fond preduzeća",
+          "employee": "Relevantna pokrivenost",
+          "advisor": "Po potrebi za naplatu",
+          "hr": "Ukupan iznos programa",
+          "operations": "Ovlašćena administracija"
+        },
+        "usageReporting": {
+          "data": "Izveštavanje o korišćenju",
+          "employee": "Sopstvena istorija",
+          "advisor": "Profesionalni opseg",
+          "hr": "Zaštićeni zbirni podaci",
+          "operations": "Ovlašćen opseg"
+        }
+      }
     },
     "credits": {
       "title": "Ljudi i fotografije"

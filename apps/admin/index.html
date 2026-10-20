@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette="forest" data-mode="light" data-font="onest">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NestSelf Admin</title>
+    <script>
+      (function(){try{var k='nestself-theme';var s=localStorage.getItem(k);if(!s)return;var t=JSON.parse(s);var p=['forest','ink','plum','azure'];var m=['light','dark'];var f=['onest','commissioner','nunito','fira','lato'];if(p.indexOf(t.palette)>=0)document.documentElement.setAttribute('data-palette',t.palette);if(m.indexOf(t.mode)>=0)document.documentElement.setAttribute('data-mode',t.mode);if(f.indexOf(t.font)>=0)document.documentElement.setAttribute('data-font',t.font);}catch(e){}})();
+    </script>
   </head>
   <body>
     <div id="root"></div>

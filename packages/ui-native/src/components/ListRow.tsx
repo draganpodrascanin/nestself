@@ -36,10 +36,10 @@ export function ListRow({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [
+        style={(state) => [
           baseStyle,
-          pressed && { backgroundColor: colors.tint },
-          typeof style === 'function' ? style({ pressed }) : style,
+          state.pressed && { backgroundColor: colors.tint },
+          typeof style === 'function' ? style(state) : style,
         ]}
         {...rest}
       >

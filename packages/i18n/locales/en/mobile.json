@@ -15,7 +15,19 @@
     "categories": "Support areas",
     "psychological": "Psychological",
     "legal": "Legal",
-    "financial": "Financial"
+    "financial": "Financial",
+    "areaIntro": {
+      "psychological": "Speak with a qualified counsellor in a confidential setting.",
+      "legal": "Get guidance on employment law, rights and procedures.",
+      "financial": "Receive support with budgeting, debt and financial planning."
+    },
+    "selectTime": "Choose a time",
+    "review": "Review",
+    "sessionFee": "Session fee",
+    "employerCovers": "Employer covers",
+    "youPay": "You pay",
+    "confirmFor": "Confirm for {{amount}}",
+    "done": "Demonstration complete"
   },
   "appointments": {
     "title": "Appointments",
@@ -26,11 +38,21 @@
   },
   "messages": {
     "title": "Messages",
-    "noConversations": "No conversations yet"
+    "noConversations": "No conversations yet",
+    "noConversationsBody": "Start a conversation with your support advisor."
   },
   "notifications": {
     "title": "Notifications",
     "noNotifications": "No new notifications",
     "markAllRead": "Mark all as read"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "appearance": "Appearance"
+  },
+  "notFound": {
+    "title": "Screen not found",
+    "body": "The screen you are looking for does not exist."
   }
 }

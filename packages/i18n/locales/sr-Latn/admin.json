@@ -1,13 +1,28 @@
 {
+  "nav": {
+    "overview": "Pregled",
+    "experts": "Stručnjaci",
+    "organizations": "Organizacije",
+    "content": "Sadržaj",
+    "eventRequests": "Zahtevi za događaje",
+    "settings": "Podešavanja"
+  },
   "experts": {
     "title": "Stručnjaci",
     "realPortraitNote": "Portrete imaju samo odobreni stručnjaci; inicijali se koriste do tada.",
     "name": "Ime",
     "specialisation": "Specijalizacija",
+    "area": "Oblast",
+    "languages": "Jezici",
+    "format": "Format",
     "status": "Status",
     "active": "Aktivan",
     "inactive": "Neaktivan",
-    "pending": "Na čekanju"
+    "pending": "Na čekanju",
+    "density": "Gustina",
+    "densityDefault": "Podrazumevana",
+    "densityCompact": "Kompaktna",
+    "detail": "Detalji stručnjaka"
   },
   "organizations": {
     "title": "Organizacije",
@@ -16,7 +31,11 @@
     "employees": "Zaposleni",
     "status": "Status",
     "active": "Aktivna",
-    "suspended": "Suspendovana"
+    "suspended": "Suspendovana",
+    "teams": "Timovi",
+    "members": "Članovi",
+    "detail": "Detalji organizacije",
+    "programme": "Program"
   },
   "tables": {
     "id": "ID",
@@ -34,6 +53,36 @@
     "overview": "Pregled",
     "totalUsers": "Ukupno korisnika",
     "activeExperts": "Aktivni stručnjaci",
-    "totalOrganizations": "Ukupno organizacija"
+    "totalOrganizations": "Ukupno organizacija",
+    "openEventRequests": "Otvoreni zahtevi za događaje",
+    "sampleLabel": "Uzorak"
+  },
+  "content": {
+    "title": "Sadržaj",
+    "area": "Oblast",
+    "locale": "Jezik"
+  },
+  "eventRequests": {
+    "title": "Zahtevi za događaje",
+    "field": "Polje",
+    "example": "Primer vrednosti",
+    "required": "Obavezno",
+    "participants": "Učesnici",
+    "location": "Lokacija",
+    "dates": "Datumi",
+    "budget": "Budžet",
+    "yes": "Da",
+    "no": "Ne"
+  },
+  "settings": {
+    "title": "Podešavanja",
+    "locale": "Jezik",
+    "appearance": "Izgled",
+    "modeLight": "Svetli",
+    "modeDark": "Tamni"
+  },
+  "api": {
+    "connected": "API povezan",
+    "notConnected": "API nije povezan (režim uzorka)"
   }
 }

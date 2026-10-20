@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { appPrepareActions } from './pages';
 
 /** Theme shape stored under `nestself-theme` in localStorage. */
 export interface ThemeConfig {
@@ -66,6 +67,5 @@ export function collectConsoleErrors(page: Page): string[] {
  * (e.g. clicking through a multi-step demo) before the screenshot is taken.
  */
 export const prepareActions: Record<string, (page: Page) => Promise<void>> = {
-  // Future entries added by app tasks, e.g.:
-  // 'booking-review': async (page) => { await page.click('[data-testid="next"]'); ... },
+  ...appPrepareActions,
 };

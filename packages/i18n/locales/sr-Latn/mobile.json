@@ -15,7 +15,19 @@
     "categories": "Oblasti podrške",
     "psychological": "Psihološka",
     "legal": "Pravna",
-    "financial": "Finansijska"
+    "financial": "Finansijska",
+    "areaIntro": {
+      "psychological": "Razgovarajte sa kvalifikovanim savetnikom u poverljivom okruženju.",
+      "legal": "Dobijte smernice o radnom pravu, pravima i procedurama.",
+      "financial": "Primite podršku za budžetiranje, dugove i finansijsko planiranje."
+    },
+    "selectTime": "Izaberite termin",
+    "review": "Pregled",
+    "sessionFee": "Cena sesije",
+    "employerCovers": "Poslodavac pokriva",
+    "youPay": "Vi plaćate",
+    "confirmFor": "Potvrdi za {{amount}}",
+    "done": "Demonstracija završena"
   },
   "appointments": {
     "title": "Termini",
@@ -26,11 +38,21 @@
   },
   "messages": {
     "title": "Poruke",
-    "noConversations": "Još nema razgovora"
+    "noConversations": "Još nema razgovora",
+    "noConversationsBody": "Započnite razgovor sa vašim savetnikom za podršku."
   },
   "notifications": {
     "title": "Obaveštenja",
     "noNotifications": "Nema novih obaveštenja",
     "markAllRead": "Označi sve kao pročitano"
+  },
+  "settings": {
+    "title": "Podešavanja",
+    "language": "Jezik",
+    "appearance": "Izgled"
+  },
+  "notFound": {
+    "title": "Ekran nije pronađen",
+    "body": "Ekran koji tražite ne postoji."
   }
 }

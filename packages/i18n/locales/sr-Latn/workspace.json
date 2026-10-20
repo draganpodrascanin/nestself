@@ -80,5 +80,9 @@
     "activated": "Aktivirani nalozi",
     "teamBreakdown": "Pregled po timu",
     "protectedNote": "Zaštićeno nije isto što i nula."
+  },
+  "api": {
+    "connected": "API je povezan",
+    "sampleMode": "API nije povezan (probni podaci)"
   }
 }

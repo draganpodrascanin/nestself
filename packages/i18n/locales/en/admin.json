@@ -1,13 +1,28 @@
 {
+  "nav": {
+    "overview": "Overview",
+    "experts": "Experts",
+    "organizations": "Organisations",
+    "content": "Content",
+    "eventRequests": "Event requests",
+    "settings": "Settings"
+  },
   "experts": {
     "title": "Experts",
     "realPortraitNote": "Portraits appear only for approved experts; initials are used until then.",
     "name": "Name",
     "specialisation": "Specialisation",
+    "area": "Area",
+    "languages": "Languages",
+    "format": "Format",
     "status": "Status",
     "active": "Active",
     "inactive": "Inactive",
-    "pending": "Pending"
+    "pending": "Pending",
+    "density": "Density",
+    "densityDefault": "Default",
+    "densityCompact": "Compact",
+    "detail": "Expert detail"
   },
   "organizations": {
     "title": "Organisations",
@@ -16,7 +31,11 @@
     "employees": "Employees",
     "status": "Status",
     "active": "Active",
-    "suspended": "Suspended"
+    "suspended": "Suspended",
+    "teams": "Teams",
+    "members": "Members",
+    "detail": "Organisation detail",
+    "programme": "Programme"
   },
   "tables": {
     "id": "ID",
@@ -34,6 +53,36 @@
     "overview": "Overview",
     "totalUsers": "Total users",
     "activeExperts": "Active experts",
-    "totalOrganizations": "Total organisations"
+    "totalOrganizations": "Total organisations",
+    "openEventRequests": "Open event requests",
+    "sampleLabel": "Sample"
+  },
+  "content": {
+    "title": "Content",
+    "area": "Area",
+    "locale": "Locale"
+  },
+  "eventRequests": {
+    "title": "Event requests",
+    "field": "Field",
+    "example": "Example value",
+    "required": "Required",
+    "participants": "Participants",
+    "location": "Location",
+    "dates": "Dates",
+    "budget": "Budget",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "settings": {
+    "title": "Settings",
+    "locale": "Language",
+    "appearance": "Appearance",
+    "modeLight": "Light",
+    "modeDark": "Dark"
+  },
+  "api": {
+    "connected": "API connected",
+    "notConnected": "API not connected (sample mode)"
   }
 }

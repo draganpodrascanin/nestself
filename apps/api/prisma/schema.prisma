@@ -6,3 +6,197 @@ generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
+
+enum OrgRole {
+  EMPLOYEE
+  MANAGER
+  HR_ADMIN
+}
+
+enum PlatformRole {
+  EXPERT
+  OPERATIONS
+  ADMIN
+}
+
+enum SupportArea {
+  PSYCHOLOGICAL
+  LEGAL
+  FINANCIAL
+}
+
+enum ChannelScope {
+  ORGANIZATION
+  TEAM
+}
+
+enum ContentKind {
+  ARTICLE
+  FAQ
+  VIDEO
+}
+
+enum EventRequestStatus {
+  REQUESTED
+  OFFERS_READY
+  SELECTED
+  CLOSED
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  teams       Team[]
+  memberships Membership[]
+  channels    Channel[]
+  eventRequests EventRequest[]
+
+  @@map("organizations")
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  orgId       String       @map("org_id")
+  org         Organization @relation(fields: [orgId], references: [id])
+  memberships Membership[]
+  channels    Channel[]
+  polls       Poll[]
+
+  @@map("teams")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  displayName  String        @map("display_name")
+  locale       String        @default("en")
+  platformRole PlatformRole? @map("platform_role")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  memberships  Membership[]
+  posts        Post[]
+  pollVotes    PollVote[]
+  expert       Expert?
+
+  @@map("users")
+}
+
+model Membership {
+  id     String  @id @default(cuid())
+  role   OrgRole @default(EMPLOYEE)
+  userId String  @map("user_id")
+  orgId  String  @map("org_id")
+  teamId String? @map("team_id")
+  user   User         @relation(fields: [userId], references: [id])
+  org    Organization @relation(fields: [orgId], references: [id])
+  team   Team?        @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, orgId])
+  @@map("memberships")
+}
+
+model Channel {
+  id      String       @id @default(cuid())
+  name    String
+  scope   ChannelScope
+  orgId   String       @map("org_id")
+  teamId  String?      @map("team_id")
+  org     Organization @relation(fields: [orgId], references: [id])
+  team    Team?        @relation(fields: [teamId], references: [id])
+  posts   Post[]
+
+  @@map("channels")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  body      String
+  channelId String   @map("channel_id")
+  authorId  String   @map("author_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  channel   Channel  @relation(fields: [channelId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@map("posts")
+}
+
+model Poll {
+  id        String       @id @default(cuid())
+  question  String
+  teamId    String       @map("team_id")
+  closesAt  DateTime?    @map("closes_at")
+  createdAt DateTime     @default(now()) @map("created_at")
+  team      Team         @relation(fields: [teamId], references: [id])
+  options   PollOption[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id     String     @id @default(cuid())
+  label  String
+  pollId String     @map("poll_id")
+  poll   Poll       @relation(fields: [pollId], references: [id])
+  votes  PollVote[]
+
+  @@map("poll_options")
+}
+
+model PollVote {
+  id       String     @id @default(cuid())
+  optionId String     @map("option_id")
+  userId   String     @map("user_id")
+  option   PollOption @relation(fields: [optionId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+
+  @@unique([optionId, userId])
+  @@map("poll_votes")
+}
+
+model Expert {
+  id        String      @id @default(cuid())
+  userId    String      @unique @map("user_id")
+  area      SupportArea
+  languages String[]
+  bio       String?
+  user      User        @relation(fields: [userId], references: [id])
+  contents  ContentItem[]
+
+  @@map("experts")
+}
+
+model ContentItem {
+  id        String      @id @default(cuid())
+  title     String
+  summary   String
+  body      String
+  kind      ContentKind
+  area      SupportArea
+  locale    String      @default("en")
+  expertId  String?     @map("expert_id")
+  expert    Expert?     @relation(fields: [expertId], references: [id])
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("content_items")
+}
+
+model EventRequest {
+  id           String             @id @default(cuid())
+  orgId        String             @map("org_id")
+  participants Int
+  location     String
+  dateRange    String             @map("date_range")
+  budget       String
+  purpose      String
+  options      String[]
+  status       EventRequestStatus @default(REQUESTED)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  org          Organization       @relation(fields: [orgId], references: [id])
+
+  @@map("event_requests")
+}

@@ -1,1 +1,1 @@
-{ "extends": "@nestself/typescript-config/nestjs.json", "compilerOptions": { "outDir": "./dist", "baseUrl": "./" }, "include": ["src", "test", "prisma.config.ts", "prisma/seed.ts"] }
+{ "extends": "@nestself/typescript-config/nestjs.json", "compilerOptions": { "outDir": "./dist", "baseUrl": "./" }, "include": ["src", "test", "prisma.config.ts"] }

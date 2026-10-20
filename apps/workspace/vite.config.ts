@@ -1,2 +1,25 @@
 import { defineConfig } from 'vite';
-export default defineConfig({});
+import react from '@vitejs/plugin-react-swc';
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      target: 'react',
+      routesDirectory: './src/routes',
+      generatedRouteTree: './src/routeTree.gen.ts',
+      autoCodeSplitting: true,
+    }),
+    react(),
+    tailwindcss(),
+  ],
+  server: {
+    port: 5173,
+    strictPort: true,
+    fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] },
+    proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true } },
+  },
+  build: { sourcemap: true },
+});

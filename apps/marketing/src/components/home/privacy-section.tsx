@@ -1,0 +1,47 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
+import { LockKey } from '@phosphor-icons/react';
+import { Button, Text, Dialog, DialogTrigger, DialogContent, TextLink } from '@nestself/ui';
+import type { Locale } from '@nestself/i18n';
+
+export function PrivacySection({ locale }: { locale: Locale }) {
+  const { t } = useTranslation(['marketing', 'common']);
+
+  return (
+    <div className="grid grid-cols-[auto_1fr_auto] gap-6 py-12 border-b border-border-subtle items-start @max-[599px]:grid-cols-1 @max-[599px]:gap-4">
+      <LockKey size={32} weight="duotone" aria-hidden className="text-primary mt-1" />
+      <div>
+        <h2 className="type-section-title">{t('marketing:privacy.title')}</h2>
+        <Text tone="secondary" className="mt-2">
+          {t('marketing:privacy.body')}
+        </Text>
+      </div>
+      <Dialog>
+        <DialogTrigger>
+          <Button variant="secondary" size="sm">
+            {t('marketing:privacy.cta')}
+          </Button>
+        </DialogTrigger>
+        <DialogContent
+          title={t('marketing:privacy.dialogTitle')}
+          description={t('marketing:privacy.dialogLead')}
+          closeLabel={t('common:nav.close')}
+        >
+          <ul className="space-y-4 mt-4">
+            <li className="type-body text-text-secondary">{t('marketing:privacy.rows.employee')}</li>
+            <li className="type-body text-text-secondary">{t('marketing:privacy.rows.advisor')}</li>
+            <li className="type-body text-text-secondary">{t('marketing:privacy.rows.employer')}</li>
+            <li className="type-body text-text-secondary">{t('marketing:privacy.rows.exceptional')}</li>
+          </ul>
+          <p className="mt-6 type-metadata text-text-secondary">{t('marketing:privacy.disclaimer')}</p>
+          <div className="mt-4">
+            <TextLink href={`/${locale}/privacy-model`}>
+              {t('marketing:privacy.cta')}
+            </TextLink>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
