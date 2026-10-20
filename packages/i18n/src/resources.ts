@@ -1,4 +1,4 @@
-import type { Namespace } from './types.js';
+import type { Namespace } from './types';
 
 import enAdmin from '../locales/en/admin.json';
 import enCommon from '../locales/en/common.json';

@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import type { ViewProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
+import { useTheme } from '../theme/useTheme';
 
 export interface ScreenProps extends ViewProps {
   children: React.ReactNode;

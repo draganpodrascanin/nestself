@@ -22,6 +22,11 @@ describe('Checkbox', () => {
     expect(checkbox).toHaveAttribute('data-checked', '');
   });
 
+  it('has an accessible name matching the label text', () => {
+    render(<Checkbox>Accept terms</Checkbox>);
+    expect(screen.getByRole('checkbox', { name: 'Accept terms' })).toBeInTheDocument();
+  });
+
   it('passes axe a11y check', async () => {
     const { container } = render(<Checkbox>Terms</Checkbox>);
     await expectNoA11yViolations(container);

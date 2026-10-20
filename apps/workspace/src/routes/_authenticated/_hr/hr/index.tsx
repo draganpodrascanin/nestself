@@ -4,13 +4,13 @@ import {
   Heading,
   Text,
   MetricCard,
+  MetricGroup,
   Table,
   Th,
   Td,
   ProtectedValue,
-  EventRequestSummary,
 } from '@nestself/ui';
-import { SAMPLE_HR_PROGRAMME, SAMPLE_EVENT_REQUEST } from '@nestself/sample-data';
+import { SAMPLE_HR_PROGRAMME } from '@nestself/sample-data';
 import { formatCurrency } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 
@@ -27,18 +27,22 @@ function HrIndexPage() {
     {
       measure: t('workspace:hr.eligible'),
       value: String(SAMPLE_HR_PROGRAMME.eligibleEmployees),
+      meaning: t('workspace:hr.meaningEligible'),
     },
     {
       measure: t('workspace:hr.activated'),
       value: String(SAMPLE_HR_PROGRAMME.activatedAccounts),
+      meaning: t('workspace:hr.meaningActivated'),
     },
     {
       measure: t('workspace:hr.fund'),
       value: formatCurrency(SAMPLE_HR_PROGRAMME.availableFund, currency, locale),
+      meaning: t('workspace:hr.meaningFund'),
     },
     {
       measure: t('workspace:hr.reserved'),
       value: formatCurrency(SAMPLE_HR_PROGRAMME.reserved, currency, locale),
+      meaning: '',
     },
   ];
 
@@ -49,7 +53,7 @@ function HrIndexPage() {
       </Heading>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <MetricGroup label={t('workspace:hr.programme')} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard
           label={t('workspace:hr.eligible')}
           value={String(SAMPLE_HR_PROGRAMME.eligibleEmployees)}
@@ -62,14 +66,15 @@ function HrIndexPage() {
           label={t('workspace:hr.reserved')}
           value={formatCurrency(SAMPLE_HR_PROGRAMME.reserved, currency, locale)}
         />
-      </div>
+      </MetricGroup>
 
       {/* Programme measures table */}
       <Table density="default">
         <thead>
           <tr>
-            <Th className="bg-tint border-b border-border-subtle">{t('workspace:hr.programme')}</Th>
-            <Th numeric className="bg-tint border-b border-border-subtle">{t('common:action.viewTotal')}</Th>
+            <Th className="bg-tint border-b border-border-subtle">{t('workspace:hr.measure')}</Th>
+            <Th numeric className="bg-tint border-b border-border-subtle">{t('workspace:hr.value')}</Th>
+            <Th className="bg-tint border-b border-border-subtle">{t('workspace:hr.meaning')}</Th>
           </tr>
         </thead>
         <tbody>
@@ -77,15 +82,31 @@ function HrIndexPage() {
             <tr key={row.measure}>
               <Td className="border-b border-border-subtle">{row.measure}</Td>
               <Td numeric className="border-b border-border-subtle">{row.value}</Td>
+              <Td className="border-b border-border-subtle text-text-secondary type-metadata">{row.meaning}</Td>
             </tr>
           ))}
           <tr>
             <Td className="border-b border-border-subtle">{t('workspace:hr.teamBreakdown')}</Td>
             <Td numeric className="border-b border-border-subtle">
               <ProtectedValue
-                label={t('common:state.protected.title')}
-                reason={t('common:state.protected.body')}
+                label={t('workspace:hr.protectedLabel')}
+                reason={t('workspace:hr.meaningTeamBreakdown')}
+                totalAction={
+                  <button
+                    type="button"
+                    className="type-metadata text-primary underline"
+                    aria-label={t('workspace:hr.viewTotal')}
+                    onClick={() => {
+                      /* No-op in sample mode */
+                    }}
+                  >
+                    {t('workspace:hr.viewTotal')}
+                  </button>
+                }
               />
+            </Td>
+            <Td className="border-b border-border-subtle text-text-secondary type-metadata">
+              {t('workspace:hr.meaningTeamBreakdown')}
             </Td>
           </tr>
         </tbody>
@@ -95,31 +116,46 @@ function HrIndexPage() {
         {t('workspace:hr.protectedNote')}
       </Text>
 
-      {/* Event request summary */}
-      <Heading level={2} typeRole="sectionTitle" className="mt-8">
-        {t('common:nav.manage')}
-      </Heading>
-      <EventRequestSummary
-        request={{
-          participants: String(SAMPLE_EVENT_REQUEST.participants),
-          location: SAMPLE_EVENT_REQUEST.location,
-          dates: '',
-          budget: '',
-          options: [...SAMPLE_EVENT_REQUEST.options],
-          workflow: [],
-        }}
-        labels={{
-          field: t('workspace:hr.programme'),
-          example: t('common:sample.demoNoop'),
-          required: t('workspace:hr.programme'),
-          participants: t('common:count.participant_other', { count: SAMPLE_EVENT_REQUEST.participants }),
-          location: SAMPLE_EVENT_REQUEST.location,
-          dates: '',
-          budget: '',
-          yes: t('common:action.confirm'),
-          no: t('common:action.cancel'),
-        }}
-      />
+      {/* Team experiences / event request summary */}
+      <section className="space-y-4">
+        <Heading level={2} typeRole="sectionTitle">
+          {t('workspace:hr.teamExperiences')}
+        </Heading>
+        <Text className="text-text-secondary">
+          {t('workspace:hr.teamExperiencesLead')}
+        </Text>
+        <Table density="default">
+          <thead>
+            <tr>
+              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.field')}</Th>
+              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.example')}</Th>
+              <Th className="bg-tint border-b border-border-subtle">{t('workspace:events.comparison')}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <Td className="border-b border-border-subtle">{t('workspace:events.participantsLocation')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.exampleParticipantsLocation')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.compareParticipantsLocation')}</Td>
+            </tr>
+            <tr>
+              <Td className="border-b border-border-subtle">{t('workspace:events.datesBudget')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.exampleDatesBudget')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.compareDatesBudget')}</Td>
+            </tr>
+            <tr>
+              <Td className="border-b border-border-subtle">{t('workspace:events.options')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.exampleOptions')}</Td>
+              <Td className="border-b border-border-subtle">{t('workspace:events.compareOptions')}</Td>
+            </tr>
+            <tr>
+              <Td>{t('workspace:events.workflow')}</Td>
+              <Td>{t('workspace:events.exampleWorkflow')}</Td>
+              <Td>{t('workspace:events.compareWorkflow')}</Td>
+            </tr>
+          </tbody>
+        </Table>
+      </section>
     </div>
   );
 }

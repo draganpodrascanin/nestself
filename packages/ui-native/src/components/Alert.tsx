@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import type { ViewProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
-import { Text } from './Text.js';
+import { useTheme } from '../theme/useTheme';
+import { Text } from './Text';
 
 export type AlertTone = 'success' | 'warning' | 'danger' | 'info';
 

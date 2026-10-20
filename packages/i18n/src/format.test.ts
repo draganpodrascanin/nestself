@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCurrency, formatDate } from './format.js';
+import { formatCurrency, formatDate } from './format';
 
 describe('formatCurrency', () => {
   it('formats EUR in English locale', () => {

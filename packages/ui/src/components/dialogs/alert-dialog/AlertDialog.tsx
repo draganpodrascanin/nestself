@@ -1,5 +1,6 @@
 import { AlertDialog as BaseAlertDialog } from '@base-ui/react/alert-dialog';
-import type { ReactNode } from 'react';
+import { Children, isValidElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
 export interface AlertDialogProps {
@@ -22,8 +23,28 @@ export interface AlertDialogTriggerProps {
   className?: string;
 }
 
+/**
+ * When `children` is a single React element (e.g. `<Button>`), the element
+ * itself becomes the trigger via Base UI's `render` prop, avoiding a nested
+ * `<button>`.  When `children` is text or a fragment, the trigger wraps it
+ * as before.
+ */
 export function AlertDialogTrigger({ children, className }: AlertDialogTriggerProps) {
+  if (isSingleElement(children)) {
+    return (
+      <BaseAlertDialog.Trigger render={children as ReactElement} className={className} />
+    );
+  }
   return <BaseAlertDialog.Trigger className={className}>{children}</BaseAlertDialog.Trigger>;
+}
+
+function isSingleElement(children: ReactNode): boolean {
+  try {
+    const child = Children.only(children);
+    return isValidElement(child);
+  } catch {
+    return false;
+  }
 }
 
 export interface AlertDialogContentProps {

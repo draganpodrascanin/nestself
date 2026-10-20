@@ -1,8 +1,8 @@
 import { Text as RNText } from 'react-native';
 import type { TextProps as RNTextProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
-import { fontFamilyForWeight, resolveTone } from '../lib/typography.js';
-import type { TypeRole, Tone } from '../lib/typography.js';
+import { useTheme } from '../theme/useTheme';
+import { fontFamilyForWeight, resolveTone } from '../lib/typography';
+import type { TypeRole, Tone } from '../lib/typography';
 
 export interface TextProps extends Omit<RNTextProps, 'role'> {
   /** Typography role from the type scale. Defaults to 'body'. */

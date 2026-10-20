@@ -35,7 +35,7 @@ for (const entry of pages) {
 }
 
 test.describe('keyboard navigation: marketing-home', () => {
-  test.fixme('first Tab focuses the skip link', async ({ page }) => {
+  test('first Tab focuses the skip link', async ({ page }) => {
     await page.goto('http://localhost:3000/en');
     await settle(page);
     await page.keyboard.press('Tab');
@@ -43,7 +43,7 @@ test.describe('keyboard navigation: marketing-home', () => {
     expect(focused).toMatch(/skip/i);
   });
 
-  test.fixme('privacy dialog traps focus and Escape returns it to trigger', async ({ page }) => {
+  test('privacy dialog traps focus and Escape returns it to trigger', async ({ page }) => {
     await page.goto('http://localhost:3000/en');
     await settle(page);
 

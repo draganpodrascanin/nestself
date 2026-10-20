@@ -98,8 +98,8 @@ describe('workspace routes', () => {
       expect(screen.getByText('Legal guidance')).toBeInTheDocument();
     });
 
-    // Step 1: BookingDemo shows "Choose a time" button — click to advance
-    const seeTimesBtn = await screen.findByRole('button', { name: 'Choose a time' });
+    // Step 1: BookingDemo shows "See available times" button — click to advance
+    const seeTimesBtn = await screen.findByRole('button', { name: 'See available times' });
     await user.click(seeTimesBtn);
 
     // Step 2: Select a time slot, then click Continue

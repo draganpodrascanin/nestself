@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import type { IconProps as PhosphorIconProps, IconWeight } from 'phosphor-react-native';
-import { useTheme } from '../theme/useTheme.js';
+import { useTheme } from '../theme/useTheme';
 
 export interface IconProps {
   /** The Phosphor icon component to render. */

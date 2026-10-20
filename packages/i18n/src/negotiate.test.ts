@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { negotiateLocale, parseAcceptLanguage } from './types.js';
+import { negotiateLocale, parseAcceptLanguage } from './types';
 
 describe('negotiateLocale', () => {
   it('resolves sr-Latn-RS to sr-Latn', () => {

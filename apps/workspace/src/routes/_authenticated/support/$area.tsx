@@ -4,6 +4,7 @@ import {
   Heading,
   Text,
   Avatar,
+  Badge,
   BookingDemo,
   PrivacyAtPointOfUse,
   useAnnounce,
@@ -42,12 +43,19 @@ function SupportAreaPage() {
     available: true,
   }));
 
+  // Local expert metadata until sample-data fixture adds displayName/format
+  const expertInfo: Record<string, { name: string; format: 'online' | 'inPerson' }> = {
+    expert_psych: { name: SAMPLE_BOOKING.advisorName, format: SAMPLE_BOOKING.format },
+    expert_legal: { name: 'Dragan Vasic', format: 'inPerson' },
+    expert_fin: { name: 'Tamara Kovacevic', format: 'online' },
+  };
+
   const bookingLabels = {
     step: t('workspace:booking.step', { current: '{{current}}', total: '{{total}}' }),
     chooseAdvisor: t('workspace:booking.chooseAdvisor'),
-    advisorLead: t('workspace:categories.' + typedArea),
-    timesAvailable: `${SAMPLE_BOOKING.slots.length} ${t('workspace:booking.chooseTime')}`,
-    seeTimes: t('workspace:booking.chooseTime'),
+    advisorLead: t('workspace:booking.advisorLead'),
+    timesAvailable: t('workspace:booking.timesAvailable'),
+    seeTimes: t('workspace:booking.seeTimes'),
     chooseTime: t('workspace:booking.chooseTime'),
     reviewAndConfirm: t('workspace:booking.review'),
     confirm: t('common:action.confirm'),
@@ -102,19 +110,40 @@ function SupportAreaPage() {
       {/* Experts */}
       <section>
         <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:booking.chooseAdvisor')}
+          {t('workspace:support.experts')}
         </Heading>
-        <div className="flex gap-4 flex-wrap">
-          {experts.map((expert) => (
-            <Avatar
-              key={expert.id}
-              initials={expert.initials}
-              name={expert.initials}
-              size="md"
-            />
-          ))}
+        <div className="space-y-4">
+          {experts.map((expert) => {
+            const info = expertInfo[expert.id];
+            return (
+              <div key={expert.id} className="flex items-center gap-4">
+                <Avatar
+                  initials={expert.initials}
+                  name={info?.name ?? expert.initials}
+                  size="md"
+                />
+                <div>
+                  <Text className="font-[var(--font-weight-label)]">
+                    {info?.name ?? expert.initials}
+                  </Text>
+                  <Text className="type-metadata text-text-secondary">
+                    {t(`workspace:categories.${expert.area}`)}
+                  </Text>
+                  <Text className="type-metadata text-text-secondary">
+                    {t(`workspace:appointment.${info?.format ?? 'online'}`)}
+                  </Text>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
+
+      {/* Available times badge */}
+      <div className="flex items-center gap-2">
+        <Badge tone="success">{SAMPLE_BOOKING.slots.length}</Badge>
+        <Text className="type-metadata text-success">{t('workspace:booking.timesAvailable')}</Text>
+      </div>
 
       {/* Booking demo */}
       <BookingDemo

@@ -1,7 +1,7 @@
 import { View, StyleSheet } from 'react-native';
 import type { ViewProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
-import { Text } from './Text.js';
+import { useTheme } from '../theme/useTheme';
+import { Text } from './Text';
 
 export interface CostRow {
   /** Label for the cost line (e.g. "Session fee"). */

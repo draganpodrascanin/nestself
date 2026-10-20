@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { nativeThemes, nativeType } from './native.js';
-import type { NativeColors } from './native.js';
+import { nativeThemes, nativeType } from './native';
+import type { NativeColors } from './native';
 import tokensJson from '../tokens.json';
 
 const palettes = ['forest', 'ink', 'plum', 'azure'] as const;

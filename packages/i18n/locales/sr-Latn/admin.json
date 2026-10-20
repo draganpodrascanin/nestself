@@ -81,6 +81,9 @@
     "modeLight": "Svetli",
     "modeDark": "Tamni"
   },
+  "dev": {
+    "sampleRole": "Uzorak uloge"
+  },
   "api": {
     "connected": "API povezan",
     "notConnected": "API nije povezan (režim uzorka)"

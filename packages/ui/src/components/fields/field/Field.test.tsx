@@ -90,6 +90,15 @@ describe('Select', () => {
     expect(screen.getByText('Pick one')).toBeInTheDocument();
   });
 
+  it('combobox has accessible name from Field label', () => {
+    render(
+      <Field label="Choice">
+        <Select options={options} placeholder="Pick one" />
+      </Field>,
+    );
+    expect(screen.getByRole('combobox', { name: 'Choice' })).toBeInTheDocument();
+  });
+
   it('opens with keyboard (ArrowDown), selects with Enter and exposes the chosen value', async () => {
     const handleChange = vi.fn();
     render(

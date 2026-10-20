@@ -1,7 +1,7 @@
 import i18next from 'i18next';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resources } from './resources.js';
+import { resources } from './resources';
 
 describe('i18next plural integration', () => {
   afterEach(async () => {

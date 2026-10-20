@@ -2,8 +2,8 @@ import { Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import type { PressableProps } from 'react-native';
 import type { ComponentType } from 'react';
 import type { IconProps as PhosphorIconProps } from 'phosphor-react-native';
-import { useTheme } from '../theme/useTheme.js';
-import { Text } from './Text.js';
+import { useTheme } from '../theme/useTheme';
+import { Text } from './Text';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 

@@ -1,6 +1,6 @@
 import { useContext } from 'react';
-import { ThemeContext } from './ThemeProvider.js';
-import type { ThemeState } from './types.js';
+import { ThemeContext } from './ThemeProvider';
+import type { ThemeState } from './types';
 
 /**
  * Returns the current native theme from the nearest ThemeProvider.

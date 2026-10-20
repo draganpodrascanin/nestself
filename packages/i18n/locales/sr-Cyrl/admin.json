@@ -81,6 +81,9 @@
     "modeLight": "Светли",
     "modeDark": "Тамни"
   },
+  "dev": {
+    "sampleRole": "Узорак улоге"
+  },
   "api": {
     "connected": "АПИ повезан",
     "notConnected": "АПИ није повезан (режим узорка)"

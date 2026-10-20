@@ -1,5 +1,5 @@
-import { DEFAULT_THEME, isPalette, isMode, isFont } from './index.js';
-import type { ThemeSelection } from './index.js';
+import { DEFAULT_THEME, isPalette, isMode, isFont } from './index';
+import type { ThemeSelection } from './index';
 
 export const THEME_STORAGE_KEY = 'nestself-theme';
 

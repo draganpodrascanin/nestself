@@ -67,6 +67,19 @@ describe('Table', () => {
     expect(screen.getByText('Employee list')).toBeInTheDocument();
   });
 
+  it('scroll wrapper is a focusable region with aria-label from caption', () => {
+    render(
+      <Table caption="Scrollable table">
+        <tbody>
+          <tr><Td>Data</Td></tr>
+        </tbody>
+      </Table>,
+    );
+    const region = screen.getByRole('region', { name: 'Scrollable table' });
+    expect(region).toBeInTheDocument();
+    expect(region).toHaveAttribute('tabindex', '0');
+  });
+
   it('passes axe a11y check', async () => {
     const { container } = render(
       <Table caption="Accessible table">

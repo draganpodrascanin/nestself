@@ -1,5 +1,5 @@
 // Types
-export type { Locale, Namespace } from './types.js';
+export type { Locale, Namespace } from './types';
 export {
   locales,
   defaultLocale,
@@ -8,13 +8,13 @@ export {
   isLocale,
   negotiateLocale,
   parseAcceptLanguage,
-} from './types.js';
+} from './types';
 
 // Config
-export { i18nBaseOptions, defaultLng } from './config.js';
+export { i18nBaseOptions, defaultLng } from './config';
 
 // Resources
-export { resources, resourcesFor } from './resources.js';
+export { resources, resourcesFor } from './resources';
 
 // Format helpers
 export {
@@ -22,4 +22,4 @@ export {
   formatDate,
   formatTime,
   formatDateTime,
-} from './format.js';
+} from './format';

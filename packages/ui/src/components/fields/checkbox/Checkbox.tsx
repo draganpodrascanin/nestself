@@ -1,4 +1,5 @@
 import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox';
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -21,6 +22,7 @@ export function Checkbox({
   children,
   className,
 }: CheckboxProps) {
+  const labelId = useId();
   return (
     <label
       className={cn(
@@ -35,6 +37,7 @@ export function Checkbox({
         onCheckedChange={onCheckedChange}
         disabled={disabled}
         name={name}
+        aria-labelledby={children ? labelId : undefined}
         className={cn(
           'inline-flex items-center justify-center size-[1.125rem] rounded-sm border-2 border-border-control bg-surface transition-colors duration-[var(--motion-fast)]',
           'data-checked:bg-primary data-checked:border-primary',
@@ -48,7 +51,7 @@ export function Checkbox({
           </svg>
         </BaseCheckbox.Indicator>
       </BaseCheckbox.Root>
-      {children ? <span className="type-body text-text">{children}</span> : null}
+      {children ? <span id={labelId} className="type-body text-text">{children}</span> : null}
     </label>
   );
 }

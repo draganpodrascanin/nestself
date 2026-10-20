@@ -2,10 +2,10 @@ import { View, StyleSheet } from 'react-native';
 import type { ViewProps } from 'react-native';
 import type { ComponentType } from 'react';
 import type { IconProps as PhosphorIconProps } from 'phosphor-react-native';
-import { useTheme } from '../theme/useTheme.js';
-import { Text } from './Text.js';
-import { Button } from './Button.js';
-import type { ButtonProps } from './Button.js';
+import { useTheme } from '../theme/useTheme';
+import { Text } from './Text';
+import { Button } from './Button';
+import type { ButtonProps } from './Button';
 
 /**
  * StatusBlock pattern states from the design handoff.

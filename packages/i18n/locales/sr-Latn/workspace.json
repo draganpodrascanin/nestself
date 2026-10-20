@@ -36,6 +36,9 @@
   "booking": {
     "step": "Korak {{current}} od {{total}}",
     "chooseAdvisor": "Izaberi savetnika",
+    "advisorLead": "Pronađi format i osobu koji odgovaraju.",
+    "timesAvailable": "Dostupni termini",
+    "seeTimes": "Pogledaj dostupne termine",
     "chooseTime": "Izaberi termin",
     "review": "Pregledaj svoj termin",
     "price": "Cena termina",
@@ -79,7 +82,38 @@
     "reserved": "Rezervisano",
     "activated": "Aktivirani nalozi",
     "teamBreakdown": "Pregled po timu",
-    "protectedNote": "Zaštićeno nije isto što i nula."
+    "protectedNote": "Zaštićeno nije isto što i nula.",
+    "measure": "Mera programa",
+    "value": "Vrednost",
+    "meaning": "Značenje",
+    "meaningEligible": "Administrativna podobnost, ne lista istorije podrške",
+    "meaningActivated": "Ilustrativna mera na nivou programa",
+    "meaningTeamBreakdown": "Premalo za prikaz bez otkrivanja identiteta",
+    "meaningFund": "Nakon aktivnih rezervacija u ovom fiktivnom primeru",
+    "protectedLabel": "Zaštićeno",
+    "viewTotal": "Prikaži ukupno",
+    "teamExperiences": "Timska iskustva",
+    "teamExperiencesLead": "Zahtev za 25 osoba obuhvata lokaciju, datume, budžet, svrhu i praktične potrebe. Kuglanje, karting ili dan u prirodi su kategorije za poređenje, ne izmišljene ponude provajdera."
+  },
+  "events": {
+    "field": "Polje zahteva",
+    "example": "Primer",
+    "comparison": "Obavezno poređenje",
+    "participantsLocation": "Učesnici / lokacija",
+    "datesBudget": "Datumi / budžet",
+    "options": "Opcije",
+    "workflow": "Tok rada",
+    "exampleParticipantsLocation": "25 / Novi Sad",
+    "exampleDatesBudget": "Izabrani opseg / iznos i valuta",
+    "exampleOptions": "Kuglanje, karting, dan u prirodi",
+    "exampleWorkflow": "Zatraženo → ponude spremne → odabrano",
+    "compareParticipantsLocation": "Kapacitet, prevoz i pristupačnost",
+    "compareDatesBudget": "Uključene stavke, dostupnost i uslovi",
+    "compareOptions": "Cena, trajanje, mesto, hrana i uslovi otkazivanja",
+    "compareWorkflow": "Vlasnik, status i realan rok za odgovor"
+  },
+  "support": {
+    "experts": "Savetnici"
   },
   "api": {
     "connected": "API je povezan",

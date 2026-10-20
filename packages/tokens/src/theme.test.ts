@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from 'vitest';
-import { applyTheme, readTheme, persistTheme, loadPersistedTheme, themeBootScript, THEME_STORAGE_KEY, resolveInitialTheme } from './theme.js';
-import { DEFAULT_THEME } from './index.js';
-import type { ThemeSelection } from './index.js';
+import { applyTheme, readTheme, persistTheme, loadPersistedTheme, themeBootScript, THEME_STORAGE_KEY, resolveInitialTheme } from './theme';
+import { DEFAULT_THEME } from './index';
+import type { ThemeSelection } from './index';
 
 beforeEach(() => {
   // Reset attributes

@@ -51,6 +51,25 @@ describe('sample-data fixtures', () => {
   it('SAMPLE_SESSIONS.hr_admin.orgRole === "hr_admin"', () => {
     expect(SAMPLE_SESSIONS.hr_admin.orgRole).toBe('hr_admin');
   });
+
+  it('SAMPLE_BOOKING.appointmentAt formatted in Europe/Belgrade reads 16:30', () => {
+    const dt = new Date(SAMPLE_BOOKING.appointmentAt);
+    const time = dt.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Belgrade',
+    });
+    expect(time).toBe('16:30');
+  });
+
+  it('sample posts are neutral team announcements without performance claims', () => {
+    const banned = ['all-time high', 'closed a great', 'shipped on time', 'satisfaction scores'];
+    for (const post of SAMPLE_POSTS) {
+      for (const phrase of banned) {
+        expect(post.content.toLowerCase()).not.toContain(phrase);
+      }
+    }
+  });
 });
 
 describe('sample-data mode helpers', () => {

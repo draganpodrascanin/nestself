@@ -36,6 +36,9 @@
   "booking": {
     "step": "Step {{current}} of {{total}}",
     "chooseAdvisor": "Choose an advisor",
+    "advisorLead": "Find a format and a person that fit.",
+    "timesAvailable": "Times available",
+    "seeTimes": "See available times",
     "chooseTime": "Choose a time",
     "review": "Review your appointment",
     "price": "Appointment price",
@@ -79,7 +82,38 @@
     "reserved": "Reserved",
     "activated": "Activated accounts",
     "teamBreakdown": "Team breakdown",
-    "protectedNote": "Protected is not the same as zero."
+    "protectedNote": "Protected is not the same as zero.",
+    "measure": "Programme measure",
+    "value": "Value",
+    "meaning": "Meaning",
+    "meaningEligible": "Administrative eligibility, not a support-history list",
+    "meaningActivated": "An illustrative programme-level measure",
+    "meaningTeamBreakdown": "Too small to show without exposing a person",
+    "meaningFund": "After active reservations in this fictional example",
+    "protectedLabel": "Protected",
+    "viewTotal": "View total",
+    "teamExperiences": "Team experiences",
+    "teamExperiencesLead": "A request for 25 people captures location, dates, budget, purpose and practical needs. Bowling, karting or an outdoor day are categories to compare, not invented provider offers."
+  },
+  "events": {
+    "field": "Request field",
+    "example": "Example",
+    "comparison": "Required comparison",
+    "participantsLocation": "Participants / location",
+    "datesBudget": "Dates / budget",
+    "options": "Options",
+    "workflow": "Workflow",
+    "exampleParticipantsLocation": "25 / Novi Sad",
+    "exampleDatesBudget": "Chosen range / amount and currency",
+    "exampleOptions": "Bowling, karting, outdoor day",
+    "exampleWorkflow": "Requested → offers ready → selected",
+    "compareParticipantsLocation": "Capacity, transport and accessibility",
+    "compareDatesBudget": "Included items, availability and conditions",
+    "compareOptions": "Price, duration, venue, food and cancellation terms",
+    "compareWorkflow": "Owner, status and a real response deadline"
+  },
+  "support": {
+    "experts": "Advisors"
   },
   "api": {
     "connected": "API connected",

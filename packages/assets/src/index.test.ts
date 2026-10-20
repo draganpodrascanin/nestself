@@ -5,7 +5,7 @@ import {
   availableWidths,
   srcSet,
   focalObjectPosition,
-} from './index.js';
+} from './index';
 
 describe('photos', () => {
   it('has 10 photos', () => {

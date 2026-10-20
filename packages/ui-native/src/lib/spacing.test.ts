@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { space, radius } from './spacing.js';
+import { space, radius } from './spacing';
 
 describe('space', () => {
   it('returns 0 for key 0', () => {

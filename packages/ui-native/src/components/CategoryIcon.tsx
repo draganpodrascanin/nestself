@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import type { IconProps as PhosphorIconProps } from 'phosphor-react-native';
-import { useTheme } from '../theme/useTheme.js';
+import { useTheme } from '../theme/useTheme';
 
 export type CategoryKey =
   | 'mentalSupport'

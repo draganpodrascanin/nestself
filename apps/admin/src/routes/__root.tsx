@@ -3,6 +3,8 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import type { Session } from '@nestself/contracts';
+import { platformRoles } from '@nestself/contracts';
+import type { PlatformRole } from '@nestself/contracts';
 import {
   ThemeProvider,
   ThemeStudio,
@@ -16,7 +18,7 @@ import { SampleDataBanner } from '@nestself/ui';
 import { isSampleMode } from '@nestself/sample-data';
 import { healthQueryOptions } from '@nestself/api-client';
 import i18n from '../i18n';
-import { SessionProvider } from '../session';
+import { SessionProvider, useSession } from '../session';
 import { api } from '../api';
 import '../app.css';
 
@@ -46,9 +48,33 @@ function ApiStatus() {
 
 export { ApiStatus };
 
+function AdminRoleSwitcher() {
+  const { t } = useTranslation('admin');
+  const { session, setRole } = useSession();
+  const currentRole = session.platformRole ?? 'admin';
+
+  return (
+    <label className="flex flex-col gap-1 type-metadata">
+      {t('dev.sampleRole')}
+      <select
+        value={currentRole}
+        onChange={(e) => setRole(e.target.value as PlatformRole)}
+        className="rounded-control border border-border-control bg-surface px-2 py-1"
+      >
+        {platformRoles.map((role) => (
+          <option key={role} value={role}>
+            {role}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function RootComponent() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'admin']);
   const isDev = import.meta.env.DEV;
+  const isWebdriver = typeof navigator !== 'undefined' && navigator.webdriver;
   const sampleMode = isDev || isSampleMode(import.meta.env as unknown as Record<string, string | undefined>);
   const ctx = Route.useRouteContext();
 
@@ -62,16 +88,24 @@ function RootComponent() {
                 {sampleMode ? <SampleDataBanner message={t('sample.banner')} /> : null}
                 <SkipLink>{t('nav.skipToContent')}</SkipLink>
                 <Outlet />
-                {isDev ? (
-                  <ThemeStudio
-                    enabled
-                    labels={{
-                      palette: t('theme.palette'),
-                      mode: t('theme.mode'),
-                      font: t('theme.font'),
-                      heading: t('theme.designControls'),
-                    }}
-                  />
+                {isDev && !isWebdriver ? (
+                  <>
+                    <ThemeStudio
+                      enabled
+                      labels={{
+                        palette: t('theme.palette'),
+                        mode: t('theme.mode'),
+                        font: t('theme.font'),
+                        heading: t('theme.designControls'),
+                      }}
+                    />
+                    <details className="fixed bottom-20 right-4 z-[var(--z-sticky)] rounded-control bg-surface p-4 shadow-menu border border-border-control">
+                      <summary className="cursor-pointer type-label">{t('admin:dev.sampleRole')}</summary>
+                      <div className="mt-3">
+                        <AdminRoleSwitcher />
+                      </div>
+                    </details>
+                  </>
                 ) : null}
               </SessionProvider>
             </AnnouncerProvider>

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { Heading, Select, Text } from '@nestself/ui';
+import { Heading, Text } from '@nestself/ui';
 import { useTheme } from '@nestself/ui';
 import { locales, localeMeta } from '@nestself/i18n';
 
@@ -28,15 +28,18 @@ function SettingsPage() {
       <Heading level={1}>{t('admin:settings.title')}</Heading>
 
       <div className="mt-8 flex flex-col gap-8">
-        <div>
-          <Heading level={2}>{t('admin:settings.locale')}</Heading>
-          <Select
-            options={localeOptions}
+        <label className="flex flex-col gap-1.5">
+          <span className="type-label text-text">{t('admin:settings.locale')}</span>
+          <select
             value={i18n.resolvedLanguage ?? 'en'}
-            onValueChange={handleLocaleChange}
-            className="mt-3"
-          />
-        </div>
+            onChange={(e) => handleLocaleChange(e.target.value)}
+            className="rounded-control border border-border-control bg-surface text-text px-3 min-h-12 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            {localeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
 
         <div>
           <Heading level={2}>{t('admin:settings.appearance')}</Heading>

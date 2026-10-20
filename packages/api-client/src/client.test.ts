@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { createApiClient } from './client.js';
-import { ApiError } from './errors.js';
+import { createApiClient } from './client';
+import { ApiError } from './errors';
 
 const TestSchema = z.object({ ok: z.boolean() });
 

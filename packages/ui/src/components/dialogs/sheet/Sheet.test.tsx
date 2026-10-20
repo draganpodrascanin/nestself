@@ -50,4 +50,32 @@ describe('Sheet', () => {
     await screen.findByRole('dialog');
     await expectNoA11yViolations(container);
   });
+
+  it('renders exactly one button when child is a Button element', () => {
+    const { container } = render(
+      <Sheet>
+        <SheetTrigger>
+          <button data-testid="my-btn">Open sheet btn</button>
+        </SheetTrigger>
+        <SheetContent title="Test Sheet">Body</SheetContent>
+      </Sheet>,
+    );
+    const buttons = container.querySelectorAll('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute('data-testid', 'my-btn');
+  });
+
+  it('clicking a Button-element trigger opens the sheet', async () => {
+    const user = userEvent.setup();
+    render(
+      <Sheet>
+        <SheetTrigger>
+          <button>Open via child</button>
+        </SheetTrigger>
+        <SheetContent title="Opened Sheet">Body</SheetContent>
+      </Sheet>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open via child' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,6 @@
 import { View, Pressable } from 'react-native';
 import type { PressableProps, ViewProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
+import { useTheme } from '../theme/useTheme';
 
 export interface ListRowProps extends Omit<PressableProps, 'children'> {
   /** Content of the list row. */

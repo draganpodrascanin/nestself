@@ -81,6 +81,9 @@
     "modeLight": "Light",
     "modeDark": "Dark"
   },
+  "dev": {
+    "sampleRole": "Sample role"
+  },
   "api": {
     "connected": "API connected",
     "notConnected": "API not connected (sample mode)"

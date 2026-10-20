@@ -11,9 +11,9 @@ import { DEFAULT_THEME } from '@nestself/tokens';
 import type { Palette, Mode } from '@nestself/tokens';
 import { nativeThemes, nativeSpace, nativeRadius } from '@nestself/tokens/native';
 import type { TypeRole } from '@nestself/tokens/native';
-import { typeStyle } from '../lib/typography.js';
-import type { TypeStyleResult } from '../lib/typography.js';
-import type { NativeThemeSelection, ThemeState } from './types.js';
+import { typeStyle } from '../lib/typography';
+import type { TypeStyleResult } from '../lib/typography';
+import type { NativeThemeSelection, ThemeState } from './types';
 
 export const ThemeContext = createContext<ThemeState | null>(null);
 

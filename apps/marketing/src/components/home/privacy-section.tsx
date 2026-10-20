@@ -19,7 +19,7 @@ export function PrivacySection({ locale }: { locale: Locale }) {
       </div>
       <Dialog>
         <DialogTrigger>
-          <Button variant="secondary" size="sm">
+          <Button variant="secondary" size="sm" data-testid="privacy-trigger">
             {t('marketing:privacy.cta')}
           </Button>
         </DialogTrigger>

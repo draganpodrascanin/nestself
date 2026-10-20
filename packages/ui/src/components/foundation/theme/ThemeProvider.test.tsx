@@ -41,6 +41,17 @@ describe('ThemeStudio', () => {
     expect(container.querySelector('details')).toBeNull();
   });
 
+  it('renders nothing when navigator.webdriver is true', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const { container } = render(
+      <ThemeProvider>
+        <ThemeStudio enabled />
+      </ThemeProvider>,
+    );
+    expect(container.querySelector('details')).toBeNull();
+    Object.defineProperty(navigator, 'webdriver', { value: false, configurable: true });
+  });
+
   it('selecting a palette updates data-palette', async () => {
     const user = userEvent.setup();
     render(

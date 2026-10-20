@@ -1,6 +1,6 @@
 import type { InitOptions } from 'i18next';
 
-import { defaultLocale, locales, namespaces } from './types.js';
+import { defaultLocale, locales, namespaces } from './types';
 
 export const i18nBaseOptions: InitOptions = {
   supportedLngs: [...locales],

@@ -101,10 +101,20 @@ export interface ThemeStudioProps {
   };
 }
 
+/**
+ * Dev-only floating panel for switching palette, mode and font.
+ *
+ * Renders nothing when:
+ * - `enabled` is `false`, or
+ * - the page is driven by an automated browser (`navigator.webdriver === true`,
+ *   e.g. Playwright), so screenshots and accessibility audits are not polluted
+ *   by dev chrome.
+ */
 export function ThemeStudio({ enabled, labels }: ThemeStudioProps) {
   const { theme, setPalette, setMode, setFont } = useTheme();
 
   if (!enabled) return null;
+  if (typeof navigator !== 'undefined' && navigator.webdriver === true) return null;
 
   return (
     <details

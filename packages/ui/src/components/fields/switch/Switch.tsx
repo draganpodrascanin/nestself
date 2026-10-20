@@ -1,4 +1,5 @@
 import { Switch as BaseSwitch } from '@base-ui/react/switch';
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -21,6 +22,7 @@ export function Switch({
   children,
   className,
 }: SwitchProps) {
+  const labelId = useId();
   return (
     <label
       className={cn(
@@ -29,13 +31,14 @@ export function Switch({
         className,
       )}
     >
-      {children ? <span className="type-body text-text">{children}</span> : null}
+      {children ? <span id={labelId} className="type-body text-text">{children}</span> : null}
       <BaseSwitch.Root
         checked={checked}
         defaultChecked={defaultChecked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}
         name={name}
+        aria-labelledby={children ? labelId : undefined}
         className={cn(
           'relative inline-flex items-center w-10 h-6 rounded-pill bg-border-control transition-colors duration-[var(--motion-standard)]',
           'data-checked:bg-primary',

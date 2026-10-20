@@ -41,6 +41,7 @@ function NotFoundComponent() {
 function RootComponent() {
   const { t } = useTranslation('common');
   const isDev = import.meta.env.DEV;
+  const isWebdriver = typeof navigator !== 'undefined' && navigator.webdriver;
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -51,7 +52,7 @@ function RootComponent() {
               <SkipLink>{t('nav.skipToContent')}</SkipLink>
               {isDev ? <SampleDataBanner message={t('sample.banner')} /> : null}
               <Outlet />
-              {isDev ? (
+              {isDev && !isWebdriver ? (
                 <>
                   <ThemeStudio
                     enabled

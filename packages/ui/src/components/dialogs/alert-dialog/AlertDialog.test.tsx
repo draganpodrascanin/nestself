@@ -80,4 +80,40 @@ describe('AlertDialog', () => {
     await screen.findByRole('alertdialog');
     await expectNoA11yViolations(container);
   });
+
+  it('renders exactly one button when child is a Button element', () => {
+    const { container } = render(
+      <AlertDialog>
+        <AlertDialogTrigger>
+          <button data-testid="my-btn">Remove item</button>
+        </AlertDialogTrigger>
+        <AlertDialogContent
+          title="Remove?"
+          confirmLabel="Yes"
+          cancelLabel="No"
+        />
+      </AlertDialog>,
+    );
+    const buttons = container.querySelectorAll('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute('data-testid', 'my-btn');
+  });
+
+  it('clicking a Button-element trigger opens the alert dialog', async () => {
+    const user = userEvent.setup();
+    render(
+      <AlertDialog>
+        <AlertDialogTrigger>
+          <button>Remove via child</button>
+        </AlertDialogTrigger>
+        <AlertDialogContent
+          title="Remove?"
+          confirmLabel="Yes"
+          cancelLabel="No"
+        />
+      </AlertDialog>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove via child' }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+  });
 });

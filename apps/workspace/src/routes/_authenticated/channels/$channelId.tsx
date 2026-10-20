@@ -56,7 +56,7 @@ function ChannelPage() {
       </div>
 
       {/* Disabled composer */}
-      <div className="rounded-card border border-border-subtle bg-surface p-4 opacity-60">
+      <div className="rounded-card border border-border-subtle bg-surface p-4" aria-disabled="true">
         <Text className="type-metadata text-text-secondary">
           {t('workspace:messages.typeMessage')}
         </Text>

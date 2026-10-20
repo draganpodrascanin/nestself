@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { typeStyle, resolveTone, fontFamilyForWeight } from './typography.js';
+import { typeStyle, resolveTone, fontFamilyForWeight } from './typography';
 import type { NativeColors } from '@nestself/tokens/native';
 
 describe('typeStyle', () => {

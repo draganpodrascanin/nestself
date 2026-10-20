@@ -117,6 +117,10 @@ export interface SelectProps {
   onValueChange?: (value: string | null) => void;
   disabled?: boolean;
   name?: string;
+  /** Pass-through aria-label for standalone usage (without a `Field` wrapper). */
+  'aria-label'?: string;
+  /** Pass-through aria-labelledby to associate with an external label. */
+  'aria-labelledby'?: string;
   className?: string;
 }
 
@@ -128,6 +132,8 @@ export function Select({
   onValueChange,
   disabled,
   name,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
   className,
 }: SelectProps) {
   return (
@@ -139,6 +145,8 @@ export function Select({
       name={name}
     >
       <BaseSelect.Trigger
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         className={cn(
           'inline-flex items-center justify-between min-h-12 rounded-control border border-border-control bg-surface text-text px-3',
           'data-disabled:bg-tint data-disabled:text-text-secondary',

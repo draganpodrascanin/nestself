@@ -1,4 +1,4 @@
-export { createApiClient } from './client.js';
-export type { ApiClient, ApiClientOptions } from './client.js';
-export { ApiError } from './errors.js';
-export { healthQueryOptions } from './queries/health.js';
+export { createApiClient } from './client';
+export type { ApiClient, ApiClientOptions } from './client';
+export { ApiError } from './errors';
+export { healthQueryOptions } from './queries/health';

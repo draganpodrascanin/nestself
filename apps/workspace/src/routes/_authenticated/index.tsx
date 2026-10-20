@@ -91,7 +91,7 @@ function HomePage() {
                 {t('workspace:appointment.with', { name: SAMPLE_BOOKING.advisorName })}
               </Text>
               <Text className="type-metadata text-text-secondary">
-                {formatDateTime(SAMPLE_BOOKING.date, locale)}
+                {formatDateTime(new Date(SAMPLE_BOOKING.appointmentAt), locale)}
               </Text>
             </div>
           </div>

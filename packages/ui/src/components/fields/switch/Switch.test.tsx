@@ -27,6 +27,11 @@ describe('Switch', () => {
     expect(onCheckedChange.mock.calls[0]?.[0]).toBe(true);
   });
 
+  it('has an accessible name matching the label text', () => {
+    render(<Switch>Dark mode</Switch>);
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeInTheDocument();
+  });
+
   it('passes axe a11y check', async () => {
     const { container } = render(<Switch>Toggle</Switch>);
     await expectNoA11yViolations(container);

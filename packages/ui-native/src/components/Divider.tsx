@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import type { ViewProps } from 'react-native';
-import { useTheme } from '../theme/useTheme.js';
+import { useTheme } from '../theme/useTheme';
 
 export interface DividerProps extends ViewProps {
   /** Optional override for the divider colour. Uses borderSubtle by default. */

@@ -1,6 +1,6 @@
-import type { Locale } from './types.js';
+import type { Locale } from './types';
 
-import { localeMeta } from './types.js';
+import { localeMeta } from './types';
 
 /**
  * Format a monetary amount as currency.

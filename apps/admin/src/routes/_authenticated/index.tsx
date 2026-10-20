@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { Heading, MetricCard, Badge } from '@nestself/ui';
+import { Heading, MetricCard, MetricGroup, Badge } from '@nestself/ui';
 import { SAMPLE_EXPERTS } from '@nestself/sample-data';
 
 function OverviewPage() {
@@ -24,7 +24,7 @@ function OverviewPage() {
   return (
     <div>
       <Heading level={1}>{t('dashboard.overview')}</Heading>
-      <dl className="mt-6 grid gap-4 grid-cols-1 sm:grid-cols-3">
+      <MetricGroup label={t('dashboard.overview')} className="mt-6 grid gap-4 grid-cols-1 sm:grid-cols-3">
         {metrics.map((metric) => (
           <div
             key={metric.label}
@@ -36,7 +36,7 @@ function OverviewPage() {
             </Badge>
           </div>
         ))}
-      </dl>
+      </MetricGroup>
     </div>
   );
 }

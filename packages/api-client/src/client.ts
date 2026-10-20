@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { ApiError } from './errors.js';
+import { ApiError } from './errors';
 
 export interface ApiClientOptions {
   baseUrl: string;

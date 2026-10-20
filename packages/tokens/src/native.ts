@@ -1,4 +1,4 @@
-import type { Palette, Mode } from './index.js';
+import type { Palette, Mode } from './index';
 import tokensJson from '../tokens.json';
 
 // ---------- Colors ----------

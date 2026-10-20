@@ -1,6 +1,7 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { X } from '@phosphor-icons/react';
-import type { ReactNode } from 'react';
+import { Children, isValidElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
 export interface DialogProps {
@@ -23,8 +24,28 @@ export interface DialogTriggerProps {
   className?: string;
 }
 
+/**
+ * When `children` is a single React element (e.g. `<Button>`), the element
+ * itself becomes the trigger via Base UI's `render` prop, avoiding a nested
+ * `<button>` inside the trigger's own `<button>`.  When `children` is text
+ * or a fragment the trigger wraps it in a `<button>` as before.
+ */
 export function DialogTrigger({ children, className }: DialogTriggerProps) {
+  if (isSingleElement(children)) {
+    return (
+      <BaseDialog.Trigger render={children as ReactElement} className={className} />
+    );
+  }
   return <BaseDialog.Trigger className={className}>{children}</BaseDialog.Trigger>;
+}
+
+function isSingleElement(children: ReactNode): boolean {
+  try {
+    const child = Children.only(children);
+    return isValidElement(child);
+  } catch {
+    return false;
+  }
 }
 
 export interface DialogContentProps {

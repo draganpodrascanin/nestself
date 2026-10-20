@@ -55,8 +55,17 @@ function AuthenticatedLayout() {
 
   const allNavItems = [...navItems, ...managerNav, ...hrNav];
 
-  const renderNavItems = (_variant: 'sidebar' | 'bottom') =>
-    allNavItems.map((item) => (
+  /** Bottom bar: at most 5 items (Home, Support, Appointments, Messages, Channels). */
+  const bottomBarItems = [
+    { to: '/' as const, icon: House, label: t('nav.home') },
+    { to: '/support' as const, icon: Heart, label: t('nav.support') },
+    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
+    { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
+    { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
+  ];
+
+  const renderNavItemList = (items: typeof allNavItems) =>
+    items.map((item) => (
       <NavItem
         key={item.to}
         href={item.to}
@@ -78,7 +87,7 @@ function AuthenticatedLayout() {
   const sidebar = (
     <nav aria-label={t('nav.menu')} className="flex flex-col gap-1 p-4">
       <p className="type-label text-primary px-2 py-3">NestSelf</p>
-      {renderNavItems('sidebar')}
+      {renderNavItemList(allNavItems)}
     </nav>
   );
 
@@ -91,7 +100,7 @@ function AuthenticatedLayout() {
 
   const bottomBar = (
     <nav aria-label={t('nav.menu')} className="flex justify-around items-center py-1">
-      {renderNavItems('bottom')}
+      {renderNavItemList(bottomBarItems)}
     </nav>
   );
 

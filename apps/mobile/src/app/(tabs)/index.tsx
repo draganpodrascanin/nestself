@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const appointmentDate = new Date(
-    `${SAMPLE_BOOKING.date}T${SAMPLE_BOOKING.slots[0]}:00`,
+    SAMPLE_BOOKING.appointmentAt,
   );
 
   return (
