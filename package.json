@@ -1,0 +1,55 @@
+{
+  "name": "nestself",
+  "private": true,
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "check": "turbo run check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build",
+    "e2e": "playwright test",
+    "e2e:update": "playwright test --update-snapshots",
+    "storybook": "pnpm --filter @nestself/ui dev",
+    "images:build": "pnpm --filter @nestself/assets build",
+    "credits": "node packages/assets/scripts/build-credits.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:deps": "sherif",
+    "db:up": "docker compose -f docker/docker-compose.yml up -d",
+    "db:down": "docker compose -f docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
+    "sherif": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "19.3.1",
+      "react-dom": "19.3.1"
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "@prisma/client",
+      "prisma",
+      "@swc/core",
+      "esbuild",
+      "unrs-resolver",
+      "@parcel/watcher",
+      "core-js",
+      "sharp",
+      "@scarf/scarf"
+    ]
+  }
+}

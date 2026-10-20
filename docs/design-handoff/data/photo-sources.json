@@ -1,0 +1,152 @@
+[
+  {
+    "key": "family-grass",
+    "id": 8236405,
+    "author": "Orione Conceição",
+    "source": "https://www.pexels.com/photo/family-sitting-on-grass-in-the-park-8236405/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 2796042,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.54
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/family-grass.jpg"
+  },
+  {
+    "key": "family-autumn",
+    "id": 39820787,
+    "author": "Helena Jankovičová Kováčová",
+    "source": "https://www.pexels.com/photo/happy-family-in-autumn-park-portrait-39820787/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 3151009,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.43
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/family-autumn.jpg"
+  },
+  {
+    "key": "grandfather",
+    "id": 7854123,
+    "author": "Kampus Production",
+    "source": "https://www.pexels.com/photo/children-and-an-elderly-man-sitting-on-a-bench-7854123/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 2473413,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.43
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/grandfather.jpg"
+  },
+  {
+    "key": "older-couple",
+    "id": 8796060,
+    "author": "Anastasia Shuraeva",
+    "source": "https://www.pexels.com/photo/elderly-couple-walking-together-8796060/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 4225549,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/older-couple.jpg"
+  },
+  {
+    "key": "family-carry",
+    "id": 5290387,
+    "author": "Nataliya Vaitkevich",
+    "source": "https://www.pexels.com/photo/happy-parents-carrying-their-children-5290387/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 1432921,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.4
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/family-carry.jpg"
+  },
+  {
+    "key": "family-play",
+    "id": 20811236,
+    "author": "Alexander Mass",
+    "source": "https://www.pexels.com/photo/parents-playing-with-their-child-in-a-park-20811236/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 5186139,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.56
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/family-play.jpg"
+  },
+  {
+    "key": "care-home",
+    "id": 7231629,
+    "author": "cottonbro studio",
+    "source": "https://www.pexels.com/photo/women-in-the-home-living-room-7231629/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 2220555,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/care-home.jpg"
+  },
+  {
+    "key": "couple-cooking",
+    "id": 27176133,
+    "author": "Helena Lopes",
+    "source": "https://www.pexels.com/photo/couple-enjoys-cooking-together-in-kitchen-27176133/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 1185320,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/couple-cooking.jpg"
+  },
+  {
+    "key": "friends-men",
+    "id": 30730262,
+    "author": "Shafeeque k",
+    "source": "https://www.pexels.com/photo/three-friends-laughing-outdoors-in-casual-attire-30730262/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 1848313,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.4
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/friends-men.jpg"
+  },
+  {
+    "key": "friends-bench",
+    "id": 7266805,
+    "author": "Sarah Chai",
+    "source": "https://www.pexels.com/photo/female-friends-chatting-on-bench-7266805/",
+    "license": "https://www.pexels.com/license/",
+    "bytes": 3669412,
+    "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.37
+    },
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "assets/photos/friends-bench.jpg"
+  }
+]

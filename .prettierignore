@@ -1,0 +1,17 @@
+node_modules
+dist
+build
+.next
+.turbo
+.expo
+coverage
+storybook-static
+pnpm-lock.yaml
+routeTree.gen.ts
+**/src/generated/**
+docs/design-handoff
+public/images
+packages/assets/dist
+e2e/__screenshots__
+e2e/test-results
+e2e/playwright-report

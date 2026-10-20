@@ -1,0 +1,328 @@
+{
+  "checked": "2026-10-20",
+  "primary": [
+    {
+      "name": "Onest",
+      "url": "https://github.com/simpals/onest",
+      "use": "Original source, language and interface intent."
+    },
+    {
+      "name": "Commissioner",
+      "url": "https://github.com/kosbarts/Commissioner",
+      "use": "Kostas Bartsokas; author version 1.012 and type features."
+    },
+    {
+      "name": "Nunito Sans",
+      "url": "https://github.com/googlefonts/NunitoSans",
+      "use": "Current family source and variable distribution."
+    },
+    {
+      "name": "Fira Sans",
+      "url": "https://github.com/bBoxType/FiraSans",
+      "use": "Current family source and licence."
+    },
+    {
+      "name": "Lato",
+      "url": "https://www.latofonts.com/lato-free-fonts/",
+      "use": "Official family and OFL information."
+    },
+    {
+      "name": "Phosphor",
+      "url": "https://github.com/phosphor-icons/core",
+      "use": "Official SVG source and MIT licence."
+    },
+    {
+      "name": "Iconoir",
+      "url": "https://iconoir.com/docs/introduction",
+      "use": "Alternative drawing style and licence."
+    },
+    {
+      "name": "Streamline",
+      "url": "https://blog.streamlinehq.com/the-streamline-icon-system/",
+      "use": "Alternative icon families; verify the selected package licence."
+    },
+    {
+      "name": "WCAG contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+      "use": "Text contrast thresholds."
+    },
+    {
+      "name": "WCAG non-text contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+      "use": "Relevant controls and visual boundaries."
+    },
+    {
+      "name": "WCAG target size",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+      "use": "24 × 24 AA minimum with exceptions; larger internal target chosen."
+    },
+    {
+      "name": "WCAG reflow",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+      "use": "Responsive content and zoom."
+    },
+    {
+      "name": "WCAG text spacing",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html",
+      "use": "Tolerance of user text-spacing overrides."
+    },
+    {
+      "name": "WAI modal pattern",
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/",
+      "use": "Focus and modal behaviour."
+    },
+    {
+      "name": "WAI image alternatives",
+      "url": "https://www.w3.org/WAI/tutorials/images/",
+      "use": "Informative, decorative and functional images."
+    },
+    {
+      "name": "Apple accessibility",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/accessibility",
+      "use": "Native scaling and accessibility."
+    },
+    {
+      "name": "Android targets",
+      "url": "https://support.google.com/accessibility/android/answer/7101858?hl=en",
+      "use": "48 dp touch target guidance."
+    },
+    {
+      "name": "Carbon spacing",
+      "url": "https://www.carbondesignsystem.com/building-blocks/foundations/spacing/overview",
+      "use": "A structured relationship-based spacing scale."
+    },
+    {
+      "name": "Spectrum rounding",
+      "url": "https://spectrum.adobe.com/foundations/styles/object-styles/rounding",
+      "use": "Radius related to object scale and nesting."
+    },
+    {
+      "name": "Spectrum shadows",
+      "url": "https://spectrum.adobe.com/foundations/styles/object-styles/drop-shadow",
+      "use": "Elevation through shadows."
+    },
+    {
+      "name": "Carbon motion",
+      "url": "https://www.carbondesignsystem.com/building-blocks/foundations/motion/overview",
+      "use": "Task-oriented motion."
+    },
+    {
+      "name": "MDN images",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img",
+      "use": "Responsive delivery, alt, dimensions and loading."
+    },
+    {
+      "name": "MDN container queries",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Containment/Container_queries",
+      "use": "The narrow-width homepage preview."
+    },
+    {
+      "name": "Pexels licence",
+      "url": "https://www.pexels.com/license/",
+      "use": "Photo use and restrictions; no implied endorsement."
+    },
+    {
+      "name": "Pexels commercial rules",
+      "url": "https://help.pexels.com/hc/en-us/articles/360042295214-Can-I-use-the-photos-and-videos-for-a-commercial-project",
+      "use": "Model and product endorsement restrictions."
+    }
+  ],
+  "brandResearch": [
+    {
+      "name": "Modern Health",
+      "page": "https://www.modernhealth.com/",
+      "stylesheet": "https://cdn.prod.website-files.com/5f39912be9da2f5c8fc5cc45/css/mh-2021-draft.shared.cd024fb48.min.css",
+      "observed": [
+        "#0069BF",
+        "#C7E6FF",
+        "#0A2C46",
+        "#FFCC8A"
+      ]
+    },
+    {
+      "name": "Headspace for Organizations",
+      "page": "https://organizations.headspace.com/",
+      "stylesheet": "https://cdn.prod.website-files.com/6489751d2099bd329cd95c46/css/bx-organizations-headspace.webflow.shared.e3bdbfd79.min.css",
+      "observed": [
+        "#FF7300",
+        "#0061EF",
+        "#FFCE00",
+        "#F9F4F2"
+      ]
+    },
+    {
+      "name": "Mindgram",
+      "page": "https://mindgram.com/en/",
+      "stylesheet": "https://mindgram.com/wp-content/themes/mindgrow/css/app.min.css?ver=1781780626",
+      "observed": [
+        "#1F3F34",
+        "#F54432",
+        "#F5F6F0"
+      ]
+    },
+    {
+      "name": "Unmind",
+      "page": "https://unmind.com/",
+      "stylesheet": "https://unmind.com/_next/static/css/2d280c705fc21d79.css",
+      "observed": [
+        "#254224",
+        "#FFF964",
+        "#0D0300",
+        "#F2EDE3"
+      ]
+    }
+  ],
+  "photos": [
+    {
+      "key": "family-grass",
+      "id": 8236405,
+      "author": "Orione Conceição",
+      "source": "https://www.pexels.com/photo/family-sitting-on-grass-in-the-park-8236405/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 2796042,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.54
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/family-grass.jpg"
+    },
+    {
+      "key": "family-autumn",
+      "id": 39820787,
+      "author": "Helena Jankovičová Kováčová",
+      "source": "https://www.pexels.com/photo/happy-family-in-autumn-park-portrait-39820787/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 3151009,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.43
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/family-autumn.jpg"
+    },
+    {
+      "key": "grandfather",
+      "id": 7854123,
+      "author": "Kampus Production",
+      "source": "https://www.pexels.com/photo/children-and-an-elderly-man-sitting-on-a-bench-7854123/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 2473413,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.43
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/grandfather.jpg"
+    },
+    {
+      "key": "older-couple",
+      "id": 8796060,
+      "author": "Anastasia Shuraeva",
+      "source": "https://www.pexels.com/photo/elderly-couple-walking-together-8796060/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 4225549,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/older-couple.jpg"
+    },
+    {
+      "key": "family-carry",
+      "id": 5290387,
+      "author": "Nataliya Vaitkevich",
+      "source": "https://www.pexels.com/photo/happy-parents-carrying-their-children-5290387/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 1432921,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/family-carry.jpg"
+    },
+    {
+      "key": "family-play",
+      "id": 20811236,
+      "author": "Alexander Mass",
+      "source": "https://www.pexels.com/photo/parents-playing-with-their-child-in-a-park-20811236/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 5186139,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.56
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/family-play.jpg"
+    },
+    {
+      "key": "care-home",
+      "id": 7231629,
+      "author": "cottonbro studio",
+      "source": "https://www.pexels.com/photo/women-in-the-home-living-room-7231629/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 2220555,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.42
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/care-home.jpg"
+    },
+    {
+      "key": "couple-cooking",
+      "id": 27176133,
+      "author": "Helena Lopes",
+      "source": "https://www.pexels.com/photo/couple-enjoys-cooking-together-in-kitchen-27176133/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 1185320,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.42
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/couple-cooking.jpg"
+    },
+    {
+      "key": "friends-men",
+      "id": 30730262,
+      "author": "Shafeeque k",
+      "source": "https://www.pexels.com/photo/three-friends-laughing-outdoors-in-casual-attire-30730262/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 1848313,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/friends-men.jpg"
+    },
+    {
+      "key": "friends-bench",
+      "id": 7266805,
+      "author": "Sarah Chai",
+      "source": "https://www.pexels.com/photo/female-friends-chatting-on-bench-7266805/",
+      "license": "https://www.pexels.com/license/",
+      "bytes": 3669412,
+      "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.37
+      },
+      "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+      "asset": "assets/photos/friends-bench.jpg"
+    }
+  ],
+  "claimBoundary": "Observed source facts are separated from original NestSelf design proposals."
+}

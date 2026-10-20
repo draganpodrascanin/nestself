@@ -1,0 +1,29 @@
+{
+  "name": "@nestself/assets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fonts.css": "./fonts/fonts.css",
+    "./fonts/*": "./fonts/*",
+    "./photos/*": "./photos/*",
+    "./photos.json": "./photos.json",
+    "./icons/*": "./icons/*"
+  },
+  "scripts": {
+    "build": "node scripts/build-images.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@nestself/eslint-config": "workspace:*",
+    "@nestself/typescript-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "sharp": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["pnpm-workspace.yaml", ".npmrc", "packages/typescript-config/*.json"],
+  "tasks": {
+    "topo": { "dependsOn": ["^topo"] },
+    "build": {
+      "dependsOn": ["^build", "images:sync"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NODE_ENV", "VITE_*", "NEXT_PUBLIC_*", "EXPO_PUBLIC_*"]
+    },
+    "dev": { "persistent": true, "cache": false, "dependsOn": ["images:sync"] },
+    "lint": { "dependsOn": ["topo"] },
+    "typecheck": { "dependsOn": ["topo"] },
+    "test": { "dependsOn": ["topo"], "env": ["CI"] },
+    "check": { "dependsOn": ["topo"] },
+    "storybook:build": { "dependsOn": ["topo"], "outputs": ["storybook-static/**"] },
+    "@nestself/assets#build": {
+      "dependsOn": [],
+      "inputs": ["photos/**", "photos.json", "scripts/build-images.mjs"],
+      "outputs": ["dist/**"]
+    },
+    "images:sync": {
+      "dependsOn": ["@nestself/assets#build"],
+      "outputs": ["public/images/**"]
+    },
+    "prisma:generate": {
+      "inputs": ["prisma/schema.prisma", "prisma.config.ts"],
+      "outputs": ["src/generated/**"]
+    },
+    "@nestself/api#build": { "dependsOn": ["@nestself/api#prisma:generate", "^build"], "outputs": ["dist/**"] },
+    "@nestself/api#typecheck": { "dependsOn": ["@nestself/api#prisma:generate", "topo"] },
+    "@nestself/api#test": { "dependsOn": ["@nestself/api#prisma:generate", "topo"] },
+    "@nestself/api#dev": { "dependsOn": ["@nestself/api#prisma:generate"], "persistent": true, "cache": false }
+  }
+}

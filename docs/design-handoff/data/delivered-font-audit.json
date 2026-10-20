@@ -1,0 +1,97 @@
+[
+  {
+    "file": "Commissioner-Bold.woff2",
+    "bytes": 69324,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Commissioner-Italic.woff2",
+    "bytes": 75584,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Commissioner-Regular.woff2",
+    "bytes": 69352,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Commissioner-SemiBold.woff2",
+    "bytes": 68540,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "FiraSans-Bold.woff2",
+    "bytes": 147096,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "FiraSans-Italic.woff2",
+    "bytes": 146100,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "FiraSans-Regular.woff2",
+    "bytes": 137716,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "FiraSans-SemiBold.woff2",
+    "bytes": 147276,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Lato-Bold.woff2",
+    "bytes": 211652,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Lato-Italic.woff2",
+    "bytes": 231508,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Lato-Regular.woff2",
+    "bytes": 211916,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Lato-SemiBold.woff2",
+    "bytes": 213752,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "NunitoSans-Bold.woff2",
+    "bytes": 37824,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "NunitoSans-Italic.woff2",
+    "bytes": 40440,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "NunitoSans-Regular.woff2",
+    "bytes": 38124,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "NunitoSans-SemiBold.woff2",
+    "bytes": 38140,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Onest-Bold.woff2",
+    "bytes": 38536,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Onest-Regular.woff2",
+    "bytes": 36300,
+    "missingSerbianTestGlyphs": []
+  },
+  {
+    "file": "Onest-SemiBold.woff2",
+    "bytes": 38400,
+    "missingSerbianTestGlyphs": []
+  }
+]

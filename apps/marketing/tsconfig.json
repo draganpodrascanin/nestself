@@ -1,0 +1,1 @@
+{ "extends": "@nestself/typescript-config/nextjs.json", "compilerOptions": { "paths": { "@/*": ["./src/*"] } }, "include": ["next-env.d.ts", "src", "proxy.ts", "next.config.ts", ".next/types/**/*.ts"] }

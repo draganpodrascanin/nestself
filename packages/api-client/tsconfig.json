@@ -1,0 +1,1 @@
+{ "extends": "@nestself/typescript-config/base.json", "compilerOptions": { "lib": ["ES2023", "DOM"] }, "include": ["src"] }

@@ -1,0 +1,13 @@
+{
+  "name": "@nestself/typescript-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "exports": {
+    "./base.json": "./base.json",
+    "./vite-react.json": "./vite-react.json",
+    "./nextjs.json": "./nextjs.json",
+    "./nestjs.json": "./nestjs.json",
+    "./react-native.json": "./react-native.json"
+  }
+}

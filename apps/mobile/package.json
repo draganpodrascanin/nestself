@@ -1,0 +1,52 @@
+{
+  "name": "@nestself/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "export": "expo export --platform ios --output-dir dist",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@nestself/api-client": "workspace:*",
+    "@nestself/assets": "workspace:*",
+    "@nestself/contracts": "workspace:*",
+    "@nestself/i18n": "workspace:*",
+    "@nestself/sample-data": "workspace:*",
+    "@nestself/tokens": "workspace:*",
+    "@nestself/ui-native": "workspace:*",
+    "@react-native-async-storage/async-storage": "catalog:",
+    "expo": "catalog:",
+    "expo-constants": "catalog:",
+    "expo-font": "catalog:",
+    "expo-image": "catalog:",
+    "expo-linking": "catalog:",
+    "expo-localization": "catalog:",
+    "expo-router": "catalog:",
+    "expo-splash-screen": "catalog:",
+    "expo-status-bar": "catalog:",
+    "expo-system-ui": "catalog:",
+    "i18next": "catalog:",
+    "phosphor-react-native": "catalog:",
+    "react": "catalog:",
+    "react-i18next": "catalog:",
+    "react-native": "catalog:",
+    "react-native-safe-area-context": "catalog:",
+    "react-native-screens": "catalog:",
+    "react-native-svg": "catalog:"
+  },
+  "devDependencies": {
+    "@nestself/eslint-config": "workspace:*",
+    "@nestself/typescript-config": "workspace:*",
+    "@types/react": "catalog:",
+    "babel-preset-expo": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

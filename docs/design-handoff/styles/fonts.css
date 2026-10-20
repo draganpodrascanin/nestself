@@ -1,0 +1,20 @@
+/* Local OFL fonts. No external requests. See assets/fonts/*-OFL.txt. */
+@font-face { font-family: "Onest"; src: url("../assets/fonts/Onest-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Onest"; src: url("../assets/fonts/Onest-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Onest"; src: url("../assets/fonts/Onest-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Commissioner"; src: url("../assets/fonts/Commissioner-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Commissioner"; src: url("../assets/fonts/Commissioner-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Commissioner"; src: url("../assets/fonts/Commissioner-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Commissioner"; src: url("../assets/fonts/Commissioner-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito Sans"; src: url("../assets/fonts/NunitoSans-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito Sans"; src: url("../assets/fonts/NunitoSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito Sans"; src: url("../assets/fonts/NunitoSans-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito Sans"; src: url("../assets/fonts/NunitoSans-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Fira Sans"; src: url("../assets/fonts/FiraSans-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fira Sans"; src: url("../assets/fonts/FiraSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fira Sans"; src: url("../assets/fonts/FiraSans-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fira Sans"; src: url("../assets/fonts/FiraSans-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("../assets/fonts/Lato-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("../assets/fonts/Lato-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("../assets/fonts/Lato-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("../assets/fonts/Lato-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }

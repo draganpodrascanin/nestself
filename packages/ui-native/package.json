@@ -1,0 +1,28 @@
+{
+  "name": "@nestself/ui-native",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@nestself/tokens": "workspace:*",
+    "phosphor-react-native": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-native": ">=0.80",
+    "react-native-svg": ">=15"
+  },
+  "devDependencies": {
+    "@nestself/eslint-config": "workspace:*",
+    "@nestself/typescript-config": "workspace:*",
+    "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-native-svg": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

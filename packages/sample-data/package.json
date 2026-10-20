@@ -1,0 +1,16 @@
+{
+  "name": "@nestself/sample-data",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@nestself/contracts": "workspace:*" },
+  "devDependencies": {
+    "@nestself/eslint-config": "workspace:*",
+    "@nestself/typescript-config": "workspace:*",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,1 @@
+{ "extends": "@nestself/typescript-config/base.json", "compilerOptions": { "types": ["node"], "lib": ["ES2023", "DOM"] }, "include": ["./**/*.ts", "../playwright.config.ts"] }

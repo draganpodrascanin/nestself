@@ -1,0 +1,130 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+catalog:
+  # React (web and native must agree; react-native 0.88 requires ^19.3.0)
+  react: 19.3.1
+  react-dom: 19.3.1
+  "@types/react": 19.3.0
+  "@types/react-dom": 19.3.0
+  # TypeScript and Node (5.9.x: typescript-eslint supports <6.1, @nestjs/swagger ^5.5||^6)
+  typescript: 5.9.3
+  "@types/node": 24.19.2
+  tsx: 4.23.15
+  # Bundlers and CSS
+  vite: 8.3.4
+  "@vitejs/plugin-react-swc": 4.3.3
+  next: 16.4.2
+  postcss: 8.5.31
+  tailwindcss: 4.3.3
+  "@tailwindcss/vite": 4.3.3
+  "@tailwindcss/postcss": 4.3.3
+  # TanStack
+  "@tanstack/react-router": 1.170.45
+  "@tanstack/router-plugin": 1.168.47
+  "@tanstack/react-router-devtools": 1.167.2
+  "@tanstack/react-query": 5.104.5
+  "@tanstack/react-query-devtools": 5.104.5
+  # UI
+  "@base-ui/react": 1.9.0
+  "@phosphor-icons/react": 2.1.10
+  clsx: 2.1.1
+  tailwind-merge: 3.7.0
+  # i18n
+  i18next: 26.5.3
+  react-i18next: 17.1.0
+  i18next-browser-languagedetector: 8.2.1
+  # Validation
+  zod: 4.6.7
+  # Testing
+  vitest: 5.0.5
+  jsdom: 30.1.3
+  "@testing-library/react": 16.3.3
+  "@testing-library/dom": 10.4.2
+  "@testing-library/jest-dom": 7.0.1
+  "@testing-library/user-event": 14.6.8
+  axe-core: 4.14.0
+  "@playwright/test": 1.64.1
+  "@axe-core/playwright": 4.14.0
+  supertest: 7.3.1
+  "@types/supertest": 7.2.1
+  # Storybook
+  storybook: 10.6.3
+  "@storybook/react-vite": 10.6.3
+  "@storybook/addon-a11y": 10.6.3
+  # Lint and format (ESLint 9: jsx-a11y and react-refresh do not support 10 yet)
+  eslint: 9.39.5
+  "@eslint/js": 9.39.5
+  typescript-eslint: 8.72.0
+  eslint-config-next: 16.4.2
+  eslint-config-prettier: 10.1.8
+  eslint-plugin-jsx-a11y: 6.10.2
+  eslint-plugin-react-hooks: 7.1.1
+  eslint-plugin-react-refresh: 0.5.7
+  globals: 17.13.0
+  prettier: 3.9.10
+  prettier-plugin-tailwindcss: 0.8.1
+  # Images
+  sharp: 0.35.5
+  # Expo SDK 58 / React Native
+  expo: 58.0.16
+  expo-router: 58.0.24
+  expo-font: 58.0.9
+  expo-image: 58.0.16
+  expo-localization: 58.0.5
+  expo-status-bar: 58.0.3
+  expo-splash-screen: 58.0.10
+  expo-system-ui: 58.0.6
+  expo-constants: 58.0.12
+  expo-linking: 58.0.13
+  babel-preset-expo: 58.0.18
+  react-native: 0.88.0
+  react-native-screens: 4.30.0
+  react-native-safe-area-context: 5.10.1
+  react-native-svg: 15.16.0
+  phosphor-react-native: 3.0.6
+  "@react-native-async-storage/async-storage": 3.1.1
+  # NestJS and Prisma (prisma `latest` is an 8.0 RC; 7.10.1 is the stable line)
+  "@nestjs/common": 12.2.0
+  "@nestjs/core": 12.2.0
+  "@nestjs/platform-express": 12.2.0
+  "@nestjs/cli": 12.0.9
+  "@nestjs/config": 12.0.1
+  "@nestjs/swagger": 12.0.2
+  "@nestjs/terminus": 12.1.0
+  "@nestjs/throttler": 6.7.1
+  "@nestjs/jwt": 12.0.3
+  "@nestjs/testing": 12.2.0
+  nestjs-pino: 5.3.1
+  pino: 10.4.0
+  pino-http: 11.0.0
+  pino-pretty: 13.2.0
+  prisma: 7.10.1
+  "@prisma/client": 7.10.1
+  "@prisma/adapter-pg": 7.10.1
+  pg: 8.23.1
+  "@types/pg": 8.23.1
+  rxjs: 7.8.2
+  reflect-metadata: 0.2.2
+  helmet: 8.3.0
+  dotenv: 18.0.8
+  "@swc/core": 1.16.18
+  "@swc/helpers": 0.5.23
+  unplugin-swc: 2.0.0
+  # Repo tooling
+  turbo: 2.11.9
+  sherif: 1.13.0
+
+# pnpm 10 blocks dependency build scripts unless allow-listed.
+onlyBuiltDependencies:
+  - "@prisma/engines"
+  - "@prisma/client"
+  - prisma
+  - "@swc/core"
+  - esbuild
+  - unrs-resolver
+  - "@parcel/watcher"
+  - core-js
+  - sharp
+  - "@scarf/scarf"

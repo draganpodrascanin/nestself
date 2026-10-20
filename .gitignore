@@ -9,12 +9,25 @@ build/
 out/
 .turbo/
 storybook-static/
-.expo/
-.expo-shared/
-ios/build/
-android/build/
 coverage/
 *.tsbuildinfo
+
+# generated
+apps/api/src/generated/
+apps/api/openapi.json
+packages/assets/dist/
+apps/*/public/images/
+
+# expo / native
+.expo/
+.expo-shared/
+apps/mobile/ios/
+apps/mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
 
 # env and local
 .env
@@ -24,13 +37,12 @@ coverage/
 *.log
 .vscode/*
 !.vscode/extensions.json
-!.vscode/settings.json
 .idea/
 
 # playwright
 e2e/test-results/
 e2e/playwright-report/
 
-# design deliverables that are too large or duplicated for git
+# design deliverables kept out of git (the extracted package lives in docs/design-handoff)
 NestSelf_Web_Handoff.zip
 NestSelf_Design_System.html

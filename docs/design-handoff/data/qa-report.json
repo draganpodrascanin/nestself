@@ -1,0 +1,42 @@
+{
+  "version": "0.3",
+  "passed": 21,
+  "checks": [
+    "Initial Forest & Mint / Onest selection",
+    "All eight palette / mode states render passing live contrast and matching export CSS",
+    "All five font choices propagate to the implementation brief",
+    "Wide and 390 px preview state",
+    "View navigation",
+    "Invalid email recovery, summary focus and successful local validation",
+    "Switch exposes actual programmatic state",
+    "Booking requires a selected time; explicit price split and local-only confirmation",
+    "Chat keeps failed draft and retries without a duplicate bubble",
+    "Eight distinct edge-state examples",
+    "Dialog trigger and return-focus logic (native focus trap not tested in DOM emulation)",
+    "Contrast calculation agrees with independent sRGB audit",
+    "Copy-current-CSS exports semantic values and current type choice",
+    "Copied Claude brief preserves the actual selected palette, mode and font",
+    "Token download creates the expected JSON artifact (native download UI not tested)",
+    "Theme JSON and all semantic CSS declarations agree",
+    "Component CSS parses and uses defined variables without palette hex literals",
+    "Responsive container rules and reduced-motion override present (layout not browser-rendered)",
+    "All image files, dimensions, alt attributes and SVG symbol references resolve",
+    "No DOM initialisation errors",
+    "file:// initialisation survives unavailable localStorage"
+  ],
+  "errors": [],
+  "visualBrowserQA": "Not performed: the managed preview workflow requires control-browser, which is unavailable in this session. No alternate browser or preview server was started.",
+  "limitations": [
+    "DOM emulation does not verify CSS layout, native dialog focus trapping, screen readers, device typography or real browser downloads.",
+    "Inspect 390px and 1440px in the target browser before implementation release."
+  ],
+  "standalone": {
+    "embeddedImages": 21,
+    "externalStylesheets": 0,
+    "externalScripts": 0,
+    "offlineAssets": true,
+    "bytes": 9713240
+  },
+  "deliveredFontFiles": 19,
+  "tokenContrastPairs": 120
+}

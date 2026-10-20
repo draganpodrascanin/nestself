@@ -1,0 +1,1 @@
+{ "extends": "@nestself/typescript-config/react-native.json", "include": ["src"] }
