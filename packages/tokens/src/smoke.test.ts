@@ -135,7 +135,7 @@ describe('Check 2: contrast-report.json integrity', () => {
 // ---------- Check 3: no raw hex in component/app code ----------
 
 describe('Check 3: no raw hex colour literals in component/app code', () => {
-  const hexLiteralRegex = /#[0-9a-f]{3,8}\b/i;
+  const hexLiteralRegex = /(?<!&)#[0-9a-f]{3,8}\b/i;
   const skipFiles = /\.test\.|routeTree\.gen\.ts/;
   const skipDirs = /[/\\]src[/\\]generated([/\\]|$)/;
 

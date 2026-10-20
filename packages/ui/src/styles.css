@@ -1,0 +1,46 @@
+/* @nestself/ui — tokens, theme bridge, fonts, Base UI variants, base styles, type roles. */
+@import "@nestself/tokens/tokens.css";
+@import "@nestself/tokens/tailwind.css";
+@import "@nestself/assets/fonts.css";
+@import "./typography.css";
+
+@custom-variant data-open (&[data-open]);
+@custom-variant data-closed (&[data-closed]);
+@custom-variant data-checked (&[data-checked]);
+@custom-variant data-unchecked (&[data-unchecked]);
+@custom-variant data-indeterminate (&[data-indeterminate]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-readonly (&[data-readonly]);
+@custom-variant data-invalid (&[data-invalid]);
+@custom-variant data-valid (&[data-valid]);
+@custom-variant data-highlighted (&[data-highlighted]);
+@custom-variant data-pressed (&[data-pressed]);
+@custom-variant data-selected (&[data-selected]);
+@custom-variant data-active (&[data-active]);
+@custom-variant data-starting-style (&[data-starting-style]);
+@custom-variant data-ending-style (&[data-ending-style]);
+@custom-variant pointer-coarse (@media (pointer: coarse));
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; position: relative; background: var(--color-canvas); color: var(--color-text); font: var(--font-weight-body) 1rem/1.5 var(--font-body); -webkit-font-smoothing: antialiased; }
+  #root, #__next, [data-app-root] { isolation: isolate; }
+  [hidden] { display: none !important; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  a { color: var(--color-primary); text-underline-offset: 0.2em; }
+  img { display: block; max-width: 100%; height: auto; }
+  h1, h2, h3, h4, p, figure { margin: 0; }
+  h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: var(--font-weight-label); line-height: 1.18; }
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+  ::selection { background: var(--color-accent); color: var(--color-on-accent); }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0ms !important; }
+  }
+}
+
+/* data-mode aware rule for danger variant dark text (no dark: variant) */
+html[data-mode="dark"] .btn-danger { color: var(--color-danger-surface); }
