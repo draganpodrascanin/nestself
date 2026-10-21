@@ -4,10 +4,43 @@
     "description": "Munkahelyi jóllét, amely hozzáférést biztosít a munkavállalóknak pszichológiai, jogi és pénzügyi tanácsadáshoz egyetlen átlátható felületen."
   },
   "nav": {
-    "findSupport": "Támogatás keresése",
-    "howItWorks": "Hogyan működik",
-    "lifeBeyondWork": "Élet a munkán túl",
-    "forEmployers": "Munkáltatóknak"
+    "forEmployers": "Munkáltatóknak",
+    "services": "Szolgáltatások",
+    "forEmployees": "Munkavállalóknak",
+    "resources": "Tudástár",
+    "plans": "Csomagok",
+    "about": "Rólunk"
+  },
+  "actions": {
+    "requestDemo": "Kérj bemutatót",
+    "openWorkspace": "Munkaterület megnyitása",
+    "readMore": "Tovább olvasom",
+    "register": "Regisztráció",
+    "startAssessment": "Kitöltés indítása",
+    "seeAll": "Összes megtekintése",
+    "contactUs": "Kapcsolatfelvétel",
+    "backTo": "Vissza: {{page}}"
+  },
+  "labels": {
+    "readingTime": "{{minutes}} perc olvasás",
+    "minutes": "{{count}} perc",
+    "questions": "{{count}} kérdés",
+    "live": "Élő",
+    "onDemand": "Felvételről",
+    "languages": "Nyelvek",
+    "topic": "Téma",
+    "updated": "Frissítve: {{date}}",
+    "published": "Megjelent: {{date}}",
+    "placeholderTestimonial": "Mintaadat-készletből származó példavélemény",
+    "keyFacts": "Legfontosabb tények"
+  },
+  "topics": {
+    "psychological": "Pszichológiai",
+    "legal": "Jogi",
+    "financial": "Pénzügyi",
+    "work": "Munka",
+    "family": "Család",
+    "managers": "Vezetők"
   },
   "hero": {
     "eyebrow": "Jóllét a munkahelyeden keresztül",
@@ -93,7 +126,29 @@
     "navLabel": "Lábléc",
     "photography": "Fotográfiai irányelvek",
     "credits": "Képkreditek",
-    "designSystem": "Dizájnrendszer"
+    "designSystem": "Dizájnrendszer",
+    "tagline": "Támogatás a munkában és minden, ami körbeveszi.",
+    "product": "Termék",
+    "resourcesCol": "Tudástár",
+    "company": "Cég",
+    "legalCol": "Jogi",
+    "forManagers": "Vezetőknek",
+    "webinars": "Webináriumok",
+    "articles": "Cikkek",
+    "tools": "Eszközök",
+    "faq": "GYIK",
+    "privacyModel": "Adatvédelmi modell",
+    "demo": "Kérj bemutatót",
+    "contact": "Kapcsolat",
+    "accessibility": "Akadálymentesség",
+    "creditsPage": "Kreditek",
+    "privacyPolicy": "Adatvédelmi irányelvek",
+    "terms": "Felhasználási feltételek",
+    "cookies": "Sütik",
+    "imprint": "Impresszum"
+  },
+  "locale": {
+    "switcherLabel": "Nyelv"
   },
   "credits": {
     "title": "Emberek és fényképek",

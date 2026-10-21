@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "title": "Services — NestSelf",
+    "description": "Therapy and counselling, legal consultation and financial guidance — all in one employee wellbeing programme."
+  },
+  "hero": {
+    "title": "Support that covers what matters",
+    "lead": "Three areas of professional help — psychological, legal and financial — available to employees and, where your employer's plan includes family members, their families.",
+    "primaryCta": { "label": "Request a demo", "href": "/demo" },
+    "secondaryCta": { "label": "View plans", "href": "/plans" }
+  },
+  "pillars": [
+    {
+      "id": "psychological",
+      "title": "Therapy & Counselling",
+      "paragraphs": [
+        "Talk to licensed psychologists and qualified psychotherapists about stress, anxiety, relationships, grief or anything else on your mind.",
+        "Sessions are available online or in person where offered, in Serbian, Hungarian or English."
+      ],
+      "photo": { "key": "psychological-inperson", "alt": "A person talking to a psychologist during an in-person session" },
+      "cta": { "label": "Learn more", "href": "/services/therapy" }
+    },
+    {
+      "id": "legal",
+      "title": "Legal Consultation",
+      "paragraphs": [
+        "Get confidential guidance on personal legal matters — employment contracts, tenancy, family law basics, consumer issues and more.",
+        "A qualified legal professional reviews your situation and provides a written summary of next steps."
+      ],
+      "photo": { "key": "legal-consultation", "alt": "A legal consultation session at a desk" },
+      "cta": { "label": "Learn more", "href": "/services/legal-consultation" }
+    },
+    {
+      "id": "financial",
+      "title": "Financial Guidance",
+      "paragraphs": [
+        "Work with an independent financial consultant on budgeting, debt, savings, loans or retirement planning.",
+        "Our consultants sell no products and receive no commissions — their advice is entirely in your interest."
+      ],
+      "photo": { "key": "financial-planning", "alt": "A person reviewing financial plans with a consultant" },
+      "cta": { "label": "Learn more", "href": "/services/financial-guidance" }
+    }
+  ],
+  "steps": {
+    "title": "How a session works",
+    "items": [
+      { "title": "Choose the area", "body": "Pick psychological, legal or financial support — whichever fits your situation." },
+      { "title": "Pick a professional and a time", "body": "Browse available professionals and select a time that works. Sessions are available by video or in person where offered." },
+      { "title": "See your coverage", "body": "Your coverage and any cost are shown before you confirm. No surprises." },
+      { "title": "Talk", "body": "Meet your professional for a confidential session. Your employer never learns who used NestSelf or what was discussed." },
+      { "title": "Follow up", "body": "Follow-ups and session notes stay with you. Book another session whenever you need one." }
+    ]
+  },
+  "faq": {
+    "title": "Questions about our services",
+    "items": [
+      { "question": "Is this covered by my employer?", "answer": "Your employer pays for the programme. Before you confirm a session, the platform shows your coverage and any remaining cost so there are no surprises." },
+      { "question": "Will my employer know I used the service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees only anonymised usage data for groups of 10 or more." },
+      { "question": "Can my family use NestSelf?", "answer": "Where your employer's plan includes family members, your partner and children can access the same services at no extra cost." },
+      { "question": "What languages are sessions available in?", "answer": "Sessions are available in Serbian, Hungarian and English, depending on the professional." },
+      { "question": "Can I choose between video and in-person sessions?", "answer": "Yes. When you pick a professional and time, you will see whether video, in-person or both options are available." },
+      { "question": "How do I get started?", "answer": "Your employer provides access details when the programme launches. You create a private account, choose a service area and book your first session." }
+    ]
+  },
+  "cta": {
+    "title": "Ready to support your team?",
+    "body": "See how NestSelf fits your organisation.",
+    "primary": { "label": "Request a demo", "href": "/demo" }
+  }
+}

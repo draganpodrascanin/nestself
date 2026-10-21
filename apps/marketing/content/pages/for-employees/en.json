@@ -1,0 +1,107 @@
+{
+  "meta": {
+    "title": "For Employees — NestSelf",
+    "description": "Access therapy, legal and financial support through your employer. Confidential, free where your employer covers it, and available in Serbian, Hungarian and English."
+  },
+  "hero": {
+    "eyebrow": "For employees",
+    "title": "Support that stays between you and your professional",
+    "lead": "If your employer offers NestSelf, you can talk to a licensed psychologist, get legal guidance or work through a financial question — all confidential. Your employer never learns who used the service or what was discussed.",
+    "primaryCta": { "label": "Open the workspace", "href": "__WORKSPACE_URL__" },
+    "secondaryCta": { "label": "Check if your employer offers NestSelf", "href": "/contact" },
+    "photo": { "key": "employees-break", "alt": "Employee relaxing on a break with a cup of tea" }
+  },
+  "whatYouCanUse": {
+    "eyebrow": "Your benefits",
+    "title": "What you can use",
+    "columns": 3,
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Therapy & Counselling",
+        "body": "Talk to a licensed psychologist or qualified psychotherapist — online or in person. Individual, couples and family sessions are available.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Legal Consultation",
+        "body": "Get confidential guidance on personal legal matters — family law, tenancy, consumer rights.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Financial Guidance",
+        "body": "Work through budgeting, debt, savings or retirement questions with a certified financial professional.",
+        "href": "/services/financial-guidance"
+      },
+      {
+        "icon": "check-circle",
+        "title": "Wellbeing check-ins",
+        "body": "Short, validated questionnaires that help you understand your wellbeing and find the right support — not a diagnosis.",
+        "href": "/tools"
+      },
+      {
+        "icon": "video-camera",
+        "title": "Webinars",
+        "body": "Live and on-demand expert sessions on stress, parenting, finances and more.",
+        "href": "/webinars"
+      },
+      {
+        "icon": "books",
+        "title": "Resource library",
+        "body": "Articles, guides and self-help tools you can access any time.",
+        "href": "/resources"
+      }
+    ]
+  },
+  "howToStart": {
+    "eyebrow": "Getting started",
+    "title": "How to start",
+    "steps": [
+      { "title": "Check your access", "body": "Your employer will let you know when NestSelf is available. You can also ask your HR team or check with us." },
+      { "title": "Create your private account", "body": "Sign up with the link or code your employer shares. Your account is yours alone." },
+      { "title": "Browse or book", "body": "Explore the resource library, take a wellbeing check-in or book a session with a professional." },
+      { "title": "Talk to a professional", "body": "Meet your psychologist, legal advisor or financial professional online or in person. Everything you discuss is confidential." }
+    ]
+  },
+  "whoSeesWhat": {
+    "title": "Who sees what",
+    "paragraphs": [
+      "Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more — never individual names, session content or assessment results.",
+      "All professionals are bound by professional secrecy. Your data is processed under GDPR and local data protection law."
+    ],
+    "bullets": [
+      "Your employer never sees your name, sessions or results",
+      "Anonymised reports require a minimum group of 10",
+      "Professionals are bound by professional secrecy"
+    ],
+    "cta": { "label": "Learn more about our privacy model", "href": "/privacy-model" },
+    "photo": { "key": "remote-home-dog", "alt": "Person in a private, comfortable home setting" }
+  },
+  "forYourFamily": {
+    "title": "For your family",
+    "paragraphs": [
+      "Where your employer's plan includes family members, your partner and children can access the same therapy, legal and financial support — at no extra cost to you."
+    ],
+    "photo": { "key": "family-cooking", "alt": "Family cooking together at home" }
+  },
+  "faq": {
+    "title": "Common questions from employees",
+    "items": [
+      { "question": "Is it really free for me?", "answer": "Free for you where your employer covers it. Your coverage is shown before you confirm anything." },
+      { "question": "Does my employer know I use it?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees only anonymised data for groups of 10 or more." },
+      { "question": "What can I use it for?", "answer": "Therapy and counselling, legal consultation, financial guidance, wellbeing check-ins, webinars and a resource library — depending on your employer's plan." },
+      { "question": "Can my family use it?", "answer": "Where your employer's plan includes family members, your partner and children access the same services at no extra cost." },
+      { "question": "How do I book a session?", "answer": "Log in to your NestSelf workspace, choose the type of support you need and pick a time that works for you." },
+      { "question": "What if I need help right now?", "answer": "If you are in immediate danger, call the emergency number now: 112 (Serbia and Hungary). For an ambulance: 194 (Serbia) or 104 (Hungary)." },
+      { "question": "Are the professionals licensed?", "answer": "Yes. Our network includes licensed psychologists, qualified psychotherapists, legal professionals and certified financial advisors." },
+      { "question": "What happens to my data?", "answer": "Your data is processed under GDPR and local data protection law. Professionals are bound by professional secrecy. Your employer never sees individual data." }
+    ]
+  },
+  "cta": {
+    "title": "Ready to get started?",
+    "body": "If your employer offers NestSelf, open the workspace to browse resources, take a check-in or book a session.",
+    "primary": { "label": "Open the workspace", "href": "__WORKSPACE_URL__" },
+    "secondary": { "label": "Check if your employer offers NestSelf", "href": "/contact" }
+  }
+}

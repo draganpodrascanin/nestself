@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "title": "FAQ — NestSelf",
+    "description": "Answers to the most common questions about NestSelf — for employers and employees."
+  },
+  "hero": {
+    "title": "Frequently asked questions",
+    "lead": "Everything you need to know about NestSelf, whether you are an employer exploring the programme or an employee looking for support.",
+    "primaryCta": { "label": "Contact us", "href": "/contact" }
+  },
+  "employerFaq": {
+    "title": "For employers",
+    "items": [
+      { "question": "What is NestSelf?", "answer": "NestSelf is an employee wellbeing programme that gives your people confidential access to licensed psychologists, legal professionals and financial advisors — plus self-assessments, webinars and a resource library." },
+      { "question": "What services are included?", "answer": "Depending on your plan: therapy and counselling, legal consultation, financial guidance, webinars, a resource library, self-assessment tools, manager support resources and family coverage." },
+      { "question": "How does it differ from a traditional EAP?", "answer": "Traditional EAPs often limit sessions and cover only psychological support. NestSelf includes legal and financial guidance, a self-service library, manager tools and anonymised workforce insights — all in one benefit." },
+      { "question": "Who is covered — only employees, or family members too?", "answer": "That depends on your plan. Where your plan includes family members, partners and children access the same services at no extra cost." },
+      { "question": "How do employees access the service?", "answer": "Employees receive a private link or access code during the launch. They create a personal account and can browse resources, take check-ins or book sessions immediately." },
+      { "question": "What data does the employer see?", "answer": "You see anonymised, aggregated wellbeing trends for groups of 10 or more. You never see who used the service, what was discussed or individual assessment results." },
+      { "question": "How is confidentiality protected?", "answer": "All professionals are bound by professional secrecy. We sign a data processing agreement, comply with GDPR and local data protection law, and never share individual-level data with the employer." },
+      { "question": "How quickly can we launch?", "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages." },
+      { "question": "What languages are supported?", "answer": "Sessions and resources are available in Serbian, Hungarian and English. Communications materials are prepared in your chosen languages." },
+      { "question": "What credentials do your professionals have?", "answer": "Our network includes licensed psychologists, qualified psychotherapists, legal professionals and certified financial advisors. Every professional's credentials are verified before they join." },
+      { "question": "How do you measure outcomes?", "answer": "We track anonymised, aggregated participation and satisfaction trends. We are working toward publishing outcome data; until then, we rely on validated instruments and professional standards." },
+      { "question": "How does pricing work?", "answer": "Plans are priced per eligible employee per month. Your quote is based on headcount, countries and plan. Request a demo and we will prepare a quote for you." }
+    ]
+  },
+  "employeeFaq": {
+    "title": "For employees",
+    "items": [
+      { "question": "What is NestSelf?", "answer": "NestSelf is a wellbeing benefit your employer provides. It gives you confidential access to licensed psychologists, legal professionals, financial advisors, self-assessments, webinars and a resource library." },
+      { "question": "Is it really free for me?", "answer": "Free for you where your employer covers it. Your coverage is shown before you confirm anything." },
+      { "question": "Does my employer know I use it?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees only anonymised data for groups of 10 or more." },
+      { "question": "What can I use it for?", "answer": "Therapy and counselling, legal consultation, financial guidance, wellbeing check-ins, webinars and a resource library — depending on your employer's plan." },
+      { "question": "Can my family use it?", "answer": "Where your employer's plan includes family members, your partner and children access the same services at no extra cost." },
+      { "question": "How do I book a session?", "answer": "Log in to your NestSelf workspace, choose the type of support you need and pick a time that works for you." },
+      { "question": "What if I need help right now?", "answer": "If you are in immediate danger, call the emergency number now: 112 (Serbia and Hungary). For an ambulance: 194 (Serbia) or 104 (Hungary)." },
+      { "question": "Are the professionals licensed?", "answer": "Yes. Our network includes licensed psychologists, qualified psychotherapists, legal professionals and certified financial advisors." },
+      { "question": "Can I choose my therapist?", "answer": "Yes. You can browse available professionals, see their areas of expertise and languages, and choose the one that feels right for you." },
+      { "question": "How do the self-assessment tools work?", "answer": "Short, validated questionnaires help you understand your wellbeing and find the right support. They are not a diagnosis — they are a starting point." },
+      { "question": "Is it available in my language?", "answer": "Sessions and resources are available in Serbian, Hungarian and English." },
+      { "question": "What happens to my data?", "answer": "Your data is processed under GDPR and local data protection law. Professionals are bound by professional secrecy. Your employer never sees individual data." }
+    ]
+  },
+  "cta": {
+    "title": "Still have questions?",
+    "body": "Get in touch and we will be happy to help.",
+    "primary": { "label": "Contact us", "href": "/contact" },
+    "secondary": { "label": "Request a demo", "href": "/demo" }
+  }
+}

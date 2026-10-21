@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { adminPages } from './pages/admin';
-import { marketingPages } from './pages/marketing';
+import { marketingPages, marketingPrepareActions } from './pages/marketing';
 import { workspacePages, workspacePrepareActions } from './pages/workspace';
 
 export interface PageEntry {
@@ -18,4 +18,5 @@ export const pages: PageEntry[] = [...marketingPages, ...workspacePages, ...admi
 /** Prepare actions contributed by the apps, merged into helpers.prepareActions. */
 export const appPrepareActions: Record<string, (page: Page) => Promise<void>> = {
   ...workspacePrepareActions,
+  ...marketingPrepareActions,
 };

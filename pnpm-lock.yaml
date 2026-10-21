@@ -590,6 +590,9 @@ importers:
       '@nestself/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@nestself/sample-data':
+        specifier: workspace:*
+        version: link:../../packages/sample-data
       '@nestself/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
@@ -11393,9 +11396,7 @@ snapshots:
       metro-runtime: 0.87.1
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.88.0': {}
 

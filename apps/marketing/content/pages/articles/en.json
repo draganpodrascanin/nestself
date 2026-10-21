@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "title": "Articles — NestSelf",
+    "description": "Expert articles on mental health, legal rights, financial literacy and workplace wellbeing."
+  },
+  "hero": {
+    "title": "Articles",
+    "lead": "Practical, expert-reviewed articles on mental health, legal rights, financial literacy and workplace wellbeing.",
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
+  },
+  "filterLabel": "Filter by topic",
+  "allTopicsLabel": "All",
+  "topics": {
+    "psychological": "Mental health",
+    "legal": "Legal",
+    "financial": "Financial",
+    "work": "Work",
+    "family": "Family",
+    "managers": "Managers"
+  },
+  "cardLabels": {
+    "readingTime": "{minutes} min read",
+    "published": "Published"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigation",
+    "breadcrumbArticles": "Articles",
+    "readingTime": "{minutes} min read",
+    "disclaimerText": "This article is general information, not medical, legal or financial advice.",
+    "disclaimerLinkText": "Talk to a professional",
+    "relatedTitle": "Related articles",
+    "ctaBand": {
+      "title": "Need to talk to someone?",
+      "body": "If your employer offers NestSelf, you can book a confidential session with a licensed professional at no cost to you.",
+      "primaryLabel": "Request a demo",
+      "primaryHref": "/demo"
+    }
+  },
+  "serviceLinks": {
+    "psychological": "/services/therapy",
+    "legal": "/services/legal-consultation",
+    "financial": "/services/financial-guidance",
+    "work": "/services/therapy",
+    "family": "/services/therapy",
+    "managers": "/services/therapy"
+  }
+}

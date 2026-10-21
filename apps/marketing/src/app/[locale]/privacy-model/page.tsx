@@ -2,20 +2,22 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
-import { getServerT } from '@/i18n/server';
+import { Breadcrumbs } from '@nestself/ui';
 import { localizedMetadata } from '@/i18n/metadata';
+import { PageHero, StepsSection } from '@/components/sections';
 import { PrivacyModelContent } from './privacy-model-content';
+import { loadContent } from './content';
 
 interface Params { locale: string }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const { t } = await getServerT(locale as Locale);
+  const { data } = await loadContent(locale as Locale);
   return localizedMetadata({
     locale: locale as Locale,
-    title: t('marketing:pages.privacyModel.title'),
-    description: t('marketing:pages.privacyModel.lead'),
+    title: data.meta.title,
+    description: data.meta.description,
     pathname: '/privacy-model',
   });
 }
@@ -23,5 +25,34 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 export default async function PrivacyModelPage({ params }: { params: Promise<Params> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  return <PrivacyModelContent />;
+
+  const { data } = await loadContent(locale as Locale);
+
+  return (
+    <main id="main" tabIndex={-1} className="@container">
+      <div className="pt-8 pb-4">
+        <Breadcrumbs label={data.breadcrumb.label} items={[
+          { label: data.breadcrumb.home, href: `/${locale}` },
+          { label: data.meta.title },
+        ]} />
+      </div>
+
+      <PageHero
+        title={data.hero.title}
+        lead={data.hero.lead}
+        primaryCta={{ label: '', href: '' }}
+        variant="quiet"
+        className="[&_[class*=flex-wrap]]:hidden"
+      />
+
+      <PrivacyModelContent />
+
+      <StepsSection
+        id="in-practice"
+        eyebrow={data.inPractice.eyebrow}
+        title={data.inPractice.title}
+        steps={data.inPractice.steps}
+      />
+    </main>
+  );
 }

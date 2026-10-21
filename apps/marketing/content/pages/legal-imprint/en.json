@@ -1,0 +1,46 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Imprint",
+    "description": "Legal information about the NestSelf website operator."
+  },
+  "title": "Imprint",
+  "updatedAt": "2026-10-21",
+  "intro": "Legal information about the operator of this website, as required by Hungarian Act CVIII of 2001 (Ekertv.) and Serbian Law on Electronic Commerce (Zakon o elektronskoj trgovini, Article 13).",
+  "sections": [
+    {
+      "heading": "Impresszum (Hungary)",
+      "paragraphs": [
+        "Service provider (szolgáltató):"
+      ],
+      "bullets": [
+        "Teljes név (full name): [Company name]",
+        "Székhely (registered seat): [Address]",
+        "Cégjegyzékszám (company registration number): [Cégjegyzékszám]",
+        "Adószám (tax number): [Adószám]",
+        "Elektronikus levelezési cím (email): hello@nestself.example",
+        "Telefonszám (phone): [Phone number]",
+        "Hosting provider: [Hosting provider name and address]"
+      ]
+    },
+    {
+      "heading": "Pravne informacije (Serbia)",
+      "paragraphs": [
+        "Podaci o pružaocu usluga:"
+      ],
+      "bullets": [
+        "Naziv firme (company name): [Company name]",
+        "Sedište (registered seat): [Address]",
+        "Matični broj (registration number): [Matični broj]",
+        "PIB (tax identification number): [PIB]",
+        "Kontakt email: hello@nestself.example",
+        "Kontakt telefon: [Phone number]"
+      ]
+    }
+  ],
+  "updatedAtLabel": "Last updated:",
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  }
+}

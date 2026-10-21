@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "title": "Plans — NestSelf",
+    "description": "Three plans for organisations of every size. Essentials, Complete and Enterprise — priced per eligible employee per month."
+  },
+  "hero": {
+    "title": "Choose the right plan for your organisation",
+    "lead": "Every plan includes confidential access to licensed professionals and a launch toolkit. Pick the scope that fits your team.",
+    "primaryCta": { "label": "Request a demo", "href": "/demo" }
+  },
+  "tiers": [
+    {
+      "name": "Essentials",
+      "audience": "For organisations starting with core psychological support.",
+      "includes": [
+        "Therapy & Counselling with licensed psychologists",
+        "Resource library: articles, guides and self-help tools",
+        "Webinars: live and on-demand expert sessions"
+      ],
+      "cta": { "label": "Request a demo", "href": "/demo" }
+    },
+    {
+      "name": "Complete",
+      "audience": "For organisations that want the full wellbeing benefit.",
+      "includes": [
+        "Everything in Essentials",
+        "Legal Consultation on personal legal matters",
+        "Financial Guidance from certified professionals",
+        "Manager tools: polls, conversation guides, briefings",
+        "Anonymised workforce insights for HR"
+      ],
+      "cta": { "label": "Request a demo", "href": "/demo" }
+    },
+    {
+      "name": "Enterprise",
+      "audience": "For multi-country organisations with advanced needs.",
+      "includes": [
+        "Everything in Complete",
+        "Multi-country support (Serbia, Hungary and beyond)",
+        "Single sign-on (SSO) integration",
+        "Custom reporting and workforce insights",
+        "Dedicated NestSelf contact"
+      ],
+      "cta": { "label": "Request a demo", "href": "/demo" }
+    }
+  ],
+  "note": "Priced per eligible employee per month. Your quote is based on headcount, countries and plan.",
+  "inEveryPlan": {
+    "eyebrow": "Included",
+    "title": "In every plan",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "lock-key",
+        "title": "Confidentiality",
+        "body": "Your employer never learns who used NestSelf or what was discussed. Anonymised reports require a minimum group of 10."
+      },
+      {
+        "icon": "translate",
+        "title": "Serbian, Hungarian and English",
+        "body": "Sessions, resources and communications materials in the languages your people speak."
+      },
+      {
+        "icon": "sparkle",
+        "title": "Launch toolkit",
+        "body": "Announcement emails, posters and intranet materials — prepared in your chosen languages and ready to go."
+      },
+      {
+        "icon": "check-circle",
+        "title": "Accessibility",
+        "body": "The platform is designed to meet WCAG 2.1 Level AA, so every employee can use it comfortably."
+      }
+    ]
+  },
+  "faq": {
+    "title": "Pricing questions",
+    "items": [
+      { "question": "How does pricing work?", "answer": "Plans are priced per eligible employee per month. Your quote is based on headcount, countries and plan. Request a demo and we will prepare a quote for you." },
+      { "question": "Is there a minimum company size?", "answer": "NestSelf works for organisations of all sizes. Contact us and we will find the right plan for your team." },
+      { "question": "Can we start with Essentials and upgrade later?", "answer": "Yes. You can move to Complete or Enterprise at any time. Your NestSelf contact will help you plan the transition." },
+      { "question": "Do you offer a trial period?", "answer": "We can discuss a pilot programme as part of your demo. Contact us to learn more." },
+      { "question": "What is included in the launch toolkit?", "answer": "Announcement emails, posters, intranet materials and a manager briefing — all in your chosen languages." },
+      { "question": "How quickly can we launch?", "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages." }
+    ]
+  },
+  "cta": {
+    "title": "Request a quote",
+    "body": "Tell us about your organisation and we will prepare a plan and a quote.",
+    "primary": { "label": "Request a demo", "href": "/demo" }
+  }
+}

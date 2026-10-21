@@ -1,0 +1,44 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Cookie Policy",
+    "description": "How NestSelf uses cookies on this website."
+  },
+  "title": "Cookie Policy",
+  "updatedAt": "2026-10-21",
+  "intro": "This page explains what cookies this website uses and how you can manage them.",
+  "sections": [
+    {
+      "heading": "1. What cookies we use",
+      "paragraphs": [
+        "This website uses a single functional cookie:"
+      ],
+      "bullets": [
+        "NEXT_LOCALE: stores your preferred language (e.g. \"en\", \"hu\", \"sr-Latn\"). This cookie is strictly necessary for the language switcher to work. It does not track you or collect personal data."
+      ]
+    },
+    {
+      "heading": "2. No analytics or marketing cookies",
+      "paragraphs": [
+        "We do not use analytics cookies, marketing cookies or any third-party tracking. There is no cookie consent banner because only a strictly functional cookie is set."
+      ]
+    },
+    {
+      "heading": "3. How to clear the cookie",
+      "paragraphs": [
+        "You can delete the NEXT_LOCALE cookie at any time through your browser settings. The website will continue to work; it will use your browser's language preference instead."
+      ]
+    },
+    {
+      "heading": "4. Changes to this policy",
+      "paragraphs": [
+        "If we add new cookies in the future, we will update this page and implement a cookie consent mechanism. The date at the top of this page indicates the last revision."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Last updated:",
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  }
+}

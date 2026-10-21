@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "title": "Contact us",
+    "description": "Get in touch with the NestSelf team. We are based in Belgrade and Budapest."
+  },
+  "hero": {
+    "title": "Contact us",
+    "lead": "Have a question, feedback or want to explore how NestSelf can help your organisation? We are happy to hear from you."
+  },
+  "form": {
+    "fields": {
+      "name": "Your name",
+      "email": "Email address",
+      "subject": "Subject",
+      "message": "Message",
+      "consent": "I consent to NestSelf processing my data as described in the"
+    },
+    "privacyLinkText": "Privacy Policy",
+    "submit": "Send message",
+    "submitting": "Sending...",
+    "errorSummaryTitle": "Please fix the following errors",
+    "successTitle": "Message sent",
+    "successBody": "Thank you for reaching out. We will get back to you as soon as we can.",
+    "errorTitle": "Something went wrong",
+    "errorBody": "We could not send your message right now. Please try again later.",
+    "errorContactHint": "You can also reach us at",
+    "fallbackErrorLabel": "Form",
+    "fallbackErrorMessage": "Submission failed. Please check your entries and try again."
+  },
+  "aside": {
+    "emailTitle": "Email",
+    "officesTitle": "Offices",
+    "officesBody": "Belgrade and Budapest",
+    "note": "Demo requests are answered by a person from our team."
+  }
+}

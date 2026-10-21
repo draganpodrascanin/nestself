@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "title": "How access is separated",
+    "description": "Understand who sees what before you share something personal."
+  },
+  "hero": {
+    "title": "How access is separated",
+    "lead": "Understand who sees what before you share something personal."
+  },
+  "inPractice": {
+    "eyebrow": "In practice",
+    "title": "What happens at each step",
+    "steps": [
+      {
+        "title": "When you book",
+        "body": "You choose a professional and a time. Your employer sees nothing about your booking."
+      },
+      {
+        "title": "What your employer sees",
+        "body": "HR sees anonymised usage for groups of 10 or more. They never see who used NestSelf or what was discussed."
+      },
+      {
+        "title": "What we keep and for how long",
+        "body": "Session notes stay with the professional. We keep booking records as long as the law requires."
+      }
+    ]
+  },
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  }
+}

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { Alert } from '@nestself/ui';
 import type { AlertTone } from '@nestself/ui';
-import { Info, Lightbulb, Warning } from '@phosphor-icons/react';
+import { Info, Lightbulb, Warning } from '@phosphor-icons/react/dist/ssr';
 
 export type CalloutKind = 'note' | 'tip' | 'warning';
 

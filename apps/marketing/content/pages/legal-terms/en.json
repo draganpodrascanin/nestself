@@ -1,0 +1,53 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Terms of Use",
+    "description": "Terms and conditions for using the NestSelf website."
+  },
+  "title": "Terms of Use",
+  "updatedAt": "2026-10-21",
+  "intro": "By using this website you agree to the following terms. Please read them carefully.",
+  "sections": [
+    {
+      "heading": "1. Website use",
+      "paragraphs": [
+        "This website is provided for informational purposes about NestSelf services. You may browse the site, use the self-assessment tools and submit enquiries through our forms."
+      ]
+    },
+    {
+      "heading": "2. No professional advice",
+      "paragraphs": [
+        "The content on this website, including the wellbeing check-in questionnaires and articles, is for general informational purposes only. It does not constitute medical, psychological, legal or financial advice. The self-assessment tools are screening instruments, not diagnoses. Always consult a qualified professional for advice specific to your situation."
+      ]
+    },
+    {
+      "heading": "3. Intellectual property",
+      "paragraphs": [
+        "All content, design, text, graphics and software on this website are the property of [Company name] or its licensors and are protected by applicable intellectual property laws. You may not reproduce, distribute or create derivative works without our written permission."
+      ]
+    },
+    {
+      "heading": "4. Limitation of liability",
+      "paragraphs": [
+        "[Company name] provides this website on an \"as is\" basis. We do not guarantee that the website will be available without interruption or error. To the maximum extent permitted by law, we exclude liability for any indirect, incidental or consequential damages arising from the use of this website."
+      ]
+    },
+    {
+      "heading": "5. Governing law",
+      "paragraphs": [
+        "These terms are governed by [applicable law — to be determined before launch based on company registration]. Any disputes will be resolved by the competent courts of [jurisdiction — to be determined before launch]."
+      ]
+    },
+    {
+      "heading": "6. Changes to these terms",
+      "paragraphs": [
+        "We may update these terms from time to time. The date at the top of this page indicates the last revision. Continued use of the website after a change constitutes acceptance of the updated terms."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Last updated:",
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  }
+}

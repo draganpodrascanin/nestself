@@ -4,10 +4,43 @@
     "description": "Blagostanje na radnom mestu koje zaposlenima pruža pristup psihološkom, pravnom i finansijskom savetovanju kroz jasan doživljaj."
   },
   "nav": {
-    "findSupport": "Pronađi podršku",
-    "howItWorks": "Kako funkcioniše",
-    "lifeBeyondWork": "Život van posla",
-    "forEmployers": "Za poslodavce"
+    "forEmployers": "Za poslodavce",
+    "services": "Usluge",
+    "forEmployees": "Za zaposlene",
+    "resources": "Resursi",
+    "plans": "Planovi",
+    "about": "O nama"
+  },
+  "actions": {
+    "requestDemo": "Zakažite prezentaciju",
+    "openWorkspace": "Otvorite radni prostor",
+    "readMore": "Pročitajte više",
+    "register": "Prijavite se",
+    "startAssessment": "Započnite proveru",
+    "seeAll": "Pogledajte sve",
+    "contactUs": "Kontaktirajte nas",
+    "backTo": "Nazad na {{page}}"
+  },
+  "labels": {
+    "readingTime": "{{minutes}} min čitanja",
+    "minutes": "{{count}} minuta",
+    "questions": "{{count}} pitanja",
+    "live": "Uživo",
+    "onDemand": "Na zahtev",
+    "languages": "Jezici",
+    "topic": "Tema",
+    "updated": "Ažurirano {{date}}",
+    "published": "Objavljeno {{date}}",
+    "placeholderTestimonial": "Primer iskustva iz uzorka podataka",
+    "keyFacts": "Ključne činjenice"
+  },
+  "topics": {
+    "psychological": "Psihološko",
+    "legal": "Pravno",
+    "financial": "Finansijsko",
+    "work": "Posao",
+    "family": "Porodica",
+    "managers": "Rukovodioci"
   },
   "hero": {
     "eyebrow": "Blagostanje kroz radno mesto",
@@ -93,7 +126,29 @@
     "navLabel": "Podnožje stranice",
     "photography": "Fotografski pravac",
     "credits": "Zasluge za fotografije",
-    "designSystem": "Sistem dizajna"
+    "designSystem": "Sistem dizajna",
+    "tagline": "Podrška za posao i sve oko njega.",
+    "product": "Proizvod",
+    "resourcesCol": "Resursi",
+    "company": "Kompanija",
+    "legalCol": "Pravno",
+    "forManagers": "Za rukovodioce",
+    "webinars": "Vebinari",
+    "articles": "Članci",
+    "tools": "Alati",
+    "faq": "Česta pitanja",
+    "privacyModel": "Model privatnosti",
+    "demo": "Zakažite prezentaciju",
+    "contact": "Kontakt",
+    "accessibility": "Pristupačnost",
+    "creditsPage": "Zasluge",
+    "privacyPolicy": "Politika privatnosti",
+    "terms": "Uslovi korišćenja",
+    "cookies": "Kolačići",
+    "imprint": "Impresum"
+  },
+  "locale": {
+    "switcherLabel": "Jezik"
   },
   "credits": {
     "title": "Ljudi i fotografije",

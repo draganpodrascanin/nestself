@@ -10,6 +10,8 @@ import { Providers } from '@/components/providers';
 import { SiteChrome } from '@/components/site-chrome';
 import { DevThemeStudio } from '@/components/dev-theme-studio';
 import { SkipLinkWrapper } from '@/components/skip-link-wrapper';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { SITE_URL } from '@/lib/site';
 import '@/app/globals.css';
 
 interface Params {
@@ -49,6 +51,23 @@ export default async function LocaleLayout({
   }
   const meta = localeMeta[locale as Locale];
 
+  const organizationLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'NestSelf',
+    url: SITE_URL,
+    areaServed: ['RS', 'HU'],
+    availableLanguage: ['en', 'sr', 'hu'],
+  };
+
+  const webSiteLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'NestSelf',
+    url: SITE_URL,
+    inLanguage: meta.intl,
+  };
+
   return (
     <html
       lang={meta.htmlLang}
@@ -62,6 +81,8 @@ export default async function LocaleLayout({
         <script
           dangerouslySetInnerHTML={{ __html: themeBootScript() }}
         />
+        <JsonLd data={organizationLd} />
+        <JsonLd data={webSiteLd} />
       </head>
       <body data-app-root>
         <Providers locale={locale as Locale}>

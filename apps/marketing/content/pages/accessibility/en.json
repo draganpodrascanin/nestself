@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Accessibility",
+    "description": "Our commitment to making the NestSelf website accessible to everyone."
+  },
+  "hero": {
+    "title": "Accessibility statement",
+    "lead": "We want every person to be able to use this website comfortably, regardless of ability or the technology they use."
+  },
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  },
+  "contactHint": "Please contact us at {email} to report any accessibility issues.",
+  "sections": [
+    {
+      "heading": "Our target",
+      "paragraphs": [
+        "We aim to conform to the Web Content Accessibility Guidelines (WCAG) 2.2 at Level AA."
+      ]
+    },
+    {
+      "heading": "What we test",
+      "paragraphs": [
+        "We regularly test the following aspects of this website:"
+      ],
+      "bullets": [
+        "Full keyboard operation: every interactive element can be reached and activated with the keyboard alone",
+        "Screen reader labels: all images, controls and landmarks have meaningful text labels",
+        "Colour contrast: text and interactive elements meet the WCAG AA contrast ratio",
+        "Reflow at 320 px: the layout adapts without horizontal scrolling at narrow viewport widths",
+        "Reduced motion: animations are suppressed when you prefer reduced motion in your system settings",
+        "Text scaling: the layout works when browser text size is increased up to 200%"
+      ]
+    },
+    {
+      "heading": "Known limitations",
+      "paragraphs": [
+        "Third-party video players embedded in webinar pages may not meet the same accessibility standard as the rest of the site. We are working with our providers to improve this."
+      ]
+    },
+    {
+      "heading": "Report a problem",
+      "paragraphs": [
+        "If you find an accessibility barrier on this website, please let us know. We take every report seriously and will work to resolve the issue."
+      ]
+    }
+  ]
+}

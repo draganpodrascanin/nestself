@@ -1,0 +1,128 @@
+{
+  "meta": {
+    "title": "NestSelf -- employee wellbeing that works",
+    "description": "Psychological, legal and financial support for employees and their families, through one confidential platform. Available in Serbian, Hungarian and English."
+  },
+  "hero": {
+    "eyebrow": "Employee wellbeing programme",
+    "title": "Support for work. And everything around it.",
+    "lead": "Give your employees and their families access to licensed psychologists, legal professionals and financial advisors -- all through one confidential platform.",
+    "primaryCta": "Request a demo",
+    "secondaryCta": "For employees",
+    "photos": [
+      { "key": "home-hero-kitchen", "alt": "A warm kitchen scene representing everyday life" },
+      { "key": "home-hero-walk", "alt": "A person walking outdoors, taking a break" },
+      { "key": "family-cooking", "alt": "A family preparing a meal together" }
+    ]
+  },
+  "trust": [
+    { "icon": "shield-check", "label": "Licensed professionals" },
+    { "icon": "lock-key", "label": "Confidential by design" },
+    { "icon": "translate", "label": "Serbian, Hungarian and English" },
+    { "icon": "hand-heart", "label": "Psychological, legal and financial" }
+  ],
+  "services": {
+    "eyebrow": "What we offer",
+    "title": "Three areas of support, one platform",
+    "lead": "Licensed psychologists, legal professionals and certified financial advisors, available online and in person.",
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Therapy & Counselling",
+        "body": "Licensed psychologists and psychotherapists for individual, couples and family sessions -- online or in person.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Legal Consultation",
+        "body": "Confidential guidance on personal legal matters -- family law, tenancy, consumer rights.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Financial Guidance",
+        "body": "Budgeting, debt management, savings planning and retirement guidance from certified financial professionals.",
+        "href": "/services/financial-guidance"
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "How it works",
+    "title": "How it works for employees",
+    "steps": [
+      { "title": "Activate with your work email", "body": "Your employer has already set up NestSelf for you. Sign in with your work email to see what is available." },
+      { "title": "Choose an area and a time", "body": "Pick therapy, legal or financial support. Browse available professionals and find a time that suits you." },
+      { "title": "Talk, in your language", "body": "Have your session in Serbian, Hungarian or English -- online or in person. Your employer never sees who used the service or what was discussed." },
+      { "title": "Keep going with follow-ups and the library", "body": "Book follow-up sessions, explore self-help tools, read articles and join webinars at your own pace." }
+    ]
+  },
+  "employers": {
+    "eyebrow": "For employers",
+    "title": "A wellbeing benefit your team will actually use",
+    "paragraphs": [
+      "NestSelf brings psychological, legal and financial support into one platform that employees understand and trust. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more."
+    ],
+    "bullets": [
+      "Launch in weeks with a communications toolkit",
+      "Anonymised insights for groups of 10 or more",
+      "Manager resources and team polls",
+      "Family coverage where included in your employer's plan"
+    ],
+    "photo": { "key": "employers-hr-meeting", "alt": "A team in an HR meeting discussing employee wellbeing" },
+    "cta": { "label": "Request a demo", "href": "/demo" }
+  },
+  "life": {
+    "eyebrow": "Life beyond work",
+    "title": "Support for the people around you",
+    "paragraphs": [
+      "Relationships, parenting, caring for a parent, or navigating a legal question that has nothing to do with work. Where your employer's plan includes family members, they get the same access to therapy, legal and financial support."
+    ],
+    "photo": { "key": "family-park-walk", "alt": "A family walking together in a park" }
+  },
+  "resources": {
+    "title": "Articles, webinars and tools",
+    "moreLabel": "See all resources"
+  },
+  "assessments": {
+    "title": "Wellbeing assessments"
+  },
+  "testimonials": {
+    "title": "What organisations say",
+    "lead": "Placeholder testimonials from our sample data set."
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "items": [
+      {
+        "question": "Who can use NestSelf?",
+        "answer": "Any employee whose employer has activated the NestSelf programme. Where the employer's plan includes family coverage, partners and children can also access the service."
+      },
+      {
+        "question": "Is it confidential?",
+        "answer": "Yes. Your employer never learns who used NestSelf or what was discussed. HR receives only anonymised, aggregated reports when the group is large enough to prevent identification -- a minimum of 10 people."
+      },
+      {
+        "question": "What does it cost employees?",
+        "answer": "Nothing. NestSelf is a benefit paid for by your employer. You access therapy, legal and financial support at no cost to you."
+      },
+      {
+        "question": "How fast can we launch?",
+        "answer": "Most organisations go from signed agreement to employee access in two to four weeks. We provide a communications toolkit to help you announce the programme."
+      },
+      {
+        "question": "Which languages are supported?",
+        "answer": "Sessions are available in Serbian, Hungarian and English. The platform interface and all content are available in all three languages."
+      },
+      {
+        "question": "What if someone is in crisis?",
+        "answer": "If you or someone you know is in immediate danger, call the emergency number now. Serbia: 112 (emergency), 194 (ambulance). Hungary: 112 (emergency), 104 (ambulance). NestSelf also provides guidance on accessing urgent professional support."
+      }
+    ]
+  },
+  "ctaBand": {
+    "title": "Ready to support your team?",
+    "body": "See how NestSelf works for your organisation.",
+    "primary": { "label": "Request a demo", "href": "/demo" },
+    "secondary": { "label": "Contact us", "href": "/contact" }
+  }
+}

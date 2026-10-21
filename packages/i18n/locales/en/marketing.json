@@ -4,10 +4,43 @@
     "description": "Workplace wellbeing that gives employees access to psychological, legal and financial guidance through one clear experience."
   },
   "nav": {
-    "findSupport": "Find support",
-    "howItWorks": "How it works",
-    "lifeBeyondWork": "Life beyond work",
-    "forEmployers": "For employers"
+    "forEmployers": "For employers",
+    "services": "Services",
+    "forEmployees": "For employees",
+    "resources": "Resources",
+    "plans": "Plans",
+    "about": "About"
+  },
+  "actions": {
+    "requestDemo": "Request a demo",
+    "openWorkspace": "Open workspace",
+    "readMore": "Read more",
+    "register": "Register",
+    "startAssessment": "Start assessment",
+    "seeAll": "See all",
+    "contactUs": "Contact us",
+    "backTo": "Back to {{page}}"
+  },
+  "labels": {
+    "readingTime": "{{minutes}} min read",
+    "minutes": "{{count}} minutes",
+    "questions": "{{count}} questions",
+    "live": "Live",
+    "onDemand": "On demand",
+    "languages": "Languages",
+    "topic": "Topic",
+    "updated": "Updated {{date}}",
+    "published": "Published {{date}}",
+    "placeholderTestimonial": "Placeholder testimonial from the sample data set",
+    "keyFacts": "Key facts"
+  },
+  "topics": {
+    "psychological": "Psychological",
+    "legal": "Legal",
+    "financial": "Financial",
+    "work": "Work",
+    "family": "Family",
+    "managers": "Managers"
   },
   "hero": {
     "eyebrow": "Wellbeing through your workplace",
@@ -93,7 +126,29 @@
     "navLabel": "Footer",
     "photography": "Photography direction",
     "credits": "Photo credits",
-    "designSystem": "Design system"
+    "designSystem": "Design system",
+    "tagline": "Support for work, and everything around it.",
+    "product": "Product",
+    "resourcesCol": "Resources",
+    "company": "Company",
+    "legalCol": "Legal",
+    "forManagers": "For managers",
+    "webinars": "Webinars",
+    "articles": "Articles",
+    "tools": "Tools",
+    "faq": "FAQ",
+    "privacyModel": "Privacy model",
+    "demo": "Request a demo",
+    "contact": "Contact",
+    "accessibility": "Accessibility",
+    "creditsPage": "Credits",
+    "privacyPolicy": "Privacy policy",
+    "terms": "Terms of use",
+    "cookies": "Cookies",
+    "imprint": "Imprint"
+  },
+  "locale": {
+    "switcherLabel": "Language"
   },
   "credits": {
     "title": "People and photographs",

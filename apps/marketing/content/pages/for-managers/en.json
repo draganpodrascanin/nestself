@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "title": "For Managers — NestSelf",
+    "description": "Resources and guidance for managers: team polls, conversation guides and how to point someone to support — without overstepping."
+  },
+  "hero": {
+    "eyebrow": "For managers",
+    "title": "Support your team without overstepping",
+    "lead": "NestSelf gives you practical tools and guidance for the moments when a team member might need support. You do not need to be a therapist — just a thoughtful manager.",
+    "primaryCta": { "label": "Request a demo", "href": "/demo" },
+    "secondaryCta": { "label": "See plans", "href": "/plans" },
+    "photo": { "key": "manager-one-on-one", "alt": "Manager having a one-on-one conversation with a team member" }
+  },
+  "features": {
+    "eyebrow": "Manager tools",
+    "title": "What you get as a manager",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "chart-bar",
+        "title": "Team wellbeing polls",
+        "body": "Run short, anonymous polls to understand how your team is doing — without putting anyone on the spot."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Conversation guides",
+        "body": "Step-by-step guides for sensitive conversations: how to ask, what to say and what not to say."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "When and how to point someone to support",
+        "body": "Clear guidance on recognising signs and making a referral to NestSelf — without diagnosing or pressuring."
+      },
+      {
+        "icon": "books",
+        "title": "Manager resource channels",
+        "body": "Curated articles, webinars and tools specifically for people leaders navigating team wellbeing."
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "In practice",
+    "title": "Supporting someone on your team",
+    "steps": [
+      { "title": "Notice", "body": "Pay attention to changes in behaviour, energy or engagement. You do not need to diagnose — just notice." },
+      { "title": "Ask privately", "body": "Find a quiet moment. Ask how they are doing. Keep it simple and genuine." },
+      { "title": "Listen without diagnosing", "body": "Let them talk. You do not need to fix anything. Listening is the most important step." },
+      { "title": "Point to NestSelf", "body": "Let them know that NestSelf is available and confidential. Share the link or mention it naturally." },
+      { "title": "Follow up", "body": "Check in again after a few days. You do not need to ask about details — just show you care." }
+    ]
+  },
+  "resources": {
+    "title": "Resources for managers",
+    "moreHref": "/resources",
+    "moreLabel": "See all resources"
+  },
+  "cta": {
+    "title": "Ready to support your managers?",
+    "body": "Request a demo and learn how NestSelf helps managers navigate team wellbeing with confidence.",
+    "primary": { "label": "Request a demo", "href": "/demo" }
+  }
+}

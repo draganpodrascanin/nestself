@@ -1,0 +1,73 @@
+{
+  "meta": {
+    "title": "Webinars — NestSelf",
+    "description": "Live and on-demand expert sessions on wellbeing, stress, finances and more."
+  },
+  "hero": {
+    "title": "Webinars",
+    "lead": "Live and on-demand sessions led by licensed psychologists, legal professionals and financial consultants from the NestSelf network.",
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
+  },
+  "upcoming": {
+    "title": "Upcoming webinars"
+  },
+  "onDemand": {
+    "title": "On demand"
+  },
+  "cardLabels": {
+    "live": "Live",
+    "onDemand": "On demand",
+    "minutes": "{n} min",
+    "languages": "Languages",
+    "noUpcoming": "No upcoming webinars right now. Browse the on-demand library below."
+  },
+  "topics": {
+    "psychological": "Mental health",
+    "legal": "Legal",
+    "financial": "Financial",
+    "work": "Work",
+    "family": "Family",
+    "managers": "Managers"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigation",
+    "breadcrumbWebinars": "Webinars",
+    "dateLabel": "Date and time",
+    "durationLabel": "Duration",
+    "formatLabel": "Format",
+    "languagesLabel": "Languages",
+    "speakerLabel": "Speaker",
+    "timeZoneLabel": "CET",
+    "minutesSuffix": "minutes",
+    "readingTime": "{minutes} min read",
+    "relatedTitle": "Related articles",
+    "watchRecordingTitle": "Watch the recording",
+    "watchRecordingBody": "The recording of this webinar is available in the NestSelf workspace. If your employer provides NestSelf, log in to watch it.",
+    "registerTitle": "Register for this webinar"
+  },
+  "form": {
+    "nameLabel": "Full name",
+    "namePlaceholder": "Your full name",
+    "emailLabel": "Email address",
+    "emailPlaceholder": "you@company.com",
+    "companyLabel": "Company",
+    "companyPlaceholder": "Your company (optional)",
+    "optionalLabel": "optional",
+    "consentShortLabel": "Data processing consent",
+    "consentLabel": "I consent to NestSelf processing my data as described in the {privacyLink} to respond to my registration.",
+    "privacyLinkText": "Privacy Policy",
+    "privacyLinkHref": "/legal/privacy",
+    "submitLabel": "Register",
+    "errorSummaryTitle": "Please fix the following errors",
+    "nameRequired": "Please enter your name.",
+    "emailRequired": "Please enter a valid email address.",
+    "consentRequired": "You must consent to data processing.",
+    "successTitle": "You are registered",
+    "successBody": "We will email you the link before the webinar starts.",
+    "failureTitle": "We could not send your registration",
+    "failureBody": "Please try again later or contact us at {email}."
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "title": "Request a demo",
+    "description": "See how NestSelf brings psychological, legal and financial support to your team. A person from our team will follow up."
+  },
+  "hero": {
+    "title": "Request a demo",
+    "lead": "Tell us about your organisation and we will walk you through how NestSelf works for your team."
+  },
+  "form": {
+    "fields": {
+      "name": "Full name",
+      "email": "Work email",
+      "company": "Company",
+      "role": "Job title",
+      "companySize": "Company size",
+      "country": "Country",
+      "heardAbout": "How did you hear about us?",
+      "message": "Anything else you would like us to know?",
+      "consent": "I consent to NestSelf processing my data as described in the"
+    },
+    "privacyLinkText": "Privacy Policy",
+    "selectPlaceholder": "Select...",
+    "options": {
+      "companySize": [
+        { "value": "1-50", "label": "1 -- 50" },
+        { "value": "51-200", "label": "51 -- 200" },
+        { "value": "201-500", "label": "201 -- 500" },
+        { "value": "501-1000", "label": "501 -- 1,000" },
+        { "value": "1000+", "label": "1,000+" }
+      ],
+      "country": [
+        { "value": "RS", "label": "Serbia" },
+        { "value": "HU", "label": "Hungary" },
+        { "value": "OTHER", "label": "Other" }
+      ],
+      "heardAbout": [
+        { "value": "search", "label": "Search engine" },
+        { "value": "referral", "label": "Referral" },
+        { "value": "event", "label": "Event" },
+        { "value": "social", "label": "Social media" },
+        { "value": "other", "label": "Other" }
+      ]
+    },
+    "emailHint": "We recommend using your work email so we can match you with your organisation.",
+    "optional": "optional",
+    "submit": "Send request",
+    "submitting": "Sending...",
+    "errorSummaryTitle": "Please fix the following errors",
+    "successTitle": "We received your request",
+    "successBody": "A member of our team will be in touch. Check your inbox for a confirmation.",
+    "errorTitle": "Something went wrong",
+    "errorBody": "We could not send your request right now. Please try again later.",
+    "errorContactHint": "You can also reach us at",
+    "fallbackErrorLabel": "Form",
+    "fallbackErrorMessage": "Submission failed. Please check your entries and try again."
+  },
+  "aside": {
+    "title": "What happens next",
+    "steps": [
+      { "title": "A person replies", "body": "Someone from our team will reach out by email to understand your needs." },
+      { "title": "A 30-minute call", "body": "We walk you through the platform, answer questions and discuss your team's situation." },
+      { "title": "A proposal", "body": "You receive a clear proposal with coverage, timeline and next steps." }
+    ],
+    "contactTitle": "Prefer email?",
+    "contactBody": "Write to us directly at"
+  }
+}

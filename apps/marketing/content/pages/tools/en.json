@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "title": "Self-help tools and wellbeing check-ins",
+    "description": "Free self-assessments and guided planners to help you understand your wellbeing — no login, nothing stored."
+  },
+  "hero": {
+    "title": "Tools for your wellbeing",
+    "lead": "Quick self-assessments and practical planners you can use right now. Nothing you answer here is stored or shared with anyone.",
+    "primaryCta": { "label": "Start a check-in", "href": "#assessments" },
+    "secondaryCta": { "label": "Browse guides", "href": "#guides" }
+  },
+  "assessments": {
+    "eyebrow": "Self-assessments",
+    "title": "Wellbeing check-ins",
+    "intro": "Short questionnaires that help you reflect on how you have been feeling. These are not diagnoses. Your answers stay in your browser and are never sent anywhere.",
+    "durationLabel": "{minutes} min",
+    "questionsLabel": "{count} questions"
+  },
+  "guides": {
+    "eyebrow": "Guides and planners",
+    "title": "Practical tools you can use today",
+    "intro": "Step-by-step resources for conversations, budgeting and legal preparation."
+  },
+  "runner": {
+    "start": "Start",
+    "next": "Next",
+    "back": "Back",
+    "finish": "See your result",
+    "restart": "Start again",
+    "questionOf": "Question {current} of {total}",
+    "result": "Your result",
+    "yourScore": "Your score: {score} out of {max}",
+    "nothingStored": "Nothing you answered was stored or sent anywhere.",
+    "talkToSomeone": "Talk to a professional",
+    "relatedReading": "Explore related resources"
+  },
+  "breadcrumbs": {
+    "home": "Home",
+    "tools": "Tools"
+  },
+  "guideCtaLabel": "Learn more about {service}",
+  "guideCta": {
+    "psychological": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
+    "legal": { "label": "Explore legal consultation", "href": "/services/legal-consultation" },
+    "financial": { "label": "Explore financial guidance", "href": "/services/financial-guidance" },
+    "work": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
+    "family": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
+    "managers": { "label": "Explore therapy and counselling", "href": "/services/therapy" }
+  }
+}

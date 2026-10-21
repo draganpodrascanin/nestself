@@ -18,6 +18,7 @@
     "@nestself/assets": "workspace:*",
     "@nestself/contracts": "workspace:*",
     "@nestself/i18n": "workspace:*",
+    "@nestself/sample-data": "workspace:*",
     "@nestself/tokens": "workspace:*",
     "@nestself/ui": "workspace:*",
     "@phosphor-icons/react": "catalog:",

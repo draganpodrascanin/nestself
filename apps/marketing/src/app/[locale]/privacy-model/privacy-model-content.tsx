@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { Heading, Text, Table, Th, Td } from '@nestself/ui';
+import { Heading, Table, Th, Td } from '@nestself/ui';
 import { accessModel } from '@nestself/contracts';
 
 /** Maps each English `data` value from the contract to its i18n row key. */
@@ -17,15 +17,10 @@ export function PrivacyModelContent() {
   const { t } = useTranslation(['marketing', 'common']);
 
   return (
-    <main id="main" tabIndex={-1}>
-      <div className="py-16">
-        <Heading level={1} typeRole="editorial">
-          {t('marketing:pages.privacyModel.title')}
-        </Heading>
-        <Text typeRole="bodyLarge" tone="secondary" className="mt-4 max-w-[44rem]">
-          {t('marketing:pages.privacyModel.lead')}
-        </Text>
-      </div>
+    <section aria-labelledby="access-matrix-title" className="pb-8">
+      <Heading level={2} id="access-matrix-title" typeRole="sectionTitle" className="mb-6">
+        {t('marketing:pages.privacyModel.caption')}
+      </Heading>
 
       <Table caption={t('marketing:pages.privacyModel.caption')} className="mb-8">
         <thead>
@@ -54,9 +49,9 @@ export function PrivacyModelContent() {
         </tbody>
       </Table>
 
-      <p className="pb-16 type-metadata text-text-secondary">
+      <p className="pb-8 type-metadata text-text-secondary">
         {t('marketing:privacy.disclaimer')}
       </p>
-    </main>
+    </section>
   );
 }

@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "title": "Resources — NestSelf",
+    "description": "Articles, webinars and tools to help you understand wellbeing at work and at home."
+  },
+  "hero": {
+    "title": "Resources",
+    "lead": "Expert articles, live webinars and practical tools on mental health, legal rights, financial literacy and workplace wellbeing.",
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
+  },
+  "sections": {
+    "webinars": {
+      "title": "Webinars",
+      "seeAllLabel": "See all webinars",
+      "seeAllHref": "/webinars"
+    },
+    "articles": {
+      "title": "Articles",
+      "seeAllLabel": "See all articles",
+      "seeAllHref": "/articles"
+    },
+    "tools": {
+      "title": "Tools",
+      "seeAllLabel": "See all tools",
+      "seeAllHref": "/tools"
+    }
+  },
+  "topics": {
+    "psychological": "Mental health",
+    "legal": "Legal",
+    "financial": "Financial",
+    "work": "Work",
+    "family": "Family",
+    "managers": "Managers"
+  },
+  "cardLabels": {
+    "readingTime": "{minutes} min read",
+    "live": "Live",
+    "onDemand": "On demand",
+    "minutes": "{n} min",
+    "languages": "Languages",
+    "questionsLabel": "{n} questions"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Privacy Policy",
+    "description": "How NestSelf collects, uses and protects your personal data."
+  },
+  "title": "Privacy Policy",
+  "updatedAt": "2026-10-21",
+  "intro": "This privacy policy explains how NestSelf processes personal data collected through this website. We are committed to protecting your privacy in accordance with the General Data Protection Regulation (GDPR), the Serbian Law on Personal Data Protection (ZZPL) and the applicable Hungarian data protection legislation.",
+  "sections": [
+    {
+      "heading": "1. Data controller",
+      "paragraphs": [
+        "[Company name], registered at [Address].",
+        "Serbia: Matični broj [Matični broj], PIB [PIB].",
+        "Hungary: Cégjegyzékszám [Cégjegyzékszám], Adószám [Adószám].",
+        "Contact: hello@nestself.example"
+      ]
+    },
+    {
+      "heading": "2. What data we process",
+      "paragraphs": [
+        "Through this website we process the following categories of personal data:"
+      ],
+      "bullets": [
+        "Demo request forms: name, work email, company name, job title, company size, country, optional message",
+        "Contact forms: name, email, subject, message",
+        "Webinar registration forms: name, email, optional company name",
+        "A functional cookie (NEXT_LOCALE) that remembers your language preference"
+      ]
+    },
+    {
+      "heading": "3. Wellbeing check-ins",
+      "paragraphs": [
+        "The wellbeing check-in questionnaires on this website run entirely in your browser. NestSelf does not store, transmit or process any of your answers or results. No health data is collected or processed by this website."
+      ]
+    },
+    {
+      "heading": "4. Purposes and legal bases",
+      "paragraphs": [
+        "We process your data for the following purposes:"
+      ],
+      "bullets": [
+        "To respond to your demo request or message: GDPR Article 6(1)(b) (pre-contractual measures) and Article 6(1)(f) (legitimate interest in responding to enquiries)",
+        "To send webinar confirmations and reminders: GDPR Article 6(1)(b)",
+        "To remember your language preference: GDPR Article 6(1)(f) (legitimate interest in a functional website experience)"
+      ]
+    },
+    {
+      "heading": "5. Analytics and marketing cookies",
+      "paragraphs": [
+        "This website does not set analytics or marketing cookies. The only cookie used is NEXT_LOCALE, a strictly functional cookie that stores your preferred language. There is no automated decision-making or profiling."
+      ]
+    },
+    {
+      "heading": "6. Retention",
+      "paragraphs": [
+        "Contact and demo request data is retained for as long as necessary to respond to your enquiry and for a reasonable period afterwards for follow-up, unless you ask us to delete it sooner. Webinar registration data is retained for the duration of the webinar series and deleted within 12 months of the last event."
+      ]
+    },
+    {
+      "heading": "7. Processors",
+      "paragraphs": [
+        "Your data may be processed by the following categories of service providers:"
+      ],
+      "bullets": [
+        "Hosting provider: [to be named before launch]",
+        "Email service provider: [to be named before launch]"
+      ]
+    },
+    {
+      "heading": "8. Your rights",
+      "paragraphs": [
+        "Under the GDPR and the ZZPL you have the right to:"
+      ],
+      "bullets": [
+        "Access the personal data we hold about you",
+        "Request rectification of inaccurate data",
+        "Request erasure of your data",
+        "Restrict or object to processing",
+        "Data portability",
+        "Withdraw consent at any time (where processing is based on consent)"
+      ]
+    },
+    {
+      "heading": "9. How to exercise your rights",
+      "paragraphs": [
+        "To exercise any of these rights, contact us at hello@nestself.example. We will respond within 30 days."
+      ]
+    },
+    {
+      "heading": "10. Supervisory authorities",
+      "paragraphs": [
+        "If you believe your data protection rights have been violated, you have the right to lodge a complaint with:"
+      ],
+      "bullets": [
+        "Serbia: Poverenik za informacije od javnog značaja i zaštitu podataka o ličnosti (Commissioner for Information of Public Importance and Personal Data Protection), www.poverenik.rs",
+        "Hungary: Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH), www.naih.hu"
+      ]
+    },
+    {
+      "heading": "11. Contact",
+      "paragraphs": [
+        "For any questions about this privacy policy, contact us at hello@nestself.example."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Last updated:",
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "home": "Home"
+  }
+}
