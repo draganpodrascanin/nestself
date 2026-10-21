@@ -125,3 +125,27 @@ export function negotiateLocale(
 
   return fallback;
 }
+
+/**
+ * Builds the public path for a locale. The default locale lives at the root
+ * (`/`, `/plans`); every other locale is prefixed (`/en/plans`, `/hu`).
+ */
+export function localePath(locale: Locale, path = ''): string {
+  const normalized = path === '/' ? '' : path;
+  if (locale === defaultLocale) return normalized || '/';
+  return `/${locale}${normalized}`;
+}
+
+/**
+ * Splits a public pathname into its locale and the locale-free path.
+ * `/hu/plans` -> { locale: 'hu', path: '/plans' }; `/plans` -> { locale: defaultLocale, path: '/plans' }.
+ */
+export function stripLocalePrefix(pathname: string): { locale: Locale; path: string } {
+  const [, first = '', ...rest] = pathname.split('/');
+  if (isLocale(first)) {
+    const path = `/${rest.join('/')}`.replace(/\/+$/, '');
+    return { locale: first, path: path || '/' };
+  }
+  const path = pathname.replace(/\/+$/, '');
+  return { locale: defaultLocale, path: path || '/' };
+}

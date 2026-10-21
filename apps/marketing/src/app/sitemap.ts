@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { locales, localeMeta } from '@nestself/i18n';
+import { locales, localeMeta, localePath } from '@nestself/i18n';
 import { listSlugs, listAssessmentSlugs, getEntry } from '@/content/loaders';
 import { SITE_URL } from '@/i18n/metadata';
 
@@ -40,7 +40,7 @@ export const ROUTES: string[] = [
 function alternatesForRoute(route: string): Record<string, string> {
   const languages: Record<string, string> = {};
   for (const locale of locales) {
-    languages[localeMeta[locale].hreflang] = `${SITE_URL}/${locale}${route}`;
+    languages[localeMeta[locale].hreflang] = `${SITE_URL}${localePath(locale, route)}`;
   }
   return languages;
 }
@@ -52,7 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const route of ROUTES) {
     for (const locale of locales) {
       entries.push({
-        url: `${SITE_URL}/${locale}${route}`,
+        url: `${SITE_URL}${localePath(locale, route)}`,
         alternates: { languages: alternatesForRoute(route) },
       });
     }
@@ -67,7 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const route = `/articles/${slug}`;
     for (const locale of locales) {
       entries.push({
-        url: `${SITE_URL}/${locale}${route}`,
+        url: `${SITE_URL}${localePath(locale, route)}`,
         alternates: { languages: alternatesForRoute(route) },
         ...(dateStr ? { lastModified: dateStr } : {}),
       });
@@ -85,7 +85,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const route = `/webinars/${slug}`;
     for (const locale of locales) {
       entries.push({
-        url: `${SITE_URL}/${locale}${route}`,
+        url: `${SITE_URL}${localePath(locale, route)}`,
         alternates: { languages: alternatesForRoute(route) },
         ...(lastModified ? { lastModified } : {}),
       });
@@ -98,7 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const route = `/tools/${slug}`;
     for (const locale of locales) {
       entries.push({
-        url: `${SITE_URL}/${locale}${route}`,
+        url: `${SITE_URL}${localePath(locale, route)}`,
         alternates: { languages: alternatesForRoute(route) },
       });
     }
@@ -112,7 +112,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const route = `/tools/${slug}`;
     for (const locale of locales) {
       entries.push({
-        url: `${SITE_URL}/${locale}${route}`,
+        url: `${SITE_URL}${localePath(locale, route)}`,
         alternates: { languages: alternatesForRoute(route) },
       });
     }

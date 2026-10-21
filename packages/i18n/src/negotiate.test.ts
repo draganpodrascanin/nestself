@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isLocale, negotiateLocale, parseAcceptLanguage } from './types';
+import { isLocale, localePath, negotiateLocale, parseAcceptLanguage, stripLocalePrefix } from './types';
 
 describe('negotiateLocale', () => {
   it('resolves sr-Latn-RS to sr-Latn', () => {
@@ -66,5 +66,32 @@ describe('parseAcceptLanguage', () => {
 
   it('returns empty for empty string', () => {
     expect(parseAcceptLanguage('')).toEqual([]);
+  });
+});
+
+describe('localePath', () => {
+  it('leaves the default locale unprefixed', () => {
+    expect(localePath('sr-Latn')).toBe('/');
+    expect(localePath('sr-Latn', '/')).toBe('/');
+    expect(localePath('sr-Latn', '/plans')).toBe('/plans');
+  });
+
+  it('prefixes every other locale', () => {
+    expect(localePath('en')).toBe('/en');
+    expect(localePath('hu', '/plans')).toBe('/hu/plans');
+    expect(localePath('sr-Cyrl', '/articles/x')).toBe('/sr-Cyrl/articles/x');
+  });
+});
+
+describe('stripLocalePrefix', () => {
+  it('reads a prefixed path', () => {
+    expect(stripLocalePrefix('/hu/plans')).toEqual({ locale: 'hu', path: '/plans' });
+    expect(stripLocalePrefix('/en')).toEqual({ locale: 'en', path: '/' });
+    expect(stripLocalePrefix('/sr-Cyrl/')).toEqual({ locale: 'sr-Cyrl', path: '/' });
+  });
+
+  it('treats an unprefixed path as the default locale', () => {
+    expect(stripLocalePrefix('/plans')).toEqual({ locale: 'sr-Latn', path: '/plans' });
+    expect(stripLocalePrefix('/')).toEqual({ locale: 'sr-Latn', path: '/' });
   });
 });

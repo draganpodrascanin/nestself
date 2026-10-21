@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { locales, localeMeta } from '@nestself/i18n';
+import { locales, localeMeta, localePath, stripLocalePrefix } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { useTranslation } from 'react-i18next';
 import { Globe, CaretDown } from '@phosphor-icons/react/dist/ssr';
@@ -26,11 +26,9 @@ export function LocaleSwitcher({ locale, className }: LocaleSwitcherProps) {
   const { t } = useTranslation(['marketing']);
   const pathname = usePathname();
 
-  /** Replace the locale prefix in the current pathname. */
+  /** The same page in another locale: Serbian Latin at the root, every other locale prefixed. */
   function hrefFor(target: Locale): string {
-    const segments = pathname.split('/');
-    segments[1] = target;
-    return segments.join('/');
+    return localePath(target, stripLocalePrefix(pathname).path);
   }
 
   const label = t('marketing:locale.switcherLabel');

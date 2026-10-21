@@ -138,4 +138,20 @@ test.describe('keyboard navigation: marketing site', () => {
     const footerTrigger = page.getByRole('contentinfo').getByRole('button', { name: /nyelv/i });
     await expect(footerTrigger).toBeVisible();
   });
+
+  test('choosing Serbian leads to the unprefixed URL and the Serbian document language', async ({ page }) => {
+    await page.goto('http://localhost:3000/en/plans');
+    await settle(page);
+    const headerTrigger = page.getByRole('button', { name: /language/i }).first();
+    await headerTrigger.click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: /Srpski/ }).click();
+    await page.waitForURL((url) => url.pathname === '/plans');
+    await settle(page);
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('sr-Latn');
+    // The old prefixed address redirects to the unprefixed one.
+    const response = await page.goto('http://localhost:3000/sr-Latn/plans');
+    expect(response?.url()).toBe('http://localhost:3000/plans');
+  });
 });

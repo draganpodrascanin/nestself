@@ -45,7 +45,7 @@ describe('LocaleSwitcher', () => {
     expect(items).toHaveLength(4);
     // Check hrefs
     const hrefs = items.map((item) => item.getAttribute('href'));
-    expect(hrefs).toContain('/sr-Latn/services');
+    expect(hrefs).toContain('/services');
     expect(hrefs).toContain('/sr-Cyrl/services');
     expect(hrefs).toContain('/hu/services');
     expect(hrefs).toContain('/en/services');
@@ -58,7 +58,7 @@ describe('LocaleSwitcher', () => {
     const items = await screen.findAllByRole('menuitem');
     const enItem = items.find((item) => item.getAttribute('href') === '/en/services');
     expect(enItem).toHaveAttribute('aria-current', 'true');
-    const srItem = items.find((item) => item.getAttribute('href') === '/sr-Latn/services');
+    const srItem = items.find((item) => item.getAttribute('href') === '/services');
     expect(srItem).not.toHaveAttribute('aria-current');
   });
 

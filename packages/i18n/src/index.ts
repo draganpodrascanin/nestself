@@ -3,6 +3,8 @@ export type { Locale, Namespace } from './types';
 export {
   locales,
   defaultLocale,
+  localePath,
+  stripLocalePrefix,
   namespaces,
   localeMeta,
   isLocale,

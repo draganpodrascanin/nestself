@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatLanguages } from '@nestself/i18n';
+import { isLocale, formatLanguages, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { getServerT } from '@/i18n/server';
@@ -69,7 +69,7 @@ export default async function HomePage({
     listAssessments(typedLocale),
   ]);
   const articleCards: ArticleCardProps[] = articles.slice(0, 3).map((a) => ({
-    href: `/${locale}/articles/${a.slug}`,
+    href: localePath(locale, `/articles/${a.slug}`),
     title: a.frontmatter.title,
     description: a.frontmatter.description,
     topicLabel: t(`marketing:topics.${a.frontmatter.topic}`),
@@ -79,7 +79,7 @@ export default async function HomePage({
   }));
 
   const webinarCards: WebinarCardProps[] = webinars.slice(0, 3).map((w) => ({
-    href: `/${locale}/webinars/${w.slug}`,
+    href: localePath(locale, `/webinars/${w.slug}`),
     title: w.frontmatter.title,
     description: w.frontmatter.description,
     dateLabel: formatWebinarDateTime(w.frontmatter.startsAt, typedLocale),
@@ -97,7 +97,7 @@ export default async function HomePage({
   const toolCards: ToolCardProps[] = [];
 
   const assessmentCards: AssessmentCardProps[] = assessments.slice(0, 3).map((a) => ({
-    href: `/${locale}/tools/${a.slug}`,
+    href: localePath(locale, `/tools/${a.slug}`),
     title: a.data.title,
     intro: a.data.intro,
     slug: a.slug,
@@ -114,11 +114,11 @@ export default async function HomePage({
         lead={data.hero.lead}
         primaryCta={{
           label: data.hero.primaryCta,
-          href: `/${locale}/demo`,
+          href: localePath(locale, '/demo'),
         }}
         secondaryCta={{
           label: data.hero.secondaryCta,
-          href: `/${locale}/for-employees`,
+          href: localePath(locale, '/for-employees'),
         }}
         photos={[
           {
@@ -155,7 +155,7 @@ export default async function HomePage({
           icon: item.icon as IconName,
           title: item.title,
           body: item.body,
-          href: `/${locale}${item.href}`,
+          href: localePath(locale, `${item.href}`),
         }))}
       />
 
@@ -184,7 +184,7 @@ export default async function HomePage({
         }}
         cta={{
           label: data.employers.cta.label,
-          href: `/${locale}${data.employers.cta.href}`,
+          href: localePath(locale, `${data.employers.cta.href}`),
         }}
       />
 
@@ -207,7 +207,7 @@ export default async function HomePage({
           articles={articleCards}
           webinars={webinarCards}
           tools={toolCards}
-          moreHref={`/${locale}/resources`}
+          moreHref={localePath(locale, '/resources')}
           moreLabel={data.resources.moreLabel}
         />
       )}
@@ -240,7 +240,7 @@ export default async function HomePage({
         id="faq"
         title={data.faq.title}
         items={data.faq.items}
-        more={data.faq.moreLabel ? { href: `/${locale}/faq`, label: data.faq.moreLabel } : undefined}
+        more={data.faq.moreLabel ? { href: localePath(locale, '/faq'), label: data.faq.moreLabel } : undefined}
       />
 
       <CtaBand
@@ -249,13 +249,13 @@ export default async function HomePage({
         body={data.ctaBand.body}
         primary={{
           label: data.ctaBand.primary.label,
-          href: `/${locale}${data.ctaBand.primary.href}`,
+          href: localePath(locale, `${data.ctaBand.primary.href}`),
         }}
         secondary={
           data.ctaBand.secondary
             ? {
                 label: data.ctaBand.secondary.label,
-                href: `/${locale}${data.ctaBand.secondary.href}`,
+                href: localePath(locale, `${data.ctaBand.secondary.href}`),
               }
             : undefined
         }

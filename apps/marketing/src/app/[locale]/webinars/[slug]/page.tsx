@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales, formatLanguages } from '@nestself/i18n';
+import { isLocale, locales, formatLanguages, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -90,7 +90,7 @@ export default async function WebinarDetailPage({
       <Breadcrumbs
         label={data.detail.breadcrumbLabel}
         items={[
-          { label: data.detail.breadcrumbWebinars, href: `/${locale}/webinars` },
+          { label: data.detail.breadcrumbWebinars, href: localePath(locale, '/webinars') },
           { label: frontmatter.title },
         ]}
         className="pt-8"
@@ -187,7 +187,7 @@ export default async function WebinarDetailPage({
             {relatedArticles.map((a) => (
               <ArticleCard
                 key={a.slug}
-                href={`/${locale}/articles/${a.slug}`}
+                href={localePath(locale, `/articles/${a.slug}`)}
                 title={a.frontmatter.title}
                 description={a.frontmatter.description}
                 topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}

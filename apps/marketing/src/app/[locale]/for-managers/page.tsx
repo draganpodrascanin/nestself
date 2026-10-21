@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatLanguages } from '@nestself/i18n';
+import { isLocale, formatLanguages, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { localizedMetadata } from '@/i18n/metadata';
@@ -45,7 +45,7 @@ export default async function ForManagersPage({ params }: { params: Promise<Para
     .filter((a) => a.frontmatter.topic === 'managers')
     .slice(0, 3)
     .map((a) => ({
-      href: `/${locale}/articles/${a.slug}`,
+      href: localePath(locale, `/articles/${a.slug}`),
       title: a.frontmatter.title,
       description: a.frontmatter.description,
       topicLabel: resourceLabels.topics[a.frontmatter.topic] ?? a.frontmatter.topic,
@@ -62,7 +62,7 @@ export default async function ForManagersPage({ params }: { params: Promise<Para
     .filter((w) => w.frontmatter.topic === 'managers')
     .slice(0, 3)
     .map((w) => ({
-      href: `/${locale}/webinars/${w.slug}`,
+      href: localePath(locale, `/webinars/${w.slug}`),
       title: w.frontmatter.title,
       description: w.frontmatter.description,
       dateLabel: formatWebinarDateTime(w.frontmatter.startsAt, loc),
@@ -83,7 +83,7 @@ export default async function ForManagersPage({ params }: { params: Promise<Para
     .filter((t) => t.frontmatter.topic === 'managers')
     .slice(0, 3)
     .map((t) => ({
-      href: `/${locale}/tools/${t.slug}`,
+      href: localePath(locale, `/tools/${t.slug}`),
       title: t.frontmatter.title,
       description: t.frontmatter.description,
       kindLabel: t.frontmatter.kind,

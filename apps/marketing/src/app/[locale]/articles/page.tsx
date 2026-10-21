@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -78,7 +78,7 @@ export default async function ArticlesPage({
           <ul className="flex gap-2 list-none m-0 p-0 overflow-x-auto [scrollbar-width:thin] -mx-4 px-4 @max-[760px]:pr-10 @max-[760px]:[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <li className="shrink-0">
               <a
-                href={`/${locale}/articles`}
+                href={localePath(locale, '/articles')}
                 aria-current={topicFilter === null ? 'page' : undefined}
                 className={`${chipBase} ${topicFilter === null ? activeClasses : inactiveClasses}`}
               >
@@ -88,7 +88,7 @@ export default async function ArticlesPage({
             {Object.entries(data.topics).map(([key, label]) => (
               <li key={key} className="shrink-0">
                 <a
-                  href={`/${locale}/articles?topic=${key}`}
+                  href={localePath(locale, `/articles?topic=${key}`)}
                   aria-current={topicFilter === key ? 'page' : undefined}
                   className={`${chipBase} ${topicFilter === key ? activeClasses : inactiveClasses}`}
                 >
@@ -103,7 +103,7 @@ export default async function ArticlesPage({
           {filtered.map((a) => (
             <ArticleCard
               key={a.slug}
-              href={`/${locale}/articles/${a.slug}`}
+              href={localePath(locale, `/articles/${a.slug}`)}
               title={a.frontmatter.title}
               description={a.frontmatter.description}
               topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatLanguages } from '@nestself/i18n';
+import { isLocale, formatLanguages, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -91,7 +91,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             <Heading level={2} id="resources-webinars-title">
               {data.sections.webinars.title}
             </Heading>
-            <TextLink href={`/${locale}${data.sections.webinars.seeAllHref}`} trailingArrow>
+            <TextLink href={localePath(locale, `${data.sections.webinars.seeAllHref}`)} trailingArrow>
               {data.sections.webinars.seeAllLabel}
             </TextLink>
           </div>
@@ -130,7 +130,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
                   </Text>
                 </div>
                 <Heading level={3} typeRole="sectionTitle">
-                  <TextLink href={`/${locale}/webinars/${featuredWebinar.slug}`}>
+                  <TextLink href={localePath(locale, `/webinars/${featuredWebinar.slug}`)}>
                     {featuredWebinar.frontmatter.title}
                   </TextLink>
                 </Heading>
@@ -147,7 +147,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
               {gridWebinars.map((w) => (
                 <WebinarCard
                   key={w.slug}
-                  href={`/${locale}/webinars/${w.slug}`}
+                  href={localePath(locale, `/webinars/${w.slug}`)}
                   title={w.frontmatter.title}
                   description={w.frontmatter.description}
                   dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
@@ -172,7 +172,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             <Heading level={2} id="resources-articles-title">
               {data.sections.articles.title}
             </Heading>
-            <TextLink href={`/${locale}${data.sections.articles.seeAllHref}`} trailingArrow>
+            <TextLink href={localePath(locale, `${data.sections.articles.seeAllHref}`)} trailingArrow>
               {data.sections.articles.seeAllLabel}
             </TextLink>
           </div>
@@ -180,7 +180,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             {topArticles.map((a) => (
               <ArticleCard
                 key={a.slug}
-                href={`/${locale}/articles/${a.slug}`}
+                href={localePath(locale, `/articles/${a.slug}`)}
                 title={a.frontmatter.title}
                 description={a.frontmatter.description}
                 topicLabel={
@@ -203,7 +203,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             <Heading level={2} id="resources-tools-title">
               {data.sections.tools.title}
             </Heading>
-            <TextLink href={`/${locale}${data.sections.tools.seeAllHref}`} trailingArrow>
+            <TextLink href={localePath(locale, `${data.sections.tools.seeAllHref}`)} trailingArrow>
               {data.sections.tools.seeAllLabel}
             </TextLink>
           </div>
@@ -211,7 +211,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             {topTools.map((t) => (
               <ToolCard
                 key={t.slug}
-                href={`/${locale}/tools/${t.slug}`}
+                href={localePath(locale, `/tools/${t.slug}`)}
                 title={t.frontmatter.title}
                 description={t.frontmatter.description}
                 kindLabel={data.kindLabels[t.frontmatter.kind]}
@@ -221,7 +221,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
             {topAssessments.map((a) => (
               <AssessmentCard
                 key={a.slug}
-                href={`/${locale}/tools/${a.slug}`}
+                href={localePath(locale, `/tools/${a.slug}`)}
                 title={a.data.title}
                 intro={a.data.intro}
                 slug={a.slug}

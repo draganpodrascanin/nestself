@@ -34,6 +34,8 @@ const config: NextConfig = {
         destination: '/:locale/for-employers',
         permanent: true,
       },
+      { source: '/support', destination: '/services', permanent: true },
+      { source: '/employers', destination: '/for-employers', permanent: true },
     ];
   },
 };

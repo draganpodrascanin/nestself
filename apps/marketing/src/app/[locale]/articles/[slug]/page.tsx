@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales } from '@nestself/i18n';
+import { isLocale, locales, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -93,7 +93,7 @@ export default async function ArticleDetailPage({
       <Breadcrumbs
         label={data.detail.breadcrumbLabel}
         items={[
-          { label: data.detail.breadcrumbArticles, href: `/${locale}/articles` },
+          { label: data.detail.breadcrumbArticles, href: localePath(locale, '/articles') },
           { label: frontmatter.title },
         ]}
         className="pt-8"
@@ -149,7 +149,7 @@ export default async function ArticleDetailPage({
               <Info size={24} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
               <Text tone="secondary">
                 {data.detail.disclaimerText}{' '}
-                <TextLink href={`/${locale}${serviceLink}`}>
+                <TextLink href={localePath(locale, `${serviceLink}`)}>
                   {data.detail.disclaimerLinkText}
                 </TextLink>
               </Text>
@@ -171,7 +171,7 @@ export default async function ArticleDetailPage({
             {related.map((a) => (
               <ArticleCard
                 key={a.slug}
-                href={`/${locale}/articles/${a.slug}`}
+                href={localePath(locale, `/articles/${a.slug}`)}
                 title={a.frontmatter.title}
                 description={a.frontmatter.description}
                 topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}

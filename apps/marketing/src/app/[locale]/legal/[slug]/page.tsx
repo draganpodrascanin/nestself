@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatDate } from '@nestself/i18n';
+import { isLocale, formatDate, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { Heading, Text, Breadcrumbs } from '@nestself/ui';
 import { localizedMetadata } from '@/i18n/metadata';
@@ -47,7 +47,7 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
       .filter((s) => s !== typedSlug)
       .map(async (s) => {
         const { data: d } = await loadLegalContent(s, typedLocale);
-        return { label: d.title, href: `/${locale}/legal/${s}` };
+        return { label: d.title, href: localePath(locale, `/legal/${s}`) };
       }),
   );
 
@@ -65,7 +65,7 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
     <main id="main" tabIndex={-1} className="@container">
       <div className="pt-8 pb-4">
         <Breadcrumbs label={data.breadcrumb.label} items={[
-          { label: data.breadcrumb.home, href: `/${locale}` },
+          { label: data.breadcrumb.home, href: localePath(locale) },
           { label: data.meta.title },
         ]} />
       </div>

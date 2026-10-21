@@ -84,7 +84,7 @@ e2e/
 
 ## Notes
 
-- Base page entries are Serbian Latin (`sr-Latn`); `-en`, `-hu` and `-sr-cyrl` are locale variants.
+- Base page entries are Serbian Latin at unprefixed URLs (`/`, `/plans`); `-en`, `-hu` and `-sr-cyrl` are the prefixed locale variants.
 - Screenshot baselines live under `e2e/__screenshots__/{projectName}/`.
 - The `e2e/snaps/` directory (snap.mjs output) is git-ignored.
 - Test results and HTML reports are written to `e2e/test-results/` and `e2e/playwright-report/` (both git-ignored).

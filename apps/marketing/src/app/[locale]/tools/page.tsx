@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listAssessments, listEntries } from '@/content/loaders';
@@ -64,7 +64,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
             <AssessmentCard
               key={a.slug}
               slug={a.slug}
-              href={`/${locale}/tools/${a.slug}`}
+              href={localePath(locale, `/tools/${a.slug}`)}
               title={a.data.title}
               intro={a.data.intro}
               durationLabel={data.assessments.durationLabel.replace(
@@ -93,7 +93,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
           {tools.map((tool) => (
             <ToolCard
               key={tool.slug}
-              href={`/${locale}/tools/${tool.slug}`}
+              href={localePath(locale, `/tools/${tool.slug}`)}
               title={tool.frontmatter.title}
               description={tool.frontmatter.description}
               kindLabel={data.kindLabels[tool.frontmatter.kind]}

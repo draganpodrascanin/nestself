@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatLanguages } from '@nestself/i18n';
+import { isLocale, formatLanguages, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -71,7 +71,7 @@ export default async function WebinarsPage({
             {upcoming.map((w) => (
               <WebinarCard
                 key={w.slug}
-                href={`/${locale}/webinars/${w.slug}`}
+                href={localePath(locale, `/webinars/${w.slug}`)}
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
                 dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
@@ -97,7 +97,7 @@ export default async function WebinarsPage({
             {onDemand.map((w) => (
               <WebinarCard
                 key={w.slug}
-                href={`/${locale}/webinars/${w.slug}`}
+                href={localePath(locale, `/webinars/${w.slug}`)}
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
                 dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}

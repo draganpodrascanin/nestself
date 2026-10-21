@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { TextLink, Text } from '@nestself/ui';
 import type { Locale } from '@nestself/i18n';
 import { LocaleSwitcher } from './LocaleSwitcher';
+import { localePath } from '@nestself/i18n';
 
 export interface SiteFooterProps {
   locale: Locale;
@@ -21,39 +22,39 @@ export function SiteFooter({ locale }: SiteFooterProps) {
     {
       title: t('marketing:footer.product'),
       links: [
-        { label: t('marketing:nav.services'), href: `/${locale}/services` },
-        { label: t('marketing:nav.forEmployers'), href: `/${locale}/for-employers` },
-        { label: t('marketing:nav.forEmployees'), href: `/${locale}/for-employees` },
-        { label: t('marketing:footer.forManagers'), href: `/${locale}/for-managers` },
-        { label: t('marketing:nav.plans'), href: `/${locale}/plans` },
+        { label: t('marketing:nav.services'), href: localePath(locale, '/services') },
+        { label: t('marketing:nav.forEmployers'), href: localePath(locale, '/for-employers') },
+        { label: t('marketing:nav.forEmployees'), href: localePath(locale, '/for-employees') },
+        { label: t('marketing:footer.forManagers'), href: localePath(locale, '/for-managers') },
+        { label: t('marketing:nav.plans'), href: localePath(locale, '/plans') },
       ],
     },
     {
       title: t('marketing:footer.resourcesCol'),
       links: [
-        { label: t('marketing:footer.webinars'), href: `/${locale}/webinars` },
-        { label: t('marketing:footer.articles'), href: `/${locale}/articles` },
-        { label: t('marketing:footer.tools'), href: `/${locale}/tools` },
-        { label: t('marketing:footer.faq'), href: `/${locale}/faq` },
-        { label: t('marketing:footer.privacyModel'), href: `/${locale}/privacy-model` },
+        { label: t('marketing:footer.webinars'), href: localePath(locale, '/webinars') },
+        { label: t('marketing:footer.articles'), href: localePath(locale, '/articles') },
+        { label: t('marketing:footer.tools'), href: localePath(locale, '/tools') },
+        { label: t('marketing:footer.faq'), href: localePath(locale, '/faq') },
+        { label: t('marketing:footer.privacyModel'), href: localePath(locale, '/privacy-model') },
       ],
     },
     {
       title: t('marketing:footer.company'),
       links: [
-        { label: t('marketing:nav.about'), href: `/${locale}/about` },
-        { label: t('marketing:footer.demo'), href: `/${locale}/demo` },
-        { label: t('marketing:footer.contact'), href: `/${locale}/contact` },
-        { label: t('marketing:footer.accessibility'), href: `/${locale}/accessibility` },
+        { label: t('marketing:nav.about'), href: localePath(locale, '/about') },
+        { label: t('marketing:footer.demo'), href: localePath(locale, '/demo') },
+        { label: t('marketing:footer.contact'), href: localePath(locale, '/contact') },
+        { label: t('marketing:footer.accessibility'), href: localePath(locale, '/accessibility') },
       ],
     },
     {
       title: t('marketing:footer.legalCol'),
       links: [
-        { label: t('marketing:footer.privacyPolicy'), href: `/${locale}/legal/privacy` },
-        { label: t('marketing:footer.terms'), href: `/${locale}/legal/terms` },
-        { label: t('marketing:footer.cookies'), href: `/${locale}/legal/cookies` },
-        { label: t('marketing:footer.imprint'), href: `/${locale}/legal/imprint` },
+        { label: t('marketing:footer.privacyPolicy'), href: localePath(locale, '/legal/privacy') },
+        { label: t('marketing:footer.terms'), href: localePath(locale, '/legal/terms') },
+        { label: t('marketing:footer.cookies'), href: localePath(locale, '/legal/cookies') },
+        { label: t('marketing:footer.imprint'), href: localePath(locale, '/legal/imprint') },
       ],
     },
   ];

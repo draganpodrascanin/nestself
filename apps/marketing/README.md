@@ -41,7 +41,7 @@ The demo, contact and webinar-registration forms post to `/api/leads/<kind>` rou
 
 ## Locale behaviour
 
-Requests without a locale prefix are redirected by `proxy.ts`, negotiating from the `NEXT_LOCALE` cookie and then `Accept-Language`, falling back to `sr-Latn`. The header locale switcher sets the cookie. English is the authoring source of content files; Serbian Latin is the default served language.
+Serbian Latin, the default, lives at the root (`/`, `/plans`); every other locale is prefixed (`/en/plans`, `/hu`, `/sr-Cyrl/plans`). `src/proxy.ts` rewrites unprefixed requests to the `[locale]` tree internally, redirects `/sr-Latn/...` permanently to the unprefixed path, and sends visitors who chose another language earlier (the `NEXT_LOCALE` cookie the switcher writes) to that language. The browser's `Accept-Language` is not consulted: the site is Serbian first and other languages are an explicit choice. Build links with `localePath(locale, '/path')` from `@nestself/i18n`, never by hand. English is the authoring source of content files.
 
 ## Images
 

@@ -1,4 +1,6 @@
 import { permanentRedirect } from 'next/navigation';
+import { localePath } from '@nestself/i18n';
+import type { Locale } from '@nestself/i18n';
 
 interface Params {
   locale: string;
@@ -10,5 +12,5 @@ export default async function EmployersRedirect({
   params: Promise<Params>;
 }) {
   const { locale } = await params;
-  permanentRedirect(`/${locale}/for-employers` as never);
+  permanentRedirect(localePath(locale as Locale, '/for-employers') as never);
 }

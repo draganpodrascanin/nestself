@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LockKey } from '@phosphor-icons/react/dist/ssr';
 import { Button, Text, Dialog, DialogTrigger, DialogContent, TextLink } from '@nestself/ui';
 import type { Locale } from '@nestself/i18n';
+import { localePath } from '@nestself/i18n';
 
 export function PrivacySection({ locale }: { locale: Locale }) {
   const { t } = useTranslation(['marketing', 'common']);
@@ -44,7 +45,7 @@ export function PrivacySection({ locale }: { locale: Locale }) {
             {t('marketing:privacy.disclaimer')}
           </p>
           <div className="mt-4">
-            <TextLink href={`/${locale}/privacy-model`}>{t('marketing:privacy.cta')}</TextLink>
+            <TextLink href={localePath(locale, '/privacy-model')}>{t('marketing:privacy.cta')}</TextLink>
           </div>
         </DialogContent>
       </Dialog>

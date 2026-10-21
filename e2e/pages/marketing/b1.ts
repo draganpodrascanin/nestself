@@ -1,10 +1,10 @@
 import type { PageEntry } from '../../pages';
 
 export const pages: PageEntry[] = [
-  { name: 'marketing-home', url: 'http://localhost:3000/sr-Latn', locale: 'sr-Latn' },
+  { name: 'marketing-home', url: 'http://localhost:3000/', locale: 'sr-Latn' },
   {
     name: 'marketing-home-dark',
-    url: 'http://localhost:3000/sr-Latn',
+    url: 'http://localhost:3000/',
     locale: 'sr-Latn',
     theme: { palette: 'forest', mode: 'dark' },
   },

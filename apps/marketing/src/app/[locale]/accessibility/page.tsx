@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { Heading, Text, Breadcrumbs } from '@nestself/ui';
 import { localizedMetadata } from '@/i18n/metadata';
@@ -38,7 +38,7 @@ export default async function AccessibilityPage({ params }: { params: Promise<Pa
       <div className="pt-8 pb-4">
         <Breadcrumbs
           label={data.breadcrumb.label}
-          items={[{ label: data.breadcrumb.home, href: `/${locale}` }, { label: data.meta.title }]}
+          items={[{ label: data.breadcrumb.home, href: localePath(locale) }, { label: data.meta.title }]}
         />
       </div>
 

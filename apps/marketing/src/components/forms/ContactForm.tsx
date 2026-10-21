@@ -8,6 +8,7 @@ import type { FormError } from '@nestself/ui';
 import { TextLink } from '@nestself/ui';
 import { submitLead, describeIssues, type ValidationMessages } from '@/lib/leads';
 import { LeadFormShell, type FormStatus } from './LeadFormShell';
+import { localePath } from '@nestself/i18n';
 
 export interface ContactFormContent {
   fields: {
@@ -121,7 +122,7 @@ export function ContactForm({ locale, content }: ContactFormProps) {
             onCheckedChange={(c) => setConsent(c as boolean)}
           >
             {content.fields.consent}{' '}
-            <TextLink href={`/${locale}/legal/privacy-policy`}>{content.privacyLinkText}</TextLink>
+            <TextLink href={localePath(locale, '/legal/privacy-policy')}>{content.privacyLinkText}</TextLink>
           </Checkbox>
         </div>
       </div>

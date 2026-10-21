@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales } from '@nestself/i18n';
+import { isLocale, locales, localePath } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { localizedMetadata } from '@/i18n/metadata';
 import {
@@ -98,8 +98,8 @@ export default async function ToolSlugPage({
           <Breadcrumbs
             label="Breadcrumb"
             items={[
-              { label: content.breadcrumbs.home, href: `/${locale}` },
-              { label: content.breadcrumbs.tools, href: `/${locale}/tools` },
+              { label: content.breadcrumbs.home, href: localePath(locale) },
+              { label: content.breadcrumbs.tools, href: localePath(locale, '/tools') },
               { label: data.title },
             ]}
           />
@@ -147,8 +147,8 @@ export default async function ToolSlugPage({
           assessment={data}
           labels={content.runner}
           links={{
-            talk: `/${locale}/services/therapy`,
-            related: `/${locale}/resources`,
+            talk: localePath(locale, '/services/therapy'),
+            related: localePath(locale, '/resources'),
           }}
         />
       </main>
@@ -173,8 +173,8 @@ export default async function ToolSlugPage({
         <Breadcrumbs
           label="Breadcrumb"
           items={[
-            { label: content.breadcrumbs.home, href: `/${locale}` },
-            { label: content.breadcrumbs.tools, href: `/${locale}/tools` },
+            { label: content.breadcrumbs.home, href: localePath(locale) },
+            { label: content.breadcrumbs.tools, href: localePath(locale, '/tools') },
             { label: tool.frontmatter.title },
           ]}
         />
@@ -213,7 +213,7 @@ export default async function ToolSlugPage({
 
         {cta && (
           <div className="mt-12 mb-8">
-            <LinkButton href={`/${locale}${cta.href}`}>
+            <LinkButton href={localePath(locale, `${cta.href}`)}>
               {cta.label}
             </LinkButton>
           </div>

@@ -8,6 +8,7 @@ import type { FormError } from '@nestself/ui';
 import { TextLink } from '@nestself/ui';
 import { submitLead, describeIssues, type ValidationMessages } from '@/lib/leads';
 import { LeadFormShell, type FormStatus } from './LeadFormShell';
+import { localePath } from '@nestself/i18n';
 
 const FREE_MAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com', 'mail.com', 'protonmail.com', 'yandex.com', 'live.com'];
 
@@ -208,7 +209,7 @@ export function DemoRequestForm({ locale, content }: DemoRequestFormProps) {
             onCheckedChange={(c) => setConsent(c as boolean)}
           >
             {content.fields.consent}{' '}
-            <TextLink href={`/${locale}/legal/privacy-policy`}>{content.privacyLinkText}</TextLink>
+            <TextLink href={localePath(locale, '/legal/privacy-policy')}>{content.privacyLinkText}</TextLink>
           </Checkbox>
         </div>
       </div>

@@ -11,19 +11,19 @@ describe('localeAlternates', () => {
   it('contains all four locales with correct paths', () => {
     const result = localeAlternates('/services', 'en');
     expect(result.languages['en']).toBe(`${SITE_URL}/en/services`);
-    expect(result.languages['sr-Latn']).toBe(`${SITE_URL}/sr-Latn/services`);
+    expect(result.languages['sr-Latn']).toBe(`${SITE_URL}/services`);
     expect(result.languages['sr-Cyrl']).toBe(`${SITE_URL}/sr-Cyrl/services`);
     expect(result.languages['hu']).toBe(`${SITE_URL}/hu/services`);
   });
 
-  it('sets x-default to sr-Latn (the default locale)', () => {
+  it('sets x-default to the unprefixed Serbian Latin URL (the default locale)', () => {
     const result = localeAlternates('/services', 'en');
-    expect(result.languages['x-default']).toBe(`${SITE_URL}/sr-Latn/services`);
+    expect(result.languages['x-default']).toBe(`${SITE_URL}/services`);
   });
 
   it('has self-referencing canonical for the given locale', () => {
     const result = localeAlternates('/', 'en');
-    expect(result.canonical).toBe(`${SITE_URL}/en/`);
+    expect(result.canonical).toBe(`${SITE_URL}/en`);
   });
 
   it('canonical uses the page own locale, not always en', () => {
@@ -33,7 +33,7 @@ describe('localeAlternates', () => {
 
   it('x-default always points to sr-Latn regardless of the locale argument', () => {
     const result = localeAlternates('/plans', 'hu');
-    expect(result.languages['x-default']).toBe(`${SITE_URL}/sr-Latn/plans`);
+    expect(result.languages['x-default']).toBe(`${SITE_URL}/plans`);
   });
 });
 
