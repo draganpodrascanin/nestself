@@ -33,7 +33,9 @@ export function SiteHeaderBar({ locale }: SiteHeaderBarProps) {
     { label: t('marketing:nav.about'), href: `/${locale}/about` },
   ].map((link) => ({
     ...link,
-    current: current === link.href.replace(`/${locale}`, '') || (current === '/' && link.href === `/${locale}`),
+    current:
+      current === link.href.replace(`/${locale}`, '') ||
+      (current === '/' && link.href === `/${locale}`),
   }));
 
   return (
@@ -41,10 +43,11 @@ export function SiteHeaderBar({ locale }: SiteHeaderBarProps) {
       brand={{
         label: 'nestself',
         href: `/${locale}`,
+        className: 'text-[1.9rem] tracking-[-0.065em]',
       }}
       links={links}
       actions={
-        <div className="flex items-center gap-4 @max-[760px]:flex-col @max-[760px]:items-stretch">
+        <div className="gap-4 flex items-center @max-[760px]:flex-col @max-[760px]:items-stretch">
           <LocaleSwitcher locale={locale} />
           <LinkButton href={`/${locale}/demo`} size="sm">
             {t('marketing:actions.requestDemo')}
@@ -53,7 +56,6 @@ export function SiteHeaderBar({ locale }: SiteHeaderBarProps) {
       }
       menuLabel={t('common:nav.openMenu')}
       closeLabel={t('common:nav.closeMenu')}
-      className="text-[1.9rem] tracking-[-0.065em]"
     />
   );
 }

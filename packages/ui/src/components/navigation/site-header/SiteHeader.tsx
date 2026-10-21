@@ -14,6 +14,8 @@ export interface SiteHeaderLink {
 export interface SiteHeaderBrand {
   label: string;
   href: string;
+  /** Extra classes for the brand link only (size, tracking), so they never leak into the nav. */
+  className?: string;
 }
 
 export interface SiteHeaderProps {
@@ -39,12 +41,15 @@ export function SiteHeader({
   return (
     <header
       className={cn(
-        'gap-8 py-6 @container flex flex-wrap items-center justify-between border-b border-border-subtle',
+        'gap-6 py-6 @container flex flex-wrap items-center justify-between border-b border-border-subtle',
         'max-[760px]:gap-2 max-[760px]:py-4',
         className,
       )}
     >
-      <a href={brand.href} className="font-[var(--font-weight-label)] text-text no-underline">
+      <a
+        href={brand.href}
+        className={cn('font-[var(--font-weight-label)] text-text no-underline', brand.className)}
+      >
         {brand.label}
       </a>
 
@@ -65,7 +70,7 @@ export function SiteHeader({
       <nav
         id={navId}
         className={cn(
-          'gap-8 flex items-center',
+          'gap-5 flex items-center',
           '@max-[760px]:gap-1 @max-[760px]:pt-4 @max-[760px]:hidden @max-[760px]:flex-[0_0_100%] @max-[760px]:flex-col @max-[760px]:items-stretch',
           open && '@max-[760px]:flex',
         )}
