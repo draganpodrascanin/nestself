@@ -81,6 +81,7 @@ export default async function ForEmployersPage({
         eyebrow={data.whatYourPeopleGet.eyebrow}
         title={data.whatYourPeopleGet.title}
         columns={data.whatYourPeopleGet.columns as 2 | 3}
+        tiered={3}
         items={data.whatYourPeopleGet.items.map((item) => ({
           icon: item.icon as IconName,
           title: item.title,
@@ -106,6 +107,11 @@ export default async function ForEmployersPage({
         id="how-a-launch-works"
         eyebrow={data.howALaunchWorks.eyebrow}
         title={data.howALaunchWorks.title}
+        photo={
+          data.howALaunchWorks.photo
+            ? { key: data.howALaunchWorks.photo.key as PhotoKey, alt: data.howALaunchWorks.photo.alt }
+            : undefined
+        }
         steps={data.howALaunchWorks.steps}
       />
 

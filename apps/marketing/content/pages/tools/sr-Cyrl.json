@@ -38,7 +38,11 @@
     "yourScore": "Ваш резултат: {score} од {max}",
     "nothingStored": "Ништа од онога што сте одговорили није сачувано нити послато.",
     "talkToSomeone": "Разговарајте са стручњаком",
-    "relatedReading": "Истражите сродне ресурсе"
+    "relatedReading": "Истражите сродне ресурсе",
+    "whatToExpect": "Шта Вас очекује",
+    "instantResult": "Резултат видите одмах, уз предлоге за следеће кораке.",
+    "questions": "{count} питања",
+    "minutes": "{minutes} минута"
   },
   "introPhotoAlt": {
     "psychological": "Особа седи на софи и размишља о свом благостању",

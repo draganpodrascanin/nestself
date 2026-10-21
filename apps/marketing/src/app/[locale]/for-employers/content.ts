@@ -38,6 +38,7 @@ const schema = z.object({
   howALaunchWorks: z.object({
     eyebrow: z.string().optional(),
     title: z.string(),
+    photo: z.object({ key: z.string(), alt: z.string() }).optional(),
     steps: z.array(z.object({ title: z.string(), body: z.string() })),
   }),
   confidentiality: z.object({

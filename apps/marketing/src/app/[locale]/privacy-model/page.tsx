@@ -40,9 +40,7 @@ export default async function PrivacyModelPage({ params }: { params: Promise<Par
       <PageHero
         title={data.hero.title}
         lead={data.hero.lead}
-        primaryCta={{ label: '', href: '' }}
         variant="quiet"
-        className="[&_[class*=flex-wrap]]:hidden"
       />
 
       <PrivacyModelContent />

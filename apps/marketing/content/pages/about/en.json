@@ -57,12 +57,14 @@
     "eyebrow": "The team",
     "title": "Who we are",
     "lead": "A small team in Belgrade and Budapest, working across psychology, law, finance and technology.",
+    "location": "Belgrade and Budapest, with professionals and team members working remotely across both countries.",
     "columns": 3,
     "members": [
       {
         "initials": "CF",
         "role": "Co-founders",
-        "body": "Built NestSelf to close the gap between what employees need and what traditional EAPs offer."
+        "body": "Built NestSelf to close the gap between what employees need and what traditional EAPs offer.",
+        "featured": true
       },
       {
         "initials": "CL",
@@ -84,7 +86,11 @@
         "role": "Operations",
         "body": "Manages launches, employer relationships and day-to-day operations across both countries."
       }
-    ]
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf studio workspace in Belgrade"
+    }
   },
   "whereWeAre": {
     "title": "Where we are",

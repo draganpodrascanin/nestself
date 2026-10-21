@@ -17,7 +17,6 @@
     "e2e:update": "playwright test --update-snapshots",
     "storybook": "pnpm --filter @nestself/ui dev",
     "images:build": "pnpm --filter @nestself/assets build",
-    "credits": "node packages/assets/scripts/build-credits.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:deps": "sherif",

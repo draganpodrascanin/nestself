@@ -2,6 +2,7 @@ import { Eyebrow, Text, LinkButton } from '@nestself/ui';
 import { PhotoFigure } from '@nestself/ui';
 import type { PhotoKey } from '@nestself/assets';
 import { cn } from '@nestself/ui';
+import { HERO_PADDING } from './section';
 
 export interface PageHeroPhoto {
   key: PhotoKey;
@@ -17,7 +18,7 @@ export interface PageHeroProps {
   eyebrow?: string;
   title: string;
   lead: string;
-  primaryCta: PageHeroCta;
+  primaryCta?: PageHeroCta;
   secondaryCta?: PageHeroCta;
   photo?: PageHeroPhoto;
   /** Collage variant shows one large photo plus two small ones. */
@@ -38,12 +39,13 @@ export function PageHero({
   className,
 }: PageHeroProps) {
   const isSplit = variant === 'split' || variant === 'collage';
+  const hasCtas = (primaryCta && primaryCta.label) || (secondaryCta && secondaryCta.label);
 
   return (
     <section
       aria-labelledby="page-hero-title"
       className={cn(
-        'py-16',
+        HERO_PADDING,
         isSplit &&
           'grid gap-12 grid-cols-[minmax(0,5fr)_minmax(0,7fr)] @max-[760px]:grid-cols-1',
         variant === 'stacked' && 'text-center',
@@ -65,14 +67,18 @@ export function PageHero({
         <Text typeRole="bodyLarge" tone="secondary">
           {lead}
         </Text>
-        <div className="flex flex-wrap gap-4">
-          <LinkButton href={primaryCta.href}>{primaryCta.label}</LinkButton>
-          {secondaryCta && (
-            <LinkButton href={secondaryCta.href} variant="secondary">
-              {secondaryCta.label}
-            </LinkButton>
-          )}
-        </div>
+        {hasCtas && (
+          <div className="flex flex-wrap gap-4 @max-[760px]:flex-col @max-[760px]:[&>*]:w-full">
+            {primaryCta && primaryCta.label && (
+              <LinkButton href={primaryCta.href}>{primaryCta.label}</LinkButton>
+            )}
+            {secondaryCta && (
+              <LinkButton href={secondaryCta.href} variant="secondary">
+                {secondaryCta.label}
+              </LinkButton>
+            )}
+          </div>
+        )}
       </div>
 
       {variant === 'split' && photo && (
@@ -87,14 +93,14 @@ export function PageHero({
       )}
 
       {variant === 'collage' && photos && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 @max-[760px]:gap-3">
           <PhotoFigure
             photo={photos[0].key}
             alt={photos[0].alt}
             imageRole="hero-3x2"
             sizes="(max-width: 760px) 100vw, 58vw"
             priority
-            className="col-span-2 overflow-hidden rounded-card"
+            className="col-span-2 overflow-hidden rounded-card @max-[760px]:aspect-[1.2]"
           />
           <PhotoFigure
             photo={photos[1].key}

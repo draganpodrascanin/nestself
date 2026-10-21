@@ -28,7 +28,8 @@
         "A qualified legal professional reviews your situation and provides a written summary of next steps."
       ],
       "photo": { "key": "legal-consultation", "alt": "A legal consultation session at a desk" },
-      "cta": { "label": "Learn more", "href": "/services/legal-consultation" }
+      "cta": { "label": "Learn more", "href": "/services/legal-consultation" },
+      "icon": "scales"
     },
     {
       "id": "financial",
@@ -38,7 +39,8 @@
         "Our consultants sell no products and receive no commissions — their advice is entirely in your interest."
       ],
       "photo": { "key": "financial-planning", "alt": "A person reviewing financial plans with a consultant" },
-      "cta": { "label": "Learn more", "href": "/services/financial-guidance" }
+      "cta": { "label": "Learn more", "href": "/services/financial-guidance" },
+      "icon": "wallet"
     }
   ],
   "steps": {

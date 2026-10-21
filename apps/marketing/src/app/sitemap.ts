@@ -33,7 +33,6 @@ export const ROUTES: string[] = [
   '/legal/terms',
   '/legal/cookies',
   '/legal/imprint',
-  '/credits',
 ];
 
 // ---------------------------------------------------------------------------

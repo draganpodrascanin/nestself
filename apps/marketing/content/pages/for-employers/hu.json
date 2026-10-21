@@ -89,6 +89,10 @@
   "howALaunchWorks": {
     "eyebrow": "Első lépések",
     "title": "Hogyan zajlik a bevezetés",
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR-szakemberek egy programindítási tervet beszélnek meg"
+    },
     "steps": [
       {
         "title": "Kezdő megbeszélés és csomag konfigurálása",

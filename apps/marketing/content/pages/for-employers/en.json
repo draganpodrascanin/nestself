@@ -89,6 +89,10 @@
   "howALaunchWorks": {
     "eyebrow": "Getting started",
     "title": "How a launch works",
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR professionals discussing a programme launch plan"
+    },
     "steps": [
       {
         "title": "Kick-off and plan configuration",

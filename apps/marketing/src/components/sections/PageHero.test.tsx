@@ -45,6 +45,13 @@ describe('PageHero', () => {
     expect(link).toHaveAttribute('href', '/learn');
   });
 
+  it('renders without primaryCta', () => {
+    render(<PageHero title="No CTA" lead="Some lead" variant="quiet" />);
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('No CTA');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('renders as a landmark section', () => {
     render(<PageHero {...baseProps} />);
     const section = screen.getByRole('region', { name: 'Test Title' });

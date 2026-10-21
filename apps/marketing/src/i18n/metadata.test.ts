@@ -9,21 +9,31 @@ describe('SITE_URL', () => {
 
 describe('localeAlternates', () => {
   it('contains all four locales with correct paths', () => {
-    const result = localeAlternates('/services');
+    const result = localeAlternates('/services', 'en');
     expect(result.languages['en']).toBe(`${SITE_URL}/en/services`);
     expect(result.languages['sr-Latn']).toBe(`${SITE_URL}/sr-Latn/services`);
     expect(result.languages['sr-Cyrl']).toBe(`${SITE_URL}/sr-Cyrl/services`);
     expect(result.languages['hu']).toBe(`${SITE_URL}/hu/services`);
   });
 
-  it('sets x-default to English', () => {
-    const result = localeAlternates('/services');
-    expect(result.languages['x-default']).toBe(`${SITE_URL}/en/services`);
+  it('sets x-default to sr-Latn (the default locale)', () => {
+    const result = localeAlternates('/services', 'en');
+    expect(result.languages['x-default']).toBe(`${SITE_URL}/sr-Latn/services`);
   });
 
-  it('has canonical pointing to English', () => {
-    const result = localeAlternates('/');
+  it('has self-referencing canonical for the given locale', () => {
+    const result = localeAlternates('/', 'en');
     expect(result.canonical).toBe(`${SITE_URL}/en/`);
+  });
+
+  it('canonical uses the page own locale, not always en', () => {
+    const result = localeAlternates('/plans', 'hu');
+    expect(result.canonical).toBe(`${SITE_URL}/hu/plans`);
+  });
+
+  it('x-default always points to sr-Latn regardless of the locale argument', () => {
+    const result = localeAlternates('/plans', 'hu');
+    expect(result.languages['x-default']).toBe(`${SITE_URL}/sr-Latn/plans`);
   });
 });
 
@@ -40,6 +50,15 @@ describe('localizedMetadata', () => {
     expect(meta.alternates?.languages).toHaveProperty('sr-Latn');
     expect(meta.alternates?.languages).toHaveProperty('x-default');
     expect(meta.alternates?.languages).toHaveProperty('hu');
+  });
+
+  it('canonical is self-referencing for the given locale', () => {
+    const meta = localizedMetadata({
+      locale: 'hu',
+      title: 'Plans',
+      pathname: '/plans',
+    });
+    expect(meta.alternates?.canonical).toBe(`${SITE_URL}/hu/plans`);
   });
 
   it('includes metadataBase', () => {

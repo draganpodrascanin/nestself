@@ -6,6 +6,7 @@ import type { ToolCardProps } from '../cards/ToolCard';
 import { ArticleCard } from '../cards/ArticleCard';
 import { WebinarCard } from '../cards/WebinarCard';
 import { ToolCard } from '../cards/ToolCard';
+import { SECTION_PADDING } from './section';
 
 export interface ResourceTeasersProps {
   id?: string;
@@ -30,8 +31,8 @@ export function ResourceTeasers({
 }: ResourceTeasersProps) {
   const headingId = id ? `${id}-title` : undefined;
   return (
-    <section id={id} aria-labelledby={headingId} className={cn('py-16', className)}>
-      <div className="mb-8 flex items-baseline justify-between gap-4">
+    <section id={id} aria-labelledby={headingId} className={cn(SECTION_PADDING, className)}>
+      <div className="mb-6 flex items-baseline justify-between gap-4">
         <Heading level={2} id={headingId}>
           {title}
         </Heading>

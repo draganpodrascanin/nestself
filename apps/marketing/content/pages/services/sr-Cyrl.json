@@ -46,7 +46,8 @@
       "cta": {
         "label": "Сазнајте више",
         "href": "/services/legal-consultation"
-      }
+      },
+      "icon": "scales"
     },
     {
       "id": "financial",
@@ -62,7 +63,8 @@
       "cta": {
         "label": "Сазнајте више",
         "href": "/services/financial-guidance"
-      }
+      },
+      "icon": "wallet"
     }
   ],
   "steps": {

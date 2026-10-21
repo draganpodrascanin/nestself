@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { expectNoA11yViolations } from '@/test/axe';
 import { LocaleSwitcher } from './LocaleSwitcher';
 
@@ -22,40 +23,52 @@ vi.mock('react-i18next', () => ({
 
 describe('LocaleSwitcher', () => {
   beforeEach(() => {
-    // Reset cookies
     Object.defineProperty(document, 'cookie', {
       writable: true,
       value: '',
     });
   });
 
-  it('renders four locale links', () => {
+  it('trigger has accessible name "Language: English"', () => {
     render(<LocaleSwitcher locale="en" />);
-    const nav = screen.getByRole('navigation', { name: 'Language' });
-    const links = nav.querySelectorAll('a');
-    expect(links).toHaveLength(4);
+    // The trigger contains VisuallyHidden "Language: " plus visible "English"
+    const trigger = screen.getByRole('button');
+    expect(trigger.textContent).toContain('Language');
+    expect(trigger.textContent).toContain('English');
   });
 
-  it('marks the current locale with aria-current', () => {
+  it('opening shows four menuitem links with correct hrefs', async () => {
+    const user = userEvent.setup();
     render(<LocaleSwitcher locale="en" />);
-    const enLink = screen.getByText('English');
-    expect(enLink).toHaveAttribute('aria-current', 'true');
-
-    const srLink = screen.getByText('Srpski');
-    expect(srLink).not.toHaveAttribute('aria-current');
+    await user.click(screen.getByRole('button'));
+    const items = await screen.findAllByRole('menuitem');
+    expect(items).toHaveLength(4);
+    // Check hrefs
+    const hrefs = items.map((item) => item.getAttribute('href'));
+    expect(hrefs).toContain('/sr-Latn/services');
+    expect(hrefs).toContain('/sr-Cyrl/services');
+    expect(hrefs).toContain('/hu/services');
+    expect(hrefs).toContain('/en/services');
   });
 
-  it('generates correct hrefs for each locale', () => {
+  it('the current item has aria-current="true"', async () => {
+    const user = userEvent.setup();
     render(<LocaleSwitcher locale="en" />);
-    expect(screen.getByText('English')).toHaveAttribute('href', '/en/services');
-    expect(screen.getByText('Srpski')).toHaveAttribute('href', '/sr-Latn/services');
-    expect(screen.getByText('Magyar')).toHaveAttribute('href', '/hu/services');
+    await user.click(screen.getByRole('button'));
+    const items = await screen.findAllByRole('menuitem');
+    const enItem = items.find((item) => item.getAttribute('href') === '/en/services');
+    expect(enItem).toHaveAttribute('aria-current', 'true');
+    const srItem = items.find((item) => item.getAttribute('href') === '/sr-Latn/services');
+    expect(srItem).not.toHaveAttribute('aria-current');
   });
 
-  it('sets NEXT_LOCALE cookie on click', () => {
+  it('clicking an item sets the cookie', async () => {
+    const user = userEvent.setup();
     render(<LocaleSwitcher locale="en" />);
-    const huLink = screen.getByText('Magyar');
-    fireEvent.click(huLink);
+    await user.click(screen.getByRole('button'));
+    const items = await screen.findAllByRole('menuitem');
+    const huItem = items.find((item) => item.getAttribute('href') === '/hu/services');
+    if (huItem) await user.click(huItem);
     expect(document.cookie).toContain('NEXT_LOCALE=hu');
   });
 

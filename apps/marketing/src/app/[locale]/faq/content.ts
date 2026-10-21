@@ -9,7 +9,7 @@ const schema = z.object({
   hero: z.object({
     title: z.string(),
     lead: z.string(),
-    primaryCta: ctaSchema,
+    primaryCta: ctaSchema.optional(),
   }),
   employerFaq: z.object({
     title: z.string(),

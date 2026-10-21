@@ -7,6 +7,7 @@ import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listEntries } from '@/content/loaders';
 import { PageHero } from '@/components/sections/PageHero';
+import { SECTION_PADDING } from '@/components/sections/section';
 import { ArticleCard } from '@/components/cards/ArticleCard';
 import { loadContent } from './content';
 
@@ -59,8 +60,9 @@ export default async function ArticlesPage({
     : allArticles;
 
   const chipBase =
-    'inline-flex items-center gap-1.5 min-h-11 rounded-control border border-border-control bg-surface text-text px-3 py-1.5 type-body transition-colors no-underline hover:border-primary hover:text-primary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-12';
+    'inline-flex items-center gap-1.5 min-h-11 rounded-pill border bg-surface text-text px-3 py-1.5 type-body transition-colors no-underline hover:border-primary hover:text-primary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus pointer-coarse:min-h-12 whitespace-nowrap';
 
+  const inactiveClasses = 'border-border-control';
   const activeClasses = 'border-primary bg-primary text-on-primary';
 
   return (
@@ -68,28 +70,27 @@ export default async function ArticlesPage({
       <PageHero
         title={data.hero.title}
         lead={data.hero.lead}
-        primaryCta={data.hero.primaryCta}
         variant="quiet"
       />
 
-      <section className="py-16">
+      <section className={SECTION_PADDING}>
         <nav aria-label={data.filterLabel}>
-          <ul className="flex flex-wrap gap-2 list-none m-0 p-0">
-            <li>
+          <ul className="flex gap-2 list-none m-0 p-0 overflow-x-auto [scrollbar-width:thin] -mx-4 px-4">
+            <li className="shrink-0">
               <a
                 href={`/${locale}/articles`}
                 aria-current={topicFilter === null ? 'page' : undefined}
-                className={`${chipBase} ${topicFilter === null ? activeClasses : ''}`}
+                className={`${chipBase} ${topicFilter === null ? activeClasses : inactiveClasses}`}
               >
                 {data.allTopicsLabel}
               </a>
             </li>
             {Object.entries(data.topics).map(([key, label]) => (
-              <li key={key}>
+              <li key={key} className="shrink-0">
                 <a
                   href={`/${locale}/articles?topic=${key}`}
                   aria-current={topicFilter === key ? 'page' : undefined}
-                  className={`${chipBase} ${topicFilter === key ? activeClasses : ''}`}
+                  className={`${chipBase} ${topicFilter === key ? activeClasses : inactiveClasses}`}
                 >
                   {label}
                 </a>

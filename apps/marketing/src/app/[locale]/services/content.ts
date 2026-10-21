@@ -19,6 +19,7 @@ const schema = z.object({
       paragraphs: z.array(z.string()),
       photo: z.object({ key: z.string(), alt: z.string() }),
       cta: CtaLink.optional(),
+      icon: z.string().optional(),
     }),
   ),
   steps: z.object({

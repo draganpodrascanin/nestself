@@ -60,6 +60,14 @@ describe('SiteHeaderBar', () => {
     expect(screen.getByText('Request a demo')).toHaveAttribute('href', '/en/demo');
   });
 
+  it('renders the locale switcher as a menu trigger in utilities', () => {
+    render(<SiteHeaderBar locale="en" />);
+    // The locale switcher is a menu trigger button containing the current language
+    const trigger = screen.getByRole('button', { name: /Language/i });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger.textContent).toContain('English');
+  });
+
   it('passes axe', async () => {
     const { container } = render(<SiteHeaderBar locale="en" />);
     await expectNoA11yViolations(container);

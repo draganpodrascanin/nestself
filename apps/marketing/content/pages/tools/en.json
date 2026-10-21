@@ -38,7 +38,11 @@
     "yourScore": "Your score: {score} out of {max}",
     "nothingStored": "Nothing you answered was stored or sent anywhere.",
     "talkToSomeone": "Talk to a professional",
-    "relatedReading": "Explore related resources"
+    "relatedReading": "Explore related resources",
+    "whatToExpect": "What to expect",
+    "instantResult": "You see your result immediately, with suggested next steps.",
+    "questions": "{count} questions",
+    "minutes": "{minutes} minutes"
   },
   "introPhotoAlt": {
     "psychological": "A person sitting on a sofa reflecting on their wellbeing",

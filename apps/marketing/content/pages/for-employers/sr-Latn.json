@@ -89,6 +89,10 @@
   "howALaunchWorks": {
     "eyebrow": "Početak",
     "title": "Kako izgleda pokretanje",
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR stručnjaci razgovaraju o planu pokretanja programa"
+    },
     "steps": [
       {
         "title": "Uvodna faza i konfigurisanje plana",

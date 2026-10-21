@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, formatLanguages } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listEntries, listAssessments } from '@/content/loaders';
 import { PageHero } from '@/components/sections/PageHero';
-import { Heading, TextLink } from '@nestself/ui';
+import { SECTION_PADDING } from '@/components/sections/section';
+import { Card, Heading, Text, TextLink, PhotoFigure } from '@nestself/ui';
 import { ArticleCard } from '@/components/cards/ArticleCard';
 import { WebinarCard } from '@/components/cards/WebinarCard';
 import { ToolCard } from '@/components/cards/ToolCard';
@@ -45,10 +46,6 @@ function readingTimeLabel(minutes: number, template: string): string {
   return template.replace('{minutes}', String(minutes));
 }
 
-function languagesLabel(languages: string[], prefix: string): string {
-  return `${prefix}: ${languages.join(', ')}`;
-}
-
 export default async function ResourcesPage({ params }: { params: Promise<Params> }) {
   const { locale: rawLocale } = await params;
   if (!isLocale(rawLocale)) notFound();
@@ -64,9 +61,18 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
   ]);
 
   const topArticles = articles.slice(0, 3);
-  const topWebinars = webinars.slice(0, 3);
   const topTools = tools.slice(0, 3);
   const topAssessments = assessments.slice(0, 3);
+
+  // Featured upcoming webinar: live format, starts in the future, earliest first
+  const now = new Date();
+  const featuredWebinar = webinars.find(
+    (w) => w.frontmatter.format === 'live' && new Date(w.frontmatter.startsAt) > now,
+  );
+  // Grid shows up to 3 webinars, excluding the featured one to avoid duplication
+  const gridWebinars = webinars
+    .filter((w) => !featuredWebinar || w.slug !== featuredWebinar.slug)
+    .slice(0, 3);
 
   const hasTools = topTools.length > 0 || topAssessments.length > 0;
 
@@ -75,14 +81,13 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
       <PageHero
         title={data.hero.title}
         lead={data.hero.lead}
-        primaryCta={data.hero.primaryCta}
         variant="quiet"
       />
 
       {/* Webinars section */}
-      {topWebinars.length > 0 && (
-        <section aria-labelledby="resources-webinars-title" className="py-16">
-          <div className="mb-8 gap-4 flex items-baseline justify-between">
+      {webinars.length > 0 && (
+        <section aria-labelledby="resources-webinars-title" className={SECTION_PADDING}>
+          <div className="mb-6 flex items-baseline justify-between gap-4">
             <Heading level={2} id="resources-webinars-title">
               {data.sections.webinars.title}
             </Heading>
@@ -90,31 +95,80 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
               {data.sections.webinars.seeAllLabel}
             </TextLink>
           </div>
-          <div className="gap-8 grid grid-cols-3 @max-[760px]:grid-cols-1">
-            {topWebinars.map((w) => (
-              <WebinarCard
-                key={w.slug}
-                href={`/${locale}/webinars/${w.slug}`}
-                title={w.frontmatter.title}
-                description={w.frontmatter.description}
-                dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
-                durationLabel={durationLabel(
-                  w.frontmatter.durationMinutes,
-                  data.cardLabels.minutes,
-                )}
-                formatLabel={webinarFormatLabel(w.frontmatter.format, data.cardLabels)}
-                languagesLabel={languagesLabel(w.frontmatter.languages, data.cardLabels.languages)}
-                cover={{ key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt ?? '' }}
+
+          {/* Featured upcoming webinar wide card */}
+          {featuredWebinar && (
+            <Card
+              as="article"
+              interactive
+              padding="none"
+              className="mb-6 grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] @max-[760px]:grid-cols-1 overflow-hidden"
+            >
+              <PhotoFigure
+                photo={featuredWebinar.frontmatter.cover as PhotoKey}
+                alt={featuredWebinar.frontmatter.coverAlt ?? ''}
+                imageRole="card"
+                sizes="(max-width: 760px) 100vw, 66vw"
+                className="h-full [&_img]:h-full [&_img]:object-cover"
               />
-            ))}
-          </div>
+              <div className="flex flex-col justify-center gap-3 p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Text as="span" typeRole="metadata" tone="secondary">
+                    {webinarFormatLabel(featuredWebinar.frontmatter.format, data.cardLabels)}
+                  </Text>
+                  <Text as="span" typeRole="metadata" tone="secondary">
+                    &middot;
+                  </Text>
+                  <Text as="span" typeRole="metadata" tone="secondary">
+                    {durationLabel(featuredWebinar.frontmatter.durationMinutes, data.cardLabels.minutes)}
+                  </Text>
+                  <Text as="span" typeRole="metadata" tone="secondary">
+                    &middot;
+                  </Text>
+                  <Text as="span" typeRole="metadata" tone="secondary">
+                    {formatLanguages(featuredWebinar.frontmatter.languages, locale)}
+                  </Text>
+                </div>
+                <Heading level={3} typeRole="sectionTitle">
+                  <TextLink href={`/${locale}/webinars/${featuredWebinar.slug}`}>
+                    {featuredWebinar.frontmatter.title}
+                  </TextLink>
+                </Heading>
+                <Text tone="secondary">{featuredWebinar.frontmatter.description}</Text>
+                <Text as="span" typeRole="metadata" tone="secondary">
+                  {formatWebinarDateTime(featuredWebinar.frontmatter.startsAt, locale)}
+                </Text>
+              </div>
+            </Card>
+          )}
+
+          {gridWebinars.length > 0 && (
+            <div className="gap-8 grid grid-cols-3 @max-[760px]:grid-cols-1">
+              {gridWebinars.map((w) => (
+                <WebinarCard
+                  key={w.slug}
+                  href={`/${locale}/webinars/${w.slug}`}
+                  title={w.frontmatter.title}
+                  description={w.frontmatter.description}
+                  dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
+                  durationLabel={durationLabel(
+                    w.frontmatter.durationMinutes,
+                    data.cardLabels.minutes,
+                  )}
+                  formatLabel={webinarFormatLabel(w.frontmatter.format, data.cardLabels)}
+                  languagesLabel={formatLanguages(w.frontmatter.languages, locale)}
+                  cover={{ key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt ?? '' }}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       {/* Articles section */}
       {topArticles.length > 0 && (
-        <section aria-labelledby="resources-articles-title" className="py-16">
-          <div className="mb-8 gap-4 flex items-baseline justify-between">
+        <section aria-labelledby="resources-articles-title" className={SECTION_PADDING}>
+          <div className="mb-6 flex items-baseline justify-between gap-4">
             <Heading level={2} id="resources-articles-title">
               {data.sections.articles.title}
             </Heading>
@@ -144,8 +198,8 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
 
       {/* Tools section - only when non-empty */}
       {hasTools && (
-        <section aria-labelledby="resources-tools-title" className="py-16">
-          <div className="mb-8 gap-4 flex items-baseline justify-between">
+        <section aria-labelledby="resources-tools-title" className={SECTION_PADDING}>
+          <div className="mb-6 flex items-baseline justify-between gap-4">
             <Heading level={2} id="resources-tools-title">
               {data.sections.tools.title}
             </Heading>
@@ -170,6 +224,7 @@ export default async function ResourcesPage({ params }: { params: Promise<Params
                 href={`/${locale}/tools/${a.slug}`}
                 title={a.data.title}
                 intro={a.data.intro}
+                slug={a.slug}
                 durationLabel={durationLabel(a.data.durationMinutes, data.cardLabels.minutes)}
                 questionsLabel={data.cardLabels.questionsLabel.replace(
                   '{n}',

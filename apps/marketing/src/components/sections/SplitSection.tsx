@@ -1,6 +1,7 @@
 import { Eyebrow, Heading, Text, LinkButton, PhotoFigure } from '@nestself/ui';
 import { cn } from '@nestself/ui';
 import type { PhotoKey } from '@nestself/assets';
+import { SECTION_PADDING } from './section';
 
 export interface SplitSectionCta {
   label: string;
@@ -42,7 +43,8 @@ export function SplitSection({
       id={id}
       aria-labelledby={headingId}
       className={cn(
-        'grid gap-12 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center py-16 @max-[760px]:grid-cols-1',
+        'grid gap-12 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center @max-[760px]:grid-cols-1 @max-[760px]:gap-6',
+        SECTION_PADDING,
         className,
       )}
     >
@@ -57,7 +59,7 @@ export function SplitSection({
           </Text>
         ))}
         {bullets && bullets.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-2 pl-5 list-disc">
+          <ul className="mt-2 flex flex-col gap-2 pl-5 list-disc marker:text-primary">
             {bullets.map((b, i) => (
               <li key={i} className="type-body text-text-secondary">
                 {b}
@@ -77,8 +79,8 @@ export function SplitSection({
         imageRole="card"
         sizes="(max-width: 760px) 100vw, 50vw"
         className={cn(
-          'overflow-hidden rounded-card',
-          reverse && 'order-1 @max-[760px]:order-none',
+          'overflow-hidden rounded-card @max-[760px]:order-first',
+          reverse && 'order-1 @max-[760px]:order-first',
         )}
       />
     </section>

@@ -38,7 +38,9 @@
       "cta": {
         "label": "Zakažite prezentaciju",
         "href": "/demo"
-      }
+      },
+      "recommended": true,
+      "recommendedLabel": "Preporučeno"
     },
     {
       "name": "Enterprise",

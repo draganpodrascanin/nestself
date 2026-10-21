@@ -7,11 +7,13 @@ import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { getEntry, listSlugs, listEntries } from '@/content/loaders';
 import { renderMdx } from '@/content/mdx';
-import { Breadcrumbs, Heading, Text, TextLink, PhotoFigure } from '@nestself/ui';
+import { Breadcrumbs, Card, Heading, Text, TextLink, PhotoFigure } from '@nestself/ui';
+import { Info } from '@phosphor-icons/react/dist/ssr';
 import { ProseLayout } from '@/components/sections/ProseLayout';
 import { CtaBand } from '@/components/sections/CtaBand';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { ArticleCard } from '@/components/cards/ArticleCard';
+import { ReadingColumn } from '@/components/reading/ReadingColumn';
 import { loadContent } from '../content';
 
 interface Params {
@@ -98,60 +100,70 @@ export default async function ArticleDetailPage({
       />
 
       <article className="py-8">
-        {/* Meta line */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Text as="span" typeRole="metadata" tone="secondary">
-            {topicLabel}
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            &middot;
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            {formatArticleDate(frontmatter.publishedAt, locale)}
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            &middot;
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            {data.detail.readingTime.replace('{minutes}', String(readingMinutes))}
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            &middot;
-          </Text>
-          <Text as="span" typeRole="metadata" tone="secondary">
-            {frontmatter.author}
-          </Text>
-        </div>
+        <ReadingColumn>
+          {/* Meta line */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Text as="span" typeRole="metadata" tone="secondary">
+              {topicLabel}
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              &middot;
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              {formatArticleDate(frontmatter.publishedAt, locale)}
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              &middot;
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              {data.detail.readingTime.replace('{minutes}', String(readingMinutes))}
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              &middot;
+            </Text>
+            <Text as="span" typeRole="metadata" tone="secondary">
+              {frontmatter.author}
+            </Text>
+          </div>
 
-        <Heading level={1} typeRole="marketingHero" className="mb-6">
-          {frontmatter.title}
-        </Heading>
+          <Heading level={1} typeRole="editorial" className="mb-6">
+            {frontmatter.title}
+          </Heading>
 
-        <PhotoFigure
-          photo={frontmatter.cover as PhotoKey}
-          alt={frontmatter.coverAlt ?? ''}
-          imageRole="hero-3x2"
-          sizes="(max-width: 760px) 100vw, 720px"
-          priority
-          className="overflow-hidden rounded-card mb-8"
-        />
+          <PhotoFigure
+            photo={frontmatter.cover as PhotoKey}
+            alt={frontmatter.coverAlt ?? ''}
+            imageRole="hero-3x2"
+            sizes="(max-width: 760px) 100vw, 720px"
+            priority
+            className="overflow-hidden rounded-card mb-8"
+          />
 
-        <ProseLayout>{mdxContent}</ProseLayout>
+          <ProseLayout className="py-0 [&_[data-prose]]:max-w-none">
+            {mdxContent}
+          </ProseLayout>
 
-        {/* Disclaimer */}
-        <div className="mt-12 rounded-card border border-border-subtle p-6">
-          <Text tone="secondary">
-            {data.detail.disclaimerText}{' '}
-            <TextLink href={`/${locale}${serviceLink}`}>
-              {data.detail.disclaimerLinkText}
-            </TextLink>
-          </Text>
-        </div>
+          {/* Disclaimer */}
+          <Card tone="subtle" padding="lg" className="mt-10">
+            <div className="flex gap-3">
+              <Info size={24} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
+              <Text tone="secondary">
+                {data.detail.disclaimerText}{' '}
+                <TextLink href={`/${locale}${serviceLink}`}>
+                  {data.detail.disclaimerLinkText}
+                </TextLink>
+              </Text>
+            </div>
+          </Card>
+        </ReadingColumn>
       </article>
 
       {/* Related articles */}
       {related.length > 0 && (
-        <section aria-labelledby="related-articles-title" className="py-16">
+        <section
+          aria-labelledby="related-articles-title"
+          className="border-t border-border-subtle pt-12 pb-16"
+        >
           <Heading level={2} id="related-articles-title" className="mb-8">
             {data.detail.relatedTitle}
           </Heading>

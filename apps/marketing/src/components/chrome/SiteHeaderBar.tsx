@@ -46,10 +46,10 @@ export function SiteHeaderBar({ locale }: SiteHeaderBarProps) {
         className: 'text-[1.9rem] tracking-[-0.065em]',
       }}
       links={links}
+      utilities={<LocaleSwitcher locale={locale} />}
       actions={
-        <div className="gap-4 flex items-center @max-[760px]:flex-col @max-[760px]:items-stretch">
-          <LocaleSwitcher locale={locale} />
-          <LinkButton href={`/${locale}/demo`} size="sm">
+        <div className="@max-[1000px]:w-full">
+          <LinkButton href={`/${locale}/demo`} size="sm" className="@max-[1000px]:w-full">
             {t('marketing:actions.requestDemo')}
           </LinkButton>
         </div>

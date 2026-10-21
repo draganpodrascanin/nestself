@@ -15,7 +15,7 @@ All routes live under `/[locale]`. English slugs are used in every locale; hrefl
 | `/tools`, `/tools/[slug]`                                                                        | Wellbeing check-ins (assessment runner) and guides |
 | `/plans`, `/about`, `/faq`                                                                       | Plans, about, FAQ                                  |
 | `/demo`, `/contact`                                                                              | Demo request and contact forms                     |
-| `/privacy-model`, `/accessibility`, `/credits`                                                   | Trust pages                                        |
+| `/privacy-model`, `/accessibility`                                                               | Trust pages                                        |
 | `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint`                      | Legal pages (drafts with bracketed placeholders)   |
 | `/robots.txt`, `/sitemap.xml`, `/[locale]/opengraph-image`                                       | SEO                                                |
 
@@ -41,7 +41,7 @@ The demo, contact and webinar-registration forms post to `/api/leads/<kind>` rou
 
 ## Locale behaviour
 
-Requests without a locale prefix are redirected by `proxy.ts`, negotiating from the `NEXT_LOCALE` cookie and then `Accept-Language`, falling back to `en`. The header locale switcher sets the cookie.
+Requests without a locale prefix are redirected by `proxy.ts`, negotiating from the `NEXT_LOCALE` cookie and then `Accept-Language`, falling back to `sr-Latn`. The header locale switcher sets the cookie. English is the authoring source of content files; Serbian Latin is the default served language.
 
 ## Images
 

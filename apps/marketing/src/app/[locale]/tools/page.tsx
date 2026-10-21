@@ -46,7 +46,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
         primaryCta={data.hero.primaryCta}
         secondaryCta={data.hero.secondaryCta}
         photo={{ key: 'tools-notebook' as PhotoKey, alt: 'A notebook and pen on a desk' }}
-        variant="quiet"
+        variant="split"
       />
 
       {/* Self-assessments section */}
@@ -62,6 +62,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
           {assessments.map((a) => (
             <AssessmentCard
               key={a.slug}
+              slug={a.slug}
               href={`/${locale}/tools/${a.slug}`}
               title={a.data.title}
               intro={a.data.intro}

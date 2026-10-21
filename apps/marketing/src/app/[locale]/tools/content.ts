@@ -36,6 +36,10 @@ export const schema = z.object({
     nothingStored: z.string(),
     talkToSomeone: z.string(),
     relatedReading: z.string(),
+    whatToExpect: z.string(),
+    instantResult: z.string(),
+    questions: z.string(),
+    minutes: z.string(),
   }),
   introPhotoAlt: z.record(z.string(), z.string()),
   breadcrumbs: z.object({

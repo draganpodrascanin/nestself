@@ -125,7 +125,6 @@
   "footer": {
     "navLabel": "Footer",
     "photography": "Photography direction",
-    "credits": "Photo credits",
     "designSystem": "Design system",
     "tagline": "Support for work, and everything around it.",
     "product": "Product",
@@ -141,7 +140,6 @@
     "demo": "Request a demo",
     "contact": "Contact",
     "accessibility": "Accessibility",
-    "creditsPage": "Credits",
     "privacyPolicy": "Privacy policy",
     "terms": "Terms of use",
     "cookies": "Cookies",
@@ -149,22 +147,6 @@
   },
   "locale": {
     "switcherLabel": "Language"
-  },
-  "credits": {
-    "title": "People and photographs",
-    "lead": "Pexels lifestyle photographs used as conceptual imagery. No endorsement, customer identity, professional role or family eligibility is implied.",
-    "licence": "Pexels licence",
-    "photographyHeading": "Photography",
-    "fontsHeading": "Fonts",
-    "iconsHeading": "Icons",
-    "fontsBody": "Onest by onest.md, licensed under the SIL Open Font License 1.1.",
-    "iconsBody": "Phosphor Icons by phosphoricons.com, licensed under the MIT License.",
-    "colPhoto": "Photo",
-    "colPhotographer": "Photographer",
-    "colSource": "Source",
-    "colLicence": "Licence",
-    "photographyCaption": "Photographs used in this project",
-    "dialogCaption": "Photographers"
   },
   "pages": {
     "support": {
@@ -227,9 +209,6 @@
           "operations": "Authorised scope"
         }
       }
-    },
-    "credits": {
-      "title": "People and photographs"
     }
   },
   "notFound": {

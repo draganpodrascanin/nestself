@@ -32,6 +32,8 @@ export const schema = z.object({
   steps: z.object({
     eyebrow: z.string(),
     title: z.string(),
+    lead: z.string().optional(),
+    photo: photoSchema.optional(),
     steps: z.array(z.object({ title: z.string(), body: z.string() })),
   }),
   employers: z.object({
@@ -58,6 +60,7 @@ export const schema = z.object({
   testimonials: z.object({
     title: z.string(),
     lead: z.string().optional(),
+    badge: z.string().optional(),
   }),
   faq: z.object({
     title: z.string(),

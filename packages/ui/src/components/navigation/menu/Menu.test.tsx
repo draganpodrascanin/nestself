@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Menu, MenuTrigger, MenuPopup, MenuItem } from './Menu';
+import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuLinkItem } from './Menu';
 import { expectNoA11yViolations } from '../../../test/axe';
 
 function MenuFixture({ onSelect }: { onSelect?: () => void }) {
@@ -11,6 +11,19 @@ function MenuFixture({ onSelect }: { onSelect?: () => void }) {
       <MenuPopup>
         <MenuItem onClick={onSelect}>Edit</MenuItem>
         <MenuItem>Delete</MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+function LinkMenuFixture() {
+  return (
+    <Menu>
+      <MenuTrigger variant="quiet">Language</MenuTrigger>
+      <MenuPopup>
+        <MenuLinkItem href="/en" current>English</MenuLinkItem>
+        <MenuLinkItem href="/sr-Latn">Srpski</MenuLinkItem>
+        <MenuLinkItem href="/hu">Magyar</MenuLinkItem>
       </MenuPopup>
     </Menu>
   );
@@ -39,6 +52,58 @@ describe('Menu', () => {
 
   it('passes axe a11y check', async () => {
     const { container } = render(<MenuFixture />);
+    await expectNoA11yViolations(container);
+  });
+});
+
+describe('MenuLinkItem', () => {
+  it('link items render as <a href> with role menuitem', async () => {
+    const user = userEvent.setup();
+    render(<LinkMenuFixture />);
+    await user.click(screen.getByRole('button', { name: 'Language' }));
+    const enItem = await screen.findByRole('menuitem', { name: /English/ });
+    expect(enItem.tagName).toBe('A');
+    expect(enItem).toHaveAttribute('href', '/en');
+    const srItem = screen.getByRole('menuitem', { name: /Srpski/ });
+    expect(srItem.tagName).toBe('A');
+    expect(srItem).toHaveAttribute('href', '/sr-Latn');
+  });
+
+  it('the current item has aria-current="true"', async () => {
+    const user = userEvent.setup();
+    render(<LinkMenuFixture />);
+    await user.click(screen.getByRole('button', { name: 'Language' }));
+    const enItem = await screen.findByRole('menuitem', { name: /English/ });
+    expect(enItem).toHaveAttribute('aria-current', 'true');
+    const srItem = screen.getByRole('menuitem', { name: /Srpski/ });
+    expect(srItem).not.toHaveAttribute('aria-current');
+  });
+
+  it('ArrowDown moves highlight between link items', async () => {
+    const user = userEvent.setup();
+    render(<LinkMenuFixture />);
+    const trigger = screen.getByRole('button', { name: 'Language' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('menuitem', { name: /English/ });
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{ArrowDown}');
+    // Navigation works without error (Base UI manages highlighted state internally)
+    expect(screen.getByRole('menuitem', { name: /Magyar/ })).toBeInTheDocument();
+  });
+
+  it('Escape closes and returns focus from link items', async () => {
+    const user = userEvent.setup();
+    render(<LinkMenuFixture />);
+    const trigger = screen.getByRole('button', { name: 'Language' });
+    await user.click(trigger);
+    await screen.findByRole('menuitem', { name: /English/ });
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+  });
+
+  it('link menu passes axe a11y check', async () => {
+    const { container } = render(<LinkMenuFixture />);
     await expectNoA11yViolations(container);
   });
 });

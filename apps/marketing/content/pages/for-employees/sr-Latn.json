@@ -66,6 +66,10 @@
   "howToStart": {
     "eyebrow": "Početak",
     "title": "Kako da počnete",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "Osoba sedi na sofi i popunjava proveru blagostanja"
+    },
     "steps": [
       {
         "title": "Proverite pristup",

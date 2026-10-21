@@ -125,7 +125,6 @@
   "footer": {
     "navLabel": "Lábléc",
     "photography": "Fotográfiai irányelvek",
-    "credits": "Képkreditek",
     "designSystem": "Dizájnrendszer",
     "tagline": "Támogatás a munkában és minden, ami körbeveszi.",
     "product": "Termék",
@@ -141,7 +140,6 @@
     "demo": "Kérj bemutatót",
     "contact": "Kapcsolat",
     "accessibility": "Akadálymentesség",
-    "creditsPage": "Kreditek",
     "privacyPolicy": "Adatvédelmi irányelvek",
     "terms": "Felhasználási feltételek",
     "cookies": "Sütik",
@@ -149,22 +147,6 @@
   },
   "locale": {
     "switcherLabel": "Nyelv"
-  },
-  "credits": {
-    "title": "Emberek és fényképek",
-    "lead": "Pexels életstílus-fényképek konceptuális illusztrációként felhasználva. Semmilyen ajánlás, ügyfél-azonosítás, szakmai szerep vagy családi jogosultság nem áll fenn.",
-    "licence": "Pexels licenc",
-    "photographyHeading": "Fotográfia",
-    "fontsHeading": "Betűtípusok",
-    "iconsHeading": "Ikonok",
-    "fontsBody": "Onest, onest.md, SIL Open Font License 1.1 licenc alatt.",
-    "iconsBody": "Phosphor Icons, phosphoricons.com, MIT licenc alatt.",
-    "colPhoto": "Fotó",
-    "colPhotographer": "Fotós",
-    "colSource": "Forrás",
-    "colLicence": "Licenc",
-    "photographyCaption": "A projektben használt fényképek",
-    "dialogCaption": "Fotósok"
   },
   "pages": {
     "support": {
@@ -227,9 +209,6 @@
           "operations": "Engedélyezett hatókör"
         }
       }
-    },
-    "credits": {
-      "title": "Emberek és fényképek"
     }
   },
   "notFound": {

@@ -45,6 +45,16 @@ describe('SiteHeader', () => {
     expect(document.getElementById('site-nav')).toBeInTheDocument();
   });
 
+  it('renders utilities on every width', () => {
+    render(
+      <SiteHeader
+        {...defaultProps}
+        utilities={<button data-testid="lang-switch">EN</button>}
+      />,
+    );
+    expect(screen.getByTestId('lang-switch')).toBeInTheDocument();
+  });
+
   it('passes axe a11y check', async () => {
     const { container } = render(<SiteHeader {...defaultProps} />);
     await expectNoA11yViolations(container);

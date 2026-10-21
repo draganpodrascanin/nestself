@@ -111,7 +111,7 @@ export function LeadFormShell({
       <Button
         type="submit"
         disabled={status === 'submitting'}
-        className="mt-6"
+        className="mt-6 @max-[760px]:w-full"
       >
         {status === 'submitting' ? pendingLabel : submitLabel}
       </Button>

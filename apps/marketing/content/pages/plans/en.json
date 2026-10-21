@@ -38,7 +38,9 @@
       "cta": {
         "label": "Request a demo",
         "href": "/demo"
-      }
+      },
+      "recommended": true,
+      "recommendedLabel": "Recommended"
     },
     {
       "name": "Enterprise",

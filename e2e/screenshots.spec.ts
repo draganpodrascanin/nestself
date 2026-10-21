@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { applyTheme, applyLocale, settle, collectConsoleErrors, prepareActions } from './helpers';
+import { applyTheme, applyLocale, settle, scrollThrough, collectConsoleErrors, prepareActions } from './helpers';
 import { pages } from './pages';
 
 for (const entry of pages) {
@@ -26,6 +26,7 @@ for (const entry of pages) {
     }
 
     await settle(page);
+    await scrollThrough(page);
 
     await expect(page).toHaveScreenshot(`${entry.name}.png`, { fullPage: true });
 

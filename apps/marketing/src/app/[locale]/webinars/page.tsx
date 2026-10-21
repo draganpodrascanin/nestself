@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, formatLanguages } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listEntries } from '@/content/loaders';
 import { PageHero } from '@/components/sections/PageHero';
+import { SECTION_PADDING } from '@/components/sections/section';
 import { Heading, Text } from '@nestself/ui';
 import { WebinarCard } from '@/components/cards/WebinarCard';
 import { loadContent } from './content';
@@ -57,12 +58,11 @@ export default async function WebinarsPage({
       <PageHero
         title={data.hero.title}
         lead={data.hero.lead}
-        primaryCta={data.hero.primaryCta}
         variant="quiet"
       />
 
       {/* Upcoming webinars */}
-      <section aria-labelledby="upcoming-title" className="py-16">
+      <section aria-labelledby="upcoming-title" className={SECTION_PADDING}>
         <Heading level={2} id="upcoming-title" className="mb-8">
           {data.upcoming.title}
         </Heading>
@@ -77,7 +77,7 @@ export default async function WebinarsPage({
                 dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
                 durationLabel={data.cardLabels.minutes.replace('{n}', String(w.frontmatter.durationMinutes))}
                 formatLabel={data.cardLabels.live}
-                languagesLabel={`${data.cardLabels.languages}: ${w.frontmatter.languages.join(', ')}`}
+                languagesLabel={formatLanguages(w.frontmatter.languages, locale)}
                 cover={{ key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt ?? '' }}
               />
             ))}
@@ -89,7 +89,7 @@ export default async function WebinarsPage({
 
       {/* On demand */}
       {onDemand.length > 0 && (
-        <section aria-labelledby="on-demand-title" className="py-16">
+        <section aria-labelledby="on-demand-title" className={`${SECTION_PADDING} border-t border-border-subtle`}>
           <Heading level={2} id="on-demand-title" className="mb-8">
             {data.onDemand.title}
           </Heading>
@@ -103,7 +103,7 @@ export default async function WebinarsPage({
                 dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
                 durationLabel={data.cardLabels.minutes.replace('{n}', String(w.frontmatter.durationMinutes))}
                 formatLabel={data.cardLabels.onDemand}
-                languagesLabel={`${data.cardLabels.languages}: ${w.frontmatter.languages.join(', ')}`}
+                languagesLabel={formatLanguages(w.frontmatter.languages, locale)}
                 cover={{ key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt ?? '' }}
               />
             ))}

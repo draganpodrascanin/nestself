@@ -70,6 +70,12 @@
   "steps": {
     "eyebrow": "Kako funkcioniše",
     "title": "Kako funkcioniše za zaposlene",
+    "lead": "Četiri koraka od prvog prijavljivanja do razgovora sa stručnjakom.",
+    "photo": {
+      "key": "employees-break",
+      "alt": "Kolege na kratkoj pauzi ispred kancelarije"
+    },
+
     "steps": [
       {
         "title": "Aktivirajte nalog sa poslovnom e-adresom",
@@ -130,7 +136,8 @@
   },
   "testimonials": {
     "title": "Šta kažu organizacije",
-    "lead": "Uzorak podataka. Priče partnera će se pojaviti ovde kako se organizacije budu pridruživale NestSelf-u."
+    "badge": "Uzorak podataka",
+    "lead": "Priče partnera će se pojaviti ovde kako se organizacije budu pridruživale NestSelf-u."
   },
   "faq": {
     "title": "Najčešća pitanja",

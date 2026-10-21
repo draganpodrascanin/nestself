@@ -41,7 +41,7 @@ export type IconName =
   | 'translate'
   | 'hand-heart';
 
-export const iconMap: Record<IconName, ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean | 'true' }>> = {
+export const iconMap: Record<IconName, ComponentType<{ size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'; className?: string; 'aria-hidden'?: boolean | 'true' }>> = {
   heart: Heart,
   scales: Scales,
   wallet: Wallet,

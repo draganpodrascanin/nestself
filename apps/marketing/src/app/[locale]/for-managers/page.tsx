@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, formatLanguages } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { localizedMetadata } from '@/i18n/metadata';
@@ -74,7 +74,7 @@ export default async function ForManagersPage({ params }: { params: Promise<Para
         w.frontmatter.format === 'live'
           ? resourceLabels.cardLabels.live
           : resourceLabels.cardLabels.onDemand,
-      languagesLabel: w.frontmatter.languages.join(', '),
+      languagesLabel: formatLanguages(w.frontmatter.languages, loc),
       cover: { key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt },
     }));
 

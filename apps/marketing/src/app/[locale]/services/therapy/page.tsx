@@ -59,6 +59,7 @@ export default async function TherapyPage({
         eyebrow={data.covers.eyebrow}
         title={data.covers.title}
         columns={data.covers.columns}
+        variant="compact"
         items={data.covers.items.map((item) => ({
           ...item,
           icon: item.icon as IconName,

@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
 
 export interface FormError {
@@ -43,19 +44,22 @@ export const FormErrorSummary = forwardRef<FormErrorSummaryHandle, FormErrorSumm
         role="alert"
         tabIndex={-1}
         className={cn(
-          'p-4 rounded-control border-2 border-danger bg-surface',
+          'p-4 rounded-control border-2 border-danger bg-danger-surface',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
           className,
         )}
       >
-        <h3 className="mb-2 type-label text-danger">{title}</h3>
+        <h3 className="mb-2 flex items-center gap-2 type-label text-danger">
+          <WarningCircle weight="regular" size={20} aria-hidden className="shrink-0" />
+          {title}
+        </h3>
         <ul className="pl-5 space-y-1 list-disc">
           {errors.map((err) => (
             <li key={err.id} className="type-metadata">
               <a
                 href={`#${err.id}`}
                 onClick={handleLinkClick(err.id)}
-                className="text-danger underline hover:text-danger"
+                className="text-text underline hover:text-text"
               >
                 {err.label}
               </a>

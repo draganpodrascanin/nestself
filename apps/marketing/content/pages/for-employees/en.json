@@ -66,6 +66,10 @@
   "howToStart": {
     "eyebrow": "Getting started",
     "title": "How to start",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "A person sitting on a sofa completing a wellbeing check-in"
+    },
     "steps": [
       {
         "title": "Check your access",

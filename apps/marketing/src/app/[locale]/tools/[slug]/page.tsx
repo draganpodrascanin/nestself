@@ -10,11 +10,12 @@ import {
   listSlugs,
 } from '@/content/loaders';
 import { renderMdx } from '@/content/mdx';
-import { Breadcrumbs, PhotoFigure } from '@nestself/ui';
+import { Breadcrumbs, Card, PhotoFigure } from '@nestself/ui';
 import { Heading, Text, LinkButton } from '@nestself/ui';
 import type { PhotoKey } from '@nestself/assets';
 import { ProseLayout } from '@/components/sections/ProseLayout';
 import { AssessmentRunner } from '@/components/assessment/AssessmentRunner';
+import { ReadingColumn } from '@/components/reading/ReadingColumn';
 import { loadContent } from '../content';
 
 const ASSESSMENT_PHOTO: Record<string, PhotoKey> = {
@@ -104,8 +105,8 @@ export default async function ToolSlugPage({
           />
         </div>
 
-        <section className="grid gap-12 grid-cols-1 @min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center py-8">
-          <div className="max-w-[720px]">
+        <section className="grid gap-3 @min-[1024px]:gap-12 grid-cols-1 @min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center py-8">
+          <div className="max-w-[720px] @max-[1024px]:order-last">
             <Heading level={1} typeRole="screenTitle" className="mb-4">
               {data.title}
             </Heading>
@@ -164,6 +165,8 @@ export default async function ToolSlugPage({
   const topic = tool.frontmatter.topic;
   const cta = content.guideCta[topic] ?? content.guideCta['psychological'];
 
+  const isStepped = tool.frontmatter.stepped === true;
+
   return (
     <main id="main" tabIndex={-1} className="@container">
       <div className="py-8">
@@ -177,19 +180,45 @@ export default async function ToolSlugPage({
         />
       </div>
 
-      <ProseLayout>
-        <Heading level={1} typeRole="screenTitle" className="mb-8">
+      <ReadingColumn>
+        <Heading level={1} typeRole="editorial" className="mb-6">
           {tool.frontmatter.title}
         </Heading>
-        {mdxContent}
+
+        {/* A24: Summary card for guides */}
+        <Card tone="subtle" padding="lg" className="mb-8">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <Text as="span" typeRole="metadata" tone="secondary">
+              {content.kindLabels[tool.frontmatter.kind]}
+            </Text>
+            {tool.frontmatter.readingMinutes && (
+              <>
+                <Text as="span" typeRole="metadata" tone="secondary">
+                  &middot;
+                </Text>
+                <Text as="span" typeRole="metadata" tone="secondary">
+                  {tool.frontmatter.readingMinutes} min
+                </Text>
+              </>
+            )}
+          </div>
+          <Text tone="secondary" className="mt-2">
+            {tool.frontmatter.description}
+          </Text>
+        </Card>
+
+        <ProseLayout className={`py-0 [&_[data-prose]]:max-w-none ${isStepped ? '[&_[data-prose]_h2]:border-t [&_[data-prose]_h2]:border-border-subtle [&_[data-prose]_h2]:pt-8 [&_[data-prose]_h2]:mt-8' : ''}`}>
+          {mdxContent}
+        </ProseLayout>
+
         {cta && (
-          <div className="mt-12">
+          <div className="mt-12 mb-8">
             <LinkButton href={`/${locale}${cta.href}`}>
               {cta.label}
             </LinkButton>
           </div>
         )}
-      </ProseLayout>
+      </ReadingColumn>
     </main>
   );
 }

@@ -124,6 +124,27 @@ try {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
 
+    // Scroll through the page to trigger lazy-loaded images
+    await page.evaluate(async () => {
+      const step = window.innerHeight;
+      const maxScroll = document.body.scrollHeight;
+      for (let y = 0; y < maxScroll; y += step) {
+        window.scrollTo(0, y);
+        await new Promise((r) => requestAnimationFrame(() => r()));
+      }
+      await Promise.all(
+        [...document.images].map(
+          (img) =>
+            img.complete ||
+            new Promise((r) => {
+              img.onload = img.onerror = () => r();
+            }),
+        ),
+      );
+      window.scrollTo(0, 0);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    });
+
     // Take screenshot
     const filePath = resolve(outDir, `${values.name}-${kind}.png`);
 

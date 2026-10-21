@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-import { applyTheme, applyLocale, settle, prepareActions } from './helpers';
+import { applyTheme, applyLocale, settle, scrollThrough, prepareActions } from './helpers';
 import { pages } from './pages';
 
 for (const entry of pages) {
@@ -24,6 +24,7 @@ for (const entry of pages) {
     }
 
     await settle(page);
+    await scrollThrough(page);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(320);

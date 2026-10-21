@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales } from '@nestself/i18n';
+import { isLocale, locales, formatLanguages } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
@@ -12,6 +12,7 @@ import { ProseLayout } from '@/components/sections/ProseLayout';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { ArticleCard } from '@/components/cards/ArticleCard';
 import { WebinarRegistrationForm } from '@/components/forms/WebinarRegistrationForm';
+import { ReadingColumn } from '@/components/reading/ReadingColumn';
 import { loadContent } from '../content';
 
 interface Params {
@@ -96,80 +97,89 @@ export default async function WebinarDetailPage({
       />
 
       <article className="py-8">
-        <PhotoFigure
-          photo={frontmatter.cover as PhotoKey}
-          alt={frontmatter.coverAlt ?? ''}
-          imageRole="hero-3x2"
-          sizes="(max-width: 760px) 100vw, 720px"
-          priority
-          className="overflow-hidden rounded-card mb-8"
-        />
+        <ReadingColumn>
+          <PhotoFigure
+            photo={frontmatter.cover as PhotoKey}
+            alt={frontmatter.coverAlt ?? ''}
+            imageRole="hero-3x2"
+            sizes="(max-width: 760px) 100vw, 720px"
+            priority
+            className="overflow-hidden rounded-card mb-8"
+          />
 
-        <Heading level={1} typeRole="marketingHero" className="mb-6">
-          {frontmatter.title}
-        </Heading>
+          <Heading level={1} typeRole="editorial" className="mb-6">
+            {frontmatter.title}
+          </Heading>
 
-        <Text typeRole="bodyLarge" tone="secondary" className="mb-8">
-          {frontmatter.description}
-        </Text>
+          <Text typeRole="bodyLarge" tone="secondary" className="mb-8">
+            {frontmatter.description}
+          </Text>
 
-        {/* Details block */}
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 mb-12 @max-[760px]:grid-cols-1">
-          <dt className="type-label text-text-secondary">{data.detail.dateLabel}</dt>
-          <dd className="type-body">
-            {formatWebinarDateTime(frontmatter.startsAt, locale)}
-          </dd>
+          {/* Details block */}
+          <dl className="grid gap-x-6 gap-y-3 mb-12 @min-[760px]:grid-cols-[auto_1fr] @max-[760px]:grid-cols-1 @max-[760px]:gap-y-1">
+            <dt className="type-metadata text-text-secondary @min-[760px]:type-label">{data.detail.dateLabel}</dt>
+            <dd className="type-body @max-[760px]:mb-3">
+              {formatWebinarDateTime(frontmatter.startsAt, locale)}
+            </dd>
 
-          <dt className="type-label text-text-secondary">{data.detail.durationLabel}</dt>
-          <dd className="type-body">
-            {frontmatter.durationMinutes} {data.detail.minutesSuffix}
-          </dd>
+            <dt className="type-metadata text-text-secondary @min-[760px]:type-label">{data.detail.durationLabel}</dt>
+            <dd className="type-body @max-[760px]:mb-3">
+              {frontmatter.durationMinutes} {data.detail.minutesSuffix}
+            </dd>
 
-          <dt className="type-label text-text-secondary">{data.detail.formatLabel}</dt>
-          <dd className="type-body">
-            {frontmatter.format === 'live' ? data.cardLabels.live : data.cardLabels.onDemand}
-          </dd>
+            <dt className="type-metadata text-text-secondary @min-[760px]:type-label">{data.detail.formatLabel}</dt>
+            <dd className="type-body @max-[760px]:mb-3">
+              {frontmatter.format === 'live' ? data.cardLabels.live : data.cardLabels.onDemand}
+            </dd>
 
-          <dt className="type-label text-text-secondary">{data.detail.languagesLabel}</dt>
-          <dd className="type-body">{frontmatter.languages.join(', ')}</dd>
+            <dt className="type-metadata text-text-secondary @min-[760px]:type-label">{data.detail.languagesLabel}</dt>
+            <dd className="type-body @max-[760px]:mb-3">
+              {formatLanguages(frontmatter.languages, locale)}
+            </dd>
 
-          <dt className="type-label text-text-secondary">{data.detail.speakerLabel}</dt>
-          <dd className="type-body">
-            {frontmatter.speaker.role} ({data.topics[frontmatter.speaker.area as keyof typeof data.topics]})
-          </dd>
-        </dl>
+            <dt className="type-metadata text-text-secondary @min-[760px]:type-label">{data.detail.speakerLabel}</dt>
+            <dd className="type-body">
+              {frontmatter.speaker.role} ({data.topics[frontmatter.speaker.area as keyof typeof data.topics]})
+            </dd>
+          </dl>
 
-        <ProseLayout>{mdxContent}</ProseLayout>
+          <ProseLayout className="py-0 [&_[data-prose]]:max-w-none">
+            {mdxContent}
+          </ProseLayout>
 
-        {/* Registration form or on-demand note */}
-        <div className="mt-12 mb-12">
-          {isOnDemand ? (
-            <div className="rounded-card border border-border-subtle p-8">
-              <Heading level={2} typeRole="sectionTitle" className="mb-3">
-                {data.detail.watchRecordingTitle}
-              </Heading>
-              <Text tone="secondary">
-                {data.detail.watchRecordingBody}
-              </Text>
-            </div>
-          ) : (
-            <div className="rounded-card border border-border-subtle p-8">
-              <Heading level={2} typeRole="sectionTitle" className="mb-6">
-                {data.detail.registerTitle}
-              </Heading>
-              <WebinarRegistrationForm
-                webinarSlug={slug}
-                locale={locale}
-                labels={data.form}
-              />
-            </div>
-          )}
-        </div>
+          {/* Registration form or on-demand note */}
+          <div className="mt-12 mb-12">
+            {isOnDemand ? (
+              <div className="rounded-card border border-border-subtle p-8">
+                <Heading level={2} typeRole="sectionTitle" className="mb-3">
+                  {data.detail.watchRecordingTitle}
+                </Heading>
+                <Text tone="secondary">
+                  {data.detail.watchRecordingBody}
+                </Text>
+              </div>
+            ) : (
+              <div className="rounded-card border border-border-subtle p-8">
+                <Heading level={2} typeRole="sectionTitle" className="mb-6">
+                  {data.detail.registerTitle}
+                </Heading>
+                <WebinarRegistrationForm
+                  webinarSlug={slug}
+                  locale={locale}
+                  labels={data.form}
+                />
+              </div>
+            )}
+          </div>
+        </ReadingColumn>
       </article>
 
       {/* Related articles */}
       {relatedArticles.length > 0 && (
-        <section aria-labelledby="related-articles-title" className="py-16">
+        <section
+          aria-labelledby="related-articles-title"
+          className="border-t border-border-subtle pt-12 pb-16"
+        >
           <Heading level={2} id="related-articles-title" className="mb-8">
             {data.detail.relatedTitle}
           </Heading>

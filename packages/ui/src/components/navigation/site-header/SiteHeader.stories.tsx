@@ -22,3 +22,20 @@ export const States: StoryObj = {
     />
   ),
 };
+
+export const WithUtilities: StoryObj = {
+  render: () => (
+    <SiteHeader
+      brand={{ label: 'NestSelf', href: '/' }}
+      links={[
+        { label: 'Home', href: '/', current: true },
+        { label: 'Features', href: '/features' },
+        { label: 'Pricing', href: '/pricing' },
+        { label: 'About', href: '/about' },
+      ]}
+      utilities={<button type="button">EN</button>}
+      menuLabel="Open menu"
+      closeLabel="Close menu"
+    />
+  ),
+};

@@ -57,12 +57,14 @@
     "eyebrow": "Tim",
     "title": "Ko smo mi",
     "lead": "Mali tim u Beogradu i Budimpešti, koji radi na preseku psihologije, prava, finansija i tehnologije.",
+    "location": "Beograd i Budimpešta, sa stručnjacima i članovima tima koji rade na daljinu u obe zemlje.",
     "columns": 3,
     "members": [
       {
         "initials": "CF",
         "role": "Suosnivači",
-        "body": "Pokrenuli su NestSelf da bi premostili jaz između onoga što je zaposlenima potrebno i onoga što tradicionalni programi pomoći zaposlenima nude."
+        "body": "Pokrenuli su NestSelf da bi premostili jaz između onoga što je zaposlenima potrebno i onoga što tradicionalni programi pomoći zaposlenima nude.",
+        "featured": true
       },
       {
         "initials": "CL",
@@ -84,7 +86,11 @@
         "role": "Operacije",
         "body": "Upravlja pokretanjem programa, odnosima sa poslodavcima i svakodnevnim operacijama u obe zemlje."
       }
-    ]
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf studio u Beogradu"
+    }
   },
   "whereWeAre": {
     "title": "Gde se nalazimo",

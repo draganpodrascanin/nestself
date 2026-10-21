@@ -2,18 +2,19 @@ import type { Page } from '@playwright/test';
 import type { PageEntry } from '../../pages';
 
 export const pages: PageEntry[] = [
-  { name: 'marketing-demo', url: 'http://localhost:3000/en/demo' },
-  { name: 'marketing-demo-error', url: 'http://localhost:3000/en/demo', prepare: 'b6-demo-error' },
+  { name: 'marketing-demo', url: 'http://localhost:3000/sr-Latn/demo', locale: 'sr-Latn' },
+  { name: 'marketing-demo-en', url: 'http://localhost:3000/en/demo' },
+  { name: 'marketing-demo-error', url: 'http://localhost:3000/sr-Latn/demo', locale: 'sr-Latn', prepare: 'b6-demo-error' },
   { name: 'marketing-demo-hu', url: 'http://localhost:3000/hu/demo', locale: 'hu' },
-  { name: 'marketing-contact', url: 'http://localhost:3000/en/contact' },
-  { name: 'marketing-contact-error', url: 'http://localhost:3000/en/contact', prepare: 'b6-contact-error' },
-  { name: 'marketing-privacy-model', url: 'http://localhost:3000/en/privacy-model' },
-  { name: 'marketing-legal-privacy-policy', url: 'http://localhost:3000/en/legal/privacy-policy' },
-  { name: 'marketing-legal-terms', url: 'http://localhost:3000/en/legal/terms' },
-  { name: 'marketing-legal-cookies', url: 'http://localhost:3000/en/legal/cookies' },
-  { name: 'marketing-legal-imprint', url: 'http://localhost:3000/en/legal/imprint' },
-  { name: 'marketing-accessibility', url: 'http://localhost:3000/en/accessibility' },
-  { name: 'marketing-credits', url: 'http://localhost:3000/en/credits' },
+  { name: 'marketing-contact', url: 'http://localhost:3000/sr-Latn/contact', locale: 'sr-Latn' },
+  { name: 'marketing-contact-en', url: 'http://localhost:3000/en/contact' },
+  { name: 'marketing-contact-error', url: 'http://localhost:3000/sr-Latn/contact', locale: 'sr-Latn', prepare: 'b6-contact-error' },
+  { name: 'marketing-privacy-model', url: 'http://localhost:3000/sr-Latn/privacy-model', locale: 'sr-Latn' },
+  { name: 'marketing-legal-privacy-policy', url: 'http://localhost:3000/sr-Latn/legal/privacy-policy', locale: 'sr-Latn' },
+  { name: 'marketing-legal-terms', url: 'http://localhost:3000/sr-Latn/legal/terms', locale: 'sr-Latn' },
+  { name: 'marketing-legal-cookies', url: 'http://localhost:3000/sr-Latn/legal/cookies', locale: 'sr-Latn' },
+  { name: 'marketing-legal-imprint', url: 'http://localhost:3000/sr-Latn/legal/imprint', locale: 'sr-Latn' },
+  { name: 'marketing-accessibility', url: 'http://localhost:3000/sr-Latn/accessibility', locale: 'sr-Latn' },
 ];
 
 export const prepareActions: Record<string, (page: Page) => Promise<void>> = {

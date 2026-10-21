@@ -38,7 +38,9 @@
       "cta": {
         "label": "Kérj bemutatót",
         "href": "/demo"
-      }
+      },
+      "recommended": true,
+      "recommendedLabel": "Ajánlott"
     },
     {
       "name": "Enterprise",

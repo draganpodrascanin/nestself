@@ -62,6 +62,8 @@ export const ToolFrontmatterSchema = z.object({
   cover: z.string().min(1),
   coverAlt: z.string().min(1),
   order: z.number().int().default(100),
+  stepped: z.boolean().optional(),
+  readingMinutes: z.number().int().optional(),
   draft: z.boolean().default(false),
 });
 

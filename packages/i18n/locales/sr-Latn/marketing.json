@@ -125,7 +125,6 @@
   "footer": {
     "navLabel": "Podnožje stranice",
     "photography": "Fotografski pravac",
-    "credits": "Zasluge za fotografije",
     "designSystem": "Sistem dizajna",
     "tagline": "Podrška za posao i sve oko njega.",
     "product": "Proizvod",
@@ -141,7 +140,6 @@
     "demo": "Zakažite prezentaciju",
     "contact": "Kontakt",
     "accessibility": "Pristupačnost",
-    "creditsPage": "Zasluge",
     "privacyPolicy": "Politika privatnosti",
     "terms": "Uslovi korišćenja",
     "cookies": "Kolačići",
@@ -149,22 +147,6 @@
   },
   "locale": {
     "switcherLabel": "Jezik"
-  },
-  "credits": {
-    "title": "Ljudi i fotografije",
-    "lead": "Pexels fotografije životnog stila korišćene kao konceptualne slike. Nijedna saglasnost, identitet kupca, profesionalna uloga ili podobnost porodice nije podrazumevana.",
-    "licence": "Pexels licenca",
-    "photographyHeading": "Fotografija",
-    "fontsHeading": "Fontovi",
-    "iconsHeading": "Ikone",
-    "fontsBody": "Onest od onest.md, licenciran pod SIL Open Font License 1.1.",
-    "iconsBody": "Phosphor Icons od phosphoricons.com, licencirani pod MIT licencom.",
-    "colPhoto": "Fotografija",
-    "colPhotographer": "Fotograf",
-    "colSource": "Izvor",
-    "colLicence": "Licenca",
-    "photographyCaption": "Fotografije korišćene u ovom projektu",
-    "dialogCaption": "Fotografi"
   },
   "pages": {
     "support": {
@@ -227,9 +209,6 @@
           "operations": "Ovlašćen opseg"
         }
       }
-    },
-    "credits": {
-      "title": "Ljudi i fotografije"
     }
   },
   "notFound": {

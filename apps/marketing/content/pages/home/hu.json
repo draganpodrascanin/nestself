@@ -70,6 +70,11 @@
   "steps": {
     "eyebrow": "Hogyan működik",
     "title": "Hogyan működik a munkavállalók számára",
+    "lead": "Négy lépés az első bejelentkezéstől a szakemberrel folytatott beszélgetésig.",
+    "photo": {
+      "key": "employees-break",
+      "alt": "Kollégák rövid szüneten az iroda előtt"
+    },
     "steps": [
       {
         "title": "Aktiváld a munkahelyi e-mail címeddel",
@@ -130,7 +135,8 @@
   },
   "testimonials": {
     "title": "Mit mondanak a szervezetek",
-    "lead": "Mintaadatok. A partnertörténetek itt jelennek meg, ahogy a szervezetek csatlakoznak a NestSelfhez."
+    "badge": "Minta adatok",
+    "lead": "A partnertörténetek itt jelennek meg, ahogy a szervezetek csatlakoznak a NestSelfhez."
   },
   "faq": {
     "title": "Gyakran ismételt kérdések",

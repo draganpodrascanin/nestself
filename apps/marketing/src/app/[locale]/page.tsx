@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, formatLanguages } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { getServerT } from '@/i18n/server';
@@ -16,6 +16,7 @@ import {
   CtaBand,
   TestimonialsSection,
   ResourceTeasers,
+  SECTION_PADDING,
 } from '@/components/sections';
 import { PrivacySection } from '@/components/sections/PrivacySection';
 import { listEntries, listAssessments } from '@/content/loaders';
@@ -89,18 +90,17 @@ export default async function HomePage({
       w.frontmatter.format === 'live'
         ? t('marketing:labels.live')
         : t('marketing:labels.onDemand'),
-    languagesLabel: w.frontmatter.languages.join(', '),
+    languagesLabel: formatLanguages(w.frontmatter.languages, typedLocale),
     cover: { key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt },
   }));
 
   const toolCards: ToolCardProps[] = [];
 
-  // ResourceTeasers does not accept an assessments prop, so assessment cards
-  // are rendered separately below the resource teasers when available.
   const assessmentCards: AssessmentCardProps[] = assessments.slice(0, 3).map((a) => ({
     href: `/${locale}/tools/${a.slug}`,
     title: a.data.title,
     intro: a.data.intro,
+    slug: a.slug,
     durationLabel: t('marketing:labels.minutes', { count: a.data.durationMinutes }),
     questionsLabel: t('marketing:labels.questions', { count: a.data.questions.length }),
   }));
@@ -134,6 +134,7 @@ export default async function HomePage({
             alt: data.hero.photos[2].alt,
           },
         ]}
+        className="@max-[760px]:pb-6"
       />
 
       <TrustStrip
@@ -162,6 +163,12 @@ export default async function HomePage({
         id="how-it-works"
         eyebrow={data.steps.eyebrow}
         title={data.steps.title}
+        lead={data.steps.lead}
+        photo={
+          data.steps.photo
+            ? { key: data.steps.photo.key as PhotoKey, alt: data.steps.photo.alt }
+            : undefined
+        }
         steps={data.steps.steps}
       />
 
@@ -206,8 +213,8 @@ export default async function HomePage({
       )}
 
       {assessmentCards.length > 0 && (
-        <section className="py-16" aria-labelledby="assessments-heading">
-          <Heading id="assessments-heading" level={2} typeRole="sectionTitle" className="mb-8 text-center">
+        <section className={SECTION_PADDING} aria-labelledby="assessments-heading">
+          <Heading id="assessments-heading" level={2} typeRole="sectionTitle" className="mb-8">
             {data.assessments?.title ?? t('marketing:actions.startAssessment')}
           </Heading>
           <div className="grid gap-8 grid-cols-3 @max-[760px]:grid-cols-1">
@@ -222,6 +229,7 @@ export default async function HomePage({
         id="testimonials"
         title={data.testimonials.title}
         lead={data.testimonials.lead}
+        badge={data.testimonials.badge}
         items={SAMPLE_TESTIMONIALS}
         locale={typedLocale}
       />

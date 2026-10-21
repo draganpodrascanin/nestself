@@ -5,8 +5,8 @@ export interface SampleTestimonial {
   id: string;
   placeholder: true;
   name: string;
-  role: string;
-  company: string;
+  role: Record<QuoteLocale, string>;
+  company: Record<QuoteLocale, string>;
   country: 'RS' | 'HU';
   quote: Record<QuoteLocale, string>;
 }
@@ -16,8 +16,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-1',
     placeholder: true,
     name: 'Jelena M.',
-    role: 'HR Director',
-    company: 'logistics company, Novi Sad, 240 employees',
+    role: {
+      en: 'HR Director',
+      'sr-Latn': 'Direktorka ljudskih resursa',
+      'sr-Cyrl': 'Директорка људских ресурса',
+      hu: 'HR-igazgató',
+    },
+    company: {
+      en: 'logistics company, Novi Sad, 240 employees',
+      'sr-Latn': 'logistička kompanija, Novi Sad, 240 zaposlenih',
+      'sr-Cyrl': 'логистичка компанија, Нови Сад, 240 запослених',
+      hu: 'logisztikai vállalat, Újvidék, 240 munkavállaló',
+    },
     country: 'RS',
     quote: {
       en: 'Launching NestSelf was straightforward. The team guided us through every step and employee support started in less than two weeks.',
@@ -32,8 +42,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-2',
     placeholder: true,
     name: 'Marko T.',
-    role: 'People Lead',
-    company: 'IT services firm, Belgrade, 85 employees',
+    role: {
+      en: 'People Lead',
+      'sr-Latn': 'Rukovodilac za ljude i kulturu',
+      'sr-Cyrl': 'Руководилац за људе и културу',
+      hu: 'People Lead',
+    },
+    company: {
+      en: 'IT services firm, Belgrade, 85 employees',
+      'sr-Latn': 'IT kompanija, Beograd, 85 zaposlenih',
+      'sr-Cyrl': 'ИТ компанија, Београд, 85 запослених',
+      hu: 'IT-szolgáltató cég, Belgrád, 85 munkavállaló',
+    },
     country: 'RS',
     quote: {
       en: 'Employees freely use the support because they know we as the employer never see who talked or about what. That builds trust.',
@@ -48,8 +68,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-3',
     placeholder: true,
     name: 'Dragan K.',
-    role: 'CEO',
-    company: 'manufacturing company, Subotica, 120 employees',
+    role: {
+      en: 'CEO',
+      'sr-Latn': 'Generalni direktor',
+      'sr-Cyrl': 'Генерални директор',
+      hu: 'Ügyvezető igazgató',
+    },
+    company: {
+      en: 'manufacturing company, Subotica, 120 employees',
+      'sr-Latn': 'proizvodna kompanija, Subotica, 120 zaposlenih',
+      'sr-Cyrl': 'производна компанија, Суботица, 120 запослених',
+      hu: 'gyártó vállalat, Szabadka, 120 munkavállaló',
+    },
     country: 'RS',
     quote: {
       en: 'As the director of a 120-person company, I wanted a solution that is easy for employees and does not require much administration. NestSelf is exactly that.',
@@ -64,8 +94,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-4',
     placeholder: true,
     name: 'Ana P.',
-    role: 'Team Lead',
-    company: 'financial services firm, Budapest, 60 employees',
+    role: {
+      en: 'Team Lead',
+      'sr-Latn': 'Vođa tima',
+      'sr-Cyrl': 'Вођа тима',
+      hu: 'Csapatvezető',
+    },
+    company: {
+      en: 'financial services firm, Budapest, 60 employees',
+      'sr-Latn': 'finansijska kompanija, Budimpešta, 60 zaposlenih',
+      'sr-Cyrl': 'финансијска компанија, Будимпешта, 60 запослених',
+      hu: 'pénzügyi szolgáltató, Budapest, 60 munkavállaló',
+    },
     country: 'HU',
     quote: {
       en: 'The manager training helped me recognise early signs of stress in my team. Now I know where to direct colleagues when they need support.',
@@ -80,8 +120,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-5',
     placeholder: true,
     name: 'Milica S.',
-    role: 'Employee',
-    company: 'retail company, Niš, 300 employees',
+    role: {
+      en: 'Employee',
+      'sr-Latn': 'Zaposlena',
+      'sr-Cyrl': 'Запослена',
+      hu: 'Munkavállaló',
+    },
+    company: {
+      en: 'retail company, Niš, 300 employees',
+      'sr-Latn': 'maloprodajna kompanija, Niš, 300 zaposlenih',
+      'sr-Cyrl': 'малопродајна компанија, Ниш, 300 запослених',
+      hu: 'kiskereskedelmi vállalat, Niš, 300 munkavállaló',
+    },
     country: 'RS',
     quote: {
       en: 'I was able to talk to a psychologist the same week I signed up. Nobody at work knows I used NestSelf.',
@@ -96,8 +146,18 @@ export const SAMPLE_TESTIMONIALS: SampleTestimonial[] = [
     id: 'testimonial-6',
     placeholder: true,
     name: 'Zoltán B.',
-    role: 'Works Council Member',
-    company: 'construction company, Szeged, 180 employees',
+    role: {
+      en: 'Works Council Member',
+      'sr-Latn': 'Član saveta zaposlenih',
+      'sr-Cyrl': 'Члан савета запослених',
+      hu: 'Üzemi tanács tagja',
+    },
+    company: {
+      en: 'construction company, Szeged, 180 employees',
+      'sr-Latn': 'građevinska kompanija, Segedin, 180 zaposlenih',
+      'sr-Cyrl': 'грађевинска компанија, Сегедин, 180 запослених',
+      hu: 'építőipari vállalat, Szeged, 180 munkavállaló',
+    },
     country: 'HU',
     quote: {
       en: 'As a works council member, I receive anonymised reports for groups of 10 or more. The data helps us plan better support programmes.',

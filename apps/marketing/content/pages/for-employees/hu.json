@@ -66,6 +66,10 @@
   "howToStart": {
     "eyebrow": "Első lépések",
     "title": "Hogyan kezdd el",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "Személy a kanapén ülve kitölt egy közérzeti felmérést"
+    },
     "steps": [
       {
         "title": "Ellenőrizd a hozzáférésedet",

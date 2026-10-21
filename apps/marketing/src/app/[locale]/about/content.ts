@@ -28,14 +28,17 @@ const schema = z.object({
     eyebrow: z.string().optional(),
     title: z.string(),
     lead: z.string().optional(),
+    location: z.string().optional(),
     columns: z.number(),
     members: z.array(
       z.object({
         initials: z.string(),
         role: z.string(),
         body: z.string(),
+        featured: z.boolean().optional(),
       }),
     ),
+    photo: photoSchema.optional(),
   }),
   whereWeAre: z.object({
     title: z.string(),

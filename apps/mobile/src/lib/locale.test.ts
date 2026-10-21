@@ -18,12 +18,12 @@ describe('resolveDeviceLocale', () => {
     expect(resolveDeviceLocale(['sr-Latn-RS'])).toBe('sr-Latn');
   });
 
-  it('falls back to en for unknown locales', () => {
-    expect(resolveDeviceLocale(['ja', 'zh'])).toBe('en');
+  it('falls back to Serbian Latin for unknown locales', () => {
+    expect(resolveDeviceLocale(['ja', 'zh'])).toBe('sr-Latn');
   });
 
-  it('returns en for an empty list', () => {
-    expect(resolveDeviceLocale([])).toBe('en');
+  it('returns Serbian Latin for an empty list', () => {
+    expect(resolveDeviceLocale([])).toBe('sr-Latn');
   });
 
   it('picks the first matching tag', () => {

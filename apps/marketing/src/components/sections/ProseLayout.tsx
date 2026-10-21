@@ -11,7 +11,7 @@ export function ProseLayout({ children, aside, className }: ProseLayoutProps) {
   return (
     <div
       className={cn(
-        'gap-12 py-16',
+        'gap-12 py-10 @max-[760px]:py-6',
         aside
           ? 'grid grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @max-[1024px]:grid-cols-1'
           : '',

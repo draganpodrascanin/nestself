@@ -62,6 +62,41 @@ export function collectConsoleErrors(page: Page): string[] {
 }
 
 /**
+ * Scroll through the entire page in viewport-height increments so lazy-loaded
+ * images below the fold finish loading, then scroll back to the top.
+ */
+export async function scrollThrough(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    // Lazy images never load if the capture engine does not scroll, so load them all now.
+    for (const img of document.images) {
+      if (img.loading === 'lazy') img.loading = 'eager';
+    }
+    const step = window.innerHeight;
+    const maxScroll = document.documentElement.scrollHeight;
+    for (let y = 0; y < maxScroll; y += step) {
+      window.scrollTo(0, y);
+      await new Promise<void>((r) => setTimeout(r, 40));
+    }
+    const deadline = Date.now() + 10_000;
+    const pending = [...document.images].filter((img) => !img.complete);
+    await Promise.all(
+      pending.map(
+        (img) =>
+          new Promise<void>((r) => {
+            const done = () => r();
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+            setTimeout(done, Math.max(0, deadline - Date.now()));
+          }),
+      ),
+    );
+    await Promise.all([...document.images].map((img) => img.decode().catch(() => undefined)));
+    window.scrollTo(0, 0);
+  });
+  await settle(page);
+}
+
+/**
  * Named preparation actions keyed by the `prepare` field on a PageEntry.
  * Each action receives the current Page and performs interactions
  * (e.g. clicking through a multi-step demo) before the screenshot is taken.

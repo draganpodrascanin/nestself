@@ -113,15 +113,29 @@ test.describe('keyboard navigation: marketing site', () => {
     await expect(summary).not.toContainText('expected');
   });
 
-  test('the locale switcher changes the URL and the document language', async ({ page }) => {
+  test('the locale switcher menu changes the URL and the document language', async ({ page }) => {
     await page.goto('http://localhost:3000/en/plans');
     await settle(page);
-    // The footer switcher is visible at every viewport (the header one collapses behind the menu button on phones).
-    const footer = page.getByRole('contentinfo');
-    await footer.getByRole('link', { name: 'Magyar' }).click();
+
+    // Open the header locale menu
+    const headerTrigger = page.getByRole('button', { name: /language/i }).first();
+    await headerTrigger.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+
+    // Click the Magyar item
+    await menu.getByRole('menuitem', { name: 'Magyar' }).click();
     await page.waitForURL('**/hu/plans');
     await settle(page);
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('hu');
-    await expect(footer.getByRole('link', { name: 'Magyar' })).toHaveAttribute('aria-current', 'true');
+
+    // The trigger now reads "Magyar"
+    const updatedTrigger = page.getByRole('button', { name: /nyelv/i }).first();
+    await expect(updatedTrigger).toContainText('Magyar');
+
+    // The footer also has a locale switcher trigger
+    const footerTrigger = page.getByRole('contentinfo').getByRole('button', { name: /nyelv/i });
+    await expect(footerTrigger).toBeVisible();
   });
 });

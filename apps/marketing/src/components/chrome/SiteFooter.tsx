@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { TextLink, Text } from '@nestself/ui';
 import type { Locale } from '@nestself/i18n';
 import { LocaleSwitcher } from './LocaleSwitcher';
-import { CreditsDialog } from '@/components/credits-dialog';
 
 export interface SiteFooterProps {
   locale: Locale;
@@ -46,7 +45,6 @@ export function SiteFooter({ locale }: SiteFooterProps) {
         { label: t('marketing:footer.demo'), href: `/${locale}/demo` },
         { label: t('marketing:footer.contact'), href: `/${locale}/contact` },
         { label: t('marketing:footer.accessibility'), href: `/${locale}/accessibility` },
-        { label: t('marketing:footer.creditsPage'), href: `/${locale}/credits` },
       ],
     },
     {
@@ -95,10 +93,7 @@ export function SiteFooter({ locale }: SiteFooterProps) {
             {t('marketing:footer.tagline')}
           </Text>
         </div>
-        <div className="gap-6 @max-[760px]:gap-4 flex flex-wrap items-center @max-[760px]:flex-col @max-[760px]:items-start">
-          <LocaleSwitcher locale={locale} />
-          <CreditsDialog>{t('marketing:footer.credits')}</CreditsDialog>
-        </div>
+        <LocaleSwitcher locale={locale} />
       </div>
     </footer>
   );

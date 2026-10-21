@@ -33,7 +33,7 @@ content/
     hu.json
 ```
 
-Every slug directory must contain at least an `en` file. Serbian Cyrillic (`sr-Cyrl`) files are generated from the Latin (`sr-Latn`) source by transliteration and must never be edited by hand.
+Every slug directory must contain at least an `en` file. English is the authoring source of content; Serbian Latin is the default served language. Serbian Cyrillic (`sr-Cyrl`) files are generated from the Latin (`sr-Latn`) source by transliteration and must never be edited by hand.
 
 ## Frontmatter fields
 

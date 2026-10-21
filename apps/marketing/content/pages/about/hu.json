@@ -57,12 +57,14 @@
     "eyebrow": "A csapat",
     "title": "Kik vagyunk",
     "lead": "Egy kis csapat Belgrádban és Budapesten, a pszichológia, a jog, a pénzügyek és a technológia területéről.",
+    "location": "Belgrád és Budapest -- a szakemberek és a csapattagok távmunkában dolgoznak mindkét országból.",
     "columns": 3,
     "members": [
       {
         "initials": "CF",
         "role": "Társalapítók",
-        "body": "Azért hozták létre a NestSelfet, hogy áthidalják a szakadékot a munkavállalók igényei és a hagyományos EAP-programok kínálata között."
+        "body": "Azért hozták létre a NestSelfet, hogy áthidalják a szakadékot a munkavállalók igényei és a hagyományos EAP-programok kínálata között.",
+        "featured": true
       },
       {
         "initials": "CL",
@@ -84,7 +86,11 @@
         "role": "Operáció",
         "body": "A bevezetéseket, a munkáltatói kapcsolatokat és a napi működést kezeli mindkét országban."
       }
-    ]
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "A NestSelf stúdió munkaterülete Belgrádban"
+    }
   },
   "whereWeAre": {
     "title": "Hol találsz minket",

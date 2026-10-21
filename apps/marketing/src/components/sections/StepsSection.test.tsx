@@ -26,16 +26,46 @@ describe('StepsSection', () => {
     expect(h3s[0]).toHaveTextContent('Step 1');
   });
 
-  it('renders numbered eyebrows starting at 01', () => {
-    render(<StepsSection {...baseProps} />);
-    expect(screen.getByText('01')).toBeInTheDocument();
-    expect(screen.getByText('02')).toBeInTheDocument();
-    expect(screen.getByText('03')).toBeInTheDocument();
-  });
-
-  it('renders as an ordered list', () => {
+  it('renders as an ordered list with N items', () => {
     render(<StepsSection {...baseProps} />);
     expect(screen.getByRole('list')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('renders plain number markers 1..N that are aria-hidden', () => {
+    const { container } = render(<StepsSection {...baseProps} />);
+    const markers = container.querySelectorAll('[aria-hidden="true"].rounded-full');
+    expect(markers).toHaveLength(3);
+    expect(markers[0]!.textContent).toBe('1');
+    expect(markers[1]!.textContent).toBe('2');
+    expect(markers[2]!.textContent).toBe('3');
+  });
+
+  it('renders optional lead when given', () => {
+    render(<StepsSection {...baseProps} lead="A short lead paragraph." />);
+    expect(screen.getByText('A short lead paragraph.')).toBeInTheDocument();
+  });
+
+  it('does not render lead when omitted', () => {
+    const { container } = render(<StepsSection {...baseProps} />);
+    // No bodyLarge text should appear beyond the step bodies
+    expect(container.querySelector('[class*="bodyLarge"]')).toBeNull();
+  });
+
+  it('renders a photo when the photo prop is given', () => {
+    render(
+      <StepsSection
+        {...baseProps}
+        photo={{ key: 'employees-break', alt: 'Colleagues on a break' }}
+      />,
+    );
+    const img = screen.getByRole('img', { name: 'Colleagues on a break' });
+    expect(img).toBeInTheDocument();
+  });
+
+  it('does not render a photo when the photo prop is omitted', () => {
+    render(<StepsSection {...baseProps} />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('has no axe violations', async () => {

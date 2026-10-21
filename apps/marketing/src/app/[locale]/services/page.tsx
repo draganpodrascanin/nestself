@@ -9,6 +9,9 @@ import { SplitSection } from '@/components/sections/SplitSection';
 import { StepsSection } from '@/components/sections/StepsSection';
 import { FaqSection } from '@/components/sections/FaqSection';
 import { CtaBand } from '@/components/sections/CtaBand';
+import { SECTION_PADDING } from '@/components/sections/section';
+import { Card, Heading, Text, TextLink, PhotoFigure } from '@nestself/ui';
+import { iconMap, type IconName } from '@/components/sections/icons';
 import { loadContent } from './content';
 
 interface Params {
@@ -40,6 +43,8 @@ export default async function ServicesPage({
   if (!isLocale(locale)) notFound();
   const { data } = await loadContent(locale as Locale);
 
+  const [featured, ...secondary] = data.pillars;
+
   return (
     <main id="main" tabIndex={-1} className="@container">
       <PageHero
@@ -51,20 +56,55 @@ export default async function ServicesPage({
         variant="split"
       />
 
-      {data.pillars.map((pillar, i) => (
+      {/* Featured pillar (therapy) as a SplitSection */}
+      {featured && (
         <SplitSection
-          key={pillar.id}
-          id={pillar.id}
-          title={pillar.title}
-          paragraphs={pillar.paragraphs}
+          id={featured.id}
+          title={featured.title}
+          paragraphs={featured.paragraphs}
           photo={{
-            key: pillar.photo.key as PhotoKey,
-            alt: pillar.photo.alt,
+            key: featured.photo.key as PhotoKey,
+            alt: featured.photo.alt,
           }}
-          reverse={i % 2 === 1}
-          cta={pillar.cta}
+          cta={featured.cta}
         />
-      ))}
+      )}
+
+      {/* Secondary pillars as side-by-side Cards */}
+      {secondary.length > 0 && (
+        <div className={`grid grid-cols-2 gap-6 @max-[760px]:grid-cols-1 ${SECTION_PADDING}`}>
+          {secondary.map((pillar) => {
+            const Icon = pillar.icon ? iconMap[pillar.icon as IconName] : undefined;
+            return (
+              <Card key={pillar.id} as="article" padding="none" className="flex flex-col overflow-hidden">
+                <PhotoFigure
+                  photo={pillar.photo.key as PhotoKey}
+                  alt={pillar.photo.alt}
+                  imageRole="card"
+                  sizes="(max-width: 760px) 100vw, 50vw"
+                  className="overflow-hidden rounded-t-card"
+                />
+                <div className="flex flex-1 flex-col gap-3 p-5">
+                  {Icon && (
+                    <div className="w-11 h-11 rounded-control bg-accent-soft text-primary grid place-items-center">
+                      <Icon size={24} aria-hidden />
+                    </div>
+                  )}
+                  <Heading level={3} typeRole="sectionTitle">
+                    {pillar.title}
+                  </Heading>
+                  <Text tone="secondary">{pillar.paragraphs[0]}</Text>
+                  {pillar.cta && (
+                    <TextLink href={pillar.cta.href} trailingArrow className="mt-auto">
+                      {pillar.cta.label}
+                    </TextLink>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <StepsSection
         id="how-it-works"

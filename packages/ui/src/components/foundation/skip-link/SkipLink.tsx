@@ -17,7 +17,7 @@ export function SkipLink({
       href={href}
       className={cn(
         'fixed left-0 top-0 z-[var(--z-sticky)] -translate-y-full bg-primary px-4 py-2 text-on-primary type-label transition-transform duration-[var(--motion-fast)]',
-        'focus:translate-y-0',
+        'focus-visible:translate-y-0',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
         className,
       )}

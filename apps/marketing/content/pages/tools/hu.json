@@ -38,7 +38,11 @@
     "yourScore": "A pontszámod: {score} / {max}",
     "nothingStored": "A válaszaid nem kerültek tárolásra és nem lettek elküldve sehova.",
     "talkToSomeone": "Beszélj egy szakemberrel",
-    "relatedReading": "Fedezz fel kapcsolódó anyagokat"
+    "relatedReading": "Fedezz fel kapcsolódó anyagokat",
+    "whatToExpect": "Mire számíthatsz",
+    "instantResult": "Az eredményt azonnal látod, javasolt következő lépésekkel.",
+    "questions": "{count} kérdés",
+    "minutes": "{minutes} perc"
   },
   "introPhotoAlt": {
     "psychological": "Egy személy a kanapén ülve gondolkodik a jóllétéről",

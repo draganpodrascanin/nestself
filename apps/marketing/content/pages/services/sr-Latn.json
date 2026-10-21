@@ -28,7 +28,8 @@
         "Kvalifikovani pravni stručnjak pregleda Vašu situaciju i pruža pisani pregled narednih koraka."
       ],
       "photo": { "key": "legal-consultation", "alt": "Konsultacija sa pravnim stručnjakom za stolom" },
-      "cta": { "label": "Saznajte više", "href": "/services/legal-consultation" }
+      "cta": { "label": "Saznajte više", "href": "/services/legal-consultation" },
+      "icon": "scales"
     },
     {
       "id": "financial",
@@ -38,7 +39,8 @@
         "Naši konsultanti ne prodaju proizvode i ne primaju provizije — njihovi saveti su u potpunosti u Vašem interesu."
       ],
       "photo": { "key": "financial-planning", "alt": "Osoba pregleda finansijske planove sa konsultantom" },
-      "cta": { "label": "Saznajte više", "href": "/services/financial-guidance" }
+      "cta": { "label": "Saznajte više", "href": "/services/financial-guidance" },
+      "icon": "wallet"
     }
   ],
   "steps": {

@@ -28,7 +28,8 @@
         "Egy képzett jogi szakember áttekinti a helyzetedet, és írásos összefoglalót készít a következő lépésekről."
       ],
       "photo": { "key": "legal-consultation", "alt": "Jogi tanácsadás egy íróasztalnál" },
-      "cta": { "label": "Tudj meg többet", "href": "/services/legal-consultation" }
+      "cta": { "label": "Tudj meg többet", "href": "/services/legal-consultation" },
+      "icon": "scales"
     },
     {
       "id": "financial",
@@ -38,7 +39,8 @@
         "Tanácsadóink nem értékesítenek termékeket és nem kapnak jutalékot — tanácsaik kizárólag a te érdekeidet szolgálják."
       ],
       "photo": { "key": "financial-planning", "alt": "Egy személy pénzügyi terveket tekint át egy tanácsadóval" },
-      "cta": { "label": "Tudj meg többet", "href": "/services/financial-guidance" }
+      "cta": { "label": "Tudj meg többet", "href": "/services/financial-guidance" },
+      "icon": "wallet"
     }
   ],
   "steps": {

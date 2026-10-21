@@ -7,20 +7,20 @@ import { FeatureGrid } from './FeatureGrid';
 import { StepsSection } from './StepsSection';
 import { FaqSection } from './FaqSection';
 import { TestimonialsSection } from './TestimonialsSection';
-import type { Testimonial } from './TestimonialsSection';
+import type { SampleTestimonial } from '@nestself/sample-data';
 import { CtaBand } from './CtaBand';
 import { TrustStrip } from './TrustStrip';
 import { PlansSection } from './PlansSection';
 import { ResourceTeasers } from './ResourceTeasers';
 import { ProseLayout } from './ProseLayout';
 
-const sampleTestimonials: Testimonial[] = [
+const sampleTestimonials: SampleTestimonial[] = [
   {
     id: 'vis-1',
     placeholder: true,
     name: 'Jelena M.',
-    role: 'HR Director',
-    company: 'logistics company',
+    role: { en: 'HR Director', 'sr-Latn': 'Direktorka ljudskih resursa', 'sr-Cyrl': 'Директорка људских ресурса', hu: 'HR-igazgató' },
+    company: { en: 'logistics company', 'sr-Latn': 'logistička kompanija', 'sr-Cyrl': 'логистичка компанија', hu: 'logisztikai vállalat' },
     country: 'RS',
     quote: { en: 'Great experience.', 'sr-Latn': 'Odlično iskustvo.', 'sr-Cyrl': 'Одлично искуство.', hu: 'Remek élmény.' },
   },
@@ -28,8 +28,8 @@ const sampleTestimonials: Testimonial[] = [
     id: 'vis-2',
     placeholder: true,
     name: 'Marko T.',
-    role: 'People Lead',
-    company: 'tech firm',
+    role: { en: 'People Lead', 'sr-Latn': 'People Lead', 'sr-Cyrl': 'People Lead', hu: 'People Lead' },
+    company: { en: 'tech firm', 'sr-Latn': 'IT firma', 'sr-Cyrl': 'ИТ фирма', hu: 'tech cég' },
     country: 'RS',
     quote: { en: 'Easy to use.', 'sr-Latn': 'Lako za korišćenje.', 'sr-Cyrl': 'Лако за коришћење.', hu: 'Könnyen használható.' },
   },

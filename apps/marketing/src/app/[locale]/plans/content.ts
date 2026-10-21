@@ -17,6 +17,8 @@ const schema = z.object({
       audience: z.string(),
       includes: z.array(z.string()),
       cta: ctaSchema,
+      recommended: z.boolean().optional(),
+      recommendedLabel: z.string().optional(),
     }),
   ),
   note: z.string(),

@@ -7,11 +7,18 @@ import {
   ProgressBar,
   LinkButton,
   Text,
+  Heading,
   AnnouncerProvider,
   useAnnounce,
   cn,
 } from '@nestself/ui';
 import { Button } from '@nestself/ui';
+import {
+  ListNumbers,
+  Timer,
+  ShieldCheck,
+  Lightning,
+} from '@phosphor-icons/react/dist/ssr';
 import { scoreAssessment } from './scoring';
 import type { Assessment } from '@/content/schemas';
 
@@ -27,6 +34,10 @@ export interface AssessmentRunnerLabels {
   nothingStored: string;
   talkToSomeone: string;
   relatedReading: string;
+  whatToExpect?: string;
+  instantResult?: string;
+  questions?: string;
+  minutes?: string;
 }
 
 export interface AssessmentRunnerProps {
@@ -61,18 +72,6 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
 
   /**
    * Apply pending focus after React commits the new DOM.
-   *
-   * The previous implementation used requestAnimationFrame, which fires on
-   * the macrotask queue.  In jsdom rAF is backed by setTimeout(cb, 0) and
-   * is NOT flushed by testing-library's act(), so the callback could fire
-   * between async test steps and steal focus from whatever element the test
-   * had just focused -- the root cause of the intermittent keyboard-test
-   * failure.
-   *
-   * useEffect fires synchronously inside act() boundaries in tests and
-   * after the DOM commit in the browser, eliminating the race while keeping
-   * the same user-facing behaviour: focus moves to the new heading on each
-   * phase / step transition.
    */
   useEffect(() => {
     const ref = pendingFocusRef.current;
@@ -161,6 +160,39 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
           {assessment.title}
         </h2>
         <Button onClick={handleStart}>{labels.start}</Button>
+
+        {/* A22: What to expect block */}
+        {labels.whatToExpect && (
+          <div className="mt-10">
+            <Heading level={2} typeRole="sectionTitle" className="mb-4">
+              {labels.whatToExpect}
+            </Heading>
+            <ul className="space-y-3 list-none m-0 p-0">
+              {labels.questions && (
+                <li className="flex items-start gap-3">
+                  <ListNumbers size={20} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
+                  <Text>{labels.questions.replace('{count}', String(totalQuestions))}</Text>
+                </li>
+              )}
+              {labels.minutes && (
+                <li className="flex items-start gap-3">
+                  <Timer size={20} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
+                  <Text>{labels.minutes.replace('{minutes}', String(assessment.durationMinutes))}</Text>
+                </li>
+              )}
+              <li className="flex items-start gap-3">
+                <ShieldCheck size={20} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
+                <Text>{labels.nothingStored}</Text>
+              </li>
+              {labels.instantResult && (
+                <li className="flex items-start gap-3">
+                  <Lightning size={20} weight="duotone" className="text-primary shrink-0 mt-0.5" aria-hidden />
+                  <Text>{labels.instantResult}</Text>
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
       </section>
     );
   }
@@ -198,7 +230,11 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
           ))}
         </RadioGroup>
 
-        <div className="gap-4 flex flex-wrap">
+        {/* Phone pass: flex-col-reverse under 420px with full-width buttons */}
+        <div className={cn(
+          'gap-4 flex flex-wrap',
+          '@max-[420px]:flex-col-reverse @max-[420px]:[&>button]:w-full',
+        )}>
           {step > 0 && (
             <Button variant="secondary" onClick={handleBack}>
               {labels.back}
@@ -284,6 +320,7 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
           {labels.nothingStored}
         </Text>
 
+        {/* A23: Two primary buttons, then ghost "Start again" */}
         <div className="gap-4 mb-6 flex flex-wrap">
           <LinkButton href={links.talk}>{labels.talkToSomeone}</LinkButton>
           <LinkButton href={links.related} variant="secondary">
@@ -291,7 +328,7 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
           </LinkButton>
         </div>
 
-        <Button variant="secondary" onClick={handleRestart}>
+        <Button variant="ghost" onClick={handleRestart}>
           {labels.restart}
         </Button>
       </section>

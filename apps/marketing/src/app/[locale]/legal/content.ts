@@ -19,7 +19,7 @@ export const legalPageSchema = z.object({
 
 export type LegalPageData = z.infer<typeof legalPageSchema>;
 
-const LEGAL_PAGES = {
+export const LEGAL_PAGES = {
   'privacy-policy': 'legal-privacy-policy',
   'terms': 'legal-terms',
   'cookies': 'legal-cookies',

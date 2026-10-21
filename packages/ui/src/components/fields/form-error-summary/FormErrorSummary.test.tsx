@@ -48,6 +48,19 @@ describe('FormErrorSummary', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
+  it('has danger styling (border-danger and bg-danger-surface)', () => {
+    render(
+      <div>
+        <FormErrorSummary title="Fix errors" errors={errors} />
+        <input id="name-input" aria-label="Name" />
+        <input id="email-input" aria-label="Email" />
+      </div>,
+    );
+    const alert = screen.getByRole('alert');
+    expect(alert.className).toContain('border-danger');
+    expect(alert.className).toContain('bg-danger-surface');
+  });
+
   it('passes axe a11y check', async () => {
     const { container } = render(
       <div>

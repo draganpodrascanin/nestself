@@ -5,7 +5,13 @@ import type { Locale } from '@nestself/i18n';
 import { Heading, Text, Breadcrumbs } from '@nestself/ui';
 import { localizedMetadata } from '@/i18n/metadata';
 import { ProseLayout } from '@/components/sections';
-import { isLegalPageSlug, loadLegalContent, type LegalPageSlug } from '../content';
+import { LegalToc, slugify } from '@/components/reading/LegalToc';
+import {
+  isLegalPageSlug,
+  loadLegalContent,
+  type LegalPageSlug,
+  LEGAL_PAGES,
+} from '../content';
 
 interface Params { locale: string; slug: string }
 
@@ -26,7 +32,34 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
   if (!isLocale(locale) || !isLegalPageSlug(slug)) notFound();
 
   const typedLocale = locale as Locale;
-  const { data } = await loadLegalContent(slug as LegalPageSlug, typedLocale);
+  const typedSlug = slug as LegalPageSlug;
+  const { data } = await loadLegalContent(typedSlug, typedLocale);
+
+  // Build TOC sections with slugified IDs
+  const tocSections = data.sections.map((section) => ({
+    heading: section.heading,
+    id: slugify(section.heading),
+  }));
+
+  // Build other legal pages list (all except the current one)
+  const otherPages = await Promise.all(
+    (Object.keys(LEGAL_PAGES) as LegalPageSlug[])
+      .filter((s) => s !== typedSlug)
+      .map(async (s) => {
+        const { data: d } = await loadLegalContent(s, typedLocale);
+        return { label: d.title, href: `/${locale}/legal/${s}` };
+      }),
+  );
+
+  const tocAside = (
+    <LegalToc
+      sections={tocSections}
+      otherPages={otherPages}
+      otherPagesHeading={data.breadcrumb.label}
+      navLabel={data.breadcrumb.label}
+      navLabelId="legal-toc-heading"
+    />
+  );
 
   return (
     <main id="main" tabIndex={-1} className="@container">
@@ -46,12 +79,16 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
         </Text>
       </div>
 
-      <ProseLayout>
+      <ProseLayout aside={tocAside}>
         <Text typeRole="bodyLarge" tone="secondary">{data.intro}</Text>
 
-        <div className="space-y-10 mt-10">
+        <div className="space-y-10 @max-[760px]:space-y-6 mt-10">
           {data.sections.map((section, i) => (
-            <section key={i} className="space-y-4">
+            <section
+              key={i}
+              id={slugify(section.heading)}
+              className={i > 0 ? 'border-t border-border-subtle pt-8 space-y-4' : 'space-y-4'}
+            >
               <Heading level={2} typeRole="sectionTitle">
                 {section.heading}
               </Heading>

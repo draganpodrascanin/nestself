@@ -1,4 +1,4 @@
-import { locales, localeMeta } from '@nestself/i18n';
+import { locales, defaultLocale, localeMeta } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import type { Metadata } from 'next';
 
@@ -7,13 +7,13 @@ export const SITE_URL =
 
 const metadataBase = new URL(SITE_URL);
 
-export function localeAlternates(pathname: string) {
-  const canonical = `${SITE_URL}/en${pathname}`;
+export function localeAlternates(pathname: string, locale: Locale) {
+  const canonical = `${SITE_URL}/${locale}${pathname}`;
   const languages: Record<string, string> = {};
-  for (const locale of locales) {
-    languages[localeMeta[locale].hreflang] = `${SITE_URL}/${locale}${pathname}`;
+  for (const loc of locales) {
+    languages[localeMeta[loc].hreflang] = `${SITE_URL}/${loc}${pathname}`;
   }
-  languages['x-default'] = `${SITE_URL}/en${pathname}`;
+  languages['x-default'] = `${SITE_URL}/${defaultLocale}${pathname}`;
   return { canonical, languages };
 }
 
@@ -28,7 +28,7 @@ export function localizedMetadata({
   description?: string;
   pathname: string;
 }): Metadata {
-  const alternates = localeAlternates(pathname);
+  const alternates = localeAlternates(pathname, locale);
   return {
     metadataBase,
     title,

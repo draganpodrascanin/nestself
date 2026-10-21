@@ -57,7 +57,7 @@ export default async function LocaleLayout({
     name: 'NestSelf',
     url: SITE_URL,
     areaServed: ['RS', 'HU'],
-    availableLanguage: ['en', 'sr', 'hu'],
+    availableLanguage: ['sr', 'hu', 'en'],
   };
 
   const webSiteLd = {

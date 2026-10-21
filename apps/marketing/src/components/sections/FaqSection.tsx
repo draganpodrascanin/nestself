@@ -1,6 +1,7 @@
 import { Heading, Accordion, AccordionItem } from '@nestself/ui';
 import { cn } from '@nestself/ui';
 import { JsonLd } from '../seo/JsonLd';
+import { SECTION_PADDING } from './section';
 
 export interface FaqItem {
   question: string;
@@ -31,7 +32,7 @@ export function FaqSection({ id, title, items, className }: FaqSectionProps) {
   };
 
   return (
-    <section id={id} aria-labelledby={headingId} className={cn('py-16', className)}>
+    <section id={id} aria-labelledby={headingId} className={cn(SECTION_PADDING, className)}>
       <Heading level={2} id={headingId} className="mb-8">
         {title}
       </Heading>

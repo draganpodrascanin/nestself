@@ -70,6 +70,11 @@
   "steps": {
     "eyebrow": "How it works",
     "title": "How it works for employees",
+    "lead": "Four steps from your first sign-in to a conversation with a professional.",
+    "photo": {
+      "key": "employees-break",
+      "alt": "Colleagues taking a short break outside the office"
+    },
     "steps": [
       {
         "title": "Activate with your work email",
@@ -130,7 +135,8 @@
   },
   "testimonials": {
     "title": "What organisations say",
-    "lead": "Sample data. Partner stories will appear here as organisations join NestSelf."
+    "badge": "Sample data",
+    "lead": "Partner stories will appear here as organisations join NestSelf."
   },
   "faq": {
     "title": "Frequently asked questions",
