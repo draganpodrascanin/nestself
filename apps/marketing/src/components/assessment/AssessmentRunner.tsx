@@ -260,7 +260,7 @@ function AssessmentRunnerInner({
           </Text>
           <ul className="list-none m-0 p-0 space-y-1">
             {assessment.crisis.lines.map((line) => (
-              <li key={line.value} className="flex gap-2">
+              <li key={`${line.label}-${line.value}`} className="flex gap-2">
                 <Text as="span" typeRole="label">
                   {line.label}:
                 </Text>
