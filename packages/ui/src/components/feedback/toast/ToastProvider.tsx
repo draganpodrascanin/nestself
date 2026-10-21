@@ -1,4 +1,4 @@
-import { X } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react/dist/ssr';
 import { Toast as BaseToast } from '@base-ui/react/toast';
 import { cn } from '../../../lib/cn';
 
@@ -25,15 +25,13 @@ export function ToastProvider({ children, labels }: ToastProviderProps) {
 function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
   const manager = BaseToast.useToastManager<ToastData>();
   return (
-    <BaseToast.Viewport
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[var(--z-toast)] flex flex-col gap-2 max-w-[calc(100%-2rem)]"
-    >
+    <BaseToast.Viewport className="bottom-6 gap-2 fixed left-1/2 z-[var(--z-toast)] flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col">
       {manager.toasts.map((toast) => (
         <BaseToast.Root
           key={toast.id}
           toast={toast}
           className={cn(
-            'relative bg-primary text-on-primary shadow-menu rounded-control px-6 py-4 type-body',
+            'px-6 py-4 relative rounded-control bg-primary type-body text-on-primary shadow-menu',
           )}
         >
           <BaseToast.Title className="font-[var(--font-weight-label)]">
@@ -46,7 +44,7 @@ function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
           ) : null}
           <BaseToast.Close
             className={cn(
-              'absolute top-2 right-2 inline-flex items-center justify-center min-h-8 min-w-8 rounded-control',
+              'top-2 right-2 min-h-8 min-w-8 absolute inline-flex items-center justify-center rounded-control',
               'text-on-primary opacity-70 hover:opacity-100',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             )}

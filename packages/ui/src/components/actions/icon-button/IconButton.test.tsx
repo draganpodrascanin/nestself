@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { IconButton } from './IconButton';
-import { Heart } from '@phosphor-icons/react';
+import { Heart } from '@phosphor-icons/react/dist/ssr';
 import { expectNoA11yViolations } from '../../../test/axe';
 
 describe('IconButton', () => {

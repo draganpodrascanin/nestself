@@ -1,3 +1,5 @@
+'use client';
+
 import { useRef, useEffect } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -56,13 +58,13 @@ export function ChatComposer({
   };
 
   return (
-    <div className={cn('bg-surface border-t border-border-subtle px-5 py-5', className)}>
+    <div className={cn('px-5 py-5 border-t border-border-subtle bg-surface', className)}>
       {draftState === 'failed' ? (
-        <p className="type-metadata text-danger mb-2" role="alert">
+        <p className="mb-2 type-metadata text-danger" role="alert">
           {labels.failedNotice}
         </p>
       ) : null}
-      <div className="flex gap-3 items-end">
+      <div className="gap-3 flex items-end">
         <label className="flex-1">
           <span className="sr-only">{labels.message}</span>
           <input
@@ -75,7 +77,7 @@ export function ChatComposer({
             aria-readonly={draftState === 'failed' || undefined}
             placeholder={labels.message}
             className={cn(
-              'w-full min-h-11 rounded-control border border-border-control bg-surface px-3 py-2 type-body',
+              'min-h-11 px-3 py-2 w-full rounded-control border border-border-control bg-surface type-body',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
               'pointer-coarse:min-h-12',
               draftState === 'failed' && 'opacity-70',
@@ -88,7 +90,7 @@ export function ChatComposer({
             type="button"
             onClick={handleSend}
             className={cn(
-              'inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-control border border-transparent bg-primary text-on-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
+              'min-h-11 px-5 py-2.5 inline-flex items-center justify-center rounded-control border border-transparent bg-primary type-body font-[var(--font-weight-label)] text-on-primary transition-colors duration-[var(--motion-fast)]',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
               'pointer-coarse:min-h-12',
             )}
@@ -102,9 +104,9 @@ export function ChatComposer({
             disabled={!value.trim() || draftState === 'sending'}
             aria-busy={draftState === 'sending' || undefined}
             className={cn(
-              'inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-control border border-transparent bg-primary text-on-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
+              'min-h-11 px-5 py-2.5 inline-flex items-center justify-center rounded-control border border-transparent bg-primary type-body font-[var(--font-weight-label)] text-on-primary transition-colors duration-[var(--motion-fast)]',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-              'disabled:bg-disabled-surface disabled:text-disabled-text disabled:cursor-not-allowed',
+              'disabled:cursor-not-allowed disabled:bg-disabled-surface disabled:text-disabled-text',
               'pointer-coarse:min-h-12',
             )}
           >

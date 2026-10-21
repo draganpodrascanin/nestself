@@ -1,3 +1,5 @@
+'use client';
+
 import { Switch as BaseSwitch } from '@base-ui/react/switch';
 import { useId } from 'react';
 import type { ReactNode } from 'react';
@@ -26,12 +28,16 @@ export function Switch({
   return (
     <label
       className={cn(
-        'inline-flex items-center gap-3 min-h-12 cursor-pointer',
+        'gap-3 min-h-12 inline-flex cursor-pointer items-center',
         disabled && 'cursor-not-allowed opacity-60',
         className,
       )}
     >
-      {children ? <span id={labelId} className="type-body text-text">{children}</span> : null}
+      {children ? (
+        <span id={labelId} className="type-body text-text">
+          {children}
+        </span>
+      ) : null}
       <BaseSwitch.Root
         checked={checked}
         defaultChecked={defaultChecked}
@@ -40,7 +46,7 @@ export function Switch({
         name={name}
         aria-labelledby={children ? labelId : undefined}
         className={cn(
-          'relative inline-flex items-center w-10 h-6 rounded-pill bg-border-control transition-colors duration-[var(--motion-standard)]',
+          'w-10 h-6 relative inline-flex items-center rounded-pill bg-border-control transition-colors duration-[var(--motion-standard)]',
           'data-checked:bg-primary',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
           'data-disabled:opacity-50',
@@ -48,7 +54,7 @@ export function Switch({
       >
         <BaseSwitch.Thumb
           className={cn(
-            'block size-[1.2rem] rounded-full bg-surface shadow-sm transition-transform duration-[var(--motion-standard)] translate-x-0.5',
+            'shadow-sm translate-x-0.5 block size-[1.2rem] rounded-full bg-surface transition-transform duration-[var(--motion-standard)]',
             'data-checked:translate-x-4',
           )}
         />

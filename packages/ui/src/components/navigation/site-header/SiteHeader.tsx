@@ -1,6 +1,8 @@
+'use client';
+
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { List, X } from '@phosphor-icons/react';
+import { List, X } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
 
 export interface SiteHeaderLink {
@@ -37,7 +39,7 @@ export function SiteHeader({
   return (
     <header
       className={cn(
-        '@container flex flex-wrap items-center justify-between gap-8 py-6 border-b border-border-subtle',
+        'gap-8 py-6 @container flex flex-wrap items-center justify-between border-b border-border-subtle',
         'max-[760px]:gap-2 max-[760px]:py-4',
         className,
       )}
@@ -52,7 +54,7 @@ export function SiteHeader({
         aria-controls={navId}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          'hidden @max-[760px]:inline-flex items-center justify-center min-h-11 min-w-11 rounded-control pointer-coarse:min-h-12 pointer-coarse:min-w-12',
+          'min-h-11 min-w-11 pointer-coarse:min-h-12 pointer-coarse:min-w-12 hidden items-center justify-center rounded-control @max-[760px]:inline-flex',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
         )}
         aria-label={open ? closeLabel : menuLabel}
@@ -63,8 +65,8 @@ export function SiteHeader({
       <nav
         id={navId}
         className={cn(
-          'flex items-center gap-8',
-          '@max-[760px]:hidden @max-[760px]:flex-[0_0_100%] @max-[760px]:flex-col @max-[760px]:items-stretch @max-[760px]:gap-1 @max-[760px]:pt-4',
+          'gap-8 flex items-center',
+          '@max-[760px]:gap-1 @max-[760px]:pt-4 @max-[760px]:hidden @max-[760px]:flex-[0_0_100%] @max-[760px]:flex-col @max-[760px]:items-stretch',
           open && '@max-[760px]:flex',
         )}
       >
@@ -74,8 +76,8 @@ export function SiteHeader({
             href={link.href}
             aria-current={link.current ? 'page' : undefined}
             className={cn(
-              'text-text no-underline type-body hover:text-primary hover:underline',
-              'min-h-11 flex items-center @max-[760px]:px-3 @max-[760px]:min-h-12',
+              'type-body text-text no-underline hover:text-primary hover:underline',
+              'min-h-11 @max-[760px]:px-3 @max-[760px]:min-h-12 flex items-center',
               'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             )}
           >

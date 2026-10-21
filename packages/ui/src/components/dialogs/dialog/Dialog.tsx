@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
-import { X } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react/dist/ssr';
 import { Children, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
@@ -32,9 +32,7 @@ export interface DialogTriggerProps {
  */
 export function DialogTrigger({ children, className }: DialogTriggerProps) {
   if (isSingleElement(children)) {
-    return (
-      <BaseDialog.Trigger render={children as ReactElement} className={className} />
-    );
+    return <BaseDialog.Trigger render={children as ReactElement} className={className} />;
   }
   return <BaseDialog.Trigger className={className}>{children}</BaseDialog.Trigger>;
 }
@@ -65,26 +63,24 @@ export function DialogContent({
 }: DialogContentProps) {
   return (
     <BaseDialog.Portal>
-      <BaseDialog.Backdrop className="fixed inset-0 bg-scrim z-[var(--z-scrim)]" />
+      <BaseDialog.Backdrop className="inset-0 fixed z-[var(--z-scrim)] bg-scrim" />
       <BaseDialog.Popup
         aria-modal="true"
         className={cn(
-          'fixed inset-0 m-auto h-fit w-[min(calc(100%-2rem),37rem)] max-h-[min(85vh,52rem)] overflow-auto',
-          'rounded-modal border border-border-subtle bg-surface p-8 pointer-coarse:p-6 shadow-modal z-[var(--z-dialog)]',
+          'inset-0 fixed m-auto h-fit max-h-[min(85vh,52rem)] w-[min(calc(100%-2rem),37rem)] overflow-auto',
+          'p-8 pointer-coarse:p-6 z-[var(--z-dialog)] rounded-modal border border-border-subtle bg-surface shadow-modal',
           className,
         )}
       >
-        <BaseDialog.Title className="type-section-title pr-8 mb-5">
-          {title}
-        </BaseDialog.Title>
+        <BaseDialog.Title className="pr-8 mb-5 type-section-title">{title}</BaseDialog.Title>
         {description ? (
-          <BaseDialog.Description className="text-text-secondary mb-4">
+          <BaseDialog.Description className="mb-4 text-text-secondary">
             {description}
           </BaseDialog.Description>
         ) : null}
         <BaseDialog.Close
           className={cn(
-            'absolute right-4 top-4 inline-flex items-center justify-center min-h-11 min-w-11 rounded-control bg-surface text-text border-0',
+            'right-4 top-4 min-h-11 min-w-11 absolute inline-flex items-center justify-center rounded-control border-0 bg-surface text-text',
             'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             'pointer-coarse:min-h-12 pointer-coarse:min-w-12',
           )}
@@ -104,9 +100,5 @@ export interface DialogActionsProps {
 }
 
 export function DialogActions({ children, className }: DialogActionsProps) {
-  return (
-    <div className={cn('flex flex-wrap justify-end gap-3 mt-7', className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn('gap-3 mt-7 flex flex-wrap justify-end', className)}>{children}</div>;
 }

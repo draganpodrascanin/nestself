@@ -1,5 +1,5 @@
 import { Accordion as BaseAccordion } from '@base-ui/react/accordion';
-import { CaretDown } from '@phosphor-icons/react';
+import { CaretDown } from '@phosphor-icons/react/dist/ssr';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -33,11 +33,7 @@ export function Accordion({
       multiple={multiple}
       defaultValue={defaultValue}
       value={value}
-      onValueChange={
-        onValueChange
-          ? (val) => onValueChange(val as string[])
-          : undefined
-      }
+      onValueChange={onValueChange ? (val) => onValueChange(val as string[]) : undefined}
       className={cn('divide-y divide-border-subtle', className)}
     >
       {children}
@@ -68,21 +64,16 @@ export function AccordionItem({
   headingLevel,
   className,
 }: AccordionItemProps) {
-  const HeaderTag = headingLevel
-    ? (`h${headingLevel}` as const)
-    : undefined;
+  const HeaderTag = headingLevel ? (`h${headingLevel}` as const) : undefined;
 
   return (
     <BaseAccordion.Item value={value} className={className}>
-      <BaseAccordion.Header
-        {...(HeaderTag ? { render: <HeaderTag /> } : {})}
-        className="m-0"
-      >
+      <BaseAccordion.Header {...(HeaderTag ? { render: <HeaderTag /> } : {})} className="m-0">
         <BaseAccordion.Trigger
           className={cn(
-            'group flex w-full items-center justify-between gap-3',
-            'min-h-11 px-0 py-3 type-body text-text cursor-pointer',
-            'bg-transparent border-0 text-left',
+            'group gap-3 flex w-full items-center justify-between',
+            'min-h-11 px-0 py-3 cursor-pointer type-body text-text',
+            'border-0 bg-transparent text-left',
             'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             'pointer-coarse:min-h-12',
           )}

@@ -1,4 +1,4 @@
-import { WarningCircle } from '@phosphor-icons/react';
+import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
 
 export interface SampleDataBannerProps {
@@ -11,7 +11,7 @@ export function SampleDataBanner({ message, className }: SampleDataBannerProps) 
     <div
       role="note"
       className={cn(
-        'sticky top-0 z-50 flex items-center gap-3 min-h-11 px-4 py-2 bg-warning-surface text-warning type-metadata font-[var(--font-weight-label)]',
+        'top-0 gap-3 min-h-11 px-4 py-2 sticky z-50 flex items-center bg-warning-surface type-metadata font-[var(--font-weight-label)] text-warning',
         className,
       )}
     >

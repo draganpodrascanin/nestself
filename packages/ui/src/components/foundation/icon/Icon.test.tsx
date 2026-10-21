@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CategoryIcon, NavIcon, Icon } from './Icon';
-import { Heart } from '@phosphor-icons/react';
+import { Heart } from '@phosphor-icons/react/dist/ssr';
 
 describe('Icon', () => {
   it('renders aria-hidden when no label', () => {
@@ -31,9 +31,7 @@ describe('CategoryIcon', () => {
 
 describe('NavIcon', () => {
   it('uses fill weight when active', () => {
-    const { container, rerender } = render(
-      <NavIcon icon={Heart} active label="Home" />,
-    );
+    const { container, rerender } = render(<NavIcon icon={Heart} active label="Home" />);
     const svg = container.querySelector('svg');
     expect(svg).toBeTruthy();
 

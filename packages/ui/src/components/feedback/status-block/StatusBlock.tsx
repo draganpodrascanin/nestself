@@ -7,7 +7,7 @@ import {
   Clock,
   LockKey,
   ShieldCheck,
-} from '@phosphor-icons/react';
+} from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
 import { Icon } from '../../foundation/icon/Icon';
 import { Skeleton } from '../skeleton/Skeleton';

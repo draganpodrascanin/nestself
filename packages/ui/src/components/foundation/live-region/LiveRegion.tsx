@@ -1,10 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from 'react';
+'use client';
+
+import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export interface LiveRegionProps {
@@ -42,12 +38,7 @@ export function AnnouncerProvider({ children }: AnnouncerProviderProps) {
   return (
     <AnnounceCtx.Provider value={{ announce }}>
       {children}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </div>
     </AnnounceCtx.Provider>

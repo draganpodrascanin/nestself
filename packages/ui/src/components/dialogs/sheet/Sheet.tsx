@@ -1,5 +1,5 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
-import { X } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react/dist/ssr';
 import { Children, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
@@ -32,9 +32,7 @@ export interface SheetTriggerProps {
  */
 export function SheetTrigger({ children, className }: SheetTriggerProps) {
   if (isSingleElement(children)) {
-    return (
-      <BaseDialog.Trigger render={children as ReactElement} className={className} />
-    );
+    return <BaseDialog.Trigger render={children as ReactElement} className={className} />;
   }
   return <BaseDialog.Trigger className={className}>{children}</BaseDialog.Trigger>;
 }
@@ -65,26 +63,24 @@ export function SheetContent({
 }: SheetContentProps) {
   return (
     <BaseDialog.Portal>
-      <BaseDialog.Backdrop className="fixed inset-0 bg-scrim z-[var(--z-scrim)]" />
+      <BaseDialog.Backdrop className="inset-0 fixed z-[var(--z-scrim)] bg-scrim" />
       <BaseDialog.Popup
         aria-modal="true"
         className={cn(
-          'fixed bottom-0 left-0 right-0 rounded-t-sheet bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-modal z-[var(--z-dialog)]',
+          'bottom-0 left-0 right-0 p-6 fixed z-[var(--z-dialog)] rounded-t-sheet bg-surface pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-modal',
           'max-h-[min(85vh,52rem)] overflow-auto',
           className,
         )}
       >
-        <BaseDialog.Title className="type-section-title pr-8 mb-4">
-          {title}
-        </BaseDialog.Title>
+        <BaseDialog.Title className="pr-8 mb-4 type-section-title">{title}</BaseDialog.Title>
         {description ? (
-          <BaseDialog.Description className="text-text-secondary mb-4">
+          <BaseDialog.Description className="mb-4 text-text-secondary">
             {description}
           </BaseDialog.Description>
         ) : null}
         <BaseDialog.Close
           className={cn(
-            'absolute right-4 top-4 inline-flex items-center justify-center min-h-11 min-w-11 rounded-control bg-surface text-text border-0',
+            'right-4 top-4 min-h-11 min-w-11 absolute inline-flex items-center justify-center rounded-control border-0 bg-surface text-text',
             'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
             'pointer-coarse:min-h-12 pointer-coarse:min-w-12',
           )}

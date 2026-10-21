@@ -9,7 +9,7 @@ import {
   CalendarCheck,
   LockKey,
   Books,
-} from '@phosphor-icons/react';
+} from '@phosphor-icons/react/dist/ssr';
 import type { IconCategory } from '@nestself/tokens';
 
 export interface IconProps {

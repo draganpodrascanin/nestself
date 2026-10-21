@@ -22,5 +22,19 @@ const config: NextConfig = {
     };
     return config;
   },
+  async redirects() {
+    return [
+      {
+        source: '/:locale(en|sr-Latn|sr-Cyrl|hu)/support',
+        destination: '/:locale/services',
+        permanent: true,
+      },
+      {
+        source: '/:locale(en|sr-Latn|sr-Cyrl|hu)/employers',
+        destination: '/:locale/for-employers',
+        permanent: true,
+      },
+    ];
+  },
 };
 export default config;

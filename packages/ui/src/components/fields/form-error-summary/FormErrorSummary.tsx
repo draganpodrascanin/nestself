@@ -1,3 +1,5 @@
+'use client';
+
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -41,13 +43,13 @@ export const FormErrorSummary = forwardRef<FormErrorSummaryHandle, FormErrorSumm
         role="alert"
         tabIndex={-1}
         className={cn(
-          'rounded-control border-2 border-danger bg-surface p-4',
+          'p-4 rounded-control border-2 border-danger bg-surface',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
           className,
         )}
       >
-        <h3 className="type-label text-danger mb-2">{title}</h3>
-        <ul className="list-disc pl-5 space-y-1">
+        <h3 className="mb-2 type-label text-danger">{title}</h3>
+        <ul className="pl-5 space-y-1 list-disc">
           {errors.map((err) => (
             <li key={err.id} className="type-metadata">
               <a

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { IconButton } from './IconButton';
-import { Heart, X, GearSix } from '@phosphor-icons/react';
+import { Heart, X, GearSix } from '@phosphor-icons/react/dist/ssr';
 
 const meta: Meta<typeof IconButton> = {
   title: 'Actions/IconButton',
@@ -14,7 +14,7 @@ export const Default: StoryObj<typeof IconButton> = {
 
 export const Variants: StoryObj = {
   render: () => (
-    <div className="flex gap-3">
+    <div className="gap-3 flex">
       <IconButton label="Primary" icon={<Heart size={20} />} variant="primary" />
       <IconButton label="Secondary" icon={<X size={20} />} variant="secondary" />
       <IconButton label="Ghost" icon={<GearSix size={20} />} variant="ghost" />

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Icon, CategoryIcon, NavIcon } from './Icon';
-import { Heart, Scales, House } from '@phosphor-icons/react';
+import { Heart, Scales, House } from '@phosphor-icons/react/dist/ssr';
 
 const meta: Meta<typeof Icon> = {
   title: 'Foundation/Icon',
@@ -18,7 +18,7 @@ export const WithLabel: StoryObj<typeof Icon> = {
 
 export const Weights: StoryObj = {
   render: () => (
-    <div className="flex gap-4 items-center">
+    <div className="gap-4 flex items-center">
       <Icon icon={Heart} weight="regular" size={32} />
       <Icon icon={Heart} weight="fill" size={32} />
       <Icon icon={Heart} weight="duotone" size={32} />
@@ -29,7 +29,7 @@ export const Weights: StoryObj = {
 
 export const Categories: StoryObj = {
   render: () => (
-    <div className="flex gap-4 items-center">
+    <div className="gap-4 flex items-center">
       <CategoryIcon category="mentalSupport" size={48} />
       <CategoryIcon category="legal" size={48} />
       <CategoryIcon category="financial" size={48} />
@@ -44,7 +44,7 @@ export const Categories: StoryObj = {
 
 export const Nav: StoryObj = {
   render: () => (
-    <div className="flex gap-4 items-center">
+    <div className="gap-4 flex items-center">
       <NavIcon icon={House} active label="Home" />
       <NavIcon icon={Scales} label="Legal" />
     </div>

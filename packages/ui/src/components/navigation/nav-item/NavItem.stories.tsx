@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { House, ChatCircleText, CalendarCheck, Gear } from '@phosphor-icons/react';
+import { House, ChatCircleText, CalendarCheck, Gear } from '@phosphor-icons/react/dist/ssr';
 import { NavItem } from './NavItem';
 
 const meta: Meta<typeof NavItem> = {
@@ -10,7 +10,7 @@ export default meta;
 
 export const States: StoryObj = {
   render: () => (
-    <nav className="flex gap-2">
+    <nav className="gap-2 flex">
       <NavItem href="/home" icon={House} label="Home" active />
       <NavItem href="/messages" icon={ChatCircleText} label="Messages" />
       <NavItem href="/appointments" icon={CalendarCheck} label="Appointments" />

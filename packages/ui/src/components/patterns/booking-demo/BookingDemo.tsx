@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '../../../lib/cn';
 import { AlertDialog, AlertDialogContent } from '../../dialogs/alert-dialog';
@@ -6,7 +8,6 @@ import { TimeSlotGrid } from '../time-slot-grid/TimeSlotGrid';
 import { CostBreakdown } from '../cost-breakdown/CostBreakdown';
 import { ConfirmLabel } from '../confirm-label/ConfirmLabel';
 import type { TimeSlot } from '../time-slot-grid/TimeSlotGrid';
-
 
 export interface BookingDemoAdvisor {
   name: string;
@@ -88,7 +89,9 @@ export function BookingDemo({
   initialSelectedSlotId,
 }: BookingDemoProps) {
   const [step, setStep] = useState<StepValue>(initialStep);
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(initialSelectedSlotId ?? null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(
+    initialSelectedSlotId ?? null,
+  );
   const [termsOpen, setTermsOpen] = useState(false);
 
   const step1Ref = useRef<HTMLHeadingElement>(null);
@@ -127,16 +130,16 @@ export function BookingDemo({
   const stepLabel = (n: number) => (formatStep ? formatStep(n, 3) : `${labels.step} ${n} of 3`);
 
   const ghostButtonClasses = cn(
-    'inline-flex items-center justify-center min-h-11 px-5 py-2.5 rounded-control border border-border-control bg-surface text-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
+    'min-h-11 px-5 py-2.5 inline-flex items-center justify-center rounded-control border border-border-control bg-surface type-body font-[var(--font-weight-label)] text-primary transition-colors duration-[var(--motion-fast)]',
     'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
     'hover:bg-tint',
     'pointer-coarse:min-h-12',
   );
 
   const primaryButtonClasses = cn(
-    'inline-flex items-center justify-center w-full min-h-11 px-5 py-2.5 rounded-control border border-transparent bg-primary text-on-primary font-[var(--font-weight-label)] type-body transition-colors duration-[var(--motion-fast)]',
+    'min-h-11 px-5 py-2.5 inline-flex w-full items-center justify-center rounded-control border border-transparent bg-primary type-body font-[var(--font-weight-label)] text-on-primary transition-colors duration-[var(--motion-fast)]',
     'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
-    'disabled:bg-disabled-surface disabled:text-disabled-text disabled:cursor-not-allowed',
+    'disabled:cursor-not-allowed disabled:bg-disabled-surface disabled:text-disabled-text',
     'pointer-coarse:min-h-12',
   );
 
@@ -145,20 +148,17 @@ export function BookingDemo({
   /* ------------------------------------------------------------------ */
   if (step === 'done') {
     return (
-      <div className={cn('border border-border-subtle rounded-card bg-surface p-8 text-center', className)}>
-        <h3
-          ref={doneRef}
-          tabIndex={-1}
-          className="type-section-title mb-4 outline-none"
-        >
+      <div
+        className={cn(
+          'p-8 rounded-card border border-border-subtle bg-surface text-center',
+          className,
+        )}
+      >
+        <h3 ref={doneRef} tabIndex={-1} className="mb-4 type-section-title outline-none">
           {labels.doneTitle}
         </h3>
-        <p className="type-body text-text-secondary mb-6">{labels.doneMessage}</p>
-        <button
-          type="button"
-          onClick={handleReset}
-          className={ghostButtonClasses}
-        >
+        <p className="mb-6 type-body text-text-secondary">{labels.doneMessage}</p>
+        <button type="button" onClick={handleReset} className={ghostButtonClasses}>
           {labels.reset}
         </button>
       </div>
@@ -166,23 +166,19 @@ export function BookingDemo({
   }
 
   return (
-    <div className={cn('border border-border-subtle rounded-card bg-surface', className)}>
+    <div className={cn('rounded-card border border-border-subtle bg-surface', className)}>
       {/* ---------------------------------------------------------------- */}
       {/* Step 1: Choose an advisor                                        */}
       {/* ---------------------------------------------------------------- */}
       {step === 1 ? (
         <div className="p-6">
-          <p className="type-metadata text-text-secondary mb-2">{stepLabel(1)}</p>
-          <h3
-            ref={step1Ref}
-            tabIndex={-1}
-            className="type-section-title mb-2 outline-none"
-          >
+          <p className="mb-2 type-metadata text-text-secondary">{stepLabel(1)}</p>
+          <h3 ref={step1Ref} tabIndex={-1} className="mb-2 type-section-title outline-none">
             {labels.chooseAdvisor}
           </h3>
-          <p className="type-body text-text-secondary mb-6">{labels.advisorLead}</p>
+          <p className="mb-6 type-body text-text-secondary">{labels.advisorLead}</p>
 
-          <div className="flex items-center gap-4 mb-4">
+          <div className="gap-4 mb-4 flex items-center">
             <Avatar initials={advisor.initials} name={advisor.name} size="md" />
             <div>
               <p className="font-[var(--font-weight-label)]">{advisor.name}</p>
@@ -191,13 +187,9 @@ export function BookingDemo({
             </div>
           </div>
 
-          <p className="type-metadata text-success mb-6">{labels.timesAvailable}</p>
+          <p className="mb-6 type-metadata text-success">{labels.timesAvailable}</p>
 
-          <button
-            type="button"
-            onClick={() => goToStep(2)}
-            className={primaryButtonClasses}
-          >
+          <button type="button" onClick={() => goToStep(2)} className={primaryButtonClasses}>
             {labels.seeTimes}
           </button>
         </div>
@@ -208,7 +200,7 @@ export function BookingDemo({
       {/* ---------------------------------------------------------------- */}
       {step === 2 ? (
         <div className="p-6">
-          <p className="type-metadata text-text-secondary mb-2">{stepLabel(2)}</p>
+          <p className="mb-2 type-metadata text-text-secondary">{stepLabel(2)}</p>
           <button
             type="button"
             onClick={() => goToStep(1)}
@@ -216,17 +208,13 @@ export function BookingDemo({
           >
             {labels.back}
           </button>
-          <h3
-            ref={step2Ref}
-            tabIndex={-1}
-            className="type-section-title mb-2 outline-none"
-          >
+          <h3 ref={step2Ref} tabIndex={-1} className="mb-2 type-section-title outline-none">
             {labels.chooseTime}
           </h3>
-          <p className="type-metadata text-text-secondary mb-4">
+          <p className="mb-4 type-metadata text-text-secondary">
             {advisor.name} &middot; {advisor.meta}
           </p>
-          <h4 className="type-label mb-2">{dateLabel}</h4>
+          <h4 className="mb-2 type-label">{dateLabel}</h4>
           <TimeSlotGrid
             slots={slots}
             selectedId={selectedSlotId}
@@ -254,7 +242,7 @@ export function BookingDemo({
       {/* ---------------------------------------------------------------- */}
       {step === 3 ? (
         <div className="p-6">
-          <p className="type-metadata text-text-secondary mb-2">{stepLabel(3)}</p>
+          <p className="mb-2 type-metadata text-text-secondary">{stepLabel(3)}</p>
           <button
             type="button"
             onClick={() => goToStep(2)}
@@ -262,11 +250,7 @@ export function BookingDemo({
           >
             {labels.back}
           </button>
-          <h3
-            ref={step3Ref}
-            tabIndex={-1}
-            className="type-section-title mb-4 outline-none"
-          >
+          <h3 ref={step3Ref} tabIndex={-1} className="mb-4 type-section-title outline-none">
             {labels.reviewAndConfirm}
           </h3>
 
@@ -299,11 +283,7 @@ export function BookingDemo({
           />
 
           <div className="mt-6">
-            <button
-              type="button"
-              onClick={handleConfirm}
-              className={primaryButtonClasses}
-            >
+            <button type="button" onClick={handleConfirm} className={primaryButtonClasses}>
               <ConfirmLabel action={labels.confirm} amount={formatCurrency(pricing.youPay)} />
             </button>
           </div>

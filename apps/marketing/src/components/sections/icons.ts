@@ -18,7 +18,7 @@ import {
   Globe,
   Translate,
   HandHeart,
-} from '@phosphor-icons/react';
+} from '@phosphor-icons/react/dist/ssr';
 
 /** Whitelisted icon names from the plan (B.2). */
 export type IconName =

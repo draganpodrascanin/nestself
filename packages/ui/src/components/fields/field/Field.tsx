@@ -1,6 +1,6 @@
 import { Field as BaseField } from '@base-ui/react/field';
 import { Select as BaseSelect } from '@base-ui/react/select';
-import { CaretDown, Check } from '@phosphor-icons/react';
+import { CaretDown, Check } from '@phosphor-icons/react/dist/ssr';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
@@ -26,15 +26,29 @@ export function Field({
   className,
 }: FieldProps) {
   return (
-    <BaseField.Root id={id} invalid={!!error} className={cn('flex flex-col gap-1.5', className)}>
+    <BaseField.Root id={id} invalid={!!error} className={cn('gap-1.5 flex flex-col', className)}>
       <BaseField.Label className="type-label text-text">
         {label}
-        {required ? <span className="text-danger ml-0.5" aria-hidden>*</span> : null}
-        {!required && optionalLabel ? <span className="text-text-secondary type-metadata ml-1">({optionalLabel})</span> : null}
+        {required ? (
+          <span className="ml-0.5 text-danger" aria-hidden>
+            *
+          </span>
+        ) : null}
+        {!required && optionalLabel ? (
+          <span className="ml-1 type-metadata text-text-secondary">({optionalLabel})</span>
+        ) : null}
       </BaseField.Label>
       {children}
-      {description ? <BaseField.Description className="type-metadata text-text-secondary">{description}</BaseField.Description> : null}
-      {error ? <BaseField.Error match className="type-metadata text-danger">{error}</BaseField.Error> : null}
+      {description ? (
+        <BaseField.Description className="type-metadata text-text-secondary">
+          {description}
+        </BaseField.Description>
+      ) : null}
+      {error ? (
+        <BaseField.Error match className="type-metadata text-danger">
+          {error}
+        </BaseField.Error>
+      ) : null}
     </BaseField.Root>
   );
 }
@@ -56,16 +70,12 @@ export interface InputProps {
   id?: string;
 }
 
-export function Input({
-  density = 'comfortable',
-  className,
-  ...rest
-}: InputProps) {
+export function Input({ density = 'comfortable', className, ...rest }: InputProps) {
   return (
     <BaseField.Control
       {...rest}
       className={cn(
-        'rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary px-3',
+        'px-3 rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary',
         'data-invalid:border-2 data-invalid:border-danger',
         'data-disabled:bg-tint data-disabled:text-text-secondary',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
@@ -92,9 +102,9 @@ export function Textarea({ className, ...rest }: TextareaProps) {
   return (
     <BaseField.Control
       render={<textarea />}
-      {...rest as Record<string, unknown>}
+      {...(rest as Record<string, unknown>)}
       className={cn(
-        'min-h-24 resize-y rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary px-3 py-2',
+        'min-h-24 px-3 py-2 resize-y rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary',
         'data-invalid:border-2 data-invalid:border-danger',
         'data-disabled:bg-tint data-disabled:text-text-secondary',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
@@ -148,7 +158,7 @@ export function Select({
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         className={cn(
-          'inline-flex items-center justify-between min-h-12 rounded-control border border-border-control bg-surface text-text px-3',
+          'min-h-12 px-3 inline-flex items-center justify-between rounded-control border border-border-control bg-surface text-text',
           'data-disabled:bg-tint data-disabled:text-text-secondary',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
           className,
@@ -161,13 +171,13 @@ export function Select({
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner>
-          <BaseSelect.Popup className="shadow-menu rounded-control bg-surface z-[var(--z-dropdown)] overflow-auto max-h-64 py-1">
+          <BaseSelect.Popup className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu">
             {options.map((opt) => (
               <BaseSelect.Item
                 key={opt.value}
                 value={opt.value}
                 className={cn(
-                  'flex items-center px-3 py-2 cursor-pointer',
+                  'px-3 py-2 flex cursor-pointer items-center',
                   'data-highlighted:bg-tint',
                   'data-selected:font-[var(--font-weight-label)]',
                 )}

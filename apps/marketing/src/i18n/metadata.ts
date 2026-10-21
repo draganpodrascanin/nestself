@@ -2,7 +2,10 @@ import { locales, localeMeta } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import type { Metadata } from 'next';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
+const metadataBase = new URL(SITE_URL);
 
 export function localeAlternates(pathname: string) {
   const canonical = `${SITE_URL}/en${pathname}`;
@@ -27,6 +30,7 @@ export function localizedMetadata({
 }): Metadata {
   const alternates = localeAlternates(pathname);
   return {
+    metadataBase,
     title,
     description,
     alternates: {
@@ -38,6 +42,10 @@ export function localizedMetadata({
       description,
       locale: localeMeta[locale].intl,
       type: 'website',
+      images: [`/${locale}/opengraph-image`],
+    },
+    twitter: {
+      card: 'summary_large_image',
     },
   };
 }

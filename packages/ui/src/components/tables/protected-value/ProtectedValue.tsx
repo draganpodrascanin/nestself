@@ -1,5 +1,7 @@
+'use client';
+
 import { useId } from 'react';
-import { LockKey } from '@phosphor-icons/react';
+import { LockKey } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
 import { Icon } from '../../foundation/icon/Icon';
 
@@ -16,10 +18,12 @@ export interface ProtectedValueProps {
 export function ProtectedValue({ label, reason, totalAction, className }: ProtectedValueProps) {
   const reasonId = useId();
   return (
-    <span className={cn('inline-flex items-center gap-2 text-text-secondary', className)}>
+    <span className={cn('gap-2 inline-flex items-center text-text-secondary', className)}>
       <Icon icon={LockKey} size={16} />
       <span aria-describedby={reasonId}>{label}</span>
-      <span id={reasonId} className="sr-only">{reason}</span>
+      <span id={reasonId} className="sr-only">
+        {reason}
+      </span>
       {totalAction}
     </span>
   );
