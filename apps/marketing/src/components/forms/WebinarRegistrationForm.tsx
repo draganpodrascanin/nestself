@@ -15,7 +15,7 @@ import {
 } from '@nestself/ui';
 import type { FormErrorSummaryHandle, FormError } from '@nestself/ui';
 import { CONTACT_EMAIL } from '@/lib/contact';
-import { submitLead } from '@/lib/leads';
+import { submitLead, describeIssues, type ValidationMessages } from '@/lib/leads';
 
 export interface WebinarRegistrationFormLabels {
   nameLabel: string;
@@ -38,6 +38,7 @@ export interface WebinarRegistrationFormLabels {
   successBody: string;
   failureTitle: string;
   failureBody: string;
+  validation: ValidationMessages;
   /** Translatable label for the server-error entry in the error summary. */
   serverErrorLabel?: string;
 }
@@ -80,21 +81,26 @@ export function WebinarRegistrationForm({
     const result = WebinarRegistrationSchema.safeParse(raw);
 
     if (!result.success) {
-      const errors: Record<string, string> = {};
-      const summary: FormError[] = [];
+      // Build a labels map keyed by zod path names for the shared helper
+      const fieldLabels: Record<string, string> = {
+        name: labels.nameLabel,
+        email: labels.emailLabel,
+        company: labels.companyLabel,
+        consent: labels.consentShortLabel,
+      };
 
-      for (const issue of result.error.issues) {
-        const path = issue.path.join('.');
-        if (path === 'name') {
-          errors.name = labels.nameRequired;
-          summary.push({ id: 'reg-name', label: labels.nameLabel, message: labels.nameRequired });
-        } else if (path === 'email') {
-          errors.email = labels.emailRequired;
-          summary.push({ id: 'reg-email', label: labels.emailLabel, message: labels.emailRequired });
-        } else if (path === 'consent') {
-          errors.consent = labels.consentRequired;
-          summary.push({ id: 'reg-consent', label: labels.consentShortLabel, message: labels.consentRequired });
-        }
+      const described = describeIssues(result.error.issues, fieldLabels, labels.validation);
+
+      // Remap IDs from `field-X` to `reg-X` to match this form's field ids
+      const summary = described.map((err) => ({
+        ...err,
+        id: err.id.replace(/^field-/, 'reg-'),
+      }));
+
+      const errors: Record<string, string> = {};
+      for (const err of summary) {
+        const fieldName = err.id.replace(/^reg-/, '');
+        errors[fieldName] = err.message;
       }
 
       setFieldErrors(errors);

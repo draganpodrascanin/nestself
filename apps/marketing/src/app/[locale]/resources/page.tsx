@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatDate, formatDateTime } from '@nestself/i18n';
+import { isLocale } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listEntries, listAssessments } from '@/content/loaders';
@@ -31,10 +32,6 @@ export async function generateMetadata({
     description: data.meta.description,
     pathname: '/resources',
   });
-}
-
-function formatWebinarDate(startsAt: string, locale: Locale): string {
-  return formatDateTime(startsAt, locale);
 }
 
 function webinarFormatLabel(
@@ -111,7 +108,7 @@ export default async function ResourcesPage({
                 href={`/${locale}/webinars/${w.slug}`}
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
-                dateLabel={formatWebinarDate(w.frontmatter.startsAt, locale)}
+                dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
                 durationLabel={durationLabel(w.frontmatter.durationMinutes, data.cardLabels.minutes)}
                 formatLabel={webinarFormatLabel(w.frontmatter.format, data.cardLabels)}
                 languagesLabel={languagesLabel(w.frontmatter.languages, data.cardLabels.languages)}
@@ -143,7 +140,7 @@ export default async function ResourcesPage({
                 topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}
                 readingLabel={readingTimeLabel(a.readingMinutes, data.cardLabels.readingTime)}
                 cover={{ key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt ?? '' }}
-                dateLabel={formatDate(a.frontmatter.publishedAt, locale)}
+                dateLabel={formatArticleDate(a.frontmatter.publishedAt, locale)}
               />
             ))}
           </div>

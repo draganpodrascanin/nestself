@@ -10,11 +10,18 @@ import {
   listSlugs,
 } from '@/content/loaders';
 import { renderMdx } from '@/content/mdx';
-import { Breadcrumbs } from '@nestself/ui';
+import { Breadcrumbs, PhotoFigure } from '@nestself/ui';
 import { Heading, Text, LinkButton } from '@nestself/ui';
+import type { PhotoKey } from '@nestself/assets';
 import { ProseLayout } from '@/components/sections/ProseLayout';
 import { AssessmentRunner } from '@/components/assessment/AssessmentRunner';
 import { loadContent } from '../content';
+
+const ASSESSMENT_PHOTO: Record<string, PhotoKey> = {
+  psychological: 'assessment-sofa',
+  work: 'article-end-of-day',
+  financial: 'financial-planning',
+};
 
 interface Params {
   locale: string;
@@ -81,6 +88,9 @@ export default async function ToolSlugPage({
   // ----- Assessment page -----
   if (assessment) {
     const { data } = assessment;
+    const introPhotoKey = ASSESSMENT_PHOTO[data.topic] ?? ('assessment-sofa' as PhotoKey);
+    const introPhotoAlt =
+      content.introPhotoAlt[data.topic] ?? content.introPhotoAlt['default'] ?? '';
     return (
       <main id="main" tabIndex={-1} className="@container">
         <div className="py-8">
@@ -94,33 +104,42 @@ export default async function ToolSlugPage({
           />
         </div>
 
-        <section className="py-8 max-w-[720px]">
-          <Heading level={1} typeRole="screenTitle" className="mb-4">
-            {data.title}
-          </Heading>
-          <Text tone="secondary" className="mb-4">
-            {data.intro}
-          </Text>
-          <div className="flex flex-wrap gap-4 mb-4">
-            <Text as="span" typeRole="metadata" tone="secondary">
-              {content.assessments.durationLabel.replace(
-                '{minutes}',
-                String(data.durationMinutes),
-              )}
+        <section className="grid gap-12 grid-cols-1 @min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center py-8">
+          <div className="max-w-[720px]">
+            <Heading level={1} typeRole="screenTitle" className="mb-4">
+              {data.title}
+            </Heading>
+            <Text tone="secondary" className="mb-4">
+              {data.intro}
             </Text>
-            <Text as="span" typeRole="metadata" tone="secondary">
-              &middot;
-            </Text>
-            <Text as="span" typeRole="metadata" tone="secondary">
-              {content.assessments.questionsLabel.replace(
-                '{count}',
-                String(data.questions.length),
-              )}
+            <div className="flex flex-wrap gap-4 mb-4">
+              <Text as="span" typeRole="metadata" tone="secondary">
+                {content.assessments.durationLabel.replace(
+                  '{minutes}',
+                  String(data.durationMinutes),
+                )}
+              </Text>
+              <Text as="span" typeRole="metadata" tone="secondary">
+                &middot;
+              </Text>
+              <Text as="span" typeRole="metadata" tone="secondary">
+                {content.assessments.questionsLabel.replace(
+                  '{count}',
+                  String(data.questions.length),
+                )}
+              </Text>
+            </div>
+            <Text tone="secondary" typeRole="metadata" className="mb-8">
+              {content.runner.nothingStored}
             </Text>
           </div>
-          <Text tone="secondary" typeRole="metadata" className="mb-8">
-            {content.runner.nothingStored}
-          </Text>
+          <PhotoFigure
+            photo={introPhotoKey}
+            alt={introPhotoAlt}
+            imageRole="card"
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="overflow-hidden rounded-card @max-[1024px]:order-first"
+          />
         </section>
 
         <AssessmentRunner

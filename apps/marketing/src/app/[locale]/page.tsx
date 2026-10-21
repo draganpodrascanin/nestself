@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { getServerT } from '@/i18n/server';
 import { localizedMetadata } from '@/i18n/metadata';
 import { loadContent } from './content';
@@ -73,22 +74,14 @@ export default async function HomePage({
     topicLabel: t(`marketing:topics.${a.frontmatter.topic}`),
     readingLabel: t('marketing:labels.readingTime', { minutes: a.readingMinutes }),
     cover: { key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt },
-    dateLabel: t('marketing:labels.published', { date: a.frontmatter.publishedAt }),
+    dateLabel: formatArticleDate(a.frontmatter.publishedAt, typedLocale),
   }));
 
   const webinarCards: WebinarCardProps[] = webinars.slice(0, 3).map((w) => ({
     href: `/${locale}/webinars/${w.slug}`,
     title: w.frontmatter.title,
     description: w.frontmatter.description,
-    dateLabel: new Date(w.frontmatter.startsAt).toLocaleDateString(
-      typedLocale === 'sr-Latn'
-        ? 'sr-Latn-RS'
-        : typedLocale === 'sr-Cyrl'
-          ? 'sr-Cyrl-RS'
-          : typedLocale === 'hu'
-            ? 'hu-HU'
-            : 'en-GB',
-    ),
+    dateLabel: formatWebinarDateTime(w.frontmatter.startsAt, typedLocale),
     durationLabel: t('marketing:labels.minutes', {
       count: w.frontmatter.durationMinutes,
     }),

@@ -49,7 +49,8 @@ export default async function FinancialGuidancePage({
         lead={data.hero.lead}
         primaryCta={data.hero.primaryCta}
         secondaryCta={data.hero.secondaryCta}
-        variant="quiet"
+        photo={{ key: 'financial-planning' as PhotoKey, alt: 'A person reviewing financial plans with a consultant' }}
+        variant="split"
       />
 
       <FeatureGrid

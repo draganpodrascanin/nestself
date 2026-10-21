@@ -25,7 +25,14 @@
     "errorBody": "We could not send your message right now. Please try again later.",
     "errorContactHint": "You can also reach us at",
     "fallbackErrorLabel": "Form",
-    "fallbackErrorMessage": "Submission failed. Please check your entries and try again."
+    "fallbackErrorMessage": "Submission failed. Please check your entries and try again.",
+    "validation": {
+      "required": "Please fill in {{field}}.",
+      "email": "Enter a valid work email address, for example name@company.com.",
+      "consent": "Please agree to the privacy policy so we can reply.",
+      "select": "Please choose an option for {{field}}.",
+      "tooLong": "{{field}} is too long."
+    }
   },
   "aside": {
     "emailTitle": "Email",

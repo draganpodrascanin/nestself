@@ -4,6 +4,14 @@ import { loadPageContent } from '@/content/loaders';
 
 const selectOptionSchema = z.object({ value: z.string(), label: z.string() });
 
+const validationSchema = z.object({
+  required: z.string(),
+  email: z.string(),
+  consent: z.string(),
+  select: z.string(),
+  tooLong: z.string(),
+});
+
 const formFieldsSchema = z.object({
   name: z.string(),
   email: z.string(),
@@ -40,6 +48,7 @@ export const schema = z.object({
     errorContactHint: z.string(),
     fallbackErrorLabel: z.string(),
     fallbackErrorMessage: z.string(),
+    validation: validationSchema,
   }),
   aside: z.object({
     title: z.string(),

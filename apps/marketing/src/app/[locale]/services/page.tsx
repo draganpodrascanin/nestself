@@ -48,7 +48,7 @@ export default async function ServicesPage({
         primaryCta={data.hero.primaryCta}
         secondaryCta={data.hero.secondaryCta}
         photo={{ key: 'home-hero-office' as PhotoKey, alt: 'A modern, bright office space' }}
-        variant="quiet"
+        variant="split"
       />
 
       {data.pillars.map((pillar, i) => (

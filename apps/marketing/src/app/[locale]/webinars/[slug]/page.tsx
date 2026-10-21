@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales, formatDateTime, formatDate } from '@nestself/i18n';
+import { isLocale, locales } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { getEntry, listSlugs, listEntries } from '@/content/loaders';
@@ -116,7 +117,7 @@ export default async function WebinarDetailPage({
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 mb-12 @max-[760px]:grid-cols-1">
           <dt className="type-label text-text-secondary">{data.detail.dateLabel}</dt>
           <dd className="type-body">
-            {formatDateTime(frontmatter.startsAt, locale)} {data.detail.timeZoneLabel}
+            {formatWebinarDateTime(frontmatter.startsAt, locale)}
           </dd>
 
           <dt className="type-label text-text-secondary">{data.detail.durationLabel}</dt>
@@ -182,7 +183,7 @@ export default async function WebinarDetailPage({
                 topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}
                 readingLabel={data.detail.readingTime.replace('{minutes}', String(a.readingMinutes))}
                 cover={{ key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt ?? '' }}
-                dateLabel={formatDate(a.frontmatter.publishedAt, locale)}
+                dateLabel={formatArticleDate(a.frontmatter.publishedAt, locale)}
               />
             ))}
           </div>

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, locales, formatDate } from '@nestself/i18n';
+import { isLocale, locales } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatArticleDate } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { getEntry, listSlugs, listEntries } from '@/content/loaders';
@@ -106,7 +107,7 @@ export default async function ArticleDetailPage({
             &middot;
           </Text>
           <Text as="span" typeRole="metadata" tone="secondary">
-            {formatDate(frontmatter.publishedAt, locale)}
+            {formatArticleDate(frontmatter.publishedAt, locale)}
           </Text>
           <Text as="span" typeRole="metadata" tone="secondary">
             &middot;
@@ -164,7 +165,7 @@ export default async function ArticleDetailPage({
                 topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}
                 readingLabel={data.detail.readingTime.replace('{minutes}', String(a.readingMinutes))}
                 cover={{ key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt ?? '' }}
-                dateLabel={formatDate(a.frontmatter.publishedAt, locale)}
+                dateLabel={formatArticleDate(a.frontmatter.publishedAt, locale)}
               />
             ))}
           </div>

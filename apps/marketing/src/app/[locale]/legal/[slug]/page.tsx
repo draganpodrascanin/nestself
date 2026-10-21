@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale } from '@nestself/i18n';
+import { isLocale, formatDate } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { Heading, Text, Breadcrumbs } from '@nestself/ui';
 import { localizedMetadata } from '@/i18n/metadata';
@@ -25,7 +25,8 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
   const { locale, slug } = await params;
   if (!isLocale(locale) || !isLegalPageSlug(slug)) notFound();
 
-  const { data } = await loadLegalContent(slug as LegalPageSlug, locale as Locale);
+  const typedLocale = locale as Locale;
+  const { data } = await loadLegalContent(slug as LegalPageSlug, typedLocale);
 
   return (
     <main id="main" tabIndex={-1} className="@container">
@@ -41,28 +42,34 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
           {data.title}
         </Heading>
         <Text typeRole="metadata" tone="secondary" className="mt-2">
-          {data.updatedAtLabel} {data.updatedAt}
+          {data.updatedAtLabel} {formatDate(data.updatedAt, typedLocale)}
         </Text>
       </div>
 
       <ProseLayout>
-        <p className="type-body-large text-text-secondary">{data.intro}</p>
+        <Text typeRole="bodyLarge" tone="secondary">{data.intro}</Text>
 
-        {data.sections.map((section, i) => (
-          <section key={i}>
-            <h2>{section.heading}</h2>
-            {section.paragraphs.map((p, j) => (
-              <p key={j}>{p}</p>
-            ))}
-            {section.bullets && section.bullets.length > 0 && (
-              <ul>
-                {section.bullets.map((b, k) => (
-                  <li key={k}>{b}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))}
+        <div className="space-y-10 mt-10">
+          {data.sections.map((section, i) => (
+            <section key={i} className="space-y-4">
+              <Heading level={2} typeRole="sectionTitle">
+                {section.heading}
+              </Heading>
+              {section.paragraphs.map((p, j) => (
+                <Text key={j}>{p}</Text>
+              ))}
+              {section.bullets && section.bullets.length > 0 && (
+                <ul className="list-disc pl-6 space-y-2">
+                  {section.bullets.map((b, k) => (
+                    <li key={k}>
+                      <Text as="span">{b}</Text>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
       </ProseLayout>
     </main>
   );

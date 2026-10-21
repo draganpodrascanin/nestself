@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { isLocale, formatDateTime } from '@nestself/i18n';
+import { isLocale } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatWebinarDateTime } from '@/lib/dates';
 import type { PhotoKey } from '@nestself/assets';
 import { localizedMetadata } from '@/i18n/metadata';
 import { listEntries } from '@/content/loaders';
@@ -73,7 +74,7 @@ export default async function WebinarsPage({
                 href={`/${locale}/webinars/${w.slug}`}
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
-                dateLabel={formatDateTime(w.frontmatter.startsAt, locale)}
+                dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
                 durationLabel={data.cardLabels.minutes.replace('{n}', String(w.frontmatter.durationMinutes))}
                 formatLabel={data.cardLabels.live}
                 languagesLabel={`${data.cardLabels.languages}: ${w.frontmatter.languages.join(', ')}`}
@@ -99,7 +100,7 @@ export default async function WebinarsPage({
                 href={`/${locale}/webinars/${w.slug}`}
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
-                dateLabel={formatDateTime(w.frontmatter.startsAt, locale)}
+                dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
                 durationLabel={data.cardLabels.minutes.replace('{n}', String(w.frontmatter.durationMinutes))}
                 formatLabel={data.cardLabels.onDemand}
                 languagesLabel={`${data.cardLabels.languages}: ${w.frontmatter.languages.join(', ')}`}

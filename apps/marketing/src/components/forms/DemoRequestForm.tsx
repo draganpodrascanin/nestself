@@ -6,7 +6,7 @@ import type { Locale } from '@nestself/i18n';
 import { Field, Input, Select, Textarea, Checkbox } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
 import { TextLink } from '@nestself/ui';
-import { submitLead } from '@/lib/leads';
+import { submitLead, describeIssues, type ValidationMessages } from '@/lib/leads';
 import { LeadFormShell, type FormStatus } from './LeadFormShell';
 
 const FREE_MAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com', 'mail.com', 'protonmail.com', 'yandex.com', 'live.com'];
@@ -58,6 +58,7 @@ export interface DemoRequestFormContent {
   errorContactHint: string;
   fallbackErrorLabel: string;
   fallbackErrorMessage: string;
+  validation: ValidationMessages;
 }
 
 export interface DemoRequestFormProps {
@@ -104,15 +105,7 @@ export function DemoRequestForm({ locale, content }: DemoRequestFormProps) {
 
     const result = DemoRequestSchema.safeParse(data);
     if (!result.success) {
-      const fieldErrors: FormError[] = result.error.issues.map((iss) => {
-        const fieldName = String(iss.path?.[0] ?? 'form');
-        return {
-          id: `field-${fieldName}`,
-          label: content.fields[fieldName as keyof typeof content.fields] ?? fieldName,
-          message: iss.message,
-        };
-      });
-      setErrors(fieldErrors);
+      setErrors(describeIssues(result.error.issues, content.fields, content.validation));
       return;
     }
 

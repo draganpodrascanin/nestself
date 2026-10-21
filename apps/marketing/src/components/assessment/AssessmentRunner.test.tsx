@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AssessmentRunner } from './AssessmentRunner';
 import type { Assessment } from '@/content/schemas';
@@ -126,40 +126,37 @@ async function completeAllQuestions(user: ReturnType<typeof userEvent.setup>) {
  *
  * Base UI's CompositeRoot dispatches focus moves via queueMicrotask and the
  * RadioGroup uses a `touched` flag that must be set before the focus fires.
- * In jsdom the AssessmentRunner's requestAnimationFrame-based heading focus
- * management can override the radio focus between microtask flushes.
  *
- * This helper manually focuses the target radio after each ArrowDown to
- * ensure the CompositeRoot and RadioGroup process the full keyboard
- * sequence.  The keydown events are dispatched on the currently focused
- * radio (or the first radio if focus was lost), exactly as a keyboard user
- * would produce them.
+ * This helper uses findByRole (which polls until the element appears) to
+ * locate each radio, then manually focuses and dispatches ArrowDown so the
+ * CompositeRoot and RadioGroup process the full keyboard sequence.  After
+ * each ArrowDown it waits (via waitFor) for focus to settle on the expected
+ * radio before continuing.
  */
 async function selectRadioByArrowDown(targetLabel: string) {
   const options = wellbeingAssessment.options.map(o => o.label);
   const targetIdx = options.indexOf(targetLabel);
   if (targetIdx < 0) throw new Error(`Unknown option: ${targetLabel}`);
 
-  // Focus the first radio to enter the group
-  const firstRadio = screen.getByRole('radio', { name: options[0]! });
+  // Wait for the first radio to appear (handles async re-renders after step changes)
+  const firstRadio = await screen.findByRole('radio', { name: options[0]! });
   await act(async () => { firstRadio.focus(); });
 
-  // Press ArrowDown to reach the target, refocusing after each step to
-  // counter jsdom's rAF override
+  // Press ArrowDown to reach the target, ensuring focus is correct before each step
   for (let d = 0; d < targetIdx; d++) {
-    // Ensure we are on the correct radio before pressing ArrowDown
     const currentLabel = options[d]!;
     const currentRadio = screen.getByRole('radio', { name: currentLabel });
     if (document.activeElement !== currentRadio) {
       await act(async () => { currentRadio.focus(); });
     }
-    // Dispatch ArrowDown keydown (the keyboard event)
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown', bubbles: true });
     });
-    // Flush microtasks (CompositeRoot uses queueMicrotask for focus)
-    await act(async () => {
-      await new Promise<void>(r => setTimeout(r, 0));
+    // Wait for CompositeRoot's queueMicrotask-based focus to settle
+    const nextLabel = options[d + 1]!;
+    await waitFor(() => {
+      const nextRadio = screen.getByRole('radio', { name: nextLabel });
+      expect(document.activeElement === nextRadio || nextRadio.getAttribute('data-checked') === '').toBe(true);
     });
   }
 }
@@ -275,11 +272,11 @@ describe('AssessmentRunner', () => {
  * button activation.
  *
  * Base UI RadioGroup uses a CompositeRoot with roving tabindex: Tab enters
- * the group, arrow keys move + select, and Tab exits.  In jsdom the runner's
- * requestAnimationFrame-based heading focus overrides focus during await
- * boundaries, so `selectRadioByArrowDown()` re-focuses the correct radio
- * before each ArrowDown dispatch (see its JSDoc).  Tab between buttons and
- * Enter / Space activation use userEvent normally.
+ * the group, arrow keys move + select, and Tab exits.
+ * `selectRadioByArrowDown()` uses findByRole and waitFor to locate radios
+ * and wait for focus to settle after each ArrowDown (see its JSDoc).
+ * Assertions after phase transitions use findByRole / findByText to wait
+ * for the new DOM rather than assuming synchronous updates.
  */
 describe('AssessmentRunner (keyboard only)', () => {
   it('completes wellbeing check-in by keyboard only and shows result band', async () => {
@@ -310,8 +307,8 @@ describe('AssessmentRunner (keyboard only)', () => {
       await user.keyboard('{Enter}');
     }
 
-    // Result screen assertions
-    expect(screen.getByText('Your result')).toBeInTheDocument();
+    // Result screen assertions -- use findBy* to wait for the new phase
+    expect(await screen.findByText('Your result')).toBeInTheDocument();
     expect(screen.getByText('Steady')).toBeInTheDocument();
     expect(screen.getByText('Your score: 75 out of 100')).toBeInTheDocument();
 
@@ -351,14 +348,17 @@ describe('AssessmentRunner (keyboard only)', () => {
     await selectRadioByArrowDown('Often');
 
     // Focus Back button and press Enter
-    const backBtn = screen.getByRole('button', { name: 'Back' });
+    const backBtn = await screen.findByRole('button', { name: 'Back' });
     await act(async () => { backBtn.focus(); });
     await user.keyboard('{Enter}');
 
-    // Q1 again: "Sometimes" should still be selected
-    expect(
-      screen.getByRole('radio', { name: 'Sometimes' }),
-    ).toHaveAttribute('data-checked', '');
+    // Q1 again: "Sometimes" should still be selected -- wait for the heading
+    // to update, confirming the step transition completed
+    await waitFor(() => {
+      expect(
+        screen.getByRole('radio', { name: 'Sometimes' }),
+      ).toHaveAttribute('data-checked', '');
+    });
   });
 
   it('Restart returns to the intro screen (keyboard)', async () => {
@@ -380,12 +380,12 @@ describe('AssessmentRunner (keyboard only)', () => {
       await user.keyboard('{Enter}');
     }
 
-    // Focus "Start again" and press Enter
-    const restartBtn = screen.getByRole('button', { name: 'Start again' });
+    // Wait for the result screen to render before locating the restart button
+    const restartBtn = await screen.findByRole('button', { name: 'Start again' });
     await act(async () => { restartBtn.focus(); });
     await user.keyboard('{Enter}');
 
-    // Should be back at the intro screen
-    expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+    // Wait for the intro screen to appear
+    expect(await screen.findByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 });

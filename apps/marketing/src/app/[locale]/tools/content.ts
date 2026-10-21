@@ -37,6 +37,7 @@ export const schema = z.object({
     talkToSomeone: z.string(),
     relatedReading: z.string(),
   }),
+  introPhotoAlt: z.record(z.string(), z.string()),
   breadcrumbs: z.object({
     home: z.string(),
     tools: z.string(),

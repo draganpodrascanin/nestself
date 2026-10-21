@@ -4,6 +4,14 @@ import { loadPageContent } from '@/content/loaders';
 
 const ctaSchema = z.object({ label: z.string(), href: z.string() });
 
+const validationSchema = z.object({
+  required: z.string(),
+  email: z.string(),
+  consent: z.string(),
+  select: z.string(),
+  tooLong: z.string(),
+});
+
 export const schema = z.object({
   meta: z.object({ title: z.string(), description: z.string() }),
   hero: z.object({
@@ -65,6 +73,7 @@ export const schema = z.object({
     successBody: z.string(),
     failureTitle: z.string(),
     failureBody: z.string(),
+    validation: validationSchema,
   }),
 });
 

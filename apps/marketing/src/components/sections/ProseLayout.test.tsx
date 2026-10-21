@@ -30,4 +30,36 @@ describe('ProseLayout', () => {
     );
     expect(container.firstElementChild).toHaveClass('custom');
   });
+
+  it('does not horizontally centre the prose column', () => {
+    const { container } = render(
+      <ProseLayout>
+        <p>Content</p>
+      </ProseLayout>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    // Should not have mx-auto (left-aligned)
+    expect(wrapper.className).not.toContain('mx-auto');
+  });
+
+  it('constrains the prose column to a reading width', () => {
+    const { container } = render(
+      <ProseLayout>
+        <p>Content</p>
+      </ProseLayout>,
+    );
+    const prose = container.querySelector('[data-prose]') as HTMLElement;
+    expect(prose).toBeTruthy();
+    expect(prose.className).toContain('max-w-[68ch]');
+  });
+
+  it('uses a grid layout when aside is present', () => {
+    const { container } = render(
+      <ProseLayout aside={<div>Aside</div>}>
+        <p>Content</p>
+      </ProseLayout>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain('grid');
+  });
 });

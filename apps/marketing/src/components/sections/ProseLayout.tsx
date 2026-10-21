@@ -11,16 +11,18 @@ export function ProseLayout({ children, aside, className }: ProseLayoutProps) {
   return (
     <div
       className={cn(
-        'grid gap-12 py-16',
+        'gap-12 py-16',
         aside
-          ? 'grid-cols-[minmax(0,3fr)_minmax(0,1fr)] @max-[760px]:grid-cols-1'
-          : 'mx-auto max-w-[720px]',
+          ? 'grid grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @max-[1024px]:grid-cols-1'
+          : '',
         className,
       )}
     >
-      <div className="prose prose-text max-w-none">{children}</div>
+      <div data-prose="" className="max-w-[68ch]">
+        {children}
+      </div>
       {aside && (
-        <aside className="@max-[760px]:order-first">{aside}</aside>
+        <aside className="@max-[1024px]:order-first">{aside}</aside>
       )}
     </div>
   );

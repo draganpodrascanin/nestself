@@ -68,6 +68,13 @@
     "successTitle": "You are registered",
     "successBody": "We will email you the link before the webinar starts.",
     "failureTitle": "We could not send your registration",
-    "failureBody": "Please try again later or contact us at {email}."
+    "failureBody": "Please try again later or contact us at {email}.",
+    "validation": {
+      "required": "Please fill in {{field}}.",
+      "email": "Enter a valid work email address, for example name@company.com.",
+      "consent": "Please agree to the privacy policy so we can reply.",
+      "select": "Please choose an option for {{field}}.",
+      "tooLong": "{{field}} is too long."
+    }
   }
 }

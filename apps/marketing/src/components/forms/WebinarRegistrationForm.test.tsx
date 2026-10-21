@@ -4,15 +4,28 @@ import userEvent from '@testing-library/user-event';
 import { WebinarRegistrationForm } from './WebinarRegistrationForm';
 import type { WebinarRegistrationFormLabels } from './WebinarRegistrationForm';
 
-vi.mock('@/lib/leads', () => ({
-  submitLead: vi.fn(),
-}));
+// Mock submitLead but keep describeIssues as the real implementation
+vi.mock('@/lib/leads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/leads')>();
+  return {
+    ...actual,
+    submitLead: vi.fn(),
+  };
+});
 
 vi.mock('@/lib/contact', () => ({
   CONTACT_EMAIL: 'hello@nestself.example',
 }));
 
 const mockSubmitLead = vi.mocked((await import('@/lib/leads')).submitLead);
+
+const validation = {
+  required: 'Please fill in {{field}}.',
+  email: 'Enter a valid work email address, for example name@company.com.',
+  consent: 'Please agree to the privacy policy so we can reply.',
+  select: 'Please choose an option for {{field}}.',
+  tooLong: '{{field}} is too long.',
+};
 
 const labels: WebinarRegistrationFormLabels = {
   nameLabel: 'Full name',
@@ -35,6 +48,7 @@ const labels: WebinarRegistrationFormLabels = {
   successBody: 'We will email you the link before the webinar starts.',
   failureTitle: 'We could not send your registration',
   failureBody: 'Please try again later or contact us at {email}.',
+  validation,
   serverErrorLabel: 'Server error',
 };
 
@@ -57,7 +71,7 @@ describe('WebinarRegistrationForm', () => {
     expect(screen.getByRole('button', { name: /register/i })).toBeInTheDocument();
   });
 
-  it('shows error summary and focuses it when submitted with empty fields', async () => {
+  it('shows friendly error messages when submitted with empty fields', async () => {
     const user = userEvent.setup();
     render(<WebinarRegistrationForm {...defaultProps} />);
 
@@ -67,12 +81,17 @@ describe('WebinarRegistrationForm', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    // Error messages appear in both the summary and the field; just check they exist
-    expect(screen.getAllByText(/please enter your name/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/please enter a valid email/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/you must consent/i).length).toBeGreaterThanOrEqual(1);
+    // Friendly messages from the validation block appear in the error summary
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('Please fill in Full name.');
+    expect(alert.textContent).toContain('Enter a valid work email address, for example name@company.com.');
+    expect(alert.textContent).toContain('Please agree to the privacy policy so we can reply.');
 
-    // The error summary should receive focus (requestAnimationFrame in jsdom needs a tick)
+    // Raw zod messages should NOT appear
+    expect(alert.textContent).not.toContain('Too small');
+    expect(alert.textContent).not.toContain('Invalid input');
+
+    // The error summary should receive focus
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveFocus();
     });

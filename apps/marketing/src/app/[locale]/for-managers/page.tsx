@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
+import { formatArticleDate, formatWebinarDateTime } from '@/lib/dates';
 import { localizedMetadata } from '@/i18n/metadata';
 import { PageHero } from '@/components/sections/PageHero';
 import { FeatureGrid } from '@/components/sections/FeatureGrid';
@@ -56,7 +57,7 @@ export default async function ForManagersPage({
       topicLabel: 'Managers',
       readingLabel: `${a.readingMinutes} min read`,
       cover: { key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt },
-      dateLabel: a.frontmatter.publishedAt,
+      dateLabel: formatArticleDate(a.frontmatter.publishedAt, loc),
     }));
 
   const webinars = await listEntries('webinars', loc);
@@ -67,11 +68,7 @@ export default async function ForManagersPage({
       href: `/${locale}/webinars/${w.slug}`,
       title: w.frontmatter.title,
       description: w.frontmatter.description,
-      dateLabel: new Date(w.frontmatter.startsAt).toLocaleDateString('en', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }),
+      dateLabel: formatWebinarDateTime(w.frontmatter.startsAt, loc),
       durationLabel: `${w.frontmatter.durationMinutes} min`,
       formatLabel: w.frontmatter.format,
       languagesLabel: w.frontmatter.languages.join(', '),

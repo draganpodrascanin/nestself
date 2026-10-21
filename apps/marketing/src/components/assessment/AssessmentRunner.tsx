@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   RadioGroup,
   RadioItem,
@@ -40,11 +40,7 @@ export interface AssessmentRunnerProps {
 
 type Phase = 'intro' | 'questions' | 'result';
 
-function AssessmentRunnerInner({
-  assessment,
-  labels,
-  links,
-}: AssessmentRunnerProps) {
+function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerProps) {
   const { announce } = useAnnounce();
   const [phase, setPhase] = useState<Phase>('intro');
   const [step, setStep] = useState(0);
@@ -54,25 +50,46 @@ function AssessmentRunnerInner({
   const questionHeadingRef = useRef<HTMLHeadingElement>(null);
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
 
+  /**
+   * Ref set by event handlers to request post-render focus on a heading.
+   * Cleared by the effect below after the focus is applied.
+   */
+  const pendingFocusRef = useRef<React.RefObject<HTMLElement | null> | null>(null);
+
   const totalQuestions = assessment.questions.length;
   const currentQuestion = assessment.questions[step];
 
-  const focusElement = useCallback((ref: React.RefObject<HTMLElement | null>) => {
-    requestAnimationFrame(() => {
-      ref.current?.focus();
-    });
-  }, []);
+  /**
+   * Apply pending focus after React commits the new DOM.
+   *
+   * The previous implementation used requestAnimationFrame, which fires on
+   * the macrotask queue.  In jsdom rAF is backed by setTimeout(cb, 0) and
+   * is NOT flushed by testing-library's act(), so the callback could fire
+   * between async test steps and steal focus from whatever element the test
+   * had just focused -- the root cause of the intermittent keyboard-test
+   * failure.
+   *
+   * useEffect fires synchronously inside act() boundaries in tests and
+   * after the DOM commit in the browser, eliminating the race while keeping
+   * the same user-facing behaviour: focus moves to the new heading on each
+   * phase / step transition.
+   */
+  useEffect(() => {
+    const ref = pendingFocusRef.current;
+    if (ref?.current) {
+      ref.current.focus();
+      pendingFocusRef.current = null;
+    }
+  }, [phase, step]);
 
   const handleStart = useCallback(() => {
     setPhase('questions');
     setStep(0);
     announce(
-      labels.questionOf
-        .replace('{current}', '1')
-        .replace('{total}', String(totalQuestions)),
+      labels.questionOf.replace('{current}', '1').replace('{total}', String(totalQuestions)),
     );
-    focusElement(questionHeadingRef);
-  }, [announce, labels.questionOf, totalQuestions, focusElement]);
+    pendingFocusRef.current = questionHeadingRef;
+  }, [announce, labels.questionOf, totalQuestions]);
 
   const handleNext = useCallback(() => {
     if (step < totalQuestions - 1) {
@@ -83,13 +100,13 @@ function AssessmentRunnerInner({
           .replace('{current}', String(nextStep + 1))
           .replace('{total}', String(totalQuestions)),
       );
-      focusElement(questionHeadingRef);
+      pendingFocusRef.current = questionHeadingRef;
     } else {
       setPhase('result');
       announce(labels.result);
-      focusElement(resultHeadingRef);
+      pendingFocusRef.current = resultHeadingRef;
     }
-  }, [step, totalQuestions, announce, labels, focusElement]);
+  }, [step, totalQuestions, announce, labels]);
 
   const handleBack = useCallback(() => {
     if (step > 0) {
@@ -100,16 +117,16 @@ function AssessmentRunnerInner({
           .replace('{current}', String(prevStep + 1))
           .replace('{total}', String(totalQuestions)),
       );
-      focusElement(questionHeadingRef);
+      pendingFocusRef.current = questionHeadingRef;
     }
-  }, [step, announce, labels.questionOf, totalQuestions, focusElement]);
+  }, [step, announce, labels.questionOf, totalQuestions]);
 
   const handleRestart = useCallback(() => {
     setPhase('intro');
     setStep(0);
     setAnswers({});
-    focusElement(introHeadingRef);
-  }, [focusElement]);
+    pendingFocusRef.current = introHeadingRef;
+  }, []);
 
   const handleOptionChange = useCallback(
     (value: string) => {
@@ -125,9 +142,7 @@ function AssessmentRunnerInner({
     [currentQuestion, assessment.options],
   );
 
-  const currentAnswer = currentQuestion
-    ? answers[currentQuestion.id]
-    : undefined;
+  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
   const selectedLabel =
     currentAnswer != null
       ? assessment.options.find((o) => o.score === currentAnswer)?.label
@@ -141,7 +156,7 @@ function AssessmentRunnerInner({
           id="runner-intro-title"
           ref={introHeadingRef}
           tabIndex={-1}
-          className="type-section-title mb-6 sr-only"
+          className="mb-6 sr-only type-section-title"
         >
           {assessment.title}
         </h2>
@@ -158,21 +173,14 @@ function AssessmentRunnerInner({
       .replace('{total}', String(totalQuestions));
 
     return (
-      <section
-        aria-labelledby="runner-question-title"
-        className="py-8 max-w-[720px]"
-      >
-        <ProgressBar
-          value={progress}
-          label={questionLabel}
-          className="mb-8"
-        />
+      <section aria-labelledby="runner-question-title" className="py-8 max-w-[720px]">
+        <ProgressBar value={progress} label={questionLabel} className="mb-8" />
 
         <h2
           id="runner-question-title"
           ref={questionHeadingRef}
           tabIndex={-1}
-          className="type-section-title mb-6"
+          className="mb-6 type-section-title"
         >
           {currentQuestion.text}
         </h2>
@@ -190,16 +198,13 @@ function AssessmentRunnerInner({
           ))}
         </RadioGroup>
 
-        <div className="flex flex-wrap gap-4">
+        <div className="gap-4 flex flex-wrap">
           {step > 0 && (
             <Button variant="secondary" onClick={handleBack}>
               {labels.back}
             </Button>
           )}
-          <Button
-            onClick={handleNext}
-            disabled={selectedLabel == null}
-          >
+          <Button onClick={handleNext} disabled={selectedLabel == null}>
             {step < totalQuestions - 1 ? labels.next : labels.finish}
           </Button>
         </div>
@@ -212,20 +217,17 @@ function AssessmentRunnerInner({
     const result = scoreAssessment(assessment, answers);
 
     return (
-      <section
-        aria-labelledby="runner-result-title"
-        className="py-8 max-w-[720px]"
-      >
+      <section aria-labelledby="runner-result-title" className="py-8 max-w-[720px]">
         <h2
           id="runner-result-title"
           ref={resultHeadingRef}
           tabIndex={-1}
-          className="type-section-title mb-2"
+          className="mb-2 type-section-title"
         >
           {labels.result}
         </h2>
 
-        <h3 className="type-section-title mb-4">{result.band.title}</h3>
+        <h3 className="mb-4 type-section-title">{result.band.title}</h3>
 
         <Text className="mb-2">
           {labels.yourScore
@@ -240,10 +242,7 @@ function AssessmentRunnerInner({
         <Text className="mb-6">{result.band.nextStep}</Text>
 
         {/* Disclaimer */}
-        <div
-          role="note"
-          className="mb-6 rounded-card border border-border-subtle p-4"
-        >
+        <div role="note" className="mb-6 p-4 rounded-card border border-border-subtle">
           <Text typeRole="metadata" tone="secondary">
             {assessment.disclaimer}
           </Text>
@@ -252,15 +251,15 @@ function AssessmentRunnerInner({
         {/* Crisis block */}
         <div
           role="alert"
-          className="mb-8 rounded-card border border-border-control bg-surface-sunken p-4"
+          className="mb-8 bg-surface-sunken p-4 rounded-card border border-border-control"
         >
-          <h4 className="type-section-title mb-2">{assessment.crisis.title}</h4>
+          <h4 className="mb-2 type-section-title">{assessment.crisis.title}</h4>
           <Text tone="secondary" className="mb-3">
             {assessment.crisis.body}
           </Text>
-          <ul className="list-none m-0 p-0 space-y-1">
+          <ul className="m-0 p-0 space-y-1 list-none">
             {assessment.crisis.lines.map((line) => (
-              <li key={`${line.label}-${line.value}`} className="flex gap-2">
+              <li key={`${line.label}-${line.value}`} className="gap-2 flex">
                 <Text as="span" typeRole="label">
                   {line.label}:
                 </Text>
@@ -282,10 +281,8 @@ function AssessmentRunnerInner({
           {labels.nothingStored}
         </Text>
 
-        <div className="flex flex-wrap gap-4 mb-6">
-          <LinkButton href={links.talk}>
-            {labels.talkToSomeone}
-          </LinkButton>
+        <div className="gap-4 mb-6 flex flex-wrap">
+          <LinkButton href={links.talk}>{labels.talkToSomeone}</LinkButton>
           <LinkButton href={links.related} variant="secondary">
             {labels.relatedReading}
           </LinkButton>

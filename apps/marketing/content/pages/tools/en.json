@@ -34,6 +34,12 @@
     "talkToSomeone": "Talk to a professional",
     "relatedReading": "Explore related resources"
   },
+  "introPhotoAlt": {
+    "psychological": "A person sitting on a sofa reflecting on their wellbeing",
+    "work": "A person at the end of a work day, pausing to reflect",
+    "financial": "A person reviewing financial plans with a consultant",
+    "default": "A person sitting on a sofa reflecting on their wellbeing"
+  },
   "breadcrumbs": {
     "home": "Home",
     "tools": "Tools"

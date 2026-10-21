@@ -49,7 +49,8 @@ export default async function LegalConsultationPage({
         lead={data.hero.lead}
         primaryCta={data.hero.primaryCta}
         secondaryCta={data.hero.secondaryCta}
-        variant="quiet"
+        photo={{ key: 'legal-consultation' as PhotoKey, alt: 'A legal consultation session at a desk' }}
+        variant="split"
       />
 
       <FeatureGrid

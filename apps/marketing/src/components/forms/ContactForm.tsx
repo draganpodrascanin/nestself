@@ -6,7 +6,7 @@ import type { Locale } from '@nestself/i18n';
 import { Field, Input, Textarea, Checkbox } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
 import { TextLink } from '@nestself/ui';
-import { submitLead } from '@/lib/leads';
+import { submitLead, describeIssues, type ValidationMessages } from '@/lib/leads';
 import { LeadFormShell, type FormStatus } from './LeadFormShell';
 
 export interface ContactFormContent {
@@ -28,6 +28,7 @@ export interface ContactFormContent {
   errorContactHint: string;
   fallbackErrorLabel: string;
   fallbackErrorMessage: string;
+  validation: ValidationMessages;
 }
 
 export interface ContactFormProps {
@@ -60,15 +61,7 @@ export function ContactForm({ locale, content }: ContactFormProps) {
 
     const result = ContactMessageSchema.safeParse(data);
     if (!result.success) {
-      const fieldErrors: FormError[] = result.error.issues.map((iss) => {
-        const fieldName = String(iss.path?.[0] ?? 'form');
-        return {
-          id: `field-${fieldName}`,
-          label: content.fields[fieldName as keyof typeof content.fields] ?? fieldName,
-          message: iss.message,
-        };
-      });
-      setErrors(fieldErrors);
+      setErrors(describeIssues(result.error.issues, content.fields, content.validation));
       return;
     }
 

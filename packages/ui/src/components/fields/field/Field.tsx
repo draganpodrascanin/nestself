@@ -153,6 +153,7 @@ export function Select({
       onValueChange={onValueChange}
       disabled={disabled}
       name={name}
+      items={options.map((opt) => ({ value: opt.value, label: opt.label }))}
     >
       <BaseSelect.Trigger
         aria-label={ariaLabel}
@@ -176,6 +177,7 @@ export function Select({
               <BaseSelect.Item
                 key={opt.value}
                 value={opt.value}
+                label={opt.label}
                 className={cn(
                   'px-3 py-2 flex cursor-pointer items-center',
                   'data-highlighted:bg-tint',

@@ -50,7 +50,8 @@ export default async function TherapyPage({
         lead={data.hero.lead}
         primaryCta={data.hero.primaryCta}
         secondaryCta={data.hero.secondaryCta}
-        variant="quiet"
+        photo={{ key: 'psychological-inperson' as PhotoKey, alt: 'A person talking to a psychologist during an in-person session' }}
+        variant="split"
       />
 
       <FeatureGrid
