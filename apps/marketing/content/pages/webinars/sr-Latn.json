@@ -70,11 +70,12 @@
     "failureTitle": "Nismo mogli da pošaljemo Vašu prijavu",
     "failureBody": "Molimo Vas pokušajte ponovo kasnije ili nas kontaktirajte na {email}.",
     "validation": {
-      "required": "Popunite {{field}}.",
-      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@firma.com.",
-      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
-      "select": "Izaberite opciju za {{field}}.",
-      "tooLong": "{{field}} je predugačko."
+      "required": "Ovo polje je obavezno.",
+      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@kompanija.com.",
+      "consent": "Potrebna nam je Vaša saglasnost sa politikom privatnosti da bismo Vam odgovorili.",
+      "select": "Izaberite jednu od ponuđenih opcija.",
+      "tooLong": "Tekst je predugačak.",
+      "consentField": "Saglasnost"
     }
   }
 }

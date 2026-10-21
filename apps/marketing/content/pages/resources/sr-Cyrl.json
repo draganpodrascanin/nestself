@@ -15,17 +15,17 @@
     "webinars": {
       "title": "Вебинари",
       "seeAllLabel": "Погледајте све вебинаре",
-      "seeAllHref": "/wебинарс"
+      "seeAllHref": "/webinars"
     },
     "articles": {
       "title": "Чланци",
       "seeAllLabel": "Погледајте све чланке",
-      "seeAllHref": "/артицлес"
+      "seeAllHref": "/articles"
     },
     "tools": {
       "title": "Алати",
       "seeAllLabel": "Погледајте све алате",
-      "seeAllHref": "/тоолс"
+      "seeAllHref": "/tools"
     }
   },
   "topics": {
@@ -37,11 +37,16 @@
     "managers": "Руководиоци"
   },
   "cardLabels": {
-    "readingTime": "{минутес} мин читања",
+    "readingTime": "{minutes} мин читања",
     "live": "Уживо",
     "onDemand": "На захтев",
-    "minutes": "{н} мин",
+    "minutes": "{n} мин",
     "languages": "Језици",
-    "questionsLabel": "{н} питања"
+    "questionsLabel": "{n} питања"
+  },
+  "kindLabels": {
+    "guide": "Водич",
+    "planner": "Планер",
+    "checklist": "Контролна листа"
   }
 }

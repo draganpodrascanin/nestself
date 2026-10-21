@@ -82,11 +82,12 @@
       ]
     },
     "validation": {
-      "required": "Popunite {{field}}.",
+      "required": "Ovo polje je obavezno.",
       "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@kompanija.com.",
-      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
-      "select": "Izaberite opciju za {{field}}.",
-      "tooLong": "{{field}} je predugačko."
+      "consent": "Potrebna nam je Vaša saglasnost sa politikom privatnosti da bismo Vam odgovorili.",
+      "select": "Izaberite jednu od ponuđenih opcija.",
+      "tooLong": "Tekst je predugačak.",
+      "consentField": "Saglasnost"
     },
     "emailHint": "Preporučujemo da koristite poslovnu e-adresu kako bismo Vas povezali sa Vašom organizacijom.",
     "optional": "opciono",

@@ -27,11 +27,12 @@
     "fallbackErrorLabel": "Formular",
     "fallbackErrorMessage": "Slanje nije uspelo. Proverite unete podatke i pokušajte ponovo.",
     "validation": {
-      "required": "Popunite {{field}}.",
-      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@kompanija.com.",
-      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
-      "select": "Izaberite opciju za {{field}}.",
-      "tooLong": "{{field}} je predugačko."
+      "required": "Ovo polje je obavezno.",
+      "email": "Unesite ispravnu e-adresu, na primer ime@primer.com.",
+      "consent": "Potrebna nam je Vaša saglasnost sa politikom privatnosti da bismo Vam odgovorili.",
+      "select": "Izaberite jednu od ponuđenih opcija.",
+      "tooLong": "Tekst je predugačak.",
+      "consentField": "Saglasnost"
     }
   },
   "aside": {

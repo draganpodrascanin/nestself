@@ -15,11 +15,7 @@ interface Params {
   locale: string;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<Params>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const { data } = await loadContent(locale as Locale);
@@ -31,11 +27,7 @@ export async function generateMetadata({
   });
 }
 
-export default async function ToolsPage({
-  params,
-}: {
-  params: Promise<Params>;
-}) {
+export default async function ToolsPage({ params }: { params: Promise<Params> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
@@ -66,7 +58,7 @@ export default async function ToolsPage({
         <Text tone="secondary" className="mb-8 max-w-[640px]">
           {data.assessments.intro}
         </Text>
-        <div className="grid gap-6 grid-cols-1 @min-[760px]:grid-cols-2 @min-[1024px]:grid-cols-3">
+        <div className="gap-6 grid grid-cols-1 @min-[760px]:grid-cols-2 @min-[1024px]:grid-cols-3">
           {assessments.map((a) => (
             <AssessmentCard
               key={a.slug}
@@ -95,14 +87,14 @@ export default async function ToolsPage({
         <Text tone="secondary" className="mb-8 max-w-[640px]">
           {data.guides.intro}
         </Text>
-        <div className="grid gap-6 grid-cols-1 @min-[760px]:grid-cols-2 @min-[1024px]:grid-cols-3">
+        <div className="gap-6 grid grid-cols-1 @min-[760px]:grid-cols-2 @min-[1024px]:grid-cols-3">
           {tools.map((tool) => (
             <ToolCard
               key={tool.slug}
               href={`/${locale}/tools/${tool.slug}`}
               title={tool.frontmatter.title}
               description={tool.frontmatter.description}
-              kindLabel={tool.frontmatter.kind.charAt(0).toUpperCase() + tool.frontmatter.kind.slice(1)}
+              kindLabel={data.kindLabels[tool.frontmatter.kind]}
               cover={{
                 key: tool.frontmatter.cover as PhotoKey,
                 alt: tool.frontmatter.coverAlt,

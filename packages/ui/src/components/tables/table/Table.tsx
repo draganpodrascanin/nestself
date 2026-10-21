@@ -10,15 +10,13 @@ export interface TableProps {
   className?: string;
 }
 
-export function Table({
-  caption,
-  density = 'default',
-  children,
-  className,
-}: TableProps) {
+export function Table({ caption, density = 'default', children, className }: TableProps) {
   return (
     <div
-      className={cn('overflow-x-auto rounded-card border border-border-subtle bg-surface', className)}
+      className={cn(
+        '[scrollbar-width:thin] overflow-x-auto rounded-card border border-border-subtle bg-surface @max-[760px]:[mask-image:linear-gradient(to_right,black_88%,transparent)]',
+        className,
+      )}
       {...(caption
         ? {
             role: 'region' as const,
@@ -48,7 +46,7 @@ export function Th({ numeric, children, className, ...rest }: ThProps) {
       className={cn(
         'px-4 py-3 text-left font-[var(--font-weight-label)] text-text-secondary',
         'h-14 [[data-density="compact"]_&]:h-11 pointer-coarse:!h-14',
-        numeric && 'text-right tabular-nums whitespace-nowrap',
+        numeric && 'text-right whitespace-nowrap tabular-nums',
         className,
       )}
     >
@@ -70,7 +68,7 @@ export function Td({ numeric, children, className, ...rest }: TdProps) {
       className={cn(
         'px-4 py-3',
         'h-14 [[data-density="compact"]_&]:h-11 pointer-coarse:!h-14',
-        numeric && 'text-right tabular-nums whitespace-nowrap',
+        numeric && 'text-right whitespace-nowrap tabular-nums',
         className,
       )}
     >

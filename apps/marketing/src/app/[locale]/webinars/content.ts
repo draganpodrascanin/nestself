@@ -10,6 +10,7 @@ const validationSchema = z.object({
   consent: z.string(),
   select: z.string(),
   tooLong: z.string(),
+  consentField: z.string().optional(),
 });
 
 export const schema = z.object({
@@ -77,5 +78,4 @@ export const schema = z.object({
   }),
 });
 
-export const loadContent = (locale: Locale) =>
-  loadPageContent('webinars', locale, schema);
+export const loadContent = (locale: Locale) => loadPageContent('webinars', locale, schema);

@@ -259,14 +259,17 @@ function AssessmentRunnerInner({ assessment, labels, links }: AssessmentRunnerPr
           </Text>
           <ul className="m-0 p-0 space-y-1 list-none">
             {assessment.crisis.lines.map((line) => (
-              <li key={`${line.label}-${line.value}`} className="gap-2 flex">
+              <li
+                key={`${line.label}-${line.value}`}
+                className="gap-x-2 flex flex-wrap items-baseline"
+              >
                 <Text as="span" typeRole="label">
                   {line.label}:
                 </Text>
                 <a
                   href={`tel:${line.value.replace(/\s/g, '')}`}
                   className={cn(
-                    'type-label text-text',
+                    'type-label text-text whitespace-nowrap',
                     'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
                   )}
                 >

@@ -43,5 +43,10 @@
     "minutes": "{n} min",
     "languages": "Languages",
     "questionsLabel": "{n} questions"
+  },
+  "kindLabels": {
+    "guide": "Guide",
+    "planner": "Planner",
+    "checklist": "Checklist"
   }
 }

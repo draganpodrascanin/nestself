@@ -43,5 +43,10 @@
     "minutes": "{n} perc",
     "languages": "Nyelvek",
     "questionsLabel": "{n} kérdés"
+  },
+  "kindLabels": {
+    "guide": "Útmutató",
+    "planner": "Tervező",
+    "checklist": "Ellenőrzőlista"
   }
 }

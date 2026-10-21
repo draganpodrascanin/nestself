@@ -31,11 +31,14 @@ export function CrisisBlock({ title, body, lines }: CrisisBlockProps) {
               </Heading>
               <ul className="gap-1 flex flex-col">
                 {country.items.map((line) => (
-                  <li key={`${line.label}-${line.value}`} className="gap-2 flex items-baseline">
+                  <li
+                    key={`${line.label}-${line.value}`}
+                    className="gap-x-2 flex flex-wrap items-baseline"
+                  >
                     <Text typeRole="label">{line.label}:</Text>
                     <a
                       href={`tel:${line.value.replace(/\s/g, '')}`}
-                      className="type-body font-[var(--font-weight-label)] underline"
+                      className="type-body font-[var(--font-weight-label)] whitespace-nowrap underline"
                     >
                       {line.value}
                     </a>

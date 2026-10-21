@@ -18,11 +18,7 @@ interface Params {
   locale: string;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<Params>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const { data } = await loadContent(locale as Locale);
@@ -49,18 +45,11 @@ function readingTimeLabel(minutes: number, template: string): string {
   return template.replace('{minutes}', String(minutes));
 }
 
-function languagesLabel(
-  languages: string[],
-  prefix: string,
-): string {
+function languagesLabel(languages: string[], prefix: string): string {
   return `${prefix}: ${languages.join(', ')}`;
 }
 
-export default async function ResourcesPage({
-  params,
-}: {
-  params: Promise<Params>;
-}) {
+export default async function ResourcesPage({ params }: { params: Promise<Params> }) {
   const { locale: rawLocale } = await params;
   if (!isLocale(rawLocale)) notFound();
   const locale = rawLocale as Locale;
@@ -93,7 +82,7 @@ export default async function ResourcesPage({
       {/* Webinars section */}
       {topWebinars.length > 0 && (
         <section aria-labelledby="resources-webinars-title" className="py-16">
-          <div className="mb-8 flex items-baseline justify-between gap-4">
+          <div className="mb-8 gap-4 flex items-baseline justify-between">
             <Heading level={2} id="resources-webinars-title">
               {data.sections.webinars.title}
             </Heading>
@@ -101,7 +90,7 @@ export default async function ResourcesPage({
               {data.sections.webinars.seeAllLabel}
             </TextLink>
           </div>
-          <div className="grid gap-8 grid-cols-3 @max-[760px]:grid-cols-1">
+          <div className="gap-8 grid grid-cols-3 @max-[760px]:grid-cols-1">
             {topWebinars.map((w) => (
               <WebinarCard
                 key={w.slug}
@@ -109,7 +98,10 @@ export default async function ResourcesPage({
                 title={w.frontmatter.title}
                 description={w.frontmatter.description}
                 dateLabel={formatWebinarDateTime(w.frontmatter.startsAt, locale)}
-                durationLabel={durationLabel(w.frontmatter.durationMinutes, data.cardLabels.minutes)}
+                durationLabel={durationLabel(
+                  w.frontmatter.durationMinutes,
+                  data.cardLabels.minutes,
+                )}
                 formatLabel={webinarFormatLabel(w.frontmatter.format, data.cardLabels)}
                 languagesLabel={languagesLabel(w.frontmatter.languages, data.cardLabels.languages)}
                 cover={{ key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt ?? '' }}
@@ -122,7 +114,7 @@ export default async function ResourcesPage({
       {/* Articles section */}
       {topArticles.length > 0 && (
         <section aria-labelledby="resources-articles-title" className="py-16">
-          <div className="mb-8 flex items-baseline justify-between gap-4">
+          <div className="mb-8 gap-4 flex items-baseline justify-between">
             <Heading level={2} id="resources-articles-title">
               {data.sections.articles.title}
             </Heading>
@@ -130,14 +122,17 @@ export default async function ResourcesPage({
               {data.sections.articles.seeAllLabel}
             </TextLink>
           </div>
-          <div className="grid gap-8 grid-cols-3 @max-[760px]:grid-cols-1">
+          <div className="gap-8 grid grid-cols-3 @max-[760px]:grid-cols-1">
             {topArticles.map((a) => (
               <ArticleCard
                 key={a.slug}
                 href={`/${locale}/articles/${a.slug}`}
                 title={a.frontmatter.title}
                 description={a.frontmatter.description}
-                topicLabel={data.topics[a.frontmatter.topic as keyof typeof data.topics] ?? a.frontmatter.topic}
+                topicLabel={
+                  data.topics[a.frontmatter.topic as keyof typeof data.topics] ??
+                  a.frontmatter.topic
+                }
                 readingLabel={readingTimeLabel(a.readingMinutes, data.cardLabels.readingTime)}
                 cover={{ key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt ?? '' }}
                 dateLabel={formatArticleDate(a.frontmatter.publishedAt, locale)}
@@ -150,7 +145,7 @@ export default async function ResourcesPage({
       {/* Tools section - only when non-empty */}
       {hasTools && (
         <section aria-labelledby="resources-tools-title" className="py-16">
-          <div className="mb-8 flex items-baseline justify-between gap-4">
+          <div className="mb-8 gap-4 flex items-baseline justify-between">
             <Heading level={2} id="resources-tools-title">
               {data.sections.tools.title}
             </Heading>
@@ -158,14 +153,14 @@ export default async function ResourcesPage({
               {data.sections.tools.seeAllLabel}
             </TextLink>
           </div>
-          <div className="grid gap-8 grid-cols-3 @max-[760px]:grid-cols-1">
+          <div className="gap-8 grid grid-cols-3 @max-[760px]:grid-cols-1">
             {topTools.map((t) => (
               <ToolCard
                 key={t.slug}
                 href={`/${locale}/tools/${t.slug}`}
                 title={t.frontmatter.title}
                 description={t.frontmatter.description}
-                kindLabel={t.frontmatter.kind}
+                kindLabel={data.kindLabels[t.frontmatter.kind]}
                 cover={{ key: t.frontmatter.cover as PhotoKey, alt: t.frontmatter.coverAlt ?? '' }}
               />
             ))}
@@ -176,7 +171,10 @@ export default async function ResourcesPage({
                 title={a.data.title}
                 intro={a.data.intro}
                 durationLabel={durationLabel(a.data.durationMinutes, data.cardLabels.minutes)}
-                questionsLabel={data.cardLabels.questionsLabel.replace('{n}', String(a.data.questions.length))}
+                questionsLabel={data.cardLabels.questionsLabel.replace(
+                  '{n}',
+                  String(a.data.questions.length),
+                )}
               />
             ))}
           </div>

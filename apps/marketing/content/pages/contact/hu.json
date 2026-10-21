@@ -27,11 +27,12 @@
     "fallbackErrorLabel": "Űrlap",
     "fallbackErrorMessage": "A küldés nem sikerült. Kérjük, ellenőrizd a megadott adatokat, és próbáld újra.",
     "validation": {
-      "required": "Kérjük, töltsd ki a(z) {{field}} mezőt.",
-      "email": "Adj meg egy érvényes e-mail-címet, például nev@ceg.com.",
+      "required": "Ezt a mezőt ki kell tölteni.",
+      "email": "Adj meg egy érvényes e-mail-címet, például nev@pelda.hu.",
       "consent": "Kérjük, fogadd el az adatkezelési tájékoztatót, hogy válaszolhassunk.",
-      "select": "Kérjük, válassz egy lehetőséget a(z) {{field}} mezőben.",
-      "tooLong": "A(z) {{field}} túl hosszú."
+      "select": "Válassz egy lehetőséget.",
+      "tooLong": "A szöveg túl hosszú.",
+      "consentField": "Hozzájárulás"
     }
   },
   "aside": {

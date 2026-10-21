@@ -38,7 +38,7 @@ export const schema = z.object({
     languages: z.string(),
     questionsLabel: z.string(),
   }),
+  kindLabels: z.object({ guide: z.string(), planner: z.string(), checklist: z.string() }),
 });
 
-export const loadContent = (locale: Locale) =>
-  loadPageContent('resources', locale, schema);
+export const loadContent = (locale: Locale) => loadPageContent('resources', locale, schema);

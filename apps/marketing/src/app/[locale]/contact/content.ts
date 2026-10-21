@@ -8,6 +8,7 @@ const validationSchema = z.object({
   consent: z.string(),
   select: z.string(),
   tooLong: z.string(),
+  consentField: z.string().optional(),
 });
 
 export const schema = z.object({

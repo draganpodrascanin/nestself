@@ -44,9 +44,9 @@ export const schema = z.object({
   }),
   guideCtaLabel: z.string(),
   guideCta: z.record(z.string(), ctaSchema),
+  kindLabels: z.object({ guide: z.string(), planner: z.string(), checklist: z.string() }),
 });
 
 export type ToolsPageContent = z.infer<typeof schema>;
 
-export const loadContent = (locale: Locale) =>
-  loadPageContent('tools', locale, schema);
+export const loadContent = (locale: Locale) => loadPageContent('tools', locale, schema);

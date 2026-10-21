@@ -10,6 +10,7 @@ const validationSchema = z.object({
   consent: z.string(),
   select: z.string(),
   tooLong: z.string(),
+  consentField: z.string().optional(),
 });
 
 const formFieldsSchema = z.object({

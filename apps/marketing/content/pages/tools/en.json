@@ -6,8 +6,14 @@
   "hero": {
     "title": "Tools for your wellbeing",
     "lead": "Quick check-ins and practical planners you can use right now. Nothing you answer here is stored or shared with anyone.",
-    "primaryCta": { "label": "Start a check-in", "href": "#assessments" },
-    "secondaryCta": { "label": "Browse guides", "href": "#guides" }
+    "primaryCta": {
+      "label": "Start a check-in",
+      "href": "#assessments"
+    },
+    "secondaryCta": {
+      "label": "Browse guides",
+      "href": "#guides"
+    }
   },
   "assessments": {
     "eyebrow": "Check-ins",
@@ -46,11 +52,34 @@
   },
   "guideCtaLabel": "Learn more about {service}",
   "guideCta": {
-    "psychological": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
-    "legal": { "label": "Explore legal consultation", "href": "/services/legal-consultation" },
-    "financial": { "label": "Explore financial guidance", "href": "/services/financial-guidance" },
-    "work": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
-    "family": { "label": "Explore therapy and counselling", "href": "/services/therapy" },
-    "managers": { "label": "Explore therapy and counselling", "href": "/services/therapy" }
+    "psychological": {
+      "label": "Explore therapy and counselling",
+      "href": "/services/therapy"
+    },
+    "legal": {
+      "label": "Explore legal consultation",
+      "href": "/services/legal-consultation"
+    },
+    "financial": {
+      "label": "Explore financial guidance",
+      "href": "/services/financial-guidance"
+    },
+    "work": {
+      "label": "Explore therapy and counselling",
+      "href": "/services/therapy"
+    },
+    "family": {
+      "label": "Explore therapy and counselling",
+      "href": "/services/therapy"
+    },
+    "managers": {
+      "label": "Explore therapy and counselling",
+      "href": "/services/therapy"
+    }
+  },
+  "kindLabels": {
+    "guide": "Guide",
+    "planner": "Planner",
+    "checklist": "Checklist"
   }
 }

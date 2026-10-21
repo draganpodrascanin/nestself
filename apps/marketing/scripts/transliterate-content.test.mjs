@@ -150,11 +150,16 @@ describe('--check detects a stale Cyrillic file', () => {
     const slugDir = join(tmpDir, 'assessments', 'fresh-test');
     await mkdir(slugDir, { recursive: true });
 
-    const latinJson = JSON.stringify({
-      title: 'Razumevanje dobrobiti',
-      cover: 'hero-workplace',
-      topic: 'psychological',
-    }, null, 2) + '\n';
+    const latinJson =
+      JSON.stringify(
+        {
+          title: 'Razumevanje dobrobiti',
+          cover: 'hero-workplace',
+          topic: 'psychological',
+        },
+        null,
+        2,
+      ) + '\n';
 
     const latinPath = join(slugDir, 'sr-Latn.json');
     await writeFile(latinPath, latinJson, 'utf-8');
@@ -212,9 +217,7 @@ describe('--check CLI end-to-end', () => {
     await writeFile(join(slugDir, 'sr-Latn.mdx'), latinContent, 'utf-8');
 
     // Generate the correct Cyrillic file first
-    const { output: freshOutput } = await transliterateFile(
-      join(slugDir, 'sr-Latn.mdx'),
-    );
+    const { output: freshOutput } = await transliterateFile(join(slugDir, 'sr-Latn.mdx'));
     await writeFile(join(slugDir, 'sr-Cyrl.mdx'), freshOutput, 'utf-8');
 
     // --check should succeed
@@ -225,5 +228,25 @@ describe('--check CLI end-to-end', () => {
     expect(stdout).not.toContain('STALE');
 
     await rm(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('transliterateJsonContent protections', () => {
+  it('keeps single-brace placeholders, paths and href-like keys untouched', () => {
+    const out = transliterateJsonContent({
+      readingTime: '{minutes} min čitanja',
+      questions: '{count} pitanja',
+      moreHref: '/resources',
+      serviceLinks: [{ label: 'Terapija', href: '/services/therapy' }],
+      lead: 'Pogledajte /services/therapy i {{field}} ovde',
+      anchor: '#support',
+    });
+    expect(out.readingTime).toBe('{minutes} мин читања');
+    expect(out.questions).toBe('{count} питања');
+    expect(out.moreHref).toBe('/resources');
+    expect(out.serviceLinks[0].href).toBe('/services/therapy');
+    expect(out.serviceLinks[0].label).toBe('Терапија');
+    expect(out.lead).toBe('Погледајте /services/therapy и {{field}} овде');
+    expect(out.anchor).toBe('#support');
   });
 });

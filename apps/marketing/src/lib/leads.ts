@@ -12,6 +12,7 @@ export interface ValidationMessages {
   consent: string;
   select: string;
   tooLong: string;
+  consentField?: string;
 }
 
 /** A single zod issue (the subset of fields we inspect). */
@@ -61,8 +62,10 @@ export function describeIssues(
     }
 
     const message = template.replace(/\{\{field\}\}/g, fieldLabel);
+    const summaryLabel =
+      fieldName === 'consent' && validation.consentField ? validation.consentField : fieldLabel;
 
-    return { id: fieldId, label: fieldLabel, message };
+    return { id: fieldId, label: summaryLabel, message };
   });
 }
 
@@ -92,7 +95,9 @@ export async function submitLead<T>(
   }
 
   try {
-    const json = (await res.json()) as { issues?: { path: (string | number)[]; message: string }[] };
+    const json = (await res.json()) as {
+      issues?: { path: (string | number)[]; message: string }[];
+    };
     return { ok: false, status: res.status, issues: json.issues };
   } catch {
     return { ok: false, status: res.status };

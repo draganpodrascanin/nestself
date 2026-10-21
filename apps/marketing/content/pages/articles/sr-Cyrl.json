@@ -22,13 +22,13 @@
     "managers": "Руководиоци"
   },
   "cardLabels": {
-    "readingTime": "{минутес} мин читања",
+    "readingTime": "{minutes} мин читања",
     "published": "Објављено"
   },
   "detail": {
     "breadcrumbLabel": "Навигација",
     "breadcrumbArticles": "Чланци",
-    "readingTime": "{минутес} мин читања",
+    "readingTime": "{minutes} мин читања",
     "disclaimerText": "Овај чланак је општа информација, не медицински, правни или финансијски савет.",
     "disclaimerLinkText": "Разговарајте са стручњаком",
     "relatedTitle": "Сродни чланци",
@@ -36,15 +36,15 @@
       "title": "Потребан Вам је разговор са стручњаком?",
       "body": "Ако Ваш послодавац нуди NestSelf, можете заказати поверљиву сесију са лиценцираним стручњаком. Ако не, јавите свом ХР тиму да сте заинтересовани.",
       "primaryLabel": "Закажите презентацију",
-      "primaryHref": "/демо"
+      "primaryHref": "/demo"
     }
   },
   "serviceLinks": {
-    "psychological": "/сервицес/тхерапy",
-    "legal": "/сервицес/легал-цонсултатион",
-    "financial": "/сервицес/финанциал-гуиданце",
-    "work": "/сервицес/тхерапy",
-    "family": "/сервицес/тхерапy",
-    "managers": "/сервицес/тхерапy"
+    "psychological": "/services/therapy",
+    "legal": "/services/legal-consultation",
+    "financial": "/services/financial-guidance",
+    "work": "/services/therapy",
+    "family": "/services/therapy",
+    "managers": "/services/therapy"
   }
 }

@@ -129,7 +129,7 @@ const ARRAY_ONLY_UNTOUCHED_KEYS = new Set(['languages']);
 
 /** URL, domain and {{placeholder}} tokens that must survive transliteration inside prose. */
 const PROSE_PROTECTED =
-  /(https?:\/\/\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?:rs|hu|com|org|net|eu|int|dk|io|gov|edu)\b|\{\{[^}]+\}\})/g;
+  /(https?:\/\/\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?:rs|hu|com|org|net|eu|int|dk|io|gov|edu)\b|\{\{?[^{}]+\}?\}|(?:^|\s)\/[\w\-./#?=&%]+)/g;
 
 export function transliterateText(text) {
   return text
@@ -140,7 +140,7 @@ export function transliterateText(text) {
 
 export function transliterateJsonContent(obj) {
   if (typeof obj === 'string') {
-    if (/^https?:\/\//.test(obj)) return obj;
+    if (/^(https?:\/\/|mailto:|\/|#)/.test(obj)) return obj;
     return transliterateText(obj);
   }
   if (Array.isArray(obj)) {
@@ -151,7 +151,8 @@ export function transliterateJsonContent(obj) {
     for (const [key, value] of Object.entries(obj)) {
       const untouched =
         (JSON_UNTOUCHED_KEYS.has(key) && !ARRAY_ONLY_UNTOUCHED_KEYS.has(key)) ||
-        (ARRAY_ONLY_UNTOUCHED_KEYS.has(key) && Array.isArray(value));
+        (ARRAY_ONLY_UNTOUCHED_KEYS.has(key) && Array.isArray(value)) ||
+        /(href|url|link|path|slug|anchor)$/i.test(key);
       result[key] = untouched ? value : transliterateJsonContent(value);
     }
     return result;

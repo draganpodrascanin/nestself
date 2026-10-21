@@ -6,8 +6,14 @@
   "hero": {
     "title": "Alati za Vaše blagostanje",
     "lead": "Brze provere i praktični planeri koje možete koristiti odmah. Ništa što ovde odgovorite se ne čuva niti deli sa bilo kim.",
-    "primaryCta": { "label": "Započnite proveru", "href": "#assessments" },
-    "secondaryCta": { "label": "Pregledajte vodiče", "href": "#guides" }
+    "primaryCta": {
+      "label": "Započnite proveru",
+      "href": "#assessments"
+    },
+    "secondaryCta": {
+      "label": "Pregledajte vodiče",
+      "href": "#guides"
+    }
   },
   "assessments": {
     "eyebrow": "Provere",
@@ -46,11 +52,34 @@
   },
   "guideCtaLabel": "Saznajte više o usluzi {service}",
   "guideCta": {
-    "psychological": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
-    "legal": { "label": "Istražite pravno savetovanje", "href": "/services/legal-consultation" },
-    "financial": { "label": "Istražite finansijsko savetovanje", "href": "/services/financial-guidance" },
-    "work": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
-    "family": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
-    "managers": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" }
+    "psychological": {
+      "label": "Istražite psihoterapiju i savetovanje",
+      "href": "/services/therapy"
+    },
+    "legal": {
+      "label": "Istražite pravno savetovanje",
+      "href": "/services/legal-consultation"
+    },
+    "financial": {
+      "label": "Istražite finansijsko savetovanje",
+      "href": "/services/financial-guidance"
+    },
+    "work": {
+      "label": "Istražite psihoterapiju i savetovanje",
+      "href": "/services/therapy"
+    },
+    "family": {
+      "label": "Istražite psihoterapiju i savetovanje",
+      "href": "/services/therapy"
+    },
+    "managers": {
+      "label": "Istražite psihoterapiju i savetovanje",
+      "href": "/services/therapy"
+    }
+  },
+  "kindLabels": {
+    "guide": "Vodič",
+    "planner": "Planer",
+    "checklist": "Kontrolna lista"
   }
 }

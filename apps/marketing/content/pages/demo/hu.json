@@ -82,11 +82,12 @@
       ]
     },
     "validation": {
-      "required": "Kérjük, töltsd ki a(z) {{field}} mezőt.",
-      "email": "Adj meg egy érvényes munkahelyi e-mail-címet, például nev@ceg.com.",
+      "required": "Ezt a mezőt ki kell tölteni.",
+      "email": "Adj meg egy érvényes munkahelyi e-mail-címet, például nev@ceg.hu.",
       "consent": "Kérjük, fogadd el az adatkezelési tájékoztatót, hogy válaszolhassunk.",
-      "select": "Kérjük, válassz egy lehetőséget a(z) {{field}} mezőben.",
-      "tooLong": "A(z) {{field}} túl hosszú."
+      "select": "Válassz egy lehetőséget.",
+      "tooLong": "A szöveg túl hosszú.",
+      "consentField": "Hozzájárulás"
     },
     "emailHint": "Javasoljuk, hogy a munkahelyi e-mail-címedet add meg, hogy össze tudjunk párosítani a szervezeteddel.",
     "optional": "nem kötelező",

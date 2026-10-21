@@ -43,5 +43,10 @@
     "minutes": "{n} min",
     "languages": "Jezici",
     "questionsLabel": "{n} pitanja"
+  },
+  "kindLabels": {
+    "guide": "Vodič",
+    "planner": "Planer",
+    "checklist": "Kontrolna lista"
   }
 }
