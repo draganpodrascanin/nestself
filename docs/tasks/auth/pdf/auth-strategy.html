@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NestSelf authentication, authorization and infrastructure strategy</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+/* Page-specific refinements that stay within the token system */
+.lead-row { display: grid; grid-template-columns: 1fr 58mm; gap: 8mm; align-items: start; margin-bottom: 6mm; }
+.grant-card { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-card); overflow: hidden; }
+.grant-card .gc-head { background: var(--color-primary); color: var(--color-on-primary); padding: 3.5mm 5mm; display: flex; justify-content: space-between; align-items: baseline; }
+.grant-card .gc-head strong { font-size: 11pt; }
+.grant-card .gc-head span { font-size: 8pt; color: var(--color-accent); font-variant-numeric: tabular-nums; }
+.grant-card .gc-row { display: grid; grid-template-columns: 27mm 1fr; gap: 3.5mm; padding: 2.1mm 4.5mm; border-top: 1px solid var(--color-border-subtle); font-size: 8.9pt; line-height: 1.38; }
+.grant-card .gc-row:first-of-type { border-top: 0; }
+.grant-card .gc-row b { font-weight: 600; color: var(--color-primary); font-size: 8.5pt; padding-top: 0.3mm; }
+.grant-card .gc-row code { font-size: 8pt; }
+.ws-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm; }
+.ws-cards .card { padding: 3.5mm 4mm; }
+.ws-cards .card h3 { font-size: 9.6pt; display: flex; justify-content: space-between; align-items: baseline; }
+.ws-cards .card h3 small { font-weight: 400; color: var(--color-text-secondary); font-size: 8pt; }
+.ws-cards .card p { font-size: 8.6pt; color: var(--color-text-secondary); line-height: 1.4; }
+.legend { display: flex; gap: 4mm; flex-wrap: wrap; font-size: 8.3pt; color: var(--color-text-secondary); align-items: center; }
+.legend .pill { font-size: 7.3pt; }
+table.data td .pill { display: inline-block; margin-bottom: 0.6mm; }
+.checklist { list-style: none; padding: 0; }
+.checklist li { display: grid; grid-template-columns: 5mm 1fr; gap: 2.5mm; align-items: start; font-size: 8.8pt; line-height: 1.4; padding: 1.4mm 0; border-top: 1px solid var(--color-border-subtle); }
+.checklist li:first-child { border-top: 0; }
+.checklist li::before { content: ""; width: 3.6mm; height: 3.6mm; border: 1.2px solid var(--color-border-control); border-radius: var(--radius-small); margin-top: 0.9mm; }
+.exchange { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm; }
+.exchange .card h4 { font-size: 9pt; color: var(--color-primary); margin-bottom: 1.5mm; }
+.exchange .card li { font-size: 8.7pt; line-height: 1.4; }
+.timeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3mm; }
+.timeline .phase { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-card); padding: 3.5mm 3.8mm; display: flex; flex-direction: column; min-height: 96mm; }
+.timeline .phase .eyebrow { font-size: 7.5pt; }
+.timeline .phase h3 { font-size: 10pt; font-weight: 600; line-height: 1.25; margin: 1mm 0 2mm; }
+.timeline .phase p, .timeline .phase li { font-size: 8.3pt; line-height: 1.38; color: var(--color-text-secondary); }
+.timeline .phase ul { padding-left: 1.1em; margin-top: 1mm; }
+.timeline .phase .exit { margin-top: auto; padding-top: 2.5mm; border-top: 1px solid var(--color-border-subtle); font-size: 8.1pt; color: var(--color-text); }
+.timeline .phase .exit b { color: var(--color-primary); font-weight: 600; }
+.timeline .phase.active { border-color: var(--color-primary); box-shadow: inset 0 3px 0 var(--color-primary); }
+.doors { display: grid; grid-template-columns: 1fr; gap: 2.6mm; }
+.door { display: grid; grid-template-columns: 9mm 1fr; gap: 3mm; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-control); padding: 2.6mm 3.2mm; font-size: 9pt; line-height: 1.38; }
+.door.closed { background: var(--color-danger-surface); border-color: #E7C2C5; }
+.door.closed .icon-chip { background: #fff; }
+.door.closed .icon { color: var(--color-danger); }
+.door strong { display: block; font-size: 9.4pt; }
+.door small { color: var(--color-text-secondary); font-size: 8.3pt; }
+.cost-note { font-size: 8pt; color: var(--color-text-secondary); margin-top: 2.5mm; line-height: 1.4; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 1.5mm 4mm; font-size: 9pt; }
+.kv dt { font-weight: 600; color: var(--color-text-secondary); font-size: 8.3pt; }
+.kv dd { margin: 0; }
+.needs { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm; }
+.needs .card { padding: 3.5mm 4mm; }
+.needs .card h3 { font-size: 9.8pt; margin-bottom: 1mm; }
+.needs .card p { font-size: 8.7pt; }
+.needs .card .default { margin-top: 1.8mm; font-size: 8.5pt; color: var(--color-text); background: var(--color-accent-soft); border-radius: var(--radius-small); padding: 1.5mm 2.4mm; }
+.needs .card .default b { font-weight: 600; }
+.decisions.two { grid-template-columns: 1fr 1fr; gap: 2.4mm 3mm; }
+.decisions.two .decision { padding: 2.4mm 3mm; grid-template-columns: 10mm 1fr; gap: 2mm; }
+.decisions.two .title { font-size: 9pt; line-height: 1.3; }
+.decisions.two .why { font-size: 8.1pt; line-height: 1.35; }
+.decisions.two .id { font-size: 8.3pt; }
+.needs.compact .card { padding: 2.8mm 3.4mm; }
+.needs.compact .card h3 { font-size: 9.2pt; line-height: 1.3; }
+.needs.compact .card p { font-size: 8.3pt; line-height: 1.38; }
+.needs.compact .card .default { font-size: 8.1pt; margin-top: 1.4mm; padding: 1.2mm 2.2mm; }
+.icon-row, .icon-row > div { min-width: 0; }
+table.data td .icon-chip { width: 7mm; height: 7mm; border-radius: var(--radius-small); }
+table.data td .icon-chip .icon { width: 4mm; height: 4mm; }
+.grid > * { min-width: 0; }
+.wire { stroke: var(--color-border-control); stroke-width: 1; fill: none; }
+.wire.strong { stroke: var(--color-primary); stroke-width: 1.4; }
+.lead.compact { font-size: 11pt; }
+.ws-cards .card .count { display: block; font-size: 8pt; color: var(--color-text-secondary); font-weight: 400; margin-bottom: 1.2mm; }
+.legend.grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3mm; align-items: start; }
+.legend.grid5 > div { font-size: 8pt; line-height: 1.35; }
+.legend.grid5 .pill { display: inline-block; margin-bottom: 0.8mm; }
+</style>
+</head>
+<body>
+
+<!-- ============ 1 · COVER ============ -->
+<section class="page cover">
+  <div class="cover-art-wrap">
+    <svg class="cover-art" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.5" aria-hidden="true">
+      <circle cx="50" cy="50" r="48"/><circle cx="50" cy="50" r="38"/><circle cx="50" cy="50" r="28"/><circle cx="50" cy="50" r="18"/><circle cx="50" cy="50" r="8"/>
+    </svg>
+  </div>
+  <div class="cover-inner">
+    <div class="wordmark">nestself</div>
+    <h1>Authentication, authorization and infrastructure strategy</h1>
+    <p class="subtitle">How people sign in, what each of them may do, and where NestSelf runs on AWS. An overview for review; the engineering reference carries every detail.</p>
+    <div class="cover-meta">
+      <div><strong>Version 1.0</strong>21 October 2026</div>
+      <div><strong>Status</strong>Draft for founder review</div>
+      <div><strong>Engineering reference</strong>docs/tasks/auth/auth-strategy.md</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 · DECISIONS AT A GLANCE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Overview</span><h2>What this strategy decides</h2></div><div class="meta">Thirteen of the thirty-six decisions carry the design. Every decision has a numbered entry, with conditions and dissent, in the engineering reference.</div></div>
+  <p class="lead compact" style="margin-bottom:4mm">Cognito authenticates everyone. NestSelf decides what each person may do, in its own database, through one decision function. Web apps hold a cookie, never a token. Employees never set a password.</p>
+  <div class="decisions two">
+    <div class="decision"><div class="id">D-01</div><div><div class="title">One Cognito user pool per environment in Frankfurt, Essentials plan, for every population</div><div class="why">Email codes, passkeys and token rotation come with the plan; ten thousand direct users are free; nothing leaves the EU.</div></div></div>
+    <div class="decision"><div class="id">D-02</div><div><div class="title">No authorization data in tokens</div><div class="why">Tokens prove who signed in. Memberships and grants live in PostgreSQL and are read, cached for seconds, on every request.</div></div></div>
+    <div class="decision"><div class="id">D-03</div><div><div class="title">Invitation first; no self sign-up; linking of identities in NestSelf's database</div><div class="why">HR stays the gate. One identity per person across employers; Cognito's account-linking API is not used.</div></div></div>
+    <div class="decision"><div class="id">D-05</div><div><div class="title">Employees sign in with their employer's SSO or an emailed code; experts and staff with a password and an authenticator app</div><div class="why">No passwords for the largest population, no SMS, a second factor wherever someone manages other people's data.</div></div></div>
+    <div class="decision"><div class="id">D-06</div><div><div class="title">The API is the only OAuth client for the web apps and keeps sessions server-side</div><div class="why">Browsers hold an httpOnly cookie. Revoking access means deleting one key.</div></div></div>
+    <div class="decision"><div class="id">D-07</div><div><div class="title">The mobile app uses the standard native flow with tokens in the device keychain</div><div class="why">Unanimous over a custom handoff: proven libraries, what auditors expect, weeks saved. Short tokens and per-request checks close the gap.</div></div></div>
+    <div class="decision"><div class="id">D-08</div><div><div class="title">Each web app and its API share one origin behind CloudFront</div><div class="why">Strictest cookie scope, no cross-origin requests, one cookie per surface.</div></div></div>
+    <div class="decision"><div class="id">D-11</div><div><div class="title">NestSelf owns every sign-in screen, in Serbian, Hungarian and English</div><div class="why">Cognito's hosted pages offer neither language; they appear only as a silent hop during SSO.</div></div></div>
+    <div class="decision"><div class="id">D-12</div><div><div class="title">One SSO connection per employer, on verified email domains, started from NestSelf</div><div class="why">Three hundred connections fit one pool. DNS verification stops domain hijacking; portal-initiated sign-in stays off by default.</div></div></div>
+    <div class="decision"><div class="id">D-15</div><div><div class="title">Authorization is a grants model with one pure decision function</div><div class="why">Default deny, explainable decisions, delegation envelopes, effective-access preview. Scored far above policy engines for this model.</div></div></div>
+    <div class="decision"><div class="id">D-20</div><div><div class="title">Private case content is a separate domain with four doors and no administrator key</div><div class="why">Participant, assigned expert, supervision grant or time-limited emergency access. Platform and support roles are refused in code.</div></div></div>
+    <div class="decision"><div class="id">D-24</div><div><div class="title">ECS Fargate, RDS PostgreSQL, ElastiCache Valkey, S3 and CloudFront, all written as CDK <span class="pill warning">founder: budget</span></div><div class="why">Infrastructure two engineers can run. Multi-AZ database and managed NAT from the first paying client unless the founder chooses savings.</div></div></div>
+    <div class="decision" style="grid-column:span 2"><div class="id">D-35</div><div><div class="title">Five phases, about fifteen weeks to an SSO-ready pilot</div><div class="why">Foundations and spikes, identity and sessions, authorization administration, first employer SSO, hardening. Compliance runs alongside.</div></div></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">2</span></div>
+</section>
+
+<!-- ============ 3 · WHO SIGNS IN ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">People</span><h2>Who signs in, and how</h2></div><div class="meta">Five populations, one identity each. Eligibility comes from memberships; authority comes from grants.</div></div>
+  <table class="data compact">
+    <thead><tr><th style="width:40mm">Population</th><th>Signs in with</th><th>Second factor</th><th>Web session</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td class="key">Employee of a client with SSO</td><td>The employer's identity provider</td><td>The employer's own</td><td>30 min idle · 12 h · device remembered 30 days</td><td>Workspace, mobile app</td></tr>
+      <tr><td class="key">Employee of a client without SSO</td><td>Emailed one-time code</td><td>Optional</td><td>30 min idle · 12 h · device remembered 30 days</td><td>Workspace, mobile app</td></tr>
+      <tr><td class="key">Employer administrator<br><span class="small muted">owner, HR, manager, approver, finance, reporting</span></td><td>As an employee, then a context switch</td><td><span class="pill warning">Required</span> authenticator app, or the IdP's</td><td>1 h idle · 8 h · step-up every 4 h</td><td>Workspace, organization context</td></tr>
+      <tr><td class="key">Expert and expert lead</td><td>Password</td><td><span class="pill warning">Required</span> authenticator app</td><td>8 h idle · 7 days</td><td>Expert workspace</td></tr>
+      <tr><td class="key">NestSelf staff<br><span class="small muted">operations, content, coordinators, support, finance</span></td><td>Password; a workspace IdP later</td><td><span class="pill warning">Required</span> authenticator app</td><td>1 h idle · 8 h · step-up every 2 h</td><td>Admin</td></tr>
+      <tr><td class="key">Platform owner</td><td>Password</td><td><span class="pill warning">Required</span></td><td>1 h idle · 8 h · step-up every hour</td><td>Admin</td></tr>
+      <tr><td class="key">Event facilitator or supplier <span class="pill soft">later</span></td><td>Scoped delivery link</td><td>None</td><td>Per activity</td><td>Delivery packet or portal</td></tr>
+    </tbody>
+  </table>
+  <div class="split" style="margin-top:6mm">
+    <aside class="aside"><h3>Identity is not eligibility</h3><p>A person keeps one identity for life on the platform. Employers add and end memberships with effective dates. A manager is an employee who also holds grants, and switches explicitly into the organization context to use them.</p></aside>
+    <div class="stack">
+      <div class="grid cols-3">
+        <div class="tile"><div class="value">4</div><div class="label">sign-in languages: Serbian Latin and Cyrillic, Hungarian, English</div></div>
+        <div class="tile"><div class="value">0</div><div class="label">passwords for employees; codes by email or the employer's SSO</div></div>
+        <div class="tile"><div class="value">0</div><div class="label">SMS at launch; email and authenticator apps instead</div></div>
+      </div>
+      <div class="callout"><strong>A second factor where it matters</strong>Anyone acting on other people's data has one: experts, staff and every employer administrator. For SSO clients the employer's provider enforces it and the onboarding checklist records that. Employees reading content and booking their own sessions are not burdened with it.</div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">3</span></div>
+</section>
+
+<!-- ============ 4 · ARCHITECTURE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Architecture</span><h2>The platform at a glance</h2></div><div class="meta">Clients talk only to the API. Only the API talks to Cognito and the data stores.</div></div>
+  <div class="diagram">
+    <div class="grid cols-4" style="gap:4mm">
+      <div class="node"><strong>Workspace web</strong><small>employees, managers, HR · cookie</small></div>
+      <div class="node"><strong>Admin web</strong><small>NestSelf staff · cookie</small></div>
+      <div class="node"><strong>Mobile app</strong><small>employees · tokens in the keychain</small></div>
+      <div class="node"><strong>Marketing site</strong><small>public · a link to sign in</small></div>
+    </div>
+    <div class="zone" style="margin-top:9mm"><span class="zone-label">API · NestJS on ECS Fargate · the single enforcement point</span>
+      <div class="grid cols-4" style="gap:4mm">
+        <div class="node brand"><strong>Sign-in and sessions</strong><small>Cognito's confidential client · Redis sessions</small></div>
+        <div class="node brand"><strong>Access decisions</strong><small>authorize(principal, action, resource)</small></div>
+        <div class="node brand"><strong>Domain modules</strong><small>requests, scheduling, funding, content</small></div>
+        <div class="node brand"><strong>Real-time and jobs</strong><small>Socket.IO · BullMQ workers</small></div>
+      </div>
+    </div>
+    <div class="grid cols-4" style="gap:4mm;margin-top:9mm">
+      <div class="node accent"><strong>Amazon Cognito</strong><small>user pool · SAML and OIDC federation</small></div>
+      <div class="node soft"><strong>PostgreSQL</strong><small>identities, memberships, grants, audit</small></div>
+      <div class="node soft"><strong>Valkey</strong><small>sessions, caches, queues</small></div>
+      <div class="node soft"><strong>S3 and KMS</strong><small>media, exports, audit archive, restricted content</small></div>
+    </div>
+  </div>
+  <div class="split" style="margin-top:6mm">
+    <aside class="aside"><h3>Reading the diagram</h3><p>Arrows are omitted on purpose. Every client request lands in the API, which authenticates the caller, resolves who they are from the database, and asks the decision function before touching any record.</p></aside>
+    <div class="stack">
+      <table class="data compact">
+        <thead><tr><th colspan="2">Five places where the same decision is enforced</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td style="width:9mm"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg></div></td><td class="key">HTTP routes</td><td>Every route declares the action it needs or is public; a test fails the build otherwise.</td></tr>
+          <tr><td><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z"/></svg></div></td><td class="key">Background jobs</td><td>Carry the principal and re-check the decision when they run.</td></tr>
+          <tr><td><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></svg></div></td><td class="key">Exports</td><td>Authorized first, cohort rules applied, then streamed.</td></tr>
+          <tr><td><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,112a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Zm80-72H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></svg></div></td><td class="key">Files</td><td>Short-lived signed links, issued only after a decision.</td></tr>
+          <tr><td><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M168,112a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,112Zm-8,24H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Zm72-8A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"/></svg></div></td><td class="key">Real-time channels</td><td>Authenticated handshake, re-checked per subscription, dropped when access changes.</td></tr>
+        </tbody>
+      </table>
+      <table class="data compact">
+        <thead><tr><th>Client</th><th>What it holds</th><th>How it reaches the API</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Workspace and admin</td><td>One httpOnly cookie naming a server-side session</td><td>Same origin, /api/* through CloudFront</td></tr>
+          <tr><td class="key">Mobile app</td><td>Cognito tokens in secure storage, 15-minute access tokens</td><td>Bearer token to api.nestself.rs</td></tr>
+          <tr><td class="key">Marketing site</td><td>Nothing</td><td>Links to the workspace sign-in page</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">4</span></div>
+</section>
+
+<!-- ============ 5 · SIGN-IN JOURNEYS: EMPLOYEES ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Sign-in journeys</span><h2>How employees sign in</h2></div><div class="meta">Identifier-first: the email decides the route. The browser never receives a token, only a cookie that names a server-side session.</div></div>
+  <div class="stack">
+    <div>
+      <h3 style="font-size:11pt;font-weight:600;margin-bottom:2.5mm">An employee of a client with single sign-on</h3>
+      <div class="journey">
+        <div class="hop"><div class="who">Employee</div><div class="what">Opens the workspace and types a work email on the NestSelf sign-in page, in their own language.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Finds a verified email domain with an active SSO connection, starts the authorization-code flow as Cognito's confidential client and redirects the browser straight to that identity provider.</div></div>
+        <div class="hop"><div class="who">Employer IdP</div><div class="what soft">Authenticates the employee with the employer's own second factor and returns a signed assertion to Cognito. No Cognito screen is shown.</div></div>
+        <div class="hop"><div class="who">Cognito</div><div class="what soft">Issues an authorization code to the API's callback address.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Exchanges the code, verifies the tokens, binds the identity to the pending invitation, creates the session and sets the httpOnly cookie.</div></div>
+        <div class="hop"><div class="who">Employee</div><div class="what">Lands in the personal workspace. A manager also sees the switch to the organization context.</div></div>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:11pt;font-weight:600;margin-bottom:2.5mm">An employee of a client without an identity provider</h3>
+      <div class="journey">
+        <div class="hop"><div class="who">Employee</div><div class="what">Types a work or personal email address. No SSO connection matches the domain.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Shows the same next step whether or not the address is known, so nothing reveals who has an account, and asks Cognito to send a one-time code using NestSelf's localised email template.</div></div>
+        <div class="hop"><div class="who">Employee</div><div class="what">Enters the code from the email. On the first visit the invitation link already carried the token that binds this identity to the membership.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Completes the Cognito challenge, creates the session, sets the cookie and records the sign-in method and time on the session for later step-up checks.</div></div>
+        <div class="hop"><div class="who">Employee</div><div class="what">Lands in the workspace. A "remember this device" choice keeps the personal workspace signed in on that device; the organization context always asks again.</div></div>
+      </div>
+    </div>
+    <div class="grid cols-3">
+      <div class="card tinted"><h3>No passwords for employees</h3><p>Email codes and employer SSO cover every employee. Nothing to forget, nothing to leak, nothing to migrate.</p></div>
+      <div class="card"><h3>One page, four languages</h3><p>Serbian Latin and Cyrillic, Hungarian and English. Cognito's pages offer none of the first three, so NestSelf owns every screen.</p></div>
+      <div class="card"><h3>Neutral by design</h3><p>Invitation and code emails never name a service category. Only the signed-in workspace shows what is available.</p></div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">5</span></div>
+</section>
+
+<!-- ============ 6 · JOURNEYS: EXPERTS AND MOBILE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Sign-in journeys</span><h2>Experts, staff and the mobile app</h2></div><div class="meta">Higher trust means a password and an authenticator app. The phone follows the standard native flow.</div></div>
+  <div class="stack">
+    <div>
+      <h3 style="font-size:11pt;font-weight:600;margin-bottom:2.5mm">An expert on the web</h3>
+      <div class="journey">
+        <div class="hop"><div class="who">Expert</div><div class="what">Types their email; the API answers that this identity signs in with a password.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Checks the password with Cognito on the server, receives a one-time-code challenge for the authenticator app and relays it. The browser never talks to Cognito.</div></div>
+        <div class="hop"><div class="who">Expert</div><div class="what">Enters the six-digit code from the authenticator app enrolled at activation.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Completes the challenge, creates the session with its method and time recorded, sets the cookie. Staff sign in the same way in the admin app, with shorter sessions.</div></div>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:11pt;font-weight:600;margin-bottom:2.5mm">An employee of an SSO client on the phone</h3>
+      <div class="journey">
+        <div class="hop"><div class="who">Employee</div><div class="what">Types the work email in the app; the app learns that this domain uses the employer's identity provider.</div></div>
+        <div class="hop"><div class="who">App</div><div class="what soft">Opens the system browser to Cognito with a one-time code challenge, naming the employer's provider. No screen is shown before the employer's own sign-in page.</div></div>
+        <div class="hop"><div class="who">Employer IdP</div><div class="what soft">Authenticates the employee and returns to Cognito, which returns an authorization code to the app's registered link.</div></div>
+        <div class="hop"><div class="who">App</div><div class="what soft">Exchanges the code with Cognito, stores the tokens in the device keychain and calls the API with a short-lived bearer token. Employees without SSO receive their emailed code inside the app instead.</div></div>
+        <div class="hop"><div class="who">API</div><div class="what brand">Verifies the token's signature, resolves the person from the database, checks that the membership is still active and that the token family is not revoked, then decides.</div></div>
+      </div>
+    </div>
+    <div class="grid cols-3">
+      <div class="card tinted"><h3>What the browser never sees</h3><p>Cognito tokens. The web apps hold one cookie that names a session in Valkey; signing out deletes it.</p></div>
+      <div class="card"><h3>What the phone holds</h3><p>Rotating Cognito tokens in secure storage, 15-minute access tokens, biometric gate for sensitive reads, discarded after 30 days unused.</p></div>
+      <div class="card"><h3>How access ends</h3><p>Ending a membership deletes sessions, revokes refresh tokens, disconnects live channels and denylists the phone's token family, within a second.</p></div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">6</span></div>
+</section>
+
+<!-- ============ 7 · CONNECTING AN EMPLOYER'S SSO ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Enterprise SSO</span><h2>Connecting an employer's identity provider</h2></div><div class="meta">One connection per employer, registered by NestSelf operations. Employees never see a Cognito screen.</div></div>
+  <div class="split">
+    <aside class="aside stack-tight">
+      <h3>Two weeks, mostly waiting</h3>
+      <p>The work on NestSelf's side is a few hours. The elapsed time is the client's IT queue: a DNS record, an identity-provider application and a test user.</p>
+      <div class="exchange" style="grid-template-columns:1fr;margin-top:3mm">
+        <div class="card"><h4>NestSelf sends</h4><ul><li>Service-provider entity ID and the assertion consumer URL</li><li>Signing certificate</li><li>The attribute list: persistent NameID, email, given name, family name</li><li>A DNS verification token per email domain</li></ul></div>
+        <div class="card"><h4>The client sends</h4><ul><li>Metadata URL or XML (SAML) or issuer and client ID (OIDC)</li><li>The list of email domains employees use</li><li>A test account</li><li>Whether sign-in may start from their portal (off by default)</li></ul></div>
+      </div>
+    </aside>
+    <div class="stack">
+      <ol class="steps">
+        <li><h4>Register the connection</h4><p>Operations create the connection in draft state: protocol, provider name, the organization it belongs to. Nothing routes to it yet.</p></li>
+        <li><h4>Verify the email domains</h4><p>The client publishes a DNS record with the token. Only verified domains take part in routing; public mail domains are refused.</p></li>
+        <li><h4>Exchange metadata and map attributes</h4><p>The provider is created in Cognito from the metadata. The persistent NameID identifies the person; email and names fill the profile. IdP groups are ignored: access comes from NestSelf grants.</p></li>
+        <li><h4>Test with one user</h4><p>The connection moves to testing. A test sign-in must produce a verified email, bind to an invitation and show the right names before anyone else is routed.</p></li>
+        <li><h4>Invite the roster</h4><p>HR imports the roster; each person receives a neutral invitation. If the client prefers, verified-domain sign-ins may create memberships automatically into a default unit.</p></li>
+        <li><h4>Go live and watch the certificate</h4><p>The connection becomes active. Cognito refreshes metadata within six hours; a reminder fires 30 days before the IdP certificate expires so rotation overlaps.</p></li>
+      </ol>
+      <table class="data compact">
+        <thead><tr><th>Identity provider</th><th>NameID</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Microsoft Entra ID</td><td>user.objectid</td><td>Rename claims to short names; scope group claims to the app or leave them out</td></tr>
+          <tr><td class="key">Google Workspace</td><td>Primary email or a custom attribute</td><td>Use a SAML app, not Google social sign-in</td></tr>
+          <tr><td class="key">Okta</td><td>Persistent, not email</td><td>Standard SAML 2.0 app; SHA-256 signing</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>Sign-in starts at NestSelf, not at a portal</strong>Employees type their work email on the NestSelf sign-in page and are sent to their company's identity provider, whose second factor applies. Portal-initiated sign-in stays off unless the client accepts the replay risk in writing.</div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">7</span></div>
+</section>
+
+<!-- ============ 8 · LIFECYCLE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Lifecycle</span><h2>Identity stays, eligibility changes</h2></div><div class="meta">A person keeps one identity for life. Employers grant and withdraw eligibility with effective dates.</div></div>
+  <div class="lead-row">
+    <p class="lead compact">Every event below changes memberships, grants or sessions in a predictable way, and each writes an audit event. Leaving an employer ends access from a date; it never deletes the person, their professional records or the settlement history.</p>
+    <div class="grid cols-1" style="gap:3mm">
+      <div class="tile"><div class="value">&lt; 1 s</div><div class="label">from an HR deactivation to every session, websocket and delegation of that membership being closed</div></div>
+    </div>
+  </div>
+  <table class="data compact">
+    <thead><tr><th style="width:30mm">Event</th><th>What changes</th><th style="width:38mm">Sessions</th><th style="width:40mm">Grants</th></tr></thead>
+    <tbody>
+      <tr><td class="key">HR invites</td><td>An invitation with an expiry and a revocable token; duplicates against the roster are reported before the batch applies.</td><td>None exist yet</td><td>None until activation</td></tr>
+      <tr><td class="key">Employee activates</td><td>The invitation binds the person's identity to a membership that starts today. A returning person reuses their identity.</td><td>First session created</td><td>Employee template applied</td></tr>
+      <tr><td class="key">Second organization</td><td>A new membership with its own dates and unit. Nothing from the first organization is visible in the second.</td><td>Unchanged; a context picker appears</td><td>Independent per organization</td></tr>
+      <tr><td class="key">Team move</td><td>The membership's unit changes from an effective date; history keeps the old attribution.</td><td>Unchanged</td><td>Re-evaluated at the date; unit-scoped grants end</td></tr>
+      <tr><td class="key">Becomes a manager</td><td>Grants, not a role flag: activity requests, budget reading, approval up to a ceiling for an explicit unit.</td><td>Organization context becomes available</td><td>Created from the manager template, then adjusted</td></tr>
+      <tr><td class="key">Delegates while away</td><td>A time-limited grant inside the delegator's own envelope; self-approval conflicts route to the alternate.</td><td>Unchanged</td><td>Expires on its own</td></tr>
+      <tr><td class="key">Leaves the employer</td><td>The membership ends on a date. Appointments follow the continuity rule the contract defines. Records stay.</td><td>Closed for that organization</td><td>All grants of that organization end</td></tr>
+      <tr><td class="key">Suspended</td><td>A platform or HR action for a security or policy reason.</td><td>All closed at once</td><td>Frozen, not deleted</td></tr>
+      <tr><td class="key">Expert credential expires</td><td>Matching stops for the affected categories; assigned cases follow continuity.</td><td>Unchanged</td><td>Category actions suspended</td></tr>
+    </tbody>
+  </table>
+  <div class="grid cols-3" style="margin-top:5mm">
+    <div class="card tinted"><h3>Nightly reconciliation</h3><p>A job compares memberships, grants and open sessions and closes what the event path missed.</p></div>
+    <div class="card"><h3>Effective dates everywhere</h3><p>Memberships, grants, authorities and credentials carry start and end dates, read at the moment of each request.</p></div>
+    <div class="card"><h3>HR actions never delete</h3><p>Deactivation and deletion are different requests; deletion follows the retention policy of each data domain.</p></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">8</span></div>
+</section>
+
+<!-- ============ 9 · ANATOMY OF A GRANT ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Authorization</span><h2>Anatomy of a grant</h2></div><div class="meta">Grants replace hard-coded roles. Templates make onboarding understandable; grants are what the platform enforces.</div></div>
+  <div class="grid cols-2" style="gap:8mm;align-items:start">
+    <div class="stack">
+      <div class="grant-card">
+        <div class="gc-head"><strong>Grant</strong><span>grt_7f3c · created 2026-12-15</span></div>
+        <div class="gc-row"><b>Subject</b><div>A team manager in the Engineering department of one employer</div></div>
+        <div class="gc-row"><b>Actions</b><div><code>events.request</code> <code>budget.read</code> <code>spend.approve</code></div></div>
+        <div class="gc-row"><b>Scope</b><div>Org unit <em>Engineering</em>, including its sub-teams; never another department or company</div></div>
+        <div class="gc-row"><b>Conditions</b><div>Up to EUR 500 per approval; categories: workshops, team activities</div></div>
+        <div class="gc-row"><b>Validity</b><div>2027-01-01 to 2027-12-31</div></div>
+        <div class="gc-row"><b>Delegation envelope</b><div>May delegate approval up to EUR 500 inside Engineering for at most 30 days</div></div>
+        <div class="gc-row"><b>Granted by</b><div>The employer owner, from the team manager template, adjusted</div></div>
+        <div class="gc-row"><b>Audit</b><div>Creation, adjustments, every consequential use, revocation</div></div>
+      </div>
+      <table class="data compact">
+        <thead><tr><th>Scope type</th><th>Covers</th><th>Typical holder</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Platform</td><td>Every organization</td><td>Platform owner, NestSelf finance</td></tr>
+          <tr><td class="key">Organization</td><td>One employer, all units</td><td>Employer owner, HR administrator</td></tr>
+          <tr><td class="key">Org unit</td><td>One unit; descendants only if included</td><td>Team manager, reporting user</td></tr>
+          <tr><td class="key">Assigned</td><td>Named clients, queues, cases, collections</td><td>Operations, coordinators, experts, authors</td></tr>
+          <tr><td class="key">Own</td><td>The person's own records</td><td>Employee</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stack">
+      <ol class="steps" style="margin-top:0">
+        <li><h4>Choose a template</h4><p>Seventeen templates mirror the responsibilities in the product specification, from platform owner to event supplier.</p></li>
+        <li><h4>Set the scope</h4><p>The whole organization, one unit with or without its descendants, assigned clients, queues or cases, or only the person's own records.</p></li>
+        <li><h4>Adjust conditions and validity</h4><p>Ceilings, categories, a confidential-approver flag, start and end dates. Nothing may exceed what the grantor holds.</p></li>
+        <li><h4>Preview, then apply</h4><p>The effective-access preview shows exactly which actions on which scopes the person will have before the grant exists.</p></li>
+      </ol>
+      <div class="ws-cards">
+        <div class="card"><h3>Operations workspace</h3><span class="count">7 templates</span><p>Platform owner, client operations, content author, content publisher, service coordinator, support operator, NestSelf finance.</p></div>
+        <div class="card"><h3>Organization workspace</h3><span class="count">6 templates</span><p>Employer owner, HR administrator, team manager, approver, employer finance, reporting user.</p></div>
+        <div class="card"><h3>Expert workspace</h3><span class="count">2 templates</span><p>Expert, expert lead. Clinical supervision is a separate, explicit grant.</p></div>
+        <div class="card"><h3>Employee workspace</h3><span class="count">1 template, 1 later</span><p>Employee; event supplier through a scoped delivery packet later.</p></div>
+      </div>
+      <div class="callout"><strong>A manager relationship is not a grant</strong>Being someone's line manager grants nothing by itself: no reports, no spending, no descendant units. Access always comes from an explicit grant with a scope.</div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">9</span></div>
+</section>
+
+<!-- ============ 10 · WHO SEES WHAT ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Authorization</span><h2>Who sees what</h2></div><div class="meta">The visibility rules of the product specification, as the platform enforces them. The same rule applies to screens, search, exports, notifications and logs.</div></div>
+  <div class="legend grid5" style="margin-bottom:4mm">
+    <div><span class="pill success">Own</span><br>the person's own records</div>
+    <div><span class="pill accent">Assigned</span><br>only through an explicit assignment</div>
+    <div><span class="pill soft">Scoped</span><br>within an explicit grant scope</div>
+    <div><span class="pill info">Aggregate</span><br>privacy-safe totals above the cohort threshold</div>
+    <div><span class="pill danger">Unavailable</span><br>no path exists, including for administrators</div>
+  </div>
+  <table class="data compact">
+    <thead><tr><th style="width:44mm">Information</th><th>Employee</th><th>Assigned expert</th><th>NestSelf operations</th><th>Employer and managers</th></tr></thead>
+    <tbody>
+      <tr><td class="key">Membership, eligibility and team</td><td><span class="pill success">Own</span></td><td><span class="pill accent">Assigned</span><br>minimum needed for delivery</td><td><span class="pill soft">Scoped</span><br>assigned clients' people operations</td><td><span class="pill soft">Scoped</span><br>roster administrators in their units</td></tr>
+      <tr><td class="key">Private intake and professional conversation</td><td><span class="pill success">Own</span></td><td><span class="pill accent">Assigned</span><br>the assigned case only</td><td><span class="pill danger">Unavailable</span><br>except an explicitly authorized intake function</td><td><span class="pill danger">Unavailable</span></td></tr>
+      <tr><td class="key">Professional notes, if stored</td><td>Defined patient-facing route</td><td><span class="pill accent">Assigned</span><br>responsible professional; supervision by explicit grant</td><td><span class="pill danger">Unavailable</span><br>separate controls; emergency access only</td><td><span class="pill danger">Unavailable</span></td></tr>
+      <tr><td class="key">Appointment logistics</td><td><span class="pill success">Own</span></td><td><span class="pill success">Own</span> assignments</td><td><span class="pill soft">Scoped</span><br>assigned scheduling queues</td><td><span class="pill danger">Unavailable</span><br>no named consultation roster</td></tr>
+      <tr><td class="key">Payer authorization and billing reference</td><td><span class="pill success">Own</span> coverage summary</td><td>Minimum coverage fields</td><td><span class="pill soft">Scoped</span><br>designated finance staff</td><td><span class="pill soft">Scoped</span><br>the employer's permitted financial view</td></tr>
+      <tr><td class="key">Consultation usage and costs</td><td><span class="pill success">Own</span></td><td><span class="pill success">Own</span> delivery and payment records</td><td><span class="pill soft">Scoped</span><br>operational and financial scope</td><td><span class="pill info">Aggregate</span><br>a disclosed funding exception only when the employee chose it</td></tr>
+      <tr><td class="key">Team event invitations and logistics</td><td><span class="pill success">Own</span> invited activities</td><td><span class="pill accent">Assigned</span> facilitation</td><td><span class="pill soft">Scoped</span> coordinators</td><td><span class="pill soft">Scoped</span> the organizer of that event</td></tr>
+      <tr><td class="key">Content consumption and feedback</td><td><span class="pill success">Own</span></td><td>Only if intentionally shared</td><td><span class="pill info">Aggregate</span><br>restricted follow-up access</td><td><span class="pill info">Aggregate</span><br>with suppression; no named reading history</td></tr>
+    </tbody>
+  </table>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="callout"><strong>The cohort threshold</strong>Employer reports show a cell only when at least ten people are in it, suppress complementary totals and use monthly windows. The exact number is a product and privacy decision; ten is the default this strategy assumes.</div>
+    <div class="callout info"><strong>Administrators are not an exception</strong>A platform owner or a support operator reaches the confidential domain only through an approved, time-limited emergency access with a written purpose. Routine support sees redacted diagnostics.</div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">10</span></div>
+</section>
+
+<!-- ============ 11 · ONE DECISION FUNCTION ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Authorization</span><h2>One decision function, everywhere</h2></div><div class="meta">authorize(principal, action, resource) is pure once its inputs are loaded, explains itself, and is the only path to a yes.</div></div>
+  <div class="grid cols-2" style="gap:8mm;align-items:start">
+    <div class="stack">
+      <ol class="steps" style="margin-top:0">
+        <li><h4>Is the person active?</h4><p>Suspended or deactivated users are refused before anything else is read.</p></li>
+        <li><h4>Is the context valid?</h4><p>The organization context needs an active membership; expert and operations contexts need the matching capability.</p></li>
+        <li><h4>Is this restricted content?</h4><p>If so, only a participant, an assignment, a supervision grant or emergency access can allow it. Administrative grants are refused here, in code.</p></li>
+        <li><h4>Which grants match?</h4><p>Action and scope, with the organization tree resolved from the closure table; assignments cover queues, cases and clients.</p></li>
+        <li><h4>Do the conditions hold?</h4><p>Spending ceiling and currency, permitted categories, confidential approver, time window, validity dates.</p></li>
+        <li><h4>Is anyone approving themselves?</h4><p>Denied unless the organization documented otherwise; the router always finds an alternate.</p></li>
+        <li><h4>Explain the answer</h4><p>Allowed or denied, the grant ids that mattered, a reason, and a trace used by tests and the effective-access preview.</p></li>
+      </ol>
+      <pre><code>authorize(principal, 'spend.approve', {
+  kind: 'approval', orgId, orgUnitId,
+  amountMinor: 42000, currency: 'EUR', requesterId,
+})
+// allowed: true · grantIds: ['grt_7f3c']
+// explanation: org_unit scope incl. descendants;
+//              ceiling 50000 EUR holds</code></pre>
+    </div>
+    <div class="stack">
+      <h3 style="font-size:11pt;font-weight:600">Four doors into private case content</h3>
+      <div class="doors">
+        <div class="door"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg></div><div><strong>The participant</strong><small>The employee reads their own intake and conversations.</small></div></div>
+        <div class="door"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40ZM128,214.8C109.74,204.16,32,155.69,32,102A46.06,46.06,0,0,1,78,56c19.45,0,35.78,10.36,42.6,27a8,8,0,0,0,14.8,0c6.82-16.67,23.15-27,42.6-27a46.06,46.06,0,0,1,46,46C224,155.61,146.24,204.15,128,214.8Z"/></svg></div><div><strong>The assigned expert</strong><small>Only while the assignment is active; nothing from other cases.</small></div></div>
+        <div class="door"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M244.8,150.4a8,8,0,0,1-11.2-1.6A51.6,51.6,0,0,0,192,128a8,8,0,0,1-7.37-4.89,8,8,0,0,1,0-6.22A8,8,0,0,1,192,112a24,24,0,1,0-23.24-30,8,8,0,1,1-15.5-4A40,40,0,1,1,219,117.51a67.94,67.94,0,0,1,27.43,21.68A8,8,0,0,1,244.8,150.4ZM190.92,212a8,8,0,1,1-13.84,8,57,57,0,0,0-98.16,0,8,8,0,1,1-13.84-8,72.06,72.06,0,0,1,33.74-29.92,48,48,0,1,1,58.36,0A72.06,72.06,0,0,1,190.92,212ZM128,176a32,32,0,1,0-32-32A32,32,0,0,0,128,176ZM72,120a8,8,0,0,0-8-8A24,24,0,1,1,87.24,82a8,8,0,1,0,15.5-4A40,40,0,1,0,37,117.51,67.94,67.94,0,0,0,9.6,139.19a8,8,0,1,0,12.8,9.61A51.6,51.6,0,0,1,64,128,8,8,0,0,0,72,120Z"/></svg></div><div><strong>Clinical supervision</strong><small>An explicit, separate grant; operational leadership does not imply it.</small></div></div>
+        <div class="door"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"/></svg></div><div><strong>Emergency access</strong><small>Written purpose, one case or one person, approved by another platform owner, four hours at most, read-only, every read audited, an alarm on activation.</small></div></div>
+        <div class="door closed"><div class="icon-chip"><svg class="icon" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></div><div><strong>Platform owner, operations, support, employer</strong><small>No path. Support sees redacted diagnostics: connection state, delivery status, never content.</small></div></div>
+      </div>
+      <div class="callout info"><strong>Separate on every layer</strong>Restricted data has its own module, database models, S3 bucket and encryption key. Management screens and personal screens are served by different controllers, so a mistake in one cannot leak the other.</div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">11</span></div>
+</section>
+
+<!-- ============ 12 · SESSIONS AND SECURITY POSTURE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Sessions</span><h2>Sessions and security posture</h2></div><div class="meta">Short tokens, short sessions for privileged work, re-authentication before consequential actions.</div></div>
+  <div class="stack">
+    <table class="data compact">
+      <thead><tr><th style="width:52mm">Population and context</th><th>Idle</th><th>Absolute</th><th>Remember device</th><th>Mobile</th><th>Step-up interval</th></tr></thead>
+      <tbody>
+        <tr><td class="key">Employee, personal context</td><td>30 min</td><td>12 h</td><td>30 days</td><td>30 days idle · 90 days</td><td>per action</td></tr>
+        <tr><td class="key">Employee acting in the organization context</td><td>1 h</td><td>8 h</td><td>no</td><td>not at pilot</td><td>4 h</td></tr>
+        <tr><td class="key">Employer owner, HR, finance</td><td>1 h</td><td>8 h</td><td>no</td><td>not at pilot</td><td>4 h</td></tr>
+        <tr><td class="key">Expert</td><td>8 h</td><td>7 days</td><td>no</td><td>later</td><td>per action</td></tr>
+        <tr><td class="key">Staff</td><td>1 h</td><td>8 h</td><td>no</td><td>none</td><td>2 h</td></tr>
+        <tr><td class="key">Platform owner</td><td>1 h</td><td>8 h</td><td>no</td><td>none</td><td>1 h</td></tr>
+      </tbody>
+    </table>
+    <div class="grid cols-2" style="gap:6mm;align-items:start">
+      <table class="data compact">
+        <thead><tr><th>Before this action</th><th>Sign in again if older than</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Requesting or approving emergency access</td><td>5 minutes</td></tr>
+          <tr><td class="key">First restricted content read in a session</td><td>15 minutes</td></tr>
+          <tr><td class="key">Exports and reports leaving the platform</td><td>15 minutes</td></tr>
+          <tr><td class="key">Financial operations above the client's threshold</td><td>15 minutes</td></tr>
+          <tr><td class="key">Grant, approval-authority or SSO changes; deactivating people</td><td>30 minutes</td></tr>
+        </tbody>
+      </table>
+      <div class="stack">
+        <div class="grid cols-3" style="gap:3mm">
+          <div class="tile"><div class="value">15</div><div class="label">minutes: Cognito access tokens, refreshed server-side for the web</div></div>
+          <div class="tile"><div class="value">30</div><div class="label">seconds: the single-use ticket that opens a real-time channel</div></div>
+          <div class="tile"><div class="value">10</div><div class="label">seconds of grace on rotating refresh tokens; reuse is detected</div></div>
+        </div>
+        <div class="callout"><strong>What the posture rests on</strong>No passwords in flight from browsers to Cognito; rate limits and a web application firewall on sign-in; prevent-user-existence errors; invitation-only accounts; audit of every sign-in, decision change and restricted read; nightly reconciliation of sessions against memberships.</div>
+      </div>
+    </div>
+    <div class="grid cols-3">
+      <div class="card"><h3>Revocation paths</h3><p>Sign out, sign out everywhere, membership end, suspension, staff leaver. Web sessions end at once; mobile within one access-token lifetime at most, usually at once through the denylist.</p></div>
+      <div class="card"><h3>Federated step-up</h3><p>A fresh round trip to the employer's provider when it honours a forced re-login; an emailed code from NestSelf when it does not.</p></div>
+      <div class="card tinted"><h3>Later</h3><p>Passkeys as a phishing-resistant factor, Cognito's threat protection plan if a test or a client requires it, and Cognito's own step-up claims once generally available.</p></div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">12</span></div>
+</section>
+
+<!-- ============ 13 · AWS MAP ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">AWS</span><h2>The AWS map</h2></div><div class="meta">Everything in eu-central-1, Frankfurt. Backups copy to Ireland. Nothing elsewhere.</div></div>
+  <div class="diagram">
+    <div class="zone"><span class="zone-label">Edge</span>
+      <div class="grid cols-4" style="gap:3mm">
+        <div class="node"><strong>Route 53</strong><small>app · admin · api · auth · apex</small></div>
+        <div class="node"><strong>CloudFront ×3</strong><small>workspace, admin, marketing · WAF · security headers</small></div>
+        <div class="node"><strong>ACM</strong><small>certificates in Frankfurt and us-east-1</small></div>
+        <div class="node accent"><strong>Cognito domain</strong><small>auth.nestself.rs · SSO hop only</small></div>
+      </div>
+    </div>
+    <div class="zone" style="margin-top:6mm"><span class="zone-label">Production account · VPC · two availability zones</span>
+      <div class="grid cols-2" style="gap:4mm">
+        <div class="zone" style="border-style:solid"><span class="zone-label">Public subnets</span>
+          <div class="grid cols-2" style="gap:3mm"><div class="node"><strong>ALB + WAF</strong><small>sticky target group for Socket.IO</small></div><div class="node"><strong>NAT gateway</strong><small>single AZ at pilot</small></div></div>
+        </div>
+        <div class="zone" style="border-style:solid"><span class="zone-label">VPC endpoints</span>
+          <div class="grid cols-2" style="gap:3mm"><div class="node"><strong>S3 gateway</strong><small>free</small></div><div class="node"><strong>ECR · Logs · Secrets · STS</strong><small>interface</small></div></div>
+        </div>
+      </div>
+      <div class="zone" style="margin-top:4mm;border-style:solid"><span class="zone-label">Private subnets</span>
+        <div class="grid cols-4" style="gap:3mm">
+          <div class="node brand"><strong>ECS Fargate · api</strong><small>2 tasks · 0.5 vCPU · 1 GB</small></div>
+          <div class="node brand"><strong>ECS Fargate · worker</strong><small>BullMQ · 0.25 vCPU</small></div>
+          <div class="node brand"><strong>ECS Fargate · marketing</strong><small>Next 16 standalone</small></div>
+          <div class="node brand"><strong>migrate task</strong><small>runs before every API deploy</small></div>
+          <div class="node soft"><strong>RDS PostgreSQL 17</strong><small>db.t4g.small · Multi-AZ · 35-day backups</small></div>
+          <div class="node soft"><strong>ElastiCache Valkey</strong><small>cache.t4g.micro · noeviction · TLS</small></div>
+          <div class="node soft" style="grid-column: span 2"><strong>Security groups</strong><small>ALB → api:4000 · api and worker → RDS 5432 · api and worker → Valkey 6379 · nothing else</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid cols-5" style="grid-template-columns:repeat(5,1fr);gap:3mm;margin-top:6mm">
+      <div class="node accent"><strong>Cognito</strong><small>user pool · federation</small></div>
+      <div class="node soft"><strong>S3 + KMS</strong><small>media, exports, audit archive with Object Lock, restricted content · two customer keys</small></div>
+      <div class="node soft"><strong>SES</strong><small>verified domain · DKIM, SPF, DMARC</small></div>
+      <div class="node soft"><strong>Secrets Manager</strong><small>database, Valkey, Cognito secret, session key</small></div>
+      <div class="node soft"><strong>CloudWatch · CloudTrail · GuardDuty</strong><small>Security Hub and Config from phase 2</small></div>
+    </div>
+  </div>
+  <div class="grid cols-3" style="margin-top:5mm">
+    <div class="card"><h3>Accounts and environments</h3><p>Development runs locally on Docker Compose. Staging and production are separate AWS accounts under one organization, with single sign-on for the console and region-restricting policies from phase 2.</p></div>
+    <div class="card"><h3>Residency</h3><p>Pool, database, cache, storage, email and keys in Frankfurt. Cross-region copies go only to Ireland. Cognito analytics to the US stays off.</p></div>
+    <div class="card tinted"><h3>Written as code</h3><p>Nine CDK stacks in TypeScript inside the monorepo, checked by cdk-nag in CI, deployed by GitHub Actions with short-lived OIDC credentials.</p></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">13</span></div>
+</section>
+
+<!-- ============ 14 · DELIVERY AND OPERATIONS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">AWS</span><h2>Delivery and operations</h2></div><div class="meta">One pipeline, two environments, no long-lived credentials anywhere.</div></div>
+  <div class="split">
+    <aside class="aside stack-tight">
+      <h3>A release, step by step</h3>
+      <p>Pushing to main deploys staging. A release tag deploys production after a manual approval. Both run the same steps.</p>
+      <div class="grid cols-1" style="gap:3mm;margin-top:3mm">
+        <div class="tile"><div class="value">1 h · 4 h</div><div class="label">recovery point and recovery time objectives for the pilot</div></div>
+        <div class="tile"><div class="value">30 days</div><div class="label">application log retention in production; audit events kept for years in the archive</div></div>
+      </div>
+    </aside>
+    <div class="stack">
+      <ol class="steps">
+        <li><h4>Check</h4><p>Lint, typecheck, unit and property tests, the golden decision table, the default-deny route test, CDK synth with cdk-nag.</p></li>
+        <li><h4>Build</h4><p>Container images for the API, worker and marketing site tagged by commit; pushed to ECR and scanned, critical findings block the release.</p></li>
+        <li><h4>Migrate</h4><p>A one-off ECS task runs the Prisma migrations against the target database and the pipeline waits for its exit code.</p></li>
+        <li><h4>Deploy</h4><p>New task definitions roll out behind the load balancer with the deployment circuit breaker; SPA bundles sync to S3 and CloudFront invalidates.</p></li>
+        <li><h4>Verify</h4><p>Health checks confirm database and cache; a smoke sign-in runs against staging; alarms watch errors and latency after the switch.</p></li>
+      </ol>
+      <table class="data compact">
+        <thead><tr><th>Environment</th><th>Where</th><th>Identity</th><th>Data</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Development</td><td>Docker Compose on the laptop</td><td>Sample sessions and the role switcher, or a staging pool</td><td>Fixtures from the sample-data package</td></tr>
+          <tr><td class="key">Staging</td><td>AWS account nestself-staging</td><td>Its own Cognito pool and test SSO connection</td><td>Aurora Serverless that pauses when idle; synthetic data only</td></tr>
+          <tr><td class="key">Production</td><td>AWS account nestself-production</td><td>Its own pool, real connections</td><td>RDS Multi-AZ, encrypted, backed up to Ireland</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="grid cols-3" style="margin-top:5mm">
+    <div class="card"><h3>Observed</h3><p>Structured logs with redaction; alarms on errors, latency, saturation, failed sign-ins and every emergency access activation.</p></div>
+    <div class="card"><h3>Rehearsed</h3><p>A quarterly restore drill after the first paying client; a tabletop breach exercise before the pilot.</p></div>
+    <div class="card"><h3>Rotated</h3><p>Database credentials every 30 days; the Cognito client secret and session key yearly with dual acceptance; keys automatically.</p></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">14</span></div>
+</section>
+
+<!-- ============ 15 · COMPLIANCE POSTURE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Compliance</span><h2>Compliance posture</h2></div><div class="meta">Engineering background for the legal work, not legal advice. Counsel in Serbia and Hungary must confirm the items marked.</div></div>
+  <div class="grid cols-2" style="gap:7mm;align-items:start">
+    <div class="stack">
+      <table class="data compact">
+        <thead><tr><th>Processing purpose</th><th>Controller</th><th>NestSelf's role</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Platform identity and sign-in</td><td>NestSelf</td><td>Controller; contract with the user</td></tr>
+          <tr><td class="key">Employer wellbeing programme</td><td>The employer</td><td>Processor under a data processing agreement</td></tr>
+          <tr><td class="key">Professional and clinical content</td><td>NestSelf</td><td>Controller; explicit consent or health-professional basis <span class="pill warning">counsel</span></td></tr>
+          <tr><td class="key">Expert management</td><td>NestSelf</td><td>Controller</td></tr>
+          <tr><td class="key">Aggregate employer reporting</td><td>The employer</td><td>Processor; cohort rules apply</td></tr>
+        </tbody>
+      </table>
+      <table class="data compact">
+        <thead><tr><th>Data flow</th><th>Mechanism if NestSelf is a Serbian company</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Hungarian employer to NestSelf</td><td>EU standard contractual clauses, module two, inside the agreement</td></tr>
+          <tr><td class="key">Serbian employer to NestSelf</td><td>Domestic processing agreement</td></tr>
+          <tr><td class="key">NestSelf to AWS Frankfurt</td><td>Germany is an adequate destination under Serbian law; the AWS data processing addendum covers the EU side</td></tr>
+          <tr><td class="key">Staff in Serbia reading Hungarian data</td><td>Covered by the same clauses plus access controls</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warning"><strong>Two questions decide the rest</strong>Where NestSelf is incorporated, and whether its counselling counts as healthcare activity. The first sets the contract template and supervisory authority; the second sets retention for conversations (five years, or fifteen in Serbia and thirty in Hungary) and whether health-record reporting duties apply.</div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <h3>Before the first real employee signs in</h3>
+        <ul class="checklist" style="margin-top:2mm">
+          <li>Data protection impact assessment completed and signed</li>
+          <li>Data protection officer appointed or the function designated</li>
+          <li>Processing agreement template with the right clauses</li>
+          <li>Privacy notices in Serbian, Hungarian and English</li>
+          <li>Breach procedure: clients within 24 hours, authorities within 72</li>
+          <li>Data subject rights workflow: access, export, erasure with retention checks</li>
+          <li>Audit logging of sign-ins, decisions, access to restricted data, exports</li>
+          <li>Second factor enforced for staff, experts and employer administrators</li>
+          <li>Encryption in transit and at rest with customer-managed keys</li>
+          <li>Cohort threshold enforced in every employer report</li>
+          <li>Cognito, email and storage pinned to Frankfurt; analytics routing to the US disabled</li>
+          <li>Professional notes kept out of the platform until the storage decision is made</li>
+          <li>Record of processing and sub-processor register maintained</li>
+        </ul>
+      </div>
+      <div class="grid cols-2" style="gap:3mm">
+        <div class="tile"><div class="value">5 y</div><div class="label">default retention for conversation content, configurable per service and jurisdiction</div></div>
+        <div class="tile"><div class="value">20 y</div><div class="label">financial ledger and insurer authorization records, Serbian accounting law</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">15</span></div>
+</section>
+
+<!-- ============ 16 · COST SNAPSHOT ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Cost</span><h2>Pilot cost snapshot</h2></div><div class="meta">Monthly, in US dollars, before taxes. Frankfurt prices come from secondary sources and must be confirmed in the AWS Pricing Calculator.</div></div>
+  <div class="grid cols-2" style="gap:7mm;align-items:start">
+    <div class="stack">
+      <table class="data compact">
+        <thead><tr><th>Component</th><th class="num">Pilot</th><th class="num">20,000 MAU</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Cognito, Essentials plan</td><td class="num">0</td><td class="num">45 to 300</td></tr>
+          <tr><td class="key">ECS Fargate: API, worker, marketing</td><td class="num">41 to 60</td><td class="num">200 to 350</td></tr>
+          <tr><td class="key">RDS PostgreSQL, Multi-AZ</td><td class="num">59</td><td class="num">150 to 250</td></tr>
+          <tr><td class="key">ElastiCache Valkey</td><td class="num">9 to 13</td><td class="num">40 to 80</td></tr>
+          <tr><td class="key">Application load balancer</td><td class="num">27</td><td class="num">40 to 60</td></tr>
+          <tr><td class="key">NAT gateway, single zone</td><td class="num">33 plus data</td><td class="num">70 plus data</td></tr>
+          <tr><td class="key">CloudFront, WAF, Route 53, certificates</td><td class="num">20 to 40</td><td class="num">80 to 150</td></tr>
+          <tr><td class="key">S3, KMS, Secrets Manager, logs</td><td class="num">10 to 20</td><td class="num">60 to 120</td></tr>
+          <tr><td class="key">SES, Expo push</td><td class="num">under 5</td><td class="num">10 to 30</td></tr>
+          <tr><td class="key">Expo application services (mobile builds)</td><td class="num">19</td><td class="num">19 to 99</td></tr>
+          <tr><td class="key">Video (Chime SDK), 500 half-hour sessions</td><td class="num">51</td><td class="num">by volume</td></tr>
+          <tr><td class="key"><strong>Total, approximate</strong></td><td class="num"><strong>235 to 280</strong></td><td class="num"><strong>800 to 1,000</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="cost-note">Cognito scenarios: five hundred direct and fifty federated users cost nothing; two thousand direct and three thousand federated about $44; one thousand direct and nine thousand federated about $134. At two hundred thousand users Cognito becomes the largest line and the identity-provider abstraction keeps a migration possible.</p>
+    </div>
+    <div class="stack">
+      <div class="grid cols-2" style="gap:3mm">
+        <div class="tile"><div class="value">$0</div><div class="label">Cognito at pilot: ten thousand direct users and fifty federated users are free every month</div></div>
+        <div class="tile"><div class="value">~$250</div><div class="label">a production-grade pilot, before the founder's budget choices</div></div>
+      </div>
+      <div class="callout warning"><strong>Where the pilot could save about $90 a month</strong>Single-zone database instead of Multi-AZ ($28), a community NAT instance instead of the managed gateway ($30), free mobile build tier ($19), metered CloudFront without the flat plan. Each trades availability or operator time for money; the strategy assumes production grade from the first paying client.</div>
+      <div class="card"><h3>What is deliberately not bought</h3><p>Cognito's threat-protection plan ($0.020 per user, no free tier) until a test or a client requires it; an SSO broker ($125 per connection) until fifteen connections; SMS routes in Serbia and Hungary; a second NAT zone; RDS Proxy; ISR hosting for the marketing site.</p></div>
+      <div class="card tinted"><h3>People cost dominates</h3><p>Two engineers with AI agents for about fifteen weeks to an SSO-ready pilot, plus a data protection assessment and an external data protection officer. Infrastructure is a rounding error next to that.</p></div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">16</span></div>
+</section>
+
+<!-- ============ 17 · ROADMAP ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Roadmap</span><h2>Five phases to a pilot</h2></div><div class="meta">About fifteen weeks to an SSO-ready pilot. Each phase ends with a test that proves the next one can start.</div></div>
+  <div class="timeline">
+    <div class="phase active"><span class="eyebrow">Phase 0 · 2 weeks</span><h3>Foundations and spikes</h3><ul><li>Schema for identities, organizations, grants and audit</li><li>The decision function with unit, property and golden-table tests</li><li>CDK skeleton, accounts, keys, domains</li><li>Four spikes decided in week one</li></ul><div class="exit"><b>Exit:</b> golden table green in CI; spikes answered.</div></div>
+    <div class="phase"><span class="eyebrow">Phase 1 · 6 weeks</span><h3>Identity and sessions</h3><ul><li>Cognito pool and clients</li><li>Server-side sessions and cookies</li><li>Sign-in screens in four languages, web and mobile</li><li>Invitations, emailed codes, authenticator apps</li><li>Staging live; pipeline; logs and alarms</li></ul><div class="exit"><b>Exit:</b> an invited employee signs in on web and phone; a deactivated one is out within seconds.</div></div>
+    <div class="phase"><span class="eyebrow">Phase 2 · 4 weeks</span><h3>Authorization administration</h3><ul><li>Templates, grants, delegation, preview</li><li>Approval authorities</li><li>Restricted-content module and emergency access</li><li>Step-up re-authentication</li><li>Production account, guardrails, cdk-nag</li></ul><div class="exit"><b>Exit:</b> no employer or administrator view reveals private content, proven by tests.</div></div>
+    <div class="phase"><span class="eyebrow">Phase 3 · 3 weeks</span><h3>First employer SSO</h3><ul><li>One SAML or OIDC connection end to end</li><li>Domain verification and routing</li><li>Onboarding runbook run with the client</li><li>Replay protection, provider abstraction</li></ul><div class="exit"><b>Exit:</b> an invited employee activates through the IdP; an uninvited colleague is refused.</div></div>
+    <div class="phase"><span class="eyebrow">Phase 4 · ongoing</span><h3>Hardening and scale</h3><ul><li>Passkeys</li><li>Threat-protection plan if triggered</li><li>Directory sync (SCIM)</li><li>Access reviews, restore drills, penetration test</li><li>Identity merge runbook; hosting re-evaluation</li></ul><div class="exit"><b>Trigger-driven</b> rather than scheduled.</div></div>
+  </div>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="callout"><strong>Four spikes decide the plan in week one</strong>Emailed codes outside Cognito's hosted page; the session service on NestJS 12; Socket.IO through CloudFront with sticky load balancing; Prisma 7 query scoping. Each has a written fallback that costs days, not weeks.</div>
+    <div class="callout info"><strong>Alongside, from week one</strong>Data protection impact assessment, data protection officer, processing agreement template, privacy notices, breach procedure, retention schedule. None of it waits for the code.</div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">17</span></div>
+</section>
+
+<!-- ============ 18 · WHAT NEEDS YOU ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Decisions for the founder</span><h2>What needs you</h2></div><div class="meta">The document assumes the default in each card until you decide otherwise. None of them changes the architecture.</div></div>
+  <div class="needs compact">
+    <div class="card"><h3>F-01 · Where NestSelf is incorporated</h3><p>Sets the contract template, the supervisory authority and whether EU standard clauses sit in Hungarian client agreements.</p><div class="default"><b>Default:</b> Serbian company; EU clauses, module two, for Hungarian clients.</div></div>
+    <div class="card"><h3>F-02 · Professional notes on the platform</h3><p>Clinical notes would pull in health-documentation law in both countries, with 15- and 30-year retention.</p><div class="default"><b>Default:</b> not at pilot; scheduling metadata only. The restricted domain is built either way.</div></div>
+    <div class="card"><h3>F-03 · Minimum reporting cohort</h3><p>Below this size an employer report shows nothing. Smaller numbers raise re-identification risk.</p><div class="default"><b>Default:</b> ten people per cell, confirmed with the data protection officer.</div></div>
+    <div class="card"><h3>F-04 · English-only sign-in for a pilot client</h3><p>Would save one to two weeks by using Cognito's hosted page, which has neither language.</p><div class="default"><b>Default:</b> no; localised sign-in from day one.</div></div>
+    <div class="card"><h3>F-05 · Pilot budget posture</h3><p>Multi-AZ database and managed NAT, or single-zone and community NAT for about $90 a month less.</p><div class="default"><b>Default:</b> production grade from the first paying client.</div></div>
+    <div class="card"><h3>F-06 · Mobile token model</h3><p>The panel was unanimous for the standard native flow; the custom variant is documented as rejected.</p><div class="default"><b>Default:</b> standard native flow with tokens in the device keychain.</div></div>
+    <div class="card"><h3>F-07 · Domain names</h3><p>Placeholders are used for the site, the apps, the API and the sign-in domain.</p><div class="default"><b>Default:</b> nestself.rs with app, admin, api and auth subdomains; registered in phase 0.</div></div>
+    <div class="card"><h3>F-08 and F-09 · Staff identity provider; telling employees about emergency access</h3><p>Staff could later sign in through a company workspace provider. Employees could be told, after the fact, when emergency access touched their records.</p><div class="default"><b>Defaults:</b> Cognito with authenticator apps at pilot; yes, unless counsel objects.</div></div>
+  </div>
+  <div class="grid cols-4" style="margin-top:5mm;gap:3mm">
+    <div class="card" style="padding:3mm 3.4mm"><h4>Where the detail lives</h4><p class="small">docs/tasks/auth/auth-strategy.md: decisions with conditions, data model, API, infrastructure, runbooks, traceability to every story.</p></div>
+    <div class="card" style="padding:3mm 3.4mm"><h4>Eight questions for counsel</h4><p class="small">Lawful bases, healthcare classification in both countries, transfer mechanism, officer, assessment scope, cohort sign-off, SMS rules.</p></div>
+    <div class="card" style="padding:3mm 3.4mm"><h4>How a decision changes</h4><p class="small">A new revision of the decision record with the reason and the sections it touches. Never a silent edit.</p></div>
+    <div class="card tinted" style="padding:3mm 3.4mm"><h4>Next step</h4><p class="small">Confirm or change the defaults above; phase 0 starts with the four spikes and the schema.</p></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">18</span></div>
+</section>
+
+</body>
+</html>
