@@ -1,0 +1,176 @@
+{
+  "meta": {
+    "title": "NestSelf – moderan benefit za blagostanje zaposlenih",
+    "description": "Moderan benefit za blagostanje zaposlenih. Psihološka, pravna i finansijska podrška za zaposlene i njihove porodice, kroz jednu poverljivu platformu."
+  },
+  "hero": {
+    "eyebrow": "Moderan benefit za blagostanje zaposlenih",
+    "title": "Podrška za posao. I za sve oko njega.",
+    "lead": "Obezbedite zaposlenima i njihovim porodicama pristup licenciranim psiholozima, pravnim stručnjacima i finansijskim konsultantima – sve na jednoj poverljivoj platformi.",
+    "primaryCta": "Zakažite prezentaciju",
+    "secondaryCta": "Za zaposlene",
+    "photos": [
+      {
+        "key": "home-hero-kitchen",
+        "alt": "Topla scena u kuhinji koja predstavlja svakodnevni život"
+      },
+      {
+        "key": "home-hero-walk",
+        "alt": "Osoba na šetnji napolju, na pauzi"
+      },
+      {
+        "key": "family-cooking",
+        "alt": "Porodica zajedno priprema obrok"
+      }
+    ]
+  },
+  "trust": [
+    {
+      "icon": "shield-check",
+      "label": "Licencirani stručnjaci"
+    },
+    {
+      "icon": "lock-key",
+      "label": "Poverljivo od samog početka"
+    },
+    {
+      "icon": "translate",
+      "label": "Srpski, mađarski i engleski"
+    },
+    {
+      "icon": "hand-heart",
+      "label": "Psihološka, pravna i finansijska podrška"
+    }
+  ],
+  "services": {
+    "eyebrow": "Šta nudimo",
+    "title": "Tri oblasti podrške, jedna platforma",
+    "lead": "Licencirani psiholozi, pravni stručnjaci i sertifikovani finansijski konsultanti, dostupni onlajn i uživo.",
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Psihoterapija i savetovanje",
+        "body": "Licencirani psiholozi i kvalifikovani psihoterapeuti za individualne, partnerske i porodične sesije – onlajn ili uživo.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Pravno savetovanje",
+        "body": "Poverljivo savetovanje o ličnim pravnim pitanjima – porodično pravo, zakup, prava potrošača.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Finansijsko savetovanje",
+        "body": "Budžetiranje, upravljanje dugovima, planiranje štednje i penzijsko savetovanje od sertifikovanih finansijskih stručnjaka.",
+        "href": "/services/financial-guidance"
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "Kako funkcioniše",
+    "title": "Kako funkcioniše za zaposlene",
+    "steps": [
+      {
+        "title": "Aktivirajte nalog sa poslovnom e-adresom",
+        "body": "Vaš poslodavac je već podesio NestSelf za Vas. Prijavite se sa poslovnom e-adresom da vidite šta Vam je dostupno."
+      },
+      {
+        "title": "Izaberite oblast i termin",
+        "body": "Odaberite psihoterapiju, pravno ili finansijsko savetovanje. Pregledajte dostupne stručnjake i pronađite termin koji Vam odgovara."
+      },
+      {
+        "title": "Razgovarajte, na svom jeziku",
+        "body": "Obavite sesiju na srpskom, mađarskom ili engleskom jeziku – onlajn ili uživo. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo."
+      },
+      {
+        "title": "Nastavite uz dodatne sesije i biblioteku resursa",
+        "body": "Zakažite dodatne sesije, istražite alate za samopomoć, čitajte članke i pridružite se vebinarima sopstvenim tempom."
+      }
+    ]
+  },
+  "employers": {
+    "eyebrow": "Za poslodavce",
+    "title": "Benefit za blagostanje koji će Vaš tim zaista koristiti",
+    "paragraphs": [
+      "NestSelf objedinjuje psihološku, pravnu i finansijsku podršku na jednoj platformi koju zaposleni razumeju i kojoj veruju. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+    ],
+    "bullets": [
+      "Pokretanje za nekoliko nedelja uz komunikacioni paket",
+      "Anonimizovani uvidi za grupe od 10 ili više osoba",
+      "Podrška za rukovodioce i ankete o blagostanju tima",
+      "Podrška za porodicu kada Vaš plan uključuje članove porodice"
+    ],
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "Tim na HR sastanku razgovara o blagostanju zaposlenih"
+    },
+    "cta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "life": {
+    "eyebrow": "Život van posla",
+    "title": "Podrška za ljude oko Vas",
+    "paragraphs": [
+      "Odnosi, roditeljstvo, briga o roditelju ili rešavanje pravnog pitanja koje nema veze sa poslom. Kada plan Vašeg poslodavca uključuje članove porodice, i oni dobijaju isti pristup psihoterapiji, pravnom i finansijskom savetovanju."
+    ],
+    "photo": {
+      "key": "family-park-walk",
+      "alt": "Porodica zajedno šeta u parku"
+    }
+  },
+  "resources": {
+    "title": "Članci, vebinari i alati",
+    "moreLabel": "Pogledajte sve resurse"
+  },
+  "assessments": {
+    "title": "Provera blagostanja"
+  },
+  "testimonials": {
+    "title": "Šta kažu organizacije",
+    "lead": "Uzorak podataka. Priče partnera će se pojaviti ovde kako se organizacije budu pridruživale NestSelf-u."
+  },
+  "faq": {
+    "title": "Najčešća pitanja",
+    "items": [
+      {
+        "question": "Ko može da koristi NestSelf?",
+        "answer": "Svaki zaposleni čiji je poslodavac aktivirao program NestSelf. Kada plan Vašeg poslodavca uključuje članove porodice, partneri i deca takođe mogu da koriste uslugu."
+      },
+      {
+        "question": "Da li je poverljivo?",
+        "answer": "Da. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Koliko košta zaposlene?",
+        "answer": "NestSelf je benefit koji finansira poslodavac. Zaposleni ne plaćaju ništa za usluge koje njihov plan pokriva."
+      },
+      {
+        "question": "Koliko brzo možemo da pokrenemo program?",
+        "answer": "Većina organizacija od potpisanog ugovora do pristupa za zaposlene stigne za dve do četiri nedelje. Obezbeđujemo komunikacioni paket koji Vam pomaže da najavite program."
+      },
+      {
+        "question": "Koji jezici su podržani?",
+        "answer": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku. Interfejs platforme i sav sadržaj dostupni su na sva tri jezika."
+      },
+      {
+        "question": "Šta ako je neko u krizi?",
+        "answer": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, pozovite hitne službe odmah. Srbija: 112 (hitne službe), 194 (hitna pomoć); Centar Srce 0800 300 303. Mađarska: 112 (hitne službe), 104 (hitna pomoć); Lelki Elsősegély Telefonszolgálat 116 123. NestSelf takođe pruža smernice za pristup hitnoj stručnoj podršci."
+      }
+    ]
+  },
+  "ctaBand": {
+    "title": "Spremni da podržite svoj tim?",
+    "body": "Saznajte kako NestSelf funkcioniše za Vašu organizaciju.",
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondary": {
+      "label": "Razgovarajte sa nama",
+      "href": "/contact"
+    }
+  }
+}

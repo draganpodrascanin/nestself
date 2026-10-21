@@ -43,7 +43,6 @@ const JSON_UNTOUCHED_KEYS = new Set([
   'topic',
   'format',
   'kind',
-  'languages',
   'method',
 ]);
 
@@ -125,10 +124,24 @@ function transliterateFrontmatter(data) {
  * Transliterate a JSON content object, wrapping transliterateObject from
  * @nestself/i18n with untouched-key filtering and URL-string preservation.
  */
+/** Keys whose values are machine codes only when they are arrays (e.g. webinar languages ['sr', 'hu']). */
+const ARRAY_ONLY_UNTOUCHED_KEYS = new Set(['languages']);
+
+/** URL, domain and {{placeholder}} tokens that must survive transliteration inside prose. */
+const PROSE_PROTECTED =
+  /(https?:\/\/\S+|www\.\S+|\b[\w-]+(?:\.[\w-]+)*\.(?:rs|hu|com|org|net|eu|int|dk|io|gov|edu)\b|\{\{[^}]+\}\})/g;
+
+export function transliterateText(text) {
+  return text
+    .split(PROSE_PROTECTED)
+    .map((part, index) => (index % 2 === 1 ? part : transliterateObject(part)))
+    .join('');
+}
+
 export function transliterateJsonContent(obj) {
   if (typeof obj === 'string') {
     if (/^https?:\/\//.test(obj)) return obj;
-    return transliterateObject(obj);
+    return transliterateText(obj);
   }
   if (Array.isArray(obj)) {
     return obj.map(transliterateJsonContent);
@@ -136,11 +149,10 @@ export function transliterateJsonContent(obj) {
   if (obj !== null && typeof obj === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(obj)) {
-      if (JSON_UNTOUCHED_KEYS.has(key)) {
-        result[key] = value;
-      } else {
-        result[key] = transliterateJsonContent(value);
-      }
+      const untouched =
+        (JSON_UNTOUCHED_KEYS.has(key) && !ARRAY_ONLY_UNTOUCHED_KEYS.has(key)) ||
+        (ARRAY_ONLY_UNTOUCHED_KEYS.has(key) && Array.isArray(value));
+      result[key] = untouched ? value : transliterateJsonContent(value);
     }
     return result;
   }

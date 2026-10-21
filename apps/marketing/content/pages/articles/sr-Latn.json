@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "title": "Članci — NestSelf",
+    "description": "Stručni članci o mentalnom zdravlju, pravima, finansijskoj pismenosti i blagostanju na radnom mestu."
+  },
+  "hero": {
+    "title": "Članci",
+    "lead": "Praktični članci koje su pregledali stručnjaci o mentalnom zdravlju, pravima, finansijskoj pismenosti i blagostanju na radnom mestu.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "filterLabel": "Filtrirajte po temi",
+  "allTopicsLabel": "Sve",
+  "topics": {
+    "psychological": "Mentalno zdravlje",
+    "legal": "Pravo",
+    "financial": "Finansije",
+    "work": "Posao",
+    "family": "Porodica",
+    "managers": "Rukovodioci"
+  },
+  "cardLabels": {
+    "readingTime": "{minutes} min čitanja",
+    "published": "Objavljeno"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigacija",
+    "breadcrumbArticles": "Članci",
+    "readingTime": "{minutes} min čitanja",
+    "disclaimerText": "Ovaj članak je opšta informacija, ne medicinski, pravni ili finansijski savet.",
+    "disclaimerLinkText": "Razgovarajte sa stručnjakom",
+    "relatedTitle": "Srodni članci",
+    "ctaBand": {
+      "title": "Potreban Vam je razgovor sa stručnjakom?",
+      "body": "Ako Vaš poslodavac nudi NestSelf, možete zakazati poverljivu sesiju sa licenciranim stručnjakom. Ako ne, javite svom HR timu da ste zainteresovani.",
+      "primaryLabel": "Zakažite prezentaciju",
+      "primaryHref": "/demo"
+    }
+  },
+  "serviceLinks": {
+    "psychological": "/services/therapy",
+    "legal": "/services/legal-consultation",
+    "financial": "/services/financial-guidance",
+    "work": "/services/therapy",
+    "family": "/services/therapy",
+    "managers": "/services/therapy"
+  }
+}

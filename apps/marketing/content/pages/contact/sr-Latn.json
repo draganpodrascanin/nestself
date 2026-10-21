@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "title": "Kontaktirajte nas",
+    "description": "Stupite u kontakt sa NestSelf timom. Nalazimo se u Beogradu i Budimpešti."
+  },
+  "hero": {
+    "title": "Kontaktirajte nas",
+    "lead": "Imate pitanje, povratnu informaciju ili želite da saznate kako NestSelf može da pomogne Vašoj organizaciji? Biće nam drago da čujemo od Vas."
+  },
+  "form": {
+    "fields": {
+      "name": "Vaše ime",
+      "email": "E-adresa",
+      "subject": "Tema",
+      "message": "Poruka",
+      "consent": "Saglasan/saglasna sam da NestSelf obradi moje podatke radi odgovora na moj zahtev u skladu sa"
+    },
+    "privacyLinkText": "Politikom privatnosti",
+    "submit": "Pošaljite poruku",
+    "submitting": "Slanje...",
+    "errorSummaryTitle": "Ispravite sledeće greške",
+    "successTitle": "Poruka je poslata",
+    "successBody": "Hvala što ste nam se obratili. Odgovorićemo Vam čim budemo mogli.",
+    "errorTitle": "Nešto je pošlo naopako",
+    "errorBody": "Nismo mogli da pošaljemo Vašu poruku. Pokušajte ponovo kasnije.",
+    "errorContactHint": "Možete nas kontaktirati i na",
+    "fallbackErrorLabel": "Formular",
+    "fallbackErrorMessage": "Slanje nije uspelo. Proverite unete podatke i pokušajte ponovo.",
+    "validation": {
+      "required": "Popunite {{field}}.",
+      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@kompanija.com.",
+      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
+      "select": "Izaberite opciju za {{field}}.",
+      "tooLong": "{{field}} je predugačko."
+    }
+  },
+  "aside": {
+    "emailTitle": "E-pošta",
+    "officesTitle": "Kancelarije",
+    "officesBody": "Beograd i Budimpešta",
+    "note": "Na zahteve za prezentaciju odgovara osoba iz našeg tima."
+  }
+}

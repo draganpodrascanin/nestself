@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "title": "Kérj bemutatót",
+    "description": "Ismerd meg, hogyan biztosít a NestSelf pszichológiai, jogi és pénzügyi támogatást a csapatodnak. Mesélj a szervezetedről, és felvesszük veled a kapcsolatot."
+  },
+  "hero": {
+    "title": "Kérj bemutatót",
+    "lead": "Mesélj a szervezetedről, és bemutatjuk, hogyan működik a NestSelf a csapatod számára."
+  },
+  "form": {
+    "fields": {
+      "name": "Teljes név",
+      "email": "Munkahelyi e-mail",
+      "company": "Cég",
+      "role": "Beosztás",
+      "companySize": "Cégméret",
+      "country": "Ország",
+      "heardAbout": "Honnan hallottál rólunk?",
+      "message": "Van még valami, amit szeretnél megosztani velünk?",
+      "consent": "Hozzájárulok, hogy a NestSelf az Adatkezelési tájékoztatóban leírtak szerint kezelje adataimat a megkeresésem megválaszolása érdekében."
+    },
+    "privacyLinkText": "Adatkezelési tájékoztató",
+    "selectPlaceholder": "Válassz...",
+    "options": {
+      "companySize": [
+        {
+          "value": "1-50",
+          "label": "1–50 munkavállaló"
+        },
+        {
+          "value": "51-200",
+          "label": "51–200 munkavállaló"
+        },
+        {
+          "value": "201-500",
+          "label": "201–500 munkavállaló"
+        },
+        {
+          "value": "501-1000",
+          "label": "501–1000 munkavállaló"
+        },
+        {
+          "value": "1000+",
+          "label": "1000+ munkavállaló"
+        }
+      ],
+      "country": [
+        {
+          "value": "RS",
+          "label": "Szerbia"
+        },
+        {
+          "value": "HU",
+          "label": "Magyarország"
+        },
+        {
+          "value": "OTHER",
+          "label": "Egyéb"
+        }
+      ],
+      "heardAbout": [
+        {
+          "value": "search",
+          "label": "Kereső"
+        },
+        {
+          "value": "referral",
+          "label": "Ajánlás"
+        },
+        {
+          "value": "event",
+          "label": "Esemény vagy konferencia"
+        },
+        {
+          "value": "social",
+          "label": "Közösségi média"
+        },
+        {
+          "value": "other",
+          "label": "Egyéb"
+        }
+      ]
+    },
+    "validation": {
+      "required": "Kérjük, töltsd ki a(z) {{field}} mezőt.",
+      "email": "Adj meg egy érvényes munkahelyi e-mail-címet, például nev@ceg.com.",
+      "consent": "Kérjük, fogadd el az adatkezelési tájékoztatót, hogy válaszolhassunk.",
+      "select": "Kérjük, válassz egy lehetőséget a(z) {{field}} mezőben.",
+      "tooLong": "A(z) {{field}} túl hosszú."
+    },
+    "emailHint": "Javasoljuk, hogy a munkahelyi e-mail-címedet add meg, hogy össze tudjunk párosítani a szervezeteddel.",
+    "optional": "nem kötelező",
+    "submit": "Kérés elküldése",
+    "submitting": "Küldés...",
+    "errorSummaryTitle": "Kérjük, javítsd a következő hibákat",
+    "successTitle": "Megkaptuk a kérésedet",
+    "successBody": "Csapatunk egy tagja hamarosan felveszi veled a kapcsolatot. Ellenőrizd a postaládádat a visszaigazolásért.",
+    "errorTitle": "Hiba történt",
+    "errorBody": "A kérésedet jelenleg nem tudtuk elküldeni. Kérjük, próbáld újra később.",
+    "errorContactHint": "Közvetlenül is elérsz minket a következő címen:",
+    "fallbackErrorLabel": "Űrlap",
+    "fallbackErrorMessage": "A küldés nem sikerült. Kérjük, ellenőrizd a megadott adatokat, és próbáld újra."
+  },
+  "aside": {
+    "title": "Mi történik ezután",
+    "steps": [
+      {
+        "title": "Egy kolléga válaszol",
+        "body": "Csapatunk egyik tagja e-mailben felveszi veled a kapcsolatot, hogy megértse az igényeidet."
+      },
+      {
+        "title": "Egy 30 perces hívás",
+        "body": "Bemutatjuk a platformot, válaszolunk a kérdéseidre, és megbeszéljük a csapatod helyzetét."
+      },
+      {
+        "title": "Ajánlat",
+        "body": "Kapsz egy átlátható ajánlatot a szolgáltatásokról, az ütemtervről és a következő lépésekről."
+      }
+    ],
+    "contactTitle": "Inkább e-mailt küldenél?",
+    "contactBody": "Írj nekünk közvetlenül a következő címre:"
+  }
+}

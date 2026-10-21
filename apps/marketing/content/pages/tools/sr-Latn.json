@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "title": "Alati za samopomoć i provera blagostanja",
+    "description": "Provera blagostanja i vođeni planeri koji Vam pomažu da razumete svoje blagostanje — bez prijavljivanja, ništa se ne čuva."
+  },
+  "hero": {
+    "title": "Alati za Vaše blagostanje",
+    "lead": "Brze provere i praktični planeri koje možete koristiti odmah. Ništa što ovde odgovorite se ne čuva niti deli sa bilo kim.",
+    "primaryCta": { "label": "Započnite proveru", "href": "#assessments" },
+    "secondaryCta": { "label": "Pregledajte vodiče", "href": "#guides" }
+  },
+  "assessments": {
+    "eyebrow": "Provere",
+    "title": "Provera blagostanja",
+    "intro": "Kratki upitnici koji Vam pomažu da razmislite o tome kako ste se osećali. Ovo nisu dijagnoze. Vaši odgovori ostaju u Vašem pregledaču i nikada se nigde ne šalju.",
+    "durationLabel": "{minutes} min",
+    "questionsLabel": "{count} pitanja"
+  },
+  "guides": {
+    "eyebrow": "Vodiči i planeri",
+    "title": "Praktični alati koje možete koristiti danas",
+    "intro": "Korak-po-korak resursi za razgovore, budžetiranje i pravnu pripremu."
+  },
+  "runner": {
+    "start": "Započnite",
+    "next": "Sledeće",
+    "back": "Nazad",
+    "finish": "Pogledajte rezultat",
+    "restart": "Započnite ponovo",
+    "questionOf": "Pitanje {current} od {total}",
+    "result": "Vaš rezultat",
+    "yourScore": "Vaš rezultat: {score} od {max}",
+    "nothingStored": "Ništa od onoga što ste odgovorili nije sačuvano niti poslato.",
+    "talkToSomeone": "Razgovarajte sa stručnjakom",
+    "relatedReading": "Istražite srodne resurse"
+  },
+  "introPhotoAlt": {
+    "psychological": "Osoba sedi na sofi i razmišlja o svom blagostanju",
+    "work": "Osoba na kraju radnog dana, zastaje da razmisli",
+    "financial": "Osoba pregleda finansijske planove sa konsultantom",
+    "default": "Osoba sedi na sofi i razmišlja o svom blagostanju"
+  },
+  "breadcrumbs": {
+    "home": "Početna",
+    "tools": "Alati"
+  },
+  "guideCtaLabel": "Saznajte više o usluzi {service}",
+  "guideCta": {
+    "psychological": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
+    "legal": { "label": "Istražite pravno savetovanje", "href": "/services/legal-consultation" },
+    "financial": { "label": "Istražite finansijsko savetovanje", "href": "/services/financial-guidance" },
+    "work": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
+    "family": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" },
+    "managers": { "label": "Istražite psihoterapiju i savetovanje", "href": "/services/therapy" }
+  }
+}

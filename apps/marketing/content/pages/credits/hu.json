@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "title": "Kreditek",
+    "description": "A NestSelf weboldalon használt fotók, képek, betűtípusok és ikonok forrásai."
+  },
+  "hero": {
+    "title": "Kreditek",
+    "lead": "Ezen az oldalon a weboldalon használt fotókat, generált képeket, betűtípusokat és ikonokat tüntetjük fel."
+  },
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  },
+  "generatedImagery": {
+    "title": "Generált képek",
+    "lead": "Mesterséges intelligenciával készült koncepcionális életmód-képek. A képeken látható személyek nem valós személyek. Sem ajánlás, sem felhasználói azonosság, sem családi juttatásra való jogosultság nem értendő bele.",
+    "tableCaption": "Generált képek forrásai",
+    "colImage": "Kép",
+    "colGenerator": "Generátor"
+  },
+  "photography": {
+    "title": "Fotók",
+    "lead": "Pexels életmód-fotók, koncepcionális képként felhasználva. Sem ajánlás, sem ügyfél-azonosság, sem szakmai szerep, sem családi jogosultság nem értendő bele.",
+    "tableCaption": "Fotók forrásai",
+    "colPhoto": "Fotó",
+    "colPhotographer": "Fotós",
+    "colSource": "Forrás",
+    "colLicence": "Licenc",
+    "sourceLinkText": "Pexels",
+    "licenceLinkText": "Pexels licenc"
+  },
+  "fonts": {
+    "title": "Betűtípusok",
+    "body": "Onest az onest.md-től, SIL Open Font License 1.1 licenc alatt."
+  },
+  "icons": {
+    "title": "Ikonok",
+    "body": "Phosphor Icons a phosphoricons.com-tól, MIT License licenc alatt."
+  }
+}

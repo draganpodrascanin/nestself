@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "title": "Webináriumok — NestSelf",
+    "description": "Élő és felvételről elérhető szakértői előadások a jóllétről, a stresszről, a pénzügyekről és még sok másról."
+  },
+  "hero": {
+    "title": "Webináriumok",
+    "lead": "Élő és felvételről elérhető előadások, amelyeket a NestSelf hálózatának engedéllyel rendelkező pszichológusai, jogi szakemberei és pénzügyi tanácsadói tartanak.",
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  },
+  "upcoming": {
+    "title": "Közelgő webináriumok"
+  },
+  "onDemand": {
+    "title": "Felvételről"
+  },
+  "cardLabels": {
+    "live": "Élő",
+    "onDemand": "Felvételről",
+    "minutes": "{n} perc",
+    "languages": "Nyelvek",
+    "noUpcoming": "Jelenleg nincsenek közelgő webináriumok. Böngészd a felvételről elérhető könyvtárat lentebb."
+  },
+  "topics": {
+    "psychological": "Mentális egészség",
+    "legal": "Jogi",
+    "financial": "Pénzügyi",
+    "work": "Munka",
+    "family": "Család",
+    "managers": "Vezetők"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigáció",
+    "breadcrumbWebinars": "Webináriumok",
+    "dateLabel": "Dátum és időpont",
+    "durationLabel": "Időtartam",
+    "formatLabel": "Formátum",
+    "languagesLabel": "Nyelvek",
+    "speakerLabel": "Előadó",
+    "timeZoneLabel": "CET",
+    "minutesSuffix": "perc",
+    "readingTime": "{minutes} perc olvasás",
+    "relatedTitle": "Kapcsolódó cikkek",
+    "watchRecordingTitle": "Nézd meg a felvételt",
+    "watchRecordingBody": "Ennek a webináriumnak a felvétele elérhető a NestSelf munkaterületen. Ha a munkáltatód biztosítja a NestSelfet, jelentkezz be a megtekintéshez.",
+    "registerTitle": "Regisztrálj erre a webináriumra"
+  },
+  "form": {
+    "nameLabel": "Teljes név",
+    "namePlaceholder": "Teljes neved",
+    "emailLabel": "E-mail-cím",
+    "emailPlaceholder": "te@ceg.hu",
+    "companyLabel": "Cég",
+    "companyPlaceholder": "A céged (nem kötelező)",
+    "optionalLabel": "nem kötelező",
+    "consentShortLabel": "Adatkezelési hozzájárulás",
+    "consentLabel": "Hozzájárulok, hogy a NestSelf az {privacyLink} leírtak szerint kezelje adataimat a megkeresésem megválaszolása érdekében.",
+    "privacyLinkText": "Adatkezelési tájékoztatóban",
+    "privacyLinkHref": "/legal/privacy",
+    "submitLabel": "Regisztráció",
+    "errorSummaryTitle": "Kérjük, javítsd a következő hibákat",
+    "nameRequired": "Kérjük, add meg a neved.",
+    "emailRequired": "Kérjük, adj meg egy érvényes e-mail-címet.",
+    "consentRequired": "Az adatkezeléshez való hozzájárulás szükséges.",
+    "successTitle": "Sikeresen regisztráltál",
+    "successBody": "A webinárium előtt e-mailben elküldjük a linket.",
+    "failureTitle": "Nem sikerült elküldeni a regisztrációdat",
+    "failureBody": "Kérjük, próbáld újra később, vagy írj nekünk a {email} címre.",
+    "validation": {
+      "required": "Kérjük, töltsd ki a(z) {{field}} mezőt.",
+      "email": "Adj meg egy érvényes munkahelyi e-mail-címet, például nev@ceg.hu.",
+      "consent": "Kérjük, fogadd el az adatkezelési tájékoztatót, hogy válaszolhassunk.",
+      "select": "Kérjük, válassz egy lehetőséget a(z) {{field}} mezőben.",
+      "tooLong": "A(z) {{field}} túl hosszú."
+    }
+  }
+}

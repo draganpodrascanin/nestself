@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "title": "Hogyan különülnek el a hozzáférések",
+    "description": "Tudd meg, ki mit lát, mielőtt bármi személyeset megosztanál."
+  },
+  "hero": {
+    "title": "Hogyan különülnek el a hozzáférések",
+    "lead": "Tudd meg, ki mit lát, mielőtt bármi személyeset megosztanál."
+  },
+  "inPractice": {
+    "eyebrow": "A gyakorlatban",
+    "title": "Mi történik az egyes lépéseknél",
+    "steps": [
+      {
+        "title": "Amikor foglalsz",
+        "body": "Választasz egy szakembert és egy időpontot. A munkáltatód semmit sem lát a foglalásodról."
+      },
+      {
+        "title": "Mit lát a munkáltatód",
+        "body": "A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "title": "Mit tárolunk és meddig",
+        "body": "Az ülések feljegyzései a szakembernél maradnak. A foglalási adatokat a jogszabályok által előírt ideig őrizzük meg."
+      }
+    ]
+  },
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  }
+}

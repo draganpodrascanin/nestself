@@ -1,0 +1,46 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Pravne informacije",
+    "description": "Pravne informacije o operateru NestSelf sajta."
+  },
+  "title": "Pravne informacije",
+  "updatedAt": "2026-10-21",
+  "intro": "Pravne informacije o operateru ovog sajta, u skladu sa mađarskim Zakonom CVIII iz 2001. (Ekertv.) i srpskim Zakonom o elektronskoj trgovini (član 13).",
+  "sections": [
+    {
+      "heading": "Impresszum (Mađarska)",
+      "paragraphs": [
+        "Pružalac usluge (szolgáltató):"
+      ],
+      "bullets": [
+        "Teljes név (pun naziv): [Naziv kompanije]",
+        "Székhely (sedište): [Adresa]",
+        "Cégjegyzékszám (matični broj kompanije): [Cégjegyzékszám]",
+        "Adószám (poreski broj): [Adószám]",
+        "Elektronikus levelezési cím (e-adresa): hello@nestself.example",
+        "Telefonszám (telefon): [Broj telefona]",
+        "Hosting provajder: [Naziv i adresa hosting provajdera]"
+      ]
+    },
+    {
+      "heading": "Pravne informacije (Srbija)",
+      "paragraphs": [
+        "Podaci o pružaocu usluga:"
+      ],
+      "bullets": [
+        "Naziv firme: [Naziv kompanije]",
+        "Sedište: [Adresa]",
+        "Matični broj: [Matični broj]",
+        "PIB (poreski identifikacioni broj): [PIB]",
+        "Kontakt e-adresa: hello@nestself.example",
+        "Kontakt telefon: [Broj telefona]"
+      ]
+    }
+  ],
+  "updatedAtLabel": "Poslednja izmena:",
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  }
+}

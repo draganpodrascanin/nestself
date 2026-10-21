@@ -1,0 +1,107 @@
+{
+  "meta": {
+    "title": "O nama — NestSelf",
+    "description": "NestSelf je program blagostanja zaposlenih koji nudi terapiju, pravnu i finansijsku podršku u Srbiji i Mađarskoj. Upoznajte tim i saznajte kako sarađujemo sa stručnjacima."
+  },
+  "hero": {
+    "eyebrow": "O nama",
+    "title": "Blagostanje na poslu znači više od terapije",
+    "lead": "NestSelf je osnovan na jednostavnoj ideji: podrška na radnom mestu treba da obuhvati i pravna i finansijska pitanja, ne samo terapiju. Okupljamo licencirane psihologe, kvalifikovane psihoterapeute, pravne stručnjake i finansijske konsultante u jednom poverljivom benefitu.",
+    "primaryCta": {
+      "label": "Kontaktirajte nas",
+      "href": "/contact"
+    },
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf tim na poslu u beogradskom studiju"
+    }
+  },
+  "mission": {
+    "title": "Zašto smo pokrenuli NestSelf",
+    "paragraphs": [
+      "Zaposleni se suočavaju sa mnogo više od stresa. Spor oko zakupa, pitanje o roditeljskom odsustvu ili problem sa dugom mogu da opterete jednako koliko i anksioznost — a jedno često vodi drugom.",
+      "Tradicionalni programi pomoći zaposlenima pokrivaju psihološku podršku, ali pravna i finansijska pitanja prepuštaju slučaju. NestSelf objedinjuje sva tri u jednom poverljivom benefitu, kako bi Vaši zaposleni mogli da dobiju pomoć tamo gde im je zaista potrebna."
+    ],
+    "photo": {
+      "key": "home-hero-office",
+      "alt": "Moderna, svetla kancelarija u kojoj NestSelf tim radi"
+    }
+  },
+  "howWeWorkWithProfessionals": {
+    "eyebrow": "Kvalitet",
+    "title": "Kako sarađujemo sa stručnjacima",
+    "steps": [
+      {
+        "title": "Provera licenci",
+        "body": "Licenca i kvalifikacije svakog stručnjaka se proveravaju pre nego što se pridruži mreži."
+      },
+      {
+        "title": "Intervju i preporuke",
+        "body": "Intervjuišemo svakog kandidata i proveravamo profesionalne preporuke."
+      },
+      {
+        "title": "Etički kodeks i supervizija",
+        "body": "Stručnjaci se obavezuju na zajednički etički kodeks i učestvuju u redovnoj superviziji."
+      },
+      {
+        "title": "Jezici",
+        "body": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku. Stručnjaci se uparuju prema jeziku i oblasti ekspertize."
+      },
+      {
+        "title": "Stalne povratne informacije",
+        "body": "Prikupljamo anonimne povratne informacije od korisnika kako bismo održavali i unapređivali kvalitet."
+      }
+    ]
+  },
+  "team": {
+    "eyebrow": "Tim",
+    "title": "Ko smo mi",
+    "lead": "Mali tim u Beogradu i Budimpešti, koji radi na preseku psihologije, prava, finansija i tehnologije.",
+    "columns": 3,
+    "members": [
+      {
+        "initials": "CF",
+        "role": "Suosnivači",
+        "body": "Pokrenuli su NestSelf da bi premostili jaz između onoga što je zaposlenima potrebno i onoga što tradicionalni programi pomoći zaposlenima nude."
+      },
+      {
+        "initials": "CL",
+        "role": "Klinički rukovodilac",
+        "body": "Licencirani psiholog koji nadgleda mrežu terapeuta, superviziju i profesionalne standarde."
+      },
+      {
+        "initials": "LL",
+        "role": "Rukovodilac pravnog tima",
+        "body": "Vodi mrežu za pravno savetovanje i obezbeđuje usklađenost sa zakonima o zaštiti podataka u Srbiji i Mađarskoj."
+      },
+      {
+        "initials": "FL",
+        "role": "Rukovodilac finansijskog tima",
+        "body": "Sertifikovani finansijski stručnjak koji vodi uslugu finansijskog savetovanja."
+      },
+      {
+        "initials": "OP",
+        "role": "Operacije",
+        "body": "Upravlja pokretanjem programa, odnosima sa poslodavcima i svakodnevnim operacijama u obe zemlje."
+      }
+    ]
+  },
+  "whereWeAre": {
+    "title": "Gde se nalazimo",
+    "paragraphs": [
+      "Beograd i Budimpešta, sa stručnjacima i članovima tima koji rade na daljinu u obe zemlje."
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf studio u Beogradu"
+    }
+  },
+  "cta": {
+    "title": "Stupite u kontakt",
+    "body": "Želite da saznate više o NestSelf platformi ili da istražite mogućnost saradnje? Rado ćemo Vas saslušati.",
+    "primary": {
+      "label": "Kontaktirajte nas",
+      "href": "/contact"
+    }
+  }
+}

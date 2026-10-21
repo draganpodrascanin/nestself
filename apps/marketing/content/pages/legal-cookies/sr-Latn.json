@@ -1,0 +1,44 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Politika kolačića",
+    "description": "Kako NestSelf koristi kolačiće na ovom sajtu."
+  },
+  "title": "Politika kolačića",
+  "updatedAt": "2026-10-21",
+  "intro": "Ova stranica objašnjava koje kolačiće koristi ovaj sajt i kako možete da upravljate njima.",
+  "sections": [
+    {
+      "heading": "1. Koje kolačiće koristimo",
+      "paragraphs": [
+        "Ovaj sajt koristi jedan funkcionalni kolačić:"
+      ],
+      "bullets": [
+        "NEXT_LOCALE: čuva Vaš željeni jezik (npr. \"en\", \"hu\", \"sr-Latn\"). Ovaj kolačić je strogo neophodan za rad prebacivača jezika. Ne prati Vas niti prikuplja lične podatke."
+      ]
+    },
+    {
+      "heading": "2. Bez analitičkih i marketinških kolačića",
+      "paragraphs": [
+        "Ne koristimo analitičke kolačiće, marketinške kolačiće niti praćenje od strane trećih lica. Ne postoji baner za saglasnost za kolačiće jer se koristi samo strogo funkcionalni kolačić."
+      ]
+    },
+    {
+      "heading": "3. Kako da obrišete kolačić",
+      "paragraphs": [
+        "Kolačić NEXT_LOCALE možete obrisati u bilo kom trenutku putem podešavanja Vašeg pretraživača. Sajt će nastaviti da radi; koristiće jezičku preferenciju Vašeg pretraživača."
+      ]
+    },
+    {
+      "heading": "4. Izmene ove politike",
+      "paragraphs": [
+        "Ako u budućnosti dodamo nove kolačiće, ažuriraćemo ovu stranicu i implementirati mehanizam za saglasnost za kolačiće. Datum na vrhu ove stranice označava poslednju izmenu."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Poslednja izmena:",
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  }
+}

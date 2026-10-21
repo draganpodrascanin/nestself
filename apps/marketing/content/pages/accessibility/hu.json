@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Akadálymentesség",
+    "description": "Elkötelezettségünk a NestSelf weboldal mindenki számára való elérhetősége mellett."
+  },
+  "hero": {
+    "title": "Akadálymentességi nyilatkozat",
+    "lead": "Szeretnénk, ha minden ember kényelmesen használhatná ezt a weboldalt, képességeitől és az általa használt technológiától függetlenül."
+  },
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  },
+  "contactHint": "Akadálymentességi probléma esetén kérjük, írj a {email} címre.",
+  "sections": [
+    {
+      "heading": "Célkitűzésünk",
+      "paragraphs": [
+        "Célunk a Webes Tartalmak Akadálymentesítési Irányelvei (WCAG) 2.2-es verziójának AA szintű megfelelése."
+      ]
+    },
+    {
+      "heading": "Mit tesztelünk",
+      "paragraphs": [
+        "Rendszeresen teszteljük a weboldal következő tulajdonságait:"
+      ],
+      "bullets": [
+        "Teljes billentyűzetes kezelhetőség: minden interaktív elem elérhető és aktiválható kizárólag billentyűzettel",
+        "Képernyőolvasó-címkék: minden kép, vezérlőelem és terület értelmes szöveges címkével rendelkezik",
+        "Színkontraszt: a szöveg és az interaktív elemek megfelelnek a WCAG AA kontrasztaránynak",
+        "Átfolyás 320 px-en: az elrendezés keskeny nézetablak-szélességnél is vízszintes görgetés nélkül alkalmazkodik",
+        "Csökkentett mozgás: az animációk kikapcsolásra kerülnek, ha a rendszerbeállításaidban csökkentett mozgást kértél",
+        "Szövegméretezés: az elrendezés akkor is működik, ha a böngésző betűméretét 200%-ra növeled"
+      ]
+    },
+    {
+      "heading": "Ismert korlátozások",
+      "paragraphs": [
+        "A webinárium-oldalakon beágyazott, harmadik féltől származó videolejátszók esetleg nem felelnek meg ugyanannak az akadálymentességi szabványnak, mint az oldal többi része. Szolgáltatóinkkal együttműködve dolgozunk ennek javításán."
+      ]
+    },
+    {
+      "heading": "Probléma bejelentése",
+      "paragraphs": [
+        "Ha akadálymentességi problémába ütközöl ezen a weboldalon, kérjük, jelezd nekünk. Minden bejelentést komolyan veszünk, és igyekszünk mielőbb megoldani a problémát."
+      ]
+    }
+  ]
+}

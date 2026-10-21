@@ -1,0 +1,145 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Adatkezelési tájékoztató",
+    "description": "Hogyan gyűjti, használja és védi a NestSelf az Ön személyes adatait."
+  },
+  "title": "Adatkezelési tájékoztató",
+  "updatedAt": "2026-10-21",
+  "intro": "Ez az adatkezelési tájékoztató ismerteti, hogyan kezeli a NestSelf a weboldalon keresztül gyűjtött személyes adatokat. Adatait az Európai Parlament és a Tanács (EU) 2016/679 számú általános adatvédelmi rendelete (GDPR), a Szerb Köztársaság személyes adatok védelméről szóló törvénye (ZZPL, Zakon o zaštiti podataka o ličnosti) és a 2011. évi CXII. törvény az információs önrendelkezési jogról és az információszabadságról (Info tv.) alapján kezeljük.",
+  "sections": [
+    {
+      "heading": "1. Adatkezelő",
+      "paragraphs": [
+        "[Cég neve], székhely: [Cím].",
+        "Szerbia: Matični broj [Matični broj], PIB [PIB].",
+        "Magyarország: Cégjegyzékszám [Cégjegyzékszám], Adószám [Adószám].",
+        "Adatvédelmi tisztviselő: [Adatvédelmi tisztviselő neve és elérhetősége — az indulás előtt kinevezendő].",
+        "Kapcsolat: hello@nestself.example"
+      ]
+    },
+    {
+      "heading": "2. Milyen adatokat kezelünk",
+      "paragraphs": [
+        "Ezen a weboldalon a következő kategóriájú személyes adatokat kezeljük:"
+      ],
+      "bullets": [
+        "Bemutató-kérés űrlapok: név, munkahelyi e-mail, cégnév, beosztás, cégméret, ország, opcionális üzenet",
+        "Kapcsolatfelvételi űrlapok: név, e-mail, tárgy, üzenet",
+        "Webinárium-regisztrációs űrlapok: név, e-mail, opcionális cégnév",
+        "Egy funkcionális süti (NEXT_LOCALE), amely az Ön nyelvi beállítását tárolja"
+      ]
+    },
+    {
+      "heading": "3. Közérzeti pulzus kérdőívek",
+      "paragraphs": [
+        "A weboldalon található közérzeti pulzus kérdőívek teljes egészében az Ön böngészőjében futnak. Válaszait és eredményeit soha nem küldjük el szervereinkre. A NestSelf semmilyen kérdőív-adatot nem tárol, továbbít vagy kezel.",
+        "Mivel az Ön eszközéről semmilyen egészségügyi adat nem távozik, ez a weboldal nem kezel különleges adatokat a GDPR 9. cikke vagy a ZZPL 17. cikke értelmében. Az egészségügyi adatok kezeléséhez nem szükséges kifejezett hozzájárulás ezen weboldal használatához."
+      ]
+    },
+    {
+      "heading": "4. Az adatkezelés céljai és jogalapjai",
+      "paragraphs": [
+        "Adatait a következő célokból kezeljük:"
+      ],
+      "bullets": [
+        "Bemutató-kérésre vagy üzenetre történő válaszadás: GDPR 6. cikk (1) bekezdés b) pont (szerződéskötést megelőző intézkedések) és 6. cikk (1) bekezdés f) pont (jogos érdek a megkeresésekre történő válaszadáshoz)",
+        "Webinárium-visszaigazolások és emlékeztetők küldése: GDPR 6. cikk (1) bekezdés b) pont",
+        "Az Ön nyelvi beállításának megjegyzése: GDPR 6. cikk (1) bekezdés f) pont (jogos érdek a funkcionális weboldal-élményhez)"
+      ]
+    },
+    {
+      "heading": "5. Automatizált döntéshozatal",
+      "paragraphs": [
+        "Ez a weboldal nem végez automatizált döntéshozatalt vagy profilalkotást a GDPR 22. cikke szerinti értelemben."
+      ]
+    },
+    {
+      "heading": "6. Analitikai és marketing sütik",
+      "paragraphs": [
+        "Ez a weboldal nem használ analitikai vagy marketing sütiket. Az egyetlen alkalmazott süti a NEXT_LOCALE, egy funkcionális süti, amely a választott nyelvet tárolja. Részletekért tekintse meg Sütikezelési tájékoztatónkat."
+      ]
+    },
+    {
+      "heading": "7. Megőrzés",
+      "paragraphs": [
+        "A kapcsolatfelvételi és bemutató-kérési adatokat a megkeresés megválaszolásához szükséges ideig, illetve az azt követő ésszerű időtartamig őrizzük meg, kivéve ha Ön korábban kéri azok törlését. A webinárium-regisztrációs adatokat a webinárium-sorozat időtartamáig őrizzük, és az utolsó eseményt követő 12 hónapon belül töröljük."
+      ]
+    },
+    {
+      "heading": "8. Címzettek és adatfeldolgozók",
+      "paragraphs": [
+        "Adatait az alábbi kategóriájú szolgáltatók kezelhetik:"
+      ],
+      "bullets": [
+        "Tárhelyszolgáltató: [az indulás előtt megnevezendő]",
+        "E-mail-szolgáltató: [az indulás előtt megnevezendő]"
+      ]
+    },
+    {
+      "heading": "9. Nemzetközi adattovábbítás",
+      "paragraphs": [
+        "Amennyiben adatfeldolgozóink személyes adatokat továbbítanak az Európai Gazdasági Térségen (EGT) kívülre, gondoskodunk a megfelelő garanciákról, például az Európai Bizottság által jóváhagyott általános szerződési feltételek alkalmazásáról. Az ilyen továbbítások részleteit az indulás előtt itt dokumentáljuk."
+      ]
+    },
+    {
+      "heading": "10. Kötelező-e az adatszolgáltatás",
+      "paragraphs": [
+        "A bemutató-kérés, kapcsolatfelvételi vagy webinárium-regisztrációs űrlapokon történő személyes adatszolgáltatás önkéntes. Ön nem áll törvényi vagy szerződéses kötelezettség alatt az adatszolgáltatásra. Ha úgy dönt, hogy nem tölti ki a kötelező mezőket, előfordulhat, hogy nem tudunk válaszolni a megkeresésére, vagy nem tudjuk regisztrálni a webináriumra."
+      ]
+    },
+    {
+      "heading": "11. Adatvédelmi hatásvizsgálat",
+      "paragraphs": [
+        "A GDPR 35. cikkének megfelelően adatvédelmi hatásvizsgálatot (DPIA) végeztünk, figyelembe véve a NAIH 35. cikk (4) bekezdés szerinti kötelező listáját. Összefoglalója a hello@nestself.example címen kérhető."
+      ]
+    },
+    {
+      "heading": "12. Az Ön jogai",
+      "paragraphs": [
+        "A GDPR és a ZZPL értelmében Önt a következő jogok illetik meg:"
+      ],
+      "bullets": [
+        "Hozzáférés az általunk kezelt személyes adataihoz",
+        "Pontatlan adatok helyesbítésének kérése",
+        "Adatai törlésének kérése",
+        "Az adatkezelés korlátozása vagy az adatkezelés elleni tiltakozás",
+        "Adathordozhatóság",
+        "A hozzájárulás bármikori visszavonása (ahol az adatkezelés hozzájáruláson alapul)"
+      ]
+    },
+    {
+      "heading": "13. Hogyan gyakorolhatja jogait",
+      "paragraphs": [
+        "Jogai gyakorlásához írjon a hello@nestself.example címre. 30 napon belül válaszolunk."
+      ]
+    },
+    {
+      "heading": "14. Felügyeleti hatóságok",
+      "paragraphs": [
+        "Ha úgy véli, hogy adatvédelmi jogait megsértették, panaszt nyújthat be a következő hatóságoknál:"
+      ],
+      "bullets": [
+        "Szerbia: Poverenik za informacije od javnog značaja i zaštitu podataka o ličnosti (az információk nyilvánosságának és a személyes adatok védelmének biztosa), www.poverenik.rs",
+        "Magyarország: Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH), www.naih.hu"
+      ]
+    },
+    {
+      "heading": "15. A tájékoztató módosítása",
+      "paragraphs": [
+        "Ezt az adatkezelési tájékoztatót időről időre frissíthetjük. Az oldal tetején található dátum az utolsó módosítás időpontját mutatja."
+      ]
+    },
+    {
+      "heading": "16. Kapcsolat",
+      "paragraphs": [
+        "Az adatkezelési tájékoztatóval kapcsolatos kérdéseivel írjon a hello@nestself.example címre."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Utolsó frissítés:",
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "Planovi — NestSelf",
+    "description": "Tri plana za organizacije svake veličine. Osnovni, Kompletni i Enterprise — cena po kvalifikovanom zaposlenom mesečno."
+  },
+  "hero": {
+    "title": "Izaberite pravi plan za Vašu organizaciju",
+    "lead": "Svaki plan uključuje poverljiv pristup licenciranim stručnjacima i komplet za pokretanje. Izaberite obim koji odgovara Vašem timu.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "tiers": [
+    {
+      "name": "Osnovni",
+      "audience": "Za organizacije koje počinju sa osnovnom psihološkom podrškom.",
+      "includes": [
+        "Psihoterapija i savetovanje sa licenciranim psiholozima i kvalifikovanim psihoterapeutima",
+        "Resursi: članci, vodiči i alati za samopomoć",
+        "Vebinari: sesije stručnjaka uživo i na zahtev"
+      ],
+      "cta": {
+        "label": "Zakažite prezentaciju",
+        "href": "/demo"
+      }
+    },
+    {
+      "name": "Kompletni",
+      "audience": "Za organizacije koje žele potpuni benefit blagostanja.",
+      "includes": [
+        "Sve iz plana Osnovni",
+        "Pravno savetovanje o ličnim pravnim pitanjima",
+        "Finansijsko savetovanje od sertifikovanih stručnjaka",
+        "Podrška za rukovodioce: ankete, vodiči za razgovore, informativni materijali",
+        "Anonimizovani uvidi o blagostanju zaposlenih za HR"
+      ],
+      "cta": {
+        "label": "Zakažite prezentaciju",
+        "href": "/demo"
+      }
+    },
+    {
+      "name": "Enterprise",
+      "audience": "Za organizacije u više zemalja sa naprednim potrebama.",
+      "includes": [
+        "Sve iz plana Kompletni",
+        "Podrška za više zemalja (Srbija, Mađarska i šire)",
+        "Integracija jedinstvene prijave (SSO)",
+        "Prilagođeni izveštaji i uvidi o blagostanju zaposlenih",
+        "Posvećeni NestSelf kontakt"
+      ],
+      "cta": {
+        "label": "Zakažite prezentaciju",
+        "href": "/demo"
+      }
+    }
+  ],
+  "note": "Cena po kvalifikovanom zaposlenom mesečno. Vaša ponuda se zasniva na broju zaposlenih, zemljama i planu.",
+  "inEveryPlan": {
+    "eyebrow": "Uključeno",
+    "title": "U svakom planu",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "lock-key",
+        "title": "Poverljivost",
+        "body": "Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "icon": "translate",
+        "title": "Srpski, mađarski i engleski",
+        "body": "Sesije, resursi i komunikacioni materijali na jezicima koje Vaši zaposleni govore."
+      },
+      {
+        "icon": "sparkle",
+        "title": "Komplet za pokretanje",
+        "body": "Emailovi za najavu, posteri i materijali za intranet — pripremljeni na jezicima koje izaberete i spremni za upotrebu."
+      },
+      {
+        "icon": "check-circle",
+        "title": "Pristupačnost",
+        "body": "Platforma je dizajnirana da ispuni WCAG 2.2 nivo AA, kako bi svaki zaposleni mogao udobno da je koristi."
+      }
+    ]
+  },
+  "faq": {
+    "title": "Pitanja o cenama",
+    "items": [
+      {
+        "question": "Kako funkcioniše formiranje cena?",
+        "answer": "Planovi se naplaćuju po kvalifikovanom zaposlenom mesečno. Vaša ponuda se zasniva na broju zaposlenih, zemljama i planu. Zakažite prezentaciju i pripremićemo ponudu za Vas."
+      },
+      {
+        "question": "Postoji li minimalna veličina kompanije?",
+        "answer": "NestSelf radi za organizacije svih veličina. Kontaktirajte nas i pronaći ćemo pravi plan za Vaš tim."
+      },
+      {
+        "question": "Možemo li početi sa planom Osnovni i nadograditi kasnije?",
+        "answer": "Da. Možete preći na Kompletni ili Enterprise plan u bilo kom trenutku. Vaš NestSelf kontakt će Vam pomoći da isplanirate prelaz."
+      },
+      {
+        "question": "Nudite li probni period?",
+        "answer": "Možemo razgovarati o pilot programu u okviru prezentacije. Kontaktirajte nas da saznate više."
+      },
+      {
+        "question": "Šta je uključeno u komplet za pokretanje?",
+        "answer": "Emailovi za najavu, posteri, materijali za intranet i informativni materijal za rukovodioce — sve na jezicima koje izaberete."
+      },
+      {
+        "question": "Koliko brzo možemo da pokrenemo program?",
+        "answer": "Od potpisanog ugovora do pristupa zaposlenima za dve do četiri nedelje, u zavisnosti od veličine Vaše organizacije i broja jezika."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Zatražite ponudu",
+    "body": "Recite nam više o Vašoj organizaciji i pripremićemo plan i ponudu.",
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  }
+}

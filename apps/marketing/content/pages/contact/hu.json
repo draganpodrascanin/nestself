@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "title": "Kapcsolat",
+    "description": "Vedd fel a kapcsolatot a NestSelf csapatával. Belgrádban és Budapesten vagyunk."
+  },
+  "hero": {
+    "title": "Kapcsolat",
+    "lead": "Van kérdésed, visszajelzésed, vagy szeretnéd megismerni, hogyan segíthet a NestSelf a szervezetednek? Örömmel hallunk felőled."
+  },
+  "form": {
+    "fields": {
+      "name": "Neved",
+      "email": "E-mail-cím",
+      "subject": "Tárgy",
+      "message": "Üzenet",
+      "consent": "Hozzájárulok, hogy a NestSelf az Adatkezelési tájékoztatóban leírtak szerint kezelje adataimat a megkeresésem megválaszolása érdekében."
+    },
+    "privacyLinkText": "Adatkezelési tájékoztató",
+    "submit": "Üzenet küldése",
+    "submitting": "Küldés...",
+    "errorSummaryTitle": "Kérjük, javítsd a következő hibákat",
+    "successTitle": "Üzenet elküldve",
+    "successBody": "Köszönjük, hogy írtál. Amint tudunk, válaszolunk.",
+    "errorTitle": "Hiba történt",
+    "errorBody": "Az üzenetedet jelenleg nem tudtuk elküldeni. Kérjük, próbáld újra később.",
+    "errorContactHint": "Közvetlenül is elérsz minket a következő címen:",
+    "fallbackErrorLabel": "Űrlap",
+    "fallbackErrorMessage": "A küldés nem sikerült. Kérjük, ellenőrizd a megadott adatokat, és próbáld újra.",
+    "validation": {
+      "required": "Kérjük, töltsd ki a(z) {{field}} mezőt.",
+      "email": "Adj meg egy érvényes e-mail-címet, például nev@ceg.com.",
+      "consent": "Kérjük, fogadd el az adatkezelési tájékoztatót, hogy válaszolhassunk.",
+      "select": "Kérjük, válassz egy lehetőséget a(z) {{field}} mezőben.",
+      "tooLong": "A(z) {{field}} túl hosszú."
+    }
+  },
+  "aside": {
+    "emailTitle": "E-mail",
+    "officesTitle": "Irodák",
+    "officesBody": "Belgrád és Budapest",
+    "note": "A bemutatókérésekre csapatunk egyik tagja válaszol."
+  }
+}

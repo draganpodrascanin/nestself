@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "Csomagok — NestSelf",
+    "description": "Három csomag minden méretű szervezetnek. Essentials, Complete és Enterprise — jogosult munkavállalónként, havonta."
+  },
+  "hero": {
+    "title": "Válaszd ki a szervezetednek megfelelő csomagot",
+    "lead": "Minden csomag tartalmazza a bizalmas hozzáférést engedéllyel rendelkező szakemberekhez és egy bevezetési eszköztárat. Válaszd ki a csapatodhoz illő szolgáltatási kört.",
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  },
+  "tiers": [
+    {
+      "name": "Essentials",
+      "audience": "Szervezeteknek, amelyek az alap pszichológiai támogatással kezdenek.",
+      "includes": [
+        "Pszichoterápia és tanácsadás engedéllyel rendelkező pszichológusokkal és képzett pszichoterapeutákkal",
+        "Tudástár: cikkek, útmutatók és önsegítő eszközök",
+        "Webináriumok: élő és felvételről elérhető szakértői előadások"
+      ],
+      "cta": {
+        "label": "Kérj bemutatót",
+        "href": "/demo"
+      }
+    },
+    {
+      "name": "Complete",
+      "audience": "Szervezeteknek, amelyek a teljes jólléti juttatást szeretnék.",
+      "includes": [
+        "Minden, ami az Essentials csomagban megtalálható",
+        "Jogi tanácsadás személyes jogi ügyekben",
+        "Pénzügyi tanácsadás tanúsított szakemberektől",
+        "Vezetői támogatás: felmérések, beszélgetési útmutatók, tájékoztatók",
+        "Anonimizált munkavállalói betekintések a HR számára"
+      ],
+      "cta": {
+        "label": "Kérj bemutatót",
+        "href": "/demo"
+      }
+    },
+    {
+      "name": "Enterprise",
+      "audience": "Több országban működő szervezeteknek, fejlett igényekkel.",
+      "includes": [
+        "Minden, ami a Complete csomagban megtalálható",
+        "Több országra kiterjedő támogatás (Szerbia, Magyarország és azon túl)",
+        "Egyszeri bejelentkezés (SSO) integráció",
+        "Egyedi riportok és munkavállalói betekintések",
+        "Dedikált NestSelf kapcsolattartó"
+      ],
+      "cta": {
+        "label": "Kérj bemutatót",
+        "href": "/demo"
+      }
+    }
+  ],
+  "note": "Az ár jogosult munkavállalónként, havonta kerül meghatározásra. Az árajánlat a létszám, az országok és a csomag alapján készül.",
+  "inEveryPlan": {
+    "eyebrow": "Tartalmazza",
+    "title": "Minden csomagban benne van",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "lock-key",
+        "title": "Titoktartás",
+        "body": "A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "icon": "translate",
+        "title": "Szerbül, magyarul és angolul",
+        "body": "Ülések, tudástár és kommunikációs anyagok azokon a nyelveken, amelyeket a munkatársaid beszélnek."
+      },
+      {
+        "icon": "sparkle",
+        "title": "Bevezetési eszköztár",
+        "body": "Bejelentő e-mailek, plakátok és intranetes anyagok — a választott nyelveken elkészítve, azonnal használatra készen."
+      },
+      {
+        "icon": "check-circle",
+        "title": "Akadálymentesség",
+        "body": "A platform a WCAG 2.2 AA szintnek megfelelően készült, hogy minden munkavállaló kényelmesen használhassa."
+      }
+    ]
+  },
+  "faq": {
+    "title": "Árazási kérdések",
+    "items": [
+      {
+        "question": "Hogyan működik az árazás?",
+        "answer": "A csomagok ára jogosult munkavállalónként, havonta kerül meghatározásra. Az árajánlat a létszám, az országok és a csomag alapján készül. Kérj bemutatót, és elkészítjük az árajánlatodat."
+      },
+      {
+        "question": "Van minimális céglétszám?",
+        "answer": "A NestSelf minden méretű szervezetnek megfelel. Vedd fel velünk a kapcsolatot, és megtaláljuk a csapatodhoz illő csomagot."
+      },
+      {
+        "question": "Kezdhetünk az Essentials-szel, és később válthatunk?",
+        "answer": "Igen. Bármikor válthatsz Complete vagy Enterprise csomagra. A NestSelf kapcsolattartód segít megtervezni az átállást."
+      },
+      {
+        "question": "Van próbaidőszak?",
+        "answer": "A bemutató keretében megbeszélhetünk egy pilot programot. Vedd fel velünk a kapcsolatot a részletekért."
+      },
+      {
+        "question": "Mit tartalmaz a bevezetési eszköztár?",
+        "answer": "Bejelentő e-maileket, plakátokat, intranetes anyagokat és egy vezetői tájékoztatót — mindet a választott nyelveken."
+      },
+      {
+        "question": "Milyen gyorsan indulhatunk?",
+        "answer": "Az aláírt szerződéstől a munkavállalói hozzáférésig két-négy hét, a szervezeted méretétől és a nyelvek számától függően."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Kérj árajánlatot",
+    "body": "Mesélj a szervezetedről, és elkészítjük a csomagot és az árajánlatot.",
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  }
+}

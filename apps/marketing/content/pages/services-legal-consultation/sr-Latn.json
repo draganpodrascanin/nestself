@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "title": "Pravno savetovanje — NestSelf",
+    "description": "Poverljivi pravni saveti o ličnim pitanjima — ugovori o radu, zakup, porodično pravo, potrošačka pitanja i još mnogo toga."
+  },
+  "hero": {
+    "title": "Pravno savetovanje",
+    "lead": "Dobijte poverljive savete od kvalifikovanog pravnog stručnjaka o Vašim ličnim pravnim pitanjima. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo.",
+    "primaryCta": { "label": "Zakažite prezentaciju", "href": "/demo" },
+    "secondaryCta": { "label": "Nazad na usluge", "href": "/services" }
+  },
+  "covers": {
+    "eyebrow": "Šta pokriva",
+    "title": "Oblasti u kojima možemo da pomognemo",
+    "columns": 3,
+    "items": [
+      { "icon": "buildings", "title": "Ugovori o radu i prestanak radnog odnosa", "body": "Razumite svoja prava u vezi sa ugovorima, otkaznim rokovima, otpremninom i promenama na radnom mestu." },
+      { "icon": "lock-key", "title": "Stanovanje i zakup", "body": "Razjasnite pitanja u vezi sa ugovorima o zakupu, depozitima, sporovima sa zakupodavcima i pravima zakupaca." },
+      { "icon": "users-three", "title": "Osnove porodičnog prava", "body": "Početno usmeravanje u vezi sa starateljstvom, procedurama razvoda, izdržavanjem dece i srodnim pitanjima porodičnog prava." },
+      { "icon": "shield-check", "title": "Potrošačka pitanja", "body": "Pomoć sa garancijama proizvoda, sporovima oko povraćaja novca, ugovorima o uslugama i pravima na zaštitu potrošača." },
+      { "icon": "wallet", "title": "Dugovi i izvršenje", "body": "Razumite svoje opcije kada se suočavate sa naplatom dugova, sudskim izvršenjem ili potraživanjima poverilaca." },
+      { "icon": "books", "title": "Dokumenti i administracija", "body": "Saveti o overi dokumenata, apostilima, zvaničnim zahtevima i administrativnim procedurama." }
+    ]
+  },
+  "howItWorks": {
+    "title": "Kako funkcioniše",
+    "steps": [
+      { "title": "Konsultacija od 30 do 45 minuta", "body": "Svaka konsultacija traje od 30 do 45 minuta — dovoljno vremena da se sagleda Vaša situacija i izlože opcije." },
+      { "title": "Pisani pregled narednih koraka", "body": "Nakon konsultacije dobijate pisani pregled kako biste tačno znali šta da uradite dalje." },
+      { "title": "Upućivanje kada je potrebno", "body": "Ako Vaša situacija zahteva pravno zastupanje, konsultant Vas upućuje na odgovarajućeg stručnjaka." }
+    ]
+  },
+  "whatItIsNot": {
+    "id": "limitations",
+    "title": "Šta ovo nije",
+    "paragraphs": [
+      "Ova usluga Vam pruža stručne savete, a ne pravno zastupanje. Važno je razumeti njene granice."
+    ],
+    "bullets": [
+      "Nije zastupanje na sudu — ne zastupamo Vas pred sudom.",
+      "Nije zamena za angažovanog advokata — za tekuće pravne stvari možda će Vam trebati sopstveni pravni zastupnik.",
+      "Nije za sporove sa Vašim poslodavcem — gde postoji sukob interesa, usmeravamo Vas ka nezavisnoj pravnoj pomoći."
+    ],
+    "photo": { "key": "article-contract", "alt": "Pravni stručnjak pregleda dokumente tokom konsultacije" }
+  },
+  "faq": {
+    "title": "Često postavljana pitanja",
+    "items": [
+      { "question": "Da li će moj poslodavac znati da sam koristio/la ovu uslugu?", "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi." },
+      { "question": "Mogu li dobiti pomoć u sporu sa poslodavcem?", "answer": "S obzirom da Vaš poslodavac finansira program, ne možemo Vas savetovati u sporovima sa njim. U tom slučaju, upućujemo Vas na nezavisnu pravnu pomoć." },
+      { "question": "Šta se dešava nakon konsultacije?", "answer": "Dobijate pisani pregled razgovora i preporučene naredne korake. Ako Vam je potrebno pravno zastupanje, konsultant Vam obezbeđuje preporuku." },
+      { "question": "Da li članovi moje porodice mogu da koriste ovo?", "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu pristupiti istim uslugama pravnog savetovanja." },
+      { "question": "Na kojim jezicima su konsultacije dostupne?", "answer": "Konsultacije su dostupne na srpskom, mađarskom i engleskom jeziku, u zavisnosti od stručnjaka." },
+      { "question": "Da li ovo zamenjuje angažovanje sopstvenog advokata?", "answer": "Ne. Ova usluga pruža početno usmeravanje i pomaže Vam da razumete svoje opcije. Za tekuće pravne stvari možda ćete morati da angažujete sopstvenog advokata." }
+    ]
+  },
+  "cta": {
+    "title": "Dodajte pravnu podršku Vašem programu blagostanja",
+    "body": "Pomozite Vašim zaposlenima da se snalaze u ličnim pravnim pitanjima sa sigurnošću.",
+    "primary": { "label": "Zakažite prezentaciju", "href": "/demo" }
+  }
+}

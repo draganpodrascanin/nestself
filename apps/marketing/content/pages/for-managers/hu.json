@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "title": "Vezetőknek — NestSelf",
+    "description": "Anyagok és útmutatás vezetőknek: csapatszintű felmérések, beszélgetési útmutatók és hogyan irányíts valakit a támogatáshoz – anélkül, hogy túllépnéd a határaidat."
+  },
+  "hero": {
+    "eyebrow": "Vezetőknek",
+    "title": "Támogasd a csapatodat anélkül, hogy túllépnéd a határaidat",
+    "lead": "A NestSelf gyakorlati eszközöket és útmutatást ad azokra a pillanatokra, amikor egy csapattag támogatásra szorulhat. Nem kell terapeutának lenned – elég, ha figyelmes vezető vagy.",
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Nézd meg a csomagokat",
+      "href": "/plans"
+    },
+    "photo": {
+      "key": "manager-one-on-one",
+      "alt": "Vezető négyszemközti beszélgetést folytat egy csapattagjával"
+    }
+  },
+  "features": {
+    "eyebrow": "Vezetői támogatás",
+    "title": "Mit kapsz vezetőként",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "chart-bar",
+        "title": "Csapatszintű jólléti felmérések",
+        "body": "Futtass rövid, anonim felméréseket, hogy megértsd, hogyan érzik magukat a csapattagjaid – anélkül, hogy bárkit kínos helyzetbe hoznál."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Beszélgetési útmutatók",
+        "body": "Lépésről lépésre útmutatók érzékeny beszélgetésekhez: hogyan kérdezz, mit mondj és mit ne mondj."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Mikor és hogyan irányíts valakit a támogatáshoz",
+        "body": "Egyértelmű útmutatás a jelek felismeréséhez és a NestSelf ajánlásához – diagnózis vagy nyomásgyakorlás nélkül."
+      },
+      {
+        "icon": "books",
+        "title": "Vezetői anyagok",
+        "body": "Válogatott cikkek, webináriumok és eszközök vezetők számára a csapat jóllétének támogatásához."
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "A gyakorlatban",
+    "title": "Csapattag támogatása",
+    "steps": [
+      {
+        "title": "Figyelj",
+        "body": "Figyelj a viselkedés, az energia vagy az elköteleződés változásaira. Nem kell diagnózist felállítanod – csak figyelj."
+      },
+      {
+        "title": "Kérdezz négyszemközt",
+        "body": "Keress egy nyugodt pillanatot. Kérdezd meg, hogy van. Maradj egyszerű és őszinte."
+      },
+      {
+        "title": "Hallgass diagnózis nélkül",
+        "body": "Hagyd, hogy beszéljen. Nem kell semmit megoldanod. A meghallgatás a legfontosabb lépés."
+      },
+      {
+        "title": "Irányítsd a NestSelfhez",
+        "body": "Jelezd, hogy a NestSelf elérhető és bizalmas. Oszd meg a linket, vagy említsd meg természetesen."
+      },
+      {
+        "title": "Kérdezz rá később",
+        "body": "Néhány nap múlva kérdezd meg újra. Nem kell részleteket kérdezned – csak mutasd meg, hogy törődsz."
+      }
+    ]
+  },
+  "resources": {
+    "title": "Anyagok vezetőknek",
+    "moreHref": "/resources",
+    "moreLabel": "Összes tartalom megtekintése"
+  },
+  "cta": {
+    "title": "Készen állsz a vezetőid támogatására?",
+    "body": "Kérj bemutatót, és nézd meg, hogyan segíti a NestSelf a vezetőket a csapat jóllétének kezelésében.",
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  }
+}

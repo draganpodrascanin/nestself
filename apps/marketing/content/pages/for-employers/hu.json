@@ -1,0 +1,182 @@
+{
+  "meta": {
+    "title": "Munkáltatóknak — NestSelf",
+    "description": "Biztosíts bizalmas hozzáférést csapatodnak pszichoterápiához, jogi és pénzügyi támogatáshoz. Indítás heteken belül, anonimizált adatok, valódi segítség."
+  },
+  "hero": {
+    "eyebrow": "Munkáltatóknak",
+    "title": "Jólléti juttatás, amelyet az embereid tényleg használni fognak",
+    "lead": "A NestSelf bizalmas hozzáférést biztosít munkavállalóidnak engedéllyel rendelkező pszichológusokhoz, jogi szakemberekhez és pénzügyi tanácsadókhoz – kiegészítve közérzeti pulzussal, webináriumokkal és tudástárral. Anonimizált munkaerő-adatokat látsz 10 fős vagy nagyobb csoportokra. Soha nem tudod meg, ki használta a NestSelfet, és miről volt szó.",
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Nézd meg a csomagokat",
+      "href": "/plans"
+    },
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR csapat munkavállalói jólléti programról tárgyal egy tárgyalóasztalnál"
+    }
+  },
+  "whatYourPeopleGet": {
+    "eyebrow": "A csapatodnak",
+    "title": "Mit kapnak az embereid",
+    "columns": 3,
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Pszichoterápia és tanácsadás",
+        "body": "Engedéllyel rendelkező pszichológusok és képzett pszichoterapeuták egyéni, páros és családi ülésekre – online vagy személyesen.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Jogi tanácsadás",
+        "body": "Bizalmas útmutatás személyes jogi kérdésekben – családjog, lakásbérlet, fogyasztói jogok. Nem terjed ki a munkáltatóval kapcsolatos munkaügyi vitákra.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Pénzügyi tanácsadás",
+        "body": "Költségvetés-tervezés, adósságkezelés, megtakarítási és nyugdíjtanácsadás okleveles pénzügyi szakemberektől.",
+        "href": "/services/financial-guidance"
+      },
+      {
+        "icon": "video-camera",
+        "title": "Webináriumok",
+        "body": "Élő és bármikor visszanézhető szakértői előadások stresszről, szülőségről, pénzügyekről és sok másról.",
+        "href": "/webinars"
+      },
+      {
+        "icon": "books",
+        "title": "Tudástár",
+        "body": "Cikkek, útmutatók és önsegítő eszközök, amelyekhez a csapatod bármikor hozzáférhet.",
+        "href": "/resources"
+      },
+      {
+        "icon": "check-circle",
+        "title": "Közérzeti pulzus",
+        "body": "Rövid, validált kérdőívek, amelyek segítenek a munkavállalóknak megérteni a közérzetüket és megtalálni a megfelelő támogatást – nem diagnózis.",
+        "href": "/tools"
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Családi támogatás",
+        "body": "Ahol a csomagod tartalmazza a családtagokat, a partnerek és gyermekek ugyanazokat a szolgáltatásokat vehetik igénybe, külön költség nélkül."
+      }
+    ]
+  },
+  "whatHrGets": {
+    "eyebrow": "A HR-nek",
+    "title": "Mit kap a HR",
+    "paragraphs": [
+      "Átfogó képet kapsz anélkül, hogy egyéni adatokat látnál. A NestSelf anonimizált, összesített jólléti trendeket nyújt a vezetőknek – 10 fős vagy nagyobb csoportokra –, hogy felismerd a mintákat és előre tervezz.",
+      "A NestSelf kapcsolattartód az első naptól melletted áll: a bevezetés tervezésétől a csomag konfigurálásán és a kommunikáció előkészítésén át a vezetők tájékoztatásáig és a negyedéves eredmények áttekintéséig."
+    ],
+    "bullets": [
+      "Anonimizált munkaerő-adatok minimum 10 fős csoportmérettel",
+      "Bevezetési és kommunikációs eszköztár a te nyelvedeken",
+      "Vezetői anyagok és tájékoztatók",
+      "Negyedéves áttekintések a NestSelf kapcsolattartóddal"
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "A NestSelf csapat együtt dolgozik a belgrádi stúdióban"
+    }
+  },
+  "howALaunchWorks": {
+    "eyebrow": "Első lépések",
+    "title": "Hogyan zajlik a bevezetés",
+    "steps": [
+      {
+        "title": "Kezdő megbeszélés és csomag konfigurálása",
+        "body": "Megegyezünk a csomagban, a jogosult csoportokban és a nyelvekben. Te döntöd el, mit tartalmaz."
+      },
+      {
+        "title": "Jogosultsági lista és hozzáférés beállítása",
+        "body": "Megküldöd a jogosultsági listát. Mi beállítjuk a biztonságos, privát hozzáférést minden jogosult személy számára."
+      },
+      {
+        "title": "Kommunikációs eszköztár a nyelvedeken",
+        "body": "Elkészítjük a bejelentő e-maileket, plakátokat és intranetes anyagokat szerbül, magyarul és angolul."
+      },
+      {
+        "title": "Élesítés és vezetői tájékoztató",
+        "body": "A munkavállalók hozzáférést kapnak. A vezetők rövid tájékoztatót kapnak arról, hogyan irányítsanak valakit a támogatáshoz."
+      },
+      {
+        "title": "Negyedéves áttekintések",
+        "body": "A NestSelf kapcsolattartód negyedévente megosztja az anonimizált adatokat és javaslatokat."
+      }
+    ]
+  },
+  "confidentiality": {
+    "title": "Titoktartás és megfelelőség",
+    "paragraphs": [
+      "A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra.",
+      "Minden szakembert szakmai titoktartás köt. Adatfeldolgozási megállapodást kötünk, és betartjuk a GDPR-t és a helyi adatvédelmi jogszabályokat. Egyéni szintű adat soha nem kerül a munkáltató elé."
+    ],
+    "bullets": [
+      "GDPR-kompatibilis adatfeldolgozási megállapodás",
+      "Egyéni szintű adat soha nem kerül a munkáltató elé",
+      "Szakmai titoktartásra kötelezett, engedéllyel rendelkező szakemberek",
+      "Az anonimizált HR-jelentésekhez minimum 10 fős csoport szükséges"
+    ],
+    "photo": {
+      "key": "remote-home-dog",
+      "alt": "Személy otthonról dolgozik, privát és kényelmes környezetben"
+    }
+  },
+  "faq": {
+    "title": "Gyakori kérdések munkáltatóktól",
+    "items": [
+      {
+        "question": "Mi az a NestSelf?",
+        "answer": "A NestSelf egy munkavállalói jólléti program, amely bizalmas hozzáférést biztosít az embereidnek engedéllyel rendelkező pszichológusokhoz, jogi szakemberekhez és pénzügyi tanácsadókhoz – kiegészítve közérzeti pulzussal, webináriumokkal és tudástárral."
+      },
+      {
+        "question": "Milyen szolgáltatásokat tartalmaz?",
+        "answer": "A csomagtól függően: pszichoterápia és tanácsadás, jogi tanácsadás, pénzügyi tanácsadás, webináriumok, tudástár, közérzeti pulzus, vezetői támogatás és családi támogatás."
+      },
+      {
+        "question": "Miben különbözik egy hagyományos EAP-tól?",
+        "answer": "A hagyományos EAP-ok gyakran korlátozzák az ülésszámot, és csak pszichológiai támogatást nyújtanak. A NestSelf jogi és pénzügyi tanácsadást, tudástárat, vezetői támogatást és anonimizált munkaerő-adatokat is tartalmaz – egyetlen juttatásban."
+      },
+      {
+        "question": "Ki jogosult – csak a munkavállalók, vagy a családtagok is?",
+        "answer": "Ez a csomagodtól függ. Ahol a csomagod tartalmazza a családtagokat, a partnerek és gyermekek ugyanazokat a szolgáltatásokat vehetik igénybe, külön költség nélkül."
+      },
+      {
+        "question": "Milyen adatokat lát a munkáltató?",
+        "answer": "Anonimizált, összesített jólléti trendeket látsz 10 fős vagy nagyobb csoportokra. Soha nem tudod meg, ki használta a NestSelfet, mit beszéltek meg, és az egyéni felmérési eredményeket sem."
+      },
+      {
+        "question": "Hogyan biztosított a titoktartás?",
+        "answer": "Minden szakembert szakmai titoktartás köt. Adatfeldolgozási megállapodást kötünk, betartjuk a GDPR-t és a helyi adatvédelmi jogszabályokat, és soha nem osztunk meg egyéni szintű adatot a munkáltatóval."
+      },
+      {
+        "question": "Milyen gyorsan indítható el?",
+        "answer": "Az aláírt megállapodástól a munkavállalói hozzáférésig két-négy hét, a szervezeted méretétől és a nyelvek számától függően."
+      },
+      {
+        "question": "Milyen nyelveken érhető el?",
+        "answer": "Az ülések és a tudástár szerb, magyar és angol nyelven érhető el. A kommunikációs anyagokat az általad választott nyelveken készítjük el."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Készen állsz a csapatod támogatására?",
+    "body": "Kérj bemutatót, és bemutatjuk a programot, válaszolunk a kérdéseidre és elkészítjük az ajánlatot.",
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  },
+  "whoBenchmark": {
+    "source": "WHO tájékoztató a munkahelyi mentális egészségről",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "quote": "A depresszió és a szorongás kezelésére fordított minden 1 USD befektetés 4 USD-nyi megtérülést hoz jobb egészség és termelékenység formájában."
+  }
+}

@@ -34,15 +34,7 @@ const { transliterateFile, transliterateJsonContent } = await import(
 // Try to load photos.json for cover validation
 let photoKeys = new Set();
 try {
-  const photosPath = join(
-    __dirname,
-    '..',
-    '..',
-    '..',
-    'packages',
-    'assets',
-    'photos.json',
-  );
+  const photosPath = join(__dirname, '..', '..', '..', 'packages', 'assets', 'photos.json');
   const photosRaw = await readFile(photosPath, 'utf-8');
   const photosData = JSON.parse(photosRaw);
   photoKeys = new Set(
@@ -63,7 +55,13 @@ const allowMissing = process.env.CONTENT_ALLOW_MISSING_LOCALES === '1';
 const errors = [];
 const warnings = [];
 /** Track unique slugs per type for the summary. */
-const slugSets = { articles: new Set(), webinars: new Set(), tools: new Set(), assessments: new Set(), pages: new Set() };
+const slugSets = {
+  articles: new Set(),
+  webinars: new Set(),
+  tools: new Set(),
+  assessments: new Set(),
+  pages: new Set(),
+};
 
 function error(msg) {
   errors.push(msg);
@@ -94,9 +92,7 @@ async function listFiles(dir) {
 }
 
 function checkLocales(files, ext, slug, type) {
-  const localeFiles = files
-    .filter((f) => f.endsWith(ext))
-    .map((f) => f.replace(ext, ''));
+  const localeFiles = files.filter((f) => f.endsWith(ext)).map((f) => f.replace(ext, ''));
 
   if (!localeFiles.includes('en')) {
     error(`${type}/${slug}: missing en${ext}`);
@@ -149,7 +145,9 @@ for (const type of ['articles', 'webinars', 'tools']) {
           slugSets[type].add(slug);
           // Check cover exists in photos.json
           if (photoKeys.size > 0 && result.data.cover && !photoKeys.has(result.data.cover)) {
-            error(`${type}/${slug}/${loc}.mdx: cover "${result.data.cover}" not found in photos.json`);
+            error(
+              `${type}/${slug}/${loc}.mdx: cover "${result.data.cover}" not found in photos.json`,
+            );
           }
           // Check related slugs exist
           // related slugs validated after all slugs are collected
@@ -167,7 +165,9 @@ for (const type of ['articles', 'webinars', 'tools']) {
         const { output: expected } = await transliterateFile(latinPath);
 
         if (cyrillicRaw !== expected) {
-          error(`${type}/${slug}/sr-Cyrl.mdx: stale transliteration (regenerate with content:cyrillic)`);
+          error(
+            `${type}/${slug}/sr-Cyrl.mdx: stale transliteration (regenerate with content:cyrillic)`,
+          );
         }
       } catch (e) {
         error(`${type}/${slug}/sr-Cyrl.mdx: transliteration check failed: ${e.message}`);
@@ -257,6 +257,22 @@ for (const page of pageNames) {
   const files = await listFiles(pageDir);
   const locales = checkLocales(files, '.json', page, 'pages');
   if (locales.length > 0) slugSets.pages.add(page);
+
+  // Every locale file must at least be valid JSON with the same top-level keys as en.
+  let enKeys = null;
+  for (const loc of ['en', ...locales.filter((l) => l !== 'en')]) {
+    const filePath = join(pageDir, `${loc}.json`);
+    try {
+      const parsed = JSON.parse(await readFile(filePath, 'utf-8'));
+      const keys = Object.keys(parsed).sort().join(',');
+      if (loc === 'en') enKeys = keys;
+      else if (enKeys !== null && keys !== enKeys) {
+        error(`pages/${page}/${loc}.json: top-level keys differ from en.json`);
+      }
+    } catch (e) {
+      error(`pages/${page}/${loc}.json: ${e.message}`);
+    }
+  }
 
   // sr-Cyrl freshness for page JSON
   if (locales.includes('sr-Latn') && locales.includes('sr-Cyrl')) {

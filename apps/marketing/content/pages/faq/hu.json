@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "title": "GYIK — NestSelf",
+    "description": "Válaszok a NestSelffel kapcsolatos leggyakoribb kérdésekre – munkáltatóknak és munkavállalóknak."
+  },
+  "hero": {
+    "title": "Gyakran ismételt kérdések",
+    "lead": "Minden, amit a NestSelfről tudnod kell, akár munkáltatóként ismered meg a programot, akár munkavállalóként keresel támogatást.",
+    "primaryCta": {
+      "label": "Lépj velünk kapcsolatba",
+      "href": "/contact"
+    }
+  },
+  "employerFaq": {
+    "title": "Munkáltatóknak",
+    "items": [
+      {
+        "question": "Mi az a NestSelf?",
+        "answer": "A NestSelf egy munkavállalói jólléti program, amely bizalmas hozzáférést biztosít az embereidnek engedéllyel rendelkező pszichológusokhoz, jogi szakemberekhez és pénzügyi tanácsadókhoz – kiegészítve közérzeti pulzussal, webináriumokkal és tudástárral."
+      },
+      {
+        "question": "Milyen szolgáltatásokat tartalmaz?",
+        "answer": "A csomagtól függően: pszichoterápia és tanácsadás, jogi tanácsadás, pénzügyi tanácsadás, webináriumok, tudástár, közérzeti pulzus, vezetői támogatás és családi támogatás."
+      },
+      {
+        "question": "Miben különbözik egy hagyományos EAP-tól?",
+        "answer": "A hagyományos EAP-ok gyakran korlátozzák az ülésszámot, és csak pszichológiai támogatást nyújtanak. A NestSelf jogi és pénzügyi tanácsadást, tudástárat, vezetői támogatást és anonimizált munkaerő-adatokat is tartalmaz – egyetlen juttatásban."
+      },
+      {
+        "question": "Ki jogosult – csak a munkavállalók, vagy a családtagok is?",
+        "answer": "Ez a csomagodtól függ. Ahol a csomagod tartalmazza a családtagokat, a partnerek és gyermekek ugyanazokat a szolgáltatásokat vehetik igénybe, külön költség nélkül."
+      },
+      {
+        "question": "Hogyan férnek hozzá a munkavállalók a szolgáltatáshoz?",
+        "answer": "A munkavállalók a bevezetés során privát linket vagy hozzáférési kódot kapnak. Létrehozzák a személyes fiókjukat, és azonnal böngészhetik a tudástárat, kitölthetik a közérzeti pulzust vagy foglalhatnak időpontot."
+      },
+      {
+        "question": "Milyen adatokat lát a munkáltató?",
+        "answer": "Anonimizált, összesített jólléti trendeket látsz 10 fős vagy nagyobb csoportokra. Soha nem tudod meg, ki használta a NestSelfet, mit beszéltek meg, és az egyéni felmérési eredményeket sem."
+      },
+      {
+        "question": "Hogyan biztosított a titoktartás?",
+        "answer": "Minden szakembert szakmai titoktartás köt. Adatfeldolgozási megállapodást kötünk, betartjuk a GDPR-t és a helyi adatvédelmi jogszabályokat, és soha nem osztunk meg egyéni szintű adatot a munkáltatóval."
+      },
+      {
+        "question": "Milyen gyorsan indítható el?",
+        "answer": "Az aláírt megállapodástól a munkavállalói hozzáférésig két-négy hét, a szervezeted méretétől és a nyelvek számától függően."
+      },
+      {
+        "question": "Milyen nyelveken érhető el?",
+        "answer": "Az ülések és a tudástár szerb, magyar és angol nyelven érhető el. A kommunikációs anyagokat az általad választott nyelveken készítjük el."
+      },
+      {
+        "question": "Milyen végzettségűek a szakembereitek?",
+        "answer": "Hálózatunkban engedéllyel rendelkező pszichológusok, képzett pszichoterapeuták, jogi szakemberek és okleveles pénzügyi tanácsadók dolgoznak. Minden szakember végzettségét ellenőrizzük a csatlakozás előtt."
+      },
+      {
+        "question": "Hogyan mérik az eredményeket?",
+        "answer": "Anonimizált, összesített részvételi és elégedettségi trendeket követünk nyomon. Dolgozunk az eredményadatok publikálásán; addig validált mérőeszközökre és szakmai standardokra támaszkodunk."
+      },
+      {
+        "question": "Hogyan működik az árazás?",
+        "answer": "A csomagok jogosult munkavállalónkénti havi díjra épülnek. Az ajánlatod a létszám, az országok és a csomag alapján készül. Kérj bemutatót, és elkészítjük az ajánlatodat."
+      }
+    ]
+  },
+  "employeeFaq": {
+    "title": "Munkavállalóknak",
+    "items": [
+      {
+        "question": "Mi az a NestSelf?",
+        "answer": "A NestSelf a munkáltatód által biztosított jólléti juttatás. Bizalmas hozzáférést kapsz engedéllyel rendelkező pszichológusokhoz, jogi szakemberekhez, pénzügyi tanácsadókhoz, közérzeti pulzushoz, webináriumokhoz és tudástárhoz."
+      },
+      {
+        "question": "Tényleg ingyenes számomra?",
+        "answer": "Ingyenes számodra, ahol a munkáltatód fedezi. A lefedettségedet még a jóváhagyás előtt látod."
+      },
+      {
+        "question": "A munkáltatóm tudja, hogy használom?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "Mire használhatom?",
+        "answer": "Pszichoterápia és tanácsadás, jogi tanácsadás, pénzügyi tanácsadás, közérzeti pulzus, webináriumok és tudástár – a munkáltatód csomagjától függően."
+      },
+      {
+        "question": "A családom is használhatja?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a partnered és gyermekeid ugyanazokat a szolgáltatásokat vehetik igénybe, külön költség nélkül."
+      },
+      {
+        "question": "Hogyan foglalok időpontot?",
+        "answer": "Jelentkezz be a NestSelf munkaterületeden, válaszd ki a szükséges támogatás típusát, és válassz egy neked megfelelő időpontot."
+      },
+      {
+        "question": "Mi van, ha most azonnal segítségre van szükségem?",
+        "answer": "Ha közvetlen veszélyben vagy, hívd a segélyhívó számot most: 112 (Szerbia és Magyarország). Mentőhöz: 194 (Szerbia) vagy 104 (Magyarország). Krízistámogatáshoz: Centar Srce 0800 300 303 (Szerbia), Lelki Elsősegély Telefonszolgálat 116 123 (Magyarország)."
+      },
+      {
+        "question": "A szakemberek rendelkeznek engedéllyel?",
+        "answer": "Igen. Hálózatunkban engedéllyel rendelkező pszichológusok, képzett pszichoterapeuták, jogi szakemberek és okleveles pénzügyi tanácsadók dolgoznak."
+      },
+      {
+        "question": "Választhatom meg a terapeutámat?",
+        "answer": "Igen. Böngészheted az elérhető szakembereket, megnézheted a szakterületüket és a beszélt nyelveiket, és azt választhatod, aki a legmegfelelőbbnek tűnik."
+      },
+      {
+        "question": "Hogyan működik a közérzeti pulzus?",
+        "answer": "Rövid, validált kérdőívek segítenek megérteni a közérzetedet és megtalálni a megfelelő támogatást. Nem diagnózis – kiindulópont."
+      },
+      {
+        "question": "Elérhető a saját nyelvemen?",
+        "answer": "Az ülések és a tudástár szerb, magyar és angol nyelven érhető el."
+      },
+      {
+        "question": "Mi történik az adataimmal?",
+        "answer": "A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra. A szakembereket szakmai titoktartás köti, és az adataidat a GDPR és a helyi adatvédelmi jogszabályok szerint kezeljük."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Még mindig van kérdésed?",
+    "body": "Lépj velünk kapcsolatba, szívesen segítünk.",
+    "primary": {
+      "label": "Lépj velünk kapcsolatba",
+      "href": "/contact"
+    },
+    "secondary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  }
+}

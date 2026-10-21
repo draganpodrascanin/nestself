@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "title": "Resursi — NestSelf",
+    "description": "Članci, vebinari i alati koji Vam pomažu da razumete blagostanje na poslu i kod kuće."
+  },
+  "hero": {
+    "title": "Resursi",
+    "lead": "Stručni članci, vebinari uživo i praktični alati o mentalnom zdravlju, pravima, finansijskoj pismenosti i blagostanju na radnom mestu.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "sections": {
+    "webinars": {
+      "title": "Vebinari",
+      "seeAllLabel": "Pogledajte sve vebinare",
+      "seeAllHref": "/webinars"
+    },
+    "articles": {
+      "title": "Članci",
+      "seeAllLabel": "Pogledajte sve članke",
+      "seeAllHref": "/articles"
+    },
+    "tools": {
+      "title": "Alati",
+      "seeAllLabel": "Pogledajte sve alate",
+      "seeAllHref": "/tools"
+    }
+  },
+  "topics": {
+    "psychological": "Mentalno zdravlje",
+    "legal": "Pravo",
+    "financial": "Finansije",
+    "work": "Posao",
+    "family": "Porodica",
+    "managers": "Rukovodioci"
+  },
+  "cardLabels": {
+    "readingTime": "{minutes} min čitanja",
+    "live": "Uživo",
+    "onDemand": "Na zahtev",
+    "minutes": "{n} min",
+    "languages": "Jezici",
+    "questionsLabel": "{n} pitanja"
+  }
+}

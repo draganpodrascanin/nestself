@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Pristupačnost",
+    "description": "Naša posvećenost tome da NestSelf sajt bude pristupačan svima."
+  },
+  "hero": {
+    "title": "Izjava o pristupačnosti",
+    "lead": "Želimo da svaka osoba može udobno da koristi ovaj sajt, bez obzira na sposobnosti ili tehnologiju koju koristi."
+  },
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  },
+  "contactHint": "Kontaktirajte nas na {email} da prijavite bilo kakve probleme sa pristupačnošću.",
+  "sections": [
+    {
+      "heading": "Naš cilj",
+      "paragraphs": [
+        "Naš cilj je usklađenost sa Smernicama za pristupačnost veb sadržaja (WCAG) 2.2 na nivou AA."
+      ]
+    },
+    {
+      "heading": "Šta testiramo",
+      "paragraphs": [
+        "Redovno testiramo sledeće aspekte ovog sajta:"
+      ],
+      "bullets": [
+        "Potpuna upotrebljivost tastaturom: svaki interaktivni element može se dosegnuti i aktivirati samo tastaturom",
+        "Oznake za čitače ekrana: sve slike, kontrole i orijentiri imaju smislene tekstualne oznake",
+        "Kontrast boja: tekst i interaktivni elementi zadovoljavaju WCAG AA odnos kontrasta",
+        "Prilagođavanje na 320 px: raspored se prilagođava bez horizontalnog skrolovanja na uskim ekranima",
+        "Smanjeno kretanje: animacije se potiskuju kada u sistemskim podešavanjima preferirate smanjeno kretanje",
+        "Skaliranje teksta: raspored funkcioniše kada se veličina teksta u pretraživaču poveća do 200%"
+      ]
+    },
+    {
+      "heading": "Poznata ograničenja",
+      "paragraphs": [
+        "Video plejeri trećih strana ugrađeni na stranicama vebinara možda ne ispunjavaju isti standard pristupačnosti kao ostatak sajta. Radimo sa našim provajderima na poboljšanju."
+      ]
+    },
+    {
+      "heading": "Prijavite problem",
+      "paragraphs": [
+        "Ako pronađete prepreku u pristupačnosti na ovom sajtu, obavestite nas. Svaku prijavu shvatamo ozbiljno i radićemo na rešavanju problema."
+      ]
+    }
+  ]
+}

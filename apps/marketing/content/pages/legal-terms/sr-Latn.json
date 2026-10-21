@@ -1,0 +1,53 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Uslovi korišćenja",
+    "description": "Uslovi i odredbe za korišćenje NestSelf sajta."
+  },
+  "title": "Uslovi korišćenja",
+  "updatedAt": "2026-10-21",
+  "intro": "Korišćenjem ovog sajta prihvatate sledeće uslove. Pažljivo ih pročitajte.",
+  "sections": [
+    {
+      "heading": "1. Korišćenje sajta",
+      "paragraphs": [
+        "Ovaj sajt je namenjen informisanju o NestSelf uslugama. Možete pregledati sajt, koristiti provere blagostanja i slati upite putem naših formulara."
+      ]
+    },
+    {
+      "heading": "2. Bez stručnih saveta",
+      "paragraphs": [
+        "Sadržaj ovog sajta, uključujući upitnike za proveru blagostanja i članke, služi isključivo u opšte informativne svrhe. On ne predstavlja medicinski, psihološki, pravni niti finansijski savet. Provere blagostanja su instrumenti za procenu, a ne dijagnoze. Uvek se obratite kvalifikovanom stručnjaku za savet prilagođen Vašoj situaciji."
+      ]
+    },
+    {
+      "heading": "3. Intelektualna svojina",
+      "paragraphs": [
+        "Sav sadržaj, dizajn, tekst, grafika i softver na ovom sajtu su vlasništvo kompanije [Naziv kompanije] ili njenih davalaca licenci i zaštićeni su primenljivim zakonima o intelektualnoj svojini. Ne smete reprodukovati, distribuirati niti kreirati izvedena dela bez naše pisane dozvole."
+      ]
+    },
+    {
+      "heading": "4. Ograničenje odgovornosti",
+      "paragraphs": [
+        "[Naziv kompanije] pruža ovaj sajt u zatečenom stanju. Ne garantujemo da će sajt biti dostupan bez prekida ili grešaka. U najvećoj meri dozvoljenoj zakonom, isključujemo odgovornost za bilo kakvu posrednu, slučajnu ili posledičnu štetu koja proistekne iz korišćenja ovog sajta."
+      ]
+    },
+    {
+      "heading": "5. Merodavno pravo",
+      "paragraphs": [
+        "Ovi uslovi su regulisani [merodavnim pravom — biće utvrđeno pre pokretanja na osnovu registracije kompanije]. Sporovi će se rešavati pred nadležnim sudovima u [jurisdikciji — biće utvrđeno pre pokretanja]."
+      ]
+    },
+    {
+      "heading": "6. Izmene ovih uslova",
+      "paragraphs": [
+        "Ove uslove možemo povremeno ažurirati. Datum na vrhu ove stranice označava poslednju izmenu. Nastavak korišćenja sajta nakon izmene podrazumeva prihvatanje ažuriranih uslova."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Poslednja izmena:",
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "meta": {
+    "title": "Za zaposlene — NestSelf",
+    "description": "Pristupite psihoterapiji, pravnom i finansijskom savetovanju preko svog poslodavca. Poverljivo, besplatno ako Vaš poslodavac to pokriva, dostupno na srpskom, mađarskom i engleskom."
+  },
+  "hero": {
+    "eyebrow": "Za zaposlene",
+    "title": "Podrška koja ostaje između Vas i Vašeg stručnjaka",
+    "lead": "Ako Vaš poslodavac nudi NestSelf, možete da razgovarate sa licenciranim psihologom, dobijete pravno savetovanje ili rešite finansijsko pitanje – sve poverljivo. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo.",
+    "primaryCta": {
+      "label": "Otvorite radni prostor",
+      "href": "__WORKSPACE_URL__"
+    },
+    "secondaryCta": {
+      "label": "Proverite da li Vaš poslodavac nudi NestSelf",
+      "href": "/contact"
+    },
+    "photo": {
+      "key": "employees-break",
+      "alt": "Zaposleni se opušta na pauzi uz šolju čaja"
+    }
+  },
+  "whatYouCanUse": {
+    "eyebrow": "Vaši benefiti",
+    "title": "Šta možete da koristite",
+    "columns": 3,
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Psihoterapija i savetovanje",
+        "body": "Razgovarajte sa licenciranim psihologom ili kvalifikovanim psihoterapeutom – onlajn ili uživo. Dostupne su individualne, partnerske i porodične sesije.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Pravno savetovanje",
+        "body": "Dobijte poverljivo savetovanje o ličnim pravnim pitanjima – porodično pravo, zakup, prava potrošača.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Finansijsko savetovanje",
+        "body": "Rešavajte pitanja budžetiranja, dugova, štednje ili penzije sa sertifikovanim finansijskim stručnjakom.",
+        "href": "/services/financial-guidance"
+      },
+      {
+        "icon": "check-circle",
+        "title": "Provera blagostanja",
+        "body": "Kratki, validirani upitnici koji Vam pomažu da razumete svoje blagostanje i pronađete pravu podršku – nisu dijagnoza.",
+        "href": "/tools"
+      },
+      {
+        "icon": "video-camera",
+        "title": "Vebinari",
+        "body": "Sesije sa stručnjacima uživo i na zahtev o stresu, roditeljstvu, finansijama i drugim temama.",
+        "href": "/webinars"
+      },
+      {
+        "icon": "books",
+        "title": "Resursi",
+        "body": "Članci, vodiči i alati za samopomoć koje možete istraživati u bilo kom trenutku.",
+        "href": "/resources"
+      }
+    ]
+  },
+  "howToStart": {
+    "eyebrow": "Početak",
+    "title": "Kako da počnete",
+    "steps": [
+      {
+        "title": "Proverite pristup",
+        "body": "Vaš poslodavac će Vas obavestiti kada NestSelf bude dostupan. Takođe možete da pitate Vaš HR tim ili da se obratite nama."
+      },
+      {
+        "title": "Kreirajte svoj privatni nalog",
+        "body": "Registrujte se putem linka ili koda koji Vam je poslodavac prosledio. Vaš nalog pripada samo Vama."
+      },
+      {
+        "title": "Pregledajte ili zakažite",
+        "body": "Istražite resurse, uradite proveru blagostanja ili zakažite sesiju sa stručnjakom."
+      },
+      {
+        "title": "Razgovarajte sa stručnjakom",
+        "body": "Upoznajte svog psihologa, pravnog stručnjaka ili finansijskog konsultanta onlajn ili uživo. Sve o čemu razgovarate je poverljivo."
+      }
+    ]
+  },
+  "whoSeesWhat": {
+    "title": "Ko šta vidi",
+    "paragraphs": [
+      "Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi – nikada imena pojedinaca, sadržaj sesija ili rezultate procena.",
+      "Svi stručnjaci su obavezani profesionalnom tajnom. Vaši podaci se obrađuju u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka."
+    ],
+    "bullets": [
+      "Vaš poslodavac nikada ne vidi Vaše ime, sesije ili rezultate",
+      "Anonimizovani izveštaji zahtevaju grupu od najmanje 10 osoba",
+      "Stručnjaci su obavezani profesionalnom tajnom"
+    ],
+    "cta": {
+      "label": "Saznajte više o našem modelu privatnosti",
+      "href": "/privacy-model"
+    },
+    "photo": {
+      "key": "remote-home-dog",
+      "alt": "Osoba u privatnom, prijatnom kućnom okruženju"
+    }
+  },
+  "forYourFamily": {
+    "title": "Za Vašu porodicu",
+    "paragraphs": [
+      "Kada plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu da pristupe istom psihoterapijskom, pravnom i finansijskom savetovanju – bez dodatnih troškova za Vas."
+    ],
+    "photo": {
+      "key": "family-cooking",
+      "alt": "Porodica zajedno kuva kod kuće"
+    }
+  },
+  "faq": {
+    "title": "Najčešća pitanja zaposlenih",
+    "items": [
+      {
+        "question": "Da li je zaista besplatno za mene?",
+        "answer": "Besplatno za Vas ako Vaš poslodavac to pokriva. Vaše pokriće se prikazuje pre nego što bilo šta potvrdite."
+      },
+      {
+        "question": "Da li moj poslodavac zna da koristim uslugu?",
+        "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Za šta mogu da koristim NestSelf?",
+        "answer": "Psihoterapiju i savetovanje, pravno savetovanje, finansijsko savetovanje, proveru blagostanja, vebinare i resurse – u zavisnosti od plana Vašeg poslodavca."
+      },
+      {
+        "question": "Može li moja porodica da koristi NestSelf?",
+        "answer": "Kada plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca dobijaju pristup istim uslugama bez dodatnih troškova."
+      },
+      {
+        "question": "Kako da zakažem sesiju?",
+        "answer": "Prijavite se u svoj NestSelf radni prostor, izaberite vrstu podrške koja Vam je potrebna i odaberite termin koji Vam odgovara."
+      },
+      {
+        "question": "Šta ako mi je pomoć potrebna odmah?",
+        "answer": "Ako ste u neposrednoj opasnosti, pozovite hitne službe odmah: 112 (Srbija i Mađarska). Za hitnu pomoć: 194 (Srbija) ili 104 (Mađarska). Za kriznu podršku: Centar Srce 0800 300 303 (Srbija), Lelki Elsősegély Telefonszolgálat 116 123 (Mađarska)."
+      },
+      {
+        "question": "Da li su stručnjaci licencirani?",
+        "answer": "Da. Naša mreža uključuje licencirane psihologe, kvalifikovane psihoterapeute, pravne stručnjake i sertifikovane finansijske konsultante."
+      },
+      {
+        "question": "Šta se dešava sa mojim podacima?",
+        "answer": "Vaši podaci se obrađuju u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka. Stručnjaci su obavezani profesionalnom tajnom. Vaš poslodavac nikada ne vidi pojedinačne podatke."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Spremni da počnete?",
+    "body": "Ako Vaš poslodavac nudi NestSelf, otvorite radni prostor da pregledate resurse, uradite proveru blagostanja ili zakažete sesiju.",
+    "primary": {
+      "label": "Otvorite radni prostor",
+      "href": "__WORKSPACE_URL__"
+    },
+    "secondary": {
+      "label": "Proverite da li Vaš poslodavac nudi NestSelf",
+      "href": "/contact"
+    }
+  }
+}

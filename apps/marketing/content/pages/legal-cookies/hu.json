@@ -1,0 +1,44 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Sütikezelési tájékoztató",
+    "description": "Hogyan használ sütiket a NestSelf ezen a weboldalon."
+  },
+  "title": "Sütikezelési tájékoztató",
+  "updatedAt": "2026-10-21",
+  "intro": "Ez az oldal ismerteti, milyen sütiket használ ez a weboldal, és hogyan kezelheti azokat.",
+  "sections": [
+    {
+      "heading": "1. Milyen sütiket használunk",
+      "paragraphs": [
+        "Ez a weboldal egyetlen funkcionális sütit használ:"
+      ],
+      "bullets": [
+        "NEXT_LOCALE: az Ön által választott nyelvet tárolja (pl. „en”, „hu”, „sr-Latn”). Ez a süti a nyelvváltó működéséhez feltétlenül szükséges. Nem követi Önt, és nem gyűjt személyes adatokat."
+      ]
+    },
+    {
+      "heading": "2. Nincsenek analitikai vagy marketing sütik",
+      "paragraphs": [
+        "Nem használunk analitikai sütiket, marketing sütiket, és semmilyen harmadik féltől származó nyomkövetést. Nincs süti-hozzájárulási sáv, mert kizárólag funkcionális sütit használunk."
+      ]
+    },
+    {
+      "heading": "3. Hogyan törölheti a sütit",
+      "paragraphs": [
+        "A NEXT_LOCALE sütit bármikor törölheti a böngészője beállításain keresztül. A weboldal továbbra is működni fog; a böngésző nyelvi beállítását használja majd helyette."
+      ]
+    },
+    {
+      "heading": "4. A tájékoztató módosítása",
+      "paragraphs": [
+        "Ha a jövőben új sütiket vezetünk be, frissítjük ezt az oldalt, és süti-hozzájárulási mechanizmust alkalmazunk. Az oldal tetején található dátum az utolsó módosítás időpontját jelzi."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Utolsó frissítés:",
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  }
+}

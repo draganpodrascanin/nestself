@@ -1,0 +1,53 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Általános Szerződési Feltételek",
+    "description": "A NestSelf weboldal használatának feltételei."
+  },
+  "title": "Általános Szerződési Feltételek",
+  "updatedAt": "2026-10-21",
+  "intro": "A weboldal használatával Ön elfogadja az alábbi feltételeket. Kérjük, olvassa el figyelmesen.",
+  "sections": [
+    {
+      "heading": "1. A weboldal használata",
+      "paragraphs": [
+        "Ez a weboldal tájékoztató jelleggel működik a NestSelf szolgáltatásairól. Ön böngészheti az oldalt, használhatja a közérzeti pulzus kérdőíveket, és megkereséseket küldhet űrlapjainkon keresztül."
+      ]
+    },
+    {
+      "heading": "2. Nem minősül szakmai tanácsadásnak",
+      "paragraphs": [
+        "A weboldalon található tartalom, beleértve a közérzeti pulzus kérdőíveket és a cikkeket, kizárólag általános tájékoztató jellegű. Nem minősül orvosi, pszichológiai, jogi vagy pénzügyi tanácsadásnak. A közérzeti pulzus kérdőívek szűrőeszközök, nem diagnózisok. Az Ön helyzetére vonatkozó tanácsért mindig forduljon engedéllyel rendelkező szakemberhez."
+      ]
+    },
+    {
+      "heading": "3. Szellemi tulajdon",
+      "paragraphs": [
+        "A weboldalon található minden tartalom, dizájn, szöveg, grafika és szoftver [Cég neve] vagy licencadói tulajdonát képezi, és a vonatkozó szellemi tulajdonjogi jogszabályok védelme alatt áll. Írásos engedélyünk nélkül tilos a tartalom sokszorosítása, terjesztése vagy származékos művek készítése."
+      ]
+    },
+    {
+      "heading": "4. Felelősségkorlátozás",
+      "paragraphs": [
+        "[Cég neve] ezt a weboldalt „ahogy van” alapon biztosítja. Nem garantáljuk, hogy a weboldal megszakítás és hiba nélkül elérhető lesz. A jogszabályok által megengedett legteljesebb mértékben kizárjuk a felelősséget minden közvetett, járulékos vagy következményes kárért, amely a weboldal használatából ered."
+      ]
+    },
+    {
+      "heading": "5. Irányadó jog",
+      "paragraphs": [
+        "Ezekre a feltételekre [az irányadó jog — az indulás előtt, a cégbejegyzés alapján meghatározandó] az irányadó. Az esetleges jogvitákat [joghatóság — az indulás előtt meghatározandó] illetékes bíróságai bírálják el."
+      ]
+    },
+    {
+      "heading": "6. A feltételek módosítása",
+      "paragraphs": [
+        "Ezeket a feltételeket időről időre frissíthetjük. Az oldal tetején található dátum az utolsó módosítás időpontját jelzi. A weboldal módosítás utáni további használata a frissített feltételek elfogadásának minősül."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Utolsó frissítés:",
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  }
+}

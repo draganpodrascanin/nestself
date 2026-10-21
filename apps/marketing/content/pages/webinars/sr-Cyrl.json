@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "title": "Вебинари — NestSelf",
+    "description": "Сесије стручњака уживо и на захтев о благостању, стресу, финансијама и још много тога."
+  },
+  "hero": {
+    "title": "Вебинари",
+    "lead": "Сесије уживо и на захтев које воде лиценцирани психолози, правни стручњаци и финансијски консултанти из NestSelf мреже.",
+    "primaryCta": {
+      "label": "Закажите презентацију",
+      "href": "/demo"
+    }
+  },
+  "upcoming": {
+    "title": "Предстојећи вебинари"
+  },
+  "onDemand": {
+    "title": "На захтев"
+  },
+  "cardLabels": {
+    "live": "Уживо",
+    "onDemand": "На захтев",
+    "minutes": "{н} мин",
+    "languages": "Језици",
+    "noUpcoming": "Тренутно нема предстојећих вебинара. Прегледајте библиотеку снимљених вебинара испод."
+  },
+  "topics": {
+    "psychological": "Ментално здравље",
+    "legal": "Право",
+    "financial": "Финансије",
+    "work": "Посао",
+    "family": "Породица",
+    "managers": "Руководиоци"
+  },
+  "detail": {
+    "breadcrumbLabel": "Навигација",
+    "breadcrumbWebinars": "Вебинари",
+    "dateLabel": "Датум и време",
+    "durationLabel": "Трајање",
+    "formatLabel": "Формат",
+    "languagesLabel": "Језици",
+    "speakerLabel": "Предавач",
+    "timeZoneLabel": "ЦЕТ",
+    "minutesSuffix": "минута",
+    "readingTime": "{минутес} мин читања",
+    "relatedTitle": "Сродни чланци",
+    "watchRecordingTitle": "Погледајте снимак",
+    "watchRecordingBody": "Снимак овог вебинара је доступан у NestSelf радном окружењу. Ако Ваш послодавац обезбеђује NestSelf, пријавите се да га погледате.",
+    "registerTitle": "Пријавите се за овај вебинар"
+  },
+  "form": {
+    "nameLabel": "Име и презиме",
+    "namePlaceholder": "Ваше име и презиме",
+    "emailLabel": "Е-адреса",
+    "emailPlaceholder": "ви@firma.com",
+    "companyLabel": "Компанија",
+    "companyPlaceholder": "Ваша компанија (опционо)",
+    "optionalLabel": "опционо",
+    "consentShortLabel": "Сагласност за обраду података",
+    "consentLabel": "Сагласан/сагласна сам да NestSelf обради моје податке у складу са {привацyЛинк} ради одговора на мој захтев.",
+    "privacyLinkText": "Политиком приватности",
+    "privacyLinkHref": "/легал/привацy",
+    "submitLabel": "Пријавите се",
+    "errorSummaryTitle": "Исправите следеће грешке",
+    "nameRequired": "Молимо Вас да унесете Ваше име.",
+    "emailRequired": "Молимо Вас да унесете исправну е-адресу.",
+    "consentRequired": "Морате дати сагласност за обраду података.",
+    "successTitle": "Успешно сте се пријавили",
+    "successBody": "Послаћемо Вам линк путем емаила пре почетка вебинара.",
+    "failureTitle": "Нисмо могли да пошаљемо Вашу пријаву",
+    "failureBody": "Молимо Вас покушајте поново касније или нас контактирајте на {емаил}.",
+    "validation": {
+      "required": "Попуните {{field}}.",
+      "email": "Унесите исправну пословну е-адресу, на пример име@firma.com.",
+      "consent": "Прихватите политику приватности како бисмо могли да Вам одговоримо.",
+      "select": "Изаберите опцију за {{field}}.",
+      "tooLong": "{{field}} је предугачко."
+    }
+  }
+}

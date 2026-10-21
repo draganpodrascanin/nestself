@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "title": "Za rukovodioce — NestSelf",
+    "description": "Resursi i smernice za rukovodioce: ankete o timu, vodiči za razgovore i kako nekoga usmeriti ka podršci – bez prekoračenja granica."
+  },
+  "hero": {
+    "eyebrow": "Za rukovodioce",
+    "title": "Podržite svoj tim bez prekoračenja granica",
+    "lead": "NestSelf Vam pruža praktične alate i smernice za trenutke kada članu tima možda treba podrška. Ne morate da budete terapeut – dovoljno je da budete pažljiv rukovodilac.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Pogledajte planove",
+      "href": "/plans"
+    },
+    "photo": {
+      "key": "manager-one-on-one",
+      "alt": "Rukovodilac u razgovoru jedan na jedan sa članom tima"
+    }
+  },
+  "features": {
+    "eyebrow": "Podrška za rukovodioce",
+    "title": "Šta dobijate kao rukovodilac",
+    "columns": 2,
+    "items": [
+      {
+        "icon": "chart-bar",
+        "title": "Ankete o blagostanju tima",
+        "body": "Pokrenite kratke, anonimne ankete da razumete kako se Vaš tim oseća – bez dovođenja bilo koga u neprijatan položaj."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Vodiči za razgovore",
+        "body": "Korak po korak vodiči za osetljive razgovore: kako pitati, šta reći i šta ne reći."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Kada i kako nekoga usmeriti ka podršci",
+        "body": "Jasne smernice za prepoznavanje znakova i upućivanje na NestSelf – bez dijagnostikovanja ili pritiska."
+      },
+      {
+        "icon": "books",
+        "title": "Resursi za rukovodioce",
+        "body": "Odabrani članci, vebinari i alati za rukovodioce koji se bave blagostanjem tima."
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "U praksi",
+    "title": "Kako podržati nekoga iz svog tima",
+    "steps": [
+      {
+        "title": "Primetite",
+        "body": "Obratite pažnju na promene u ponašanju, energiji ili angažovanju. Ne morate da dijagnostikujete – samo primetite."
+      },
+      {
+        "title": "Pitajte nasamo",
+        "body": "Nađite miran trenutak. Pitajte kako se osećaju. Neka bude jednostavno i iskreno."
+      },
+      {
+        "title": "Slušajte bez dijagnostikovanja",
+        "body": "Pustite ih da govore. Ne morate ništa da rešavate. Slušanje je najvažniji korak."
+      },
+      {
+        "title": "Usmerite ka NestSelf-u",
+        "body": "Obavestite ih da je NestSelf dostupan i poverljiv. Podelite link ili to pomenite na prirodan način."
+      },
+      {
+        "title": "Pratite situaciju",
+        "body": "Proverite ponovo nakon nekoliko dana. Ne morate da pitate o detaljima – samo pokažite da Vam je stalo."
+      }
+    ]
+  },
+  "resources": {
+    "title": "Resursi za rukovodioce",
+    "moreHref": "/resources",
+    "moreLabel": "Pogledajte sve resurse"
+  },
+  "cta": {
+    "title": "Spremni da podržite svoje rukovodioce?",
+    "body": "Zakažite prezentaciju i saznajte kako NestSelf pomaže rukovodiocima u upravljanju blagostanjem tima.",
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  }
+}

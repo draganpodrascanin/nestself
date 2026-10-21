@@ -1,0 +1,107 @@
+{
+  "meta": {
+    "title": "A NestSelfről",
+    "description": "A NestSelf egy munkavállalói jólléti program, amely pszichoterápiát, jogi és pénzügyi támogatást kínál Szerbiában és Magyarországon. Ismerd meg a csapatot és a munkamódszerünket."
+  },
+  "hero": {
+    "eyebrow": "Rólunk",
+    "title": "A munkahelyi jóllét több, mint terápia",
+    "lead": "A NestSelfet egy egyszerű gondolat hívta életre: a munkahelyi támogatásnak a jogi és pénzügyi kérdésekre is ki kell terjednie, nem csak a terápiára. Engedéllyel rendelkező pszichológusokat, képzett pszichoterapeutákat, jogi szakembereket és pénzügyi tanácsadókat hozunk össze egyetlen bizalmas juttatásban.",
+    "primaryCta": {
+      "label": "Lépj velünk kapcsolatba",
+      "href": "/contact"
+    },
+    "photo": {
+      "key": "about-studio",
+      "alt": "A NestSelf csapata a belgrádi stúdióban dolgozik"
+    }
+  },
+  "mission": {
+    "title": "Miért hoztuk létre a NestSelfet",
+    "paragraphs": [
+      "A munkavállalók nem csak stresszel küzdenek. Egy bérleti vita, egy szülői szabadsággal kapcsolatos kérdés vagy egy adósságprobléma éppoly súlyosan nyomhatja a vállat, mint a szorongás — és az egyik gyakran a másikhoz vezet.",
+      "A hagyományos EAP-programok lefedik a pszichológiai támogatást, de a jogi és pénzügyi kérdéseket a véletlenre bízzák. A NestSelf mindhármat egyetlen bizalmas juttatásban egyesíti, hogy a munkatársaid ott kapjanak segítséget, ahol valóban szükségük van rá."
+    ],
+    "photo": {
+      "key": "home-hero-office",
+      "alt": "Egy modern, világos iroda, ahol a NestSelf csapata dolgozik"
+    }
+  },
+  "howWeWorkWithProfessionals": {
+    "eyebrow": "Minőség",
+    "title": "Hogyan dolgozunk a szakemberekkel",
+    "steps": [
+      {
+        "title": "Engedélyigazolás",
+        "body": "Minden szakember engedélyét és képesítéseit ellenőrizzük, mielőtt csatlakozna a hálózathoz."
+      },
+      {
+        "title": "Interjú és referenciák",
+        "body": "Minden jelöltet személyesen interjúztatunk, és ellenőrizzük a szakmai referenciákat."
+      },
+      {
+        "title": "Etikai kódex és szupervízió",
+        "body": "A szakemberek közös etikai kódexet követnek, és rendszeres szupervízióban vesznek részt."
+      },
+      {
+        "title": "Nyelvek",
+        "body": "Az ülések szerbül, magyarul és angolul érhetők el. A szakembereket nyelv és szakterület alapján párosítjuk."
+      },
+      {
+        "title": "Folyamatos visszajelzés",
+        "body": "Anonim visszajelzéseket gyűjtünk a felhasználóktól a minőség fenntartása és javítása érdekében."
+      }
+    ]
+  },
+  "team": {
+    "eyebrow": "A csapat",
+    "title": "Kik vagyunk",
+    "lead": "Egy kis csapat Belgrádban és Budapesten, a pszichológia, a jog, a pénzügyek és a technológia területéről.",
+    "columns": 3,
+    "members": [
+      {
+        "initials": "CF",
+        "role": "Társalapítók",
+        "body": "Azért hozták létre a NestSelfet, hogy áthidalják a szakadékot a munkavállalók igényei és a hagyományos EAP-programok kínálata között."
+      },
+      {
+        "initials": "CL",
+        "role": "Klinikai vezető",
+        "body": "Engedéllyel rendelkező pszichológus, aki a terápiás hálózatot, a szupervíziót és a szakmai standardokat felügyeli."
+      },
+      {
+        "initials": "LL",
+        "role": "Jogi vezető",
+        "body": "A jogi tanácsadói hálózatot vezeti, és biztosítja az adatvédelmi jogszabályoknak való megfelelést Szerbiában és Magyarországon."
+      },
+      {
+        "initials": "FL",
+        "role": "Pénzügyi vezető",
+        "body": "Tanúsított pénzügyi szakember, aki a pénzügyi tanácsadási szolgáltatást vezeti."
+      },
+      {
+        "initials": "OP",
+        "role": "Operáció",
+        "body": "A bevezetéseket, a munkáltatói kapcsolatokat és a napi működést kezeli mindkét országban."
+      }
+    ]
+  },
+  "whereWeAre": {
+    "title": "Hol találsz minket",
+    "paragraphs": [
+      "Belgrád és Budapest — a szakemberek és a csapattagok távmunkában dolgoznak mindkét országból."
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "A NestSelf stúdió munkaterülete Belgrádban"
+    }
+  },
+  "cta": {
+    "title": "Lépj velünk kapcsolatba",
+    "body": "Szeretnél többet megtudni a NestSelfről, vagy együttműködési lehetőséget keresni? Szívesen hallanánk rólad.",
+    "primary": {
+      "label": "Lépj velünk kapcsolatba",
+      "href": "/contact"
+    }
+  }
+}

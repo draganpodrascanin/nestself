@@ -1,0 +1,182 @@
+{
+  "meta": {
+    "title": "Za poslodavce — NestSelf",
+    "description": "Obezbedite svom timu poverljiv pristup psihoterapiji, pravnom i finansijskom savetovanju. Pokrenite program za nekoliko nedelja, pratite anonimizovane uvide i znajte da Vaši ljudi imaju pravu pomoć kada im je potrebna."
+  },
+  "hero": {
+    "eyebrow": "Za poslodavce",
+    "title": "Benefit za blagostanje koji će Vaši ljudi zaista koristiti",
+    "lead": "NestSelf Vašim zaposlenima obezbeđuje poverljiv pristup licenciranim psiholozima, pravnim stručnjacima i finansijskim konsultantima – uz proveru blagostanja, vebinare i resurse. Vi vidite anonimizovane uvide za grupe od 10 ili više osoba. Nikada ne vidite ko je koristio NestSelf ni o čemu se razgovaralo.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Pogledajte planove",
+      "href": "/plans"
+    },
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR tim razgovara o programu blagostanja zaposlenih za stolom"
+    }
+  },
+  "whatYourPeopleGet": {
+    "eyebrow": "Za Vaš tim",
+    "title": "Šta Vaši zaposleni dobijaju",
+    "columns": 3,
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Psihoterapija i savetovanje",
+        "body": "Licencirani psiholozi i kvalifikovani psihoterapeuti za individualne, partnerske i porodične sesije – onlajn ili uživo.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Pravno savetovanje",
+        "body": "Poverljivo savetovanje o ličnim pravnim pitanjima – porodično pravo, zakup, prava potrošača. Isključeni su radni sporovi sa poslodavcem.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Finansijsko savetovanje",
+        "body": "Budžetiranje, upravljanje dugovima, planiranje štednje i penzijsko savetovanje od sertifikovanih finansijskih stručnjaka.",
+        "href": "/services/financial-guidance"
+      },
+      {
+        "icon": "video-camera",
+        "title": "Vebinari",
+        "body": "Sesije sa stručnjacima uživo i na zahtev o stresu, roditeljstvu, finansijama i drugim temama.",
+        "href": "/webinars"
+      },
+      {
+        "icon": "books",
+        "title": "Resursi",
+        "body": "Članci, vodiči i alati za samopomoć kojima Vaš tim može da pristupi u bilo kom trenutku.",
+        "href": "/resources"
+      },
+      {
+        "icon": "check-circle",
+        "title": "Provera blagostanja",
+        "body": "Kratki, validirani upitnici koji pomažu zaposlenima da razumeju svoje blagostanje i pronađu pravu podršku – nisu dijagnoza.",
+        "href": "/tools"
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Podrška za porodicu",
+        "body": "Kada Vaš plan uključuje članove porodice, partneri i deca dobijaju pristup istim uslugama bez dodatnih troškova."
+      }
+    ]
+  },
+  "whatHrGets": {
+    "eyebrow": "Za HR",
+    "title": "Šta HR dobija",
+    "paragraphs": [
+      "Vidite celokupnu sliku bez uvida u individualne podatke. NestSelf pruža liderima u organizaciji anonimizovane, agregirane trendove blagostanja – za grupe od 10 ili više osoba – kako biste uočili obrasce i planirali unapred.",
+      "Vaš kontakt u NestSelf-u je uz Vas od prvog dana: planiranje pokretanja, konfigurisanje plana, priprema komunikacija, brifovanje rukovodilaca i pregled rezultata svakog kvartala."
+    ],
+    "bullets": [
+      "Anonimizovani uvidi o blagostanju uz minimalnu veličinu grupe od 10",
+      "Paket za pokretanje i komunikaciju na Vašim jezicima",
+      "Resursi i materijali za rukovodioce",
+      "Kvartalni pregledi sa Vašim kontaktom u NestSelf-u"
+    ],
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf tim radi zajedno u beogradskom studiju"
+    }
+  },
+  "howALaunchWorks": {
+    "eyebrow": "Početak",
+    "title": "Kako izgleda pokretanje",
+    "steps": [
+      {
+        "title": "Uvodna faza i konfigurisanje plana",
+        "body": "Dogovaramo se o planu, grupama koje su uključene i jezicima. Vi birate šta je uključeno."
+      },
+      {
+        "title": "Lista zaposlenih i podešavanje pristupa",
+        "body": "Dostavljate listu zaposlenih koji imaju pravo pristupa. Mi podešavamo bezbedan, privatan pristup za svaku osobu."
+      },
+      {
+        "title": "Komunikacioni paket na Vašim jezicima",
+        "body": "Pripremamo e-poruke za najavu, postere i materijale za intranet na srpskom, mađarskom i engleskom jeziku."
+      },
+      {
+        "title": "Pokretanje i brifovanje rukovodilaca",
+        "body": "Zaposleni dobijaju pristup. Rukovodioci dobijaju kratki brifing o tome kako da nekoga usmere ka podršci."
+      },
+      {
+        "title": "Kvartalni pregledi",
+        "body": "Vaš kontakt u NestSelf-u deli anonimizovane uvide i preporuke svakog kvartala."
+      }
+    ]
+  },
+  "confidentiality": {
+    "title": "Poverljivost i usklađenost",
+    "paragraphs": [
+      "Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi.",
+      "Svi stručnjaci su obavezani profesionalnom tajnom. Potpisujemo ugovor o obradi podataka i poslujemo u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka. Pojedinačni podaci se nikada ne dele sa poslodavcem."
+    ],
+    "bullets": [
+      "Ugovor o obradi podataka u skladu sa GDPR-om",
+      "Pojedinačni podaci se nikada ne dele sa poslodavcem",
+      "Licencirani stručnjaci obavezani profesionalnom tajnom",
+      "Anonimizovani HR izveštaji zahtevaju grupu od najmanje 10 osoba"
+    ],
+    "photo": {
+      "key": "remote-home-dog",
+      "alt": "Osoba radi od kuće u privatnom, prijatnom okruženju"
+    }
+  },
+  "faq": {
+    "title": "Najčešća pitanja poslodavaca",
+    "items": [
+      {
+        "question": "Šta je NestSelf?",
+        "answer": "NestSelf je program pomoći zaposlenima koji Vašim ljudima obezbeđuje poverljiv pristup licenciranim psiholozima, pravnim stručnjacima i finansijskim konsultantima – uz proveru blagostanja, vebinare i resurse."
+      },
+      {
+        "question": "Koje usluge su uključene?",
+        "answer": "U zavisnosti od Vašeg plana: psihoterapija i savetovanje, pravno savetovanje, finansijsko savetovanje, vebinari, resursi, provera blagostanja, podrška za rukovodioce i podrška za porodicu."
+      },
+      {
+        "question": "Po čemu se razlikuje od tradicionalnog EAP programa?",
+        "answer": "Tradicionalni EAP programi često ograničavaju broj sesija i pokrivaju samo psihološku podršku. NestSelf uključuje pravno i finansijsko savetovanje, resurse, podršku za rukovodioce i anonimizovane uvide – sve u jednom benefitu."
+      },
+      {
+        "question": "Ko je pokriven – samo zaposleni ili i članovi porodice?",
+        "answer": "To zavisi od Vašeg plana. Kada Vaš plan uključuje članove porodice, partneri i deca dobijaju pristup istim uslugama bez dodatnih troškova."
+      },
+      {
+        "question": "Koje podatke poslodavac vidi?",
+        "answer": "Vidite anonimizovane, agregirane trendove blagostanja za grupe od 10 ili više osoba. Nikada ne vidite ko je koristio NestSelf, o čemu se razgovaralo niti rezultate individualnih procena."
+      },
+      {
+        "question": "Kako je poverljivost zaštićena?",
+        "answer": "Svi stručnjaci su obavezani profesionalnom tajnom. Potpisujemo ugovor o obradi podataka, poslujemo u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka i nikada ne delimo pojedinačne podatke sa poslodavcem."
+      },
+      {
+        "question": "Koliko brzo možemo da pokrenemo program?",
+        "answer": "Od potpisanog ugovora do pristupa za zaposlene za dve do četiri nedelje, u zavisnosti od veličine Vaše organizacije i broja jezika."
+      },
+      {
+        "question": "Koji jezici su podržani?",
+        "answer": "Sesije i resursi su dostupni na srpskom, mađarskom i engleskom jeziku. Komunikacioni materijali se pripremaju na jezicima koje odaberete."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Spremni da podržite svoj tim?",
+    "body": "Zakažite prezentaciju i provešćemo Vas kroz program, odgovoriti na Vaša pitanja i pripremiti ponudu.",
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "whoBenchmark": {
+    "source": "WHO informativni list o mentalnom zdravlju na radu",
+    "sourceUrl": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "quote": "Za svaki uloženi US$1 u lečenje depresije i anksioznosti, postoji povrat od US$4 kroz bolje zdravlje i produktivnost."
+  }
+}

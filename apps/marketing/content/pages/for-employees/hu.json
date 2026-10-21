@@ -1,0 +1,167 @@
+{
+  "meta": {
+    "title": "Munkavállalóknak — NestSelf",
+    "description": "Vedd igénybe a pszichoterápiát, jogi és pénzügyi támogatást a munkáltatódon keresztül. Bizalmas, ingyenes ahol a munkáltatód fedezi, szerbül, magyarul és angolul."
+  },
+  "hero": {
+    "eyebrow": "Munkavállalóknak",
+    "title": "Támogatás, amely közted és a szakembered között marad",
+    "lead": "Ha a munkáltatód kínálja a NestSelfet, beszélhetsz engedéllyel rendelkező pszichológussal, jogi útmutatást kaphatsz vagy pénzügyi kérdést rendezhetsz – mindezt bizalmasan. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó.",
+    "primaryCta": {
+      "label": "Nyisd meg a munkaterületet",
+      "href": "__WORKSPACE_URL__"
+    },
+    "secondaryCta": {
+      "label": "Ellenőrizd, kínálja-e a munkáltatód a NestSelfet",
+      "href": "/contact"
+    },
+    "photo": {
+      "key": "employees-break",
+      "alt": "Munkavállaló pihen a szünetben egy csésze teával"
+    }
+  },
+  "whatYouCanUse": {
+    "eyebrow": "A juttatásaid",
+    "title": "Mire használhatod",
+    "columns": 3,
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Pszichoterápia és tanácsadás",
+        "body": "Beszélj engedéllyel rendelkező pszichológussal vagy képzett pszichoterapeutával – online vagy személyesen. Egyéni, páros és családi ülések is elérhetők.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Jogi tanácsadás",
+        "body": "Kérj bizalmas útmutatást személyes jogi kérdésekben – családjog, lakásbérlet, fogyasztói jogok.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Pénzügyi tanácsadás",
+        "body": "Dolgozz együtt okleveles pénzügyi szakemberrel a költségvetés, adósság, megtakarítás vagy nyugdíj kérdéseiben.",
+        "href": "/services/financial-guidance"
+      },
+      {
+        "icon": "check-circle",
+        "title": "Közérzeti pulzus",
+        "body": "Rövid, validált kérdőívek, amelyek segítenek megérteni a közérzetedet és megtalálni a megfelelő támogatást – nem diagnózis.",
+        "href": "/tools"
+      },
+      {
+        "icon": "video-camera",
+        "title": "Webináriumok",
+        "body": "Élő és bármikor visszanézhető szakértői előadások stresszről, szülőségről, pénzügyekről és sok másról.",
+        "href": "/webinars"
+      },
+      {
+        "icon": "books",
+        "title": "Tudástár",
+        "body": "Cikkek, útmutatók és önsegítő eszközök, amelyeket bármikor felfedezhetsz.",
+        "href": "/resources"
+      }
+    ]
+  },
+  "howToStart": {
+    "eyebrow": "Első lépések",
+    "title": "Hogyan kezdd el",
+    "steps": [
+      {
+        "title": "Ellenőrizd a hozzáférésedet",
+        "body": "A munkáltatód jelezni fogja, amikor a NestSelf elérhető. Kérdezd meg a HR csapatodat, vagy vedd fel velünk a kapcsolatot."
+      },
+      {
+        "title": "Hozd létre a privát fiókodat",
+        "body": "Regisztrálj a munkáltatód által megosztott linkkel vagy kóddal. A fiókod kizárólag a tiéd."
+      },
+      {
+        "title": "Böngéssz vagy foglalj",
+        "body": "Fedezd fel a tudástárat, töltsd ki a közérzeti pulzust vagy foglalj időpontot egy szakemberhez."
+      },
+      {
+        "title": "Beszélj egy szakemberrel",
+        "body": "Találkozz a pszichológusoddal, jogi szakembereddel vagy pénzügyi tanácsadóddal online vagy személyesen. Minden, amit megbeszéltek, bizalmas."
+      }
+    ]
+  },
+  "whoSeesWhat": {
+    "title": "Ki mit lát",
+    "paragraphs": [
+      "A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra – soha nem lát egyéni neveket, ülés-tartalmakat vagy felmérési eredményeket.",
+      "Minden szakembert szakmai titoktartás köt. Az adataidat a GDPR és a helyi adatvédelmi jogszabályok szerint kezeljük."
+    ],
+    "bullets": [
+      "A munkáltatód soha nem látja a nevedet, az üléseidet vagy az eredményeidet",
+      "Az anonimizált jelentésekhez minimum 10 fős csoport szükséges",
+      "A szakembereket szakmai titoktartás köti"
+    ],
+    "cta": {
+      "label": "Tudj meg többet az adatvédelmi modellünkről",
+      "href": "/privacy-model"
+    },
+    "photo": {
+      "key": "remote-home-dog",
+      "alt": "Személy privát, kényelmes otthoni környezetben"
+    }
+  },
+  "forYourFamily": {
+    "title": "A családodnak",
+    "paragraphs": [
+      "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a partnered és gyermekeid ugyanúgy hozzáférhetnek a pszichoterápiához, a jogi és pénzügyi támogatáshoz – számodra külön költség nélkül."
+    ],
+    "photo": {
+      "key": "family-cooking",
+      "alt": "Család együtt főz otthon"
+    }
+  },
+  "faq": {
+    "title": "Gyakori kérdések munkavállalóktól",
+    "items": [
+      {
+        "question": "Tényleg ingyenes számomra?",
+        "answer": "Ingyenes számodra, ahol a munkáltatód fedezi. A lefedettségedet még a jóváhagyás előtt látod."
+      },
+      {
+        "question": "A munkáltatóm tudja, hogy használom?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "Mire használhatom?",
+        "answer": "Pszichoterápia és tanácsadás, jogi tanácsadás, pénzügyi tanácsadás, közérzeti pulzus, webináriumok és tudástár – a munkáltatód csomagjától függően."
+      },
+      {
+        "question": "A családom is használhatja?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a partnered és gyermekeid ugyanazokat a szolgáltatásokat vehetik igénybe, külön költség nélkül."
+      },
+      {
+        "question": "Hogyan foglalok időpontot?",
+        "answer": "Jelentkezz be a NestSelf munkaterületeden, válaszd ki a szükséges támogatás típusát, és válassz egy neked megfelelő időpontot."
+      },
+      {
+        "question": "Mi van, ha most azonnal segítségre van szükségem?",
+        "answer": "Ha közvetlen veszélyben vagy, hívd a segélyhívó számot most: 112 (Szerbia és Magyarország). Mentőhöz: 194 (Szerbia) vagy 104 (Magyarország). Krízistámogatáshoz: Centar Srce 0800 300 303 (Szerbia), Lelki Elsősegély Telefonszolgálat 116 123 (Magyarország)."
+      },
+      {
+        "question": "A szakemberek rendelkeznek engedéllyel?",
+        "answer": "Igen. Hálózatunkban engedéllyel rendelkező pszichológusok, képzett pszichoterapeuták, jogi szakemberek és okleveles pénzügyi tanácsadók dolgoznak."
+      },
+      {
+        "question": "Mi történik az adataimmal?",
+        "answer": "Az adataidat a GDPR és a helyi adatvédelmi jogszabályok szerint kezeljük. A szakembereket szakmai titoktartás köti. A munkáltatód soha nem lát egyéni adatokat."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Készen állsz az első lépésre?",
+    "body": "Ha a munkáltatód kínálja a NestSelfet, nyisd meg a munkaterületet, böngészd a tudástárat, töltsd ki a közérzeti pulzust vagy foglalj időpontot.",
+    "primary": {
+      "label": "Nyisd meg a munkaterületet",
+      "href": "__WORKSPACE_URL__"
+    },
+    "secondary": {
+      "label": "Ellenőrizd, kínálja-e a munkáltatód a NestSelfet",
+      "href": "/contact"
+    }
+  }
+}

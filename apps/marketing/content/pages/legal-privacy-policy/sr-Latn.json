@@ -1,0 +1,145 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Politika privatnosti",
+    "description": "Kako NestSelf prikuplja, koristi i štiti Vaše lične podatke."
+  },
+  "title": "Politika privatnosti",
+  "updatedAt": "2026-10-21",
+  "intro": "Ova politika privatnosti objašnjava kako NestSelf obrađuje lične podatke prikupljene putem ovog sajta. Vaše podatke obrađujemo u skladu sa Opštom uredbom o zaštiti podataka (GDPR), srpskim Zakonom o zaštiti podataka o ličnosti (ZZPL) i mađarskim Zakonom CXII iz 2011. o informacionom samoodređenju i slobodi informisanja (Info tv.).",
+  "sections": [
+    {
+      "heading": "1. Rukovalac podacima",
+      "paragraphs": [
+        "[Naziv kompanije], registrovan na adresi [Adresa].",
+        "Srbija: Matični broj [Matični broj], PIB [PIB].",
+        "Mađarska: Cégjegyzékszám [Cégjegyzékszám], Adószám [Adószám].",
+        "Lice za zaštitu podataka: [Ime i kontakt lica za zaštitu podataka — biće imenovano pre pokretanja].",
+        "Kontakt: hello@nestself.example"
+      ]
+    },
+    {
+      "heading": "2. Koje podatke obrađujemo",
+      "paragraphs": [
+        "Putem ovog sajta obrađujemo sledeće kategorije ličnih podataka:"
+      ],
+      "bullets": [
+        "Formulari za zahtev za prezentaciju: ime, poslovna e-adresa, naziv kompanije, pozicija, veličina kompanije, država, opciona poruka",
+        "Kontakt formulari: ime, e-adresa, tema, poruka",
+        "Formulari za prijavu na vebinar: ime, e-adresa, opcioni naziv kompanije",
+        "Funkcionalni kolačić (NEXT_LOCALE) koji pamti Vašu jezičku preferenciju"
+      ]
+    },
+    {
+      "heading": "3. Provere blagostanja",
+      "paragraphs": [
+        "Upitnici za proveru blagostanja na ovom sajtu se u potpunosti izvršavaju u Vašem pretraživaču. Vaši odgovori i rezultati se nikada ne šalju na naše servere. NestSelf ne skladišti, ne prenosi niti obrađuje bilo kakve podatke iz provera blagostanja.",
+        "Budući da zdravstveni podaci ne napuštaju Vaš uređaj, ovaj sajt ne obrađuje posebne kategorije podataka u smislu člana 9 GDPR-a ili člana 17 ZZPL-a. Za korišćenje ovog sajta nije potrebna izričita saglasnost za obradu zdravstvenih podataka."
+      ]
+    },
+    {
+      "heading": "4. Svrhe i pravni osnov",
+      "paragraphs": [
+        "Vaše podatke obrađujemo u sledeće svrhe:"
+      ],
+      "bullets": [
+        "Odgovor na Vaš zahtev za prezentaciju ili poruku: član 6(1)(b) GDPR-a (predugovorne mere) i član 6(1)(f) (legitimni interes za odgovaranje na upite)",
+        "Slanje potvrda i podsetnika za vebinare: član 6(1)(b) GDPR-a",
+        "Pamćenje Vaše jezičke preferencije: član 6(1)(f) GDPR-a (legitimni interes za funkcionalno iskustvo na sajtu)"
+      ]
+    },
+    {
+      "heading": "5. Automatizovano donošenje odluka",
+      "paragraphs": [
+        "Ovaj sajt ne vrši automatizovano donošenje odluka niti profilisanje u smislu člana 22 GDPR-a."
+      ]
+    },
+    {
+      "heading": "6. Analitički i marketinški kolačići",
+      "paragraphs": [
+        "Ovaj sajt ne koristi analitičke niti marketinške kolačiće. Jedini kolačić koji se koristi je NEXT_LOCALE, strogo funkcionalni kolačić koji čuva Vaš željeni jezik. Pogledajte našu Politiku kolačića za detalje."
+      ]
+    },
+    {
+      "heading": "7. Čuvanje podataka",
+      "paragraphs": [
+        "Podaci iz kontakt formulara i zahteva za prezentaciju čuvaju se onoliko dugo koliko je potrebno da odgovorimo na Vaš upit i razuman period nakon toga za praćenje, osim ako ne zatražite ranije brisanje. Podaci o prijavi na vebinare čuvaju se tokom trajanja serije vebinara i brišu se u roku od 12 meseci od poslednjeg događaja."
+      ]
+    },
+    {
+      "heading": "8. Primaoci i obrađivači",
+      "paragraphs": [
+        "Vaše podatke mogu obrađivati sledeće kategorije pružalaca usluga:"
+      ],
+      "bullets": [
+        "Hosting provajder: [biće naveden pre pokretanja]",
+        "Provajder usluge e-pošte: [biće naveden pre pokretanja]"
+      ]
+    },
+    {
+      "heading": "9. Međunarodni prenosi",
+      "paragraphs": [
+        "Ako bilo koji od naših obrađivača prenosi lične podatke van Evropskog ekonomskog prostora (EEP), obezbeđujemo odgovarajuće mere zaštite, kao što su Standardne ugovorne klauzule koje je odobrila Evropska komisija. Detalji o takvim prenosima biće dokumentovani ovde pre pokretanja."
+      ]
+    },
+    {
+      "heading": "10. Da li je pružanje Vaših podataka obavezno",
+      "paragraphs": [
+        "Pružanje Vaših ličnih podataka putem formulara za zahtev za prezentaciju, kontakt ili prijavu na vebinar je dobrovoljno. Niste pod zakonskom niti ugovornom obavezom da ih pružite. Ako odlučite da ne popunite obavezna polja, možda nećemo biti u mogućnosti da odgovorimo na Vaš upit ili Vas registrujemo za vebinar."
+      ]
+    },
+    {
+      "heading": "11. Procena uticaja na zaštitu podataka",
+      "paragraphs": [
+        "Procena uticaja na zaštitu podataka (DPIA) sprovedena je u skladu sa članom 35 GDPR-a, uzimajući u obzir obaveznu listu NAIH za DPIA (lista iz člana 35(4)). Sažetak je dostupan na zahtev putem kontakta na hello@nestself.example."
+      ]
+    },
+    {
+      "heading": "12. Vaša prava",
+      "paragraphs": [
+        "Prema GDPR-u i ZZPL-u imate pravo da:"
+      ],
+      "bullets": [
+        "Pristupite ličnim podacima koje čuvamo o Vama",
+        "Zatražite ispravku netačnih podataka",
+        "Zatražite brisanje Vaših podataka",
+        "Ograničite ili uložite prigovor na obradu",
+        "Prenosivost podataka",
+        "Povučete saglasnost u bilo kom trenutku (kada se obrada zasniva na saglasnosti)"
+      ]
+    },
+    {
+      "heading": "13. Kako da ostvarite svoja prava",
+      "paragraphs": [
+        "Da biste ostvarili bilo koje od ovih prava, kontaktirajte nas na hello@nestself.example. Odgovorićemo u roku od 30 dana."
+      ]
+    },
+    {
+      "heading": "14. Nadzorni organi",
+      "paragraphs": [
+        "Ako smatrate da su Vaša prava na zaštitu podataka povređena, imate pravo da podnesete žalbu:"
+      ],
+      "bullets": [
+        "Srbija: Poverenik za informacije od javnog značaja i zaštitu podataka o ličnosti, www.poverenik.rs",
+        "Mađarska: Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH), www.naih.hu"
+      ]
+    },
+    {
+      "heading": "15. Izmene ove politike",
+      "paragraphs": [
+        "Ovu politiku privatnosti možemo povremeno ažurirati. Datum na vrhu ove stranice pokazuje poslednju izmenu."
+      ]
+    },
+    {
+      "heading": "16. Kontakt",
+      "paragraphs": [
+        "Za sva pitanja o ovoj politici privatnosti, kontaktirajte nas na hello@nestself.example."
+      ]
+    }
+  ],
+  "updatedAtLabel": "Poslednja izmena:",
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  }
+}

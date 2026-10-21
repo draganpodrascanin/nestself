@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "title": "Cikkek — NestSelf",
+    "description": "Szakértői cikkek a mentális egészségről, a jogi ismeretekről, a pénzügyi tudatosságról és a munkahelyi jóllétről."
+  },
+  "hero": {
+    "title": "Cikkek",
+    "lead": "Gyakorlati, szakértők által lektorált cikkek a mentális egészségről, a jogi ismeretekről, a pénzügyi tudatosságról és a munkahelyi jóllétről.",
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  },
+  "filterLabel": "Szűrés téma szerint",
+  "allTopicsLabel": "Összes",
+  "topics": {
+    "psychological": "Mentális egészség",
+    "legal": "Jogi",
+    "financial": "Pénzügyi",
+    "work": "Munka",
+    "family": "Család",
+    "managers": "Vezetők"
+  },
+  "cardLabels": {
+    "readingTime": "{minutes} perc olvasás",
+    "published": "Megjelent"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigáció",
+    "breadcrumbArticles": "Cikkek",
+    "readingTime": "{minutes} perc olvasás",
+    "disclaimerText": "Ez a cikk általános tájékoztatás, nem orvosi, jogi vagy pénzügyi tanácsadás.",
+    "disclaimerLinkText": "Beszélj egy szakemberrel",
+    "relatedTitle": "Kapcsolódó cikkek",
+    "ctaBand": {
+      "title": "Szeretnél beszélni valakivel?",
+      "body": "Ha a munkáltatód biztosítja a NestSelfet, foglalhatsz egy bizalmas ülést egy engedéllyel rendelkező szakemberrel. Ha nem, szólj a HR-csapatodnak, hogy érdekel.",
+      "primaryLabel": "Kérj bemutatót",
+      "primaryHref": "/demo"
+    }
+  },
+  "serviceLinks": {
+    "psychological": "/services/therapy",
+    "legal": "/services/legal-consultation",
+    "financial": "/services/financial-guidance",
+    "work": "/services/therapy",
+    "family": "/services/therapy",
+    "managers": "/services/therapy"
+  }
+}

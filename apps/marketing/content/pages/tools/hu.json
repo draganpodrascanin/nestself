@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "title": "Önsegítő eszközök és közérzeti pulzus",
+    "description": "Közérzeti pulzus és irányított tervezők, amelyek segítenek megérteni a jóllétedet — bejelentkezés nélkül, semmi sem kerül tárolásra."
+  },
+  "hero": {
+    "title": "Eszközök a jóllétedhez",
+    "lead": "Gyors felmérések és gyakorlati tervezők, amelyeket most azonnal használhatsz. Amit itt megválaszolsz, az nem kerül tárolásra és nem osztjuk meg senkivel.",
+    "primaryCta": { "label": "Indíts egy felmérést", "href": "#assessments" },
+    "secondaryCta": { "label": "Böngészd az útmutatókat", "href": "#guides" }
+  },
+  "assessments": {
+    "eyebrow": "Felmérések",
+    "title": "Közérzeti pulzus",
+    "intro": "Rövid kérdőívek, amelyek segítenek elgondolkodni azon, hogyan érezted magad az utóbbi időben. Ezek nem diagnózisok. A válaszaid a böngésződben maradnak, és soha nem kerülnek elküldésre.",
+    "durationLabel": "{minutes} perc",
+    "questionsLabel": "{count} kérdés"
+  },
+  "guides": {
+    "eyebrow": "Útmutatók és tervezők",
+    "title": "Gyakorlati eszközök, amelyeket ma elkezdhetsz használni",
+    "intro": "Lépésről lépésre haladó anyagok beszélgetésekhez, költségvetéshez és jogi felkészüléshez."
+  },
+  "runner": {
+    "start": "Kezdés",
+    "next": "Tovább",
+    "back": "Vissza",
+    "finish": "Eredmény megtekintése",
+    "restart": "Újrakezdés",
+    "questionOf": "{current}. kérdés a(z) {total}-ból/-ből",
+    "result": "Az eredményed",
+    "yourScore": "A pontszámod: {score} / {max}",
+    "nothingStored": "A válaszaid nem kerültek tárolásra és nem lettek elküldve sehova.",
+    "talkToSomeone": "Beszélj egy szakemberrel",
+    "relatedReading": "Fedezz fel kapcsolódó anyagokat"
+  },
+  "introPhotoAlt": {
+    "psychological": "Egy személy a kanapén ülve gondolkodik a jóllétéről",
+    "work": "Egy személy a munkanap végén, megállva egy pillanatra",
+    "financial": "Egy személy pénzügyi terveket tekint át egy tanácsadóval",
+    "default": "Egy személy a kanapén ülve gondolkodik a jóllétéről"
+  },
+  "breadcrumbs": {
+    "home": "Főoldal",
+    "tools": "Eszközök"
+  },
+  "guideCtaLabel": "Tudj meg többet erről: {service}",
+  "guideCta": {
+    "psychological": { "label": "Fedezd fel a pszichoterápiát és tanácsadást", "href": "/services/therapy" },
+    "legal": { "label": "Fedezd fel a jogi tanácsadást", "href": "/services/legal-consultation" },
+    "financial": { "label": "Fedezd fel a pénzügyi tanácsadást", "href": "/services/financial-guidance" },
+    "work": { "label": "Fedezd fel a pszichoterápiát és tanácsadást", "href": "/services/therapy" },
+    "family": { "label": "Fedezd fel a pszichoterápiát és tanácsadást", "href": "/services/therapy" },
+    "managers": { "label": "Fedezd fel a pszichoterápiát és tanácsadást", "href": "/services/therapy" }
+  }
+}

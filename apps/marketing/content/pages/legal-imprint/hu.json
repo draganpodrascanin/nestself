@@ -1,0 +1,46 @@
+{
+  "draft": true,
+  "meta": {
+    "title": "Impresszum",
+    "description": "Jogi információk a NestSelf weboldal üzemeltetőjéről."
+  },
+  "title": "Impresszum",
+  "updatedAt": "2026-10-21",
+  "intro": "A weboldal üzemeltetőjére vonatkozó jogi információk a 2001. évi CVIII. törvény (Ekertv.) és a szerb elektronikus kereskedelemről szóló törvény (Zakon o elektronskoj trgovini, 13. cikk) előírásai szerint.",
+  "sections": [
+    {
+      "heading": "Impresszum (Magyarország)",
+      "paragraphs": [
+        "Szolgáltató:"
+      ],
+      "bullets": [
+        "Teljes név (full name): [Cég neve]",
+        "Székhely (registered seat): [Cím]",
+        "Cégjegyzékszám (company registration number): [Cégjegyzékszám]",
+        "Adószám (tax number): [Adószám]",
+        "Elektronikus levelezési cím (email): hello@nestself.example",
+        "Telefonszám (phone): [Telefonszám]",
+        "Tárhelyszolgáltató: [Tárhelyszolgáltató neve és címe]"
+      ]
+    },
+    {
+      "heading": "Pravne informacije (Szerbia)",
+      "paragraphs": [
+        "Podaci o pružaocu usluga:"
+      ],
+      "bullets": [
+        "Naziv firme (cégnév): [Cég neve]",
+        "Sedište (székhely): [Cím]",
+        "Matični broj (nyilvántartási szám): [Matični broj]",
+        "PIB (adóazonosító szám): [PIB]",
+        "Kontakt email: hello@nestself.example",
+        "Kontakt telefon: [Telefonszám]"
+      ]
+    }
+  ],
+  "updatedAtLabel": "Utolsó frissítés:",
+  "breadcrumb": {
+    "label": "Navigáció",
+    "home": "Főoldal"
+  }
+}

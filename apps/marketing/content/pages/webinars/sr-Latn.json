@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "title": "Vebinari — NestSelf",
+    "description": "Sesije stručnjaka uživo i na zahtev o blagostanju, stresu, finansijama i još mnogo toga."
+  },
+  "hero": {
+    "title": "Vebinari",
+    "lead": "Sesije uživo i na zahtev koje vode licencirani psiholozi, pravni stručnjaci i finansijski konsultanti iz NestSelf mreže.",
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  },
+  "upcoming": {
+    "title": "Predstojeći vebinari"
+  },
+  "onDemand": {
+    "title": "Na zahtev"
+  },
+  "cardLabels": {
+    "live": "Uživo",
+    "onDemand": "Na zahtev",
+    "minutes": "{n} min",
+    "languages": "Jezici",
+    "noUpcoming": "Trenutno nema predstojećih vebinara. Pregledajte biblioteku snimljenih vebinara ispod."
+  },
+  "topics": {
+    "psychological": "Mentalno zdravlje",
+    "legal": "Pravo",
+    "financial": "Finansije",
+    "work": "Posao",
+    "family": "Porodica",
+    "managers": "Rukovodioci"
+  },
+  "detail": {
+    "breadcrumbLabel": "Navigacija",
+    "breadcrumbWebinars": "Vebinari",
+    "dateLabel": "Datum i vreme",
+    "durationLabel": "Trajanje",
+    "formatLabel": "Format",
+    "languagesLabel": "Jezici",
+    "speakerLabel": "Predavač",
+    "timeZoneLabel": "CET",
+    "minutesSuffix": "minuta",
+    "readingTime": "{minutes} min čitanja",
+    "relatedTitle": "Srodni članci",
+    "watchRecordingTitle": "Pogledajte snimak",
+    "watchRecordingBody": "Snimak ovog vebinara je dostupan u NestSelf radnom okruženju. Ako Vaš poslodavac obezbeđuje NestSelf, prijavite se da ga pogledate.",
+    "registerTitle": "Prijavite se za ovaj vebinar"
+  },
+  "form": {
+    "nameLabel": "Ime i prezime",
+    "namePlaceholder": "Vaše ime i prezime",
+    "emailLabel": "E-adresa",
+    "emailPlaceholder": "vi@firma.com",
+    "companyLabel": "Kompanija",
+    "companyPlaceholder": "Vaša kompanija (opciono)",
+    "optionalLabel": "opciono",
+    "consentShortLabel": "Saglasnost za obradu podataka",
+    "consentLabel": "Saglasan/saglasna sam da NestSelf obradi moje podatke u skladu sa {privacyLink} radi odgovora na moj zahtev.",
+    "privacyLinkText": "Politikom privatnosti",
+    "privacyLinkHref": "/legal/privacy",
+    "submitLabel": "Prijavite se",
+    "errorSummaryTitle": "Ispravite sledeće greške",
+    "nameRequired": "Molimo Vas da unesete Vaše ime.",
+    "emailRequired": "Molimo Vas da unesete ispravnu e-adresu.",
+    "consentRequired": "Morate dati saglasnost za obradu podataka.",
+    "successTitle": "Uspešno ste se prijavili",
+    "successBody": "Poslaćemo Vam link putem emaila pre početka vebinara.",
+    "failureTitle": "Nismo mogli da pošaljemo Vašu prijavu",
+    "failureBody": "Molimo Vas pokušajte ponovo kasnije ili nas kontaktirajte na {email}.",
+    "validation": {
+      "required": "Popunite {{field}}.",
+      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@firma.com.",
+      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
+      "select": "Izaberite opciju za {{field}}.",
+      "tooLong": "{{field}} je predugačko."
+    }
+  }
+}

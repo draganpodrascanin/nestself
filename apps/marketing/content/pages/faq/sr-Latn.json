@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "title": "Najčešća pitanja — NestSelf",
+    "description": "Odgovori na najčešća pitanja o NestSelf-u – za poslodavce i zaposlene."
+  },
+  "hero": {
+    "title": "Najčešća pitanja",
+    "lead": "Sve što treba da znate o NestSelf-u, bilo da ste poslodavac koji istražuje program ili zaposleni koji traži podršku.",
+    "primaryCta": {
+      "label": "Kontaktirajte nas",
+      "href": "/contact"
+    }
+  },
+  "employerFaq": {
+    "title": "Za poslodavce",
+    "items": [
+      {
+        "question": "Šta je NestSelf?",
+        "answer": "NestSelf je program pomoći zaposlenima koji Vašim ljudima obezbeđuje poverljiv pristup licenciranim psiholozima, pravnim stručnjacima i finansijskim konsultantima – uz proveru blagostanja, vebinare i resurse."
+      },
+      {
+        "question": "Koje usluge su uključene?",
+        "answer": "U zavisnosti od Vašeg plana: psihoterapija i savetovanje, pravno savetovanje, finansijsko savetovanje, vebinari, resursi, provera blagostanja, podrška za rukovodioce i podrška za porodicu."
+      },
+      {
+        "question": "Po čemu se razlikuje od tradicionalnog EAP programa?",
+        "answer": "Tradicionalni EAP programi često ograničavaju broj sesija i pokrivaju samo psihološku podršku. NestSelf uključuje pravno i finansijsko savetovanje, resurse, podršku za rukovodioce i anonimizovane uvide – sve u jednom benefitu."
+      },
+      {
+        "question": "Ko je pokriven – samo zaposleni ili i članovi porodice?",
+        "answer": "To zavisi od Vašeg plana. Kada Vaš plan uključuje članove porodice, partneri i deca dobijaju pristup istim uslugama bez dodatnih troškova."
+      },
+      {
+        "question": "Kako zaposleni pristupaju usluzi?",
+        "answer": "Zaposleni dobijaju privatni link ili pristupni kod tokom pokretanja programa. Kreiraju lični nalog i odmah mogu da pregledaju resurse, urade proveru blagostanja ili zakažu sesije."
+      },
+      {
+        "question": "Koje podatke poslodavac vidi?",
+        "answer": "Vidite anonimizovane, agregirane trendove blagostanja za grupe od 10 ili više osoba. Nikada ne vidite ko je koristio NestSelf, o čemu se razgovaralo niti rezultate individualnih procena."
+      },
+      {
+        "question": "Kako je poverljivost zaštićena?",
+        "answer": "Svi stručnjaci su obavezani profesionalnom tajnom. Potpisujemo ugovor o obradi podataka, poslujemo u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka i nikada ne delimo pojedinačne podatke sa poslodavcem."
+      },
+      {
+        "question": "Koliko brzo možemo da pokrenemo program?",
+        "answer": "Od potpisanog ugovora do pristupa za zaposlene za dve do četiri nedelje, u zavisnosti od veličine Vaše organizacije i broja jezika."
+      },
+      {
+        "question": "Koji jezici su podržani?",
+        "answer": "Sesije i resursi su dostupni na srpskom, mađarskom i engleskom jeziku. Komunikacioni materijali se pripremaju na jezicima koje odaberete."
+      },
+      {
+        "question": "Kakve kvalifikacije imaju Vaši stručnjaci?",
+        "answer": "Naša mreža uključuje licencirane psihologe, kvalifikovane psihoterapeute, pravne stručnjake i sertifikovane finansijske konsultante. Kvalifikacije svakog stručnjaka se proveravaju pre pridruživanja."
+      },
+      {
+        "question": "Kako merite rezultate?",
+        "answer": "Pratimo anonimizovane, agregirane trendove učešća i zadovoljstva. Radimo na objavljivanju podataka o ishodima; do tada se oslanjamo na validirane instrumente i profesionalne standarde."
+      },
+      {
+        "question": "Kako funkcioniše cena?",
+        "answer": "Planovi se naplaćuju po zaposlenom mesečno. Vaša ponuda se zasniva na broju zaposlenih, zemljama i planu. Zakažite prezentaciju i pripremićemo ponudu za Vas."
+      }
+    ]
+  },
+  "employeeFaq": {
+    "title": "Za zaposlene",
+    "items": [
+      {
+        "question": "Šta je NestSelf?",
+        "answer": "NestSelf je benefit za blagostanje koji Vam obezbeđuje Vaš poslodavac. Pruža Vam poverljiv pristup licenciranim psiholozima, pravnim stručnjacima, finansijskim konsultantima, proveri blagostanja, vebinarima i resursima."
+      },
+      {
+        "question": "Da li je zaista besplatno za mene?",
+        "answer": "Besplatno za Vas ako Vaš poslodavac to pokriva. Vaše pokriće se prikazuje pre nego što bilo šta potvrdite."
+      },
+      {
+        "question": "Da li moj poslodavac zna da koristim uslugu?",
+        "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Za šta mogu da koristim NestSelf?",
+        "answer": "Psihoterapiju i savetovanje, pravno savetovanje, finansijsko savetovanje, proveru blagostanja, vebinare i resurse – u zavisnosti od plana Vašeg poslodavca."
+      },
+      {
+        "question": "Može li moja porodica da koristi NestSelf?",
+        "answer": "Kada plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca dobijaju pristup istim uslugama bez dodatnih troškova."
+      },
+      {
+        "question": "Kako da zakažem sesiju?",
+        "answer": "Prijavite se u svoj NestSelf radni prostor, izaberite vrstu podrške koja Vam je potrebna i odaberite termin koji Vam odgovara."
+      },
+      {
+        "question": "Šta ako mi je pomoć potrebna odmah?",
+        "answer": "Ako ste u neposrednoj opasnosti, pozovite hitne službe odmah: 112 (Srbija i Mađarska). Za hitnu pomoć: 194 (Srbija) ili 104 (Mađarska). Za kriznu podršku: Centar Srce 0800 300 303 (Srbija), Lelki Elsősegély Telefonszolgálat 116 123 (Mađarska)."
+      },
+      {
+        "question": "Da li su stručnjaci licencirani?",
+        "answer": "Da. Naša mreža uključuje licencirane psihologe, kvalifikovane psihoterapeute, pravne stručnjake i sertifikovane finansijske konsultante."
+      },
+      {
+        "question": "Mogu li da izaberem svog terapeuta?",
+        "answer": "Da. Možete da pregledate dostupne stručnjake, vidite njihove oblasti ekspertize i jezike, i izaberete osobu koja Vam najviše odgovara."
+      },
+      {
+        "question": "Kako funkcioniše provera blagostanja?",
+        "answer": "Kratki, validirani upitnici Vam pomažu da razumete svoje blagostanje i pronađete pravu podršku. Nisu dijagnoza – oni su polazna tačka."
+      },
+      {
+        "question": "Da li je dostupno na mom jeziku?",
+        "answer": "Sesije i resursi su dostupni na srpskom, mađarskom i engleskom jeziku."
+      },
+      {
+        "question": "Šta se dešava sa mojim podacima?",
+        "answer": "Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi. Stručnjaci su obavezani profesionalnom tajnom, a Vaši podaci se obrađuju u skladu sa GDPR-om i lokalnim zakonima o zaštiti podataka."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Još uvek imate pitanja?",
+    "body": "Javite nam se i rado ćemo Vam pomoći.",
+    "primary": {
+      "label": "Kontaktirajte nas",
+      "href": "/contact"
+    },
+    "secondary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
+  }
+}

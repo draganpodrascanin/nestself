@@ -1,0 +1,176 @@
+{
+  "meta": {
+    "title": "NestSelf – modern munkavállalói jólléti juttatás",
+    "description": "Modern munkavállalói jólléti juttatás. Pszichológiai, jogi és pénzügyi támogatás munkavállalóknak és családtagjaiknak, egyetlen bizalmas platformon."
+  },
+  "hero": {
+    "eyebrow": "Modern munkavállalói jólléti juttatás",
+    "title": "Támogatás a munkához. És mindenhez, ami körülveszi.",
+    "lead": "Biztosíts munkavállalóidnak és családtagjaiknak hozzáférést engedéllyel rendelkező pszichológusokhoz, jogi szakemberekhez és pénzügyi tanácsadókhoz – egyetlen bizalmas platformon.",
+    "primaryCta": "Kérj bemutatót",
+    "secondaryCta": "Munkavállalóknak",
+    "photos": [
+      {
+        "key": "home-hero-kitchen",
+        "alt": "Meleg konyhai jelenet, amely a mindennapokat idézi"
+      },
+      {
+        "key": "home-hero-walk",
+        "alt": "Szabadban sétáló személy, szünetet tartva"
+      },
+      {
+        "key": "family-cooking",
+        "alt": "Család közösen főz"
+      }
+    ]
+  },
+  "trust": [
+    {
+      "icon": "shield-check",
+      "label": "Engedéllyel rendelkező szakemberek"
+    },
+    {
+      "icon": "lock-key",
+      "label": "Beépített titoktartás"
+    },
+    {
+      "icon": "translate",
+      "label": "Szerb, magyar és angol nyelven"
+    },
+    {
+      "icon": "hand-heart",
+      "label": "Pszichológiai, jogi és pénzügyi"
+    }
+  ],
+  "services": {
+    "eyebrow": "Mit kínálunk",
+    "title": "Három támogatási terület, egy platform",
+    "lead": "Engedéllyel rendelkező pszichológusok, jogi szakemberek és okleveles pénzügyi tanácsadók, online és személyesen.",
+    "items": [
+      {
+        "icon": "heart",
+        "title": "Pszichoterápia és tanácsadás",
+        "body": "Engedéllyel rendelkező pszichológusok és képzett pszichoterapeuták egyéni, páros és családi ülésekre – online vagy személyesen.",
+        "href": "/services/therapy"
+      },
+      {
+        "icon": "scales",
+        "title": "Jogi tanácsadás",
+        "body": "Bizalmas útmutatás személyes jogi kérdésekben – családjog, lakásbérlet, fogyasztói jogok.",
+        "href": "/services/legal-consultation"
+      },
+      {
+        "icon": "wallet",
+        "title": "Pénzügyi tanácsadás",
+        "body": "Költségvetés-tervezés, adósságkezelés, megtakarítási és nyugdíjtanácsadás okleveles pénzügyi szakemberektől.",
+        "href": "/services/financial-guidance"
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "Hogyan működik",
+    "title": "Hogyan működik a munkavállalók számára",
+    "steps": [
+      {
+        "title": "Aktiváld a munkahelyi e-mail címeddel",
+        "body": "A munkáltatód már beállította a NestSelfet. Jelentkezz be a munkahelyi e-mail címeddel, és nézd meg, mi érhető el."
+      },
+      {
+        "title": "Válassz területet és időpontot",
+        "body": "Válaszd a pszichoterápiát, a jogi vagy a pénzügyi támogatást. Böngészd az elérhető szakembereket, és találj megfelelő időpontot."
+      },
+      {
+        "title": "Beszélj, a saját nyelveden",
+        "body": "Tartsd az ülésedet szerbül, magyarul vagy angolul – online vagy személyesen. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó."
+      },
+      {
+        "title": "Folytasd az utánkövetéssel és a tudástárral",
+        "body": "Foglalj utánkövető üléseket, fedezd fel az önsegítő eszközöket, olvass cikkeket és csatlakozz webináriumokhoz a saját tempódban."
+      }
+    ]
+  },
+  "employers": {
+    "eyebrow": "Munkáltatóknak",
+    "title": "Jólléti juttatás, amelyet a csapatod tényleg használni fog",
+    "paragraphs": [
+      "A NestSelf pszichológiai, jogi és pénzügyi támogatást kínál egyetlen platformon, amelyet a munkavállalók megértenek és amelyben megbíznak. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+    ],
+    "bullets": [
+      "Indítás heteken belül, kommunikációs eszköztárral",
+      "Anonimizált adatok 10 fős vagy nagyobb csoportokra",
+      "Vezetői támogatás és csapatszintű jólléti felmérések",
+      "Családi támogatás, ahol a csomagod tartalmazza a családtagokat"
+    ],
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "Csapat egy HR-megbeszélésen a munkavállalói jóllétről tárgyal"
+    },
+    "cta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
+  },
+  "life": {
+    "eyebrow": "A munkán túl",
+    "title": "Támogatás a körülötted lévőknek",
+    "paragraphs": [
+      "Kapcsolatok, gyermeknevelés, szülőgondozás vagy egy olyan jogi kérdés, aminek semmi köze a munkához. Ahol a munkáltatód csomagja tartalmazza a családtagokat, ők is ugyanúgy hozzáférnek a pszichoterápiához, a jogi és a pénzügyi támogatáshoz."
+    ],
+    "photo": {
+      "key": "family-park-walk",
+      "alt": "Család együtt sétál a parkban"
+    }
+  },
+  "resources": {
+    "title": "Cikkek, webináriumok és eszközök",
+    "moreLabel": "Összes tartalom megtekintése"
+  },
+  "assessments": {
+    "title": "Közérzeti pulzus"
+  },
+  "testimonials": {
+    "title": "Mit mondanak a szervezetek",
+    "lead": "Mintaadatok. A partnertörténetek itt jelennek meg, ahogy a szervezetek csatlakoznak a NestSelfhez."
+  },
+  "faq": {
+    "title": "Gyakran ismételt kérdések",
+    "items": [
+      {
+        "question": "Ki használhatja a NestSelfet?",
+        "answer": "Bármely munkavállaló, akinek a munkáltatója aktiválta a NestSelf programot. Ahol a munkáltatód csomagja tartalmazza a családtagokat, a partnerek és gyermekek is igénybe vehetik a szolgáltatást."
+      },
+      {
+        "question": "Bizalmas a szolgáltatás?",
+        "answer": "Igen. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált, összesített jelentéseket kap, ha a csoport elég nagy az azonosítás kizárásához – legalább 10 fő."
+      },
+      {
+        "question": "Mennyibe kerül a munkavállalóknak?",
+        "answer": "A NestSelf a munkáltató által finanszírozott juttatás. A munkavállalók semmit nem fizetnek a csomagjuk által fedezett szolgáltatásokért."
+      },
+      {
+        "question": "Milyen gyorsan indítható el?",
+        "answer": "A legtöbb szervezet az aláírt megállapodástól számítva két-négy héten belül eléri a munkavállalói hozzáférést. Kommunikációs eszköztárat biztosítunk a program bejelentéséhez."
+      },
+      {
+        "question": "Milyen nyelveken érhető el?",
+        "answer": "Az ülések szerb, magyar és angol nyelven érhetők el. A platform felülete és minden tartalom mindhárom nyelven elérhető."
+      },
+      {
+        "question": "Mi a teendő krízishelyzetben?",
+        "answer": "Ha te vagy valaki, akit ismersz, közvetlen veszélyben van, hívd a segélyhívó számot most. Szerbia: 112 (segélyhívó), 194 (mentő); Centar Srce 0800 300 303. Magyarország: 112 (segélyhívó), 104 (mentő); Lelki Elsősegély Telefonszolgálat 116 123. A NestSelf ezenkívül segít a sürgős szakmai támogatás elérésében."
+      }
+    ]
+  },
+  "ctaBand": {
+    "title": "Készen állsz a csapatod támogatására?",
+    "body": "Nézd meg, hogyan működik a NestSelf a szervezeted számára.",
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondary": {
+      "label": "Beszélj velünk",
+      "href": "/contact"
+    }
+  }
+}

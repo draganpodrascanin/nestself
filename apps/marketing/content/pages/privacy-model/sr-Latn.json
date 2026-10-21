@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "title": "Kako je pristup razdvojen",
+    "description": "Razumite ko šta vidi pre nego što podelite nešto lično."
+  },
+  "hero": {
+    "title": "Kako je pristup razdvojen",
+    "lead": "Razumite ko šta vidi pre nego što podelite nešto lično."
+  },
+  "inPractice": {
+    "eyebrow": "U praksi",
+    "title": "Šta se dešava u svakom koraku",
+    "steps": [
+      {
+        "title": "Kada zakažete termin",
+        "body": "Vi birate stručnjaka i vreme. Vaš poslodavac ne vidi ništa o Vašem zakazivanju."
+      },
+      {
+        "title": "Šta Vaš poslodavac vidi",
+        "body": "Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "title": "Šta čuvamo i koliko dugo",
+        "body": "Beleške sa sesija ostaju kod stručnjaka. Mi čuvamo podatke o zakazivanju onoliko dugo koliko zakon zahteva."
+      }
+    ]
+  },
+  "breadcrumb": {
+    "label": "Navigacija",
+    "home": "Početna"
+  }
+}

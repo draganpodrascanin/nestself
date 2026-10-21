@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "title": "Zakažite prezentaciju",
+    "description": "Saznajte kako NestSelf donosi psihološku, pravnu i finansijsku podršku Vašem timu. Recite nam nešto o Vašoj organizaciji i javićemo Vam se."
+  },
+  "hero": {
+    "title": "Zakažite prezentaciju",
+    "lead": "Recite nam nešto o Vašoj organizaciji, a mi ćemo Vam pokazati kako NestSelf funkcioniše za Vaš tim."
+  },
+  "form": {
+    "fields": {
+      "name": "Ime i prezime",
+      "email": "Poslovna e-adresa",
+      "company": "Kompanija",
+      "role": "Pozicija",
+      "companySize": "Veličina kompanije",
+      "country": "Država",
+      "heardAbout": "Kako ste čuli za nas?",
+      "message": "Ima li još nešto što biste želeli da znamo?",
+      "consent": "Saglasan/saglasna sam da NestSelf obradi moje podatke radi odgovora na moj zahtev u skladu sa"
+    },
+    "privacyLinkText": "Politikom privatnosti",
+    "selectPlaceholder": "Izaberite...",
+    "options": {
+      "companySize": [
+        {
+          "value": "1-50",
+          "label": "1 do 50 zaposlenih"
+        },
+        {
+          "value": "51-200",
+          "label": "51 do 200 zaposlenih"
+        },
+        {
+          "value": "201-500",
+          "label": "201 do 500 zaposlenih"
+        },
+        {
+          "value": "501-1000",
+          "label": "501 do 1.000 zaposlenih"
+        },
+        {
+          "value": "1000+",
+          "label": "1.000+ zaposlenih"
+        }
+      ],
+      "country": [
+        {
+          "value": "RS",
+          "label": "Srbija"
+        },
+        {
+          "value": "HU",
+          "label": "Mađarska"
+        },
+        {
+          "value": "OTHER",
+          "label": "Drugo"
+        }
+      ],
+      "heardAbout": [
+        {
+          "value": "search",
+          "label": "Pretraživač"
+        },
+        {
+          "value": "referral",
+          "label": "Preporuka"
+        },
+        {
+          "value": "event",
+          "label": "Događaj ili konferencija"
+        },
+        {
+          "value": "social",
+          "label": "Društvene mreže"
+        },
+        {
+          "value": "other",
+          "label": "Drugo"
+        }
+      ]
+    },
+    "validation": {
+      "required": "Popunite {{field}}.",
+      "email": "Unesite ispravnu poslovnu e-adresu, na primer ime@kompanija.com.",
+      "consent": "Prihvatite politiku privatnosti kako bismo mogli da Vam odgovorimo.",
+      "select": "Izaberite opciju za {{field}}.",
+      "tooLong": "{{field}} je predugačko."
+    },
+    "emailHint": "Preporučujemo da koristite poslovnu e-adresu kako bismo Vas povezali sa Vašom organizacijom.",
+    "optional": "opciono",
+    "submit": "Pošaljite zahtev",
+    "submitting": "Slanje...",
+    "errorSummaryTitle": "Ispravite sledeće greške",
+    "successTitle": "Primili smo Vaš zahtev",
+    "successBody": "Član našeg tima će Vam se javiti. Proverite prijemno sanduče za potvrdu.",
+    "errorTitle": "Nešto je pošlo naopako",
+    "errorBody": "Nismo mogli da pošaljemo Vaš zahtev. Pokušajte ponovo kasnije.",
+    "errorContactHint": "Možete nas kontaktirati i na",
+    "fallbackErrorLabel": "Formular",
+    "fallbackErrorMessage": "Slanje nije uspelo. Proverite unete podatke i pokušajte ponovo."
+  },
+  "aside": {
+    "title": "Šta sledi",
+    "steps": [
+      {
+        "title": "Javlja Vam se naša osoba",
+        "body": "Neko iz našeg tima će Vam se javiti putem e-pošte kako bi razumeo Vaše potrebe."
+      },
+      {
+        "title": "Poziv od 30 minuta",
+        "body": "Vodimo Vas kroz platformu, odgovaramo na pitanja i razgovaramo o situaciji u Vašem timu."
+      },
+      {
+        "title": "Predlog",
+        "body": "Dobijate jasan predlog sa pokrivenošću, vremenskim okvirom i sledećim koracima."
+      }
+    ],
+    "contactTitle": "Radije putem e-pošte?",
+    "contactBody": "Pišite nam direktno na"
+  }
+}
