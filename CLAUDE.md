@@ -14,7 +14,9 @@ Component and app code references semantic tokens only (`bg-primary`, `text-text
 
 ## Content rule
 
-No testimonials, client logos, invented statistics, availability promises, privacy guarantees, fake bookings, payments or messages. Interactive demonstrations state that nothing was created. Stock people are never named experts or customers. Sample data is flagged and banner-labelled.
+No client logos, invented statistics, availability promises ("24/7"), response-time promises, privacy guarantees, fake bookings, payments or messages. Interactive demonstrations state that nothing was created. Stock and generated people are never named experts or customers. Sample data is flagged and banner-labelled in the apps.
+
+Marketing-site exceptions agreed on 2026-10-21: testimonials are placeholders from `SAMPLE_TESTIMONIALS` in `packages/sample-data` (fictional first names and roles, anonymised company descriptors, `placeholder: true`, rendered with `data-placeholder="true"`) until real consented quotes exist; the contact email defaults to `hello@nestself.example` until `NEXT_PUBLIC_CONTACT_EMAIL` is set; legal pages carry bracketed company-identifier placeholders. All three are launch-checklist items in the marketing spec, not production content. Third-party benchmarks may be quoted only with their source named. Wellbeing check-ins are never presented as diagnoses and always show the disclaimer and crisis block; the WHO-5 is not used (licence).
 
 ## Sample-data rule
 

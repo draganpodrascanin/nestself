@@ -1,31 +1,52 @@
 # @nestself/marketing
 
-Public-facing marketing site built with Next.js 16 (App Router).
+Public marketing site built with Next.js 16 (App Router, webpack). Locales: `en`, `sr-Latn`, `sr-Cyrl` (generated), `hu`.
 
 ## Routes
 
-| Path                      | Description              |
-| ------------------------- | ------------------------ |
-| `/[locale]`               | Homepage                 |
-| `/[locale]/support`       | Support areas            |
-| `/[locale]/employers`     | Employer experience      |
-| `/[locale]/privacy-model` | Access matrix            |
-| `/[locale]/credits`       | Photography, fonts, icons|
-| `/robots.txt`             | Robots directive         |
-| `/sitemap.xml`            | Sitemap with alternates  |
+All routes live under `/[locale]`. English slugs are used in every locale; hreflang alternates and a sitemap cover the four locales.
+
+| Path                                                                                             | Page                                               |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `/`                                                                                              | Home                                               |
+| `/for-employers`, `/for-employees`, `/for-managers`                                              | Audience pages (`/employers` redirects)            |
+| `/services`, `/services/therapy`, `/services/legal-consultation`, `/services/financial-guidance` | Services (`/support` redirects)                    |
+| `/resources`, `/articles`, `/articles/[slug]`, `/webinars`, `/webinars/[slug]`                   | Resources                                          |
+| `/tools`, `/tools/[slug]`                                                                        | Wellbeing check-ins (assessment runner) and guides |
+| `/plans`, `/about`, `/faq`                                                                       | Plans, about, FAQ                                  |
+| `/demo`, `/contact`                                                                              | Demo request and contact forms                     |
+| `/privacy-model`, `/accessibility`, `/credits`                                                   | Trust pages                                        |
+| `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint`                      | Legal pages (drafts with bracketed placeholders)   |
+| `/robots.txt`, `/sitemap.xml`, `/[locale]/opengraph-image`                                       | SEO                                                |
+
+## Where the text lives
+
+- UI strings: `packages/i18n/locales/<locale>/marketing.json` and `common.json` (i18next).
+- Page copy: `content/pages/<page>/<locale>.json`, validated by the zod schema in `src/app/[locale]/<route>/content.ts`.
+- Articles, webinars, guides: `content/{articles,webinars,tools}/<slug>/<locale>.mdx`; check-ins: `content/assessments/<slug>/<locale>.json`. See `content/README.md`.
+- `sr-Cyrl` files are generated from `sr-Latn`: `pnpm --filter @nestself/marketing content:cyrillic`. `pnpm --filter @nestself/marketing check` validates every file, cover key and translation parity.
+
+## Lead capture
+
+The demo, contact and webinar-registration forms post to `/api/leads/<kind>` route handlers, which validate with the shared zod schemas from `@nestself/contracts` and forward to the NestJS API at `API_URL`. Without `API_URL` the handlers return 503 and the forms show an honest failure with the contact email. Nothing is stored by this app.
+
+## Environment
+
+| Variable                    | Purpose                                                                  |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_SITE_URL`      | Canonical origin for metadata, sitemap and Open Graph                    |
+| `NEXT_PUBLIC_WORKSPACE_URL` | "Open the workspace" links                                               |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on the site (defaults to a `.example` placeholder) |
+| `API_URL`                   | Server-side base URL of the API for lead forwarding                      |
 
 ## Locale behaviour
 
-Requests without a locale prefix are redirected via `proxy.ts` (Next 16 middleware).
-The locale is negotiated from the `NEXT_LOCALE` cookie, then the `Accept-Language`
-header, falling back to `en`. Supported locales: `en`, `sr-Latn`, `sr-Cyrl`, `hu`.
+Requests without a locale prefix are redirected by `proxy.ts`, negotiating from the `NEXT_LOCALE` cookie and then `Accept-Language`, falling back to `en`. The header locale switcher sets the cookie.
 
-## Image sync
+## Images
 
-Run `pnpm --filter @nestself/marketing images:sync` to copy processed image
-variants from `packages/assets/dist/images` into `public/images`.
+Generated and stock photographs live in `packages/assets`; run `pnpm --filter @nestself/marketing images:sync` to copy the processed variants into `public/images`.
 
-## No-analytics policy
+## Policies
 
-This site includes no analytics, cookie banners, newsletter forms, testimonials,
-client logos or statistics. Interactive demonstrations state that nothing was created.
+No analytics and no cookie banner (only the functional `NEXT_LOCALE` cookie). No invented statistics, outcome claims or client logos. Testimonials are placeholders from `SAMPLE_TESTIMONIALS` until real ones exist. Check-ins run in the browser and store nothing.
