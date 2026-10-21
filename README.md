@@ -176,3 +176,7 @@ See `docs/superpowers/specs/2026-10-20-nestself-monorepo-setup-design.md` for th
 ## Credits
 
 See `CREDITS.md` for photographer, font and icon licence attributions.
+
+## Marketing site content
+
+The public site (`apps/marketing`) keeps page copy, articles, webinars, guides and wellbeing check-ins as files under `apps/marketing/content` in `en`, `sr-Latn` and `hu`; `sr-Cyrl` is generated with `pnpm --filter @nestself/marketing content:cyrillic`. `pnpm check` validates every content file, cover key, translation parity and Cyrillic freshness. Lead forms forward to the API (`API_URL`); see `apps/marketing/README.md`.

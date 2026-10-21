@@ -20,11 +20,11 @@ Out of scope: workspace, admin and mobile features; authentication; payments; a 
 
 ## 2. Audiences and offering
 
-| Audience | What they need from the site | Primary CTA |
-| --- | --- | --- |
-| Employers: HR, people leaders, founders in Serbia and Hungary | Understand the programme, trust it (confidentiality, professionals, GDPR), see how it launches, request a demo | Request a demo |
-| Employees of client companies (and family members where covered) | Understand what they can use, how confidential it is, and start using it | Open the workspace, or "Check if your employer offers NestSelf" |
-| Managers | Resources for leading teams well, team polls and channels | Explore manager resources |
+| Audience                                                         | What they need from the site                                                                                   | Primary CTA                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Employers: HR, people leaders, founders in Serbia and Hungary    | Understand the programme, trust it (confidentiality, professionals, GDPR), see how it launches, request a demo | Request a demo                                                  |
+| Employees of client companies (and family members where covered) | Understand what they can use, how confidential it is, and start using it                                       | Open the workspace, or "Check if your employer offers NestSelf" |
+| Managers                                                         | Resources for leading teams well, team polls and channels                                                      | Explore manager resources                                       |
 
 Offering names follow the research guide section 2 (EN / SR Latin / HU): Therapy & Counselling (Psihoterapija i savetovanje / Pszichoterápia és tanácsadás), Legal Consultation (Pravno savetovanje / Jogi tanácsadás), Financial Guidance (Finansijsko savetovanje / Pénzügyi tanácsadás), Webinars (Vebinari / Webináriumok), Articles in a Resources hub (Resursi / Tudástár), Wellbeing check-ins (Provera blagostanja / Közérzeti pulzus), Self-help tools (Alati za samopomoć / Önsegítő eszközök), Workforce insights (Uvidi za HR / HR betekintések), Manager support (Podrška za rukovodioce / Vezetői támogatás), Family support (Podrška za porodicu / Családi támogatás). The taxonomy:
 
@@ -43,29 +43,29 @@ Offering names follow the research guide section 2 (EN / SR Latin / HU): Therapy
 
 All routes are prefixed with the locale (`/en`, `/sr-Latn`, `/sr-Cyrl`, `/hu`). English slugs are used in every locale (one URL structure, hreflang alternates); localised slugs are a later SEO step and are listed in the launch checklist.
 
-| Route | Page | Audience | Primary CTA |
-| --- | --- | --- | --- |
-| `/` | Home | all | Request a demo; For employees |
-| `/for-employers` | For employers (`/employers` redirects) | employers | Request a demo |
-| `/for-employees` | For employees | employees | Open the workspace |
-| `/services` | Services overview (replaces `/support`, which redirects) | all | Request a demo |
-| `/services/therapy` | Therapy and counselling | all | Request a demo / For employees |
-| `/services/legal-consultation` | Legal consultation | all | same |
-| `/services/financial-guidance` | Financial guidance | all | same |
-| `/resources` | Resources hub (webinars, articles, tools) | all | Browse |
-| `/webinars`, `/webinars/[slug]` | Webinar list and detail with registration | all | Register |
-| `/articles`, `/articles/[slug]` | Article list and detail | all | Read; related CTA |
-| `/tools`, `/tools/[slug]` | Self-assessments and other tools; interactive runner for assessments | all | Start |
-| `/for-managers` | For managers | managers | Explore |
-| `/faq` | FAQ for employers and employees | all | Request a demo |
-| `/plans` | Plans and pricing approach (quote based, no invented numbers) | employers | Request a quote |
-| `/about` | About NestSelf: mission, how professionals are vetted, team as roles | all | Contact |
-| `/demo` | Demo request form (every "Request a demo" CTA lands here) | employers | Send |
-| `/contact` | Contact form and details | all | Send |
-| `/privacy-model` | How confidentiality works (existing, expanded) | all | For employees |
-| `/accessibility` | Accessibility statement | all | Contact |
-| `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint` | Legal pages (EU, Serbia, Hungary impresszum) | all | none |
-| `/credits` | Photo and font credits (existing, extended with generated imagery) | all | none |
+| Route                                                                       | Page                                                                 | Audience  | Primary CTA                    |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------- | ------------------------------ |
+| `/`                                                                         | Home                                                                 | all       | Request a demo; For employees  |
+| `/for-employers`                                                            | For employers (`/employers` redirects)                               | employers | Request a demo                 |
+| `/for-employees`                                                            | For employees                                                        | employees | Open the workspace             |
+| `/services`                                                                 | Services overview (replaces `/support`, which redirects)             | all       | Request a demo                 |
+| `/services/therapy`                                                         | Therapy and counselling                                              | all       | Request a demo / For employees |
+| `/services/legal-consultation`                                              | Legal consultation                                                   | all       | same                           |
+| `/services/financial-guidance`                                              | Financial guidance                                                   | all       | same                           |
+| `/resources`                                                                | Resources hub (webinars, articles, tools)                            | all       | Browse                         |
+| `/webinars`, `/webinars/[slug]`                                             | Webinar list and detail with registration                            | all       | Register                       |
+| `/articles`, `/articles/[slug]`                                             | Article list and detail                                              | all       | Read; related CTA              |
+| `/tools`, `/tools/[slug]`                                                   | Self-assessments and other tools; interactive runner for assessments | all       | Start                          |
+| `/for-managers`                                                             | For managers                                                         | managers  | Explore                        |
+| `/faq`                                                                      | FAQ for employers and employees                                      | all       | Request a demo                 |
+| `/plans`                                                                    | Plans and pricing approach (quote based, no invented numbers)        | employers | Request a quote                |
+| `/about`                                                                    | About NestSelf: mission, how professionals are vetted, team as roles | all       | Contact                        |
+| `/demo`                                                                     | Demo request form (every "Request a demo" CTA lands here)            | employers | Send                           |
+| `/contact`                                                                  | Contact form and details                                             | all       | Send                           |
+| `/privacy-model`                                                            | How confidentiality works (existing, expanded)                       | all       | For employees                  |
+| `/accessibility`                                                            | Accessibility statement                                              | all       | Contact                        |
+| `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint` | Legal pages (EU, Serbia, Hungary impresszum)                         | all       | none                           |
+| `/credits`                                                                  | Photo and font credits (existing, extended with generated imagery)   | all       | none                           |
 
 Navigation: Services (a single link to the overview, with the three services listed on it), For employers, For employees, Resources, Plans, About, with a locale switcher and the "Request a demo" button (to `/demo`) in the header actions slot. Footer: four columns (Product, Resources, Company, Legal) plus locale switcher, tagline and credits.
 
@@ -139,7 +139,7 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 
 - Vitest: content loader and schema tests, assessment scoring, lead schemas, route handlers (fetch mocked), new UI components (keyboard, roles, axe), API leads controller and service.
 - `pnpm check`: token smoke (now also scanning the new marketing code), locale parity with four locales, content parity and transliteration.
-- Playwright: every route registered in `e2e/pages/marketing/*.ts` for `en`, plus `hu` and `sr-Cyrl` variants of home, employers, one service, one article, one webinar and one tool, plus the dark home. Screenshots at 390 and 1440, axe, 320 reflow. New keyboard tests: assessment completable by keyboard; demo form shows the error summary and focuses it on empty submit; locale switcher changes `lang` and the URL.
+- Playwright: 56 marketing entries registered through `e2e/pages/marketing/*.ts` (every route in `en`, `hu` and `sr-Cyrl` variants of the main pages, `sr-Latn` and dark home, form error states and the check-in result state via prepare actions). Screenshots at 390 and 1440, axe (WCAG 2.2 AA tags), 320 reflow. Keyboard tests: check-in completable by keyboard with focus landing on the result heading; demo form empty submit focuses the error summary and shows friendly messages; locale switcher changes the URL and `html[lang]`.
 - Visual review loop: after implementation, regenerate baselines and review every PNG at both widths (the orchestrator and a review agent), fix layout, text overflow, Hungarian long-word wrapping and image focal problems, regenerate.
 - Browser check of a dialog focus trap and the assessment at 390 px in a real browser.
 
@@ -157,7 +157,7 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 
 ## 8. Launch checklist (not done in this pass)
 
-Replace placeholder testimonials with real, consented quotes; verify the crisis helpline numbers and hours with the operators; set the real contact email; conduct a DPIA and obtain a medical-device (MDR) classification opinion for the check-ins before any answers are ever stored (today nothing is stored); validate the Serbian programme name and the Hungarian informal register with native HR professionals; legal review of the Serbian psychotherapist wording; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
+Translations were produced and reviewed by language-model translators and reviewers, not by native professionals: a native Serbian and a native Hungarian review remain mandatory before launch. Replace placeholder testimonials with real, consented quotes; verify the crisis helpline numbers and hours with the operators; set the real contact email; conduct a DPIA and obtain a medical-device (MDR) classification opinion for the check-ins before any answers are ever stored (today nothing is stored); validate the Serbian programme name and the Hungarian informal register with native HR professionals; legal review of the Serbian psychotherapist wording; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
 
 ## 9. Work breakdown
 
