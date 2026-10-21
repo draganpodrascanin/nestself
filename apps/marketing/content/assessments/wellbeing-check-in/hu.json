@@ -1,0 +1,69 @@
+{
+  "title": "Közérzeti pulzus",
+  "intro": "Nyolc kérdés arról, hogyan érezted magad az elmúlt két hétben. Ez nem validált klinikai mérőeszköz. A válaszaid nem kerülnek tárolásra, és soha nem osztjuk meg őket a munkáltatóddal.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "NestSelf közérzeti pulzus (nem validált klinikai mérőeszköz)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "A NestSelf által készített mérőeszköz. A forrás URL a WHO munkahelyi mentális egészségről szóló háttéranyaga, nem licenchivatkozás."
+  },
+  "questions": [
+    { "id": "wc1", "text": "Volt elég energiám, hogy végigcsináljam a napot" },
+    { "id": "wc2", "text": "Jól aludtam" },
+    { "id": "wc3", "text": "Jó hangulatban voltam" },
+    { "id": "wc4", "text": "Kötődtem a körülöttem lévő emberekhez" },
+    { "id": "wc5", "text": "Képes voltam összpontosítani arra, amit csináltam" },
+    { "id": "wc6", "text": "Élveztem a mindennapi tevékenységeimet" },
+    { "id": "wc7", "text": "Mentesnek éreztem magam a túlzott aggódástól" },
+    { "id": "wc8", "text": "Bizakodóan tekintettem a jövőbe" }
+  ],
+  "options": [
+    { "label": "Egyáltalán nem", "score": 0 },
+    { "label": "Ritkán", "score": 1 },
+    { "label": "Néha", "score": 2 },
+    { "label": "Gyakran", "score": 3 },
+    { "label": "Mindig", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 39,
+        "title": "Jelenleg alacsony",
+        "body": "A válaszaid alapján a jólléted alacsony volt az elmúlt két hétben. Elérhető a támogatás, és segíthet.",
+        "nextStep": "Fontold meg, hogy beszélj egy pszichológussal a munkáltatói programodon keresztül. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      },
+      {
+        "min": 40,
+        "max": 69,
+        "title": "Vegyes",
+        "body": "A válaszaid vegyes képet mutatnak. Egyes területeken jól megy, míg mások több figyelmet igényelnek.",
+        "nextStep": "Böngészd át a jólléti cikkeinket és eszközeinket, vagy fontold meg egy bizalmas beszélgetést egy pszichológussal a munkáltatói programodon keresztül."
+      },
+      {
+        "min": 70,
+        "max": 100,
+        "title": "Stabil",
+        "body": "A válaszaid alapján a jólléted stabil volt az elmúlt két hétben. Az egészséges szokások fenntartása segíthet megtartani ezt az egyensúlyt.",
+        "nextStep": "Böngészd át a jólléti cikkeinket és eszközeinket az egyensúly megőrzéséhez."
+      }
+    ]
+  },
+  "disclaimer": "Ez az eszköz nem minősül orvostechnikai eszköznek, és nem nyújt diagnózist. Kizárólag tájékoztatási célokat szolgál. Klinikai értékelésért fordulj engedéllyel rendelkező szakemberhez. Ha krízishelyzetben vagy, hívd a segélyhívó számot.",
+  "crisis": {
+    "title": "Azonnali segítségre van szükséged?",
+    "body": "Ha te vagy valaki a környezetedben közvetlen veszélyben van, hívd a segélyhívó számot most.",
+    "lines": [
+      { "label": "Segélyhívó (Szerbia)", "value": "112" },
+      { "label": "Mentők (Szerbia)", "value": "194" },
+      { "label": "Centar Srce (Szerbia)", "value": "0800 300 303" },
+      { "label": "Segélyhívó (Magyarország)", "value": "112" },
+      { "label": "Mentők (Magyarország)", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Magyarország)", "value": "116 123" }
+    ]
+  }
+}

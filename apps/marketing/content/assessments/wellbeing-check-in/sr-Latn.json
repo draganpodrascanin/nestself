@@ -1,0 +1,69 @@
+{
+  "title": "Provera blagostanja",
+  "intro": "Osam pitanja o tome kako ste se osećali tokom poslednje dve nedelje. Ovo nije validiran klinički instrument. Vaši odgovori se ne čuvaju i nikada se ne dele sa Vašim poslodavcem.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "NestSelf provera blagostanja (nije validiran klinički instrument)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "Instrument koji je kreirala kompanija NestSelf. Navedeni URL je pozadinski materijal Svetske zdravstvene organizacije o mentalnom zdravlju na radnom mestu, a ne referenca na licencu."
+  },
+  "questions": [
+    { "id": "wc1", "text": "Imao/la sam dovoljno energije da izdržim ceo dan" },
+    { "id": "wc2", "text": "Dobro sam spavao/la" },
+    { "id": "wc3", "text": "Bio/la sam dobro raspoložen/a" },
+    { "id": "wc4", "text": "Osećao/la sam se povezano sa ljudima oko mene" },
+    { "id": "wc5", "text": "Mogao/la sam da se koncentrišem na ono čime se bavim" },
+    { "id": "wc6", "text": "Uživao/la sam u svakodnevnim aktivnostima" },
+    { "id": "wc7", "text": "Osećao/la sam se slobodno od preterane brige" },
+    { "id": "wc8", "text": "Pozitivno sam gledao/la na ono što me čeka" }
+  ],
+  "options": [
+    { "label": "Uopšte ne", "score": 0 },
+    { "label": "Retko", "score": 1 },
+    { "label": "Ponekad", "score": 2 },
+    { "label": "Često", "score": 3 },
+    { "label": "Sve vreme", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 39,
+        "title": "Trenutno nisko",
+        "body": "Vaši odgovori ukazuju na to da je Vaše blagostanje bilo nisko tokom poslednje dve nedelje. Podrška je dostupna i može pomoći.",
+        "nextStep": "Razmislite o razgovoru sa psihologom kroz program Vašeg poslodavca. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      },
+      {
+        "min": 40,
+        "max": 69,
+        "title": "Mešovito",
+        "body": "Vaši odgovori ukazuju na mešovitu sliku. Neke oblasti funkcionišu dobro, dok bi druge mogle zahtevati pažnju.",
+        "nextStep": "Istražite naše članke i alate za blagostanje ili razmislite o poverljivom razgovoru sa psihologom kroz program Vašeg poslodavca."
+      },
+      {
+        "min": 70,
+        "max": 100,
+        "title": "Stabilno",
+        "body": "Vaši odgovori ukazuju na to da je Vaše blagostanje bilo stabilno tokom poslednje dve nedelje. Održavanje zdravih navika može Vam pomoći da ostanete na pravom putu.",
+        "nextStep": "Istražite naše članke i alate za blagostanje za ideje o održavanju ravnoteže."
+      }
+    ]
+  },
+  "disclaimer": "Ovaj alat nije medicinski uređaj i ne pruža dijagnozu. Namenjen je isključivo u informativne svrhe. Za kliničku procenu, obratite se licenciranom stručnjaku. Ako ste u krizi, pozovite hitni broj.",
+  "crisis": {
+    "title": "Potrebna Vam je hitna pomoć?",
+    "body": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, odmah pozovite hitni broj.",
+    "lines": [
+      { "label": "Hitni broj – Srbija", "value": "112" },
+      { "label": "Hitna pomoć – Srbija", "value": "194" },
+      { "label": "Centar Srce (Srbija)", "value": "0800 300 303" },
+      { "label": "Hitni broj – Mađarska", "value": "112" },
+      { "label": "Hitna pomoć – Mađarska", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Mađarska)", "value": "116 123" }
+    ]
+  }
+}

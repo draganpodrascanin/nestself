@@ -1,0 +1,74 @@
+{
+  "title": "Provera sagorevanja",
+  "intro": "Šest pitanja o ličnom sagorevanju iz Kopenhagenskog inventara sagorevanja. Vaši odgovori se ne čuvaju i nikada se ne dele sa Vašim poslodavcem.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "Kopenhagenski inventar sagorevanja (CBI) – skala ličnog sagorevanja",
+    "source": "https://nfa.dk/media/hl5nbers/cbi-first-edition.pdf",
+    "licence": "Kristensen, T. S., Borritz, M., Villadsen, E., & Christensen, K. B. (2005). The Copenhagen Burnout Inventory. Besplatno za upotrebu uz navođenje izvora."
+  },
+  "questions": [
+    { "id": "b1", "text": "Koliko često se osećate umorno?" },
+    { "id": "b2", "text": "Koliko često ste fizički iscrpljeni?" },
+    { "id": "b3", "text": "Koliko često ste emocionalno iscrpljeni?" },
+    { "id": "b4", "text": "Koliko često pomislite: „Ne mogu više“?" },
+    { "id": "b5", "text": "Koliko često se osećate istrošeno?" },
+    { "id": "b6", "text": "Koliko često se osećate slabo i podložno bolestima?" }
+  ],
+  "options": [
+    { "label": "Nikada ili skoro nikada", "score": 0 },
+    { "label": "Retko", "score": 25 },
+    { "label": "Ponekad", "score": 50 },
+    { "label": "Često", "score": 75 },
+    { "label": "Uvek", "score": 100 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "mean",
+    "bands": [
+      {
+        "min": 0,
+        "max": 49,
+        "title": "Nizak nivo sagorevanja",
+        "body": "Vaši odgovori ukazuju na nizak nivo ličnog sagorevanja. Održavanje zdravih navika može Vam pomoći da ostanete u ravnoteži.",
+        "nextStep": "Istražite naše članke i alate za blagostanje za ideje o očuvanju energije."
+      },
+      {
+        "min": 50,
+        "max": 74,
+        "title": "Umeren nivo sagorevanja",
+        "body": "Vaši odgovori ukazuju na umeren nivo ličnog sagorevanja. Razgovor sa nekim o onome što proživljavate mogao bi biti od pomoći.",
+        "nextStep": "Razmislite o razgovoru sa psihologom kroz program Vašeg poslodavca. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      },
+      {
+        "min": 75,
+        "max": 99,
+        "title": "Visok nivo sagorevanja",
+        "body": "Vaši odgovori ukazuju na visok nivo ličnog sagorevanja. Stručna podrška može napraviti značajnu razliku.",
+        "nextStep": "Preporučujemo zakazivanje poverljive sesije sa psihologom kroz program Vašeg poslodavca. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      },
+      {
+        "min": 100,
+        "max": 100,
+        "title": "Izražen nivo sagorevanja",
+        "body": "Vaši odgovori ukazuju na izražen nivo ličnog sagorevanja. Molimo Vas da razmislite o tome da se što pre obratite za stručnu podršku.",
+        "nextStep": "Zakažite poverljivu sesiju sa psihologom kroz program Vašeg poslodavca što je pre moguće. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      }
+    ]
+  },
+  "disclaimer": "Ovaj alat nije medicinski uređaj i ne pruža dijagnozu. Namenjen je isključivo u informativne svrhe. Za kliničku procenu, obratite se licenciranom stručnjaku. Ako ste u krizi, pozovite hitni broj.",
+  "crisis": {
+    "title": "Potrebna Vam je hitna pomoć?",
+    "body": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, odmah pozovite hitni broj.",
+    "lines": [
+      { "label": "Hitni broj – Srbija", "value": "112" },
+      { "label": "Hitna pomoć – Srbija", "value": "194" },
+      { "label": "Centar Srce (Srbija)", "value": "0800 300 303" },
+      { "label": "Hitni broj – Mađarska", "value": "112" },
+      { "label": "Hitna pomoć – Mađarska", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Mađarska)", "value": "116 123" }
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "title": "Szorongás felmérés",
+  "intro": "Hét kérdés arról, milyen gyakran zavartak bizonyos problémák az elmúlt két hétben. A válaszaid nem kerülnek tárolásra, és soha nem osztjuk meg őket a munkáltatóddal.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "Generalizált Szorongás Kérdőív, 7 tételes változat (GAD-7)",
+    "source": "https://www.phqscreeners.com/",
+    "licence": "Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke és kollégáik fejlesztették, a Pfizer Inc. oktatási támogatásával. Reprodukálásához, fordításához, megjelenítéséhez vagy terjesztéséhez nem szükséges engedély."
+  },
+  "questions": [
+    { "id": "g1", "text": "Idegesség, szorongás vagy feszültség érzése" },
+    { "id": "g2", "text": "Képtelenség az aggódás megállítására vagy kontrollálására" },
+    { "id": "g3", "text": "Túlzott aggódás különféle dolgok miatt" },
+    { "id": "g4", "text": "Nehézség az ellazulásban" },
+    { "id": "g5", "text": "Olyan nyugtalanság, hogy nehéz egy helyben ülni" },
+    { "id": "g6", "text": "Könnyű ingerültség vagy bosszankodás" },
+    { "id": "g7", "text": "Félelemérzés, mintha valami szörnyű dolog történhetne" }
+  ],
+  "options": [
+    { "label": "Egyáltalán nem", "score": 0 },
+    { "label": "Néhány napig", "score": 1 },
+    { "label": "A napok több mint felében", "score": 2 },
+    { "label": "Szinte minden nap", "score": 3 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21,
+    "method": "sum",
+    "bands": [
+      {
+        "min": 0,
+        "max": 4,
+        "title": "Minimális szorongás",
+        "body": "A válaszaid minimális szintű szorongásra utalnak. Az egészséges szokások fenntartása segíthet megőrizni az egyensúlyodat.",
+        "nextStep": "Böngészd át a jólléti cikkeinket és eszközeinket az egyensúly megőrzéséhez."
+      },
+      {
+        "min": 5,
+        "max": 9,
+        "title": "Enyhe szorongás",
+        "body": "A válaszaid enyhe szintű szorongásra utalnak. Elérhető a támogatás, ha szeretnéd átbeszélni a dolgokat.",
+        "nextStep": "Fontold meg az önsegítő eszközeink használatát, vagy beszélj egy pszichológussal a munkáltatói programodon keresztül."
+      },
+      {
+        "min": 10,
+        "max": 14,
+        "title": "Mérsékelt szorongás",
+        "body": "A válaszaid mérsékelt szintű szorongásra utalnak. Érdemes lenne hamarosan szakemberrel beszélned.",
+        "nextStep": "Javasoljuk, hogy foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      },
+      {
+        "min": 15,
+        "max": 21,
+        "title": "Súlyos szorongás",
+        "body": "A válaszaid súlyos szintű szorongásra utalnak. Érdemes lenne hamarosan szakemberrel beszélned.",
+        "nextStep": "Foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül mielőbb. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      }
+    ]
+  },
+  "disclaimer": "Ez az eszköz nem minősül orvostechnikai eszköznek, és nem nyújt diagnózist. Kizárólag tájékoztatási célokat szolgál. Klinikai értékelésért fordulj engedéllyel rendelkező szakemberhez. Ha krízishelyzetben vagy, hívd a segélyhívó számot.",
+  "crisis": {
+    "title": "Azonnali segítségre van szükséged?",
+    "body": "Ha te vagy valaki a környezetedben közvetlen veszélyben van, hívd a segélyhívó számot most.",
+    "lines": [
+      { "label": "Segélyhívó (Szerbia)", "value": "112" },
+      { "label": "Mentők (Szerbia)", "value": "194" },
+      { "label": "Centar Srce (Szerbia)", "value": "0800 300 303" },
+      { "label": "Segélyhívó (Magyarország)", "value": "112" },
+      { "label": "Mentők (Magyarország)", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Magyarország)", "value": "116 123" }
+    ]
+  }
+}

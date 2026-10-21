@@ -1,0 +1,74 @@
+{
+  "title": "Kiégés felmérés",
+  "intro": "Hat kérdés a személyes kiégésről a Koppenhágai Kiégés Kérdőívből. A válaszaid nem kerülnek tárolásra, és soha nem osztjuk meg őket a munkáltatóddal.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "Koppenhágai Kiégés Kérdőív (CBI) – személyes kiégés alskála",
+    "source": "https://nfa.dk/media/hl5nbers/cbi-first-edition.pdf",
+    "licence": "Kristensen, T. S., Borritz, M., Villadsen, E., & Christensen, K. B. (2005). The Copenhagen Burnout Inventory. Forrásmegjelöléssel szabadon használható."
+  },
+  "questions": [
+    { "id": "b1", "text": "Milyen gyakran érzed magad fáradtnak?" },
+    { "id": "b2", "text": "Milyen gyakran vagy fizikailag kimerült?" },
+    { "id": "b3", "text": "Milyen gyakran vagy érzelmileg kimerült?" },
+    { "id": "b4", "text": "Milyen gyakran gondolod azt: „Nem bírom tovább”?" },
+    { "id": "b5", "text": "Milyen gyakran érzed magad elcsigázottnak?" },
+    { "id": "b6", "text": "Milyen gyakran érzed magad gyengének és betegségre hajlamosnak?" }
+  ],
+  "options": [
+    { "label": "Soha vagy szinte soha", "score": 0 },
+    { "label": "Ritkán", "score": 25 },
+    { "label": "Néha", "score": 50 },
+    { "label": "Gyakran", "score": 75 },
+    { "label": "Mindig", "score": 100 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "mean",
+    "bands": [
+      {
+        "min": 0,
+        "max": 49,
+        "title": "Alacsony kiégési szint",
+        "body": "A válaszaid alacsony szintű személyes kiégésre utalnak. Az egészséges szokások fenntartása segíthet megőrizni az egyensúlyodat.",
+        "nextStep": "Böngészd át a jólléti cikkeinket és eszközeinket az energiád fenntartásáért."
+      },
+      {
+        "min": 50,
+        "max": 74,
+        "title": "Mérsékelt kiégési szint",
+        "body": "A válaszaid mérsékelt szintű személyes kiégésre utalnak. Segíthet, ha beszélsz valakivel arról, amit tapasztalsz.",
+        "nextStep": "Fontold meg, hogy beszélj egy pszichológussal a munkáltatói programodon keresztül. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      },
+      {
+        "min": 75,
+        "max": 99,
+        "title": "Magas kiégési szint",
+        "body": "A válaszaid magas szintű személyes kiégésre utalnak. A szakmai segítség valódi változást hozhat.",
+        "nextStep": "Javasoljuk, hogy foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      },
+      {
+        "min": 100,
+        "max": 100,
+        "title": "Súlyos kiégési szint",
+        "body": "A válaszaid súlyos szintű személyes kiégésre utalnak. Kérjük, fontold meg, hogy mielőbb szakmai segítséget kérsz.",
+        "nextStep": "Foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül mielőbb. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      }
+    ]
+  },
+  "disclaimer": "Ez az eszköz nem minősül orvostechnikai eszköznek, és nem nyújt diagnózist. Kizárólag tájékoztatási célokat szolgál. Klinikai értékelésért fordulj engedéllyel rendelkező szakemberhez. Ha krízishelyzetben vagy, hívd a segélyhívó számot.",
+  "crisis": {
+    "title": "Azonnali segítségre van szükséged?",
+    "body": "Ha te vagy valaki a környezetedben közvetlen veszélyben van, hívd a segélyhívó számot most.",
+    "lines": [
+      { "label": "Segélyhívó (Szerbia)", "value": "112" },
+      { "label": "Mentők (Szerbia)", "value": "194" },
+      { "label": "Centar Srce (Szerbia)", "value": "0800 300 303" },
+      { "label": "Segélyhívó (Magyarország)", "value": "112" },
+      { "label": "Mentők (Magyarország)", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Magyarország)", "value": "116 123" }
+    ]
+  }
+}

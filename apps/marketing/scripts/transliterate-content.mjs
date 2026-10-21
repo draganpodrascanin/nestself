@@ -24,12 +24,7 @@ const { transliterate, transliterateObject } = await import(
 const CONTENT_ROOT = process.env.__TRANSLITERATE_CONTENT_ROOT || join(__dirname, '..', 'content');
 
 /** Frontmatter keys whose string values should be transliterated in MDX files. */
-const MDX_TRANSLITERATE_KEYS = new Set([
-  'title',
-  'description',
-  'coverAlt',
-  'author',
-]);
+const MDX_TRANSLITERATE_KEYS = new Set(['title', 'description', 'coverAlt', 'author']);
 
 /** Nested frontmatter paths that should be transliterated (dot-separated). */
 const MDX_TRANSLITERATE_NESTED = [{ parent: 'speaker', key: 'role' }];
@@ -49,6 +44,7 @@ const JSON_UNTOUCHED_KEYS = new Set([
   'format',
   'kind',
   'languages',
+  'method',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -234,7 +230,9 @@ async function run() {
   }
 
   if (mode === 'check' && stale > 0) {
-    console.error(`\n${stale} file(s) are stale. Run: pnpm --filter @nestself/marketing content:cyrillic`);
+    console.error(
+      `\n${stale} file(s) are stale. Run: pnpm --filter @nestself/marketing content:cyrillic`,
+    );
     process.exit(1);
   }
 

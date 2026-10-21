@@ -1,0 +1,76 @@
+{
+  "title": "Provera finansijskog blagostanja",
+  "intro": "Osam pitanja o tome kako se osećate u vezi sa svojom finansijskom situacijom u ovom trenutku. Ovo nije validiran klinički instrument. Vaši odgovori se ne čuvaju i nikada se ne dele sa Vašim poslodavcem.",
+  "durationMinutes": 3,
+  "topic": "financial",
+  "instrument": {
+    "name": "NestSelf provera finansijskog blagostanja (nije validiran klinički instrument)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "Instrument koji je kreirala kompanija NestSelf. Navedeni URL je pozadinski materijal Svetske zdravstvene organizacije o finansijskom stresu i blagostanju zaposlenih, a ne referenca na licencu."
+  },
+  "questions": [
+    { "id": "fw1", "text": "Brinem da li ću imati dovoljno novca da pokrijem mesečne troškove" },
+    { "id": "fw2", "text": "Osećam stres kada razmišljam o svojoj finansijskoj situaciji" },
+    { "id": "fw3", "text": "Izbegavam da gledam izvode sa računa ili račune za plaćanje" },
+    { "id": "fw4", "text": "Teško mi je da svaki mesec uštedim bilo kakav novac" },
+    { "id": "fw5", "text": "Osećam nesigurnost u vezi sa planiranjem svoje finansijske budućnosti" },
+    { "id": "fw6", "text": "Brige oko novca utiču na moj san ili koncentraciju" },
+    { "id": "fw7", "text": "Osećam da mi nedostaje znanje za donošenje finansijskih odluka sa sigurnošću" },
+    { "id": "fw8", "text": "Osećam da ne bih mogao/la da se izborim sa neočekivanim troškom" }
+  ],
+  "options": [
+    { "label": "Nikada", "score": 0 },
+    { "label": "Retko", "score": 1 },
+    { "label": "Ponekad", "score": 2 },
+    { "label": "Često", "score": 3 },
+    { "label": "Veoma često", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 25,
+        "title": "Nizak finansijski stres",
+        "body": "Vaši odgovori ukazuju na nizak nivo finansijskog stresa. Održavanje dobrih finansijskih navika pomoći će Vam da ostanete na pravom putu.",
+        "nextStep": "Istražite naš budžetski radni list i članke o finansijskom blagostanju za praktične savete."
+      },
+      {
+        "min": 26,
+        "max": 50,
+        "title": "Umeren finansijski stres",
+        "body": "Vaši odgovori ukazuju na umeren nivo finansijskog stresa. Razgovor sa finansijskim konsultantom mogao bi Vam pomoći da se osećate sigurnije.",
+        "nextStep": "Razmislite o zakazivanju poverljive sesije sa finansijskim konsultantom kroz program Vašeg poslodavca."
+      },
+      {
+        "min": 51,
+        "max": 75,
+        "title": "Visok finansijski stres",
+        "body": "Vaši odgovori ukazuju na visok nivo finansijskog stresa. Stručno finansijsko savetovanje je dostupno i može Vam pomoći da pronađete praktične sledeće korake.",
+        "nextStep": "Preporučujemo zakazivanje poverljive sesije sa finansijskim konsultantom kroz program Vašeg poslodavca. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      },
+      {
+        "min": 76,
+        "max": 100,
+        "title": "Veoma visok finansijski stres",
+        "body": "Vaši odgovori ukazuju na veoma visok nivo finansijskog stresa. Molimo Vas da razmislite o tome da se uskoro obratite za podršku.",
+        "nextStep": "Zakažite poverljivu sesiju sa finansijskim konsultantom kroz program Vašeg poslodavca što je pre moguće. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf niti o čemu se razgovaralo."
+      }
+    ]
+  },
+  "disclaimer": "Ovaj alat nije medicinski uređaj i ne pruža dijagnozu. Namenjen je isključivo u informativne svrhe. Za kliničku procenu, obratite se licenciranom stručnjaku. Ako ste u krizi, pozovite hitni broj.",
+  "crisis": {
+    "title": "Potrebna Vam je hitna pomoć?",
+    "body": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, odmah pozovite hitni broj.",
+    "lines": [
+      { "label": "Hitni broj – Srbija", "value": "112" },
+      { "label": "Hitna pomoć – Srbija", "value": "194" },
+      { "label": "Centar Srce (Srbija)", "value": "0800 300 303" },
+      { "label": "Hitni broj – Mađarska", "value": "112" },
+      { "label": "Hitna pomoć – Mađarska", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Mađarska)", "value": "116 123" }
+    ]
+  }
+}

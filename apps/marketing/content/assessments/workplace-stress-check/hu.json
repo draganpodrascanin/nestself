@@ -1,0 +1,76 @@
+{
+  "title": "Munkahelyi stressz felmérés",
+  "intro": "Nyolc kérdés, amelyek segítenek átgondolni, hogyan hatott rád a munka az utóbbi időben. Ez nem validált klinikai mérőeszköz. A válaszaid nem kerülnek tárolásra, és soha nem osztjuk meg őket a munkáltatóddal.",
+  "durationMinutes": 3,
+  "topic": "work",
+  "instrument": {
+    "name": "NestSelf munkahelyi stressz felmérés (nem validált klinikai mérőeszköz)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "A NestSelf által készített mérőeszköz. A forrás URL a WHO munkahelyi stresszről szóló háttéranyaga, nem licenchivatkozás."
+  },
+  "questions": [
+    { "id": "ws1", "text": "Nehezen tudok kikapcsolni a munkanap végén" },
+    { "id": "ws2", "text": "Nyomasztónak érzem az elvégzendő munka mennyiségét" },
+    { "id": "ws3", "text": "Nehezen tudok koncentrálni a munkahelyi feladatokra" },
+    { "id": "ws4", "text": "Feszültnek vagy szorongónak érzem magam a munkahelyi ügyek miatt" },
+    { "id": "ws5", "text": "Munkahelyi gondok miatt alvási problémáim vannak" },
+    { "id": "ws6", "text": "Úgy érzem, nincs befolyásom a munkahelyi helyzetemre" },
+    { "id": "ws7", "text": "Kerülök bizonyos feladatokat vagy felelősségeket a munkahelyemen" },
+    { "id": "ws8", "text": "Kevésbé érzem magam motiváltnak vagy elkötelezettnek a munkámban, mint korábban" }
+  ],
+  "options": [
+    { "label": "Soha", "score": 0 },
+    { "label": "Ritkán", "score": 1 },
+    { "label": "Néha", "score": 2 },
+    { "label": "Gyakran", "score": 3 },
+    { "label": "Nagyon gyakran", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 25,
+        "title": "Alacsony munkahelyi stressz",
+        "body": "A válaszaid alacsony szintű munkahelyi stresszre utalnak. A jelenlegi egyensúlyod fenntartása kiváló alap.",
+        "nextStep": "Böngészd át a jólléti cikkeinket a munkahelyi egyensúly megőrzéséhez."
+      },
+      {
+        "min": 26,
+        "max": 50,
+        "title": "Mérsékelt munkahelyi stressz",
+        "body": "A válaszaid mérsékelt szintű munkahelyi stresszre utalnak. Kisebb változtatások vagy egy beszélgetés valakivel segíthet.",
+        "nextStep": "Fontold meg a beszélgetés-tervezőnk használatát a vezetőddel folytatott beszélgetéshez, vagy beszélj egy pszichológussal a munkáltatói programodon keresztül."
+      },
+      {
+        "min": 51,
+        "max": 75,
+        "title": "Magas munkahelyi stressz",
+        "body": "A válaszaid magas szintű munkahelyi stresszre utalnak. Szakmai segítség érhető el, és segíthet gyakorlati megoldásokat találni.",
+        "nextStep": "Javasoljuk, hogy foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      },
+      {
+        "min": 76,
+        "max": 100,
+        "title": "Nagyon magas munkahelyi stressz",
+        "body": "A válaszaid nagyon magas szintű munkahelyi stresszre utalnak. Kérjük, fontold meg, hogy hamarosan segítséget kérsz.",
+        "nextStep": "Foglalj egy bizalmas konzultációt egy pszichológussal a munkáltatói programodon keresztül mielőbb. A munkáltatód soha nem tudja meg, ki vette igénybe a NestSelf szolgáltatásait, és miről esett szó."
+      }
+    ]
+  },
+  "disclaimer": "Ez az eszköz nem minősül orvostechnikai eszköznek, és nem nyújt diagnózist. Kizárólag tájékoztatási célokat szolgál. Klinikai értékelésért fordulj engedéllyel rendelkező szakemberhez. Ha krízishelyzetben vagy, hívd a segélyhívó számot.",
+  "crisis": {
+    "title": "Azonnali segítségre van szükséged?",
+    "body": "Ha te vagy valaki a környezetedben közvetlen veszélyben van, hívd a segélyhívó számot most.",
+    "lines": [
+      { "label": "Segélyhívó (Szerbia)", "value": "112" },
+      { "label": "Mentők (Szerbia)", "value": "194" },
+      { "label": "Centar Srce (Szerbia)", "value": "0800 300 303" },
+      { "label": "Segélyhívó (Magyarország)", "value": "112" },
+      { "label": "Mentők (Magyarország)", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Magyarország)", "value": "116 123" }
+    ]
+  }
+}
