@@ -13,6 +13,11 @@ export const pages: PageEntry[] = [
     locale: 'sr-Cyrl',
   },
   {
+    name: 'marketing-home-sr-latn',
+    url: 'http://localhost:3000/sr-Latn',
+    locale: 'sr-Latn',
+  },
+  {
     name: 'marketing-home-hu',
     url: 'http://localhost:3000/hu',
     locale: 'hu',

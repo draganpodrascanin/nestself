@@ -75,3 +75,52 @@ test.describe('keyboard navigation: marketing-home', () => {
     expect(returnedToTrigger).toBe('privacy-trigger');
   });
 });
+
+test.describe('keyboard navigation: marketing site', () => {
+  test('a wellbeing check-in can be completed with the keyboard only', async ({ page }) => {
+    await page.goto('http://localhost:3000/en/tools/wellbeing-check-in');
+    await settle(page);
+    await page.getByRole('button', { name: 'Start' }).focus();
+    await page.keyboard.press('Enter');
+    for (let i = 0; i < 8; i += 1) {
+      const option = page.getByRole('radio', { name: 'Often' });
+      await option.waitFor({ state: 'visible' });
+      await option.focus();
+      await page.keyboard.press('Space');
+      const finish = page.getByRole('button', { name: 'See your result' });
+      const next = (await finish.count()) > 0 ? finish : page.getByRole('button', { name: 'Next' });
+      await next.focus();
+      await page.keyboard.press('Enter');
+    }
+    const heading = page.getByRole('heading', { name: 'Your result' });
+    await heading.waitFor({ state: 'visible' });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.textContent?.trim()), { timeout: 2_000 })
+      .toBe('Your result');
+  });
+
+  test('submitting the empty demo form moves focus to the error summary', async ({ page }) => {
+    await page.goto('http://localhost:3000/en/demo');
+    await settle(page);
+    const submit = page.getByRole('button', { name: 'Send request' });
+    await submit.focus();
+    await page.keyboard.press('Enter');
+    const summary = page.getByRole('alert').filter({ hasText: /please fix/i });
+    await summary.waitFor({ state: 'visible' });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.getAttribute('role')), { timeout: 2_000 })
+      .toBe('alert');
+    await expect(summary).not.toContainText('expected');
+  });
+
+  test('the locale switcher changes the URL and the document language', async ({ page }) => {
+    await page.goto('http://localhost:3000/en/plans');
+    await settle(page);
+    const header = page.getByRole('banner');
+    await header.getByRole('link', { name: 'Magyar' }).click();
+    await page.waitForURL('**/hu/plans');
+    await settle(page);
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('hu');
+    await expect(header.getByRole('link', { name: 'Magyar' })).toHaveAttribute('aria-current', 'true');
+  });
+});
