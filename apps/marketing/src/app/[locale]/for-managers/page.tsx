@@ -13,16 +13,13 @@ import type { IconName } from '@/components/sections/icons';
 import type { PhotoKey } from '@nestself/assets';
 import { listEntries } from '@/content/loaders';
 import { loadContent } from './content';
+import { loadContent as loadResourcesContent } from '../resources/content';
 
 interface Params {
   locale: string;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<Params>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const { data } = await loadContent(locale as Locale);
@@ -34,16 +31,13 @@ export async function generateMetadata({
   });
 }
 
-export default async function ForManagersPage({
-  params,
-}: {
-  params: Promise<Params>;
-}) {
+export default async function ForManagersPage({ params }: { params: Promise<Params> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
   const loc = locale as Locale;
   const { data } = await loadContent(loc);
+  const { data: resourceLabels } = await loadResourcesContent(loc);
 
   // Fetch manager-topic resources (may be empty)
   const articles = await listEntries('articles', loc);
@@ -54,8 +48,11 @@ export default async function ForManagersPage({
       href: `/${locale}/articles/${a.slug}`,
       title: a.frontmatter.title,
       description: a.frontmatter.description,
-      topicLabel: 'Managers',
-      readingLabel: `${a.readingMinutes} min read`,
+      topicLabel: resourceLabels.topics[a.frontmatter.topic] ?? a.frontmatter.topic,
+      readingLabel: resourceLabels.cardLabels.readingTime.replace(
+        '{minutes}',
+        String(a.readingMinutes),
+      ),
       cover: { key: a.frontmatter.cover as PhotoKey, alt: a.frontmatter.coverAlt },
       dateLabel: formatArticleDate(a.frontmatter.publishedAt, loc),
     }));
@@ -69,8 +66,14 @@ export default async function ForManagersPage({
       title: w.frontmatter.title,
       description: w.frontmatter.description,
       dateLabel: formatWebinarDateTime(w.frontmatter.startsAt, loc),
-      durationLabel: `${w.frontmatter.durationMinutes} min`,
-      formatLabel: w.frontmatter.format,
+      durationLabel: resourceLabels.cardLabels.minutes.replace(
+        '{n}',
+        String(w.frontmatter.durationMinutes),
+      ),
+      formatLabel:
+        w.frontmatter.format === 'live'
+          ? resourceLabels.cardLabels.live
+          : resourceLabels.cardLabels.onDemand,
       languagesLabel: w.frontmatter.languages.join(', '),
       cover: { key: w.frontmatter.cover as PhotoKey, alt: w.frontmatter.coverAlt },
     }));
@@ -88,9 +91,7 @@ export default async function ForManagersPage({
     }));
 
   const hasResources =
-    managerArticles.length > 0 ||
-    managerWebinars.length > 0 ||
-    managerTools.length > 0;
+    managerArticles.length > 0 || managerWebinars.length > 0 || managerTools.length > 0;
 
   return (
     <main id="main" tabIndex={-1} className="@container">
