@@ -49,3 +49,6 @@ NestSelf_Design_System.html
 
 # e2e ad-hoc screenshots
 e2e/snaps/
+
+# Docker local env
+docker/api.env

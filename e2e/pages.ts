@@ -7,7 +7,7 @@ export interface PageEntry {
   name: string;
   url: string;
   theme?: { palette: 'forest' | 'ink' | 'plum' | 'azure'; mode: 'light' | 'dark' };
-  locale?: 'en' | 'sr-Latn' | 'sr-Cyrl';
+  locale?: 'en' | 'sr-Latn' | 'sr-Cyrl' | 'hu';
   /** Name of an action in `appPrepareActions` run after navigation (e.g. click through to a step). */
   prepare?: string;
 }

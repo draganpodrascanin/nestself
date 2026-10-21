@@ -4,11 +4,11 @@
  * Fails (exit 1) when:
  *   - A key in `en` is missing in another locale, or vice versa
  *   - A value is an empty string
- *   - A plural group is incomplete for Serbian (_one, _few, _other)
+ *   - A plural group is incomplete for the locale's plural system
  *   - Committed sr-Cyrl differs from a fresh transliteration
  *   - A {{placeholder}} set differs between locales for the same key
  *
- * Prints "All 5 namespaces consistent across 3 locales." on success.
+ * Prints "All 5 namespaces consistent across 4 locales." on success.
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -19,9 +19,13 @@ import { execFileSync } from 'node:child_process';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const localesDir = join(__dirname, '..', 'locales');
 
-const localeNames = ['en', 'sr-Latn', 'sr-Cyrl'];
-const serbianLocales = ['sr-Latn', 'sr-Cyrl'];
-const serbianPluralSuffixes = ['_one', '_few', '_other'];
+const localeNames = ['en', 'sr-Latn', 'sr-Cyrl', 'hu'];
+
+const pluralSuffixesByLocale = {
+  'sr-Latn': ['_one', '_few', '_other'],
+  'sr-Cyrl': ['_one', '_few', '_other'],
+  hu: ['_one', '_other'],
+};
 
 let errors = [];
 let nsCount = 0;
@@ -40,6 +44,25 @@ function flattenKeys(obj, prefix = '') {
     }
   }
   return keys;
+}
+
+/** All plural suffixes that any locale might use. */
+const allPluralSuffixes = ['_one', '_few', '_other'];
+
+/**
+ * Returns true when `key` ends with a plural suffix that `locale` does not use.
+ * English is the superset (it carries _few for Serbian), so keys ending in a
+ * suffix that the target locale does not need are skipped in parity checks.
+ */
+function isPluralKeyIrrelevantFor(key, locale) {
+  const localeSuffixes = pluralSuffixesByLocale[locale];
+  if (!localeSuffixes) return false; // locale not in the map (e.g. en) — all keys relevant
+  for (const suffix of allPluralSuffixes) {
+    if (key.endsWith(suffix) && !localeSuffixes.includes(suffix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -98,15 +121,17 @@ for (const nsFile of nsFiles) {
 
     const localeKeys = new Set(Object.keys(flat));
 
-    // Keys in en but missing in this locale
+    // Keys in en but missing in this locale (skip plural suffixes the locale does not use)
     for (const key of enKeys) {
+      if (isPluralKeyIrrelevantFor(key, locale)) continue;
       if (!localeKeys.has(key)) {
         errors.push(`${ns}: key "${key}" is in en but missing in ${locale}`);
       }
     }
 
-    // Keys in this locale but missing in en
+    // Keys in this locale but missing in en (skip plural suffixes en does not use)
     for (const key of localeKeys) {
+      if (isPluralKeyIrrelevantFor(key, 'en')) continue;
       if (!enKeys.has(key)) {
         errors.push(`${ns}: key "${key}" is in ${locale} but missing in en`);
       }
@@ -119,8 +144,9 @@ for (const nsFile of nsFiles) {
       }
     }
 
-    // Check placeholder parity
+    // Check placeholder parity (skip plural keys irrelevant for this locale)
     for (const key of enKeys) {
+      if (isPluralKeyIrrelevantFor(key, locale)) continue;
       if (!flat[key]) continue;
       const enPlaceholders = extractPlaceholders(enFlat[key]);
       const localePlaceholders = extractPlaceholders(flat[key]);
@@ -143,15 +169,15 @@ for (const nsFile of nsFiles) {
     }
   }
 
-  // Check Serbian plural groups
-  for (const locale of serbianLocales) {
+  // Check plural groups per locale
+  for (const [locale, suffixes] of Object.entries(pluralSuffixesByLocale)) {
     const flat = flatData[locale];
     if (!flat) continue;
 
     // Find all keys ending with a plural suffix
     const pluralRoots = new Set();
     for (const key of Object.keys(flat)) {
-      for (const suffix of serbianPluralSuffixes) {
+      for (const suffix of suffixes) {
         if (key.endsWith(suffix)) {
           pluralRoots.add(key.slice(0, -suffix.length));
           break;
@@ -160,7 +186,7 @@ for (const nsFile of nsFiles) {
     }
 
     for (const root of pluralRoots) {
-      for (const suffix of serbianPluralSuffixes) {
+      for (const suffix of suffixes) {
         const fullKey = `${root}${suffix}`;
         if (!flat[fullKey]) {
           errors.push(`${ns}: incomplete plural group "${root}" in ${locale} — missing "${fullKey}"`);

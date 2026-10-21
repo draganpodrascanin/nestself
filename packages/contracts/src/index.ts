@@ -6,20 +6,37 @@ export {
   SessionSchema,
   canAccessHr,
   canManageTeam,
-} from './roles.js';
-export type { OrgRole, PlatformRole, Session } from './roles.js';
+} from './roles.ts';
+export type { OrgRole, PlatformRole, Session } from './roles.ts';
 
-export { locales, LocaleSchema, defaultLocale } from './locale.js';
-export type { Locale } from './locale.js';
+export { locales, LocaleSchema, defaultLocale } from './locale.ts';
+export type { Locale } from './locale.ts';
 
 export {
   supportAreas,
   SupportAreaSchema,
   supportAreaIcon,
-} from './support.js';
-export type { SupportArea } from './support.js';
+} from './support.ts';
+export type { SupportArea } from './support.ts';
 
-export { HealthResponseSchema } from './health.js';
-export type { HealthResponse } from './health.js';
+export { HealthResponseSchema } from './health.ts';
+export type { HealthResponse } from './health.ts';
 
-export { accessModel } from './access-model.js';
+export { accessModel } from './access-model.ts';
+
+export {
+  CompanySizeSchema,
+  CountrySchema,
+  DemoRequestSchema,
+  ContactMessageSchema,
+  WebinarRegistrationSchema,
+  LeadSchema,
+  LeadAcceptedSchema,
+} from './leads.ts';
+export type {
+  DemoRequest,
+  ContactMessage,
+  WebinarRegistration,
+  Lead,
+  LeadAccepted,
+} from './leads.ts';

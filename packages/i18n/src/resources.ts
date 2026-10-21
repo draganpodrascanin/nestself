@@ -10,6 +10,11 @@ import srCyrlCommon from '../locales/sr-Cyrl/common.json';
 import srCyrlMarketing from '../locales/sr-Cyrl/marketing.json';
 import srCyrlMobile from '../locales/sr-Cyrl/mobile.json';
 import srCyrlWorkspace from '../locales/sr-Cyrl/workspace.json';
+import huAdmin from '../locales/hu/admin.json';
+import huCommon from '../locales/hu/common.json';
+import huMarketing from '../locales/hu/marketing.json';
+import huMobile from '../locales/hu/mobile.json';
+import huWorkspace from '../locales/hu/workspace.json';
 import srLatnAdmin from '../locales/sr-Latn/admin.json';
 import srLatnCommon from '../locales/sr-Latn/common.json';
 import srLatnMarketing from '../locales/sr-Latn/marketing.json';
@@ -37,6 +42,13 @@ export const resources = {
     workspace: srCyrlWorkspace,
     admin: srCyrlAdmin,
     mobile: srCyrlMobile,
+  },
+  hu: {
+    common: huCommon,
+    marketing: huMarketing,
+    workspace: huWorkspace,
+    admin: huAdmin,
+    mobile: huMobile,
   },
 } as const;
 

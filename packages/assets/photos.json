@@ -7,7 +7,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.54 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.54
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/family-grass.jpg"
@@ -20,7 +23,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.43 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.43
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/family-autumn.jpg"
@@ -33,7 +39,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1068,
-    "focalPoint": { "x": 0.5, "y": 0.43 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.43
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/grandfather.jpg"
@@ -46,7 +55,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.5 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/older-couple.jpg"
@@ -59,7 +71,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1067,
     "height": 1600,
-    "focalPoint": { "x": 0.5, "y": 0.4 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.4
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/family-carry.jpg"
@@ -72,7 +87,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1067,
     "height": 1600,
-    "focalPoint": { "x": 0.5, "y": 0.56 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.56
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/family-play.jpg"
@@ -85,7 +103,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.42 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/care-home.jpg"
@@ -98,7 +119,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.42 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/couple-cooking.jpg"
@@ -111,7 +135,10 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.4 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.4
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/friends-men.jpg"
@@ -124,9 +151,420 @@
     "license": "https://www.pexels.com/license/",
     "width": 1600,
     "height": 1067,
-    "focalPoint": { "x": 0.5, "y": 0.37 },
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.37
+    },
     "status": "Conceptual lifestyle imagery. No endorsement, user identity or family benefit eligibility implied.",
     "usage": "Lifestyle context only; never a named expert, customer or endorsement",
     "asset": "photos/friends-bench.jpg"
+  },
+  {
+    "key": "home-hero-kitchen",
+    "id": 39820788,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.45,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/home-hero-kitchen.jpg"
+  },
+  {
+    "key": "home-hero-walk",
+    "id": 39820789,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/home-hero-walk.jpg"
+  },
+  {
+    "key": "home-hero-office",
+    "id": 39820790,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/home-hero-office.jpg"
+  },
+  {
+    "key": "employers-hr-meeting",
+    "id": 39820791,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/employers-hr-meeting.jpg"
+  },
+  {
+    "key": "employees-break",
+    "id": 39820792,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.3,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/employees-break.jpg"
+  },
+  {
+    "key": "psychological-video-call",
+    "id": 39820793,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.45,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/psychological-video-call.jpg"
+  },
+  {
+    "key": "psychological-inperson",
+    "id": 39820794,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/psychological-inperson.jpg"
+  },
+  {
+    "key": "legal-consultation",
+    "id": 39820795,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/legal-consultation.jpg"
+  },
+  {
+    "key": "financial-planning",
+    "id": 39820796,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.45,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/financial-planning.jpg"
+  },
+  {
+    "key": "family-cooking",
+    "id": 39820797,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/family-cooking.jpg"
+  },
+  {
+    "key": "family-park-walk",
+    "id": 39820798,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.4,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/family-park-walk.jpg"
+  },
+  {
+    "key": "manager-one-on-one",
+    "id": 39820799,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/manager-one-on-one.jpg"
+  },
+  {
+    "key": "webinar-speaker",
+    "id": 39820800,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.35,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/webinar-speaker.jpg"
+  },
+  {
+    "key": "webinar-viewer",
+    "id": 39820801,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.4,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/webinar-viewer.jpg"
+  },
+  {
+    "key": "article-morning",
+    "id": 39820802,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.45,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/article-morning.jpg"
+  },
+  {
+    "key": "article-end-of-day",
+    "id": 39820803,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/article-end-of-day.jpg"
+  },
+  {
+    "key": "article-budget",
+    "id": 39820804,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Still life; no people",
+    "asset": "photos/article-budget.jpg"
+  },
+  {
+    "key": "article-contract",
+    "id": 39820805,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/article-contract.jpg"
+  },
+  {
+    "key": "article-parenting",
+    "id": 39820806,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.4,
+      "y": 0.4
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/article-parenting.jpg"
+  },
+  {
+    "key": "tools-notebook",
+    "id": 39820807,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/tools-notebook.jpg"
+  },
+  {
+    "key": "assessment-sofa",
+    "id": 39820808,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.42
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/assessment-sofa.jpg"
+  },
+  {
+    "key": "about-studio",
+    "id": 39820809,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.45,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/about-studio.jpg"
+  },
+  {
+    "key": "remote-home-dog",
+    "id": 39820810,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1360,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Lifestyle context only; never a named expert, customer or endorsement",
+    "asset": "photos/remote-home-dog.jpg"
+  },
+  {
+    "key": "og-wide",
+    "id": 39820811,
+    "kind": "generated",
+    "author": "Generated with OpenAI GPT Image 2.5 for NestSelf",
+    "source": "generated",
+    "license": "Generated imagery; no third-party rights. People shown are not real persons.",
+    "width": 2048,
+    "height": 1072,
+    "focalPoint": {
+      "x": 0.5,
+      "y": 0.45
+    },
+    "status": "Conceptual lifestyle imagery (AI generated). No endorsement, user identity or family benefit eligibility implied.",
+    "usage": "Open Graph background only",
+    "asset": "photos/og-wide.jpg"
   }
 ]

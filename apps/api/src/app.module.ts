@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { RolesGuard } from './auth/roles.guard.js';
 import { ProgrammeModule } from './programme/programme.module.js';
+import { LeadsModule } from './leads/leads.module.js';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ProgrammeModule } from './programme/programme.module.js';
     HealthModule,
     AuthModule,
     ProgrammeModule,
+    LeadsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

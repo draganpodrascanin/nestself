@@ -52,7 +52,7 @@ Options:
 | `--name <base>`   | Base filename                                  | `snap`         |
 | `--palette <p>`   | Theme palette (forest, ink, plum, azure)        | --             |
 | `--mode <m>`      | Theme mode (light, dark)                        | --             |
-| `--locale <l>`    | Locale (en, sr-Latn, sr-Cyrl)                   | --             |
+| `--locale <l>`    | Locale (en, sr-Latn, sr-Cyrl, hu)                | --             |
 | `--viewport <v>`  | Viewport: mobile, desktop, or both              | `both`         |
 | `--selector <s>`  | Screenshot only this CSS selector               | --             |
 | `--no-full`       | Capture viewport only, not full page            | full page      |

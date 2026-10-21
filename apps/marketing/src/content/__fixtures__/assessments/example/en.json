@@ -1,0 +1,60 @@
+{
+  "title": "Workplace stress check",
+  "intro": "This short questionnaire helps you reflect on your current stress levels. It is not a diagnosis.",
+  "durationMinutes": 5,
+  "topic": "psychological",
+  "instrument": {
+    "name": "PSS-4",
+    "source": "https://das.nh.gov/wellness/docs/percieved%20stress%20scale.pdf",
+    "licence": "Public domain"
+  },
+  "questions": [
+    { "id": "q1", "text": "In the last month, how often have you felt unable to control important things in your life?" },
+    { "id": "q2", "text": "In the last month, how often have you felt confident about your ability to handle personal problems?" },
+    { "id": "q3", "text": "In the last month, how often have you felt things were going your way?" },
+    { "id": "q4", "text": "In the last month, how often have you felt difficulties were piling up so high you could not overcome them?" }
+  ],
+  "options": [
+    { "label": "Never", "score": 0 },
+    { "label": "Almost never", "score": 1 },
+    { "label": "Sometimes", "score": 2 },
+    { "label": "Fairly often", "score": 3 },
+    { "label": "Very often", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 16,
+    "bands": [
+      {
+        "min": 0,
+        "max": 5,
+        "title": "Low perceived stress",
+        "body": "Your responses suggest low levels of perceived stress. Maintaining healthy habits can help you stay on track.",
+        "nextStep": "Explore our wellbeing articles for tips on maintaining balance."
+      },
+      {
+        "min": 6,
+        "max": 10,
+        "title": "Moderate perceived stress",
+        "body": "Your responses suggest moderate stress. Consider exploring support resources available through your programme.",
+        "nextStep": "Speak with a wellbeing professional through your employer's programme."
+      },
+      {
+        "min": 11,
+        "max": 16,
+        "title": "High perceived stress",
+        "body": "Your responses suggest higher levels of perceived stress. Professional support may be beneficial.",
+        "nextStep": "We recommend booking a confidential session with a psychologist through your programme."
+      }
+    ]
+  },
+  "disclaimer": "This self-assessment is for informational purposes only and does not constitute a medical or psychological diagnosis. If you are in crisis, please contact the emergency services listed below.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, please contact:",
+    "lines": [
+      { "label": "Emergency services", "value": "112" },
+      { "label": "National helpline (Serbia)", "value": "0800 300 303" }
+    ]
+  }
+}

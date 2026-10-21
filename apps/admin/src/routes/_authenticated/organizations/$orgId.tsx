@@ -7,7 +7,8 @@ import {
   SAMPLE_PEOPLE,
   SAMPLE_HR_PROGRAMME,
 } from '@nestself/sample-data';
-import { formatCurrency } from '@nestself/i18n';
+import { formatCurrency, isLocale } from '@nestself/i18n';
+import type { Locale } from '@nestself/i18n';
 import i18n from '../../../i18n';
 
 function OrgDetailPage() {
@@ -17,7 +18,8 @@ function OrgDetailPage() {
   const teams = SAMPLE_TEAMS.filter((team) => team.orgId === orgId);
   const members = SAMPLE_PEOPLE.filter((p) => p.orgId === orgId);
 
-  const locale = (i18n.resolvedLanguage ?? 'en') as 'en' | 'sr-Latn' | 'sr-Cyrl';
+  const resolved = i18n.resolvedLanguage ?? 'en';
+  const locale: Locale = isLocale(resolved) ? resolved : 'en';
 
   return (
     <div>

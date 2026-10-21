@@ -7,6 +7,7 @@ export const i18nBaseOptions: InitOptions = {
   fallbackLng: {
     'sr-Cyrl': ['sr-Latn', 'en'],
     'sr-Latn': ['en'],
+    hu: ['en'],
     default: ['en'],
   },
   load: 'currentOnly',

@@ -115,6 +115,10 @@ catalog:
   # Repo tooling
   turbo: 2.11.9
   sherif: 1.13.0
+  next-mdx-remote: 6.0.0
+  gray-matter: 4.0.3
+  remark-gfm: 4.0.1
+  rehype-slug: 6.0.0
 
 # pnpm 10 blocks dependency build scripts unless allow-listed.
 onlyBuiltDependencies:

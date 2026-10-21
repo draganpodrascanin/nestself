@@ -1,9 +1,9 @@
 import photosJson from '../photos.json';
 
-export type PhotoKey = 'family-grass' | 'family-autumn' | 'grandfather' | 'older-couple' | 'family-carry' | 'family-play' | 'care-home' | 'couple-cooking' | 'friends-men' | 'friends-bench';
+export type PhotoKey = 'family-grass' | 'family-autumn' | 'grandfather' | 'older-couple' | 'family-carry' | 'family-play' | 'care-home' | 'couple-cooking' | 'friends-men' | 'friends-bench' | 'home-hero-kitchen' | 'home-hero-walk' | 'home-hero-office' | 'employers-hr-meeting' | 'employees-break' | 'psychological-video-call' | 'psychological-inperson' | 'legal-consultation' | 'financial-planning' | 'family-cooking' | 'family-park-walk' | 'manager-one-on-one' | 'webinar-speaker' | 'webinar-viewer' | 'article-morning' | 'article-end-of-day' | 'article-budget' | 'article-contract' | 'article-parenting' | 'tools-notebook' | 'assessment-sofa' | 'about-studio' | 'remote-home-dog' | 'og-wide';
 export type ImageRole = 'hero-3x2' | 'hero-4x5' | 'portrait' | 'card' | 'avatar' | 'article';
 export type ImageFormat = 'avif' | 'webp' | 'jpg';
-export interface Photo { key: PhotoKey; id: number; author: string; source: string; license: string; width: number; height: number; focalPoint: { x: number; y: number }; status: string; usage: string; asset: string }
+export interface Photo { key: PhotoKey; id: number; kind?: 'stock' | 'generated'; author: string; source: string; license: string; width: number; height: number; focalPoint: { x: number; y: number }; status: string; usage: string; asset: string }
 
 export const photos = photosJson as Photo[];
 export const photoByKey = Object.fromEntries(photos.map((p) => [p.key, p])) as Record<PhotoKey, Photo>;

@@ -1,0 +1,58 @@
+{
+  "tabs": {
+    "home": "Kezdőlap",
+    "support": "Támogatás",
+    "appointments": "Időpontok",
+    "messages": "Üzenetek"
+  },
+  "home": {
+    "greeting": "Üdvözöljük, {{name}}",
+    "upcoming": "Következő időpont",
+    "quickActions": "Gyorsműveletek"
+  },
+  "support": {
+    "title": "Támogatás keresése",
+    "categories": "Támogatási területek",
+    "psychological": "Pszichológiai",
+    "legal": "Jogi",
+    "financial": "Pénzügyi",
+    "areaIntro": {
+      "psychological": "Beszéljen képzett tanácsadóval bizalmas környezetben.",
+      "legal": "Kapjon útmutatást munkajogi kérdésekben, jogokról és eljárásokról.",
+      "financial": "Kapjon támogatást költségvetés-tervezésben, adósságkezelésben és pénzügyi tervezésben."
+    },
+    "selectTime": "Válasszon időpontot",
+    "review": "Áttekintés",
+    "sessionFee": "Alkalom díja",
+    "employerCovers": "Munkáltató fizeti",
+    "youPay": "Ön fizeti",
+    "confirmFor": "Megerősítés: {{amount}}",
+    "done": "Bemutató befejezve"
+  },
+  "appointments": {
+    "title": "Időpontok",
+    "upcoming": "Közelgő",
+    "past": "Korábbi",
+    "noUpcoming": "Nincs közelgő időpont",
+    "noPast": "Nincs korábbi időpont"
+  },
+  "messages": {
+    "title": "Üzenetek",
+    "noConversations": "Még nincsenek beszélgetések",
+    "noConversationsBody": "Kezdeményezzen beszélgetést a támogatást nyújtó tanácsadójával."
+  },
+  "notifications": {
+    "title": "Értesítések",
+    "noNotifications": "Nincs új értesítés",
+    "markAllRead": "Összes megjelölése olvasottként"
+  },
+  "settings": {
+    "title": "Beállítások",
+    "language": "Nyelv",
+    "appearance": "Megjelenés"
+  },
+  "notFound": {
+    "title": "A képernyő nem található",
+    "body": "A keresett képernyő nem létezik."
+  }
+}

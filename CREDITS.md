@@ -2,7 +2,7 @@
 
 ## Photographs
 
-All photographs are conceptual lifestyle imagery sourced from Pexels under the [Pexels licence](https://www.pexels.com/license/). People shown are not customers, experts, endorsers or evidence of outcomes and family imagery implies no eligibility.
+All stock photographs are conceptual lifestyle imagery sourced from Pexels under the [Pexels licence](https://www.pexels.com/license/). People shown are not customers, experts, endorsers or evidence of outcomes and family imagery implies no eligibility.
 
 | Key | Photographer | Pexels Link | Licence |
 | --- | --- | --- | --- |
@@ -16,6 +16,37 @@ All photographs are conceptual lifestyle imagery sourced from Pexels under the [
 | couple-cooking | Helena Lopes | https://www.pexels.com/photo/couple-enjoys-cooking-together-in-kitchen-27176133/ | https://www.pexels.com/license/ |
 | friends-men | Shafeeque k | https://www.pexels.com/photo/three-friends-laughing-outdoors-in-casual-attire-30730262/ | https://www.pexels.com/license/ |
 | friends-bench | Sarah Chai | https://www.pexels.com/photo/female-friends-chatting-on-bench-7266805/ | https://www.pexels.com/license/ |
+
+## Generated imagery
+
+The following images were generated for NestSelf with OpenAI GPT Image 2.5 from written briefs. The people in them do not exist; they are not customers, experts or endorsers, and family scenes imply no eligibility. Prompts and generation records live with the design team.
+
+| Key | Generator | Usage |
+| --- | --- | --- |
+| home-hero-kitchen | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| home-hero-walk | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| home-hero-office | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| employers-hr-meeting | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| employees-break | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| psychological-video-call | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| psychological-inperson | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| legal-consultation | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| financial-planning | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| family-cooking | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| family-park-walk | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| manager-one-on-one | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| webinar-speaker | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| webinar-viewer | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| article-morning | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| article-end-of-day | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| article-budget | Generated with OpenAI GPT Image 2.5 for NestSelf | Still life; no people |
+| article-contract | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| article-parenting | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| tools-notebook | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| assessment-sofa | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| about-studio | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| remote-home-dog | Generated with OpenAI GPT Image 2.5 for NestSelf | Lifestyle context only; never a named expert, customer or endorsement |
+| og-wide | Generated with OpenAI GPT Image 2.5 for NestSelf | Open Graph background only |
 
 ## Fonts
 

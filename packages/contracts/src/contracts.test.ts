@@ -4,11 +4,11 @@ import {
   SessionSchema,
   canAccessHr,
   canManageTeam,
-} from './roles.js';
-import { LocaleSchema, defaultLocale, locales } from './locale.js';
-import { SupportAreaSchema, supportAreaIcon, supportAreas } from './support.js';
-import { HealthResponseSchema } from './health.js';
-import { accessModel } from './access-model.js';
+} from './roles.ts';
+import { LocaleSchema, defaultLocale, locales } from './locale.ts';
+import { SupportAreaSchema, supportAreaIcon, supportAreas } from './support.ts';
+import { HealthResponseSchema } from './health.ts';
+import { accessModel } from './access-model.ts';
 
 describe('roles', () => {
   it('parses a valid OrgRole', () => {
@@ -63,8 +63,8 @@ describe('roles', () => {
 });
 
 describe('locale', () => {
-  it('has three locales', () => {
-    expect(locales).toEqual(['en', 'sr-Latn', 'sr-Cyrl']);
+  it('has four locales including hu', () => {
+    expect(locales).toEqual(['en', 'sr-Latn', 'sr-Cyrl', 'hu']);
   });
 
   it('defaults to en', () => {
@@ -75,6 +75,7 @@ describe('locale', () => {
     expect(LocaleSchema.parse('en')).toBe('en');
     expect(LocaleSchema.parse('sr-Latn')).toBe('sr-Latn');
     expect(LocaleSchema.parse('sr-Cyrl')).toBe('sr-Cyrl');
+    expect(LocaleSchema.parse('hu')).toBe('hu');
   });
 
   it('rejects invalid locales', () => {

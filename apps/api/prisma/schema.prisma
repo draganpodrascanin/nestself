@@ -185,6 +185,25 @@ model ContentItem {
   @@map("content_items")
 }
 
+enum LeadKind {
+  DEMO_REQUEST
+  CONTACT
+  WEBINAR_REGISTRATION
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  kind      LeadKind
+  email     String
+  locale    String
+  source    String?
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@map("leads")
+}
+
 model EventRequest {
   id           String             @id @default(cuid())
   orgId        String             @map("org_id")

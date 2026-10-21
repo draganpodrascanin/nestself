@@ -8,8 +8,10 @@ import {
 } from './index';
 
 describe('photos', () => {
-  it('has 10 photos', () => {
-    expect(photos).toHaveLength(10);
+  it('has the 10 stock photos plus generated imagery with unique keys', () => {
+    const stock = photos.filter((p) => p.kind !== 'generated');
+    expect(stock).toHaveLength(10);
+    expect(new Set(photos.map((p) => p.key)).size).toBe(photos.length);
   });
 
   it('focal points within 0..1', () => {
@@ -33,11 +35,19 @@ describe('photos', () => {
     expect(focalObjectPosition('family-grass')).toBe('50% 54%');
   });
 
-  it('every photo has author, pexels source and licence URL', () => {
-    for (const p of photos) {
+  it('every stock photo has author, pexels source and licence URL', () => {
+    for (const p of photos.filter((x) => x.kind !== 'generated')) {
       expect(p.author).toBeTruthy();
       expect(p.source).toMatch(/pexels\.com/);
       expect(p.license).toMatch(/pexels\.com\/license/);
+    }
+  });
+
+  it('every generated image names its generator and carries the no-endorsement status', () => {
+    for (const p of photos.filter((x) => x.kind === 'generated')) {
+      expect(p.author).toMatch(/GPT Image/);
+      expect(p.status).toMatch(/AI generated/);
+      expect(p.usage).toBeTruthy();
     }
   });
 });

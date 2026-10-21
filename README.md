@@ -89,10 +89,11 @@ pnpm storybook
 
 ## API database
 
-Start Postgres with Docker Compose:
+Start Postgres and Redis with Docker Compose:
 
 ```bash
-pnpm db:up
+pnpm db:up        # Postgres 17 + Redis 7 in the background
+pnpm db:down      # stop and remove the containers
 ```
 
 Or point `DATABASE_URL` in `apps/api/.env` to any running PostgreSQL instance (see `.env.example` for the default connection string).
@@ -105,6 +106,10 @@ pnpm --filter @nestself/api prisma:seed
 ```
 
 The seed script refuses to run when `NODE_ENV` is `production`.
+
+## Running the API in Docker
+
+To build and run the API as a container alongside Postgres and Redis, copy `docker/api.env.example` to `docker/api.env`, set a real `JWT_SECRET`, and run `pnpm docker:api`. This builds the multi-stage Dockerfile at `apps/api/Dockerfile`, runs Prisma migrations automatically, and starts the API on port 4000. Redis is included for BullMQ job queues that will be added later. See `docker/README.md` for the full service breakdown and CI build instructions.
 
 ## Sample mode
 

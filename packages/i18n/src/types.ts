@@ -1,4 +1,4 @@
-export const locales = ['en', 'sr-Latn', 'sr-Cyrl'] as const;
+export const locales = ['en', 'sr-Latn', 'sr-Cyrl', 'hu'] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = 'en';
 
@@ -44,6 +44,14 @@ export const localeMeta: Record<
     intl: 'sr-Cyrl-RS',
     nativeName: 'Српски',
     script: 'Cyrl',
+    dir: 'ltr',
+  },
+  hu: {
+    htmlLang: 'hu',
+    hreflang: 'hu',
+    intl: 'hu-HU',
+    nativeName: 'Magyar',
+    script: 'Latn',
     dir: 'ltr',
   },
 };

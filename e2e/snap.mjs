@@ -11,7 +11,7 @@
  *   --name <base>        Base name for output files (default: snap)
  *   --palette <palette>  Theme palette: forest | ink | plum | azure
  *   --mode <mode>        Theme mode: light | dark
- *   --locale <locale>    Locale: en | sr-Latn | sr-Cyrl
+ *   --locale <locale>    Locale: en | sr-Latn | sr-Cyrl | hu
  *   --viewport <type>    Viewport: mobile | desktop | both (default: both)
  *   --selector <css>     Screenshot only this CSS selector
  *   --no-full            Capture viewport only, not full page

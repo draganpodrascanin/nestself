@@ -1,0 +1,185 @@
+{
+  "meta": {
+    "title": "NestSelf -- Támogatás a munkában és minden, ami körbeveszi",
+    "description": "Munkahelyi jóllét, amely hozzáférést biztosít a munkavállalóknak pszichológiai, jogi és pénzügyi tanácsadáshoz egyetlen átlátható felületen."
+  },
+  "nav": {
+    "findSupport": "Támogatás keresése",
+    "howItWorks": "Hogyan működik",
+    "lifeBeyondWork": "Élet a munkán túl",
+    "forEmployers": "Munkáltatóknak"
+  },
+  "hero": {
+    "eyebrow": "Jóllét a munkahelyeden keresztül",
+    "titleLine1": "Támogatás a munkában.",
+    "titleLine2": "És minden, ami körbeveszi.",
+    "lead": "Az élet nem fér bele egy munkaköri leírásba. Találj beszélgetést, gyakorlati tanácsot és egy tisztább következő lépést ahhoz, ami foglalkoztat.",
+    "ctaPrimary": "Támogatás felfedezése",
+    "ctaSecondary": "A csapatodnak",
+    "note": "A megerősítés előtt ellenőrizd a lefedettséged.",
+    "caption": "A hétköznapi pillanatok, amelyekből egy teljes élet áll.",
+    "altLead": "Egy család együtt tölti az idejét a fűben egy parkban",
+    "altFriends": "Barátok beszélgetnek és nevetnek a szabadban",
+    "altCare": "Két nő egy meghitt pillanatot oszt meg egy nappaliban"
+  },
+  "support": {
+    "eyebrow": "Támogatás keresése",
+    "title": "Nem kell tökéletes ok ahhoz, hogy elkezdhesd.",
+    "lead": "Egy nehéz hét. Egy kérdés, amit folyton halasztasz. Egy döntés, ami egyedül nagyobbnak tűnik. Válaszd ki a segítség fajtáját, ami neked megfelel.",
+    "alt": "Két barát beszélget egy padon a szabadban",
+    "psychological": {
+      "title": "Egy kis hely a beszélgetésre",
+      "body": "Pszichológiai támogatás ahhoz, amit cipelsz, a munkahelyen vagy azon kívül."
+    },
+    "legal": {
+      "title": "Egy tisztább út előre",
+      "body": "Jogi tanácsadás egy kérdés megértéséhez és az előtted álló lehetőségekhez."
+    },
+    "financial": {
+      "title": "Több tisztánlátás a pénzügyekben",
+      "body": "Gyakorlati pénzügyi tanácsadás a hétköznapi döntésekhez és a következő lépéshez."
+    }
+  },
+  "how": {
+    "eyebrow": "Hogyan működik",
+    "title": "Az első lépésed lehet kicsi.",
+    "lead": "Egy egyértelmű út a támogatás kiválasztásától annak megértéséig, hogy mi történik ezután.",
+    "step1": {
+      "title": "Kezdd ott, ahol tartasz.",
+      "body": "Válassz egy támogatási területet, és nézd meg, ki tud segíteni. Nem kell előre mindent kitalálnod."
+    },
+    "step2": {
+      "title": "Nézd meg a részleteket.",
+      "body": "Ellenőrizd a formátumot, az elérhetőséget és a munkahelyi lefedettséged, mielőtt választanál."
+    },
+    "step3": {
+      "title": "Tedd meg a következő lépést.",
+      "body": "Kezdj el egy beszélgetést vagy erősíts meg egy időpontot, a fontos részletekkel előtted."
+    }
+  },
+  "life": {
+    "eyebrow": "Emberek, nem beosztások",
+    "title": "A munkanap körül egy teljes élet van.",
+    "lead": "Kapcsolatok, új felelősségek, hétköznapi napok és váratlan fordulatok. A támogatásnak minderre helyet kell hagynia.",
+    "alt1": "Egy idősebb felnőtt és két gyerek beszélget egy parkban, egy padon",
+    "caption1": "Idő azokkal, akik fontosak.",
+    "alt2": "Szülők és egy gyerek játszanak a szabadban egy parkban",
+    "caption2": "Hely a kis, jó pillanatoknak.",
+    "alt3": "Egy pár együtt főz a konyhában",
+    "caption3": "Az élet, a maga hétköznapi formájában."
+  },
+  "employer": {
+    "eyebrow": "Munkáltatóknak",
+    "title": "Egy munkahelyi juttatás, amelynek középpontjában az emberek állnak.",
+    "body": "A pszichológiai, jogi és pénzügyi tanácsadás egyetlen érthető munkavállalói élményben, a program kezeléséhez külön felülettel.",
+    "cta": "A munkáltatói élmény felfedezése",
+    "alt": "Egy család együtt a szabadban, őszi fák között"
+  },
+  "privacy": {
+    "title": "Tudd, mit osztasz meg. Tudd, ki láthatja.",
+    "body": "Mielőtt valami személyeset megosztanál, értsd meg, hogyan vannak elkülönítve a beszélgetések, időpontok és a munkáltatói jelentések.",
+    "cta": "Az adatvédelmi modell elolvasása",
+    "dialogTitle": "Hogyan kell elkülöníteni a hozzáférést",
+    "dialogLead": "A saját támogatási előzményeid, a kijelölt szakember hozzáférése és a munkáltató programnézete eltérő célokat szolgálnak.",
+    "rows": {
+      "employee": "Munkavállaló: saját beszélgetéseid és időpontjaid.",
+      "advisor": "Kijelölt tanácsadó: a kijelölt ügyhöz szükséges hatókör.",
+      "employer": "Munkáltató: jogosultsági adminisztráció, programköltségvetés és védett összesített jelentés, egyéni támogatási tartalom nélkül.",
+      "exceptional": "Kivételes hozzáférés: meghatározott, engedélyezett és rögzített üzemeltetési folyamat."
+    },
+    "disclaimer": "Ez a javasolt tervezési modell, nem élő adatvédelmi nyilatkozat vagy megvalósított hozzáférés-szabályozás igazolása."
+  },
+  "footer": {
+    "navLabel": "Lábléc",
+    "photography": "Fotográfiai irányelvek",
+    "credits": "Képkreditek",
+    "designSystem": "Dizájnrendszer"
+  },
+  "credits": {
+    "title": "Emberek és fényképek",
+    "lead": "Pexels életstílus-fényképek konceptuális illusztrációként felhasználva. Semmilyen ajánlás, ügyfél-azonosítás, szakmai szerep vagy családi jogosultság nem áll fenn.",
+    "licence": "Pexels licenc",
+    "photographyHeading": "Fotográfia",
+    "fontsHeading": "Betűtípusok",
+    "iconsHeading": "Ikonok",
+    "fontsBody": "Onest, onest.md, SIL Open Font License 1.1 licenc alatt.",
+    "iconsBody": "Phosphor Icons, phosphoricons.com, MIT licenc alatt.",
+    "colPhoto": "Fotó",
+    "colPhotographer": "Fotós",
+    "colSource": "Forrás",
+    "colLicence": "Licenc",
+    "photographyCaption": "A projektben használt fényképek",
+    "dialogCaption": "Fotósok"
+  },
+  "pages": {
+    "support": {
+      "title": "Találd meg a megfelelő támogatást",
+      "lead": "Pszichológiai, jogi és pénzügyi tanácsadás a munkahelyeden keresztül.",
+      "workspaceNote": "A tartalom és az időpontfoglalás a munkavállalói alkalmazásban található.",
+      "workspaceLink": "Bejelentkezés a munkaterületre"
+    },
+    "employers": {
+      "title": "Egy juttatás, amelyet az emberek köré építettek",
+      "lead": "Adj hozzáférést a csapatodnak pszichológiai, jogi és pénzügyi tanácsadáshoz egy helyen.",
+      "hrTitle": "HR átláthatósági elvek",
+      "hrAggregates": "Csak összesítések: a munkáltatói nézet programszintű összesítéseket mutat, nem egyéni támogatási részleteket.",
+      "hrProtected": "A védett nem nulla: ha egy csoport túl kicsi a biztonságos jelentéshez, az érték védett, nem elnyomott.",
+      "hrRoles": "Szerepkörök szerveroldali érvényesítéssel: a felhasználói felület láthatósága a szerepmodellt követi, de a hozzáférés-szabályozást a szerver határozza meg, nem a kliens."
+    },
+    "privacyModel": {
+      "title": "Hogyan van elkülönítve a hozzáférés",
+      "lead": "Mielőtt valami személyeset megosztanál, értsd meg, ki mit lát.",
+      "colData": "Adat",
+      "colEmployee": "Munkavállaló",
+      "colAdvisor": "Tanácsadó",
+      "colHr": "HR",
+      "colOperations": "Üzemeltetés",
+      "caption": "Hozzáférési modell",
+      "rows": {
+        "conversationContent": {
+          "data": "Beszélgetés tartalma",
+          "employee": "Saját",
+          "advisor": "Csak a kijelölt ügy",
+          "hr": "Nincs megtekintés",
+          "operations": "Kivételes, kifejezetten engedélyezett hozzáférés"
+        },
+        "appointmentsHistory": {
+          "data": "Időpontok / támogatási előzmények",
+          "employee": "Saját",
+          "advisor": "Szükséges hatókör",
+          "hr": "Nincs egyéni megtekintés",
+          "operations": "Szükséges üzemeltetési hatókör"
+        },
+        "benefitEligibility": {
+          "data": "Juttatási jogosultság",
+          "employee": "Saját",
+          "advisor": "Szükség szerint",
+          "hr": "Jogosultsági adminisztráció",
+          "operations": "Engedélyezett adminisztráció"
+        },
+        "companyFund": {
+          "data": "Céges keret",
+          "employee": "Releváns lefedettség",
+          "advisor": "Számlázáshoz szükséges",
+          "hr": "Program összesítés",
+          "operations": "Engedélyezett adminisztráció"
+        },
+        "usageReporting": {
+          "data": "Használati jelentés",
+          "employee": "Saját előzmények",
+          "advisor": "Szakmai hatókör",
+          "hr": "Védett összesítések",
+          "operations": "Engedélyezett hatókör"
+        }
+      }
+    },
+    "credits": {
+      "title": "Emberek és fényképek"
+    }
+  },
+  "notFound": {
+    "title": "Ez az oldal nem létezik",
+    "body": "A cím megváltozhatott, vagy az oldalt eltávolították.",
+    "cta": "Vissza a kezdőlapra"
+  }
+}

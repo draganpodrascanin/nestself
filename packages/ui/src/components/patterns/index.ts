@@ -10,3 +10,4 @@ export * from './photo-figure';
 export * from './avatar';
 export * from './sample-data-banner';
 export * from './booking-demo';
+export * from './card';

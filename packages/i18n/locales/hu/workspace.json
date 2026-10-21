@@ -1,0 +1,122 @@
+{
+  "home": {
+    "greeting": "Üdvözöljük, {{name}}",
+    "upcoming": "Következő időpont",
+    "noAppointments": "Nincs közelgő időpont",
+    "supportAreas": "Támogatási területek",
+    "recentMessages": "Legutóbbi üzenetek",
+    "noMessages": "Nincs új üzenet"
+  },
+  "categories": {
+    "psychological": "Pszichológiai támogatás",
+    "legal": "Jogi tanácsadás",
+    "financial": "Pénzügyi tanácsadás"
+  },
+  "appointment": {
+    "with": "Tanácsadó: {{name}}",
+    "date": "Dátum",
+    "time": "Időpont",
+    "format": "Formátum",
+    "online": "Online",
+    "inPerson": "Személyes",
+    "status": "Állapot",
+    "confirmed": "Megerősítve",
+    "pending": "Függőben",
+    "cancelled": "Lemondva",
+    "completed": "Befejezve"
+  },
+  "channels": {
+    "title": "Csatornák",
+    "general": "Általános",
+    "wellbeing": "Jóllét",
+    "announcements": "Közlemények",
+    "newMessage": "Új üzenet",
+    "noChannels": "Nincs elérhető csatorna"
+  },
+  "booking": {
+    "step": "{{current}}/{{total}} lépés",
+    "chooseAdvisor": "Válasszon tanácsadót",
+    "advisorLead": "Találjon megfelelő formátumot és személyt.",
+    "timesAvailable": "Elérhető időpontok",
+    "seeTimes": "Elérhető időpontok megtekintése",
+    "chooseTime": "Válasszon időpontot",
+    "review": "Időpont áttekintése",
+    "price": "Időpont ára",
+    "employerCovers": "Munkáltató fizeti",
+    "youPay": "Ön fizeti",
+    "timeZone": "Időzóna: {{zone}}",
+    "terms": "Módosítási és lemondási feltételek",
+    "confirmPay": "Megerősítés és fizetés: {{amount}}",
+    "done": {
+      "title": "Példa megerősítve",
+      "body": "A termékben a megerősítés megmutatná az időpontot, a költséget és a lemondási feltételeket. Itt nem jött létre időpont vagy fizetés."
+    }
+  },
+  "messages": {
+    "title": "Üzenetek",
+    "compose": "Új üzenet",
+    "noConversations": "Még nincsenek beszélgetések",
+    "typeMessage": "Írjon üzenetet",
+    "encrypted": "Végpontok közötti titkosítás"
+  },
+  "polls": {
+    "title": "Szavazások",
+    "active": "Aktív",
+    "closed": "Lezárt",
+    "vote": "Szavazás",
+    "results": "Eredmények",
+    "noPollsActive": "Nincs aktív szavazás"
+  },
+  "settings": {
+    "title": "Beállítások",
+    "profile": "Profil",
+    "notifications": "Értesítések",
+    "language": "Nyelv",
+    "theme": "Téma",
+    "about": "Névjegy"
+  },
+  "hr": {
+    "programme": "Támogatási program",
+    "eligible": "Jogosult munkavállalók",
+    "fund": "Elérhető keret",
+    "reserved": "Lefoglalva",
+    "activated": "Aktivált fiókok",
+    "teamBreakdown": "Csapatbontás",
+    "protectedNote": "A védett nem azonos a nullával.",
+    "measure": "Programmutató",
+    "value": "Érték",
+    "meaning": "Jelentés",
+    "meaningEligible": "Adminisztratív jogosultság, nem a támogatási előzmények listája",
+    "meaningActivated": "Szemléltető programszintű mutató",
+    "meaningTeamBreakdown": "Túl kicsi a biztonságos megjelenítéshez anélkül, hogy felfedne egy személyt",
+    "meaningFund": "Az aktív foglalások levonása után ebben a fiktív példában",
+    "protectedLabel": "Védett",
+    "viewTotal": "Összesen megtekintése",
+    "teamExperiences": "Csapatélmények",
+    "teamExperiencesLead": "Egy 25 fős kérelem rögzíti a helyszínt, az időpontokat, a költségvetést, a célt és a gyakorlati igényeket. A bowling, a gokart és a szabadtéri nap összehasonlítandó kategóriák, nem kitalált szolgáltatói ajánlatok."
+  },
+  "events": {
+    "field": "Kérelem mező",
+    "example": "Példa",
+    "comparison": "Szükséges összehasonlítás",
+    "participantsLocation": "Résztvevők / helyszín",
+    "datesBudget": "Időpontok / költségvetés",
+    "options": "Lehetőségek",
+    "workflow": "Munkafolyamat",
+    "exampleParticipantsLocation": "25 / Novi Sad",
+    "exampleDatesBudget": "Választott időszak / összeg és pénznem",
+    "exampleOptions": "Bowling, gokart, szabadtéri nap",
+    "exampleWorkflow": "Igényelve → ajánlatok készen → kiválasztva",
+    "compareParticipantsLocation": "Kapacitás, közlekedés és akadálymentesség",
+    "compareDatesBudget": "Tartalmazott tételek, elérhetőség és feltételek",
+    "compareOptions": "Ár, időtartam, helyszín, étkezés és lemondási feltételek",
+    "compareWorkflow": "Felelős, állapot és valós válaszadási határidő"
+  },
+  "support": {
+    "experts": "Tanácsadók"
+  },
+  "api": {
+    "connected": "API csatlakoztatva",
+    "sampleMode": "API nincs csatlakoztatva (mintaadatok mód)"
+  }
+}

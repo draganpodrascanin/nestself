@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LocaleSchema } from './locale.ts';
 
 export const orgRoles = ['employee', 'manager', 'hr_admin'] as const;
 export const OrgRoleSchema = z.enum(orgRoles);
@@ -16,7 +17,7 @@ export const SessionSchema = z.object({
   orgId: z.string().min(1).nullable(),
   orgRole: OrgRoleSchema.nullable(),
   platformRole: PlatformRoleSchema.nullable(),
-  locale: z.enum(['en', 'sr-Latn', 'sr-Cyrl']).default('en'),
+  locale: LocaleSchema.default('en'),
 });
 export type Session = z.infer<typeof SessionSchema>;
 

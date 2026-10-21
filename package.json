@@ -21,8 +21,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:deps": "sherif",
-    "db:up": "docker compose -f docker/docker-compose.yml up -d",
+    "db:up": "docker compose -f docker/docker-compose.yml up -d postgres redis",
     "db:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:api": "docker compose -f docker/docker-compose.yml --profile api up --build",
     "lint:root": "eslint e2e playwright.config.ts eslint.config.js"
   },
   "devDependencies": {

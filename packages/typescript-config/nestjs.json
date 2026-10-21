@@ -11,6 +11,8 @@
     "declaration": false,
     "sourceMap": true,
     "incremental": true,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
     "types": ["node"]
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { negotiateLocale, parseAcceptLanguage } from './types';
+import { isLocale, negotiateLocale, parseAcceptLanguage } from './types';
 
 describe('negotiateLocale', () => {
   it('resolves sr-Latn-RS to sr-Latn', () => {
@@ -29,6 +29,15 @@ describe('negotiateLocale', () => {
 
   it('returns sr-Latn for bare sr', () => {
     expect(negotiateLocale(['sr'])).toBe('sr-Latn');
+  });
+
+  it('negotiates Hungarian from hu-HU and bare hu', () => {
+    expect(negotiateLocale(['hu-HU'])).toBe('hu');
+    expect(negotiateLocale(['hu'])).toBe('hu');
+    expect(negotiateLocale(['de', 'hu;q=0.8'].map((t) => t.split(';')[0]!))).toBe('hu');
+  });
+  it('isLocale accepts hu', () => {
+    expect(isLocale('hu')).toBe(true);
   });
 });
 

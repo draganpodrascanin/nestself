@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "overview": "Áttekintés",
+    "experts": "Szakértők",
+    "organizations": "Szervezetek",
+    "content": "Tartalom",
+    "eventRequests": "Eseményigények",
+    "settings": "Beállítások"
+  },
+  "experts": {
+    "title": "Szakértők",
+    "realPortraitNote": "A portré csak a jóváhagyott szakértőknél jelenik meg; addig monogramot használunk.",
+    "name": "Név",
+    "specialisation": "Szakterület",
+    "area": "Terület",
+    "languages": "Nyelvek",
+    "format": "Formátum",
+    "status": "Állapot",
+    "active": "Aktív",
+    "inactive": "Inaktív",
+    "pending": "Függőben",
+    "density": "Sűrűség",
+    "densityDefault": "Alapértelmezett",
+    "densityCompact": "Kompakt",
+    "detail": "Szakértő részletei"
+  },
+  "organizations": {
+    "title": "Szervezetek",
+    "name": "Név",
+    "plan": "Csomag",
+    "employees": "Munkavállalók",
+    "status": "Állapot",
+    "active": "Aktív",
+    "suspended": "Felfüggesztve",
+    "teams": "Csapatok",
+    "members": "Tagok",
+    "detail": "Szervezet részletei",
+    "programme": "Program"
+  },
+  "tables": {
+    "id": "Azonosító",
+    "createdAt": "Létrehozva",
+    "updatedAt": "Frissítve",
+    "actions": "Műveletek",
+    "edit": "Szerkesztés",
+    "delete": "Törlés",
+    "view": "Részletek megtekintése",
+    "noResults": "Nincs találat",
+    "showing": "{{from}}–{{to}} / {{total}}"
+  },
+  "dashboard": {
+    "title": "Vezérlőpult",
+    "overview": "Áttekintés",
+    "totalUsers": "Összes felhasználó",
+    "activeExperts": "Aktív szakértők",
+    "totalOrganizations": "Összes szervezet",
+    "openEventRequests": "Nyitott eseményigények",
+    "sampleLabel": "Minta"
+  },
+  "content": {
+    "title": "Tartalom",
+    "area": "Terület",
+    "locale": "Nyelv"
+  },
+  "eventRequests": {
+    "title": "Eseményigények",
+    "field": "Mező",
+    "example": "Példaérték",
+    "required": "Kötelező",
+    "participants": "Résztvevők",
+    "location": "Helyszín",
+    "dates": "Időpontok",
+    "budget": "Költségvetés",
+    "yes": "Igen",
+    "no": "Nem"
+  },
+  "settings": {
+    "title": "Beállítások",
+    "locale": "Nyelv",
+    "appearance": "Megjelenés",
+    "modeLight": "Világos",
+    "modeDark": "Sötét"
+  },
+  "dev": {
+    "sampleRole": "Minta szerepkör"
+  },
+  "api": {
+    "connected": "API csatlakoztatva",
+    "notConnected": "API nincs csatlakoztatva (mintaadatok mód)"
+  }
+}

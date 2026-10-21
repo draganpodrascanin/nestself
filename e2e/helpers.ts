@@ -28,7 +28,7 @@ export async function applyTheme(
  */
 export async function applyLocale(
   page: Page,
-  locale: 'en' | 'sr-Latn' | 'sr-Cyrl',
+  locale: 'en' | 'sr-Latn' | 'sr-Cyrl' | 'hu',
 ): Promise<void> {
   await page.addInitScript((l: string) => {
     localStorage.setItem('nestself-locale', l);

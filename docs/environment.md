@@ -35,6 +35,10 @@ All variables are listed in `.env.example` at the repository root. Copy the rele
 | ---------------------- | ------------------------------------------------------------ | ----------------------- |
 | `NEXT_PUBLIC_SITE_URL` | Canonical site URL, used for metadata and sitemap generation | `http://localhost:3000` |
 
+## Docker
+
+Docker Compose services (Postgres, Redis and optionally the API) are defined in `docker/docker-compose.yml`. Run `pnpm db:up` to start only the databases, or `pnpm docker:api` to build and start the full API stack. Copy `docker/api.env.example` to `docker/api.env` before running the API profile. See `docker/README.md` for details on each service, the two Compose profiles and how to build the API image in CI.
+
 ## Notes
 
 - `VITE_DATA_SOURCE` and `EXPO_PUBLIC_DATA_SOURCE` default to `sample` in development. In sample mode, apps import fixtures from `@nestself/sample-data` and display a banner on every screen.

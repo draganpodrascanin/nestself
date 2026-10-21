@@ -16,16 +16,30 @@ lines.push('# Credits');
 lines.push('');
 
 // Photographs
+const stock = photos.filter((p) => p.kind !== 'generated');
+const generated = photos.filter((p) => p.kind === 'generated');
 lines.push('## Photographs');
 lines.push('');
-lines.push('All photographs are conceptual lifestyle imagery sourced from Pexels under the [Pexels licence](https://www.pexels.com/license/). People shown are not customers, experts, endorsers or evidence of outcomes and family imagery implies no eligibility.');
+lines.push('All stock photographs are conceptual lifestyle imagery sourced from Pexels under the [Pexels licence](https://www.pexels.com/license/). People shown are not customers, experts, endorsers or evidence of outcomes and family imagery implies no eligibility.');
 lines.push('');
 lines.push('| Key | Photographer | Pexels Link | Licence |');
 lines.push('| --- | --- | --- | --- |');
-for (const p of photos) {
+for (const p of stock) {
   lines.push(`| ${p.key} | ${p.author} | ${p.source} | ${p.license} |`);
 }
 lines.push('');
+if (generated.length) {
+  lines.push('## Generated imagery');
+  lines.push('');
+  lines.push('The following images were generated for NestSelf with OpenAI GPT Image 2.5 from written briefs. The people in them do not exist; they are not customers, experts or endorsers, and family scenes imply no eligibility. Prompts and generation records live with the design team.');
+  lines.push('');
+  lines.push('| Key | Generator | Usage |');
+  lines.push('| --- | --- | --- |');
+  for (const p of generated) {
+    lines.push(`| ${p.key} | ${p.author} | ${p.usage} |`);
+  }
+  lines.push('');
+}
 
 // Fonts
 lines.push('## Fonts');

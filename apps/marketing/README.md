@@ -18,7 +18,7 @@ Public-facing marketing site built with Next.js 16 (App Router).
 
 Requests without a locale prefix are redirected via `proxy.ts` (Next 16 middleware).
 The locale is negotiated from the `NEXT_LOCALE` cookie, then the `Accept-Language`
-header, falling back to `en`. Supported locales: `en`, `sr-Latn`, `sr-Cyrl`.
+header, falling back to `en`. Supported locales: `en`, `sr-Latn`, `sr-Cyrl`, `hu`.
 
 ## Image sync
 

@@ -28,4 +28,9 @@ describe('formatDate', () => {
     const result = formatDate('2026-10-21T12:00:00Z', 'sr-Latn');
     expect(result).toMatch(/oktobar/i);
   });
+
+  it('formats hu date with Hungarian month name', () => {
+    const result = formatDate('2026-10-21T12:00:00Z', 'hu');
+    expect(result).toBe('2026. október 21.');
+  });
 });
