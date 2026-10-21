@@ -88,6 +88,9 @@ export const AssessmentSchema = z.object({
   scoring: z.object({
     min: z.number(),
     max: z.number(),
+    method: z
+      .enum(['sum', 'mean', 'sum-scaled-100'])
+      .optional(),
     bands: z
       .array(
         z.object({

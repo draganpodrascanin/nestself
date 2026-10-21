@@ -1,0 +1,76 @@
+{
+  "title": "Financial wellbeing check",
+  "intro": "Eight questions about how you feel about your financial situation right now. This is not a validated clinical instrument. Your answers are not stored and are never shared with your employer.",
+  "durationMinutes": 3,
+  "topic": "financial",
+  "instrument": {
+    "name": "NestSelf Financial Wellbeing Check (not a validated clinical instrument)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "NestSelf-authored instrument. The source URL is background reading on financial stress and employee wellbeing from WHO, not a licence reference."
+  },
+  "questions": [
+    { "id": "fw1", "text": "I worry about having enough money to cover my monthly expenses" },
+    { "id": "fw2", "text": "I feel stressed when I think about my financial situation" },
+    { "id": "fw3", "text": "I avoid looking at my bank statements or bills" },
+    { "id": "fw4", "text": "I find it difficult to save any money each month" },
+    { "id": "fw5", "text": "I feel uncertain about how to plan for my financial future" },
+    { "id": "fw6", "text": "Money concerns affect my sleep or concentration" },
+    { "id": "fw7", "text": "I feel I lack the knowledge to make confident financial decisions" },
+    { "id": "fw8", "text": "I would feel unable to handle an unexpected expense" }
+  ],
+  "options": [
+    { "label": "Never", "score": 0 },
+    { "label": "Rarely", "score": 1 },
+    { "label": "Sometimes", "score": 2 },
+    { "label": "Often", "score": 3 },
+    { "label": "Very often", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 25,
+        "title": "Low financial stress",
+        "body": "Your responses suggest a low level of financial stress. Keeping good financial habits will help you stay on track.",
+        "nextStep": "Explore our budget worksheet and financial wellbeing articles for practical tips."
+      },
+      {
+        "min": 26,
+        "max": 50,
+        "title": "Moderate financial stress",
+        "body": "Your responses suggest a moderate level of financial stress. A conversation with a financial adviser could help you feel more in control.",
+        "nextStep": "Consider booking a confidential session with a financial adviser through your employer's programme."
+      },
+      {
+        "min": 51,
+        "max": 75,
+        "title": "High financial stress",
+        "body": "Your responses suggest a high level of financial stress. Professional financial guidance is available and can help you find practical next steps.",
+        "nextStep": "We recommend booking a confidential session with a financial adviser through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
+      },
+      {
+        "min": 76,
+        "max": 100,
+        "title": "Very high financial stress",
+        "body": "Your responses suggest a very high level of financial stress. Please consider reaching out for support soon.",
+        "nextStep": "Book a confidential session with a financial adviser through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
+      }
+    ]
+  },
+  "disclaimer": "This tool is not a medical device and does not provide a diagnosis. It is for informational purposes only. For a clinical evaluation, talk to a licensed professional. If you are in crisis, call the emergency number.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, call the emergency number now.",
+    "lines": [
+      { "label": "Serbia emergency", "value": "112" },
+      { "label": "Serbia ambulance", "value": "194" },
+      { "label": "Centar Srce (Serbia)", "value": "0800 300 303" },
+      { "label": "Hungary emergency", "value": "112" },
+      { "label": "Hungary ambulance", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Hungary)", "value": "116 123" }
+    ]
+  }
+}

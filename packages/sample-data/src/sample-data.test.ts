@@ -12,9 +12,11 @@ import {
   SAMPLE_BOOKING,
   SAMPLE_HR_PROGRAMME,
   SAMPLE_EVENT_REQUEST,
+  SAMPLE_TESTIMONIALS,
   isSampleMode,
   assertNotProduction,
 } from './index';
+const QUOTE_LOCALES = ['en', 'sr-Latn', 'sr-Cyrl', 'hu'] as const;
 
 describe('sample-data fixtures', () => {
   const allFixtures: ReadonlyArray<object> = [
@@ -67,6 +69,28 @@ describe('sample-data fixtures', () => {
     for (const post of SAMPLE_POSTS) {
       for (const phrase of banned) {
         expect(post.content.toLowerCase()).not.toContain(phrase);
+      }
+    }
+  });
+});
+
+describe('SAMPLE_TESTIMONIALS', () => {
+  it('has exactly six entries', () => {
+    expect(SAMPLE_TESTIMONIALS).toHaveLength(6);
+  });
+
+  it('every entry has placeholder: true', () => {
+    for (const t of SAMPLE_TESTIMONIALS) {
+      expect(t.placeholder).toBe(true);
+    }
+  });
+
+  it('every entry has quotes for all four locales', () => {
+    for (const t of SAMPLE_TESTIMONIALS) {
+      for (const locale of QUOTE_LOCALES) {
+        expect(t.quote[locale]).toBeDefined();
+        expect(typeof t.quote[locale]).toBe('string');
+        expect(t.quote[locale].length).toBeGreaterThan(0);
       }
     }
   });

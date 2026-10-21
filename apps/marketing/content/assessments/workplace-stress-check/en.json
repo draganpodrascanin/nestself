@@ -1,0 +1,76 @@
+{
+  "title": "Workplace stress check",
+  "intro": "Eight questions to help you reflect on how work has been affecting you recently. This is not a validated clinical instrument. Your answers are not stored and are never shared with your employer.",
+  "durationMinutes": 3,
+  "topic": "work",
+  "instrument": {
+    "name": "NestSelf Workplace Stress Check (not a validated clinical instrument)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "NestSelf-authored instrument. The source URL is background reading on workplace stress from WHO, not a licence reference."
+  },
+  "questions": [
+    { "id": "ws1", "text": "I find it hard to switch off from work at the end of the day" },
+    { "id": "ws2", "text": "I feel overwhelmed by the amount of work I need to do" },
+    { "id": "ws3", "text": "I have difficulty concentrating on tasks at work" },
+    { "id": "ws4", "text": "I feel tense or anxious about work-related matters" },
+    { "id": "ws5", "text": "I have trouble sleeping because of work concerns" },
+    { "id": "ws6", "text": "I feel I lack control over my work situation" },
+    { "id": "ws7", "text": "I avoid certain tasks or responsibilities at work" },
+    { "id": "ws8", "text": "I feel less motivated or engaged at work than I used to" }
+  ],
+  "options": [
+    { "label": "Never", "score": 0 },
+    { "label": "Rarely", "score": 1 },
+    { "label": "Sometimes", "score": 2 },
+    { "label": "Often", "score": 3 },
+    { "label": "Very often", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 25,
+        "title": "Low workplace stress",
+        "body": "Your responses suggest a low level of workplace stress. Keeping your current balance is a great foundation.",
+        "nextStep": "Explore our wellbeing articles for ideas on maintaining balance at work."
+      },
+      {
+        "min": 26,
+        "max": 50,
+        "title": "Moderate workplace stress",
+        "body": "Your responses suggest a moderate level of workplace stress. Small adjustments or talking things through with someone could help.",
+        "nextStep": "Consider using our conversation planner to prepare a talk with your manager, or speak with a wellbeing professional through your employer's programme."
+      },
+      {
+        "min": 51,
+        "max": 75,
+        "title": "High workplace stress",
+        "body": "Your responses suggest a high level of workplace stress. Professional support is available and can help you find practical ways forward.",
+        "nextStep": "We recommend booking a confidential session with a psychologist through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
+      },
+      {
+        "min": 76,
+        "max": 100,
+        "title": "Very high workplace stress",
+        "body": "Your responses suggest a very high level of workplace stress. Please consider reaching out for support soon.",
+        "nextStep": "Book a confidential session with a psychologist through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
+      }
+    ]
+  },
+  "disclaimer": "This tool is not a medical device and does not provide a diagnosis. It is for informational purposes only. For a clinical evaluation, talk to a licensed professional. If you are in crisis, call the emergency number.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, call the emergency number now.",
+    "lines": [
+      { "label": "Serbia emergency", "value": "112" },
+      { "label": "Serbia ambulance", "value": "194" },
+      { "label": "Centar Srce (Serbia)", "value": "0800 300 303" },
+      { "label": "Hungary emergency", "value": "112" },
+      { "label": "Hungary ambulance", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Hungary)", "value": "116 123" }
+    ]
+  }
+}

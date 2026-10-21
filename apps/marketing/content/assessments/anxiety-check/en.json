@@ -1,0 +1,74 @@
+{
+  "title": "Anxiety check",
+  "intro": "Seven questions about how often you have been bothered by certain problems over the past two weeks. Your answers are not stored and are never shared with your employer.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "Generalised Anxiety Disorder 7-item scale (GAD-7)",
+    "source": "https://www.phqscreeners.com/",
+    "licence": "Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute."
+  },
+  "questions": [
+    { "id": "g1", "text": "Feeling nervous, anxious, or on edge" },
+    { "id": "g2", "text": "Not being able to stop or control worrying" },
+    { "id": "g3", "text": "Worrying too much about different things" },
+    { "id": "g4", "text": "Trouble relaxing" },
+    { "id": "g5", "text": "Being so restless that it is hard to sit still" },
+    { "id": "g6", "text": "Becoming easily annoyed or irritable" },
+    { "id": "g7", "text": "Feeling afraid, as if something awful might happen" }
+  ],
+  "options": [
+    { "label": "Not at all", "score": 0 },
+    { "label": "Several days", "score": 1 },
+    { "label": "More than half the days", "score": 2 },
+    { "label": "Nearly every day", "score": 3 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21,
+    "method": "sum",
+    "bands": [
+      {
+        "min": 0,
+        "max": 4,
+        "title": "Minimal anxiety",
+        "body": "Your responses suggest a minimal level of anxiety. Keeping up healthy routines can help you stay on track.",
+        "nextStep": "Explore our wellbeing articles and tools for ideas on maintaining balance."
+      },
+      {
+        "min": 5,
+        "max": 9,
+        "title": "Mild anxiety",
+        "body": "Your responses suggest a mild level of anxiety. Support is available if you would like to talk things through.",
+        "nextStep": "Consider exploring our self-help tools or speaking with a wellbeing professional through your employer's programme."
+      },
+      {
+        "min": 10,
+        "max": 14,
+        "title": "Moderate anxiety",
+        "body": "Your responses suggest a moderate level of anxiety. Talking to a professional soon is a good next step.",
+        "nextStep": "We recommend booking a confidential session with a psychologist through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
+      },
+      {
+        "min": 15,
+        "max": 21,
+        "title": "Severe anxiety",
+        "body": "Your responses suggest a severe level of anxiety. Talking to a professional soon is a good next step.",
+        "nextStep": "Book a confidential session with a psychologist through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
+      }
+    ]
+  },
+  "disclaimer": "This tool is not a medical device and does not provide a diagnosis. It is for informational purposes only. For a clinical evaluation, talk to a licensed professional. If you are in crisis, call the emergency number.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, call the emergency number now.",
+    "lines": [
+      { "label": "Serbia emergency", "value": "112" },
+      { "label": "Serbia ambulance", "value": "194" },
+      { "label": "Centar Srce (Serbia)", "value": "0800 300 303" },
+      { "label": "Hungary emergency", "value": "112" },
+      { "label": "Hungary ambulance", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Hungary)", "value": "116 123" }
+    ]
+  }
+}

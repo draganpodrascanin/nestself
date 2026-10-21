@@ -1,0 +1,69 @@
+{
+  "title": "Wellbeing check-in",
+  "intro": "Eight questions about how you have been feeling over the past two weeks. This is not a validated clinical instrument. Your answers are not stored and are never shared with your employer.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "NestSelf wellbeing check-in (not a validated clinical instrument)",
+    "source": "https://www.who.int/news-room/fact-sheets/detail/mental-health-at-work",
+    "licence": "NestSelf-authored instrument. The source URL is background reading on workplace mental health from WHO, not a licence reference."
+  },
+  "questions": [
+    { "id": "wc1", "text": "I have had enough energy to get through the day" },
+    { "id": "wc2", "text": "I have been sleeping well" },
+    { "id": "wc3", "text": "I have felt in a good mood" },
+    { "id": "wc4", "text": "I have felt connected to the people around me" },
+    { "id": "wc5", "text": "I have been able to focus on what I was doing" },
+    { "id": "wc6", "text": "I have enjoyed my daily activities" },
+    { "id": "wc7", "text": "I have felt free from excessive worry" },
+    { "id": "wc8", "text": "I have felt positive about what lies ahead" }
+  ],
+  "options": [
+    { "label": "Not at all", "score": 0 },
+    { "label": "Rarely", "score": 1 },
+    { "label": "Sometimes", "score": 2 },
+    { "label": "Often", "score": 3 },
+    { "label": "All of the time", "score": 4 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "sum-scaled-100",
+    "bands": [
+      {
+        "min": 0,
+        "max": 39,
+        "title": "Low right now",
+        "body": "Your responses suggest your wellbeing has been low over the past two weeks. Support is available and can help.",
+        "nextStep": "Consider speaking with a wellbeing professional through your employer's programme. All sessions are confidential. Your employer never learns who used NestSelf or what was discussed."
+      },
+      {
+        "min": 40,
+        "max": 69,
+        "title": "Mixed",
+        "body": "Your responses suggest a mixed picture. Some areas are going well while others could use attention.",
+        "nextStep": "Explore our wellbeing articles and tools, or consider a confidential conversation with a psychologist through your employer's programme."
+      },
+      {
+        "min": 70,
+        "max": 100,
+        "title": "Steady",
+        "body": "Your responses suggest your wellbeing has been steady over the past two weeks. Keeping up healthy routines can help you stay on track.",
+        "nextStep": "Explore our wellbeing articles and tools for ideas on maintaining balance."
+      }
+    ]
+  },
+  "disclaimer": "This tool is not a medical device and does not provide a diagnosis. It is for informational purposes only. For a clinical evaluation, talk to a licensed professional. If you are in crisis, call the emergency number.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, call the emergency number now.",
+    "lines": [
+      { "label": "Serbia emergency", "value": "112" },
+      { "label": "Serbia ambulance", "value": "194" },
+      { "label": "Centar Srce (Serbia)", "value": "0800 300 303" },
+      { "label": "Hungary emergency", "value": "112" },
+      { "label": "Hungary ambulance", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Hungary)", "value": "116 123" }
+    ]
+  }
+}

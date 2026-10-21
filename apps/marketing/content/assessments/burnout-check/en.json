@@ -1,0 +1,74 @@
+{
+  "title": "Burnout check",
+  "intro": "Six questions about personal burnout from the Copenhagen Burnout Inventory. Your answers are not stored and are never shared with your employer.",
+  "durationMinutes": 3,
+  "topic": "psychological",
+  "instrument": {
+    "name": "Copenhagen Burnout Inventory (CBI) – personal burnout scale",
+    "source": "https://nfa.dk/media/hl5nbers/cbi-first-edition.pdf",
+    "licence": "Kristensen, T. S., Borritz, M., Villadsen, E., & Christensen, K. B. (2005). The Copenhagen Burnout Inventory. Free to use with attribution."
+  },
+  "questions": [
+    { "id": "b1", "text": "How often do you feel tired?" },
+    { "id": "b2", "text": "How often are you physically exhausted?" },
+    { "id": "b3", "text": "How often are you emotionally exhausted?" },
+    { "id": "b4", "text": "How often do you think: \"I can't take it anymore\"?" },
+    { "id": "b5", "text": "How often do you feel worn out?" },
+    { "id": "b6", "text": "How often do you feel weak and susceptible to illness?" }
+  ],
+  "options": [
+    { "label": "Never or almost never", "score": 0 },
+    { "label": "Seldom", "score": 25 },
+    { "label": "Sometimes", "score": 50 },
+    { "label": "Often", "score": 75 },
+    { "label": "Always", "score": 100 }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 100,
+    "method": "mean",
+    "bands": [
+      {
+        "min": 0,
+        "max": 49,
+        "title": "Low burnout level",
+        "body": "Your responses suggest a low level of personal burnout. Keeping healthy routines can help you stay balanced.",
+        "nextStep": "Explore our wellbeing articles and tools for ideas on sustaining your energy."
+      },
+      {
+        "min": 50,
+        "max": 74,
+        "title": "Moderate burnout level",
+        "body": "Your responses suggest a moderate level of personal burnout. It may help to talk to someone about what you are experiencing.",
+        "nextStep": "Consider speaking with a wellbeing professional through your employer's programme. All sessions are confidential."
+      },
+      {
+        "min": 75,
+        "max": 99,
+        "title": "High burnout level",
+        "body": "Your responses suggest a high level of personal burnout. Professional support can make a real difference.",
+        "nextStep": "We recommend booking a confidential session with a psychologist through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
+      },
+      {
+        "min": 100,
+        "max": 100,
+        "title": "Severe burnout level",
+        "body": "Your responses suggest a severe level of personal burnout. Please consider reaching out for professional support as soon as you can.",
+        "nextStep": "Book a confidential session with a psychologist through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
+      }
+    ]
+  },
+  "disclaimer": "This tool is not a medical device and does not provide a diagnosis. It is for informational purposes only. For a clinical evaluation, talk to a licensed professional. If you are in crisis, call the emergency number.",
+  "crisis": {
+    "title": "Need immediate help?",
+    "body": "If you or someone you know is in immediate danger, call the emergency number now.",
+    "lines": [
+      { "label": "Serbia emergency", "value": "112" },
+      { "label": "Serbia ambulance", "value": "194" },
+      { "label": "Centar Srce (Serbia)", "value": "0800 300 303" },
+      { "label": "Hungary emergency", "value": "112" },
+      { "label": "Hungary ambulance", "value": "104" },
+      { "label": "Lelki Elsősegély Telefonszolgálat (Hungary)", "value": "116 123" }
+    ]
+  }
+}

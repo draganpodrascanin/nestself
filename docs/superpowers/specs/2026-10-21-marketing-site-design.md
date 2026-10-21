@@ -157,7 +157,7 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 
 ## 8. Launch checklist (not done in this pass)
 
-Replace placeholder testimonials with real, consented quotes; verify the crisis helpline numbers and hours with the operators; set the real contact email; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
+Replace placeholder testimonials with real, consented quotes; verify the crisis helpline numbers and hours with the operators; set the real contact email; conduct a DPIA and obtain a medical-device (MDR) classification opinion for the check-ins before any answers are ever stored (today nothing is stored); validate the Serbian programme name and the Hungarian informal register with native HR professionals; legal review of the Serbian psychotherapist wording; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
 
 ## 9. Work breakdown
 

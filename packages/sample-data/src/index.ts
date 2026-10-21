@@ -7,4 +7,6 @@ export { SAMPLE_CONTENT } from './fixtures/content';
 export { SAMPLE_BOOKING } from './fixtures/booking';
 export { SAMPLE_HR_PROGRAMME } from './fixtures/hr';
 export { SAMPLE_EVENT_REQUEST } from './fixtures/events';
+export { SAMPLE_TESTIMONIALS } from './fixtures/testimonials';
+export type { SampleTestimonial } from './fixtures/testimonials';
 export { isSampleMode, assertNotProduction } from './mode';
