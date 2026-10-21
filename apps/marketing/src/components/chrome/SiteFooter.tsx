@@ -61,7 +61,7 @@ export function SiteFooter({ locale }: SiteFooterProps) {
   ];
 
   return (
-    <footer className="py-12 border-t border-border-subtle">
+    <footer className="@container py-12 border-t border-border-subtle">
       <nav aria-label={t('marketing:footer.navLabel')}>
         <div className="gap-8 grid grid-cols-4 @max-[760px]:grid-cols-2 @max-[420px]:grid-cols-1">
           {columns.map((col) => (

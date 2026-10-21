@@ -733,3 +733,53 @@ Run as parallel translators on disjoint files, then a reviewer per language.
 - [ ] `CLAUDE.md` content rule updated: testimonials are placeholders from `SAMPLE_TESTIMONIALS` until real consented quotes exist; the rest unchanged. `apps/marketing/README.md` route table and "No-analytics policy" paragraph updated to the truth (forms exist; no analytics; placeholder testimonials). Spec section 8 launch checklist reviewed against reality.
 - [ ] `pnpm lint && pnpm lint:root && pnpm typecheck && pnpm test && CONTENT_STRICT=1 pnpm check && pnpm build && pnpm e2e` all green; `pnpm --filter @nestself/ui storybook:build` green.
 - [ ] Commit in logical units (foundations; pages; content and translations; e2e baselines; docker), update memory, report.
+
+## Phase D: fixes from the first visual and accessibility pass
+
+Findings came from the Playwright pass (axe, 320 px reflow) and from a visual review of all 109 marketing screenshots. Each task below owns disjoint files. Do not touch apps/marketing/content/{articles,webinars,tools,assessments} (a translation wave is writing their sr-Latn and hu siblings right now).
+
+### Task D1: Friendly form validation and labelled select options
+
+**Owns:** `apps/marketing/src/components/forms/**`, `apps/marketing/content/pages/demo/**`, `apps/marketing/content/pages/contact/**`, `apps/marketing/content/pages/webinars/**` (only the registration-form labels block), `apps/marketing/src/app/[locale]/demo/content.ts`, `apps/marketing/src/app/[locale]/contact/content.ts`, `apps/marketing/src/app/[locale]/webinars/content.ts` (schema additions only), `apps/marketing/src/lib/leads.ts`.
+
+Problem: the error summaries show zod's developer messages ("Too small: expected string to have >=1 characters", "Invalid input: expected true", "Invalid option: expected one of \"1-50\"|...") and the country select shows raw codes ("OTHER", "HU").
+
+- [ ] Add a `validation` block to the demo, contact and webinar page content schemas and `en.json`: `{ required: "Please fill in {{field}}.", email: "Enter a valid work email address, for example name@company.com.", consent: "Please agree to the privacy policy so we can reply.", select: "Please choose an option for {{field}}.", tooLong: "{{field}} is too long." }` plus a `fields` block already present (labels). Map every zod issue to one of these by issue code and path (`too_small` on a string → required; `invalid_format`/email → email; `invalid_value` on `consent` → consent; `invalid_value`/`invalid_enum_value` on selects → select; `too_big` → tooLong), interpolating the field label from the page content, in one shared helper in `src/lib/leads.ts` (`describeIssues(issues, labels, validation)`), used by all three forms. The summary links keep pointing at the field ids; inline field errors show the same friendly message.
+- [ ] Country, company-size and heard-about selects get human labels from the page content (`countries: { RS: "Serbia", HU: "Hungary", OTHER: "Other" }`, `companySizes: { "1-50": "1 to 50 employees", ... }`, `heardAbout: { search: "Search engine", referral: "Recommendation", event: "Event or conference", social: "Social media", other: "Other" }`) while still submitting the codes; the default country still follows the locale.
+- [ ] Update the form tests: empty submit shows the friendly messages (not the zod text), a bad email shows the email message, selects render labels. Run `pnpm --filter @nestself/marketing test` and `pnpm --filter @nestself/marketing typecheck`, then screenshot `/en/demo` after an empty submit (the e2e prepare action is in `e2e/pages/marketing/b6.ts`) and look at it.
+
+### Task D2: Legal, accessibility and prose page rendering
+
+**Owns:** `apps/marketing/src/app/[locale]/legal/**`, `apps/marketing/src/app/[locale]/accessibility/**`, `apps/marketing/src/app/[locale]/credits/**`, `apps/marketing/src/components/sections/ProseLayout.tsx` (+ test), `apps/marketing/content/pages/legal-*/**`, `apps/marketing/content/pages/accessibility/**` (structure only, no wording changes).
+
+Problem: the legal pages and the accessibility statement render their section headings and bullet lists as undifferentiated text in a narrow centred column, and show "Last updated: 2026-10-21" raw.
+
+- [ ] Render each content section with `Heading level={2} typeRole="sectionTitle"` (numbered sections keep their number in the heading text), paragraphs as `Text` with vertical rhythm (`space-y-4` inside sections, `space-y-10` between sections), bullets as a real `<ul>` with list markers, and the "last updated" line through `formatDate` from `@nestself/i18n` in the page locale. If the content JSON stores headings and bullets inside paragraph strings, restructure the JSON into `sections[].heading`, `paragraphs[]`, `bullets[]` without changing any wording.
+- [ ] `ProseLayout` starts at the left edge of the page container like every other page (no horizontal centering), with a reading width around 68ch and an optional aside slot on the right from 1024 px; keep the MDX article pages looking the same otherwise. Update its test.
+- [ ] Verify with `pnpm --filter @nestself/marketing test && pnpm --filter @nestself/marketing typecheck`, then screenshot `/en/legal/privacy-policy`, `/en/accessibility` and `/en/articles/signs-of-burnout-first-steps` at both widths and look at them.
+
+### Task D3: Locale-aware dates and labels on cards and teasers
+
+**Owns:** `apps/marketing/src/app/[locale]/for-managers/**`, `apps/marketing/src/app/[locale]/page.tsx` (date formatting lines only), `apps/marketing/src/app/[locale]/resources/**`, `apps/marketing/src/app/[locale]/articles/**` (date formatting only), `apps/marketing/src/app/[locale]/webinars/**` (date formatting only), `apps/marketing/src/lib/dates.ts` (new).
+
+Problem: the managers page passes raw `publishedAt` ("2026-10-08") to article cards and formats webinar dates with a hard-coded `'en'` locale; other pages format dates in different ways.
+
+- [ ] Create `src/lib/dates.ts` with `formatArticleDate(iso, locale)` and `formatWebinarDateTime(iso, locale)` built on `formatDate`/`formatDateTime` from `@nestself/i18n` (time zone Europe/Belgrade; webinar format "12 November 2026, 18:00 CET" in English and the locale's natural equivalent), with unit tests for en, sr-Latn, sr-Cyrl and hu.
+- [ ] Use them everywhere a date label is produced: home teasers, for-managers teasers, resources hub, articles list and detail, webinars list and detail. Grep for `toLocaleDateString`, `publishedAt` and `startsAt` in `apps/marketing/src/app` to find every site; no page may pass an ISO string straight to a card.
+- [ ] Verify with tests and typecheck, then screenshot `/en/for-managers` and `/hu/for-managers` and look at the dates.
+
+### Task D4: Visual polish on service, check-in, about and plans pages
+
+**Owns:** `apps/marketing/src/app/[locale]/services/**` (page files), `apps/marketing/content/pages/services*/**`, `apps/marketing/src/app/[locale]/tools/**` (page files only; not the runner), `apps/marketing/content/pages/tools/**`, `apps/marketing/content/pages/about/**`, `apps/marketing/content/pages/plans/**`, `apps/marketing/src/app/[locale]/about/**`.
+
+- [ ] Service pages open with `PageHero variant="split"` and a photo: overview `home-hero-office`, therapy `psychological-inperson`, legal consultation `legal-consultation`, financial guidance `financial-planning` (the later split sections then use a different photo than the hero: therapy "Who you will talk to" keeps `psychological-video-call`, legal "What it is not" uses `article-contract`, financial "Independent" uses `article-budget`).
+- [ ] Check-in intro pages (`/tools/<assessment>`) get a photo in the intro (not in the runner): map topic to photo in the page file (`psychological` → `assessment-sofa`, `work` → `article-end-of-day`, `financial` → `financial-planning`, default `assessment-sofa`), shown beside the intro text at 1024 px and above it on phones, with a meaningful `alt` from the tools page content JSON (add `introPhotoAlt` per topic to `content/pages/tools/en.json`).
+- [ ] About page: the "Why we built NestSelf" section uses `home-hero-office` instead of repeating the hero photo.
+- [ ] Plans page: "designed to meet WCAG 2.1 Level AA" becomes "designed to meet WCAG 2.2 Level AA" (the accessibility statement targets 2.2).
+- [ ] Verify with tests, typecheck and `CONTENT_ALLOW_MISSING_LOCALES=1 pnpm --filter @nestself/marketing check`, then screenshot `/en/services/therapy`, `/en/tools/wellbeing-check-in` and `/en/about` at both widths and look at them (faces must not be cropped by the hero crop; adjust the layout, never the photo files).
+
+### Task D5: Stabilise the assessment runner keyboard test
+
+**Owns:** `apps/marketing/src/components/assessment/AssessmentRunner.test.tsx` and, only if a real defect is found, `apps/marketing/src/components/assessment/AssessmentRunner.tsx`.
+
+- [ ] Two reviewers saw the keyboard-only test fail intermittently. Run it 15 times in a loop (`for i in $(seq 1 15); do pnpm --filter @nestself/marketing exec vitest run src/components/assessment/AssessmentRunner.test.tsx --reporter=dot || echo FAIL $i; done`), find the race (focus moving before the new question renders, `fireEvent.keyDown` on the wrong element, missing `await` on `user.tab()`), fix it with `findBy*` queries and `waitFor` on focus rather than timeouts, and confirm 15 consecutive passes. If the component itself moves focus too early (before the heading exists), fix the component and keep the behaviour described in the plan (focus moves to the new question heading on each step).
