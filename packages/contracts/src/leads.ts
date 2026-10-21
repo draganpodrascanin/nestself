@@ -1,13 +1,8 @@
 import { z } from 'zod';
 import { LocaleSchema } from './locale.ts';
 
-export const CompanySizeSchema = z.enum([
-  '1-49',
-  '50-199',
-  '200-499',
-  '500-999',
-  '1000+',
-]);
+export const CompanySizeSchema = z.enum(['1-50', '51-200', '201-500', '501-1000', '1000+']);
+export const HeardAboutSchema = z.enum(['search', 'referral', 'event', 'social', 'other']);
 
 export const CountrySchema = z.enum(['RS', 'HU', 'OTHER']);
 
@@ -31,6 +26,7 @@ export const DemoRequestSchema = LeadBase.extend({
   country: CountrySchema,
   role: Text(120).optional(),
   message: z.string().trim().max(2000).optional(),
+  heardAbout: HeardAboutSchema.optional(),
 });
 
 export const ContactMessageSchema = LeadBase.extend({
@@ -43,7 +39,10 @@ export const ContactMessageSchema = LeadBase.extend({
 
 export const WebinarRegistrationSchema = LeadBase.extend({
   kind: z.literal('webinar_registration'),
-  webinarSlug: z.string().regex(/^[a-z0-9-]+$/).max(120),
+  webinarSlug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .max(120),
   name: Text(120),
   email: Email,
   company: z.string().trim().max(160).optional(),

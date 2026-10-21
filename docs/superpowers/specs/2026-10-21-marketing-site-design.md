@@ -26,7 +26,7 @@ Out of scope: workspace, admin and mobile features; authentication; payments; a 
 | Employees of client companies (and family members where covered) | Understand what they can use, how confidential it is, and start using it | Open the workspace, or "Check if your employer offers NestSelf" |
 | Managers | Resources for leading teams well, team polls and channels | Explore manager resources |
 
-Offerings and their recommended names come from the research guide section 2 (EN, SR, HU). The working taxonomy:
+Offering names follow the research guide section 2 (EN / SR Latin / HU): Therapy & Counselling (Psihoterapija i savetovanje / Pszichoterápia és tanácsadás), Legal Consultation (Pravno savetovanje / Jogi tanácsadás), Financial Guidance (Finansijsko savetovanje / Pénzügyi tanácsadás), Webinars (Vebinari / Webináriumok), Articles in a Resources hub (Resursi / Tudástár), Wellbeing check-ins (Provera blagostanja / Közérzeti pulzus), Self-help tools (Alati za samopomoć / Önsegítő eszközök), Workforce insights (Uvidi za HR / HR betekintések), Manager support (Podrška za rukovodioce / Vezetői támogatás), Family support (Podrška za porodicu / Családi támogatás). The taxonomy:
 
 1. Psychological support and psychotherapy sessions with licensed professionals.
 2. Legal consultation.
@@ -46,26 +46,28 @@ All routes are prefixed with the locale (`/en`, `/sr-Latn`, `/sr-Cyrl`, `/hu`). 
 | Route | Page | Audience | Primary CTA |
 | --- | --- | --- | --- |
 | `/` | Home | all | Request a demo; For employees |
-| `/employers` | For employers | employers | Request a demo |
-| `/employees` | For employees | employees | Open the workspace |
+| `/for-employers` | For employers (`/employers` redirects) | employers | Request a demo |
+| `/for-employees` | For employees | employees | Open the workspace |
 | `/services` | Services overview (replaces `/support`, which redirects) | all | Request a demo |
-| `/services/psychological-support` | Psychological support | all | Request a demo / For employees |
+| `/services/therapy` | Therapy and counselling | all | Request a demo / For employees |
 | `/services/legal-consultation` | Legal consultation | all | same |
-| `/services/financial-consultation` | Financial consultation | all | same |
+| `/services/financial-guidance` | Financial guidance | all | same |
 | `/resources` | Resources hub (webinars, articles, tools) | all | Browse |
 | `/webinars`, `/webinars/[slug]` | Webinar list and detail with registration | all | Register |
 | `/articles`, `/articles/[slug]` | Article list and detail | all | Read; related CTA |
 | `/tools`, `/tools/[slug]` | Self-assessments and other tools; interactive runner for assessments | all | Start |
-| `/managers` | For managers | managers | Explore |
+| `/for-managers` | For managers | managers | Explore |
+| `/faq` | FAQ for employers and employees | all | Request a demo |
 | `/plans` | Plans and pricing approach (quote based, no invented numbers) | employers | Request a quote |
 | `/about` | About NestSelf: mission, how professionals are vetted, team as roles | all | Contact |
-| `/contact` | Contact and demo request form | employers | Send |
+| `/demo` | Demo request form (every "Request a demo" CTA lands here) | employers | Send |
+| `/contact` | Contact form and details | all | Send |
 | `/privacy-model` | How confidentiality works (existing, expanded) | all | For employees |
 | `/accessibility` | Accessibility statement | all | Contact |
 | `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint` | Legal pages (EU, Serbia, Hungary impresszum) | all | none |
 | `/credits` | Photo and font credits (existing, extended with generated imagery) | all | none |
 
-Navigation: Services (dropdown-free: a single link to the overview, with the three services listed on it), For employers, For employees, Resources, Plans, About, with a locale switcher and the "Request a demo" button in the header actions slot. Footer: four columns (Product, Resources, Company, Legal) plus locale switcher, tagline and credits.
+Navigation: Services (a single link to the overview, with the three services listed on it), For employers, For employees, Resources, Plans, About, with a locale switcher and the "Request a demo" button (to `/demo`) in the header actions slot. Footer: four columns (Product, Resources, Company, Legal) plus locale switcher, tagline and credits.
 
 ## 4. Architecture
 
@@ -87,7 +89,7 @@ Page content format: `apps/marketing/content/pages/<page>/<locale>.json`, valida
 - Articles and webinars: `apps/marketing/content/<articles|webinars>/<slug>/<locale>.mdx` with zod-validated frontmatter. Rendering uses `next-mdx-remote/rsc` with `remark-gfm` and `rehype-slug`, and a small component map (headings, callouts, figures via `PhotoFigure`).
 - Article frontmatter: `title`, `description`, `topic` (one of psychological, legal, financial, work, family, managers), `publishedAt`, `updatedAt?`, `readingMinutes` (computed when absent), `cover` (photo key), `author` (always a role such as "NestSelf editorial team"; never a named invented expert), `reviewedBy?` (omitted until a real reviewer exists), `related` (slugs).
 - Webinar frontmatter: `title`, `description`, `topic`, `startsAt` (ISO with offset), `durationMinutes`, `format` (`live` or `on-demand`), `speaker` (role and area, no invented personal names), `language` (locale codes the webinar is held in), `cover`, `registrationOpen`.
-- Self-assessments: data, not prose: `apps/marketing/content/assessments/<slug>/<locale>.json` with `title`, `intro`, `instrument` (source and licence line), `questions[]` (text), `options[]` (label, score), `scoring` (bands with range, title, body, next step), `disclaimer`, `crisis` block. Only instruments that are free for commercial web use are included (the research guide section 4 lists them); the WHO-5 is the first, a Copenhagen Burnout Inventory personal-burnout check the second, and two NestSelf-authored, explicitly non-clinical check-ins (workplace stress, financial wellbeing) complete the set.
+- Self-assessments: data, not prose: `apps/marketing/content/assessments/<slug>/<locale>.json` with `title`, `intro`, `instrument` (source and licence line), `questions[]` (text), `options[]` (label, score), `scoring` (bands with range, title, body, next step), `disclaimer`, `crisis` block. Only instruments that are free for commercial web use are included (research guide section 4): the GAD-7 (public domain, attributed to Spitzer, Williams, Kroenke and colleagues) and the Copenhagen Burnout Inventory personal-burnout scale (free with attribution), plus three NestSelf-authored, explicitly non-clinical check-ins (general wellbeing, workplace stress, financial wellbeing). The WHO-5 is excluded because its licence is disputed and likely non-commercial since 2024; MBI, WEMWBS and PSS-10 are excluded because they need paid or unclear licences.
 - Other tools: MDX guides under `apps/marketing/content/tools/<slug>/<locale>.mdx` (conversation planner, budget planner worksheet, legal document checklist).
 - `sr-Cyrl` files for all content types are generated from `sr-Latn` by `apps/marketing/scripts/transliterate-content.mjs`, which reuses `packages/i18n/scripts/transliterate-core.mjs` and protects code spans, URLs, frontmatter keys and brand names. `apps/marketing/scripts/check-content.mjs` enforces: every slug has `en`, `sr-Latn`, `hu`; `sr-Cyrl` matches a fresh transliteration; frontmatter validates; every referenced photo key and related slug exists. It is wired into `pnpm check`.
 
@@ -103,7 +105,7 @@ A client component driven by the assessment JSON: one question per step, Base UI
 
 ### 4.6 Lead capture
 
-- Shared schemas in `packages/contracts/src/leads.ts`: `DemoRequestSchema` (name, work email, company, company size bucket, country `RS | HU | OTHER`, role, message, consent, locale, honeypot), `ContactMessageSchema`, `WebinarRegistrationSchema` (webinar slug, name, email, consent, locale).
+- Shared schemas in `packages/contracts/src/leads.ts`: `DemoRequestSchema` (full name, work email, company, company size bucket `1-50 | 51-200 | 201-500 | 501-1000 | 1000+`, country `RS | HU | OTHER`, job title as `role`, how they heard about us, message, consent, locale, honeypot), `ContactMessageSchema`, `WebinarRegistrationSchema` (webinar slug, name, email, consent, locale).
 - API: `LeadsModule` in `apps/api` with public, throttled routes `POST /api/leads/demo-requests`, `POST /api/leads/contact`, `POST /api/leads/webinar-registrations`, validated with the shared zod schemas, stored in a `Lead` table (Prisma model with `kind`, `payload` JSON, `email`, `locale`, `source`, `createdAt`) via a new migration. No email is sent yet; a comment marks where a BullMQ job will be enqueued.
 - Marketing: Next route handlers `POST /api/leads/*` validate again and forward to `${API_URL}` (server-side env, never public). When `API_URL` is unset, they return 503 and the form shows an honest failure with the contact email address. Forms use `Field`, `FormErrorSummary` and `LiveRegion`; success states say exactly what happened ("We received your request") and never promise response times.
 
@@ -129,7 +131,7 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 - Testimonials are placeholders: `SAMPLE_TESTIMONIALS` in `packages/sample-data` with `placeholder: true`, fictional first names and roles, anonymised company descriptors, quotes written per locale. Rendered with initials, `data-placeholder="true"`, and listed in the launch checklist to be replaced. `CLAUDE.md` is updated to say exactly this.
 - No invented statistics, outcome claims, client logos, availability promises ("24/7") or response-time promises. Facts we can state: three support areas, four locales, licensed professionals, anonymised HR reporting with minimum group sizes, GDPR.
 - Family coverage is always "where included in your employer's plan".
-- Assessments are not diagnoses; every result carries the disclaimer and the crisis block with local emergency numbers (Serbia 112 and 194, Hungary 112 and 104) and a national helpline line only where the research confirmed one.
+- Assessments are not diagnoses; every result carries the disclaimer and the crisis block with local emergency numbers (Serbia 112 and 194, Hungary 112 and 104) and the helplines the research surfaced (Serbia: Centar Srce 0800 300 303; Hungary: Lelki Elsősegély Telefonszolgálat 116 123), with number verification on the launch checklist.
 - Expert portraits: roles and initials only.
 - Pricing: no numbers; plan tiers describe scope and are quote based.
 
@@ -155,7 +157,7 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 
 ## 8. Launch checklist (not done in this pass)
 
-Replace placeholder testimonials with real, consented quotes; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
+Replace placeholder testimonials with real, consented quotes; verify the crisis helpline numbers and hours with the operators; set the real contact email; native-speaker review of Serbian and Hungarian; build and push the API image in CI; email notifications for leads (BullMQ worker); localised slugs; legal review of the privacy policy, terms, cookie policy and impresszum texts (they are drafted templates with the company identifiers left as clearly marked fields); real expert profiles; Android.
 
 ## 9. Work breakdown
 

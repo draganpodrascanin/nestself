@@ -15,7 +15,7 @@ describe('leads', () => {
     name: 'Test Person',
     email: '  Test@Example.Com  ',
     company: 'Example d.o.o.',
-    companySize: '50-199' as const,
+    companySize: '51-200' as const,
     country: 'RS' as const,
     locale: 'en' as const,
     consent: true as const,
@@ -94,7 +94,7 @@ describe('leads', () => {
   });
 
   it('CompanySizeSchema accepts valid sizes', () => {
-    expect(CompanySizeSchema.parse('1-49')).toBe('1-49');
+    expect(CompanySizeSchema.parse('1-50')).toBe('1-50');
     expect(CompanySizeSchema.parse('1000+')).toBe('1000+');
   });
 

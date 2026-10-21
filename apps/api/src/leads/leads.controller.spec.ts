@@ -49,7 +49,7 @@ describe('LeadsController (e2e)', () => {
       name: 'Test Person',
       email: 'Test@Example.com',
       company: 'Example d.o.o.',
-      companySize: '50-199',
+      companySize: '51-200',
       country: 'RS',
       locale: 'en',
       consent: true,
