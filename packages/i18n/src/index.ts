@@ -22,4 +22,5 @@ export {
   formatDate,
   formatTime,
   formatDateTime,
+  formatLanguages,
 } from './format';

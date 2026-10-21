@@ -19,6 +19,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   ghost: 'border-transparent bg-transparent text-primary hover:bg-tint active:bg-tint',
   danger: 'btn-danger border-transparent bg-danger text-surface hover:brightness-95',
   'on-brand': 'border-transparent bg-on-primary text-primary hover:bg-accent hover:text-on-accent',
+  'on-brand-outline':
+    'border-on-primary/70 bg-transparent text-on-primary hover:bg-on-primary/10 active:bg-on-primary/15',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

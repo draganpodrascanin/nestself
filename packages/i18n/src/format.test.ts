@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCurrency, formatDate } from './format';
+import { formatCurrency, formatDate, formatLanguages } from './format';
 
 describe('formatCurrency', () => {
   it('formats EUR in English locale', () => {
@@ -32,5 +32,27 @@ describe('formatDate', () => {
   it('formats hu date with Hungarian month name', () => {
     const result = formatDate('2026-10-21T12:00:00Z', 'hu');
     expect(result).toBe('2026. október 21.');
+  });
+});
+
+describe('formatLanguages', () => {
+  it('names languages in English', () => {
+    expect(formatLanguages(['sr', 'hu', 'en'], 'en')).toBe('Serbian, Hungarian, English');
+  });
+
+  it('names languages in Serbian Latin, lower case as Serbian writes them', () => {
+    expect(formatLanguages(['en', 'sr'], 'sr-Latn')).toBe('engleski, srpski');
+  });
+
+  it('names languages in Serbian Cyrillic', () => {
+    expect(formatLanguages(['hu'], 'sr-Cyrl')).toBe('мађарски');
+  });
+
+  it('names languages in Hungarian', () => {
+    expect(formatLanguages(['sr', 'en'], 'hu')).toBe('szerb, angol');
+  });
+
+  it('falls back to the code for an unknown language', () => {
+    expect(formatLanguages(['xx'], 'en')).toBe('xx');
   });
 });

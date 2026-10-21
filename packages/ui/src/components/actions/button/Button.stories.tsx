@@ -15,6 +15,7 @@ export const Variants: StoryObj = {
       <Button variant="ghost">Ghost</Button>
       <Button variant="danger">Danger</Button>
       <Button variant="on-brand">On Brand</Button>
+      <Button variant="on-brand-outline">On Brand Outline</Button>
     </div>
   ),
 };

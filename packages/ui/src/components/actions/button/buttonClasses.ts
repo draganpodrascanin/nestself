@@ -1,6 +1,6 @@
 import { cn } from '../../../lib/cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'on-brand';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'on-brand' | 'on-brand-outline';
 export type ButtonSize = 'md' | 'sm';
 
 export const variantClasses: Record<ButtonVariant, string> = {
@@ -10,6 +10,9 @@ export const variantClasses: Record<ButtonVariant, string> = {
   ghost: 'border-transparent bg-transparent text-primary hover:bg-tint active:bg-tint px-2',
   danger: 'btn-danger border-transparent bg-danger text-surface hover:brightness-95',
   'on-brand': 'border-transparent bg-on-primary text-primary hover:bg-accent hover:text-on-accent',
+  /** Secondary action on a primary-coloured band: outlined, so the solid on-brand button stays the obvious first choice. */
+  'on-brand-outline':
+    'border-on-primary/70 bg-transparent text-on-primary hover:bg-on-primary/10 active:bg-on-primary/15 data-pressed:bg-on-primary/15',
 };
 
 export const sizeClasses: Record<ButtonSize, string> = {

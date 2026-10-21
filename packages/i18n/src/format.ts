@@ -61,3 +61,14 @@ export function formatDateTime(
     timeStyle: 'short',
   }).format(d);
 }
+
+/**
+ * Human-readable language names for session or webinar language codes
+ * (`en`, `sr`, `hu`), in the viewer's locale and script: "Serbian, Hungarian",
+ * "srpski, mađarski", "српски, мађарски", "szerb, magyar".
+ */
+export function formatLanguages(codes: readonly string[], locale: Locale): string {
+  const intl = localeMeta[locale].intl;
+  const names = new Intl.DisplayNames([intl], { type: 'language', fallback: 'code' });
+  return codes.map((code) => names.of(code) ?? code).join(', ');
+}
