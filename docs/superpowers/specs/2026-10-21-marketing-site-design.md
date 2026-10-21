@@ -65,9 +65,9 @@ All routes are prefixed with the locale (`/en`, `/sr-Latn`, `/sr-Cyrl`, `/hu`). 
 | `/privacy-model`                                                            | How confidentiality works (existing, expanded)                       | all       | For employees                  |
 | `/accessibility`                                                            | Accessibility statement                                              | all       | Contact                        |
 | `/legal/privacy-policy`, `/legal/terms`, `/legal/cookies`, `/legal/imprint` | Legal pages (EU, Serbia, Hungary impresszum)                         | all       | none                           |
-| `/credits`                                                                  | Photo and font credits (existing, extended with generated imagery)   | all       | none                           |
+| `/credits`                                                                  | Removed on 2026-10-21 (decision 12): neither the Pexels licence nor the generated imagery needs attribution; provenance stays in `photos.json` | —         | —                              |
 
-Navigation: Services (a single link to the overview, with the three services listed on it), For employers, For employees, Resources, Plans, About, with a locale switcher and the "Request a demo" button (to `/demo`) in the header actions slot. Footer: four columns (Product, Resources, Company, Legal) plus locale switcher, tagline and credits.
+Navigation: Services (a single link to the overview, with the three services listed on it), For employers, For employees, Resources, Plans, About, with the "Request a demo" button (to `/demo`) in the header actions slot and a language dropdown (globe icon, current language, menu of the four languages with the Serbian script named) in the header's utilities slot, visually subordinate to the navigation. Footer: four columns (Product, Resources, Company, Legal) plus the same language dropdown and the tagline.
 
 ## 4. Architecture
 
@@ -75,7 +75,7 @@ Navigation: Services (a single link to the overview, with the three services lis
 
 `hu` is added to `packages/i18n` (`locales`, `localeMeta` with `htmlLang: 'hu'`, `hreflang: 'hu'`, `intl: 'hu-HU'`, `nativeName: 'Magyar'`), to `packages/contracts` `LocaleSchema`, to the fallback map (`hu` falls back to `en`), to the parity checker (Hungarian plural groups are `_one` and `_other`), to the e2e `PageEntry.locale` union and `snap.mjs`, and to every catalog namespace. Catalogs for workspace, admin, mobile and common are translated once (drafts pending native review, like the Serbian ones). Onest covers every Hungarian and Serbian glyph (verified from the TTF cmap: ő ű and all Cyrillic letters present).
 
-The marketing header gets a `LocaleSwitcher` (links to the same path in each locale; sets the `NEXT_LOCALE` cookie the proxy already honours). `generateStaticParams`, `sitemap.ts` and `localeAlternates` pick the new locale up from the shared `locales` array.
+The marketing header gets a `LocaleSwitcher` (a Base UI menu of links to the same path in each locale; sets the `NEXT_LOCALE` cookie the proxy already honours). `generateStaticParams`, `sitemap.ts` and `localeAlternates` pick the locales up from the shared `locales` array. Since 2026-10-21 (decision 10) `defaultLocale` is `sr-Latn`: the proxy and the root page fall back to Serbian Latin when neither the cookie nor `Accept-Language` matches, `x-default` points at the Serbian Latin URL, and every page's canonical URL is its own locale URL. English remains the authoring source of content files; that is a workflow convention, not a user-facing default.
 
 ### 4.2 Two kinds of text
 
@@ -154,6 +154,12 @@ Per-page `generateMetadata` with localised title and description; hreflang alter
 7. Postgres 17 in Compose to match the local verification database.
 8. No cookie banner: only the functional `NEXT_LOCALE` cookie is set; the cookie policy page explains it.
 9. Testimonials mocked as requested, flagged in code and in the launch checklist.
+10. (Feedback round 1, 2026-10-21) Serbian Latin is the default language: `defaultLocale = 'sr-Latn'`, locale order `sr-Latn, sr-Cyrl, hu, en`, self-referencing canonicals, `x-default` on Serbian Latin; e2e base entries are Serbian Latin with `-en`, `-hu`, `-sr-cyrl` variants.
+11. (Round 1) The locale switcher is a dropdown menu (globe icon + current language name; items "Srpski · latinica", "Српски · ћирилица", "Magyar", "English") in a header utilities slot at the far right and in the footer, not among the navigation links.
+12. (Round 1) The credits page, credits dialog, `CREDITS.md` and its build script are removed: the Pexels licence and the generated images need no attribution. Photographer and source metadata stay in `packages/assets/photos.json` for provenance.
+13. (Round 1) Testimonials: card grid with one featured card (brand tint, larger quote), quote icon instead of typographic quotes, localised roles and company descriptors, a "Sample data" badge beside the heading.
+14. (Round 1) Steps sections: two-column composition (sticky heading, optional lead and photo on the left; a numbered vertical timeline with filled primary markers on the right), single column on phones. The uppercase "01" eyebrow pattern is gone.
+15. (Round 1) Reading pages (articles, webinars, guides, legal, accessibility) use one centred 720 px reading column for header, cover, body and disclaimer; related content stays container-wide below a rule. Every section shares `SECTION_PADDING` (`py-16`, `py-10` on phones); the trust strip is a bordered band directly under the hero with a two-column grid on phones.
 
 ## 8. Launch checklist (not done in this pass)
 

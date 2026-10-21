@@ -1,6 +1,7 @@
-export const locales = ['en', 'sr-Latn', 'sr-Cyrl', 'hu'] as const;
+export const locales = ['sr-Latn', 'sr-Cyrl', 'hu', 'en'] as const;
 export type Locale = (typeof locales)[number];
-export const defaultLocale: Locale = 'en';
+/** Serbian Latin is the default: it is served when nothing in the cookie or Accept-Language matches. */
+export const defaultLocale: Locale = 'sr-Latn';
 
 export const namespaces = [
   'common',
@@ -18,23 +19,18 @@ export const localeMeta: Record<
     hreflang: string;
     intl: string;
     nativeName: string;
+    /** Script qualifier shown next to the native name where two scripts of one language are offered. */
+    scriptLabel?: string;
     script: 'Latn' | 'Cyrl';
     dir: 'ltr';
   }
 > = {
-  en: {
-    htmlLang: 'en',
-    hreflang: 'en',
-    intl: 'en-GB',
-    nativeName: 'English',
-    script: 'Latn',
-    dir: 'ltr',
-  },
   'sr-Latn': {
     htmlLang: 'sr-Latn',
     hreflang: 'sr-Latn',
     intl: 'sr-Latn-RS',
     nativeName: 'Srpski',
+    scriptLabel: 'latinica',
     script: 'Latn',
     dir: 'ltr',
   },
@@ -43,6 +39,7 @@ export const localeMeta: Record<
     hreflang: 'sr-Cyrl',
     intl: 'sr-Cyrl-RS',
     nativeName: 'Српски',
+    scriptLabel: 'ћирилица',
     script: 'Cyrl',
     dir: 'ltr',
   },
@@ -51,6 +48,14 @@ export const localeMeta: Record<
     hreflang: 'hu',
     intl: 'hu-HU',
     nativeName: 'Magyar',
+    script: 'Latn',
+    dir: 'ltr',
+  },
+  en: {
+    htmlLang: 'en',
+    hreflang: 'en',
+    intl: 'en-GB',
+    nativeName: 'English',
     script: 'Latn',
     dir: 'ltr',
   },

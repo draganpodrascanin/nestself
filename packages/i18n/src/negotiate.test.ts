@@ -19,8 +19,12 @@ describe('negotiateLocale', () => {
     expect(negotiateLocale(['de', 'en-US'])).toBe('en');
   });
 
-  it('returns default for empty candidates', () => {
-    expect(negotiateLocale([])).toBe('en');
+  it('returns the Serbian Latin default for empty candidates', () => {
+    expect(negotiateLocale([])).toBe('sr-Latn');
+  });
+
+  it('falls back to Serbian Latin when no candidate is supported', () => {
+    expect(negotiateLocale(['de-DE', 'fr'])).toBe('sr-Latn');
   });
 
   it('returns exact match for supported locale', () => {
