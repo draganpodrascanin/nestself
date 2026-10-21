@@ -6,10 +6,19 @@
   "hero": {
     "eyebrow": "For employers",
     "title": "A wellbeing benefit your people will actually use",
-    "lead": "NestSelf gives your employees confidential access to licensed psychologists, legal professionals and financial advisors — plus self-assessments, webinars and a resource library. You get anonymised workforce insights. No one learns who used the service or what was discussed.",
-    "primaryCta": { "label": "Request a demo", "href": "/demo" },
-    "secondaryCta": { "label": "See plans", "href": "/plans" },
-    "photo": { "key": "employers-hr-meeting", "alt": "HR team discussing employee wellbeing programme at a meeting table" }
+    "lead": "NestSelf gives your employees confidential access to licensed psychologists, legal professionals and financial consultants — plus wellbeing check-ins, webinars and resources. You see anonymised workforce insights for groups of 10 or more. You never see who used NestSelf or what was discussed.",
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "See plans",
+      "href": "/plans"
+    },
+    "photo": {
+      "key": "employers-hr-meeting",
+      "alt": "HR team discussing employee wellbeing programme at a meeting table"
+    }
   },
   "whatYourPeopleGet": {
     "eyebrow": "For your team",
@@ -42,7 +51,7 @@
       },
       {
         "icon": "books",
-        "title": "Resource library",
+        "title": "Resources",
         "body": "Articles, guides and self-help tools your team can access any time.",
         "href": "/resources"
       },
@@ -55,7 +64,7 @@
       {
         "icon": "hand-heart",
         "title": "Family support",
-        "body": "Where your employer's plan includes family members, partners and children access the same services at no extra cost."
+        "body": "Where your plan includes family members, partners and children access the same services at no extra cost."
       }
     ]
   },
@@ -72,17 +81,35 @@
       "Manager resources and briefing materials",
       "Quarterly reviews with your NestSelf contact"
     ],
-    "photo": { "key": "about-studio", "alt": "NestSelf team working together in the Belgrade studio" }
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf team working together in the Belgrade studio"
+    }
   },
   "howALaunchWorks": {
     "eyebrow": "Getting started",
     "title": "How a launch works",
     "steps": [
-      { "title": "Kick-off and plan configuration", "body": "We agree on the plan, eligible groups and languages. You choose what is included." },
-      { "title": "Eligibility file and access setup", "body": "You share an eligibility list. We set up secure, private access for every eligible person." },
-      { "title": "Communications toolkit in your languages", "body": "We prepare announcement emails, posters and intranet materials in Serbian, Hungarian and English." },
-      { "title": "Go-live and manager briefing", "body": "Employees get access. Managers receive a short briefing on how to point someone to support." },
-      { "title": "Quarterly reviews", "body": "Your NestSelf contact shares anonymised insights and recommendations each quarter." }
+      {
+        "title": "Kick-off and plan configuration",
+        "body": "We agree on the plan, eligible groups and languages. You choose what is included."
+      },
+      {
+        "title": "Eligibility file and access setup",
+        "body": "You share an eligibility list. We set up secure, private access for every eligible person."
+      },
+      {
+        "title": "Communications toolkit in your languages",
+        "body": "We prepare announcement emails, posters and intranet materials in Serbian, Hungarian and English."
+      },
+      {
+        "title": "Go-live and manager briefing",
+        "body": "Employees get access. Managers receive a short briefing on how to point someone to support."
+      },
+      {
+        "title": "Quarterly reviews",
+        "body": "Your NestSelf contact shares anonymised insights and recommendations each quarter."
+      }
     ]
   },
   "confidentiality": {
@@ -97,25 +124,55 @@
       "Licensed professionals bound by professional secrecy",
       "Anonymised HR reports require a minimum group of 10"
     ],
-    "photo": { "key": "remote-home-dog", "alt": "Person working from home in a private, comfortable setting" }
+    "photo": {
+      "key": "remote-home-dog",
+      "alt": "Person working from home in a private, comfortable setting"
+    }
   },
   "faq": {
     "title": "Common questions from employers",
     "items": [
-      { "question": "What is NestSelf?", "answer": "NestSelf is an employee wellbeing programme that gives your people confidential access to licensed psychologists, legal professionals and financial advisors — plus self-assessments, webinars and a resource library." },
-      { "question": "What services are included?", "answer": "Depending on your plan: therapy and counselling, legal consultation, financial guidance, webinars, a resource library, self-assessment tools, manager support resources and family coverage." },
-      { "question": "How does it differ from a traditional EAP?", "answer": "Traditional EAPs often limit sessions and cover only psychological support. NestSelf includes legal and financial guidance, a self-service library, manager tools and anonymised workforce insights — all in one benefit." },
-      { "question": "Who is covered — only employees, or family members too?", "answer": "That depends on your plan. Where your plan includes family members, partners and children access the same services at no extra cost." },
-      { "question": "What data does the employer see?", "answer": "You see anonymised, aggregated wellbeing trends for groups of 10 or more. You never see who used the service, what was discussed or individual assessment results." },
-      { "question": "How is confidentiality protected?", "answer": "All professionals are bound by professional secrecy. We sign a data processing agreement, comply with GDPR and local data protection law, and never share individual-level data with the employer." },
-      { "question": "How quickly can we launch?", "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages." },
-      { "question": "What languages are supported?", "answer": "Sessions and resources are available in Serbian, Hungarian and English. Communications materials are prepared in your chosen languages." }
+      {
+        "question": "What is NestSelf?",
+        "answer": "NestSelf is an employee wellbeing programme that gives your people confidential access to licensed psychologists, legal professionals and financial consultants — plus wellbeing check-ins, webinars and resources."
+      },
+      {
+        "question": "What services are included?",
+        "answer": "Depending on your plan: Therapy & Counselling, Legal Consultation, Financial Guidance, Webinars, Resources, Wellbeing check-ins, Manager support and Family support."
+      },
+      {
+        "question": "How does it differ from a traditional EAP?",
+        "answer": "Traditional EAPs often limit sessions and cover only psychological support. NestSelf includes legal and financial guidance, resources, manager support and anonymised workforce insights — all in one benefit."
+      },
+      {
+        "question": "Who is covered — only employees, or family members too?",
+        "answer": "That depends on your plan. Where your plan includes family members, partners and children access the same services at no extra cost."
+      },
+      {
+        "question": "What data does the employer see?",
+        "answer": "You see anonymised, aggregated wellbeing trends for groups of 10 or more. You never see who used NestSelf, what was discussed or individual assessment results."
+      },
+      {
+        "question": "How is confidentiality protected?",
+        "answer": "All professionals are bound by professional secrecy. We sign a data processing agreement, comply with GDPR and local data protection law, and never share individual-level data with the employer."
+      },
+      {
+        "question": "How quickly can we launch?",
+        "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages."
+      },
+      {
+        "question": "What languages are supported?",
+        "answer": "Sessions and resources are available in Serbian, Hungarian and English. Communications materials are prepared in your chosen languages."
+      }
     ]
   },
   "cta": {
     "title": "Ready to support your team?",
     "body": "Request a demo and we will walk you through the programme, answer your questions and prepare a quote.",
-    "primary": { "label": "Request a demo", "href": "/demo" }
+    "primary": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   },
   "whoBenchmark": {
     "source": "WHO fact sheet on mental health at work",

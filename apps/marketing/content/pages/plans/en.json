@@ -6,18 +6,24 @@
   "hero": {
     "title": "Choose the right plan for your organisation",
     "lead": "Every plan includes confidential access to licensed professionals and a launch toolkit. Pick the scope that fits your team.",
-    "primaryCta": { "label": "Request a demo", "href": "/demo" }
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   },
   "tiers": [
     {
       "name": "Essentials",
       "audience": "For organisations starting with core psychological support.",
       "includes": [
-        "Therapy & Counselling with licensed psychologists",
-        "Resource library: articles, guides and self-help tools",
+        "Therapy & Counselling with licensed psychologists and qualified psychotherapists",
+        "Resources: articles, guides and self-help tools",
         "Webinars: live and on-demand expert sessions"
       ],
-      "cta": { "label": "Request a demo", "href": "/demo" }
+      "cta": {
+        "label": "Request a demo",
+        "href": "/demo"
+      }
     },
     {
       "name": "Complete",
@@ -26,10 +32,13 @@
         "Everything in Essentials",
         "Legal Consultation on personal legal matters",
         "Financial Guidance from certified professionals",
-        "Manager tools: polls, conversation guides, briefings",
+        "Manager support: polls, conversation guides, briefings",
         "Anonymised workforce insights for HR"
       ],
-      "cta": { "label": "Request a demo", "href": "/demo" }
+      "cta": {
+        "label": "Request a demo",
+        "href": "/demo"
+      }
     },
     {
       "name": "Enterprise",
@@ -41,7 +50,10 @@
         "Custom reporting and workforce insights",
         "Dedicated NestSelf contact"
       ],
-      "cta": { "label": "Request a demo", "href": "/demo" }
+      "cta": {
+        "label": "Request a demo",
+        "href": "/demo"
+      }
     }
   ],
   "note": "Priced per eligible employee per month. Your quote is based on headcount, countries and plan.",
@@ -53,7 +65,7 @@
       {
         "icon": "lock-key",
         "title": "Confidentiality",
-        "body": "Your employer never learns who used NestSelf or what was discussed. Anonymised reports require a minimum group of 10."
+        "body": "Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more."
       },
       {
         "icon": "translate",
@@ -75,17 +87,38 @@
   "faq": {
     "title": "Pricing questions",
     "items": [
-      { "question": "How does pricing work?", "answer": "Plans are priced per eligible employee per month. Your quote is based on headcount, countries and plan. Request a demo and we will prepare a quote for you." },
-      { "question": "Is there a minimum company size?", "answer": "NestSelf works for organisations of all sizes. Contact us and we will find the right plan for your team." },
-      { "question": "Can we start with Essentials and upgrade later?", "answer": "Yes. You can move to Complete or Enterprise at any time. Your NestSelf contact will help you plan the transition." },
-      { "question": "Do you offer a trial period?", "answer": "We can discuss a pilot programme as part of your demo. Contact us to learn more." },
-      { "question": "What is included in the launch toolkit?", "answer": "Announcement emails, posters, intranet materials and a manager briefing — all in your chosen languages." },
-      { "question": "How quickly can we launch?", "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages." }
+      {
+        "question": "How does pricing work?",
+        "answer": "Plans are priced per eligible employee per month. Your quote is based on headcount, countries and plan. Request a demo and we will prepare a quote for you."
+      },
+      {
+        "question": "Is there a minimum company size?",
+        "answer": "NestSelf works for organisations of all sizes. Contact us and we will find the right plan for your team."
+      },
+      {
+        "question": "Can we start with Essentials and upgrade later?",
+        "answer": "Yes. You can move to Complete or Enterprise at any time. Your NestSelf contact will help you plan the transition."
+      },
+      {
+        "question": "Do you offer a trial period?",
+        "answer": "We can discuss a pilot programme as part of your demo. Contact us to learn more."
+      },
+      {
+        "question": "What is included in the launch toolkit?",
+        "answer": "Announcement emails, posters, intranet materials and a manager briefing — all in your chosen languages."
+      },
+      {
+        "question": "How quickly can we launch?",
+        "answer": "From signed agreement to employee access in two to four weeks, depending on the size of your organisation and the number of languages."
+      }
     ]
   },
   "cta": {
     "title": "Request a quote",
     "body": "Tell us about your organisation and we will prepare a plan and a quote.",
-    "primary": { "label": "Request a demo", "href": "/demo" }
+    "primary": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   }
 }

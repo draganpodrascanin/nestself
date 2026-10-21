@@ -63,16 +63,19 @@ export function SiteFooter({ locale }: SiteFooterProps) {
   return (
     <footer className="py-12 border-t border-border-subtle">
       <nav aria-label={t('marketing:footer.navLabel')}>
-        <div className="grid gap-8 grid-cols-4 @max-[760px]:grid-cols-2">
+        <div className="gap-8 grid grid-cols-4 @max-[760px]:grid-cols-2 @max-[420px]:grid-cols-1">
           {columns.map((col) => (
             <div key={col.title}>
               <Text as="span" typeRole="label" className="mb-3 block">
                 {col.title}
               </Text>
-              <ul role="list" className="flex flex-col gap-2">
+              <ul role="list" className="gap-1 min-w-0 flex flex-col">
                 {col.links.map((link) => (
                   <li key={link.href}>
-                    <TextLink href={link.href} className="type-body text-text-secondary">
+                    <TextLink
+                      href={link.href}
+                      className="py-1 inline-block type-body break-words text-text-secondary"
+                    >
                       {link.label}
                     </TextLink>
                   </li>
@@ -83,20 +86,18 @@ export function SiteFooter({ locale }: SiteFooterProps) {
         </div>
       </nav>
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-border-subtle pt-8 @max-[760px]:flex-col @max-[760px]:items-start">
+      <div className="mt-10 gap-6 pt-8 flex flex-wrap items-center justify-between border-t border-border-subtle @max-[760px]:flex-col @max-[760px]:items-start">
         <div>
-          <span className="text-[1.9rem] tracking-[-0.065em] font-[var(--font-weight-label)] text-text">
+          <span className="text-[1.9rem] font-[var(--font-weight-label)] tracking-[-0.065em] text-text">
             nestself
           </span>
           <Text typeRole="metadata" tone="secondary" className="mt-1">
             {t('marketing:footer.tagline')}
           </Text>
         </div>
-        <div className="flex flex-wrap items-center gap-6 @max-[760px]:flex-col @max-[760px]:items-start @max-[760px]:gap-4">
+        <div className="gap-6 @max-[760px]:gap-4 flex flex-wrap items-center @max-[760px]:flex-col @max-[760px]:items-start">
           <LocaleSwitcher locale={locale} />
-          <CreditsDialog>
-            {t('marketing:footer.credits')}
-          </CreditsDialog>
+          <CreditsDialog>{t('marketing:footer.credits')}</CreditsDialog>
         </div>
       </div>
     </footer>

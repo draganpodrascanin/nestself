@@ -1,16 +1,16 @@
 {
   "meta": {
     "title": "Self-help tools and wellbeing check-ins",
-    "description": "Free self-assessments and guided planners to help you understand your wellbeing — no login, nothing stored."
+    "description": "Wellbeing check-ins and guided planners to help you understand your wellbeing — no login, nothing stored."
   },
   "hero": {
     "title": "Tools for your wellbeing",
-    "lead": "Quick self-assessments and practical planners you can use right now. Nothing you answer here is stored or shared with anyone.",
+    "lead": "Quick check-ins and practical planners you can use right now. Nothing you answer here is stored or shared with anyone.",
     "primaryCta": { "label": "Start a check-in", "href": "#assessments" },
     "secondaryCta": { "label": "Browse guides", "href": "#guides" }
   },
   "assessments": {
-    "eyebrow": "Self-assessments",
+    "eyebrow": "Check-ins",
     "title": "Wellbeing check-ins",
     "intro": "Short questionnaires that help you reflect on how you have been feeling. These are not diagnoses. Your answers stay in your browser and are never sent anywhere.",
     "durationLabel": "{minutes} min",

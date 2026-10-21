@@ -6,7 +6,7 @@
   },
   "title": "Privacy Policy",
   "updatedAt": "2026-10-21",
-  "intro": "This privacy policy explains how NestSelf processes personal data collected through this website. We are committed to protecting your privacy in accordance with the General Data Protection Regulation (GDPR), the Serbian Law on Personal Data Protection (ZZPL) and the applicable Hungarian data protection legislation.",
+  "intro": "This privacy policy explains how NestSelf processes personal data collected through this website. We process your data in accordance with the General Data Protection Regulation (GDPR), the Serbian Law on Personal Data Protection (ZZPL, Zakon o zaštiti podataka o ličnosti) and the Hungarian Act CXII of 2011 on Informational Self-Determination and Freedom of Information (Info tv.).",
   "sections": [
     {
       "heading": "1. Data controller",
@@ -14,6 +14,7 @@
         "[Company name], registered at [Address].",
         "Serbia: Matični broj [Matični broj], PIB [PIB].",
         "Hungary: Cégjegyzékszám [Cégjegyzékszám], Adószám [Adószám].",
+        "Data protection officer: [DPO name and contact — to be appointed before launch].",
         "Contact: hello@nestself.example"
       ]
     },
@@ -32,7 +33,8 @@
     {
       "heading": "3. Wellbeing check-ins",
       "paragraphs": [
-        "The wellbeing check-in questionnaires on this website run entirely in your browser. NestSelf does not store, transmit or process any of your answers or results. No health data is collected or processed by this website."
+        "The wellbeing check-in questionnaires on this website run entirely in your browser. Your answers and results are never sent to our servers. NestSelf does not store, transmit or process any check-in data.",
+        "Because no health data leaves your device, this website does not process special-category data under GDPR Article 9 or ZZPL Article 17. No explicit consent for health-data processing is required for the use of this website."
       ]
     },
     {
@@ -47,19 +49,25 @@
       ]
     },
     {
-      "heading": "5. Analytics and marketing cookies",
+      "heading": "5. Automated decision-making",
       "paragraphs": [
-        "This website does not set analytics or marketing cookies. The only cookie used is NEXT_LOCALE, a strictly functional cookie that stores your preferred language. There is no automated decision-making or profiling."
+        "This website does not carry out automated decision-making or profiling as defined by GDPR Article 22."
       ]
     },
     {
-      "heading": "6. Retention",
+      "heading": "6. Analytics and marketing cookies",
+      "paragraphs": [
+        "This website does not set analytics or marketing cookies. The only cookie used is NEXT_LOCALE, a strictly functional cookie that stores your preferred language. See our Cookie Policy for details."
+      ]
+    },
+    {
+      "heading": "7. Retention",
       "paragraphs": [
         "Contact and demo request data is retained for as long as necessary to respond to your enquiry and for a reasonable period afterwards for follow-up, unless you ask us to delete it sooner. Webinar registration data is retained for the duration of the webinar series and deleted within 12 months of the last event."
       ]
     },
     {
-      "heading": "7. Processors",
+      "heading": "8. Recipients and processors",
       "paragraphs": [
         "Your data may be processed by the following categories of service providers:"
       ],
@@ -69,7 +77,25 @@
       ]
     },
     {
-      "heading": "8. Your rights",
+      "heading": "9. International transfers",
+      "paragraphs": [
+        "If any of our processors transfer personal data outside the European Economic Area (EEA), we ensure appropriate safeguards are in place, such as Standard Contractual Clauses approved by the European Commission. Details of any such transfers will be documented here before launch."
+      ]
+    },
+    {
+      "heading": "10. Whether providing your data is required",
+      "paragraphs": [
+        "Providing your personal data through the demo request, contact or webinar registration forms is voluntary. You are not under a statutory or contractual obligation to provide it. If you choose not to fill in the required fields, we may not be able to respond to your enquiry or register you for a webinar."
+      ]
+    },
+    {
+      "heading": "11. Data protection impact assessment",
+      "paragraphs": [
+        "A data protection impact assessment (DPIA) has been conducted in accordance with GDPR Article 35, taking into account the NAIH mandatory DPIA list (Article 35(4) list). A summary is available on request by contacting us at hello@nestself.example."
+      ]
+    },
+    {
+      "heading": "12. Your rights",
       "paragraphs": [
         "Under the GDPR and the ZZPL you have the right to:"
       ],
@@ -83,13 +109,13 @@
       ]
     },
     {
-      "heading": "9. How to exercise your rights",
+      "heading": "13. How to exercise your rights",
       "paragraphs": [
         "To exercise any of these rights, contact us at hello@nestself.example. We will respond within 30 days."
       ]
     },
     {
-      "heading": "10. Supervisory authorities",
+      "heading": "14. Supervisory authorities",
       "paragraphs": [
         "If you believe your data protection rights have been violated, you have the right to lodge a complaint with:"
       ],
@@ -99,7 +125,13 @@
       ]
     },
     {
-      "heading": "11. Contact",
+      "heading": "15. Changes to this policy",
+      "paragraphs": [
+        "We may update this privacy policy from time to time. The date at the top of this page shows the last revision."
+      ]
+    },
+    {
+      "heading": "16. Contact",
       "paragraphs": [
         "For any questions about this privacy policy, contact us at hello@nestself.example."
       ]

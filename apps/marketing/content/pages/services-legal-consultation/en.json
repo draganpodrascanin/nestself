@@ -5,7 +5,7 @@
   },
   "hero": {
     "title": "Legal Consultation",
-    "lead": "Get confidential guidance from a qualified legal professional on your personal legal questions. Your employer never learns who used the service or what was discussed.",
+    "lead": "Get confidential guidance from a qualified legal professional on your personal legal questions. Your employer never learns who used NestSelf or what was discussed.",
     "primaryCta": { "label": "Request a demo", "href": "/demo" },
     "secondaryCta": { "label": "Back to services", "href": "/services" }
   },
@@ -46,7 +46,7 @@
   "faq": {
     "title": "Frequently asked questions",
     "items": [
-      { "question": "Will my employer know I used this service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees only anonymised usage data for groups of 10 or more." },
+      { "question": "Will my employer know I used this service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more." },
       { "question": "Can I get help with a dispute with my employer?", "answer": "Because your employer funds the programme, we cannot advise on disputes with them. In that case, we refer you to independent legal help." },
       { "question": "What happens after the consultation?", "answer": "You receive a written summary of the discussion and recommended next steps. If you need legal representation, your consultant provides a referral." },
       { "question": "Can my family members use this?", "answer": "Where your employer's plan includes family members, your partner and children can access the same legal consultation services." },

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Services — NestSelf",
-    "description": "Therapy and counselling, legal consultation and financial guidance — all in one employee wellbeing programme."
+    "description": "Therapy and counselling, legal consultation and financial guidance — a modern employee wellbeing benefit."
   },
   "hero": {
     "title": "Support that covers what matters",
@@ -55,7 +55,7 @@
     "title": "Questions about our services",
     "items": [
       { "question": "Is this covered by my employer?", "answer": "Your employer pays for the programme. Before you confirm a session, the platform shows your coverage and any remaining cost so there are no surprises." },
-      { "question": "Will my employer know I used the service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees only anonymised usage data for groups of 10 or more." },
+      { "question": "Will my employer know I used the service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more." },
       { "question": "Can my family use NestSelf?", "answer": "Where your employer's plan includes family members, your partner and children can access the same services at no extra cost." },
       { "question": "What languages are sessions available in?", "answer": "Sessions are available in Serbian, Hungarian and English, depending on the professional." },
       { "question": "Can I choose between video and in-person sessions?", "answer": "Yes. When you pick a professional and time, you will see whether video, in-person or both options are available." },

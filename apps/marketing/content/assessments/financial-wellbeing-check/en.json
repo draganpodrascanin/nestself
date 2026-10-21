@@ -41,22 +41,22 @@
         "min": 26,
         "max": 50,
         "title": "Moderate financial stress",
-        "body": "Your responses suggest a moderate level of financial stress. A conversation with a financial adviser could help you feel more in control.",
-        "nextStep": "Consider booking a confidential session with a financial adviser through your employer's programme."
+        "body": "Your responses suggest a moderate level of financial stress. A conversation with a financial consultant could help you feel more in control.",
+        "nextStep": "Consider booking a confidential session with a financial consultant through your employer's programme."
       },
       {
         "min": 51,
         "max": 75,
         "title": "High financial stress",
         "body": "Your responses suggest a high level of financial stress. Professional financial guidance is available and can help you find practical next steps.",
-        "nextStep": "We recommend booking a confidential session with a financial adviser through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
+        "nextStep": "We recommend booking a confidential session with a financial consultant through your employer's programme. Your employer never learns who used NestSelf or what was discussed."
       },
       {
         "min": 76,
         "max": 100,
         "title": "Very high financial stress",
         "body": "Your responses suggest a very high level of financial stress. Please consider reaching out for support soon.",
-        "nextStep": "Book a confidential session with a financial adviser through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
+        "nextStep": "Book a confidential session with a financial consultant through your employer's programme as soon as possible. Your employer never learns who used NestSelf or what was discussed."
       }
     ]
   },

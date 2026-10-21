@@ -6,9 +6,15 @@
   "hero": {
     "eyebrow": "About us",
     "title": "Wellbeing at work means more than therapy",
-    "lead": "NestSelf was founded on a simple idea: workplace support should include legal and financial questions, not only therapy. We bring licensed psychologists, legal professionals and financial advisors together in one confidential benefit.",
-    "primaryCta": { "label": "Contact us", "href": "/contact" },
-    "photo": { "key": "about-studio", "alt": "The NestSelf team at work in the Belgrade studio" }
+    "lead": "NestSelf was founded on a simple idea: workplace support should include legal and financial questions, not only therapy. We bring licensed psychologists, qualified psychotherapists, legal professionals and financial consultants together in one confidential benefit.",
+    "primaryCta": {
+      "label": "Contact us",
+      "href": "/contact"
+    },
+    "photo": {
+      "key": "about-studio",
+      "alt": "The NestSelf team at work in the Belgrade studio"
+    }
   },
   "mission": {
     "title": "Why we built NestSelf",
@@ -16,17 +22,35 @@
       "Employees deal with more than stress. A tenancy dispute, a question about parental leave or a debt problem can weigh just as heavily as anxiety — and one often leads to the other.",
       "Traditional EAPs cover psychological support but leave legal and financial questions to chance. NestSelf brings all three together in one confidential benefit, so your people can get help where they actually need it."
     ],
-    "photo": { "key": "psychological-inperson", "alt": "Psychologist in a session with a client" }
+    "photo": {
+      "key": "psychological-inperson",
+      "alt": "Psychologist in a session with a client"
+    }
   },
   "howWeWorkWithProfessionals": {
     "eyebrow": "Quality",
     "title": "How we work with professionals",
     "steps": [
-      { "title": "Licence verification", "body": "Every professional's licence and credentials are verified before they join the network." },
-      { "title": "Interview and references", "body": "We interview every candidate and check professional references." },
-      { "title": "Code of ethics and supervision", "body": "Professionals commit to a shared code of ethics and participate in regular supervision." },
-      { "title": "Languages", "body": "Sessions are available in Serbian, Hungarian and English. Professionals are matched by language and area of expertise." },
-      { "title": "Ongoing feedback", "body": "We collect anonymous feedback from users to maintain and improve quality." }
+      {
+        "title": "Licence verification",
+        "body": "Every professional's licence and credentials are verified before they join the network."
+      },
+      {
+        "title": "Interview and references",
+        "body": "We interview every candidate and check professional references."
+      },
+      {
+        "title": "Code of ethics and supervision",
+        "body": "Professionals commit to a shared code of ethics and participate in regular supervision."
+      },
+      {
+        "title": "Languages",
+        "body": "Sessions are available in Serbian, Hungarian and English. Professionals are matched by language and area of expertise."
+      },
+      {
+        "title": "Ongoing feedback",
+        "body": "We collect anonymous feedback from users to maintain and improve quality."
+      }
     ]
   },
   "team": {
@@ -35,11 +59,31 @@
     "lead": "A small team in Belgrade and Budapest, working across psychology, law, finance and technology.",
     "columns": 3,
     "members": [
-      { "initials": "CF", "role": "Co-founders", "body": "Built NestSelf to close the gap between what employees need and what traditional EAPs offer." },
-      { "initials": "CL", "role": "Clinical lead", "body": "Licensed psychologist overseeing the therapy network, supervision and professional standards." },
-      { "initials": "LL", "role": "Legal lead", "body": "Leads the legal consultation network and ensures compliance with data protection law in Serbia and Hungary." },
-      { "initials": "FL", "role": "Financial lead", "body": "Certified financial professional leading the financial guidance service." },
-      { "initials": "OP", "role": "Operations", "body": "Manages launches, employer relationships and day-to-day operations across both countries." }
+      {
+        "initials": "CF",
+        "role": "Co-founders",
+        "body": "Built NestSelf to close the gap between what employees need and what traditional EAPs offer."
+      },
+      {
+        "initials": "CL",
+        "role": "Clinical lead",
+        "body": "Licensed psychologist overseeing the therapy network, supervision and professional standards."
+      },
+      {
+        "initials": "LL",
+        "role": "Legal lead",
+        "body": "Leads the legal consultation network and ensures compliance with data protection law in Serbia and Hungary."
+      },
+      {
+        "initials": "FL",
+        "role": "Financial lead",
+        "body": "Certified financial professional leading the financial guidance service."
+      },
+      {
+        "initials": "OP",
+        "role": "Operations",
+        "body": "Manages launches, employer relationships and day-to-day operations across both countries."
+      }
     ]
   },
   "whereWeAre": {
@@ -47,11 +91,17 @@
     "paragraphs": [
       "Belgrade and Budapest, with professionals and team members working remotely across both countries."
     ],
-    "photo": { "key": "about-studio", "alt": "NestSelf studio workspace in Belgrade" }
+    "photo": {
+      "key": "about-studio",
+      "alt": "NestSelf studio workspace in Belgrade"
+    }
   },
   "cta": {
     "title": "Get in touch",
     "body": "Want to learn more about NestSelf or explore a partnership? We would love to hear from you.",
-    "primary": { "label": "Contact us", "href": "/contact" }
+    "primary": {
+      "label": "Contact us",
+      "href": "/contact"
+    }
   }
 }

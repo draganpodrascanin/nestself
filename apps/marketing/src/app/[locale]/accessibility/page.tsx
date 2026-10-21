@@ -8,7 +8,9 @@ import { PageHero, ProseLayout } from '@/components/sections';
 import { CONTACT_EMAIL } from '@/lib/contact';
 import { loadContent } from './content';
 
-interface Params { locale: string }
+interface Params {
+  locale: string;
+}
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale } = await params;
@@ -33,10 +35,10 @@ export default async function AccessibilityPage({ params }: { params: Promise<Pa
   return (
     <main id="main" tabIndex={-1} className="@container">
       <div className="pt-8 pb-4">
-        <Breadcrumbs label={data.breadcrumb.label} items={[
-          { label: data.breadcrumb.home, href: `/${locale}` },
-          { label: data.meta.title },
-        ]} />
+        <Breadcrumbs
+          label={data.breadcrumb.label}
+          items={[{ label: data.breadcrumb.home, href: `/${locale}` }, { label: data.meta.title }]}
+        />
       </div>
 
       <PageHero
@@ -67,7 +69,12 @@ export default async function AccessibilityPage({ params }: { params: Promise<Pa
         <section>
           <p>
             {contactHintParts[0]}
-            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="text-primary underline underline-offset-[0.2em]"
+            >
+              {CONTACT_EMAIL}
+            </a>
             {contactHintParts[1]}
           </p>
         </section>

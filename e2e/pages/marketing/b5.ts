@@ -31,7 +31,7 @@ async function completeWellbeingCheckIn(page: Page): Promise<void> {
   }
 
   // Wait for result heading to be visible
-  await page.getByText('Your result').waitFor({ state: 'visible' });
+  await page.getByRole('heading', { name: 'Your result' }).waitFor({ state: 'visible' });
 }
 
 export const prepareActions: Record<string, (page: Page) => Promise<void>> = {

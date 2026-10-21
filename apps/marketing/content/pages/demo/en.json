@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Request a demo",
-    "description": "See how NestSelf brings psychological, legal and financial support to your team. A person from our team will follow up."
+    "description": "See how NestSelf brings psychological, legal and financial support to your team. Tell us about your organisation and a person from our team will be in touch."
   },
   "hero": {
     "title": "Request a demo",
@@ -23,23 +23,62 @@
     "selectPlaceholder": "Select...",
     "options": {
       "companySize": [
-        { "value": "1-50", "label": "1 -- 50" },
-        { "value": "51-200", "label": "51 -- 200" },
-        { "value": "201-500", "label": "201 -- 500" },
-        { "value": "501-1000", "label": "501 -- 1,000" },
-        { "value": "1000+", "label": "1,000+" }
+        {
+          "value": "1-50",
+          "label": "1 – 50"
+        },
+        {
+          "value": "51-200",
+          "label": "51 – 200"
+        },
+        {
+          "value": "201-500",
+          "label": "201 – 500"
+        },
+        {
+          "value": "501-1000",
+          "label": "501 – 1,000"
+        },
+        {
+          "value": "1000+",
+          "label": "1,000+"
+        }
       ],
       "country": [
-        { "value": "RS", "label": "Serbia" },
-        { "value": "HU", "label": "Hungary" },
-        { "value": "OTHER", "label": "Other" }
+        {
+          "value": "RS",
+          "label": "Serbia"
+        },
+        {
+          "value": "HU",
+          "label": "Hungary"
+        },
+        {
+          "value": "OTHER",
+          "label": "Other"
+        }
       ],
       "heardAbout": [
-        { "value": "search", "label": "Search engine" },
-        { "value": "referral", "label": "Referral" },
-        { "value": "event", "label": "Event" },
-        { "value": "social", "label": "Social media" },
-        { "value": "other", "label": "Other" }
+        {
+          "value": "search",
+          "label": "Search engine"
+        },
+        {
+          "value": "referral",
+          "label": "Referral"
+        },
+        {
+          "value": "event",
+          "label": "Event"
+        },
+        {
+          "value": "social",
+          "label": "Social media"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
       ]
     },
     "emailHint": "We recommend using your work email so we can match you with your organisation.",
@@ -58,9 +97,18 @@
   "aside": {
     "title": "What happens next",
     "steps": [
-      { "title": "A person replies", "body": "Someone from our team will reach out by email to understand your needs." },
-      { "title": "A 30-minute call", "body": "We walk you through the platform, answer questions and discuss your team's situation." },
-      { "title": "A proposal", "body": "You receive a clear proposal with coverage, timeline and next steps." }
+      {
+        "title": "A person replies",
+        "body": "Someone from our team will reach out by email to understand your needs."
+      },
+      {
+        "title": "A 30-minute call",
+        "body": "We walk you through the platform, answer questions and discuss your team's situation."
+      },
+      {
+        "title": "A proposal",
+        "body": "You receive a clear proposal with coverage, timeline and next steps."
+      }
     ],
     "contactTitle": "Prefer email?",
     "contactBody": "Write to us directly at"
