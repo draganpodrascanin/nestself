@@ -193,3 +193,11 @@
 ## Barrier after C1, S1, D1
 
 Orchestrator: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm check`, `pnpm --filter @nestself/marketing check`; regenerate marketing baselines (`--update-snapshots=all`, 2 workers, warmed routes); visual QA workflow on the new baselines (phones first); fix loop; commit.
+
+## Barrier log (2026-10-21)
+
+- Streams C1, S1 and D1 each passed spec-compliance and code-quality review (19 agent runs). Commit d32d9c6.
+- Visual QA round 1 on the regenerated baselines (six reviewers, phones first): 11 findings (4 major, 7 minor), all fixed in e323b86: trust strip two columns down to 330 px containers, home FAQ two-column with a link to all questions, balanced hero headings, feature-grid secondary row sized to its item count, service steps with lead and photo, distinct legal table-of-contents headings, articles chip fade, tools hub rhythm, shorter access CTA, plural Serbian check-ins title; the e2e scroll-through now forces lazy images before captures.
+- Baselines: 73 entries x 390/1440 = 146 files regenerated with `--update-snapshots=all` (b25b2b7). Confirmation against a fresh dev server (8 GB heap, warmed sitemap, chunked by spec): screenshots 145/146 with the one failure (accessibility, desktop) passing on an immediate re-run, a11y 156/156 including the three keyboard tests, 320 px reflow 73/73.
+- Repo checks: lint 13/13, typecheck 14/14, unit tests 14/14 packages (marketing 270, ui 258), `pnpm check`, marketing content check (23 pages), production build 9/9 in a detached worktree (174 static marketing pages), Storybook build.
+- Operational: the shared dev server died under the first 365-test run (empty responses, then connection refused); restarted with `NODE_OPTIONS=--max-old-space-size=8192` and the suite split per spec it stayed healthy. Run long Playwright sessions under `caffeinate -i -s`.
