@@ -116,11 +116,12 @@ test.describe('keyboard navigation: marketing site', () => {
   test('the locale switcher changes the URL and the document language', async ({ page }) => {
     await page.goto('http://localhost:3000/en/plans');
     await settle(page);
-    const header = page.getByRole('banner');
-    await header.getByRole('link', { name: 'Magyar' }).click();
+    // The footer switcher is visible at every viewport (the header one collapses behind the menu button on phones).
+    const footer = page.getByRole('contentinfo');
+    await footer.getByRole('link', { name: 'Magyar' }).click();
     await page.waitForURL('**/hu/plans');
     await settle(page);
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('hu');
-    await expect(header.getByRole('link', { name: 'Magyar' })).toHaveAttribute('aria-current', 'true');
+    await expect(footer.getByRole('link', { name: 'Magyar' })).toHaveAttribute('aria-current', 'true');
   });
 });
