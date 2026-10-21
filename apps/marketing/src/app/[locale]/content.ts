@@ -64,6 +64,7 @@ export const schema = z.object({
   }),
   faq: z.object({
     title: z.string(),
+    moreLabel: z.string().optional(),
     items: z.array(z.object({ question: z.string(), answer: z.string() })),
   }),
   ctaBand: z.object({

@@ -116,6 +116,8 @@ export function FeatureGrid({
   }
 
   const primaryItems = tiered ? items.slice(0, tiered) : items;
+  /** Static class map: Tailwind cannot see a computed `grid-cols-${n}`. */
+  const secondaryColumns = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as const;
   const secondaryItems = tiered ? items.slice(tiered) : [];
 
   return (
@@ -146,7 +148,7 @@ export function FeatureGrid({
       {secondaryItems.length > 0 && (
         <ul
           role="list"
-          className="mt-6 grid gap-3 grid-cols-4 @max-[760px]:grid-cols-1"
+          className={cn('mt-6 grid gap-3 @max-[760px]:grid-cols-1', secondaryColumns[Math.min(secondaryItems.length, 4) as 1 | 2 | 3 | 4])}
         >
           {secondaryItems.map((item, i) => (
             <CompactItem key={`${item.icon}-secondary-${i}`} item={item} />

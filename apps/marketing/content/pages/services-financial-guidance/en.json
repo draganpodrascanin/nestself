@@ -6,30 +6,77 @@
   "hero": {
     "title": "Financial Guidance",
     "lead": "Work with an independent financial consultant on the money questions that matter to you. Our consultants sell no products and receive no commissions — their advice is entirely in your interest.",
-    "primaryCta": { "label": "Request a demo", "href": "/demo" },
-    "secondaryCta": { "label": "Back to services", "href": "/services" }
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Back to services",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "What it covers",
     "title": "Areas we can help with",
     "columns": 3,
     "items": [
-      { "icon": "wallet", "title": "Budgeting", "body": "Build a realistic budget that fits your life and helps you stay on top of your spending." },
-      { "icon": "chart-bar", "title": "Debt", "body": "Understand your options for managing or reducing debt, with a clear plan for next steps." },
-      { "icon": "shield-check", "title": "Savings and emergency fund", "body": "Set savings goals and build an emergency fund so unexpected costs do not catch you off guard." },
-      { "icon": "buildings", "title": "Loans and mortgages basics", "body": "Get guidance on what to look for in loan terms, interest rates and mortgage options." },
-      { "icon": "books", "title": "Taxes basics", "body": "Understand your tax obligations, deductions you may be entitled to and how to stay compliant." },
-      { "icon": "clock", "title": "Pensions", "body": "Learn how your pension works, what you can expect and whether additional savings make sense for you." }
+      {
+        "icon": "wallet",
+        "title": "Budgeting",
+        "body": "Build a realistic budget that fits your life and helps you stay on top of your spending."
+      },
+      {
+        "icon": "chart-bar",
+        "title": "Debt",
+        "body": "Understand your options for managing or reducing debt, with a clear plan for next steps."
+      },
+      {
+        "icon": "shield-check",
+        "title": "Savings and emergency fund",
+        "body": "Set savings goals and build an emergency fund so unexpected costs do not catch you off guard."
+      },
+      {
+        "icon": "buildings",
+        "title": "Loans and mortgages basics",
+        "body": "Get guidance on what to look for in loan terms, interest rates and mortgage options."
+      },
+      {
+        "icon": "books",
+        "title": "Taxes basics",
+        "body": "Understand your tax obligations, deductions you may be entitled to and how to stay compliant."
+      },
+      {
+        "icon": "clock",
+        "title": "Pensions",
+        "body": "Learn how your pension works, what you can expect and whether additional savings make sense for you."
+      }
     ]
   },
   "howItWorks": {
     "title": "How it works",
     "steps": [
-      { "title": "Book a session", "body": "Choose a time that works for you. Sessions are available by video or in person where offered." },
-      { "title": "Share your situation", "body": "Your consultant reviews your financial picture with you and identifies the areas where guidance will help most." },
-      { "title": "Get a plan", "body": "You leave with clear, actionable next steps tailored to your goals and circumstances." },
-      { "title": "Follow up", "body": "Book follow-up sessions as your situation changes. Your notes and progress stay with you." }
-    ]
+      {
+        "title": "Book a session",
+        "body": "Choose a time that works for you. Sessions are available by video or in person where offered."
+      },
+      {
+        "title": "Share your situation",
+        "body": "Your consultant reviews your financial picture with you and identifies the areas where guidance will help most."
+      },
+      {
+        "title": "Get a plan",
+        "body": "You leave with clear, actionable next steps tailored to your goals and circumstances."
+      },
+      {
+        "title": "Follow up",
+        "body": "Book follow-up sessions as your situation changes. Your notes and progress stay with you."
+      }
+    ],
+    "lead": "Independent guidance, step by step.",
+    "photo": {
+      "key": "financial-planning",
+      "alt": "A consultant and a client going through a household budget"
+    }
   },
   "independent": {
     "id": "independent",
@@ -38,22 +85,46 @@
       "Our financial consultants sell no products and receive no commissions. They are not tied to any bank, insurer or investment firm.",
       "Their only interest is helping you make informed decisions about your money."
     ],
-    "photo": { "key": "article-budget", "alt": "A financial consultant reviewing plans with a client" }
+    "photo": {
+      "key": "article-budget",
+      "alt": "A financial consultant reviewing plans with a client"
+    }
   },
   "faq": {
     "title": "Frequently asked questions",
     "items": [
-      { "question": "Will my employer know I used this service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more." },
-      { "question": "Will the consultant try to sell me something?", "answer": "No. Our consultants are independent — they sell no products and receive no commissions. Their advice is entirely in your interest." },
-      { "question": "Can my family members use this?", "answer": "Where your employer's plan includes family members, your partner and children can access the same financial guidance services." },
-      { "question": "What languages are sessions available in?", "answer": "Sessions are available in Serbian, Hungarian and English, depending on the consultant." },
-      { "question": "How many sessions can I have?", "answer": "The number of sessions depends on your employer's plan. Before you book, the platform shows your remaining coverage so there are no surprises." },
-      { "question": "Is this financial advice?", "answer": "This is guidance to help you understand your options and make informed decisions. For specific investment or tax advice, your consultant may recommend a specialist." }
+      {
+        "question": "Will my employer know I used this service?",
+        "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more."
+      },
+      {
+        "question": "Will the consultant try to sell me something?",
+        "answer": "No. Our consultants are independent — they sell no products and receive no commissions. Their advice is entirely in your interest."
+      },
+      {
+        "question": "Can my family members use this?",
+        "answer": "Where your employer's plan includes family members, your partner and children can access the same financial guidance services."
+      },
+      {
+        "question": "What languages are sessions available in?",
+        "answer": "Sessions are available in Serbian, Hungarian and English, depending on the consultant."
+      },
+      {
+        "question": "How many sessions can I have?",
+        "answer": "The number of sessions depends on your employer's plan. Before you book, the platform shows your remaining coverage so there are no surprises."
+      },
+      {
+        "question": "Is this financial advice?",
+        "answer": "This is guidance to help you understand your options and make informed decisions. For specific investment or tax advice, your consultant may recommend a specialist."
+      }
     ]
   },
   "cta": {
     "title": "Add financial guidance to your wellbeing programme",
     "body": "Help your employees feel more confident about their finances.",
-    "primary": { "label": "Request a demo", "href": "/demo" }
+    "primary": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   }
 }

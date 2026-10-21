@@ -6,29 +6,73 @@
   "hero": {
     "title": "Legal Consultation",
     "lead": "Get confidential guidance from a qualified legal professional on your personal legal questions. Your employer never learns who used NestSelf or what was discussed.",
-    "primaryCta": { "label": "Request a demo", "href": "/demo" },
-    "secondaryCta": { "label": "Back to services", "href": "/services" }
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Back to services",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "What it covers",
     "title": "Areas we can help with",
     "columns": 3,
     "items": [
-      { "icon": "buildings", "title": "Employment contracts and termination", "body": "Understand your rights around contracts, notice periods, severance and workplace changes." },
-      { "icon": "lock-key", "title": "Housing and tenancy", "body": "Get clarity on lease agreements, deposits, landlord disputes and tenant rights." },
-      { "icon": "users-three", "title": "Family matters basics", "body": "Initial guidance on custody, divorce procedures, child support and related family law questions." },
-      { "icon": "shield-check", "title": "Consumer issues", "body": "Help with product warranties, refund disputes, service contracts and consumer protection rights." },
-      { "icon": "wallet", "title": "Debt and enforcement", "body": "Understand your options when dealing with debt collection, court enforcement or creditor claims." },
-      { "icon": "books", "title": "Documents and administration", "body": "Guidance on notarising documents, apostilles, official applications and administrative procedures." }
+      {
+        "icon": "buildings",
+        "title": "Employment contracts and termination",
+        "body": "Understand your rights around contracts, notice periods, severance and workplace changes."
+      },
+      {
+        "icon": "lock-key",
+        "title": "Housing and tenancy",
+        "body": "Get clarity on lease agreements, deposits, landlord disputes and tenant rights."
+      },
+      {
+        "icon": "users-three",
+        "title": "Family matters basics",
+        "body": "Initial guidance on custody, divorce procedures, child support and related family law questions."
+      },
+      {
+        "icon": "shield-check",
+        "title": "Consumer issues",
+        "body": "Help with product warranties, refund disputes, service contracts and consumer protection rights."
+      },
+      {
+        "icon": "wallet",
+        "title": "Debt and enforcement",
+        "body": "Understand your options when dealing with debt collection, court enforcement or creditor claims."
+      },
+      {
+        "icon": "books",
+        "title": "Documents and administration",
+        "body": "Guidance on notarising documents, apostilles, official applications and administrative procedures."
+      }
     ]
   },
   "howItWorks": {
     "title": "How it works",
     "steps": [
-      { "title": "30- to 45-minute consultation", "body": "Each consultation lasts 30 to 45 minutes — enough time to review your situation and outline your options." },
-      { "title": "Written summary of next steps", "body": "After the consultation you receive a written summary so you know exactly what to do next." },
-      { "title": "Referral when needed", "body": "If your situation requires legal representation, your consultant refers you to an appropriate professional." }
-    ]
+      {
+        "title": "30- to 45-minute consultation",
+        "body": "Each consultation lasts 30 to 45 minutes — enough time to review your situation and outline your options."
+      },
+      {
+        "title": "Written summary of next steps",
+        "body": "After the consultation you receive a written summary so you know exactly what to do next."
+      },
+      {
+        "title": "Referral when needed",
+        "body": "If your situation requires legal representation, your consultant refers you to an appropriate professional."
+      }
+    ],
+    "lead": "A consultation is practical: you bring the question, the lawyer brings the options.",
+    "photo": {
+      "key": "legal-consultation",
+      "alt": "A lawyer and a client reviewing documents together"
+    }
   },
   "whatItIsNot": {
     "id": "limitations",
@@ -41,22 +85,46 @@
       "Not a substitute for a retained lawyer — for ongoing legal matters you may need your own counsel.",
       "Not for disputes with your employer — where a conflict of interest exists, we point you to independent legal help."
     ],
-    "photo": { "key": "article-contract", "alt": "A legal professional reviewing documents during a consultation" }
+    "photo": {
+      "key": "article-contract",
+      "alt": "A legal professional reviewing documents during a consultation"
+    }
   },
   "faq": {
     "title": "Frequently asked questions",
     "items": [
-      { "question": "Will my employer know I used this service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more." },
-      { "question": "Can I get help with a dispute with my employer?", "answer": "Because your employer funds the programme, we cannot advise on disputes with them. In that case, we refer you to independent legal help." },
-      { "question": "What happens after the consultation?", "answer": "You receive a written summary of the discussion and recommended next steps. If you need legal representation, your consultant provides a referral." },
-      { "question": "Can my family members use this?", "answer": "Where your employer's plan includes family members, your partner and children can access the same legal consultation services." },
-      { "question": "What languages are consultations available in?", "answer": "Consultations are available in Serbian, Hungarian and English, depending on the professional." },
-      { "question": "Is this a replacement for having my own lawyer?", "answer": "No. This service provides initial guidance and helps you understand your options. For ongoing matters, you may need to retain your own lawyer." }
+      {
+        "question": "Will my employer know I used this service?",
+        "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more."
+      },
+      {
+        "question": "Can I get help with a dispute with my employer?",
+        "answer": "Because your employer funds the programme, we cannot advise on disputes with them. In that case, we refer you to independent legal help."
+      },
+      {
+        "question": "What happens after the consultation?",
+        "answer": "You receive a written summary of the discussion and recommended next steps. If you need legal representation, your consultant provides a referral."
+      },
+      {
+        "question": "Can my family members use this?",
+        "answer": "Where your employer's plan includes family members, your partner and children can access the same legal consultation services."
+      },
+      {
+        "question": "What languages are consultations available in?",
+        "answer": "Consultations are available in Serbian, Hungarian and English, depending on the professional."
+      },
+      {
+        "question": "Is this a replacement for having my own lawyer?",
+        "answer": "No. This service provides initial guidance and helps you understand your options. For ongoing matters, you may need to retain your own lawyer."
+      }
     ]
   },
   "cta": {
     "title": "Add legal support to your wellbeing programme",
     "body": "Help your employees navigate personal legal matters with confidence.",
-    "primary": { "label": "Request a demo", "href": "/demo" }
+    "primary": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   }
 }

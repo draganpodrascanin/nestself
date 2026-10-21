@@ -6,30 +6,77 @@
   "hero": {
     "title": "Pénzügyi tanácsadás",
     "lead": "Dolgozz együtt egy független pénzügyi tanácsadóval a számodra fontos pénzügyi kérdésekben. Tanácsadóink nem értékesítenek termékeket és nem kapnak jutalékot — tanácsaik kizárólag a te érdekeidet szolgálják.",
-    "primaryCta": { "label": "Kérj bemutatót", "href": "/demo" },
-    "secondaryCta": { "label": "Vissza a szolgáltatásokhoz", "href": "/services" }
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Vissza a szolgáltatásokhoz",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "Miben segítünk",
     "title": "Területek, ahol segíthetünk",
     "columns": 3,
     "items": [
-      { "icon": "wallet", "title": "Költségvetés", "body": "Állíts össze egy reális költségvetést, ami illik az életedhez, és segít kézben tartani a kiadásaidat." },
-      { "icon": "chart-bar", "title": "Adósság", "body": "Értsd meg a lehetőségeidet az adósságkezelésre vagy -csökkentésre, egy világos tervvel a következő lépésekhez." },
-      { "icon": "shield-check", "title": "Megtakarítás és vészhelyzeti alap", "body": "Tűzz ki megtakarítási célokat, és építs fel egy vészhelyzeti alapot, hogy a váratlan költségek ne érjenek felkészületlenül." },
-      { "icon": "buildings", "title": "Hitelek és jelzálog alapok", "body": "Kérj útmutatást a hitelfeltételekhez, kamatokhoz és jelzálog-lehetőségekhez." },
-      { "icon": "books", "title": "Adózás alapok", "body": "Értsd meg az adókötelezettségeidet, az igénybe vehető kedvezményeket és a szabályos adózást." },
-      { "icon": "clock", "title": "Nyugdíj", "body": "Tudd meg, hogyan működik a nyugdíjad, mire számíthatsz, és hogy van-e értelme további megtakarításnak." }
+      {
+        "icon": "wallet",
+        "title": "Költségvetés",
+        "body": "Állíts össze egy reális költségvetést, ami illik az életedhez, és segít kézben tartani a kiadásaidat."
+      },
+      {
+        "icon": "chart-bar",
+        "title": "Adósság",
+        "body": "Értsd meg a lehetőségeidet az adósságkezelésre vagy -csökkentésre, egy világos tervvel a következő lépésekhez."
+      },
+      {
+        "icon": "shield-check",
+        "title": "Megtakarítás és vészhelyzeti alap",
+        "body": "Tűzz ki megtakarítási célokat, és építs fel egy vészhelyzeti alapot, hogy a váratlan költségek ne érjenek felkészületlenül."
+      },
+      {
+        "icon": "buildings",
+        "title": "Hitelek és jelzálog alapok",
+        "body": "Kérj útmutatást a hitelfeltételekhez, kamatokhoz és jelzálog-lehetőségekhez."
+      },
+      {
+        "icon": "books",
+        "title": "Adózás alapok",
+        "body": "Értsd meg az adókötelezettségeidet, az igénybe vehető kedvezményeket és a szabályos adózást."
+      },
+      {
+        "icon": "clock",
+        "title": "Nyugdíj",
+        "body": "Tudd meg, hogyan működik a nyugdíjad, mire számíthatsz, és hogy van-e értelme további megtakarításnak."
+      }
     ]
   },
   "howItWorks": {
     "title": "Hogyan működik",
     "steps": [
-      { "title": "Foglalj időpontot", "body": "Válassz egy neked megfelelő időpontot. Az ülések videón vagy személyesen érhetők el." },
-      { "title": "Oszd meg a helyzetedet", "body": "Tanácsadód áttekinti veled a pénzügyi képedet, és azonosítja azokat a területeket, ahol a legtöbbet segíthet." },
-      { "title": "Kapj egy tervet", "body": "Világos, végrehajtható lépésekkel távozol, amelyek a céljaidhoz és a körülményeidhez igazodnak." },
-      { "title": "Folytasd", "body": "Foglalj visszatérő üléseket, ahogy változik a helyzeted. A jegyzeteid és a haladásod megmaradnak." }
-    ]
+      {
+        "title": "Foglalj időpontot",
+        "body": "Válassz egy neked megfelelő időpontot. Az ülések videón vagy személyesen érhetők el."
+      },
+      {
+        "title": "Oszd meg a helyzetedet",
+        "body": "Tanácsadód áttekinti veled a pénzügyi képedet, és azonosítja azokat a területeket, ahol a legtöbbet segíthet."
+      },
+      {
+        "title": "Kapj egy tervet",
+        "body": "Világos, végrehajtható lépésekkel távozol, amelyek a céljaidhoz és a körülményeidhez igazodnak."
+      },
+      {
+        "title": "Folytasd",
+        "body": "Foglalj visszatérő üléseket, ahogy változik a helyzeted. A jegyzeteid és a haladásod megmaradnak."
+      }
+    ],
+    "lead": "Független tanácsadás, lépésről lépésre.",
+    "photo": {
+      "key": "financial-planning",
+      "alt": "Tanácsadó és ügyfél átnéz egy háztartási költségvetést"
+    }
   },
   "independent": {
     "id": "independent",
@@ -38,22 +85,46 @@
       "Pénzügyi tanácsadóink nem értékesítenek termékeket és nem kapnak jutalékot. Nincsenek bankhoz, biztosítóhoz vagy befektetési céghez kötve.",
       "Egyetlen érdekük az, hogy segítsenek tájékozott döntéseket hozni a pénzügyeidről."
     ],
-    "photo": { "key": "article-budget", "alt": "Pénzügyi tanácsadó terveket tekint át egy ügyféllel" }
+    "photo": {
+      "key": "article-budget",
+      "alt": "Pénzügyi tanácsadó terveket tekint át egy ügyféllel"
+    }
   },
   "faq": {
     "title": "Gyakran ismételt kérdések",
     "items": [
-      { "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?", "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra." },
-      { "question": "Megpróbál majd eladni nekem valamit a tanácsadó?", "answer": "Nem. Tanácsadóink függetlenek — nem értékesítenek termékeket és nem kapnak jutalékot. Tanácsaik kizárólag a te érdekeidet szolgálják." },
-      { "question": "A családtagjaim is használhatják?", "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a pénzügyi tanácsadási szolgáltatást vehetik igénybe." },
-      { "question": "Milyen nyelveken érhetők el az ülések?", "answer": "Az ülések szerbül, magyarul és angolul érhetők el, a tanácsadótól függően." },
-      { "question": "Hány ülésen vehetek részt?", "answer": "Az ülések száma a munkáltatód csomagjától függ. Foglalás előtt a platform megjeleníti a fennmaradó lefedettségedet, így nincsenek meglepetések." },
-      { "question": "Ez pénzügyi tanácsadás?", "answer": "Ez útmutatás, amely segít megérteni a lehetőségeidet és tájékozott döntéseket hozni. Speciális befektetési vagy adótanácsadáshoz tanácsadód szakembert ajánlhat." }
+      {
+        "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "Megpróbál majd eladni nekem valamit a tanácsadó?",
+        "answer": "Nem. Tanácsadóink függetlenek — nem értékesítenek termékeket és nem kapnak jutalékot. Tanácsaik kizárólag a te érdekeidet szolgálják."
+      },
+      {
+        "question": "A családtagjaim is használhatják?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a pénzügyi tanácsadási szolgáltatást vehetik igénybe."
+      },
+      {
+        "question": "Milyen nyelveken érhetők el az ülések?",
+        "answer": "Az ülések szerbül, magyarul és angolul érhetők el, a tanácsadótól függően."
+      },
+      {
+        "question": "Hány ülésen vehetek részt?",
+        "answer": "Az ülések száma a munkáltatód csomagjától függ. Foglalás előtt a platform megjeleníti a fennmaradó lefedettségedet, így nincsenek meglepetések."
+      },
+      {
+        "question": "Ez pénzügyi tanácsadás?",
+        "answer": "Ez útmutatás, amely segít megérteni a lehetőségeidet és tájékozott döntéseket hozni. Speciális befektetési vagy adótanácsadáshoz tanácsadód szakembert ajánlhat."
+      }
     ]
   },
   "cta": {
     "title": "Egészítsd ki a jólléti programodat pénzügyi tanácsadással",
     "body": "Segítsd a munkavállalóidat, hogy magabiztosabban kezeljék a pénzügyeiket.",
-    "primary": { "label": "Kérj bemutatót", "href": "/demo" }
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
   }
 }

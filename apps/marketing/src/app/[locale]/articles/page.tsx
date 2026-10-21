@@ -75,7 +75,7 @@ export default async function ArticlesPage({
 
       <section className={SECTION_PADDING}>
         <nav aria-label={data.filterLabel}>
-          <ul className="flex gap-2 list-none m-0 p-0 overflow-x-auto [scrollbar-width:thin] -mx-4 px-4">
+          <ul className="flex gap-2 list-none m-0 p-0 overflow-x-auto [scrollbar-width:thin] -mx-4 px-4 @max-[760px]:pr-10 @max-[760px]:[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <li className="shrink-0">
               <a
                 href={`/${locale}/articles`}

@@ -165,7 +165,8 @@
         "question": "Mi a teendő krízishelyzetben?",
         "answer": "Ha te vagy valaki, akit ismersz, közvetlen veszélyben van, hívd a segélyhívó számot most. Szerbia: 112 (segélyhívó), 194 (mentő); Centar Srce 0800 300 303. Magyarország: 112 (segélyhívó), 104 (mentő); Lelki Elsősegély Telefonszolgálat 116 123. A NestSelf ezenkívül segít a sürgős szakmai támogatás elérésében."
       }
-    ]
+    ],
+    "moreLabel": "Minden kérdés"
   },
   "ctaBand": {
     "title": "Készen állsz a csapatod támogatására?",

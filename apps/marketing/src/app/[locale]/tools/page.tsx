@@ -10,6 +10,7 @@ import { ToolCard } from '@/components/cards/ToolCard';
 import { Heading, Text, Eyebrow } from '@nestself/ui';
 import type { PhotoKey } from '@nestself/assets';
 import { loadContent } from './content';
+import { SECTION_PADDING } from '@/components/sections/section';
 
 interface Params {
   locale: string;
@@ -50,7 +51,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
       />
 
       {/* Self-assessments section */}
-      <section id="assessments" aria-labelledby="assessments-title" className="py-16">
+      <section id="assessments" aria-labelledby="assessments-title" className={SECTION_PADDING}>
         <Eyebrow>{data.assessments.eyebrow}</Eyebrow>
         <Heading level={2} id="assessments-title" typeRole="sectionTitle" className="mt-2 mb-4">
           {data.assessments.title}
@@ -80,7 +81,7 @@ export default async function ToolsPage({ params }: { params: Promise<Params> })
       </section>
 
       {/* Guides and planners section */}
-      <section id="guides" aria-labelledby="guides-title" className="py-16">
+      <section id="guides" aria-labelledby="guides-title" className={SECTION_PADDING}>
         <Eyebrow>{data.guides.eyebrow}</Eyebrow>
         <Heading level={2} id="guides-title" typeRole="sectionTitle" className="mt-2 mb-4">
           {data.guides.title}

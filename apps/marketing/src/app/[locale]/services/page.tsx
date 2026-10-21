@@ -109,6 +109,8 @@ export default async function ServicesPage({
       <StepsSection
         id="how-it-works"
         title={data.steps.title}
+        lead={data.steps.lead}
+        photo={data.steps.photo ? { key: data.steps.photo.key as PhotoKey, alt: data.steps.photo.alt } : undefined}
         steps={data.steps.items}
       />
 

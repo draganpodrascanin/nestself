@@ -49,5 +49,6 @@
   "breadcrumb": {
     "label": "Breadcrumb",
     "home": "Home"
-  }
+  },
+  "relatedHeading": "Related documents"
 }

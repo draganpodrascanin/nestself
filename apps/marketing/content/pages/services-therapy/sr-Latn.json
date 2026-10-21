@@ -6,30 +6,77 @@
   "hero": {
     "title": "Psihoterapija i savetovanje",
     "lead": "Razgovarajte sa licenciranim psiholozima i kvalifikovanim psihoterapeutima o onome što Vam je na umu — stres, anksioznost, odnosi, tuga ili bilo šta drugo. Sesije su poverljive, a Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo.",
-    "primaryCta": { "label": "Zakažite prezentaciju", "href": "/demo" },
-    "secondaryCta": { "label": "Nazad na usluge", "href": "/services" }
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Nazad na usluge",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "Šta pokriva",
     "title": "Oblasti u kojima možemo da pomognemo",
     "columns": 3,
     "items": [
-      { "icon": "heart", "title": "Stres i sagorevanje", "body": "Prepoznajte znakove na vreme i razvijte praktične strategije suočavanja uz profesionalno vođenje." },
-      { "icon": "chat-circle-text", "title": "Anksioznost i loše raspoloženje", "body": "Razumite šta osećate i radite na tome sa kvalifikovanim stručnjakom Vašim tempom." },
-      { "icon": "users-three", "title": "Odnosi i porodica", "body": "Prođite kroz izazove u Vašim odnosima, roditeljstvu ili porodičnom životu uz poverljivu podršku." },
-      { "icon": "hand-heart", "title": "Tuga i promene", "body": "Obradite gubitak, životne prelaze ili velike promene sa nekim ko sluša bez osude." },
-      { "icon": "clock", "title": "San", "body": "Otkrijte šta Vas drži budnim i izgradite zdravije navike spavanja uz pristupe zasnovane na dokazima." },
-      { "icon": "buildings", "title": "Konflikti na poslu", "body": "Razgovarajte o napetostima na poslu, teškim kolegama ili promenama uloga u bezbednom, poverljivom prostoru." }
+      {
+        "icon": "heart",
+        "title": "Stres i sagorevanje",
+        "body": "Prepoznajte znakove na vreme i razvijte praktične strategije suočavanja uz profesionalno vođenje."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Anksioznost i loše raspoloženje",
+        "body": "Razumite šta osećate i radite na tome sa kvalifikovanim stručnjakom Vašim tempom."
+      },
+      {
+        "icon": "users-three",
+        "title": "Odnosi i porodica",
+        "body": "Prođite kroz izazove u Vašim odnosima, roditeljstvu ili porodičnom životu uz poverljivu podršku."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Tuga i promene",
+        "body": "Obradite gubitak, životne prelaze ili velike promene sa nekim ko sluša bez osude."
+      },
+      {
+        "icon": "clock",
+        "title": "San",
+        "body": "Otkrijte šta Vas drži budnim i izgradite zdravije navike spavanja uz pristupe zasnovane na dokazima."
+      },
+      {
+        "icon": "buildings",
+        "title": "Konflikti na poslu",
+        "body": "Razgovarajte o napetostima na poslu, teškim kolegama ili promenama uloga u bezbednom, poverljivom prostoru."
+      }
     ]
   },
   "howItWorks": {
     "title": "Kako funkcioniše",
     "steps": [
-      { "title": "Sesije od 50 minuta", "body": "Svaka sesija traje 50 minuta — dovoljno vremena da se ide dublje od brze provere." },
-      { "title": "Video ili uživo", "body": "Izaberite video sesije odakle god želite ili se sretnite uživo gde je to moguće." },
-      { "title": "Srpski, mađarski ili engleski", "body": "Sesije su dostupne na jeziku na kom se najudobnije osećate." },
-      { "title": "Nastavci kada Vam zatrebaju", "body": "Zakažite nastavak sesija Vašim tempom. Vaše beleške i napredak ostaju kod Vas između sesija." }
-    ]
+      {
+        "title": "Sesije od 50 minuta",
+        "body": "Svaka sesija traje 50 minuta — dovoljno vremena da se ide dublje od brze provere."
+      },
+      {
+        "title": "Video ili uživo",
+        "body": "Izaberite video sesije odakle god želite ili se sretnite uživo gde je to moguće."
+      },
+      {
+        "title": "Srpski, mađarski ili engleski",
+        "body": "Sesije su dostupne na jeziku na kom se najudobnije osećate."
+      },
+      {
+        "title": "Nastavci kada Vam zatrebaju",
+        "body": "Zakažite nastavak sesija Vašim tempom. Vaše beleške i napredak ostaju kod Vas između sesija."
+      }
+    ],
+    "lead": "Šta možete da očekujete od prvih sesija.",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "Osoba udobno sedi na sofi sa sveskom"
+    }
   },
   "whoYouTalkTo": {
     "id": "professionals",
@@ -38,40 +85,94 @@
       "Svaki stručnjak na NestSelf platformi je licencirani psiholog ili kvalifikovani psihoterapeut, proveren kroz strukturirani proces selekcije.",
       "Koriste metode zasnovane na dokazima i učestvuju u redovnoj superviziji. Nikada nećete biti povezani sa nekim ko nije kvalifikovan."
     ],
-    "photo": { "key": "psychological-video-call", "alt": "Psiholog tokom sesije putem video poziva" }
+    "photo": {
+      "key": "psychological-video-call",
+      "alt": "Psiholog tokom sesije putem video poziva"
+    }
   },
   "crisis": {
     "title": "Ako Vam je pomoć potrebna odmah",
     "body": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, pozovite broj za hitne slučajeve odmah.",
     "lines": [
-      { "country": "Srbija", "items": [
-        { "label": "Hitne službe", "value": "112" },
-        { "label": "Hitna pomoć", "value": "194" },
-        { "label": "Centar Srce", "value": "0800 300 303" }
-      ]},
-      { "country": "Mađarska", "items": [
-        { "label": "Hitne službe", "value": "112" },
-        { "label": "Hitna pomoć", "value": "104" },
-        { "label": "Lelki Elsősegély Telefonszolgálat", "value": "116 123" }
-      ]}
+      {
+        "country": "Srbija",
+        "items": [
+          {
+            "label": "Hitne službe",
+            "value": "112"
+          },
+          {
+            "label": "Hitna pomoć",
+            "value": "194"
+          },
+          {
+            "label": "Centar Srce",
+            "value": "0800 300 303"
+          }
+        ]
+      },
+      {
+        "country": "Mađarska",
+        "items": [
+          {
+            "label": "Hitne službe",
+            "value": "112"
+          },
+          {
+            "label": "Hitna pomoć",
+            "value": "104"
+          },
+          {
+            "label": "Lelki Elsősegély Telefonszolgálat",
+            "value": "116 123"
+          }
+        ]
+      }
     ]
   },
   "faq": {
     "title": "Često postavljana pitanja",
     "items": [
-      { "question": "Da li će moj poslodavac znati da sam koristio/la ovu uslugu?", "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi." },
-      { "question": "Da li je ovo terapija ili savetovanje?", "answer": "I jedno i drugo. Naši stručnjaci uključuju licencirane psihologe i kvalifikovane psihoterapeute koji nude različite pristupe u zavisnosti od Vaših potreba. Ne morate se odlučiti unapred — Vaš stručnjak će voditi razgovor." },
-      { "question": "Koliko sesija mogu da imam?", "answer": "Broj sesija zavisi od plana Vašeg poslodavca. Pre zakazivanja, platforma Vam prikazuje preostalo pokriće kako ne bi bilo iznenađenja." },
-      { "question": "Da li članovi moje porodice mogu da koriste ovo?", "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu pristupiti istim uslugama psihoterapije i savetovanja." },
-      { "question": "Kako se biraju stručnjaci?", "answer": "Svaki stručnjak je licencirani psiholog ili kvalifikovani psihoterapeut. Prolaze kroz strukturirani proces provere i učestvuju u redovnoj superviziji." },
-      { "question": "Šta ako ne uspostavim kontakt sa svojim stručnjakom?", "answer": "Možete se prebaciti na drugog stručnjaka u bilo kom trenutku, bez pitanja." },
-      { "question": "Da li se sesije snimaju?", "answer": "Ne. Sesije se nikada ne snimaju. Beleške su vidljive samo Vama i Vašem stručnjaku." },
-      { "question": "Koje metode stručnjaci koriste?", "answer": "Naši stručnjaci koriste metode zasnovane na dokazima, uključujući kognitivno-bihejvioralnu terapiju, psihodinamske pristupe i integrativne tehnike, prilagođene Vašim potrebama." }
+      {
+        "question": "Da li će moj poslodavac znati da sam koristio/la ovu uslugu?",
+        "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Da li je ovo terapija ili savetovanje?",
+        "answer": "I jedno i drugo. Naši stručnjaci uključuju licencirane psihologe i kvalifikovane psihoterapeute koji nude različite pristupe u zavisnosti od Vaših potreba. Ne morate se odlučiti unapred — Vaš stručnjak će voditi razgovor."
+      },
+      {
+        "question": "Koliko sesija mogu da imam?",
+        "answer": "Broj sesija zavisi od plana Vašeg poslodavca. Pre zakazivanja, platforma Vam prikazuje preostalo pokriće kako ne bi bilo iznenađenja."
+      },
+      {
+        "question": "Da li članovi moje porodice mogu da koriste ovo?",
+        "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu pristupiti istim uslugama psihoterapije i savetovanja."
+      },
+      {
+        "question": "Kako se biraju stručnjaci?",
+        "answer": "Svaki stručnjak je licencirani psiholog ili kvalifikovani psihoterapeut. Prolaze kroz strukturirani proces provere i učestvuju u redovnoj superviziji."
+      },
+      {
+        "question": "Šta ako ne uspostavim kontakt sa svojim stručnjakom?",
+        "answer": "Možete se prebaciti na drugog stručnjaka u bilo kom trenutku, bez pitanja."
+      },
+      {
+        "question": "Da li se sesije snimaju?",
+        "answer": "Ne. Sesije se nikada ne snimaju. Beleške su vidljive samo Vama i Vašem stručnjaku."
+      },
+      {
+        "question": "Koje metode stručnjaci koriste?",
+        "answer": "Naši stručnjaci koriste metode zasnovane na dokazima, uključujući kognitivno-bihejvioralnu terapiju, psihodinamske pristupe i integrativne tehnike, prilagođene Vašim potrebama."
+      }
     ]
   },
   "cta": {
     "title": "Spremni da podržite mentalno zdravlje Vašeg tima?",
     "body": "Saznajte kako se psihoterapija i savetovanje uklapaju u Vaš program blagostanja.",
-    "primary": { "label": "Zakažite prezentaciju", "href": "/demo" }
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
   }
 }

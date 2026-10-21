@@ -6,30 +6,77 @@
   "hero": {
     "title": "Finansijsko savetovanje",
     "lead": "Radite sa nezavisnim finansijskim konsultantom na pitanjima o novcu koja su Vam važna. Naši konsultanti ne prodaju proizvode i ne primaju provizije — njihovi saveti su u potpunosti u Vašem interesu.",
-    "primaryCta": { "label": "Zakažite prezentaciju", "href": "/demo" },
-    "secondaryCta": { "label": "Nazad na usluge", "href": "/services" }
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Nazad na usluge",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "Šta pokriva",
     "title": "Oblasti u kojima možemo da pomognemo",
     "columns": 3,
     "items": [
-      { "icon": "wallet", "title": "Budžetiranje", "body": "Napravite realan budžet koji odgovara Vašem životu i pomaže Vam da kontrolišete troškove." },
-      { "icon": "chart-bar", "title": "Dugovi", "body": "Razumite svoje opcije za upravljanje ili smanjenje dugova, uz jasan plan za naredne korake." },
-      { "icon": "shield-check", "title": "Štednja i fond za hitne slučajeve", "body": "Postavite ciljeve štednje i izgradite fond za hitne slučajeve kako Vas neočekivani troškovi ne bi iznenadili." },
-      { "icon": "buildings", "title": "Osnove kredita i hipoteka", "body": "Dobijte savete o tome na šta da obratite pažnju u uslovima kredita, kamatnim stopama i opcijama hipoteka." },
-      { "icon": "books", "title": "Osnove poreza", "body": "Razumite svoje poreske obaveze, odbitke na koje možete imati pravo i kako da budete u skladu sa propisima." },
-      { "icon": "clock", "title": "Penzije", "body": "Saznajte kako Vaša penzija funkcioniše, šta možete očekivati i da li dodatna štednja ima smisla za Vas." }
+      {
+        "icon": "wallet",
+        "title": "Budžetiranje",
+        "body": "Napravite realan budžet koji odgovara Vašem životu i pomaže Vam da kontrolišete troškove."
+      },
+      {
+        "icon": "chart-bar",
+        "title": "Dugovi",
+        "body": "Razumite svoje opcije za upravljanje ili smanjenje dugova, uz jasan plan za naredne korake."
+      },
+      {
+        "icon": "shield-check",
+        "title": "Štednja i fond za hitne slučajeve",
+        "body": "Postavite ciljeve štednje i izgradite fond za hitne slučajeve kako Vas neočekivani troškovi ne bi iznenadili."
+      },
+      {
+        "icon": "buildings",
+        "title": "Osnove kredita i hipoteka",
+        "body": "Dobijte savete o tome na šta da obratite pažnju u uslovima kredita, kamatnim stopama i opcijama hipoteka."
+      },
+      {
+        "icon": "books",
+        "title": "Osnove poreza",
+        "body": "Razumite svoje poreske obaveze, odbitke na koje možete imati pravo i kako da budete u skladu sa propisima."
+      },
+      {
+        "icon": "clock",
+        "title": "Penzije",
+        "body": "Saznajte kako Vaša penzija funkcioniše, šta možete očekivati i da li dodatna štednja ima smisla za Vas."
+      }
     ]
   },
   "howItWorks": {
     "title": "Kako funkcioniše",
     "steps": [
-      { "title": "Zakažite sesiju", "body": "Izaberite termin koji Vam odgovara. Sesije su dostupne putem videa ili uživo gde je to moguće." },
-      { "title": "Podelite svoju situaciju", "body": "Vaš konsultant pregleda Vašu finansijsku sliku zajedno sa Vama i identifikuje oblasti gde će saveti najviše pomoći." },
-      { "title": "Dobijte plan", "body": "Odlazite sa jasnim, konkretnim narednim koracima prilagođenim Vašim ciljevima i okolnostima." },
-      { "title": "Nastavite", "body": "Zakažite nastavak sesija kako se Vaša situacija menja. Vaše beleške i napredak ostaju kod Vas." }
-    ]
+      {
+        "title": "Zakažite sesiju",
+        "body": "Izaberite termin koji Vam odgovara. Sesije su dostupne putem videa ili uživo gde je to moguće."
+      },
+      {
+        "title": "Podelite svoju situaciju",
+        "body": "Vaš konsultant pregleda Vašu finansijsku sliku zajedno sa Vama i identifikuje oblasti gde će saveti najviše pomoći."
+      },
+      {
+        "title": "Dobijte plan",
+        "body": "Odlazite sa jasnim, konkretnim narednim koracima prilagođenim Vašim ciljevima i okolnostima."
+      },
+      {
+        "title": "Nastavite",
+        "body": "Zakažite nastavak sesija kako se Vaša situacija menja. Vaše beleške i napredak ostaju kod Vas."
+      }
+    ],
+    "lead": "Nezavisno savetovanje, korak po korak.",
+    "photo": {
+      "key": "financial-planning",
+      "alt": "Konsultant i klijent prolaze kroz kućni budžet"
+    }
   },
   "independent": {
     "id": "independent",
@@ -38,22 +85,46 @@
       "Naši finansijski konsultanti ne prodaju proizvode i ne primaju provizije. Nisu vezani ni za jednu banku, osiguravajuće društvo ili investicionu firmu.",
       "Jedini interes im je da Vam pomognu da donesete informisane odluke o Vašem novcu."
     ],
-    "photo": { "key": "article-budget", "alt": "Finansijski konsultant pregleda planove sa klijentom" }
+    "photo": {
+      "key": "article-budget",
+      "alt": "Finansijski konsultant pregleda planove sa klijentom"
+    }
   },
   "faq": {
     "title": "Često postavljana pitanja",
     "items": [
-      { "question": "Da li će moj poslodavac znati da sam koristio/la ovu uslugu?", "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi." },
-      { "question": "Da li će mi konsultant pokušati nešto da proda?", "answer": "Ne. Naši konsultanti su nezavisni — ne prodaju proizvode i ne primaju provizije. Njihovi saveti su u potpunosti u Vašem interesu." },
-      { "question": "Da li članovi moje porodice mogu da koriste ovo?", "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu pristupiti istim uslugama finansijskog savetovanja." },
-      { "question": "Na kojim jezicima su sesije dostupne?", "answer": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku, u zavisnosti od konsultanta." },
-      { "question": "Koliko sesija mogu da imam?", "answer": "Broj sesija zavisi od plana Vašeg poslodavca. Pre zakazivanja, platforma Vam prikazuje preostalo pokriće kako ne bi bilo iznenađenja." },
-      { "question": "Da li je ovo finansijski savet?", "answer": "Ovo je savetovanje koje Vam pomaže da razumete svoje opcije i donesete informisane odluke. Za specifične investicione ili poreske savete, Vaš konsultant može preporučiti specijalistu." }
+      {
+        "question": "Da li će moj poslodavac znati da sam koristio/la ovu uslugu?",
+        "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Da li će mi konsultant pokušati nešto da proda?",
+        "answer": "Ne. Naši konsultanti su nezavisni — ne prodaju proizvode i ne primaju provizije. Njihovi saveti su u potpunosti u Vašem interesu."
+      },
+      {
+        "question": "Da li članovi moje porodice mogu da koriste ovo?",
+        "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu pristupiti istim uslugama finansijskog savetovanja."
+      },
+      {
+        "question": "Na kojim jezicima su sesije dostupne?",
+        "answer": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku, u zavisnosti od konsultanta."
+      },
+      {
+        "question": "Koliko sesija mogu da imam?",
+        "answer": "Broj sesija zavisi od plana Vašeg poslodavca. Pre zakazivanja, platforma Vam prikazuje preostalo pokriće kako ne bi bilo iznenađenja."
+      },
+      {
+        "question": "Da li je ovo finansijski savet?",
+        "answer": "Ovo je savetovanje koje Vam pomaže da razumete svoje opcije i donesete informisane odluke. Za specifične investicione ili poreske savete, Vaš konsultant može preporučiti specijalistu."
+      }
     ]
   },
   "cta": {
     "title": "Dodajte finansijsko savetovanje Vašem programu blagostanja",
     "body": "Pomozite Vašim zaposlenima da se osećaju sigurnije u vezi sa finansijama.",
-    "primary": { "label": "Zakažite prezentaciju", "href": "/demo" }
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
   }
 }

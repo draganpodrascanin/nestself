@@ -17,7 +17,7 @@
   },
   "assessments": {
     "eyebrow": "Provere",
-    "title": "Provera blagostanja",
+    "title": "Provere blagostanja",
     "intro": "Kratki upitnici koji Vam pomažu da razmislite o tome kako ste se osećali. Ovo nisu dijagnoze. Vaši odgovori ostaju u Vašem pregledaču i nikada se nigde ne šalju.",
     "durationLabel": "{minutes} min",
     "questionsLabel": "{count} pitanja"

@@ -6,30 +6,77 @@
   "hero": {
     "title": "Pszichoterápia és tanácsadás",
     "lead": "Beszélj engedéllyel rendelkező pszichológusokkal és képzett pszichoterapeutákkal arról, ami foglalkoztat — stressz, szorongás, kapcsolatok, gyász vagy bármi más. Az ülések bizalmasak, és a munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó.",
-    "primaryCta": { "label": "Kérj bemutatót", "href": "/demo" },
-    "secondaryCta": { "label": "Vissza a szolgáltatásokhoz", "href": "/services" }
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Vissza a szolgáltatásokhoz",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "Miben segítünk",
     "title": "Területek, ahol segíthetünk",
     "columns": 3,
     "items": [
-      { "icon": "heart", "title": "Stressz és kiégés", "body": "Ismerd fel időben a jeleket, és alakíts ki hatékony megküzdési stratégiákat szakmai segítséggel." },
-      { "icon": "chat-circle-text", "title": "Szorongás és rossz hangulat", "body": "Értsd meg, mit érzel, és dolgozd fel egy képzett szakemberrel a saját tempódban." },
-      { "icon": "users-three", "title": "Kapcsolatok és család", "body": "Kezeld a kapcsolataidban, a szülői szerepedben vagy a családi életedben felmerülő kihívásokat bizalmas támogatással." },
-      { "icon": "hand-heart", "title": "Gyász és változás", "body": "Dolgozd fel a veszteséget, az élethelyzet-változásokat vagy a nagy változásokat valakivel, aki ítélkezés nélkül hallgat." },
-      { "icon": "clock", "title": "Alvás", "body": "Azonosítsd, mi tart ébren, és építs egészségesebb alvási szokásokat bizonyítékokon alapuló módszerekkel." },
-      { "icon": "buildings", "title": "Munkahelyi konfliktus", "body": "Beszéld meg a munkahelyi feszültségeket, a nehéz kollégákat vagy a szerepváltozásokat egy biztonságos, bizalmas térben." }
+      {
+        "icon": "heart",
+        "title": "Stressz és kiégés",
+        "body": "Ismerd fel időben a jeleket, és alakíts ki hatékony megküzdési stratégiákat szakmai segítséggel."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Szorongás és rossz hangulat",
+        "body": "Értsd meg, mit érzel, és dolgozd fel egy képzett szakemberrel a saját tempódban."
+      },
+      {
+        "icon": "users-three",
+        "title": "Kapcsolatok és család",
+        "body": "Kezeld a kapcsolataidban, a szülői szerepedben vagy a családi életedben felmerülő kihívásokat bizalmas támogatással."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Gyász és változás",
+        "body": "Dolgozd fel a veszteséget, az élethelyzet-változásokat vagy a nagy változásokat valakivel, aki ítélkezés nélkül hallgat."
+      },
+      {
+        "icon": "clock",
+        "title": "Alvás",
+        "body": "Azonosítsd, mi tart ébren, és építs egészségesebb alvási szokásokat bizonyítékokon alapuló módszerekkel."
+      },
+      {
+        "icon": "buildings",
+        "title": "Munkahelyi konfliktus",
+        "body": "Beszéld meg a munkahelyi feszültségeket, a nehéz kollégákat vagy a szerepváltozásokat egy biztonságos, bizalmas térben."
+      }
     ]
   },
   "howItWorks": {
     "title": "Hogyan működik",
     "steps": [
-      { "title": "50 perces ülések", "body": "Minden ülés 50 percig tart — elég idő ahhoz, hogy mélyebbre menjünk, mint egy gyors beszélgetés." },
-      { "title": "Videó vagy személyes", "body": "Válassz videóülést bárhonnan, vagy találkozz személyesen, ahol elérhető." },
-      { "title": "Szerbül, magyarul vagy angolul", "body": "Az ülések azon a nyelven érhetők el, amelyen a legkényelmesebben érzed magad." },
-      { "title": "Visszatérő ülések, amikor szükséged van rájuk", "body": "Foglalj visszatérő üléseket a saját tempódban. A jegyzeteid és a haladásod megmaradnak az ülések között." }
-    ]
+      {
+        "title": "50 perces ülések",
+        "body": "Minden ülés 50 percig tart — elég idő ahhoz, hogy mélyebbre menjünk, mint egy gyors beszélgetés."
+      },
+      {
+        "title": "Videó vagy személyes",
+        "body": "Válassz videóülést bárhonnan, vagy találkozz személyesen, ahol elérhető."
+      },
+      {
+        "title": "Szerbül, magyarul vagy angolul",
+        "body": "Az ülések azon a nyelven érhetők el, amelyen a legkényelmesebben érzed magad."
+      },
+      {
+        "title": "Visszatérő ülések, amikor szükséged van rájuk",
+        "body": "Foglalj visszatérő üléseket a saját tempódban. A jegyzeteid és a haladásod megmaradnak az ülések között."
+      }
+    ],
+    "lead": "Mire számíthatsz az első üléseken.",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "Egy személy kényelmesen ül a kanapén egy jegyzetfüzettel"
+    }
   },
   "whoYouTalkTo": {
     "id": "professionals",
@@ -38,40 +85,94 @@
       "A NestSelf minden szakembere engedéllyel rendelkező pszichológus vagy képzett pszichoterapeuta, aki strukturált kiválasztási folyamaton esett át.",
       "Bizonyítékokon alapuló módszereket használnak, és rendszeres szupervízióban vesznek részt. Soha nem kerülsz össze képzetlen szakemberrel."
     ],
-    "photo": { "key": "psychological-video-call", "alt": "Egy pszichológus videóhívásos ülés közben" }
+    "photo": {
+      "key": "psychological-video-call",
+      "alt": "Egy pszichológus videóhívásos ülés közben"
+    }
   },
   "crisis": {
     "title": "Ha most azonnal segítségre van szükséged",
     "body": "Ha te vagy valaki, akit ismersz, közvetlen veszélyben van, hívd a segélyhívó számot most.",
     "lines": [
-      { "country": "Szerbia", "items": [
-        { "label": "Segélyhívó", "value": "112" },
-        { "label": "Mentők", "value": "194" },
-        { "label": "Centar Srce", "value": "0800 300 303" }
-      ]},
-      { "country": "Magyarország", "items": [
-        { "label": "Segélyhívó", "value": "112" },
-        { "label": "Mentők", "value": "104" },
-        { "label": "Lelki Elsősegély Telefonszolgálat", "value": "116 123" }
-      ]}
+      {
+        "country": "Szerbia",
+        "items": [
+          {
+            "label": "Segélyhívó",
+            "value": "112"
+          },
+          {
+            "label": "Mentők",
+            "value": "194"
+          },
+          {
+            "label": "Centar Srce",
+            "value": "0800 300 303"
+          }
+        ]
+      },
+      {
+        "country": "Magyarország",
+        "items": [
+          {
+            "label": "Segélyhívó",
+            "value": "112"
+          },
+          {
+            "label": "Mentők",
+            "value": "104"
+          },
+          {
+            "label": "Lelki Elsősegély Telefonszolgálat",
+            "value": "116 123"
+          }
+        ]
+      }
     ]
   },
   "faq": {
     "title": "Gyakran ismételt kérdések",
     "items": [
-      { "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?", "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra." },
-      { "question": "Ez terápia vagy tanácsadás?", "answer": "Mindkettő. Szakembereink között engedéllyel rendelkező pszichológusok és képzett pszichoterapeuták vannak, akik különféle megközelítéseket kínálnak az igényeidnek megfelelően. Nem kell előre döntened — a szakembered irányítja a beszélgetést." },
-      { "question": "Hány ülésen vehetek részt?", "answer": "Az ülések száma a munkáltatód csomagjától függ. Foglalás előtt a platform megjeleníti a fennmaradó lefedettségedet, így nincsenek meglepetések." },
-      { "question": "A családtagjaim is használhatják?", "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a pszichoterápiát és tanácsadást vehetik igénybe." },
-      { "question": "Hogyan választják ki a szakembereket?", "answer": "Minden szakember engedéllyel rendelkező pszichológus vagy képzett pszichoterapeuta. Strukturált kiválasztási folyamaton esnek át, és rendszeres szupervízióban vesznek részt." },
-      { "question": "Mi van, ha nem találom meg a közös hangot a szakemberemmel?", "answer": "Bármikor válthatsz egy másik szakemberre, kérdések nélkül." },
-      { "question": "Rögzítik az üléseket?", "answer": "Nem. Az üléseket soha nem rögzítik. A jegyzetek csak neked és a szakemberednek láthatók." },
-      { "question": "Milyen módszereket használnak a szakemberek?", "answer": "Szakembereink bizonyítékokon alapuló módszereket alkalmaznak, beleértve a kognitív viselkedésterápiát, a pszichodinamikus megközelítéseket és az integratív technikákat, az igényeidhez igazítva." }
+      {
+        "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "Ez terápia vagy tanácsadás?",
+        "answer": "Mindkettő. Szakembereink között engedéllyel rendelkező pszichológusok és képzett pszichoterapeuták vannak, akik különféle megközelítéseket kínálnak az igényeidnek megfelelően. Nem kell előre döntened — a szakembered irányítja a beszélgetést."
+      },
+      {
+        "question": "Hány ülésen vehetek részt?",
+        "answer": "Az ülések száma a munkáltatód csomagjától függ. Foglalás előtt a platform megjeleníti a fennmaradó lefedettségedet, így nincsenek meglepetések."
+      },
+      {
+        "question": "A családtagjaim is használhatják?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a pszichoterápiát és tanácsadást vehetik igénybe."
+      },
+      {
+        "question": "Hogyan választják ki a szakembereket?",
+        "answer": "Minden szakember engedéllyel rendelkező pszichológus vagy képzett pszichoterapeuta. Strukturált kiválasztási folyamaton esnek át, és rendszeres szupervízióban vesznek részt."
+      },
+      {
+        "question": "Mi van, ha nem találom meg a közös hangot a szakemberemmel?",
+        "answer": "Bármikor válthatsz egy másik szakemberre, kérdések nélkül."
+      },
+      {
+        "question": "Rögzítik az üléseket?",
+        "answer": "Nem. Az üléseket soha nem rögzítik. A jegyzetek csak neked és a szakemberednek láthatók."
+      },
+      {
+        "question": "Milyen módszereket használnak a szakemberek?",
+        "answer": "Szakembereink bizonyítékokon alapuló módszereket alkalmaznak, beleértve a kognitív viselkedésterápiát, a pszichodinamikus megközelítéseket és az integratív technikákat, az igényeidhez igazítva."
+      }
     ]
   },
   "cta": {
     "title": "Készen állsz a csapatod mentális egészségét támogatni?",
     "body": "Nézd meg, hogyan illeszkedik a pszichoterápia és tanácsadás a jólléti programodba.",
-    "primary": { "label": "Kérj bemutatót", "href": "/demo" }
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
   }
 }

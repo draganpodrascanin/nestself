@@ -236,7 +236,12 @@ export default async function HomePage({
 
       <PrivacySection locale={typedLocale} />
 
-      <FaqSection id="faq" title={data.faq.title} items={data.faq.items} />
+      <FaqSection
+        id="faq"
+        title={data.faq.title}
+        items={data.faq.items}
+        more={data.faq.moreLabel ? { href: `/${locale}/faq`, label: data.faq.moreLabel } : undefined}
+      />
 
       <CtaBand
         id="cta"

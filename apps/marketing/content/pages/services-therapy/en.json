@@ -6,30 +6,77 @@
   "hero": {
     "title": "Therapy & Counselling",
     "lead": "Talk to licensed psychologists and qualified psychotherapists about what is on your mind — stress, anxiety, relationships, grief or anything else. Sessions are confidential, and your employer never learns who used NestSelf or what was discussed.",
-    "primaryCta": { "label": "Request a demo", "href": "/demo" },
-    "secondaryCta": { "label": "Back to services", "href": "/services" }
+    "primaryCta": {
+      "label": "Request a demo",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Back to services",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "What it covers",
     "title": "Areas we can help with",
     "columns": 3,
     "items": [
-      { "icon": "heart", "title": "Stress and burnout", "body": "Recognise the signs early and develop practical coping strategies with professional guidance." },
-      { "icon": "chat-circle-text", "title": "Anxiety and low mood", "body": "Understand what you are feeling and work through it with a qualified professional at your own pace." },
-      { "icon": "users-three", "title": "Relationships and family", "body": "Navigate challenges in your relationships, parenting or family life with confidential support." },
-      { "icon": "hand-heart", "title": "Grief and change", "body": "Process loss, life transitions or major changes with someone who listens without judgement." },
-      { "icon": "clock", "title": "Sleep", "body": "Identify what keeps you awake and build healthier sleep habits with evidence-based approaches." },
-      { "icon": "buildings", "title": "Conflict at work", "body": "Talk through workplace tensions, difficult colleagues or role changes in a safe, confidential space." }
+      {
+        "icon": "heart",
+        "title": "Stress and burnout",
+        "body": "Recognise the signs early and develop practical coping strategies with professional guidance."
+      },
+      {
+        "icon": "chat-circle-text",
+        "title": "Anxiety and low mood",
+        "body": "Understand what you are feeling and work through it with a qualified professional at your own pace."
+      },
+      {
+        "icon": "users-three",
+        "title": "Relationships and family",
+        "body": "Navigate challenges in your relationships, parenting or family life with confidential support."
+      },
+      {
+        "icon": "hand-heart",
+        "title": "Grief and change",
+        "body": "Process loss, life transitions or major changes with someone who listens without judgement."
+      },
+      {
+        "icon": "clock",
+        "title": "Sleep",
+        "body": "Identify what keeps you awake and build healthier sleep habits with evidence-based approaches."
+      },
+      {
+        "icon": "buildings",
+        "title": "Conflict at work",
+        "body": "Talk through workplace tensions, difficult colleagues or role changes in a safe, confidential space."
+      }
     ]
   },
   "howItWorks": {
     "title": "How it works",
     "steps": [
-      { "title": "50-minute sessions", "body": "Each session lasts 50 minutes — enough time to go deeper than a quick check-in." },
-      { "title": "Video or in person", "body": "Choose video sessions from anywhere, or meet in person where available." },
-      { "title": "Serbian, Hungarian or English", "body": "Sessions are available in the language you are most comfortable in." },
-      { "title": "Follow-ups when you need them", "body": "Book follow-up sessions at your own pace. Your notes and progress stay with you between sessions." }
-    ]
+      {
+        "title": "50-minute sessions",
+        "body": "Each session lasts 50 minutes — enough time to go deeper than a quick check-in."
+      },
+      {
+        "title": "Video or in person",
+        "body": "Choose video sessions from anywhere, or meet in person where available."
+      },
+      {
+        "title": "Serbian, Hungarian or English",
+        "body": "Sessions are available in the language you are most comfortable in."
+      },
+      {
+        "title": "Follow-ups when you need them",
+        "body": "Book follow-up sessions at your own pace. Your notes and progress stay with you between sessions."
+      }
+    ],
+    "lead": "What to expect from your first sessions.",
+    "photo": {
+      "key": "assessment-sofa",
+      "alt": "A person sitting comfortably on a sofa with a notebook"
+    }
   },
   "whoYouTalkTo": {
     "id": "professionals",
@@ -38,40 +85,94 @@
       "Every professional on NestSelf is a licensed psychologist or qualified psychotherapist, vetted through a structured selection process.",
       "They use evidence-based methods and participate in regular supervision. You will never be matched with someone unqualified."
     ],
-    "photo": { "key": "psychological-video-call", "alt": "A psychologist during a video-call session" }
+    "photo": {
+      "key": "psychological-video-call",
+      "alt": "A psychologist during a video-call session"
+    }
   },
   "crisis": {
     "title": "If you need help right now",
     "body": "If you or someone you know is in immediate danger, call the emergency number now.",
     "lines": [
-      { "country": "Serbia", "items": [
-        { "label": "Emergency", "value": "112" },
-        { "label": "Ambulance", "value": "194" },
-        { "label": "Centar Srce", "value": "0800 300 303" }
-      ]},
-      { "country": "Hungary", "items": [
-        { "label": "Emergency", "value": "112" },
-        { "label": "Ambulance", "value": "104" },
-        { "label": "Lelki Elsősegély Telefonszolgálat", "value": "116 123" }
-      ]}
+      {
+        "country": "Serbia",
+        "items": [
+          {
+            "label": "Emergency",
+            "value": "112"
+          },
+          {
+            "label": "Ambulance",
+            "value": "194"
+          },
+          {
+            "label": "Centar Srce",
+            "value": "0800 300 303"
+          }
+        ]
+      },
+      {
+        "country": "Hungary",
+        "items": [
+          {
+            "label": "Emergency",
+            "value": "112"
+          },
+          {
+            "label": "Ambulance",
+            "value": "104"
+          },
+          {
+            "label": "Lelki Elsősegély Telefonszolgálat",
+            "value": "116 123"
+          }
+        ]
+      }
     ]
   },
   "faq": {
     "title": "Frequently asked questions",
     "items": [
-      { "question": "Will my employer know I used this service?", "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more." },
-      { "question": "Is this therapy or counselling?", "answer": "Both. Our professionals include licensed psychologists and qualified psychotherapists who offer different approaches depending on your needs. You do not need to decide in advance — your professional will guide the conversation." },
-      { "question": "How many sessions can I have?", "answer": "The number of sessions depends on your employer's plan. Before you book, the platform shows your remaining coverage so there are no surprises." },
-      { "question": "Can my family members use this?", "answer": "Where your employer's plan includes family members, your partner and children can access the same therapy and counselling services." },
-      { "question": "How are professionals selected?", "answer": "Every professional is a licensed psychologist or qualified psychotherapist. They go through a structured vetting process and participate in regular supervision." },
-      { "question": "What if I do not connect with my professional?", "answer": "You can switch to a different professional at any time, no questions asked." },
-      { "question": "Are sessions recorded?", "answer": "No. Sessions are never recorded. Notes are visible only to you and your professional." },
-      { "question": "What methods do professionals use?", "answer": "Our professionals use evidence-based methods, including cognitive-behavioural therapy, psychodynamic approaches and integrative techniques, tailored to your needs." }
+      {
+        "question": "Will my employer know I used this service?",
+        "answer": "No. Your employer never learns who used NestSelf or what was discussed. HR sees anonymised usage for groups of 10 or more."
+      },
+      {
+        "question": "Is this therapy or counselling?",
+        "answer": "Both. Our professionals include licensed psychologists and qualified psychotherapists who offer different approaches depending on your needs. You do not need to decide in advance — your professional will guide the conversation."
+      },
+      {
+        "question": "How many sessions can I have?",
+        "answer": "The number of sessions depends on your employer's plan. Before you book, the platform shows your remaining coverage so there are no surprises."
+      },
+      {
+        "question": "Can my family members use this?",
+        "answer": "Where your employer's plan includes family members, your partner and children can access the same therapy and counselling services."
+      },
+      {
+        "question": "How are professionals selected?",
+        "answer": "Every professional is a licensed psychologist or qualified psychotherapist. They go through a structured vetting process and participate in regular supervision."
+      },
+      {
+        "question": "What if I do not connect with my professional?",
+        "answer": "You can switch to a different professional at any time, no questions asked."
+      },
+      {
+        "question": "Are sessions recorded?",
+        "answer": "No. Sessions are never recorded. Notes are visible only to you and your professional."
+      },
+      {
+        "question": "What methods do professionals use?",
+        "answer": "Our professionals use evidence-based methods, including cognitive-behavioural therapy, psychodynamic approaches and integrative techniques, tailored to your needs."
+      }
     ]
   },
   "cta": {
     "title": "Ready to support your team's mental health?",
     "body": "See how Therapy & Counselling fits your wellbeing programme.",
-    "primary": { "label": "Request a demo", "href": "/demo" }
+    "primary": {
+      "label": "Request a demo",
+      "href": "/demo"
+    }
   }
 }

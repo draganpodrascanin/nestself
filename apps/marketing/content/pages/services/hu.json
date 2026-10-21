@@ -6,8 +6,14 @@
   "hero": {
     "title": "Támogatás, ami valóban számít",
     "lead": "Háromféle szakmai segítség — pszichológiai, jogi és pénzügyi — elérhető a munkavállalók és, ahol a munkáltatód csomagja tartalmazza a családtagokat, a családjuk számára.",
-    "primaryCta": { "label": "Kérj bemutatót", "href": "/demo" },
-    "secondaryCta": { "label": "Csomagok megtekintése", "href": "/plans" }
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Csomagok megtekintése",
+      "href": "/plans"
+    }
   },
   "pillars": [
     {
@@ -17,8 +23,14 @@
         "Beszélj engedéllyel rendelkező pszichológusokkal és képzett pszichoterapeutákkal stresszről, szorongásról, kapcsolatokról, gyászról vagy bármiről, ami foglalkoztat.",
         "Az ülések online vagy személyesen érhetők el szerbül, magyarul vagy angolul."
       ],
-      "photo": { "key": "psychological-inperson", "alt": "Egy személy pszichológussal beszélget egy személyes ülésen" },
-      "cta": { "label": "Tudj meg többet", "href": "/services/therapy" }
+      "photo": {
+        "key": "psychological-inperson",
+        "alt": "Egy személy pszichológussal beszélget egy személyes ülésen"
+      },
+      "cta": {
+        "label": "Tudj meg többet",
+        "href": "/services/therapy"
+      }
     },
     {
       "id": "legal",
@@ -27,8 +39,14 @@
         "Kérj bizalmas útmutatást személyes jogi kérdéseidben — munkaszerződések, bérleti ügyek, családjogi alapok, fogyasztóvédelmi kérdések és még sok más.",
         "Egy képzett jogi szakember áttekinti a helyzetedet, és írásos összefoglalót készít a következő lépésekről."
       ],
-      "photo": { "key": "legal-consultation", "alt": "Jogi tanácsadás egy íróasztalnál" },
-      "cta": { "label": "Tudj meg többet", "href": "/services/legal-consultation" },
+      "photo": {
+        "key": "legal-consultation",
+        "alt": "Jogi tanácsadás egy íróasztalnál"
+      },
+      "cta": {
+        "label": "Tudj meg többet",
+        "href": "/services/legal-consultation"
+      },
       "icon": "scales"
     },
     {
@@ -38,35 +56,82 @@
         "Dolgozz együtt egy független pénzügyi tanácsadóval a költségvetés, az adósság, a megtakarítás, a hitelek vagy a nyugdíjtervezés terén.",
         "Tanácsadóink nem értékesítenek termékeket és nem kapnak jutalékot — tanácsaik kizárólag a te érdekeidet szolgálják."
       ],
-      "photo": { "key": "financial-planning", "alt": "Egy személy pénzügyi terveket tekint át egy tanácsadóval" },
-      "cta": { "label": "Tudj meg többet", "href": "/services/financial-guidance" },
+      "photo": {
+        "key": "financial-planning",
+        "alt": "Egy személy pénzügyi terveket tekint át egy tanácsadóval"
+      },
+      "cta": {
+        "label": "Tudj meg többet",
+        "href": "/services/financial-guidance"
+      },
       "icon": "wallet"
     }
   ],
   "steps": {
     "title": "Hogyan zajlik egy ülés",
     "items": [
-      { "title": "Válaszd ki a területet", "body": "Válassz pszichológiai, jogi vagy pénzügyi támogatást — amelyik a helyzetednek megfelel." },
-      { "title": "Válassz szakembert és időpontot", "body": "Böngészd az elérhető szakembereket, és válassz egy neked megfelelő időpontot. Az ülések videón vagy személyesen érhetők el." },
-      { "title": "Nézd meg a lefedettséget", "body": "A lefedettséged és az esetleges költség a foglalás megerősítése előtt megjelenik. Nincsenek meglepetések." },
-      { "title": "Beszélj", "body": "Találkozz a szakembereddel egy bizalmas ülésen. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó." },
-      { "title": "Folytasd", "body": "A visszajelzések és az ülésjegyzetek nálad maradnak. Foglalj újabb ülést, amikor szükséged van rá." }
-    ]
+      {
+        "title": "Válaszd ki a területet",
+        "body": "Válassz pszichológiai, jogi vagy pénzügyi támogatást — amelyik a helyzetednek megfelel."
+      },
+      {
+        "title": "Válassz szakembert és időpontot",
+        "body": "Böngészd az elérhető szakembereket, és válassz egy neked megfelelő időpontot. Az ülések videón vagy személyesen érhetők el."
+      },
+      {
+        "title": "Nézd meg a lefedettséget",
+        "body": "A lefedettséged és az esetleges költség a foglalás megerősítése előtt megjelenik. Nincsenek meglepetések."
+      },
+      {
+        "title": "Beszélj",
+        "body": "Találkozz a szakembereddel egy bizalmas ülésen. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó."
+      },
+      {
+        "title": "Folytasd",
+        "body": "A visszajelzések és az ülésjegyzetek nálad maradnak. Foglalj újabb ülést, amikor szükséged van rá."
+      }
+    ],
+    "lead": "Az első bejelentkezéstől az utánkövetésig minden lépés közted és a szakember között marad.",
+    "photo": {
+      "key": "home-hero-office",
+      "alt": "Kollégák beszélgetnek egy világos irodában"
+    }
   },
   "faq": {
     "title": "Kérdések a szolgáltatásainkról",
     "items": [
-      { "question": "A munkáltatóm fizeti ezt?", "answer": "A munkáltatód fizeti a programot. A foglalás megerősítése előtt a platform megjeleníti a lefedettségedet és az esetleges fennmaradó költséget, így nincsenek meglepetések." },
-      { "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?", "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra." },
-      { "question": "A családom is használhatja a NestSelfet?", "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazokat a szolgáltatásokat vehetik igénybe külön költség nélkül." },
-      { "question": "Milyen nyelveken érhetők el az ülések?", "answer": "Az ülések szerbül, magyarul és angolul érhetők el, a szakembertől függően." },
-      { "question": "Választhatok videó és személyes ülés között?", "answer": "Igen. Amikor szakembert és időpontot választasz, látni fogod, hogy videó, személyes vagy mindkét lehetőség elérhető-e." },
-      { "question": "Hogyan kezdhetek hozzá?", "answer": "A munkáltatód a program indításakor megadja a hozzáférési adatokat. Létrehozol egy privát fiókot, kiválasztasz egy területet, és lefoglalod az első ülésedet." }
+      {
+        "question": "A munkáltatóm fizeti ezt?",
+        "answer": "A munkáltatód fizeti a programot. A foglalás megerősítése előtt a platform megjeleníti a lefedettségedet és az esetleges fennmaradó költséget, így nincsenek meglepetések."
+      },
+      {
+        "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "A családom is használhatja a NestSelfet?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazokat a szolgáltatásokat vehetik igénybe külön költség nélkül."
+      },
+      {
+        "question": "Milyen nyelveken érhetők el az ülések?",
+        "answer": "Az ülések szerbül, magyarul és angolul érhetők el, a szakembertől függően."
+      },
+      {
+        "question": "Választhatok videó és személyes ülés között?",
+        "answer": "Igen. Amikor szakembert és időpontot választasz, látni fogod, hogy videó, személyes vagy mindkét lehetőség elérhető-e."
+      },
+      {
+        "question": "Hogyan kezdhetek hozzá?",
+        "answer": "A munkáltatód a program indításakor megadja a hozzáférési adatokat. Létrehozol egy privát fiókot, kiválasztasz egy területet, és lefoglalod az első ülésedet."
+      }
     ]
   },
   "cta": {
     "title": "Készen állsz a csapatod támogatására?",
     "body": "Nézd meg, hogyan illeszkedik a NestSelf a szervezetedhez.",
-    "primary": { "label": "Kérj bemutatót", "href": "/demo" }
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
   }
 }

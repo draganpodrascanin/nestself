@@ -6,29 +6,73 @@
   "hero": {
     "title": "Jogi tanácsadás",
     "lead": "Kérj bizalmas útmutatást egy képzett jogi szakembertől a személyes jogi kérdéseidben. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó.",
-    "primaryCta": { "label": "Kérj bemutatót", "href": "/demo" },
-    "secondaryCta": { "label": "Vissza a szolgáltatásokhoz", "href": "/services" }
+    "primaryCta": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Vissza a szolgáltatásokhoz",
+      "href": "/services"
+    }
   },
   "covers": {
     "eyebrow": "Miben segítünk",
     "title": "Területek, ahol segíthetünk",
     "columns": 3,
     "items": [
-      { "icon": "buildings", "title": "Munkaszerződések és felmondás", "body": "Értsd meg a jogaidat a szerződések, felmondási idők, végkielégítés és munkahelyi változások kapcsán." },
-      { "icon": "lock-key", "title": "Lakhatás és bérleti ügyek", "body": "Kérj tisztánlátást bérleti szerződések, kauciók, bérbeadói viták és bérlői jogok terén." },
-      { "icon": "users-three", "title": "Családi ügyek alapjai", "body": "Kezdeti útmutatás felügyeleti jog, válási eljárások, gyermektartás és kapcsolódó családjogi kérdések terén." },
-      { "icon": "shield-check", "title": "Fogyasztóvédelmi ügyek", "body": "Segítség termékgaranciák, visszatérítési viták, szolgáltatási szerződések és fogyasztóvédelmi jogok terén." },
-      { "icon": "wallet", "title": "Adósság és végrehajtás", "body": "Értsd meg a lehetőségeidet adósságbehajtás, bírósági végrehajtás vagy hitelezői követelések esetén." },
-      { "icon": "books", "title": "Dokumentumok és ügyintézés", "body": "Útmutatás közjegyzői hitelesítésekhez, apostille-okhoz, hivatalos kérelmekhez és hatósági eljárásokhoz." }
+      {
+        "icon": "buildings",
+        "title": "Munkaszerződések és felmondás",
+        "body": "Értsd meg a jogaidat a szerződések, felmondási idők, végkielégítés és munkahelyi változások kapcsán."
+      },
+      {
+        "icon": "lock-key",
+        "title": "Lakhatás és bérleti ügyek",
+        "body": "Kérj tisztánlátást bérleti szerződések, kauciók, bérbeadói viták és bérlői jogok terén."
+      },
+      {
+        "icon": "users-three",
+        "title": "Családi ügyek alapjai",
+        "body": "Kezdeti útmutatás felügyeleti jog, válási eljárások, gyermektartás és kapcsolódó családjogi kérdések terén."
+      },
+      {
+        "icon": "shield-check",
+        "title": "Fogyasztóvédelmi ügyek",
+        "body": "Segítség termékgaranciák, visszatérítési viták, szolgáltatási szerződések és fogyasztóvédelmi jogok terén."
+      },
+      {
+        "icon": "wallet",
+        "title": "Adósság és végrehajtás",
+        "body": "Értsd meg a lehetőségeidet adósságbehajtás, bírósági végrehajtás vagy hitelezői követelések esetén."
+      },
+      {
+        "icon": "books",
+        "title": "Dokumentumok és ügyintézés",
+        "body": "Útmutatás közjegyzői hitelesítésekhez, apostille-okhoz, hivatalos kérelmekhez és hatósági eljárásokhoz."
+      }
     ]
   },
   "howItWorks": {
     "title": "Hogyan működik",
     "steps": [
-      { "title": "30-45 perces konzultáció", "body": "Minden konzultáció 30-45 percig tart — elég idő a helyzeted áttekintésére és a lehetőségeid felvázolására." },
-      { "title": "Írásos összefoglaló a következő lépésekről", "body": "A konzultáció után írásos összefoglalót kapsz, így pontosan tudod, mit kell tenned." },
-      { "title": "Továbbítás szükség esetén", "body": "Ha a helyzeted jogi képviseletet igényel, tanácsadód a megfelelő szakemberhez irányít." }
-    ]
+      {
+        "title": "30-45 perces konzultáció",
+        "body": "Minden konzultáció 30-45 percig tart — elég idő a helyzeted áttekintésére és a lehetőségeid felvázolására."
+      },
+      {
+        "title": "Írásos összefoglaló a következő lépésekről",
+        "body": "A konzultáció után írásos összefoglalót kapsz, így pontosan tudod, mit kell tenned."
+      },
+      {
+        "title": "Továbbítás szükség esetén",
+        "body": "Ha a helyzeted jogi képviseletet igényel, tanácsadód a megfelelő szakemberhez irányít."
+      }
+    ],
+    "lead": "A konzultáció gyakorlatias: te hozod a kérdést, az ügyvéd a lehetőségeket.",
+    "photo": {
+      "key": "legal-consultation",
+      "alt": "Ügyvéd és ügyfél együtt nézi át a dokumentumokat"
+    }
   },
   "whatItIsNot": {
     "id": "limitations",
@@ -41,22 +85,46 @@
       "Nem helyettesíti a saját ügyvédet — folyamatos jogi ügyekhez szükséged lehet saját jogi képviselőre.",
       "Nem a munkáltatóddal szembeni vitákra — összeférhetetlenség esetén független jogi segítséghez irányítunk."
     ],
-    "photo": { "key": "article-contract", "alt": "Jogi szakember dokumentumokat tekint át egy konzultáció során" }
+    "photo": {
+      "key": "article-contract",
+      "alt": "Jogi szakember dokumentumokat tekint át egy konzultáció során"
+    }
   },
   "faq": {
     "title": "Gyakran ismételt kérdések",
     "items": [
-      { "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?", "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra." },
-      { "question": "Kérhetek segítséget a munkáltatómmal szembeni vitában?", "answer": "Mivel a munkáltatód finanszírozza a programot, nem tudunk tanácsot adni a vele szembeni vitákban. Ilyen esetben független jogi segítséghez irányítunk." },
-      { "question": "Mi történik a konzultáció után?", "answer": "Írásos összefoglalót kapsz a megbeszélésről és a javasolt következő lépésekről. Ha jogi képviseletre van szükséged, tanácsadód továbbítást biztosít." },
-      { "question": "A családtagjaim is használhatják?", "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a jogi tanácsadási szolgáltatást vehetik igénybe." },
-      { "question": "Milyen nyelveken érhetők el a konzultációk?", "answer": "A konzultációk szerbül, magyarul és angolul érhetők el, a szakembertől függően." },
-      { "question": "Ez helyettesíti a saját ügyvédet?", "answer": "Nem. Ez a szolgáltatás kezdeti útmutatást nyújt, és segít megérteni a lehetőségeidet. Folyamatos ügyekhez szükséged lehet saját ügyvédre." }
+      {
+        "question": "Megtudja a munkáltatóm, hogy igénybe vettem a szolgáltatást?",
+        "answer": "Nem. A munkáltatód soha nem tudja meg, ki használta a NestSelfet, és miről volt szó. A HR csak anonimizált használati adatokat lát, 10 fős vagy nagyobb csoportokra."
+      },
+      {
+        "question": "Kérhetek segítséget a munkáltatómmal szembeni vitában?",
+        "answer": "Mivel a munkáltatód finanszírozza a programot, nem tudunk tanácsot adni a vele szembeni vitákban. Ilyen esetben független jogi segítséghez irányítunk."
+      },
+      {
+        "question": "Mi történik a konzultáció után?",
+        "answer": "Írásos összefoglalót kapsz a megbeszélésről és a javasolt következő lépésekről. Ha jogi képviseletre van szükséged, tanácsadód továbbítást biztosít."
+      },
+      {
+        "question": "A családtagjaim is használhatják?",
+        "answer": "Ahol a munkáltatód csomagja tartalmazza a családtagokat, a párod és a gyermekeid ugyanazt a jogi tanácsadási szolgáltatást vehetik igénybe."
+      },
+      {
+        "question": "Milyen nyelveken érhetők el a konzultációk?",
+        "answer": "A konzultációk szerbül, magyarul és angolul érhetők el, a szakembertől függően."
+      },
+      {
+        "question": "Ez helyettesíti a saját ügyvédet?",
+        "answer": "Nem. Ez a szolgáltatás kezdeti útmutatást nyújt, és segít megérteni a lehetőségeidet. Folyamatos ügyekhez szükséged lehet saját ügyvédre."
+      }
     ]
   },
   "cta": {
     "title": "Egészítsd ki a jólléti programodat jogi támogatással",
     "body": "Segítsd a munkavállalóidat, hogy magabiztosan kezeljék személyes jogi ügyeiket.",
-    "primary": { "label": "Kérj bemutatót", "href": "/demo" }
+    "primary": {
+      "label": "Kérj bemutatót",
+      "href": "/demo"
+    }
   }
 }

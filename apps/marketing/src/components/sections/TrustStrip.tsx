@@ -23,7 +23,7 @@ export function TrustStrip({ items, ariaLabel, className }: TrustStripProps) {
     >
       <ul
         role="list"
-        className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 @max-[760px]:grid @max-[760px]:grid-cols-2 @max-[760px]:gap-x-4 @max-[760px]:gap-y-4 @max-[380px]:grid-cols-1"
+        className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 @max-[760px]:grid @max-[760px]:grid-cols-2 @max-[760px]:gap-x-4 @max-[760px]:gap-y-4 @max-[330px]:grid-cols-1"
       >
         {items.map((item) => {
           const Icon = iconMap[item.icon];

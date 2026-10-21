@@ -6,8 +6,14 @@
   "hero": {
     "title": "Podrška koja pokriva ono što je važno",
     "lead": "Tri oblasti profesionalne pomoći — psihološka, pravna i finansijska — dostupne zaposlenima i, ukoliko plan Vašeg poslodavca uključuje članove porodice, njihovim porodicama.",
-    "primaryCta": { "label": "Zakažite prezentaciju", "href": "/demo" },
-    "secondaryCta": { "label": "Pogledajte planove", "href": "/plans" }
+    "primaryCta": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    },
+    "secondaryCta": {
+      "label": "Pogledajte planove",
+      "href": "/plans"
+    }
   },
   "pillars": [
     {
@@ -17,8 +23,14 @@
         "Razgovarajte sa licenciranim psiholozima i kvalifikovanim psihoterapeutima o stresu, anksioznosti, odnosima, tuzi ili bilo čemu drugom što Vam je na umu.",
         "Sesije su dostupne onlajn ili uživo gde je to moguće, na srpskom, mađarskom ili engleskom jeziku."
       ],
-      "photo": { "key": "psychological-inperson", "alt": "Osoba razgovara sa psihologom tokom sesije uživo" },
-      "cta": { "label": "Saznajte više", "href": "/services/therapy" }
+      "photo": {
+        "key": "psychological-inperson",
+        "alt": "Osoba razgovara sa psihologom tokom sesije uživo"
+      },
+      "cta": {
+        "label": "Saznajte više",
+        "href": "/services/therapy"
+      }
     },
     {
       "id": "legal",
@@ -27,8 +39,14 @@
         "Dobijte poverljive savete o ličnim pravnim pitanjima — ugovori o radu, zakup, osnove porodičnog prava, potrošačka pitanja i još mnogo toga.",
         "Kvalifikovani pravni stručnjak pregleda Vašu situaciju i pruža pisani pregled narednih koraka."
       ],
-      "photo": { "key": "legal-consultation", "alt": "Konsultacija sa pravnim stručnjakom za stolom" },
-      "cta": { "label": "Saznajte više", "href": "/services/legal-consultation" },
+      "photo": {
+        "key": "legal-consultation",
+        "alt": "Konsultacija sa pravnim stručnjakom za stolom"
+      },
+      "cta": {
+        "label": "Saznajte više",
+        "href": "/services/legal-consultation"
+      },
       "icon": "scales"
     },
     {
@@ -38,35 +56,82 @@
         "Radite sa nezavisnim finansijskim konsultantom na budžetiranju, dugovima, štednji, kreditima ili planiranju penzije.",
         "Naši konsultanti ne prodaju proizvode i ne primaju provizije — njihovi saveti su u potpunosti u Vašem interesu."
       ],
-      "photo": { "key": "financial-planning", "alt": "Osoba pregleda finansijske planove sa konsultantom" },
-      "cta": { "label": "Saznajte više", "href": "/services/financial-guidance" },
+      "photo": {
+        "key": "financial-planning",
+        "alt": "Osoba pregleda finansijske planove sa konsultantom"
+      },
+      "cta": {
+        "label": "Saznajte više",
+        "href": "/services/financial-guidance"
+      },
       "icon": "wallet"
     }
   ],
   "steps": {
     "title": "Kako funkcioniše sesija",
     "items": [
-      { "title": "Izaberite oblast", "body": "Izaberite psihološku, pravnu ili finansijsku podršku — u zavisnosti od Vaše situacije." },
-      { "title": "Izaberite stručnjaka i termin", "body": "Pregledajte dostupne stručnjake i izaberite termin koji Vam odgovara. Sesije su dostupne putem videa ili uživo gde je to moguće." },
-      { "title": "Pogledajte Vaše pokriće", "body": "Vaše pokriće i eventualni troškovi prikazuju se pre potvrde. Bez iznenađenja." },
-      { "title": "Razgovarajte", "body": "Upoznajte svog stručnjaka na poverljivoj sesiji. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo." },
-      { "title": "Nastavite", "body": "Zapisi i beleške sa sesija ostaju kod Vas. Zakažite novu sesiju kad god Vam zatreba." }
-    ]
+      {
+        "title": "Izaberite oblast",
+        "body": "Izaberite psihološku, pravnu ili finansijsku podršku — u zavisnosti od Vaše situacije."
+      },
+      {
+        "title": "Izaberite stručnjaka i termin",
+        "body": "Pregledajte dostupne stručnjake i izaberite termin koji Vam odgovara. Sesije su dostupne putem videa ili uživo gde je to moguće."
+      },
+      {
+        "title": "Pogledajte Vaše pokriće",
+        "body": "Vaše pokriće i eventualni troškovi prikazuju se pre potvrde. Bez iznenađenja."
+      },
+      {
+        "title": "Razgovarajte",
+        "body": "Upoznajte svog stručnjaka na poverljivoj sesiji. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo."
+      },
+      {
+        "title": "Nastavite",
+        "body": "Zapisi i beleške sa sesija ostaju kod Vas. Zakažite novu sesiju kad god Vam zatreba."
+      }
+    ],
+    "lead": "Od prve prijave do naknadnog termina, svaki korak ostaje između Vas i Vašeg stručnjaka.",
+    "photo": {
+      "key": "home-hero-office",
+      "alt": "Kolege razgovaraju u svetloj kancelariji"
+    }
   },
   "faq": {
     "title": "Pitanja o našim uslugama",
     "items": [
-      { "question": "Da li ovo pokriva moj poslodavac?", "answer": "Vaš poslodavac plaća program. Pre nego što potvrdite sesiju, platforma Vam prikazuje Vaše pokriće i eventualne preostale troškove kako ne bi bilo iznenađenja." },
-      { "question": "Da li će moj poslodavac znati da sam koristio/la uslugu?", "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi." },
-      { "question": "Da li moja porodica može da koristi NestSelf?", "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu koristiti iste usluge bez dodatnih troškova." },
-      { "question": "Na kojim jezicima su sesije dostupne?", "answer": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku, u zavisnosti od stručnjaka." },
-      { "question": "Mogu li da biram između video i sesija uživo?", "answer": "Da. Kada izaberete stručnjaka i termin, videćete da li su dostupne video sesije, sesije uživo ili oba formata." },
-      { "question": "Kako da započnem?", "answer": "Vaš poslodavac obezbeđuje podatke za pristup kada se program pokrene. Kreirate privatni nalog, izaberete oblast usluge i zakažete prvu sesiju." }
+      {
+        "question": "Da li ovo pokriva moj poslodavac?",
+        "answer": "Vaš poslodavac plaća program. Pre nego što potvrdite sesiju, platforma Vam prikazuje Vaše pokriće i eventualne preostale troškove kako ne bi bilo iznenađenja."
+      },
+      {
+        "question": "Da li će moj poslodavac znati da sam koristio/la uslugu?",
+        "answer": "Ne. Vaš poslodavac nikada ne saznaje ko je koristio NestSelf ni o čemu se razgovaralo. HR vidi anonimizovane podatke o korišćenju samo za grupe od 10 ili više ljudi."
+      },
+      {
+        "question": "Da li moja porodica može da koristi NestSelf?",
+        "answer": "Ukoliko plan Vašeg poslodavca uključuje članove porodice, Vaš partner i deca mogu koristiti iste usluge bez dodatnih troškova."
+      },
+      {
+        "question": "Na kojim jezicima su sesije dostupne?",
+        "answer": "Sesije su dostupne na srpskom, mađarskom i engleskom jeziku, u zavisnosti od stručnjaka."
+      },
+      {
+        "question": "Mogu li da biram između video i sesija uživo?",
+        "answer": "Da. Kada izaberete stručnjaka i termin, videćete da li su dostupne video sesije, sesije uživo ili oba formata."
+      },
+      {
+        "question": "Kako da započnem?",
+        "answer": "Vaš poslodavac obezbeđuje podatke za pristup kada se program pokrene. Kreirate privatni nalog, izaberete oblast usluge i zakažete prvu sesiju."
+      }
     ]
   },
   "cta": {
     "title": "Spremni da podržite svoj tim?",
     "body": "Saznajte kako NestSelf odgovara Vašoj organizaciji.",
-    "primary": { "label": "Zakažite prezentaciju", "href": "/demo" }
+    "primary": {
+      "label": "Zakažite prezentaciju",
+      "href": "/demo"
+    }
   }
 }

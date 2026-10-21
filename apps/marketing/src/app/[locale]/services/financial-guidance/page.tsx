@@ -68,6 +68,8 @@ export default async function FinancialGuidancePage({
       <StepsSection
         id="how-it-works"
         title={data.howItWorks.title}
+        lead={data.howItWorks.lead}
+        photo={data.howItWorks.photo ? { key: data.howItWorks.photo.key as PhotoKey, alt: data.howItWorks.photo.alt } : undefined}
         steps={data.howItWorks.steps}
       />
 

@@ -75,7 +75,6 @@
       "key": "employees-break",
       "alt": "Kolege na kratkoj pauzi ispred kancelarije"
     },
-
     "steps": [
       {
         "title": "Aktivirajte nalog sa poslovnom e-adresom",
@@ -132,7 +131,7 @@
     "moreLabel": "Pogledajte sve resurse"
   },
   "assessments": {
-    "title": "Provera blagostanja"
+    "title": "Provere blagostanja"
   },
   "testimonials": {
     "title": "Šta kažu organizacije",
@@ -166,7 +165,8 @@
         "question": "Šta ako je neko u krizi?",
         "answer": "Ako ste Vi ili neko koga poznajete u neposrednoj opasnosti, pozovite hitne službe odmah. Srbija: 112 (hitne službe), 194 (hitna pomoć); Centar Srce 0800 300 303. Mađarska: 112 (hitne službe), 104 (hitna pomoć); Lelki Elsősegély Telefonszolgálat 116 123. NestSelf takođe pruža smernice za pristup hitnoj stručnoj podršci."
       }
-    ]
+    ],
+    "moreLabel": "Sva pitanja"
   },
   "ctaBand": {
     "title": "Spremni da podržite svoj tim?",

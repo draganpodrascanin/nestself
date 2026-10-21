@@ -61,7 +61,7 @@ export function PageHero({
         )}
       >
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-        <h1 id="page-hero-title" className="type-marketing-hero">
+        <h1 id="page-hero-title" className="type-marketing-hero text-balance">
           {title}
         </h1>
         <Text typeRole="bodyLarge" tone="secondary">

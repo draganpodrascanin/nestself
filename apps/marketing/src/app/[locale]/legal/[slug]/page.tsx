@@ -55,7 +55,7 @@ export default async function LegalPage({ params }: { params: Promise<Params> })
     <LegalToc
       sections={tocSections}
       otherPages={otherPages}
-      otherPagesHeading={data.breadcrumb.label}
+      otherPagesHeading={data.relatedHeading}
       navLabel={data.breadcrumb.label}
       navLabelId="legal-toc-heading"
     />

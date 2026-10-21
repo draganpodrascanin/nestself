@@ -9,6 +9,7 @@ export const legalPageSchema = z.object({
   updatedAt: z.string(),
   updatedAtLabel: z.string(),
   breadcrumb: z.object({ label: z.string(), home: z.string() }),
+  relatedHeading: z.string(),
   intro: z.string(),
   sections: z.array(z.object({
     heading: z.string(),

@@ -23,6 +23,8 @@ const schema = z.object({
     }),
   ),
   steps: z.object({
+    lead: z.string().optional(),
+    photo: z.object({ key: z.string(), alt: z.string() }).optional(),
     title: z.string(),
     items: z.array(z.object({ title: z.string(), body: z.string() })),
   }),
