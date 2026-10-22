@@ -57,14 +57,24 @@ const sharedProps: cdk.StackProps = {
   }),
 };
 
-// --- Auth stack (all stages) ---
+// --- Auth stack (every stage) ---
+// Rollout order (2026-10-22): Cognito only while development is local, then the
+// platform stacks when the web apps ship, mobile last. Without `-c platform=true`
+// this app contains only the auth stack, so `cdk deploy --all` cannot create the
+// network, database, compute, edge, observability or CI resources by accident.
 const _authStack = new NestSelfAuthStack(app, `NestSelf-${stage}-Auth`, {
   ...sharedProps,
   config,
 });
 
-// --- Remaining stacks (staging and production only) ---
-if (stage !== 'dev') {
+const platformRequested =
+  app.node.tryGetContext('platform') === 'true' || app.node.tryGetContext('platform') === true;
+if (platformRequested && stage === 'dev') {
+  throw new Error('The platform stacks are not defined for the dev stage; use -c stage=staging or production.');
+}
+
+// --- Platform stacks (staging and production, opt-in with -c platform=true) ---
+if (platformRequested) {
   const securityBaseline = new NestSelfSecurityBaselineStack(
     app,
     `NestSelf-${stage}-SecurityBaseline`,

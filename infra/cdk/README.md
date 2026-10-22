@@ -32,23 +32,53 @@ AWS CDK project for the NestSelf platform. Defines the auth, network, data, secu
 
 **IAM note**: The CDK bootstrap stack (`cdk bootstrap`) must be run once per target account/region before the first deploy. The deployer needs `AdministratorAccess` or equivalent scoped permissions during bootstrap. After bootstrap, the deploy role is assumed from the bootstrap stack.
 
+## Rollout order
+
+Deployment happens in three steps, matching the product rollout. Each step is an explicit opt-in so nothing beyond the current step is created.
+
+| Step | When | What is deployed | Command |
+|---|---|---|---|
+| 1. Cognito only | Now; development stays local (Docker Compose Postgres and Redis, API on the laptop) | `NestSelf-<stage>-Auth` only: user pool, app clients, triggers, secrets | `cdk deploy NestSelf-dev-Auth -c stage=dev -c account=<ACCOUNT_ID>` |
+| 2. Web applications | After the first features are complete | All platform stacks (network, data, compute, edge, observability, CI) | `cdk deploy --all -c stage=staging -c account=<ACCOUNT_ID> -c platform=true` |
+| 3. Mobile | After everything is verified end to end | No new stacks: the mobile client already exists in the auth stack; EAS builds point at the staging or production pool | `node infra/cdk/scripts/env-from-outputs.mjs <stage> --mobile` |
+
+Without `-c platform=true` the CDK app contains only the auth stack for every stage, so `cdk deploy --all` and `cdk synth` touch nothing else. The CI nag gate synthesizes with `-c platform=true` so the platform stacks stay reviewed while they are not deployed.
+
+### Step 1: connect the API to a real Cognito pool
+
+```bash
+# once per account and region
+pnpm --filter @nestself/cdk exec cdk bootstrap aws://<ACCOUNT_ID>/eu-central-1
+
+# deploy the dev pool (auth stack only)
+pnpm --filter @nestself/cdk exec cdk deploy NestSelf-dev-Auth -c stage=dev -c account=<ACCOUNT_ID>
+
+# write the pool coordinates and secrets into the API env, then switch the mode
+node infra/cdk/scripts/env-from-outputs.mjs dev >> apps/api/.env
+# in apps/api/.env: AUTH_MODE=cognito, REDIS_URL set (required in cognito mode), SESSION_ENCRYPTION_KEY from the stack secret
+pnpm db:up && pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/api db:seed
+pnpm --filter @nestself/api dev
+```
+
+The web apps keep running locally against `http://localhost:4000`; the dev pool's callback URLs already list the localhost origins.
+
 ## Commands
 
 ```bash
 # Synthesize dev (no AWS credentials needed)
 pnpm --filter @nestself/cdk exec cdk synth -c stage=dev -c account=<ACCOUNT_ID>
 
-# Synthesize staging offline (no credentials)
-pnpm --filter @nestself/cdk exec cdk synth -c stage=staging -c account=<ACCOUNT_ID> --no-lookups
+# Synthesize staging offline with the platform stacks (no credentials)
+pnpm --filter @nestself/cdk exec cdk synth -c stage=staging -c account=<ACCOUNT_ID> -c platform=true --no-lookups
 
 # Deploy dev auth stack
 pnpm --filter @nestself/cdk exec cdk deploy NestSelf-dev-Auth -c stage=dev -c account=<ACCOUNT_ID>
 
-# Deploy all staging stacks
-pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<ACCOUNT_ID>
+# Deploy all staging stacks (step 2 of the rollout)
+pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<ACCOUNT_ID> -c platform=true
 
-# Deploy all production stacks
-pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=production -c account=<ACCOUNT_ID>
+# Deploy all production stacks (step 2 of the rollout)
+pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=production -c account=<ACCOUNT_ID> -c platform=true
 
 # Run the migrate task manually (staging)
 aws ecs run-task \

@@ -81,4 +81,5 @@ jobs:
           pnpm --filter @nestself/cdk exec cdk synth
           -c stage=staging
           -c account=000000000000
+          -c platform=true
           --no-lookups
