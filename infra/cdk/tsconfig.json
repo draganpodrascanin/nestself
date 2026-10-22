@@ -1,0 +1,9 @@
+{
+  "extends": "@nestself/typescript-config/base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "cdk.out"
+  },
+  "include": ["bin/**/*.ts", "lib/**/*.ts", "test/**/*.ts"]
+}

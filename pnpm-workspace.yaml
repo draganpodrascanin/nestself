@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "infra/*"
 
 catalog:
   # React (web and native must agree; react-native 0.88 requires ^19.3.0)
@@ -112,6 +113,32 @@ catalog:
   "@swc/core": 1.16.18
   "@swc/helpers": 0.5.23
   unplugin-swc: 2.0.0
+  # Auth, infrastructure and jobs (added 2026-10-22; versions from npm view)
+  aws-cdk-lib: 2.274.0
+  constructs: 10.8.1
+  cdk-nag: 3.0.2
+  aws-cdk: 2.1146.0
+  esbuild: 0.28.2
+  "@types/aws-lambda": 8.10.164
+  fast-check: 4.10.2
+  aws-jwt-verify: 5.2.1
+  "@aws-sdk/client-cognito-identity-provider": 3.1155.0
+  "@aws-sdk/client-ses": 3.1155.0
+  redis: 6.3.0
+  ioredis: 6.0.0
+  bullmq: 6.4.0
+  ua-parser-js: 2.0.10
+  "@types/ua-parser-js": 0.7.39
+  socket.io: 4.8.4
+  "@nestjs/websockets": 12.2.0
+  "@nestjs/platform-socket.io": 12.2.0
+  cookie: 2.0.1
+  qrcode: 1.5.4
+  "@types/qrcode": 1.5.6
+  expo-auth-session: 58.0.14
+  expo-secure-store: 58.0.2
+  expo-web-browser: 58.0.6
+  expo-crypto: 58.0.7
   # Repo tooling
   turbo: 2.11.9
   sherif: 1.13.0

@@ -1,0 +1,76 @@
+import { describe, it, expect } from 'vitest';
+import * as cdk from 'aws-cdk-lib';
+import { Validations } from 'aws-cdk-lib';
+import { AwsSolutionsChecks } from 'cdk-nag';
+import { NestSelfAuthStack } from '../lib/auth-stack.js';
+import { NestSelfNetworkStack } from '../lib/network-stack.js';
+import { NestSelfDataStack } from '../lib/data-stack.js';
+import { NestSelfSecurityBaselineStack } from '../lib/security-baseline-stack.js';
+import { getStageConfig } from '../lib/config.js';
+
+const sharedEnv = { account: '111111111111', region: 'eu-central-1' };
+const synthesizerProps = {
+  synthesizer: new cdk.DefaultStackSynthesizer({
+    generateBootstrapVersionRule: false,
+  }),
+};
+
+describe('cdk-nag AwsSolutions -- auth stack', () => {
+  it('dev auth stack synthesizes with nag plugin without violations', () => {
+    const app = new cdk.App();
+    const config = getStageConfig('dev');
+    const _stack = new NestSelfAuthStack(app, 'NagDevAuth', {
+      config,
+      env: sharedEnv,
+      ...synthesizerProps,
+    });
+    Validations.of(app).addPlugins(new AwsSolutionsChecks());
+    // Synthesis runs the validation plugin; if violations remain it throws
+    const assembly = app.synth();
+    expect(assembly).toBeDefined();
+  });
+
+  it('production auth stack synthesizes with nag plugin without violations', () => {
+    const app = new cdk.App();
+    const config = getStageConfig('production');
+    const _stack = new NestSelfAuthStack(app, 'NagProdAuth', {
+      config,
+      env: sharedEnv,
+      ...synthesizerProps,
+    });
+    Validations.of(app).addPlugins(new AwsSolutionsChecks());
+    const assembly = app.synth();
+    expect(assembly).toBeDefined();
+  });
+});
+
+describe('cdk-nag AwsSolutions -- staging full synth', () => {
+  it('all staging stacks synthesize with nag plugin', () => {
+    const app = new cdk.App();
+    const config = getStageConfig('staging');
+
+    const securityBaseline = new NestSelfSecurityBaselineStack(
+      app, 'NagStagingSecurity', { config, env: sharedEnv, ...synthesizerProps },
+    );
+
+    const network = new NestSelfNetworkStack(
+      app, 'NagStagingNetwork', { config, env: sharedEnv, ...synthesizerProps },
+    );
+
+    const _data = new NestSelfDataStack(app, 'NagStagingData', {
+      config,
+      env: sharedEnv,
+      platformKey: securityBaseline.platformKey,
+      vpc: network.vpc,
+      ...synthesizerProps,
+    });
+
+    const _auth = new NestSelfAuthStack(
+      app, 'NagStagingAuth', { config, env: sharedEnv, ...synthesizerProps },
+    );
+
+    Validations.of(app).addPlugins(new AwsSolutionsChecks());
+    const assembly = app.synth();
+    expect(assembly).toBeDefined();
+  });
+});

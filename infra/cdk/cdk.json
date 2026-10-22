@@ -1,0 +1,17 @@
+{
+  "app": "PATH=\"$PWD/node_modules/.bin:$PATH\" tsx bin/app.ts",
+  "watch": {
+    "include": ["bin/**", "lib/**"],
+    "exclude": ["node_modules", "cdk.out", "test", "**/*.test.ts", "**/*.d.ts"]
+  },
+  "context": {
+    "nag": true,
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
+    "@aws-cdk/core:defaultCrossStackReferences": "both",
+    "availability-zones:account=111111111111:region=eu-central-1": ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+  }
+}
