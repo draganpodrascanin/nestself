@@ -2,7 +2,7 @@ import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
-    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    include: ['src/**/*.{spec,test}.ts', 'test/**/*.{spec,test}.ts'],
     environment: 'node',
     env: {
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
