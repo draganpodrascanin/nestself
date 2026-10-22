@@ -15,6 +15,7 @@ import { SessionEndpointsService } from './session-endpoints.service.js';
 import { ChallengeStore } from './challenge-store.js';
 import { SignInThrottle } from './sign-in-throttle.js';
 import { AccessRevocationService } from './access-revocation.service.js';
+import { ProfileService } from './profile.service.js';
 import { AuthorizationGuard } from '../authz/authorization.guard.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ContextLoader } from '../authz/context-loader.js';
@@ -47,6 +48,7 @@ import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
     ChallengeStore,
     SignInThrottle,
     AccessRevocationService,
+    ProfileService,
     AuthorizationGuard,
     AuthorizationService,
     ContextLoader,

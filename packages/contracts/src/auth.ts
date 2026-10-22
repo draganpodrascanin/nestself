@@ -4,6 +4,7 @@
  * @see Sections 5.1, 5.2, 5.9 of auth-strategy.md
  */
 import { z } from 'zod';
+import { LocaleSchema } from './locale.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -221,6 +222,17 @@ export const TotpConfirmRequestSchema = z.object({
   code: z.string().min(6).max(6),
 });
 export type TotpConfirmRequest = z.infer<typeof TotpConfirmRequestSchema>;
+
+// --- Profile (PATCH /auth/me/locale, PATCH /auth/me/display-name) ---
+export const ProfileLocaleRequestSchema = z.object({
+  locale: LocaleSchema,
+});
+export type ProfileLocaleRequest = z.infer<typeof ProfileLocaleRequestSchema>;
+
+export const ProfileDisplayNameRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(120),
+});
+export type ProfileDisplayNameRequest = z.infer<typeof ProfileDisplayNameRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Error schemas (5.9)

@@ -146,10 +146,18 @@ All routes under the global `/api` prefix.
 | POST | /auth/sign-out-all | @Authenticated | default |
 | POST | /auth/ws-ticket | @Authenticated | 30/min |
 | GET | /auth/me | @Authenticated | default |
+| PATCH | /auth/me/locale | @Authenticated | default |
+| PATCH | /auth/me/display-name | @Authenticated | default |
 | GET | /auth/sessions | @Authenticated | default |
 | DELETE | /auth/sessions/:sessionId | @Authenticated | default |
 | GET | /health | @Public | default |
 | GET | /orgs/:orgId/programme | @Authorize(program.overview) | default |
+| GET | /orgs/:orgId/org-units | @Authorize(program.overview) | default |
+| POST | /orgs/:orgId/org-units | @Authorize(org_units.manage) | default |
+| PATCH | /orgs/:orgId/org-units/:unitId | @Authorize(org_units.manage) | default |
+| POST | /orgs/:orgId/org-units/:unitId/move | @Authorize(org_units.manage) | default |
+| GET | /orgs/:orgId/members | @Authorize(program.overview) | default |
+| PATCH | /orgs/:orgId/members/:membershipId | @Authorize(people.move) | default |
 | POST | /orgs/:orgId/members/:membershipId/end | @Authorize(people.deactivate) | default |
 | POST | /ops/users/:userId/suspend | @Authorize(people.deactivate) | default |
 | POST | /ops/users/:userId/reinstate | @Authorize(people.deactivate) | default |
@@ -250,12 +258,79 @@ Two implementations behind the `BEARER_VERIFIER` DI token:
 - `CognitoBearerVerifier` — `aws-jwt-verify` + revoked family check when
   `AUTH_MODE=cognito`
 
+## WebSocket (`src/ws/`)
+
+Real-time communication over Socket.IO at path `/api/ws`.
+Implemented as task T-1.11 (4.6.7, AUTHZ-R-58..60).
+
+### Adapter
+
+`NestSelfIoAdapter` (extends `IoAdapter` from `@nestjs/platform-socket.io`)
+configures the Socket.IO server and registers the handshake middleware.
+Installed in `main.ts` via `app.useWebSocketAdapter(new NestSelfIoAdapter(app))`.
+
+| Config | Source |
+|--------|--------|
+| Path | `/api/ws` |
+| CORS | `WORKSPACE_URL`, `ADMIN_URL` with credentials |
+
+### Handshake authentication (AUTHZ-R-58)
+
+`WsAuthService.authenticateHandshake()` runs in the `io.use()` middleware:
+
+1. **Origin check** — when `Origin` header is present, it must match
+   `WORKSPACE_URL` or `ADMIN_URL`. Rejects with `forbidden_origin`.
+2. **Web path (cookie)** — parse session cookie via `SessionCookies.parse`,
+   load session via `SessionService.get`, load principal via
+   `PrincipalLoader.load`. Rejects when missing, suspended or deactivated
+   with `unauthorized`.
+3. **Mobile path (ticket)** — `handshake.auth.ticket` → SHA-256 →
+   `store.getDel(wsTicketKey(hash))` (single-use, AUTHZ-R-60). Reject when
+   absent or older than 30 s with `invalid_ticket`. Load principal for
+   the stored `userId` with default context (same as bearer path).
+4. **Attach** `socket.data.principal` and
+   `socket.data.subscriptions = new Map()`.
+
+### Gateway events
+
+`EventsGateway` (`@WebSocketGateway({ path: '/api/ws' })`) handles:
+
+| Event | Direction | Payload | Behaviour |
+|-------|-----------|---------|-----------|
+| `subscribe` | client → server | `{ room, action, resource }` (zod-validated) | Runs `authorizeSubscription`; on allow → join room, record in `subscriptions`; on deny → emit `subscribe:denied { room, reason }` (AUTHZ-R-59) |
+| `unsubscribe` | client → server | `{ room }` | Leave room, remove from `subscriptions` |
+| `subscribe:ok` | server → client | `{ room }` | Subscription confirmed |
+| `subscribe:denied` | server → client | `{ room, reason }` | Subscription denied |
+| `subscription:revoked` | server → client | `{ room }` | Room access revoked after invalidation |
+| `session:revoked` | server → client | `{ reason }` | Socket about to be disconnected (suspension/deactivation) |
+
+The gateway class carries `@Authenticated()` for the default-deny scan
+(AUTHZ-R-62). Per-subscription authorization runs inside the handler.
+
+### Real-time invalidation
+
+`WsInvalidationService` subscribes to the Redis `invalidate` channel.
+On each message with a `userId`:
+
+1. Find all sockets for that user via `WsConnectionRegistry`.
+2. Reload the principal via `PrincipalLoader.load`.
+3. If the user is now suspended, deactivated or missing → emit
+   `session:revoked` and disconnect the socket (SESS-R-24, DR-15).
+4. Otherwise, re-run `authorizeSubscription` for every recorded
+   subscription. Revoke rooms that are no longer allowed, emitting
+   `subscription:revoked { room }`.
+
+### Module map addition
+
+| Module | Global? | Key export(s) |
+|--------|---------|---------------|
+| `WsModule` | no | `WsAuthService`, `WsConnectionRegistry` |
+
 ### Not yet implemented
 
 - SSO / SAML (routes stubbed as `ssoStartUrl: null`)
 - Step-up authentication (annotation wired, enforcement phase 2)
 
 - Push notifications
-- WebSocket authentication (ws-ticket created but gateway not wired)
 - `/auth/me/locale`, `/auth/me/display-name` profile update endpoints
 - Mobile bearer token refresh and family management

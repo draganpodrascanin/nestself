@@ -168,6 +168,37 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   });
 
   // -----------------------------------------------------------------------
+  // 2b. Profile updates
+  // -----------------------------------------------------------------------
+
+  it('PATCH /api/auth/me/locale and /me/display-name update the profile', async () => {
+    const localeRes = await agent
+      .patch('/api/auth/me/locale')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ locale: 'hu' });
+    expect(localeRes.status).toBe(200);
+    expect(localeRes.body.principal.locale).toBe('hu');
+
+    const nameRes = await agent
+      .patch('/api/auth/me/display-name')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ displayName: 'Jovan P.' });
+    expect(nameRes.status).toBe(200);
+    expect(nameRes.body.principal.initials).toBe('JP');
+
+    // The cache was dropped: /me reflects the new values on the next request.
+    const meRes = await agent.get('/api/auth/me');
+    expect(meRes.body.principal.locale).toBe('hu');
+    expect(meRes.body.principal.displayName).toBe('Jovan P.');
+
+    const badRes = await agent
+      .patch('/api/auth/me/locale')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ locale: 'xx' });
+    expect(badRes.status).toBe(400);
+  });
+
+  // -----------------------------------------------------------------------
   // 3. CSRF rejection: mutating request without X-CSRF-Token → 403
   // -----------------------------------------------------------------------
 

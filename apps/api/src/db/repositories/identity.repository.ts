@@ -141,6 +141,16 @@ export class IdentityRepository {
     return row!;
   }
 
+  /** Update the user's own profile fields. */
+  async updateProfile(
+    userId: string,
+    patch: { locale?: string; displayName?: string },
+    tx?: DbExecutor,
+  ): Promise<UserRow | null> {
+    const [row] = await this.exec(tx).update(users).set(patch).where(eq(users.id, userId)).returning();
+    return row ?? null;
+  }
+
   /** Record a successful sign-in. */
   async touchLastSignIn(userId: string, at: Date, tx?: DbExecutor): Promise<void> {
     await this.exec(tx).update(users).set({ lastSignInAt: at }).where(eq(users.id, userId));

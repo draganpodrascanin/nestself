@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Req,
   Res,
@@ -45,6 +46,8 @@ import { PasswordResetService } from './password-reset.service.js';
 import { SessionEndpointsService } from './session-endpoints.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SessionCookies } from '../session/session-cookie.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ProfileService } from './profile.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 import {
   DiscoverRequestSchema,
@@ -57,6 +60,8 @@ import {
   PasswordResetStartRequestSchema,
   PasswordResetConfirmRequestSchema,
   ContextSwitchRequestSchema,
+  ProfileLocaleRequestSchema,
+  ProfileDisplayNameRequestSchema,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +111,7 @@ export class AuthController {
     private readonly passwordReset: PasswordResetService,
     private readonly sessionEndpoints: SessionEndpointsService,
     private readonly cookies: SessionCookies,
+    private readonly profile: ProfileService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -361,6 +367,38 @@ export class AuthController {
   @Get('me')
   async me(@CurrentPrincipal() principal: Principal) {
     return this.sessionEndpoints.getMe(principal);
+  }
+
+  // -----------------------------------------------------------------------
+  // PATCH /api/auth/me/locale
+  // -----------------------------------------------------------------------
+
+  @Authenticated()
+  @Patch('me/locale')
+  @HttpCode(200)
+  async updateLocale(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+    @Body() body: unknown,
+  ) {
+    const { locale } = validate(ProfileLocaleRequestSchema, body);
+    return this.profile.updateLocale(principal, locale, extractMeta(req));
+  }
+
+  // -----------------------------------------------------------------------
+  // PATCH /api/auth/me/display-name
+  // -----------------------------------------------------------------------
+
+  @Authenticated()
+  @Patch('me/display-name')
+  @HttpCode(200)
+  async updateDisplayName(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+    @Body() body: unknown,
+  ) {
+    const { displayName } = validate(ProfileDisplayNameRequestSchema, body);
+    return this.profile.updateDisplayName(principal, displayName, extractMeta(req));
   }
 
   // -----------------------------------------------------------------------
