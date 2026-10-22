@@ -2,18 +2,20 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'phosphor-react-native';
-import { Screen, Text, Card } from '@nestself/ui-native';
+import { Screen, Text, Card, Button } from '@nestself/ui-native';
 import { useTheme } from '@nestself/ui-native';
 import { locales, localeMeta } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import { modes } from '@nestself/tokens';
 import { changeLocale } from '@/i18n';
+import { useAuth } from '@/auth/use-auth';
 import { SampleDataBanner } from '@/components/SampleDataBanner';
 
 export default function SettingsScreen() {
-  const { t, i18n } = useTranslation(['mobile', 'common']);
+  const { t, i18n } = useTranslation(['mobile', 'common', 'auth']);
   const { colors, space, radius, mode, setMode } = useTheme();
   const router = useRouter();
+  const auth = useAuth();
   const currentLocale = i18n.language as Locale;
 
   return (
@@ -113,6 +115,13 @@ export default function SettingsScreen() {
             })}
           </View>
         </Card>
+
+        {/* Sign out */}
+        <Button
+          variant="secondary"
+          onPress={() => void auth.signOut()}
+          label={t('auth:mobile.signOut')}
+        />
       </ScrollView>
     </Screen>
   );

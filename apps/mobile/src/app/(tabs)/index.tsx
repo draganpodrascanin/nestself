@@ -7,16 +7,17 @@ import { SAMPLE_BOOKING } from '@nestself/sample-data';
 import { supportAreas } from '@nestself/contracts';
 import { formatDateTime } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
-import { useSession } from '@/providers/session';
+import { useAuth } from '@/auth/use-auth';
 import { SampleDataBanner } from '@/components/SampleDataBanner';
 import { categoryIconMap, areaToCategory } from '@/lib/categories';
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation(['mobile', 'common']);
   const { colors, space, radius } = useTheme();
-  const session = useSession();
+  const { principal } = useAuth();
   const router = useRouter();
 
+  const displayName = principal?.displayName ?? '';
   const appointmentDate = new Date(SAMPLE_BOOKING.appointmentAt);
 
   return (
@@ -38,12 +39,12 @@ export default function HomeScreen() {
           <Text role="label" tone="default">
             {t('common:brand.name')}
           </Text>
-          <Avatar name={session.displayName} size={40} />
+          <Avatar name={displayName} size={40} />
         </View>
 
         {/* Greeting */}
         <Text role="screenTitle">
-          {t('mobile:home.greeting', { name: session.displayName.split(' ')[0] })}
+          {t('mobile:home.greeting', { name: displayName.split(' ')[0] })}
         </Text>
 
         {/* Next appointment card */}

@@ -15,7 +15,7 @@ const i18n = i18next.createInstance();
 
 void i18n.use(initReactI18next).init({
   ...i18nBaseOptions,
-  resources: resourcesFor(['common', 'mobile']) as Resource,
+  resources: resourcesFor(['common', 'mobile', 'auth']) as Resource,
   lng: deviceLocale,
   react: { useSuspense: false },
 });
