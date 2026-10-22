@@ -70,6 +70,8 @@ const CATEGORY_MAP: ReadonlyMap<AuditAction, AuditCategory> = new Map<AuditActio
 
 function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('auth.')) return 'SECURITY';
+  // API-R-27: suspension is a security event (3-year tier), not an admin change.
+  if (action === 'user.suspended') return 'SECURITY';
   if (action.startsWith('identity.')) return 'ADMIN';
   if (action.startsWith('invitation.')) return 'ADMIN';
   if (action.startsWith('membership.')) return 'ADMIN';

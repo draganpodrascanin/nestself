@@ -12,6 +12,7 @@ writer, environment schema and error handling. Implemented on
 | `IdentityModule` | no | `IdentityProviderService` (abstract class) |
 | `SessionModule` | no | `SessionService`, `SessionCookies`, `CsrfGuard` |
 | `AuditModule` | yes | `AuditWriter` |
+| `DbModule` | yes | `DbService`, repositories (identity, authorization, audit, leads, invitations, memberships) |
 
 ## Redis (`src/redis/`)
 
@@ -149,6 +150,14 @@ All routes under the global `/api` prefix.
 | DELETE | /auth/sessions/:sessionId | @Authenticated | default |
 | GET | /health | @Public | default |
 | GET | /orgs/:orgId/programme | @Authorize(program.overview) | default |
+| POST | /orgs/:orgId/members/:membershipId/end | @Authorize(people.deactivate) | default |
+| POST | /ops/users/:userId/suspend | @Authorize(people.deactivate) | default |
+| POST | /ops/users/:userId/reinstate | @Authorize(people.deactivate) | default |
+| POST | /orgs/:orgId/invitations | @Authorize(people.invite) | default |
+| POST | /orgs/:orgId/invitations/import | @Authorize(people.import) | default |
+| DELETE | /orgs/:orgId/invitations/:invitationId | @Authorize(people.invite) | default |
+| GET | /invitations/:token/preview | @Public | 10/min |
+| POST | /invitations/accept | @Public | 10/min |
 | POST | /leads/* (3 routes) | @Public | default |
 
 ### Principal cache (T-1.7)
@@ -210,8 +219,9 @@ The **default-deny test** walks every controller handler via
 
 ### PrincipalLoader (`src/principal/`)
 
-Loads `Principal` from Prisma (user, memberships, grants, expert,
-staff templates). Uses a Redis cache with circuit-breaker (3 failures
+Loads `Principal` from the identity and authorization repositories
+(backed by Drizzle; user, memberships, grants, expert, staff
+templates). Uses a Redis cache with circuit-breaker (3 failures
 → open for 5s, LRU fallback 100 entries / 10s TTL). `InvalidationSubscriber`
 listens on Redis pub/sub for `principal:invalidate:{userId}` messages.
 
@@ -244,7 +254,7 @@ Two implementations behind the `BEARER_VERIFIER` DI token:
 
 - SSO / SAML (routes stubbed as `ssoStartUrl: null`)
 - Step-up authentication (annotation wired, enforcement phase 2)
-- Invitation acceptance flow
+
 - Push notifications
 - WebSocket authentication (ws-ticket created but gateway not wired)
 - `/auth/me/locale`, `/auth/me/display-name` profile update endpoints

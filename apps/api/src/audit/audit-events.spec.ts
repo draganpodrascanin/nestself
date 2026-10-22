@@ -18,9 +18,15 @@ describe('audit-events', () => {
 
   it('identity/invitation/membership/user actions map to ADMIN', () => {
     const prefixes = ['identity.', 'invitation.', 'membership.', 'user.'];
-    for (const action of AUDIT_ACTIONS.filter((a) => prefixes.some((p) => a.startsWith(p)))) {
+    for (const action of AUDIT_ACTIONS.filter(
+      (a) => prefixes.some((p) => a.startsWith(p)) && a !== 'user.suspended',
+    )) {
       expect(categoryFor(action)).toBe('ADMIN');
     }
+  });
+
+  it('user.suspended maps to SECURITY (API-R-27)', () => {
+    expect(categoryFor('user.suspended')).toBe('SECURITY');
   });
 
   it('grant and access actions map to AUTHORIZATION', () => {
