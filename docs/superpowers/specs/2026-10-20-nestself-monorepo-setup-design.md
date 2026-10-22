@@ -1,5 +1,7 @@
 # NestSelf monorepo setup — design
 
+> **Superseded (2026-10-22):** the API data layer moved from Prisma 7 to Drizzle ORM with PostgreSQL row-level security (decision D-37 in docs/tasks/auth/auth-strategy.md). Prisma commands, schema paths and the generated client referenced below no longer exist; see apps/api/README.md.
+
 Date: 2026-10-20
 Status: approved for implementation under the stated assumptions (see "Decisions made without live confirmation")
 Design source of truth: `docs/design-handoff/` (NestSelf Web Handoff v0.3, Forest & Mint, light, Onest)

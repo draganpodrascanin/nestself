@@ -1,12 +1,18 @@
 # @nestself/api
 
-NestJS 12 API server with Prisma 7 schema skeleton and server-side role enforcement.
+NestJS 12 API server with Drizzle ORM, PostgreSQL row-level security and grant-based authorization.
 
 ## Run instructions
 
 ```bash
-# Generate Prisma client
-pnpm --filter @nestself/api prisma:generate
+# Start the database (Postgres 17 + Redis 7)
+pnpm db:up
+
+# Run migrations
+pnpm --filter @nestself/api db:migrate
+
+# Seed the database with sample data
+pnpm --filter @nestself/api db:seed
 
 # Start in development mode
 pnpm --filter @nestself/api dev
@@ -16,33 +22,92 @@ pnpm --filter @nestself/api build
 
 # Run tests
 pnpm --filter @nestself/api test
-
-# Run migrations (requires a running database)
-pnpm --filter @nestself/api prisma:migrate
-
-# Seed the database with sample data
-pnpm --filter @nestself/api prisma:seed
 ```
 
 The server listens on port 4000 by default. Copy `.env.example` to `.env` and adjust values.
 
-## Role enforcement
+### Schema changes
 
-The API enforces roles on the server side using two guards applied globally:
+When the Drizzle schema files under `src/db/schema/` change:
 
-- **AuthGuard**: verifies JWT tokens from the `Authorization: Bearer <token>` header. Routes decorated with `@Public()` skip authentication. Invalid or missing tokens result in 401.
+```bash
+# Generate a migration from the schema diff
+pnpm --filter @nestself/api db:generate
 
-- **RolesGuard**: when a route is decorated with `@Roles(...)`, the guard checks:
-  1. If the user has a matching **platform role** (expert, operations, admin), access is granted regardless of organisation.
-  2. Otherwise, if `@OrgParam('orgId')` is set, the guard looks up the user's membership in that organisation and checks if their **org role** (employee, manager, hr_admin) matches one of the required roles.
-  3. If neither condition is met, the request is denied with 403.
-  4. Routes without `@Roles()` metadata allow any authenticated user.
+# Create a custom (hand-written) migration
+pnpm --filter @nestself/api db:generate -- --custom --name=<name>
+```
 
-Role values use lower-case strings from `@nestself/contracts` (employee, manager, hr_admin, expert, operations, admin). Prisma enum values are UPPER_CASE and mapped via a small adapter in `src/auth/types.ts`.
+Migrations are SQL files in `drizzle/`. Apply them with `db:migrate` (never with `drizzle-kit push`).
 
-## What is deliberately missing
+## Database layer
 
-- **Appointments, payments, messages, credits**: these require contractual rules and a privacy risk assessment (spec section 17).
-- **Database migrations**: the orchestrator runs migrations in Phase 4 against a temporary database. The schema is defined but no migration files exist yet.
-- **Real authentication flow**: the AuthGuard verifies JWTs but no login/registration endpoints exist. These will be added in a later phase.
-- **Analytics, testimonials, logos, statistics**: not included per project content rules.
+The data access layer uses Drizzle ORM (drizzle-orm 0.45.4, drizzle-kit 0.31.11) with PostgreSQL and row-level security for tenant isolation.
+
+### Schema
+
+Table definitions live in `src/db/schema/` as `pgTable` calls with snake_case column mapping. Enum types use `pgEnum`. The entry point is `src/db/schema/index.ts`; the Drizzle config is `drizzle.config.ts`.
+
+### DbService and repositories
+
+`DbService` (`src/db/db.service.ts`) wraps a `pg` Pool and exposes the typed Drizzle database handle. It provides:
+
+- `db`: the Drizzle database instance for queries.
+- `withOrgScope(orgId, fn)`: runs a transaction with `set_config('app.current_org_id', orgId, true)` so that row-level security policies scope reads and writes to one organization.
+- `ping()`: connectivity probe for the health check.
+
+Repositories under `src/db/repositories/` (identity, authorization, audit, leads, invitations, memberships) encapsulate table queries. Services depend on repositories; tests mock repository methods or override `DbService`.
+
+### Row-level security
+
+Tenant tables (`org_units`, `memberships`, `grants`, `approval_authorities`, `invitations`, `sso_connections`, `channels`, `event_requests`) carry RLS policies declared in the schema with `pgPolicy`. The policy predicate is:
+
+```
+coalesce(current_setting('app.current_org_id', true), '') = '' OR org_id = current_setting('app.current_org_id', true)
+```
+
+An unset setting (empty string) means system context: principal loading, seeding and background jobs bypass RLS filtering. The API connects as `nestself_api`, a login role that is a member of the `nestself_app` group role. RLS is enabled and forced (`FORCE ROW LEVEL SECURITY`) so that even the table owner is subject to policies. The `nestself_app` role has no `UPDATE` or `DELETE` on `audit_events`.
+
+Two database roles are involved:
+
+| Role | Purpose |
+|------|---------|
+| `nestself` (owner) | Runs migrations; has full DDL privileges; superuser in local dev bypasses RLS |
+| `nestself_api` (login) | Member of `nestself_app`; the API connects as this role; RLS is enforced |
+
+The integration test (`test/db/schema.spec.ts`) creates a non-superuser login and verifies that cross-tenant reads return no rows and cross-tenant writes are rejected.
+
+### Migrations
+
+Migrations live in `drizzle/` and are tracked in the `drizzle.__drizzle_migrations` table. Two migrations exist:
+
+- `0000_init.sql`: generated by `drizzle-kit generate` from the schema.
+- `0001_audit_partitions_rls_roles.sql`: hand-written custom migration containing audit_events monthly range partitions, the `audit_events_ensure_partitions()` function, append-only triggers, `nestself_app` role grants and `FORCE ROW LEVEL SECURITY` on tenant tables.
+
+### Audit partitions
+
+`audit_events` is range-partitioned by `occurred_at` (monthly). The `audit_events_ensure_partitions()` function creates partitions ahead of time. Append-only triggers reject `UPDATE` and `DELETE` on the table.
+
+## Authentication and authorization
+
+The legacy `AuthGuard` and `RolesGuard` no longer exist. See `apps/api/docs/auth-core.md` for the current authentication and authorization layer.
+
+Four global guards are registered via `APP_GUARD` in `app.module.ts`:
+
+1. **AuthenticationGuard**: session cookie or bearer token; attaches `request.principal`.
+2. **CsrfGuard**: double-submit CSRF check on session-cookie requests.
+3. **AuthorizationGuard**: evaluates `@Authorize(action, resolver)` metadata.
+4. **ThrottlerGuard**: rate limiting (default 60 req/min).
+
+Routes use `@Public()`, `@Authenticated()` or `@Authorize(action, resolver)` decorators. A CI test fails on any undecorated route.
+
+## What is still missing
+
+- SSO/SAML integration (routes stubbed as `ssoStartUrl: null`)
+- Step-up authentication enforcement (annotation wired, enforcement deferred to phase 2)
+- Push notifications
+- WebSocket gateway (ws-ticket created but gateway not wired)
+- `/auth/me/locale` and `/auth/me/display-name` profile update endpoints
+- Mobile bearer token refresh and family management
+- Professional-domain module (conversations, intake, professional notes)
+- Payment and booking endpoints

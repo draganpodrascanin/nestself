@@ -555,7 +555,7 @@ table.data td .icon-chip .icon { width: 4mm; height: 4mm; }
       <ol class="steps">
         <li><h4>Check</h4><p>Lint, typecheck, unit and property tests, the golden decision table, the default-deny route test, CDK synth with cdk-nag.</p></li>
         <li><h4>Build</h4><p>Container images for the API, worker and marketing site tagged by commit; pushed to ECR and scanned, critical findings block the release.</p></li>
-        <li><h4>Migrate</h4><p>A one-off ECS task runs the Prisma migrations against the target database and the pipeline waits for its exit code.</p></li>
+        <li><h4>Migrate</h4><p>A one-off ECS task runs the Drizzle migrations against the target database and the pipeline waits for its exit code.</p></li>
         <li><h4>Deploy</h4><p>New task definitions roll out behind the load balancer with the deployment circuit breaker; SPA bundles sync to S3 and CloudFront invalidates.</p></li>
         <li><h4>Verify</h4><p>Health checks confirm database and cache; a smoke sign-in runs against staging; alarms watch errors and latency after the switch.</p></li>
       </ol>
@@ -679,7 +679,7 @@ table.data td .icon-chip .icon { width: 4mm; height: 4mm; }
     <div class="phase"><span class="eyebrow">Phase 4 · ongoing</span><h3>Hardening and scale</h3><ul><li>Passkeys</li><li>Threat-protection plan if triggered</li><li>Directory sync (SCIM)</li><li>Access reviews, restore drills, penetration test</li><li>Identity merge runbook; hosting re-evaluation</li></ul><div class="exit"><b>Trigger-driven</b> rather than scheduled.</div></div>
   </div>
   <div class="grid cols-2" style="margin-top:6mm">
-    <div class="callout"><strong>Four spikes decide the plan in week one</strong>Emailed codes outside Cognito's hosted page; the session service on NestJS 12; Socket.IO through CloudFront with sticky load balancing; Prisma 7 query scoping. Each has a written fallback that costs days, not weeks.</div>
+    <div class="callout"><strong>Three spikes decide the plan in week one</strong>Emailed codes outside Cognito's hosted page; the session service on NestJS 12; Socket.IO through CloudFront with sticky load balancing. Tenant scoping uses PostgreSQL row-level security (no spike needed). Each has a written fallback that costs days, not weeks.</div>
     <div class="callout info"><strong>Alongside, from week one</strong>Data protection impact assessment, data protection officer, processing agreement template, privacy notices, breach procedure, retention schedule. None of it waits for the code.</div>
   </div>
   <div class="page-footer"><span>NestSelf · Authentication, authorization and infrastructure strategy</span><span class="num">17</span></div>

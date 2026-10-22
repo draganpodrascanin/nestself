@@ -107,8 +107,8 @@
   - [11.3 Technical spikes](#113-technical-spikes)
   - [11.4 Unverified facts](#114-unverified-facts)
   - [11.5 Assumptions](#115-assumptions)
-- [Appendix A Prisma schema draft](#appendix-a-prisma-schema-draft)
-  - [A.1 Schema fragment](#a1-schema-fragment)
+- [Appendix A Database schema (Drizzle)](#appendix-a-database-schema-drizzle)
+  - [A.1 Schema overview and representative excerpt](#a1-schema-overview-and-representative-excerpt)
   - [A.2 Changes from the existing schema](#a2-changes-from-the-existing-schema)
   - [A.3 Migration plan](#a3-migration-plan)
 - [Appendix B Cognito configuration (IaC)](#appendix-b-cognito-configuration-iac)
@@ -219,39 +219,39 @@ This document contains engineering background on data protection, retention and 
 
 | Term | Meaning | Do not use instead |
 |---|---|---|
-| user | A person with an identity on the platform. One identity for life, across employers. Prisma model `User`. | person record, account holder |
+| user | A person with an identity on the platform. One identity for life, across employers. Table `users`. | person record, account holder |
 | identity | The authentication identity of a user in Cognito (the `sub` claim) and the linked external identities. | login, account |
-| external identity | A link from a user to an identity provider subject (Cognito native, or an employer IdP). Prisma model `ExternalIdentity`. | identity link, federation record |
-| organization | An employer client company. Prisma model `Organization`. Short form in prose: organization; in code: `org`. | company (except when quoting the spec), tenant (use only when discussing isolation) |
-| org unit | A node of an organization's tree: company root, department or team. Prisma model `OrgUnit`. | team (unless the unit is a team), group, department (unless the unit is a department) |
-| membership | A user's eligibility in an organization with effective dates, primary org unit, cost center and optional line manager. Prisma model `Membership`. | affiliation, employment record, seat |
+| external identity | A link from a user to an identity provider subject (Cognito native, or an employer IdP). Table `external_identities`. | identity link, federation record |
+| organization | An employer client company. Table `organizations`. Short form in prose: organization; in code: `org`. | company (except when quoting the spec), tenant (use only when discussing isolation) |
+| org unit | A node of an organization's tree: company root, department or team. Table `org_units`. | team (unless the unit is a team), group, department (unless the unit is a department) |
+| membership | A user's eligibility in an organization with effective dates, primary org unit, cost center and optional line manager. Table `memberships`. | affiliation, employment record, seat |
 | context | The workspace a user is acting in: personal (employee) or an organization's management context. Stored on the session as `activeContext`. | mode, tenant switch |
 | surface | A client application: workspace web, admin web, mobile app, marketing site, supplier portal (later). | frontend, app (when ambiguous) |
 | population | A trust group of users: employees, employer admins, experts, NestSelf staff, external facilitators. | user type, persona (reserve "persona" for product discussions) |
 | employer admin | Any user acting under an organization's management template: owner, HR administrator, team or budget manager, approver, employer finance, reporting user. | client admin, HR user (unless specifically HR) |
 | staff | NestSelf's own employees: platform owner, client operations, content author, content reviewer, service coordinator, support operator, NestSelf finance. | operators (as a collective), admins |
 | expert | An independent professional delivering services (psychologist, lawyer, financial adviser); expert lead is an expert with practice-group responsibilities. | provider (unless quoting the spec), therapist (only when the service is therapy) |
-| template | A permission template: a named starting set of actions, scope type and boundaries, from which grants are created. Prisma model `PermissionTemplate`. | role (except for the legacy enums), profile |
-| grant | An explicit, inspectable permission: subject, actions, scope, conditions, validity, delegation boundary, grantor. Prisma model `Grant`. | permission, privilege, role assignment |
+| template | A permission template: a named starting set of actions, scope type and boundaries, from which grants are created. Table `permission_templates`. | role (except for the legacy enums), profile |
+| grant | An explicit, inspectable permission: subject, actions, scope, conditions, validity, delegation boundary, grantor. Table `grants`. | permission, privilege, role assignment |
 | action | A dotted capability name such as `content.publish` or `spend.approve`. The catalogue is in 4.3. | permission string, operation |
 | scope | Where a grant applies: platform, organization, org unit (with or without descendants), assigned clients, assigned queues, assigned cases, own. | realm, boundary (reserve "boundary" for delegation) |
 | condition | A structured limit on a grant: spending ceiling, permitted categories, confidential approver, and similar. | constraint, rule |
 | delegation envelope | The maximum scope, actions and conditions a grantor may delegate; a delegated grant never exceeds it. | delegation boundary (only when naming the `delegationBoundary` field), authority limit |
-| assignment | A link between a user and a work item that confers access: expert to case, coordinator to queue, client operations to organization. Prisma model `Assignment`. | allocation, ownership |
-| approval authority | A user's authority to decide requests within scope, categories and an amount ceiling, with validity and an alternate. Prisma model `ApprovalAuthority`. | approver role |
-| emergency access | A separately approved, time-limited, logged grant to restricted professional content. Prisma model `EmergencyAccess`. | break-glass (may appear once as a synonym in runbooks), override |
+| assignment | A link between a user and a work item that confers access: expert to case, coordinator to queue, client operations to organization. Table `assignments`. | allocation, ownership |
+| approval authority | A user's authority to decide requests within scope, categories and an amount ceiling, with validity and an alternate. Table `approval_authorities`. | approver role |
+| emergency access | A separately approved, time-limited, logged grant to restricted professional content. Table `emergency_access`. | break-glass (may appear once as a synonym in runbooks), override |
 | confidential domain | Private intake text, conversations between an employee and an expert, professional notes, consultation content. Reachable only through assignment or emergency access. | sensitive data (too broad), case content (acceptable when quoting the spec) |
 | restricted content | Any item inside the confidential domain. | private data |
 | principal | The resolved caller inside the API: user id, display name, memberships with effective status, staff templates, active context, authentication strength and time. Type `Principal` in `@nestself/contracts`. | AuthUser (legacy type name, mention once in 2.3), current user |
 | session | The API-held session record in Redis that a surface references by cookie or bearer token. | login session, web session |
 | Cognito tokens | The access, ID and refresh tokens Cognito issues to the API as its confidential client; held server-side only. | JWTs (unless the sentence is about verification), user tokens |
 | sign-in | The act and the page. Verb: sign in. Noun and adjective: sign-in. Sign-out likewise. | login, log in, logon, logout |
-| invitation | A revocable, expiring token that lets an invited person activate a membership. Prisma model `Invitation`. | invite (noun), onboarding link |
+| invitation | A revocable, expiring token that lets an invited person activate a membership. Table `invitations`. | invite (noun), onboarding link |
 | activation | The first sign-in that binds an invitation to an identity and starts the membership. | registration, sign-up (Cognito self sign-up is disabled) |
-| SSO connection | An organization's identity provider configuration registered in Cognito and mapped to email domains. Prisma model `SsoConnection`. | IdP config, federation |
+| SSO connection | An organization's identity provider configuration registered in Cognito and mapped to email domains. Table `sso_connections`. | IdP config, federation |
 | home-realm discovery | Deciding from the entered email which sign-in method and SSO connection apply. | domain routing, IdP discovery |
 | step-up | Re-authentication required before a sensitive action when the session's last authentication is older than the action's limit. | re-auth, elevated mode |
-| audit event | An append-only record of a consequential action: actor, context, action, record, safe details. Prisma model `AuditEvent`. | log line (reserve for application logs), audit log entry |
+| audit event | An append-only record of a consequential action: actor, context, action, record, safe details. Table `audit_events` (range-partitioned). | log line (reserve for application logs), audit log entry |
 | decision | The result of `authorize()`: allowed or denied, matching grant ids, denial reason, explanation. | verdict, outcome |
 | environment | dev (local, Docker Compose), staging, production. | stage, tier (reserve "tier" for Cognito feature plans) |
 | Cognito feature plan | Lite, Essentials or Plus. Write "the Essentials plan". | tier (Cognito calls them plans in the console; the corpus says tier; be consistent: plan) |
@@ -287,10 +287,10 @@ Acronyms used in the table: SSO (single sign-on), IdP (identity provider), OTP (
 | D-13 | Session lifetimes | Per-population idle and absolute limits; access tokens 15 minutes everywhere | Security judge's shorter values adopted; configurable per environment | recommended | 1 |
 | D-14 | Step-up re-authentication | Application-side with `authMethod`, `authTime`, `lastStepUpAt`; action classes define max age | ACR/AMR is in staged rollout and cannot be relied on for launch [S-35] | settled | 2, 4 |
 | D-15 | Authorization engine | Hand-built grants with a pure `authorize()` decision function | Scored 75 against at most 53 for Cedar and other engines; delegation, ceilings and previews are native | settled | 0, 2 |
-| D-16 | Organization tree | Closure table (`OrgUnit` + `OrgUnitClosure`) | Prisma 7 compatibility with ltree is unverified; trees are shallow and small; closure tables are plain Prisma | settled | 0 |
+| D-16 | Organization tree | Closure table (`OrgUnit` + `OrgUnitClosure`) | ltree compatibility is unverified; trees are shallow and small; closure tables are plain Drizzle tables (revised 2026-10-22, see D-37) | settled | 0 |
 | D-17 | Grant model | Zod-validated conditions, delegation envelopes, depth limit 3, self-approval prevention | Seventeen templates seeded from the specification; nightly reconciliation of expired grants [S-01] | settled | 2 |
 | D-18 | Principal resolution and caching | Redis cache with 30-second and 60-second TTLs, jitter, explicit invalidation, circuit breaker | A cache miss always queries the database; a stale entry is never served after an invalidation | settled | 1 |
-| D-19 | Enforcement pattern | Global `AuthenticationGuard` and `AuthorizationGuard`; CI default-deny test; Prisma scoping extension | Routes without `@Authorize` or `@Public` fail CI; BullMQ jobs re-run `authorize()` at execution | settled | 1, 2 |
+| D-19 | Enforcement pattern | Global `AuthenticationGuard` and `AuthorizationGuard`; CI default-deny test; RLS tenant policies (revised 2026-10-22, see D-37) | Routes without `@Authorize` or `@Public` fail CI; BullMQ jobs re-run `authorize()` at execution | settled | 1, 2 |
 | D-20 | Confidential domain and emergency access | Restricted data in its own controllers, bucket and KMS key; emergency access is time-limited and logged | Platform, organization and org-unit scoped grants cannot reach restricted actions; every emergency read is audited [PLAT-05, SYS-06] | settled | 2 |
 | D-21 | Audit log | Append-only `AuditEvent` with retention tiers; no UPDATE or DELETE on the table | Safe details only; `ipHash` and `userAgentFamily` instead of raw values; pino redaction in application logs [PLAT-04] | settled | 1 |
 | D-22 | Professional notes and video | No professional notes stored at pilot; video via Amazon Chime SDK in eu-central-1 | Storing notes triggers health documentation laws in Serbia and Hungary; Chime SDK is $0.0017 per attendee-minute [S-191] | founder (F-02) | 2 |
@@ -308,6 +308,7 @@ Acronyms used in the table: SSO (single sign-on), IdP (identity provider), OTP (
 | D-34 | Cost reference | Pilot about $235 to $280 per month (Multi-AZ, managed NAT); about $150 to $170 with Single-AZ | Cognito $0 at pilot; video about $51 per month for 500 half-hour sessions; all Frankfurt prices unverified | recommended | all |
 | D-35 | Delivery phases | Phase 0 (2 weeks), 1 (6 weeks), 2 (4 weeks), 3 (3 weeks), 4 (ongoing) | Compliance items run in parallel from phase 0; phase exits are defined | recommended | all |
 | D-36 | Migration from the stub | `AUTH_MODE=stub\|cognito`; stub refused when `NODE_ENV=production` | Sample mode keeps `SAMPLE_SESSIONS` and the `?role=` switcher; `JWT_SECRET` removed after cutover | settled | 1 |
+| D-37 | Data access layer | Drizzle ORM with PostgreSQL row-level security as tenant defense in depth | drizzle-kit expresses RLS policies, partial indexes, checks and views in the schema; `set_config` tenant scoping inside transactions; replaces the Prisma client extension (SPIKE-04) | settled | 0-1 |
 
 ### Changing decisions
 
@@ -445,6 +446,8 @@ The current codebase uses a stub authentication layer with HS256 JWTs and an enu
 | 6 | `apps/api/prisma/schema.prisma` (lines 10-14, `OrgRole` enum) | `OrgRole` has only `EMPLOYEE`, `MANAGER`, `HR_ADMIN`. The six employer-side permission templates are not represented. | 4.4 Templates |
 | 7 | `apps/api/prisma/schema.prisma` (lines 16-20, `PlatformRole` enum) | `PlatformRole` has only `EXPERT`, `OPERATIONS`, `ADMIN`. The seven staff-side permission templates are not represented. | 4.4 Templates |
 | 8 | `apps/api/prisma/schema.prisma` (entire schema) | Missing tables: `Grant`, `AuditEvent`, `Invitation`, `OrgUnit` (tree), `OrgUnitClosure`, `Assignment`, `ApprovalAuthority`, `EmergencyAccess`, `ExternalIdentity`, `ExpertCredential`, `SsoConnection`, `SsoDomain`, `RetentionPolicy`. | 4.2 Domain model |
+
+> **Note (2026-10-22):** Findings 5 through 8 and 17 through 18 reference the original Prisma schema file. The schema has since moved to Drizzle ORM (D-37); the current source of truth is `apps/api/src/db/schema/*.ts`.
 | 9 | `apps/api/src/auth/auth.guard.ts` (lines 37-40) | JSON Web Token (JWT) verification uses HMAC-SHA256 (HS256) with a shared `JWT_SECRET`. No audience, no issuer, no key rotation, no asymmetric signing. The JWT payload is cast directly to `AuthUser`. | 3.1 Identity provider, 3.6 Sessions |
 | 10 | `apps/api/src/app.module.ts` (lines 33-42) | `JwtModule` uses a static `JWT_SECRET`. No sign-in endpoints, no token refresh, no session management. | 3.6 Sessions |
 | 11 | `apps/api/src/config/env.ts` (lines 9-10) | `env.ts` requires `JWT_SECRET` and `JWT_EXPIRES_IN`. No Cognito-related environment variables. | 3.2 User pool design, Appendix E |
@@ -1266,7 +1269,7 @@ Every consequential identity event produces records, session effects and audit e
 
 ## 4 Authorization architecture
 
-The authorization model resolves every access decision server-side from inspectable, scoped grants and a pure TypeScript decision function. Seventeen Prisma models and one Redis record form the domain. An action catalogue of 95 exact strings is the single source of capability names. Seventeen permission templates seed grants during onboarding and delegation. This section defines the principles, domain model, action catalogue and template-to-grant mapping; sections 4.5 through 4.9 cover the decision engine, enforcement, confidential domains, effective-access preview and privacy-safe reporting.
+The authorization model resolves every access decision server-side from inspectable, scoped grants and a pure TypeScript decision function. Seventeen database tables and one Redis record form the domain. An action catalogue of 95 exact strings is the single source of capability names. Seventeen permission templates seed grants during onboarding and delegation. This section defines the principles, domain model, action catalogue and template-to-grant mapping; sections 4.5 through 4.9 cover the decision engine, enforcement, confidential domains, effective-access preview and privacy-safe reporting.
 
 ### 4.1 Principles
 
@@ -1290,7 +1293,7 @@ Eight principles govern every authorization decision in the platform. They are n
 
 ### 4.2 Domain model
 
-The authorization domain spans seventeen Prisma models and one Redis record. Together they represent identity, organizational structure, grants, assignments, approvals, audit and emergency access. The entity table below lists each model with its purpose and key fields; the ER diagram shows their relationships; the rules that follow describe the invariants each entity enforces.
+The authorization domain spans seventeen database tables and one Redis record. Together they represent identity, organizational structure, grants, assignments, approvals, audit and emergency access. The entity table below lists each model with its purpose and key fields; the ER diagram shows their relationships; the rules that follow describe the invariants each entity enforces.
 
 #### Entity table
 
@@ -2013,7 +2016,7 @@ The authorization engine has four layers of testing [D-15].
 
 ### 4.6 Enforcement
 
-Authorization enforcement is the layer that calls `authorize()` from every access point in the platform: HTTP routes, service methods, background jobs, exports, file delivery and real-time channels [D-19, SYS-01]. The enforcement pattern uses a global authentication guard, a decorator-driven authorization guard, a service-layer check method and defense-in-depth Prisma scoping. A CI test fails the build when any controller route lacks a decorator.
+Authorization enforcement is the layer that calls `authorize()` from every access point in the platform: HTTP routes, service methods, background jobs, exports, file delivery and real-time channels [D-19, SYS-01]. The enforcement pattern uses a global authentication guard, a decorator-driven authorization guard, a service-layer check method and defense-in-depth row-level security tenant scoping [D-37]. A CI test fails the build when any controller route lacks a decorator.
 
 #### 4.6.1 NestJS guard and decorator pattern
 
@@ -2095,19 +2098,25 @@ Management controllers and personal-context controllers are separate classes wit
 | Operations | `/ops/` | Operations | `client.configure`, `sso.manage`, `access.emergency.approve` |
 | Professional interaction | `/consultations/`, `/conversations/` | Assignment-scoped | `consultation.join`, `conversation.read.assigned` |
 
-No management controller may import or query models from the professional-interaction module. The professional-interaction module has its own controllers, its own Prisma models, its own S3 bucket (`PROFESSIONAL_CONTENT_BUCKET`) and its own KMS key (`KMS_PROFESSIONAL_KEY_ARN`) [D-20, DR-03].
+No management controller may import or query models from the professional-interaction module. The professional-interaction module has its own controllers, its own Drizzle schema tables, its own S3 bucket (`PROFESSIONAL_CONTENT_BUCKET`) and its own KMS key (`KMS_PROFESSIONAL_KEY_ARN`) [D-20, DR-03].
 
 **AUTHZ-R-51** Management controllers under `/orgs/:orgId/` must never return support-request content, conversation bodies, appointment details for other users, or professional notes [DR-12].
 
-#### 4.6.3 Prisma scoping helpers
+#### 4.6.3 Row-level security tenant scoping
 
-A Prisma client extension adds organization scoping to tenant-aware models as defense in depth [D-19, SPIKE-04]. The extension intercepts `findMany`, `findFirst`, `findUnique`, `count`, `update` and `delete` on models that carry an `orgId` column and appends a `WHERE org_id = $activeOrgId` clause.
+Tenant tables that carry an `org_id` column have PostgreSQL row-level security policies declared in the Drizzle schema with `pgPolicy` and enforced with `enableRLS()` and `FORCE ROW LEVEL SECURITY` [D-19, D-37]. The policy predicate is:
 
-The active organization id is set per request from the principal's context. If the context is `personal`, the extension scopes to the user's ACTIVE memberships' organization ids. If the context is `organization`, it scopes to that single organization.
+```
+coalesce(current_setting('app.current_org_id', true), '') = '' OR org_id = current_setting('app.current_org_id', true)
+```
 
-The extension is defense in depth. It does not replace `authorize()`. A query that passes the Prisma extension but fails `authorize()` is still denied.
+`DbService.withOrgScope(orgId, fn)` runs a transaction with `select set_config('app.current_org_id', orgId, true)` so that every query inside the transaction is scoped to that organization by the database itself. When the setting is unset (empty string), the predicate passes all rows; this is the system context used for principal loading, seeding and background jobs.
 
-**AUTHZ-R-52** The Prisma scoping extension must be confirmed by SPIKE-04. If the spike fails, the scoping must be applied as explicit `WHERE` clauses in every repository method [D-19].
+The API connects as `nestself_api`, a login role that is a member of the `nestself_app` group role created in `docker/initdb/01-app-role.sql`. Neither role is a superuser or the table owner, so RLS is enforced. Local Homebrew development with a superuser bypasses RLS; the integration test (`apps/api/test/db/schema.spec.ts`) creates a non-superuser login to prove that cross-tenant reads return no rows and cross-tenant writes are rejected.
+
+RLS is defense in depth. It does not replace `authorize()`. A query that passes the RLS policy but fails `authorize()` is still denied.
+
+**AUTHZ-R-52** The tenant RLS policies must be enabled and forced on every table that carries `org_id`; the policy predicate must use `current_setting('app.current_org_id', true)`. The API must connect as a role without `BYPASSRLS` that is not the table owner. The integration test must prove that cross-tenant reads return no rows and cross-tenant writes are rejected [D-19, D-37].
 
 #### 4.6.4 Background jobs
 
@@ -2206,12 +2215,12 @@ Every record stored on the platform belongs to exactly one class. Each class map
 
 #### 4.7.2 Professional-interaction module boundary
 
-The professional-interaction module owns all restricted data: separate NestJS module, controllers, Prisma models, S3 bucket and KMS key. No import from other modules may reference a restricted model directly [DR-03, DR-12].
+The professional-interaction module owns all restricted data: separate NestJS module, controllers, Drizzle schema tables, S3 bucket and KMS key. No import from other modules may reference a restricted model directly [DR-03, DR-12].
 
 | Element | Professional-interaction module | Other modules |
 |---|---|---|
 | Controllers | `ProfessionalConversationController`, `ProfessionalIntakeController` | Organization, scheduling, funding, content |
-| Prisma models | Conversation, IntakeRecord, ProfessionalNote (future) | Membership, Grant, Appointment, FundTransaction |
+| Drizzle tables | conversations, intake_records, professional_notes (future) | memberships, grants, appointments, fund_transactions |
 | S3 bucket | `professional-content` | `media`, `exports` |
 | KMS key | `alias/nestself-professional` | `alias/nestself-platform` |
 | Foreign keys | Appointment id links the two domains; no FK from management into restricted | References appointment and user ids only |
@@ -2378,7 +2387,7 @@ Retention key: SECURITY 3 years, AUTHORIZATION (AUTHZ) 10 years, FINANCIAL 10 ye
 
 The `AuditEvent` table is append-only at the database level.
 
-1. **Database role.** The application role has `INSERT` and `SELECT` on `audit_events` but not `UPDATE` or `DELETE`. The migration role (`prisma migrate deploy`) retains full DDL privileges.
+1. **Database role.** The application role (`nestself_app`) has `INSERT` and `SELECT` on `audit_events` but not `UPDATE` or `DELETE`. The migration/owner role retains full DDL privileges.
 2. **Trigger.** A `BEFORE UPDATE OR DELETE` trigger raises `RAISE EXCEPTION 'audit_events is append-only'`, guarding against bugs that bypass the role restriction.
 3. **Partitioning.** Monthly partitions on `occurredAt`. A partition-management job creates new ones. Old partitions are detached (not dropped) after the nightly export confirms success.
 4. **Nightly export.** A BullMQ job exports the previous day's events to `audit-archive` with S3 Object Lock in Governance mode [D-21, D-27]. The object's retention period is at least as long as the maximum `retainUntil` value in the batch. The job logs its completion as an `AuditEvent` with `actorKind = 'JOB'`.
@@ -3746,7 +3755,7 @@ The following contract types are introduced by this section:
 | `PasswordResetStartRequestSchema` / `PasswordResetStartResponseSchema` | `packages/contracts/src/auth.ts` | Password reset start (API-R-37). |
 | `PasswordResetConfirmRequestSchema` / `PasswordResetConfirmResponseSchema` | `packages/contracts/src/auth.ts` | Password reset confirm (API-R-38). |
 | `PushRegisterRequestSchema` / `PushRegisterResponseSchema` / `PushUnregisterRequestSchema` | `packages/contracts/src/push.ts` | Push token registration (API-R-39, API-R-40). |
-| `push_subscription` | Prisma model (phase 1) | Keyed on `(userId, deviceId)`. Stores `platform`, `token`, `createdAt`, `updatedAt`. |
+| `push_subscription` | Drizzle table (phase 1) | Keyed on `(userId, deviceId)`. Stores `platform`, `token`, `createdAt`, `updatedAt`. |
 
 
 ## 6 Client integration
@@ -4007,7 +4016,7 @@ One ECS cluster per account on standard Fargate (not Express Mode) [D-24]. All F
 | `worker` | 0.25 | 0.5 GB | None | 1 | 1 | Queue depth (custom metric, target tracking) | BullMQ heartbeat | None |
 | `marketing` | 0.25 | 0.5 GB | 3000 | 1 | 0 | CPU 70 % | `GET /health` on port 3000 | No stickiness |
 
-The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `prisma migrate deploy` as a one-off ECS `run-task` before each API deployment and exits when the migration completes [D-24].
+The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `pnpm --filter @nestself/api db:migrate` as a one-off ECS `run-task` before each API deployment and exits when the migration completes [D-24].
 
 ALB target-group stickiness uses a duration-based cookie (1 day) for the API service to support multi-task Socket.IO long-polling and upgrade [D-08]. SPIKE-03 verifies this path.
 
@@ -4619,7 +4628,7 @@ The staging workflow tags images by commit SHA. The production workflow tags ima
 
 #### 7.12.4 Migration task
 
-The `migrate` task definition runs `npx prisma migrate deploy` using the same container image as the API. It connects to the database using credentials from Secrets Manager. The task runs as a one-off ECS `run-task` call, not as a service. The deploy workflow waits for the task to complete and checks the exit code. A non-zero exit code aborts the deployment.
+The `migrate` task definition runs `pnpm --filter @nestself/api db:migrate` using the same container image as the API. It connects to the database using credentials from Secrets Manager. The task runs as a one-off ECS `run-task` call, not as a service. The deploy workflow waits for the task to complete and checks the exit code. A non-zero exit code aborts the deployment.
 
 **OPS-R-09** Migrations must never run from a developer machine against the staging or production database. The only path is the `migrate` ECS task triggered by the CI/CD pipeline. [D-30]
 
@@ -4911,7 +4920,7 @@ Private support requests and conversations are restricted. They are isolated in 
 | T01 | Credential stuffing | WAF rate rules, `USER_PASSWORD_AUTH` disabled, MFA, email OTP | 3.2, 7.8 |
 | T02 | Phishing via spoofed sign-in | Custom domain `auth.<domain>`, exact callback URLs, passkeys (phase 4) | 3.2, 3.5, 7.8 |
 | T03 | Token theft via XSS | BFF cookie sessions, CSP, tokens never in JavaScript | 3.6, 7.8 |
-| T04 | IDOR cross-tenant access | Server-side scope, Prisma scoping extension (SPIKE-04), `authorize()` | 4.5, 4.6 |
+| T04 | IDOR cross-tenant access | Server-side scope, PostgreSQL row-level security (D-37), `authorize()` | 4.5, 4.6 |
 | T05 | SAML assertion replay | SP-initiated default, assertion-id replay cache `saml_assertion:{id}` | 3.4 |
 | T06 | Account linking via unverified email | Self sign-up disabled, `email_verified` check, `sub`-based identity | 3.3, 3.4 |
 | T07 | Email domain spoofing in HRD | DNS domain verification, public-domain blocklist | 3.4 |
@@ -5123,7 +5132,7 @@ Every task in every phase must satisfy these rules.
 | PLAN-R-03 | Use only semantic color tokens; no hex literals outside `packages/tokens/`. Use only `@nestself/sample-data` for fictional fixtures. [Content rule, colour rule] |
 | PLAN-R-04 | Every API controller route must carry `@Authorize(action, resourceResolver)` or `@Public()`. A CI test (`default-deny.test.ts`) fails on any undecorated route. [SYS-01, DR-01] |
 | PLAN-R-05 | Audit every consequential action through `AuditWriter.record()`. Never log message bodies, intake text, professional notes, full voucher codes, raw IP addresses or tokens. [PLAT-04, DR-17, DR-18] |
-| PLAN-R-06 | Review gates: every PR that touches `apps/api/src/auth/`, `apps/api/src/authz/`, `packages/contracts/src/authorization.ts`, CDK stacks or Prisma migrations requires engineer review. Agent PRs on other files require a passing CI and a one-line summary. |
+| PLAN-R-06 | Review gates: every PR that touches `apps/api/src/auth/`, `apps/api/src/authz/`, `packages/contracts/src/authorization.ts`, CDK stacks or Drizzle migrations (`apps/api/drizzle/`, `apps/api/src/db/schema/`) requires engineer review. Agent PRs on other files require a passing CI and a one-line summary. |
 | PLAN-R-07 | Sample mode (`VITE_DATA_SOURCE=sample`, `EXPO_PUBLIC_DATA_SOURCE=sample`) must keep working throughout. The `SampleDataBanner` and `?role=` switcher remain until phase 1 cutover, after which they stay in sample mode only. [Sample-data rule] |
 | PLAN-R-08 | All sign-in screens, error states and challenge forms must be keyboard-accessible, labelled for assistive technology and localized in sr-Latn, sr-Cyrl, hu and en. sr-Cyrl catalogs are generated by transliteration. [D-11, F-04] |
 
@@ -5136,13 +5145,13 @@ These are time-boxed investigations that gate later tasks.
 | SPIKE-01 | Can `InitiateAuth`/`AdminInitiateAuth` with `USER_AUTH` and `EMAIL_OTP` run from a Node script and from an Expo device without managed login? [S-10, S-33] | A disposable Cognito pool in eu-central-1 on Essentials; a Node script calling `AdminInitiateAuth` with `PREFERRED_CHALLENGE: EMAIL_OTP`; an Expo snack calling `InitiateAuth`. | Go: email OTP works headlessly. No-go fallback: `CUSTOM_AUTH` challenge that sends a code through SES, or password plus TOTP for every population. | T-1.4, T-1.5, T-1.9 |
 | SPIKE-02 | Does a custom Redis session service work under NestJS 12 on Express 5 with `enableCsrfProtection()`? [S-159, S-163] | A minimal NestJS 12 app with a Redis-backed session middleware, `__Host-` cookies, double-submit CSRF token and `enableCsrfProtection()`. | Go: cookie set, CSRF validated, session persisted. No-go fallback: `express-session` with `connect-redis` and `csrf-sync`. | T-1.3 |
 | SPIKE-03 | Does Socket.IO long-polling and WebSocket upgrade work through CloudFront `/api/ws` to an ALB with target-group stickiness across two ECS tasks? [D-08] | Two Fargate tasks behind an ALB with duration-based stickiness; a CloudFront behaviour for `/api/ws`; a client connecting, sending a message routed to the correct task. | Go: messages reach the correct task. No-go: serve websockets from `api.<domain>` directly (bypass CloudFront for `/api/ws`). | T-1.11 |
-| SPIKE-04 | Can a Prisma 7 client extension scope tenant-aware queries by `orgId`? [D-19] | A Prisma extension that injects `WHERE org_id = ?` on `findMany`, `findFirst`, `update`, `delete` for models with an `orgId` field; unit tests with two organizations. | Go: extension intercepts correctly. No-go: manual `where` clauses with a linting rule. | T-2.3 |
+| SPIKE-04 | Can a Prisma 7 client extension scope tenant-aware queries by `orgId`? [D-19] | Superseded by D-37: PostgreSQL row-level security with `set_config` tenant scoping replaces the extension approach. | Superseded | -- |
 | SPIKE-06 | Does the NestJS 12 `IoAdapter` support `io.use` middleware for cookie and ticket validation? [D-19] | A NestJS 12 app with a custom `IoAdapter` that calls `io.use` to validate a session cookie or a single-use ticket before the connection handshake completes. | Go: `io.use` fires and can reject connections. No-go fallback: a plain `handleConnection` guard with manual socket middleware. | T-1.11 |
 | SPIKE-07 | Does the Next 16.4 standalone output build correctly with transpiled workspace packages from the monorepo? [D-24] | A Next 16.4 app in the monorepo using `output: 'standalone'` with `--webpack`, importing from `@nestself/tokens` and `@nestself/i18n`; build and run in a Docker container matching the ECS task definition. | Go: container starts and serves pages. No-go fallback: copy workspace packages into the Next app at build time or use a multi-stage Docker build with explicit transpilation. | T-1.12 |
 
 ### 9.3 Phase 0: Foundations (2 weeks)
 
-**Goal.** Prisma schema and migrations for the identity, organization, authorization and audit domains. The `authorize()` decision function passes a golden table of at least 100 tuples. CDK project skeleton with accounts, KMS keys and Route 53. Spikes decided.
+**Goal.** Drizzle schema and migrations for the identity, organization, authorization and audit domains. The `authorize()` decision function passes a golden table of at least 100 tuples. CDK project skeleton with accounts, KMS keys and Route 53. Spikes decided.
 
 **Entry conditions.** Monorepo CI is green (`pnpm lint && pnpm typecheck && pnpm test && pnpm check`). Docker Compose runs locally with Postgres 17 and Redis 7.
 
@@ -5150,12 +5159,12 @@ These are time-boxed investigations that gate later tasks.
 
 | ID | Title | Files | What to build | Acceptance criteria | Tests | Dependencies | Size | Agent? |
 |---|---|---|---|---|---|---|---|---|
-| T-0.1 | Prisma schema: identity, org tree, authorization, audit | `apps/api/prisma/schema.prisma`, new migration | Add `ExternalIdentity`, `OrgUnit`, `OrgUnitClosure`, `Invitation`, `PermissionTemplate`, `Grant`, `Assignment`, `ApprovalAuthority`, `EmergencyAccess`, `SsoConnection`, `SsoDomain`, `ExpertCredential`, `RetentionPolicy`, `AuditEvent`. Extend `User` (add `emailVerifiedAt`, `suspendedAt`, `deactivatedAt`, `lastSignInAt`; keep `platformRole` until phase 2). Extend `Organization` (add `country`, `timezone`, `contractStart`, `contractEnd`, `ownerUserId`, `selfApprovalAllowed`, `financialStepUpThresholdMinor`, `status`). Extend `Membership` (add `orgUnitId`, `costCenterUnitId`, `lineManagerUserId`, `status`, `startDate`, `endDate`, `endedReason`; unique on `userId, orgId, startDate`). Create `AuditEvent` with monthly partitions and a trigger that rejects UPDATE and DELETE. Seed 17 `PermissionTemplate` rows and `RetentionPolicy` rows. Replace `Team` with `OrgUnit`: create a PostgreSQL VIEW named `teams` that selects from `org_units` WHERE `kind = 'TEAM'`; export a deprecated `Team` type alias from `@nestself/contracts` pointing to `OrgUnit`; mark both with a `@deprecated` JSDoc annotation and a TODO referencing the phase 2 removal. | Migration applies cleanly on a fresh database; `prisma generate` succeeds; seed runs without error; the audit trigger rejects an UPDATE; the `teams` view returns the correct rows. | Migration test; seed test; audit trigger test (attempt UPDATE, expect rejection); `teams` view test. | None | L | Agent, engineer review |
+| T-0.1 | Drizzle schema: identity, org tree, authorization, audit | `apps/api/src/db/schema/*.ts`, `apps/api/drizzle/0000_init.sql` | Add tables for `ExternalIdentity`, `OrgUnit`, `OrgUnitClosure`, `Invitation`, `PermissionTemplate`, `Grant`, `Assignment`, `ApprovalAuthority`, `EmergencyAccess`, `SsoConnection`, `SsoDomain`, `ExpertCredential`, `RetentionPolicy`, `AuditEvent`. Extend `users` (add `emailVerifiedAt`, `suspendedAt`, `deactivatedAt`, `lastSignInAt`; keep `platformRole` until phase 2). Extend `organizations` (add `country`, `timezone`, `contractStart`, `contractEnd`, `ownerUserId`, `selfApprovalAllowed`, `financialStepUpThresholdMinor`, `status`). Extend `memberships` (add `orgUnitId`, `costCenterUnitId`, `lineManagerUserId`, `status`, `startDate`, `endDate`, `endedReason`; unique on `userId, orgId, startDate`). Create `audit_events` with monthly partitions and a trigger that rejects UPDATE and DELETE. Seed 17 `permission_templates` rows and `retention_policies` rows. Replace `Team` with `OrgUnit`: create a PostgreSQL VIEW named `teams` that selects from `org_units` WHERE `kind = 'TEAM'`; export a deprecated `Team` type alias from `@nestself/contracts` pointing to `OrgUnit`; mark both with a `@deprecated` JSDoc annotation and a TODO referencing the phase 2 removal. RLS policies declared in the schema [D-37]. | Migration applies cleanly on a fresh database; `db:generate` produces no diff on a clean schema; seed runs without error; the audit trigger rejects an UPDATE; the `teams` view returns the correct rows. | Migration test; seed test; audit trigger test (attempt UPDATE, expect rejection); `teams` view test. | None | L | Agent, engineer review |
 | T-0.2 | Contracts: `Principal`, actions, templates, authorization types | `packages/contracts/src/principal.ts`, `packages/contracts/src/authorization.ts`, `packages/contracts/src/actions.ts`, `packages/contracts/src/templates.ts`, `packages/contracts/src/index.ts` | Define `Principal`, `ActiveContext`, `Population`, `Workspace`, `ScopeType` types per 4.2 Domain model. Define the `ACTIONS` object with every action string from 4.3 Action catalogue. Define `TEMPLATE_KEYS`. Define `Action`, `Resource`, `AuthorizationRequest`, `AuthorizationContext`, `Decision`, `GrantCondition`. Export `can(principal, action, resource)` as a client-side hint. Keep `SessionSchema`, `OrgRole`, `PlatformRole` as deprecated exports. | `pnpm --filter @nestself/contracts typecheck` passes; every action string is a valid `Action`; `can()` returns a boolean. | Unit tests for `can()` with sample principals; type tests asserting `Action` accepts every catalogue string. [SYS-01] | None | M | Agent |
 | T-0.3 | `authorize()` decision engine | `apps/api/src/authz/authorize.ts`, `apps/api/src/authz/authorize.test.ts`, `apps/api/src/authz/authorize.property.test.ts`, `apps/api/src/authz/golden-table.test.ts`, `apps/api/src/authz/golden-table.json` | Implement `authorize(principal, action, resource, ctx)` as a pure function per D-15. Evaluation order: user state, context validity, confidential hard deny, assignments, grants (action match, scope match using closure-table ancestor set in `ctx`), conditions (ceiling, categories, confidential approver), validity window, self-approval rule, delegation envelope. Return `{ allowed, grantIds, assignmentIds, denialReason, explanation[] }`. Implement `authorizeMany()` for batch checks and `effectiveAccess(userId, orgId)`. The golden table (`golden-table.json`) is an array of tuple objects. Each tuple has the following schema (all fields required unless marked optional): `label` (string, human-readable test name), `principal` (a `Principal` object as defined in T-0.2; include at minimum `userId`, `context`, `memberships` and `auth`), `action` (an `Action` string from the 4.3 catalogue), `resource` (object with `orgId` and optional `ownerId`, `orgUnitId`, `targetId`, `dataClass`), `ctx` (object with `ancestors` as a string array of org-unit ids forming the closure-table ancestor set, and optional `amountMinor`, `currency`, `category`), and `expected` (object with `allowed` as a boolean, `denialReason` as a string or null, and optional `grantIds` and `assignmentIds` arrays). A sample tuple: `{ "label": "employee reads own check-in", "principal": { "userId": "u1", "context": { "kind": "personal" }, "memberships": [{ "membershipId": "m1", "orgId": "o1", "orgUnitId": "ou1", "status": "ACTIVE", "startDate": "2026-01-01", "endDate": null }], "auth": { "method": "email_otp", "time": "2026-10-21T10:00:00Z", "secondFactor": false, "lastStepUpAt": null }, "sessionId": "s1", "tokenFamily": null, "displayName": "Test", "initials": "T", "locale": "en", "staffTemplates": [], "expert": null }, "action": "preferences.manage", "resource": { "orgId": "o1", "ownerId": "u1" }, "ctx": { "ancestors": ["ou1", "o1-root"] }, "expected": { "allowed": true, "denialReason": null } }`. | All golden-table tuples pass. Property tests pass: no cross-organization allow, delegated never exceeds delegator, expired never allows, revoked denies after invalidation, confidential domain never allowed by administrative grants. [SYS-01, PLAT-02, ORG-01, DR-01, DR-02, DR-03, DR-22] | Unit tests per rule; fast-check property invariants; golden table (100+ tuples); `effectiveAccess` returns correct grants for a sample user. | T-0.2 | L | Agent, engineer review |
-| T-0.4 | Audit writer | `apps/api/src/audit/audit-writer.ts`, `apps/api/src/audit/audit-writer.test.ts`, `apps/api/src/audit/audit.module.ts` | `AuditWriter.record(event)` inserts an `AuditEvent` with the correct `category`, `retainUntil` (computed from `RetentionPolicy`), `ipHash` (SHA-256 truncated) and `userAgentFamily` (parsed). A pino redaction config exported for the application logger. | Events insert with correct retention; forbidden fields (message body, intake text, professional notes, tokens) never appear in the record; pino redaction config covers all sensitive paths. [PLAT-04, DR-17, DR-18] | Unit test with a mock Prisma client; pino redaction test scanning output for forbidden field names. | T-0.1 | S | Agent |
+| T-0.4 | Audit writer | `apps/api/src/audit/audit-writer.ts`, `apps/api/src/audit/audit-writer.test.ts`, `apps/api/src/audit/audit.module.ts` | `AuditWriter.record(event)` inserts an `AuditEvent` with the correct `category`, `retainUntil` (computed from `RetentionPolicy`), `ipHash` (SHA-256 truncated) and `userAgentFamily` (parsed). A pino redaction config exported for the application logger. | Events insert with correct retention; forbidden fields (message body, intake text, professional notes, tokens) never appear in the record; pino redaction config covers all sensitive paths. [PLAT-04, DR-17, DR-18] | Unit test with a mock AuditRepository; pino redaction test scanning output for forbidden field names. | T-0.1 | S | Agent |
 | T-0.5 | CDK project skeleton | `infra/cdk/bin/app.ts`, `infra/cdk/lib/network-stack.ts`, `infra/cdk/lib/data-stack.ts`, `infra/cdk/lib/auth-stack.ts` (placeholder), `infra/cdk/lib/security-baseline-stack.ts`, `infra/cdk/package.json`, `infra/cdk/cdk.json`, `infra/cdk/tsconfig.json` | Create the CDK app `NestSelf` with stages `staging` and `production`. `NestSelfNetworkStack`: VPC, two AZs, public and private subnets, gateway endpoint for S3, interface endpoints for ECR, CloudWatch Logs, Secrets Manager, STS. `NestSelfDataStack`: RDS PostgreSQL 17 `db.t4g.small`, encrypted with `alias/nestself-platform`, automated backups 35 days, daily cross-region snapshot copies to eu-west-1 via an EventBridge rule (D-32); ElastiCache for Valkey `cache.t4g.micro` with custom parameter group `maxmemory-policy=noeviction`, TLS, auth token in Secrets Manager (D-26). `NestSelfSecurityBaselineStack`: CloudTrail organization trail, KMS keys `alias/nestself-platform` and `alias/nestself-professional`. Route 53 hosted zone. | `cdk synth` succeeds for both stages; `cdk-nag` AwsSolutions pack runs (suppressions commented with justification). [D-23, D-25, D-26, D-27, D-30, D-32] | Snapshot tests for each stack. | None | L | Agent, engineer review |
-| T-0.6 | Spikes SPIKE-01 to SPIKE-04 | `infra/spikes/spike-01-email-otp/`, `infra/spikes/spike-02-redis-session/`, `infra/spikes/spike-03-socketio-cloudfront/`, `infra/spikes/spike-04-prisma-extension/` | Execute each spike per section 9.2. Document the result as a short markdown file with the decision (go or no-go) and evidence. | Each spike has a documented outcome; no-go fallbacks are specified where applicable. | Each spike directory contains a README with the go/no-go decision and evidence. The spike script runs without external dependencies beyond a disposable Cognito pool (SPIKE-01) or Docker Compose (SPIKE-02 to SPIKE-04). | None | M | Engineer |
+| T-0.6 | Spikes SPIKE-01 to SPIKE-03 | `infra/spikes/spike-01-email-otp/`, `infra/spikes/spike-02-redis-session/`, `infra/spikes/spike-03-socketio-cloudfront/` | Execute each spike per section 9.2. SPIKE-04 is superseded by D-37. Document the result as a short markdown file with the decision (go or no-go) and evidence. | Each spike has a documented outcome; no-go fallbacks are specified where applicable. | Each spike directory contains a README with the go/no-go decision and evidence. The spike script runs without external dependencies beyond a disposable Cognito pool (SPIKE-01) or Docker Compose (SPIKE-02 to SPIKE-03). | None | M | Engineer |
 
 ### 9.4 Phase 1: Identity and sessions (6 weeks)
 
@@ -5198,11 +5207,11 @@ These are time-boxed investigations that gate later tasks.
 |---|---|---|---|---|---|---|---|---|
 | T-2.1 | Grant administration endpoints | `apps/api/src/grants/grants.controller.ts`, `apps/api/src/grants/grants.service.ts`, `apps/api/src/grants/grants.service.test.ts` | Endpoints per 5 API surface: `GET|POST /orgs/:orgId/grants`, `PATCH /orgs/:orgId/grants/:grantId`, `POST /orgs/:orgId/grants/:grantId/revoke`, `POST /orgs/:orgId/grants/delegate`, `GET /orgs/:orgId/grants/preview`. `GET|POST|PATCH /orgs/:orgId/approval-authorities`. Rate limit: 10 writes per minute per session (D-17). Validation: delegation never exceeds the delegator's effective access or delegation envelope; depth limit 3; self-approval denied unless `Organization.selfApprovalAllowed`. Preview via `effectiveAccess()`. [D-17, ORG-01, PLAT-02] | A grant is created from a template; preview shows effective access; delegation is within bounds; self-approval is blocked; rate limit enforced. | Integration tests; delegation depth test; self-approval conflict test. | T-0.3, T-1.6 | L | Agent, engineer review |
 | T-2.2 | Template and grant administration UI | `apps/admin/src/routes/orgs/:orgId/grants/`, `apps/workspace/src/routes/orgs/:orgId/grants/` | Grant listing, template assignment with scope and condition adjustment, effective-access preview. Separate controllers and DTOs for management and personal workspaces (DR-12). Audit log viewer for authorized users. [ORG-01, PLAT-02, DR-12] | An admin assigns a template, adjusts conditions, previews effective access and applies; a personal-context user cannot see management grant controls. | Component tests; separation test (personal context denied management endpoints). | T-2.1 | L | Agent |
-| T-2.3 | Prisma tenant-scoping extension | `apps/api/src/prisma/org-scope.extension.ts`, `apps/api/src/prisma/org-scope.extension.test.ts` | Defence-in-depth extension per SPIKE-04. If SPIKE-04 succeeded: Prisma client extension that injects `orgId` scoping on tenant-aware models. If not: manual scoping with a linting rule. [D-19] | A query without scoping is intercepted; a cross-tenant query returns no rows. | Unit tests with two orgs and cross-org access attempts. | SPIKE-04 | M | Agent |
-| T-2.4 | Confidential-domain module | `apps/api/prisma/schema.prisma` (extend with professional-domain models), `apps/api/src/professional/professional.controller.ts`, `apps/api/src/professional/professional.service.ts`, `apps/api/src/professional/professional.module.ts`, `apps/api/src/professional/professional.service.test.ts` | Separate controllers for restricted data: private intake, conversations, consultation content. The Prisma schema models for this domain are deferred to the product specification; create placeholder models (e.g. `Conversation`, `IntakeRecord`) with the minimum fields needed for access-path enforcement. Own S3 bucket (`professional-content`), KMS key (`alias/nestself-professional`). Access paths: participant, assigned expert, explicit clinical-supervision grant, `EmergencyAccess`. `authorize()` hard-denies any platform, organization, org-unit or assigned-client scoped grant on restricted actions. Support operators see redacted diagnostics only. [D-20, SYS-06, DR-03, EXP-05, EXP-06] | An assigned expert reads the conversation; a platform owner without emergency access cannot; a support operator sees only redacted content; `authorize()` hard-denies administrative grants. | Integration tests for each access path; hard-deny test for admin grants; redaction test. | T-0.3, T-1.6 | L | Engineer |
+| T-2.3 | RLS policies for phase-2 tables | `apps/api/src/db/schema/*.ts`, new migration in `apps/api/drizzle/` | Extend the `pgPolicy` tenant-isolation policies to the professional-domain tables added in phase 2 (conversations, intake_records) and verify the integration test covers them. Add any new partial indexes for phase-2 query patterns. [D-19, D-37] | `db:generate` produces the migration; cross-tenant reads on the new tables return no rows; the integration test passes with the non-superuser role. | Integration tests with two orgs and cross-org access attempts on the new tables. | T-2.4 | M | Agent |
+| T-2.4 | Confidential-domain module | `apps/api/src/db/schema/professional.ts` (new), `apps/api/src/professional/professional.controller.ts`, `apps/api/src/professional/professional.service.ts`, `apps/api/src/professional/professional.module.ts`, `apps/api/src/professional/professional.service.test.ts` | Separate controllers for restricted data: private intake, conversations, consultation content. The Drizzle schema tables for this domain are deferred to the product specification; create placeholder tables (e.g. `conversations`, `intake_records`) with the minimum fields needed for access-path enforcement. Own S3 bucket (`professional-content`), KMS key (`alias/nestself-professional`). Access paths: participant, assigned expert, explicit clinical-supervision grant, `EmergencyAccess`. `authorize()` hard-denies any platform, organization, org-unit or assigned-client scoped grant on restricted actions. Support operators see redacted diagnostics only. [D-20, SYS-06, DR-03, EXP-05, EXP-06] | An assigned expert reads the conversation; a platform owner without emergency access cannot; a support operator sees only redacted content; `authorize()` hard-denies administrative grants. | Integration tests for each access path; hard-deny test for admin grants; redaction test. | T-0.3, T-1.6 | L | Engineer |
 | T-2.5 | Emergency access | `apps/api/src/emergency/emergency.controller.ts`, `apps/api/src/emergency/emergency.service.ts` | `POST /ops/emergency-access`: request with purpose and scope (one case or one user's records). `POST /ops/emergency-access/:id/approve`: approved by a different platform owner (single-approver mandatory review). Expiry at most 4 hours, read-only, single-record access, exports disabled, step-up required. Sweeper every 15 minutes. CloudWatch alarm on every activation. Every read audited. [D-20, PLAT-05] | An emergency access request is approved and grants time-limited read access; a self-approver is rejected; the sweeper expires access; the CloudWatch alarm fires; every read is audited. | Unit tests for each constraint; sweeper test; alarm verification in CDK. | T-2.4 | M | Agent, engineer review |
 | T-2.6 | Step-up re-authentication | `apps/api/src/auth/step-up.service.ts`, `apps/api/src/auth/step-up.service.test.ts` | `POST /auth/step-up/start`, `POST /auth/step-up/verify`. Session records `authMethod`, `authTime`, `lastStepUpAt`. Action classes per 4.5 Decision engine: emergency 5 min, restricted 15 min, export 15 min, financial 15 min, administration 30 min. Native users: TOTP, email OTP or passkey. Federated users: fresh IdP round trip with `prompt=login` and `max_age=0`, fallback to NestSelf email OTP. Session id regenerated after step-up. [D-14] | A sensitive action triggers step-up when authentication is too old; step-up succeeds and updates `lastStepUpAt`; session id is regenerated. | Unit tests per action class; federated fallback test. | T-1.4 | M | Agent |
-| T-2.7 | Data backfill: roles to templates and grants | `apps/api/prisma/migrations/` (new), `apps/api/scripts/backfill-grants.ts` | Migrate `User.platformRole` and `Membership.role` to `Grant` rows based on `PermissionTemplate` mappings. Remove `platformRole` column and `OrgRole`/`PlatformRole` enums. Update contracts to remove deprecated exports. Replace `canAccessHr` and `canManageTeam` with `can()`. [D-36] | Backfill produces correct grants for every existing user; `can()` returns the same results as the old helpers for the same inputs; the deprecated columns are dropped. | Migration test on a seeded database; before-after comparison test. | T-2.1 | M | Agent, engineer review |
+| T-2.7 | Data backfill: roles to templates and grants | `apps/api/drizzle/` (new migration), `apps/api/src/db/schema/`, `apps/api/scripts/backfill-grants.ts` | Migrate `User.platformRole` and `Membership.role` to `Grant` rows based on `PermissionTemplate` mappings. Remove `platformRole` column and `OrgRole`/`PlatformRole` enums. Update contracts to remove deprecated exports. Replace `canAccessHr` and `canManageTeam` with `can()`. [D-36] | Backfill produces correct grants for every existing user; `can()` returns the same results as the old helpers for the same inputs; the deprecated columns are dropped. | Migration test on a seeded database; before-after comparison test. | T-2.1 | M | Agent, engineer review |
 | T-2.8 | Security baseline: SCPs, Security Hub, production | `infra/cdk/lib/security-baseline-stack.ts` | SCPs per D-23: deny resource creation outside eu-central-1 (us-east-1 for ACM and CloudFront only), deny stopping CloudTrail, deny public S3. Enable Security Hub and AWS Config conformance pack. `cdk-nag` AwsSolutions pack enforced as a CI gate. Deploy the production account. [D-23, D-31, DR-19] | SCPs apply; Security Hub is active; `cdk-nag` passes in CI; production stacks deploy. | CDK nag assertions; SCP validation test. | T-1.12 | M | Agent, engineer review |
 | T-2.9 | File delivery authorization | `apps/api/src/files/file-delivery.service.ts`, `apps/api/src/files/file-delivery.service.test.ts` | S3 presigned URLs (5 to 15 minutes) issued only after `authorize()` succeeds for the requested resource. The service takes a resource reference, runs authorization, and returns a presigned URL or a denial. Presigned URL duration depends on content type: 5 minutes for restricted professional content, 15 minutes for general media and exports. [D-19, DR-01] | An authorized user receives a presigned URL; a denied user receives 403 (or 404 per non-disclosure); the URL expires after the configured duration; restricted content uses the `nestself-professional` KMS key. | Unit test per authorization outcome; URL expiry test; presigned URL signature test. | T-1.6, T-2.4 | M | Agent |
 | T-2.10 | Nightly grant reconciliation job | `apps/api/src/jobs/grant-reconciliation.job.ts`, `apps/api/src/jobs/grant-reconciliation.job.test.ts` | A BullMQ scheduled job running nightly that: ends grants with `validUntil` in the past, revokes orphaned delegations (parent grant revoked), verifies membership-grant consistency (active grants for ended memberships), and logs every action as an audit event. [D-15, D-17] | Expired grants are ended; orphaned delegations are revoked; mismatches between membership status and active grants are flagged; all actions are audited. | Unit test with seeded expired grants, orphaned delegations and mismatched memberships. | T-2.1, T-0.4 | M | Agent |
@@ -5255,7 +5264,7 @@ Testing runs at four levels:
 
 The migration runs through phases 0 and 1 with a dual-mode period (D-36).
 
-1. **Phase 0.** The Prisma schema adds new models alongside the existing ones. `Team` is aliased to `OrgUnit`. `platformRole` and `OrgRole` remain. The `authorize()` function is tested but not yet wired into guards.
+1. **Phase 0.** The Drizzle schema adds new tables alongside the existing ones, with RLS policies declared in the schema [D-37]. `Team` is aliased to `OrgUnit`. `platformRole` and `OrgRole` remain. The `authorize()` function is tested but not yet wired into guards.
 
 2. **Phase 1, dual mode.** `AUTH_MODE=stub` (the default locally) keeps the HS256 `AuthGuard`, `SAMPLE_SESSIONS` and `?role=` switcher. `AUTH_MODE=cognito` (the default in staging) enables the new `AuthenticationGuard` and `AuthorizationGuard`. Both modes produce the same `Principal` shape. Feature flags are not needed beyond `AUTH_MODE` and `VITE_DATA_SOURCE`. Sample mode (`VITE_DATA_SOURCE=sample`) is untouched.
 
@@ -5290,6 +5299,8 @@ The tasks above introduce npm packages that do not exist in the current `pnpm-wo
 | `aws-cdk-lib` | `infra/cdk` | AWS CDK constructs for all infrastructure stacks | `2.188.0` | T-0.5, T-1.1, T-1.12, T-2.8 |
 | `constructs` | `infra/cdk` | CDK constructs base library (peer dependency of `aws-cdk-lib`) | `10.4.2` | T-0.5 |
 | `cdk-nag` | `infra/cdk` | CDK compliance checks (AwsSolutions pack) | `2.35.0` | T-0.5, T-1.12, T-2.8 |
+| `drizzle-orm` | `apps/api` | Drizzle ORM for typed SQL queries and schema definitions [D-37] | `0.45.4` | T-0.1 |
+| `drizzle-kit` | `apps/api` (devDependencies) | Migration generation and schema diffing [D-37] | `0.31.11` | T-0.1 |
 | `fast-check` | `apps/api` (devDependencies) | Property-based testing for authorization invariants | `4.12.0` | T-0.3 |
 
 #### Phase 1
@@ -5632,7 +5643,7 @@ Each spike runs in phase 0 and produces a go or no-go result. A no-go triggers t
 | SPIKE-01 | Can email OTP work through `InitiateAuth`/`AdminInitiateAuth` with `USER_AUTH` and `EMAIL_OTP` from a custom UI? [S-10, S-33] | Node script and Expo device against a test pool; verify OTP arrives and tokens are returned | D-05; D-11 | CUSTOM_AUTH with SES, or password plus TOTP for all populations |
 | SPIKE-02 | Does a custom Redis session service work under NestJS 12 on Express 5 with `enableCsrfProtection()`? [S-159, S-163] | Minimal NestJS 12 app with `node-redis`, `__Host-` cookie and CSRF double-submit; verify create, read, destroy and CSRF rejection | D-06 | `express-session` with `connect-redis` under Express 5 |
 | SPIKE-03 | Does Socket.IO long-polling and upgrade work through CloudFront `/api/ws` to an ALB with stickiness across two tasks? [S-53] | Two Fargate tasks behind ALB with duration-based stickiness; CloudFront routing; verify polling, upgrade and message delivery | D-08; D-19 | Route websocket traffic directly to the ALB, bypassing CloudFront |
-| SPIKE-04 | Can a Prisma 7 client extension scope tenant-aware queries by adding an `orgId` filter? | Extension against PostgreSQL 17 with a multi-tenant test schema; verify no cross-organization leakage through relations | D-19 | Manual `where` clauses only; accept the loss of defense-in-depth scoping |
+| SPIKE-04 | Can a Prisma 7 client extension scope tenant-aware queries by adding an `orgId` filter? | Superseded by D-37: PostgreSQL RLS policies replace the extension approach | D-19 | -- |
 
 Later spikes (not phase 0 gates):
 
@@ -5669,933 +5680,92 @@ These assumptions underpin the delivery plan, cost model and design choices. If 
 | ASSUMPTION-06 | The marketing site remains public-only with no authenticated features | D-08 edge topology; D-24 compute | Marketing needs authenticated previews or gated content; the marketing distribution needs cookie forwarding or a separate auth flow |
 
 
-## Appendix A Prisma schema draft
-
-This appendix contains a complete Prisma 7 schema fragment for every identity, organization, authorization, audit and retention model the decision record (Appendix I) names. The fragment reflects the state after phase 0 migrations. Legacy enums (`OrgRole`, `PlatformRole`) and the `Team` model remain but are deprecated; phase 2 removes them after data backfill [D-36]. Sessions live in Redis (see 3.6 Sessions), not in Prisma [D-06]. The schema replaces the existing `apps/api/prisma/schema.prisma` in full and passes `prisma validate` as written [S-02].
-
-### A.1 Schema fragment
-
-```prisma
-datasource db {
-  provider = "postgresql"
-}
-
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
-
-// ─── New enums ───────────────────────────────────────────────────────
-
-/// Org-unit node type [D-16].
-enum OrgUnitKind {
-  COMPANY
-  DEPARTMENT
-  TEAM
-}
-
-/// Membership lifecycle state [D-03].
-enum MembershipStatus {
-  INVITED
-  ACTIVE
-  ENDED
-}
-
-/// SSO identity-provider protocol [D-12].
-enum SsoProtocol {
-  SAML
-  OIDC
-}
-
-/// SSO connection lifecycle state [D-12].
-enum SsoConnectionStatus {
-  DRAFT
-  TESTING
-  ACTIVE
-  SUSPENDED
-}
-
-/// Assignment target type [D-15, D-19].
-enum AssignmentKind {
-  CASE
-  QUEUE
-  CLIENT
-  PRACTICE_GROUP
-  COLLECTION
-  SUPPORT_CASE
-  SUPERVISION
-  /// Event or team activity assigned to an external facilitator or supplier (phase 4, EVT-05).
-  ACTIVITY
-}
-
-/// Audit-event category; determines the retention tier [D-21].
-enum AuditCategory {
-  SECURITY
-  AUTHORIZATION
-  FINANCIAL
-  CONTENT_ACCESS
-  ADMIN
-}
-
-/// Audit-event authorization outcome [D-21].
-enum AuditResult {
-  ALLOWED
-  DENIED
-  NONE
-}
-
-/// Audit-event actor type [D-21].
-enum ActorKind {
-  USER
-  SYSTEM
-  JOB
-}
-
-/// Emergency-access scope type [D-20].
-enum EmergencyScopeKind {
-  CASE
-  USER_RECORDS
-}
-
-/// Expert-credential review lifecycle [LEAD-01].
-enum ExpertCredentialStatus {
-  PENDING_REVIEW
-  APPROVED
-  EXPIRED
-  REVOKED
-}
-
-// ─── Legacy enums (deprecated; removed in phase 2) ──────────────────
-
-/// @deprecated Use PermissionTemplate and Grant [D-36].
-enum OrgRole {
-  EMPLOYEE
-  MANAGER
-  HR_ADMIN
-}
-
-/// @deprecated Use PermissionTemplate and Grant [D-36].
-enum PlatformRole {
-  EXPERT
-  OPERATIONS
-  ADMIN
-}
-
-// ─── Retained enums (unchanged) ─────────────────────────────────────
-
-enum SupportArea {
-  PSYCHOLOGICAL
-  LEGAL
-  FINANCIAL
-}
-
-enum ChannelScope {
-  ORGANIZATION
-  TEAM
-}
-
-enum ContentKind {
-  ARTICLE
-  FAQ
-  VIDEO
-}
-
-enum LeadKind {
-  DEMO_REQUEST
-  CONTACT
-  WEBINAR_REGISTRATION
-}
-
-enum EventRequestStatus {
-  REQUESTED
-  OFFERS_READY
-  SELECTED
-  CLOSED
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// IDENTITY MODELS - Phase 0: User extended, ExternalIdentity created
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: existing model, extended with new fields in migration 001.
-/// A person with an identity on the platform. One row per natural
-/// person, independent of employers [D-02, D-04, SYS-01].
-model User {
-  id              String       @id @default(cuid())
-  /// Unique, stored lowercase; normalisation enforced at the application layer.
-  email           String       @unique
-  displayName     String       @map("display_name")
-  /// Default locale synced to Cognito custom:locale [D-02].
-  locale          String       @default("sr-Latn")
-  /// Set when the email is verified through invitation acceptance or identity binding.
-  emailVerifiedAt DateTime?    @map("email_verified_at")
-  /// Non-null suspends all sessions within the cache window [D-18].
-  suspendedAt     DateTime?    @map("suspended_at")
-  /// Soft deletion; row retained per RetentionPolicy [SYS-10].
-  deactivatedAt   DateTime?    @map("deactivated_at")
-  /// Updated on each successful sign-in.
-  lastSignInAt    DateTime?    @map("last_sign_in_at")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
-
-  /// @deprecated Removed in phase 2; use templates and grants [D-36].
-  platformRole PlatformRole? @map("platform_role")
-
-  // ── inverse relations ──
-  externalIdentities       ExternalIdentity[]
-  memberships              Membership[]          @relation("MembershipUser")
-  managedMemberships       Membership[]          @relation("MembershipManager")
-  ownedOrganizations       Organization[]        @relation("OrgOwner")
-  grants                   Grant[]               @relation("GrantSubject")
-  grantsGiven              Grant[]               @relation("GrantGrantor")
-  grantsRevoked            Grant[]               @relation("GrantRevoker")
-  assignments              Assignment[]          @relation("AssignmentUser")
-  assignmentsGiven         Assignment[]          @relation("AssignmentAssigner")
-  approvalAuthorities      ApprovalAuthority[]   @relation("ApprovalUser")
-  approvalAlternates       ApprovalAuthority[]   @relation("ApprovalAlternate")
-  invitationsAccepted      Invitation[]          @relation("InvitationAccepted")
-  invitationsSent          Invitation[]          @relation("InvitationSender")
-  emergencyAccess          EmergencyAccess[]     @relation("EmergencyUser")
-  emergencyApprovals       EmergencyAccess[]     @relation("EmergencyApprover")
-  emergencyRevocations     EmergencyAccess[]     @relation("EmergencyRevoker")
-  auditEvents              AuditEvent[]
-  expertCredentialReviews  ExpertCredential[]    @relation("CredentialReviewer")
-  posts                    Post[]
-  pollVotes                PollVote[]
-  expert                   Expert?
-
-  @@map("users")
-}
-
-// Phase 0: new table created in migration 001.
-/// Link from a User to an identity-provider subject [D-02, D-04].
-/// Provider is "cognito" for pool-native users or "cognito:<providerName>"
-/// for federated users (e.g. "cognito:org-acme-saml"). Subject is the
-/// Cognito sub claim; globally unique per provider [D-02, D-04].
-model ExternalIdentity {
-  id              String    @id @default(cuid())
-  userId          String    @map("user_id")
-  /// "cognito" for pool-native or "cognito:<providerName>" for federated [D-04].
-  provider        String
-  /// Cognito sub claim; globally unique per provider.
-  subject         String
-  /// Cognito Username field (may differ from sub for federated users).
-  cognitoUsername String    @map("cognito_username")
-  /// Email from the identity provider at the most recent sign-in.
-  email           String
-  /// Whether the IdP asserted email ownership [D-04].
-  emailVerified   Boolean   @default(false) @map("email_verified")
-  /// Updated on each sign-in through this identity.
-  lastSeenAt      DateTime? @map("last_seen_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([provider, subject])
-  @@index([userId])
-  @@map("external_identities")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// ORGANIZATION MODELS - Phase 0: Organization extended, OrgUnit and
-// OrgUnitClosure created in migration 001
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: existing model, extended with new fields in migration 001.
-/// An employer client company [D-02, PLAT-01].
-model Organization {
-  id                            String    @id @default(cuid())
-  name                          String
-  slug                          String    @unique
-  /// ISO 3166-1 alpha-2: "RS" or "HU" [D-33].
-  country                       String    @default("RS")
-  /// IANA timezone identifier [PLAT-01].
-  timezone                      String    @default("Europe/Belgrade")
-  /// Start of the employer contract [PLAT-01].
-  contractStart                 DateTime? @map("contract_start")
-  /// End of the employer contract.
-  contractEnd                   DateTime? @map("contract_end")
-  /// Initial owner User assigned at creation [PLAT-01].
-  ownerUserId                   String?   @map("owner_user_id")
-  /// Organization policy flag; authorize() denies self-approval when false [D-17].
-  selfApprovalAllowed           Boolean   @default(false) @map("self_approval_allowed")
-  /// Amount in currency minor units above which financial step-up applies [D-14].
-  financialStepUpThresholdMinor Int?      @map("financial_step_up_threshold_minor")
-  /// Per-organization reporting cohort threshold; null falls back to platform default (F-03). Minimum 10 [DR-11, ORG-08, T08].
-  cohortThreshold               Int?      @map("cohort_threshold")
-  /// Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED. Kept as a string with a check constraint in migration 001.
-  status                        String    @default("ACTIVE")
-  createdAt                     DateTime  @default(now()) @map("created_at")
-  updatedAt                     DateTime  @updatedAt @map("updated_at")
-
-  owner               User?               @relation("OrgOwner", fields: [ownerUserId], references: [id])
-  orgUnits             OrgUnit[]
-  memberships          Membership[]
-  grants               Grant[]
-  approvalAuthorities  ApprovalAuthority[]
-  invitations          Invitation[]
-  ssoConnections       SsoConnection[]
-  auditEvents          AuditEvent[]
-  eventRequests        EventRequest[]
-  channels             Channel[]
-  /// @deprecated Replaced by OrgUnit in phase 2 [D-16, D-36].
-  teams                Team[]
-
-  @@map("organizations")
-}
-
-// Phase 0: new table created in migration 001.
-/// A node in an organization's tree: company root, department or team.
-/// Replaces the flat Team model [D-16]. Trees are shallow (three to five
-/// levels) and small (under 1,000 units per client at pilot) [S-01].
-model OrgUnit {
-  id             String      @id @default(cuid())
-  orgId          String      @map("org_id")
-  /// Null for the company-root node.
-  parentId       String?     @map("parent_id")
-  kind           OrgUnitKind @default(DEPARTMENT)
-  name           String
-  /// Optional cost-center identifier for charging.
-  costCenterCode String?     @map("cost_center_code")
-  /// Non-null hides the unit from active queries.
-  archivedAt     DateTime?   @map("archived_at")
-  createdAt      DateTime    @default(now()) @map("created_at")
-
-  org      Organization @relation(fields: [orgId], references: [id])
-  parent   OrgUnit?     @relation("OrgUnitTree", fields: [parentId], references: [id])
-  children OrgUnit[]    @relation("OrgUnitTree")
-
-  closureAncestors      OrgUnitClosure[]  @relation("ClosureDescendant")
-  closureDescendants    OrgUnitClosure[]  @relation("ClosureAncestor")
-
-  memberships           Membership[]      @relation("MembershipOrgUnit")
-  costCenterMembers     Membership[]      @relation("MembershipCostCenter")
-  grants                Grant[]
-  approvalAuthorities   ApprovalAuthority[]
-  invitations           Invitation[]
-  defaultForConnections SsoConnection[]   @relation("SsoDefaultOrgUnit")
-
-  @@index([orgId, kind])
-  @@map("org_units")
-}
-
-// Phase 0: new table created in migration 001.
-/// Closure table for efficient ancestor and descendant queries on
-/// OrgUnit [D-16]. Maintained in the same transaction as create, move
-/// and archive. Every node has a self-referencing entry at depth 0.
-/// Cycle prevention is enforced at the service layer before insert.
-model OrgUnitClosure {
-  ancestorId   String @map("ancestor_id")
-  descendantId String @map("descendant_id")
-  /// 0 = self, 1 = direct parent, 2 = grandparent, and so on.
-  depth        Int
-
-  ancestor   OrgUnit @relation("ClosureAncestor", fields: [ancestorId], references: [id])
-  descendant OrgUnit @relation("ClosureDescendant", fields: [descendantId], references: [id])
-
-  @@id([ancestorId, descendantId])
-  @@index([descendantId])
-  @@map("org_unit_closure")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// MEMBERSHIP - Phase 0: existing model extended in migration 001
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: existing model, extended with new fields in migration 001.
-/// A user's eligibility in an organization with effective dates
-/// [D-03, ORG-02, ORG-04, F10].
-model Membership {
-  id                String           @id @default(cuid())
-  userId            String           @map("user_id")
-  orgId             String           @map("org_id")
-  /// Primary team or department.
-  orgUnitId         String?          @map("org_unit_id")
-  /// Cost-center org unit for charging (may differ from orgUnitId).
-  costCenterUnitId  String?          @map("cost_center_unit_id")
-  /// Line-manager User reference.
-  lineManagerUserId String?          @map("line_manager_user_id")
-  status            MembershipStatus @default(INVITED)
-  /// Effective start; set at activation [ORG-02].
-  startDate         DateTime         @map("start_date")
-  /// Effective end; set on deactivation [ORG-04].
-  endDate           DateTime?        @map("end_date")
-  /// Controlled vocabulary: LEFT, CONTRACT_ENDED, DEACTIVATED_BY_HR, SUSPENDED_BY_PLATFORM, MERGED. Check constraint in migration 001.
-  endedReason       String?          @map("ended_reason")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-
-  /// @deprecated Replaced by templates and grants in phase 2 [D-36].
-  role OrgRole @default(EMPLOYEE)
-
-  /// @deprecated Replaced by orgUnitId; removed in phase 2 [D-36].
-  teamId String? @map("team_id")
-
-  user           User         @relation("MembershipUser", fields: [userId], references: [id])
-  org            Organization @relation(fields: [orgId], references: [id])
-  orgUnit        OrgUnit?     @relation("MembershipOrgUnit", fields: [orgUnitId], references: [id])
-  costCenterUnit OrgUnit?     @relation("MembershipCostCenter", fields: [costCenterUnitId], references: [id])
-  lineManager    User?        @relation("MembershipManager", fields: [lineManagerUserId], references: [id])
-  team           Team?        @relation(fields: [teamId], references: [id])
-
-  @@unique([userId, orgId, startDate])
-  @@index([orgId, status])
-  @@map("memberships")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// AUTHORIZATION MODELS - Phase 0: tables created in migration 001;
-// populated and enforced from phase 2
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: new table created in migration 001; seeded in phase 0.
-/// A named starting set of actions, scope type and boundaries from
-/// which grants are created [D-17]. Seventeen rows seeded from the
-/// specification; an admin assigns a template, sets scope, adjusts
-/// conditions, previews and applies.
-model PermissionTemplate {
-  id                   String   @id @default(cuid())
-  /// Human-readable unique key, e.g. "platform_owner", "hr_admin".
-  key                  String   @unique
-  /// Display name shown in the admin UI.
-  name                 String
-  /// Target workspace: employee, organization, expert, operations.
-  workspace            String
-  /// Target population: employee, employer_admin, expert, staff, external.
-  population           String
-  /// Default action strings from the catalogue (see 4.3).
-  actions              String[]
-  /// Default ScopeType value from contracts.
-  scopeType            String   @map("scope_type")
-  /// Default conditions (zod-validated at runtime) [D-17].
-  defaultConditions    Json?    @map("default_conditions")
-  /// Whether grants sourced from this template require a second factor.
-  requiresSecondFactor Boolean  @default(false) @map("requires_second_factor")
-  /// Actions that require step-up re-authentication when exercised [D-14].
-  stepUpActions        String[] @map("step_up_actions")
-  /// Inactive templates cannot source new grants.
-  isActive             Boolean  @default(true) @map("is_active")
-  createdAt            DateTime @default(now()) @map("created_at")
-
-  grants Grant[]
-
-  @@map("permission_templates")
-}
-
-// Phase 0: new table created in migration 001; populated from phase 2.
-/// An explicit, inspectable permission: subject, actions, scope,
-/// conditions, validity, delegation boundary and grantor [D-15, D-17].
-model Grant {
-  id                 String    @id @default(cuid())
-  /// The user who holds this grant.
-  subjectUserId      String    @map("subject_user_id")
-  /// PermissionTemplate.key that sourced this grant; null for ad-hoc grants.
-  templateKey        String?   @map("template_key")
-  /// Dotted action strings; no wildcards [D-15].
-  actions            String[]
-  /// ScopeType value from contracts (platform, organization, org_unit, etc.).
-  scopeType          String    @map("scope_type")
-  /// Organization scope; null for platform-wide or own scopes.
-  scopeOrgId         String?   @map("scope_org_id")
-  /// Org-unit scope; null when the scope is broader than a unit.
-  scopeOrgUnitId     String?   @map("scope_org_unit_id")
-  /// Whether the grant covers descendant org units [D-16].
-  includeDescendants Boolean   @default(false) @map("include_descendants")
-  /// Polymorphic resource kind for assignment-based scopes.
-  scopeRefKind       String?   @map("scope_ref_kind")
-  /// Polymorphic resource id for assignment-based scopes.
-  scopeRefId         String?   @map("scope_ref_id")
-  /// Zod discriminated union: spending_ceiling, categories, confidential_approver, time_window [D-17].
-  conditions         Json?
-  /// Start of the validity window.
-  validFrom          DateTime  @map("valid_from")
-  /// End of the validity window; null means indefinite.
-  validUntil         DateTime? @map("valid_until")
-  /// Maximum scope, actions and conditions this grant may delegate [D-17].
-  delegationEnvelope Json?     @map("delegation_envelope")
-  /// Non-null for delegated grants; depth limit 3 [D-17].
-  parentGrantId      String?   @map("parent_grant_id")
-  /// The user who created this grant.
-  grantedByUserId    String    @map("granted_by_user_id")
-  grantedAt          DateTime  @default(now()) @map("granted_at")
-  /// Non-null means the grant is revoked.
-  revokedAt          DateTime? @map("revoked_at")
-  /// The user who revoked this grant.
-  revokedByUserId    String?   @map("revoked_by_user_id")
-  /// Free-text reason for revocation.
-  revokedReason      String?   @map("revoked_reason")
-
-  subject      User                @relation("GrantSubject", fields: [subjectUserId], references: [id])
-  grantedBy    User                @relation("GrantGrantor", fields: [grantedByUserId], references: [id])
-  revokedBy    User?               @relation("GrantRevoker", fields: [revokedByUserId], references: [id])
-  template     PermissionTemplate? @relation(fields: [templateKey], references: [key])
-  scopeOrg     Organization?       @relation(fields: [scopeOrgId], references: [id])
-  scopeOrgUnit OrgUnit?            @relation(fields: [scopeOrgUnitId], references: [id])
-  parentGrant  Grant?              @relation("GrantDelegation", fields: [parentGrantId], references: [id])
-  children     Grant[]             @relation("GrantDelegation")
-
-  @@index([subjectUserId, scopeOrgId])
-  @@index([scopeOrgId])
-  @@index([templateKey])
-  @@map("grants")
-}
-
-// Phase 0: new table created in migration 001; populated from phase 2.
-/// A link between a user and a work item that confers access [D-15, D-19].
-/// Used by authorize() for assignment-based scopes: "Is this expert
-/// assigned to this case?" [EXP-03].
-model Assignment {
-  id               String         @id @default(cuid())
-  /// The assigned user (expert, coordinator, client operations, etc.).
-  userId           String         @map("user_id")
-  /// Type of target resource.
-  kind             AssignmentKind
-  /// Polymorphic id of the assigned resource (case, queue, org, etc.).
-  targetId         String         @map("target_id")
-  assignedByUserId String         @map("assigned_by_user_id")
-  startAt          DateTime       @map("start_at")
-  endAt            DateTime?      @map("end_at")
-  /// Reason for the assignment or reassignment.
-  reason           String?
-
-  user       User @relation("AssignmentUser", fields: [userId], references: [id])
-  assignedBy User @relation("AssignmentAssigner", fields: [assignedByUserId], references: [id])
-
-  @@index([userId, kind])
-  @@index([targetId, kind])
-  @@map("assignments")
-}
-
-// Phase 0: new table created in migration 001; populated from phase 2.
-/// A user's authority to decide requests within scope, categories and
-/// an amount ceiling, with validity and an alternate [D-17, MGR-04].
-model ApprovalAuthority {
-  id                     String    @id @default(cuid())
-  userId                 String    @map("user_id")
-  orgId                  String    @map("org_id")
-  orgUnitId              String?   @map("org_unit_id")
-  /// Whether the authority extends to descendant org units.
-  includeDescendants     Boolean   @default(false) @map("include_descendants")
-  /// Service categories this authority covers.
-  categories             String[]
-  /// Ceiling in currency minor units; null means no cap.
-  maxAmountMinor         Int?      @map("max_amount_minor")
-  currency               String?   @default("EUR")
-  validFrom              DateTime  @map("valid_from")
-  validUntil             DateTime? @map("valid_until")
-  /// Self-reference: the authority this was delegated from.
-  delegatedFromId        String?   @map("delegated_from_id")
-  /// Alternate approver when this user is absent.
-  alternateUserId        String?   @map("alternate_user_id")
-  /// Whether this authority can approve confidential items [D-20].
-  isConfidentialApprover Boolean   @default(false) @map("is_confidential_approver")
-  createdAt              DateTime  @default(now()) @map("created_at")
-
-  user          User                @relation("ApprovalUser", fields: [userId], references: [id])
-  org           Organization        @relation(fields: [orgId], references: [id])
-  orgUnit       OrgUnit?            @relation(fields: [orgUnitId], references: [id])
-  alternate     User?               @relation("ApprovalAlternate", fields: [alternateUserId], references: [id])
-  delegatedFrom ApprovalAuthority?  @relation("ApprovalDelegation", fields: [delegatedFromId], references: [id])
-  delegations   ApprovalAuthority[] @relation("ApprovalDelegation")
-
-  @@index([orgId, orgUnitId])
-  @@map("approval_authorities")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// INVITATION AND SSO - Phase 0: tables created in migration 001;
-// Invitation used from phase 1, SsoConnection from phase 3
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: new table created in migration 001; used from phase 1.
-/// A revocable, expiring token that lets an invited person activate a
-/// membership [D-03, ORG-02]. The raw token is never stored; only
-/// tokenHash (SHA-256) is persisted.
-model Invitation {
-  id              String    @id @default(cuid())
-  /// Normalised lowercase email of the invitee.
-  email           String
-  orgId           String    @map("org_id")
-  /// Target org unit for the new membership.
-  orgUnitId       String?   @map("org_unit_id")
-  /// PermissionTemplate key for the initial grant.
-  templateKey     String?   @map("template_key")
-  /// SHA-256 of the invitation token [D-03].
-  tokenHash       String    @unique @map("token_hash")
-  /// Default 7 days from creation [D-03].
-  expiresAt       DateTime  @map("expires_at")
-  revokedAt       DateTime? @map("revoked_at")
-  acceptedAt      DateTime? @map("accepted_at")
-  /// User who activated this invitation.
-  acceptedUserId  String?   @map("accepted_user_id")
-  invitedByUserId String    @map("invited_by_user_id")
-  /// Correlation id for bulk HR imports.
-  importBatchId   String?   @map("import_batch_id")
-  createdAt       DateTime  @default(now()) @map("created_at")
-
-  org          Organization @relation(fields: [orgId], references: [id])
-  orgUnit      OrgUnit?     @relation(fields: [orgUnitId], references: [id])
-  acceptedUser User?        @relation("InvitationAccepted", fields: [acceptedUserId], references: [id])
-  invitedBy    User         @relation("InvitationSender", fields: [invitedByUserId], references: [id])
-
-  @@index([email, orgId])
-  @@map("invitations")
-}
-
-// Phase 0: new table created in migration 001; used from phase 3.
-/// An organization's identity-provider configuration registered in
-/// Cognito and mapped to email domains [D-12].
-model SsoConnection {
-  id                   String              @id @default(cuid())
-  orgId                String              @map("org_id")
-  protocol             SsoProtocol
-  /// Cognito pool-level provider name, e.g. "org-acme-saml"; max 20 characters [D-12].
-  cognitoProviderName  String              @unique @map("cognito_provider_name")
-  status               SsoConnectionStatus @default(DRAFT)
-  /// SAML metadata endpoint URL.
-  metadataUrl          String?             @map("metadata_url")
-  /// Cached SAML metadata XML.
-  metadataXml          String?             @map("metadata_xml")
-  /// OIDC issuer URL.
-  oidcIssuer           String?             @map("oidc_issuer")
-  /// OIDC client id at the IdP.
-  oidcClientId         String?             @map("oidc_client_id")
-  /// IdP attribute to NestSelf field mapping [D-12].
-  attributeMapping     Json?               @map("attribute_mapping")
-  /// Requires written risk acceptance [D-12, DR-06].
-  idpInitiatedAllowed  Boolean             @default(false) @map("idp_initiated_allowed")
-  /// Auto-create ACTIVE memberships for verified-domain sign-ins without an invitation [D-03].
-  jitProvisioning      Boolean             @default(false) @map("jit_provisioning")
-  /// Default org unit for JIT-provisioned members.
-  defaultOrgUnitId     String?             @map("default_org_unit_id")
-  /// IdP signing certificate expiry; reminders at 30 days [D-12].
-  certificateExpiresAt DateTime?           @map("certificate_expires_at")
-  lastTestedAt         DateTime?           @map("last_tested_at")
-  createdAt            DateTime            @default(now()) @map("created_at")
-
-  org            Organization @relation(fields: [orgId], references: [id])
-  defaultOrgUnit OrgUnit?     @relation("SsoDefaultOrgUnit", fields: [defaultOrgUnitId], references: [id])
-  domains        SsoDomain[]
-
-  @@index([orgId])
-  @@map("sso_connections")
-}
-
-// Phase 0: new table created in migration 001; used from phase 3.
-/// A verified email domain bound to an SSO connection for home-realm
-/// discovery [D-12]. Public email domains are blocklisted at the API.
-model SsoDomain {
-  id                String    @id @default(cuid())
-  connectionId      String    @map("connection_id")
-  /// Lowercase; public email domains rejected by the API [D-12, DR-07].
-  domain            String    @unique
-  /// DNS TXT record value for domain ownership proof.
-  verificationToken String    @map("verification_token")
-  /// Non-null means the DNS TXT check passed.
-  verifiedAt        DateTime? @map("verified_at")
-
-  connection SsoConnection @relation(fields: [connectionId], references: [id])
-
-  @@map("sso_domains")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// CONFIDENTIAL DOMAIN - Phase 0: table created in migration 001;
-// used from phase 2
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: new table created in migration 001; used from phase 2.
-/// Separately approved, time-limited, logged access to restricted
-/// professional content [D-20, PLAT-05]. Approved by a different
-/// platform owner (single-approver with mandatory review log while
-/// staff are fewer than four).
-model EmergencyAccess {
-  id               String             @id @default(cuid())
-  /// The user who receives emergency access.
-  userId           String             @map("user_id")
-  /// A different platform owner who approved the request [D-20].
-  approvedByUserId String             @map("approved_by_user_id")
-  /// Written justification.
-  purpose          String
-  /// CASE or USER_RECORDS [D-20].
-  scopeKind        EmergencyScopeKind @map("scope_kind")
-  /// Id of the specific case or user whose records.
-  scopeId          String             @map("scope_id")
-  grantedAt        DateTime           @default(now()) @map("granted_at")
-  /// At most 4 hours from grantedAt; sweeper runs every 15 minutes [D-20].
-  expiresAt        DateTime           @map("expires_at")
-  revokedAt        DateTime?          @map("revoked_at")
-  revokedByUserId  String?            @map("revoked_by_user_id")
-
-  user       User  @relation("EmergencyUser", fields: [userId], references: [id])
-  approvedBy User  @relation("EmergencyApprover", fields: [approvedByUserId], references: [id])
-  revokedBy  User? @relation("EmergencyRevoker", fields: [revokedByUserId], references: [id])
-
-  @@index([userId, expiresAt])
-  @@map("emergency_access")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// AUDIT AND COMPLIANCE - Phase 0: tables created in migration 001
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 0: new table created in migration 001; used from phase 1.
-/// Append-only record of a consequential action [D-21, PLAT-04].
-/// The table is partitioned by occurred_at (monthly) in raw SQL.
-/// The application database role has no UPDATE or DELETE; a trigger
-/// rejects both as defence in depth. Safe details only: never message
-/// bodies, intake text, professional notes, full voucher codes or
-/// tokens [D-21].
-model AuditEvent {
-  id              String        @default(uuid())
-  /// Event timestamp; partition key for monthly partitions.
-  occurredAt      DateTime      @map("occurred_at")
-  /// Null for SYSTEM and some JOB events.
-  actorUserId     String?       @map("actor_user_id")
-  actorKind       ActorKind     @map("actor_kind")
-  /// Organization context; null for platform-level events.
-  orgId           String?       @map("org_id")
-  /// Dotted event name from the audit catalogue (Part C of Appendix I).
-  action          String
-  /// Affected model name, e.g. "Grant", "Membership".
-  recordType      String        @map("record_type")
-  /// Id of the affected record.
-  recordId        String        @map("record_id")
-  result          AuditResult
-  /// Determines the retention tier (SECURITY 3 y, AUTHORIZATION/FINANCIAL/ADMIN 10 y, CONTENT_ACCESS 1 y) [D-21].
-  category        AuditCategory
-  /// Safe change details in JSON; never raw tokens or restricted content.
-  details         Json
-  /// Redis session id, if applicable.
-  sessionId       String?       @map("session_id")
-  /// SHA-256 of the client IP; never the raw IP address [D-21].
-  ipHash          String?       @map("ip_hash")
-  /// Parsed user-agent family; never the raw UA string [D-21].
-  userAgentFamily String?       @map("user_agent_family")
-  /// Computed from category and RetentionPolicy at insert time.
-  retainUntil     DateTime      @map("retain_until")
-
-  actor User?         @relation(fields: [actorUserId], references: [id])
-  org   Organization? @relation(fields: [orgId], references: [id])
-
-  /// Composite PK required for monthly range partitioning on occurred_at.
-  @@id([id, occurredAt])
-  @@index([actorUserId, occurredAt])
-  @@index([orgId, action, occurredAt])
-  @@index([recordType, recordId])
-  @@index([category, retainUntil])
-  @@map("audit_events")
-}
-
-// Phase 0: new table created in migration 001; populated from phase 1.
-/// Expert credential verification record [LEAD-01].
-/// Pending or expired status blocks new expert matching for affected
-/// service categories.
-model ExpertCredential {
-  id               String                @id @default(cuid())
-  expertId         String                @map("expert_id")
-  /// Aligns with SupportArea values (psychological, legal, financial).
-  serviceCategory  String                @map("service_category")
-  status           ExpertCredentialStatus @default(PENDING_REVIEW)
-  reviewedByUserId String?               @map("reviewed_by_user_id")
-  /// When the credential becomes valid.
-  effectiveFrom    DateTime?             @map("effective_from")
-  /// When the credential expires; triggers re-review [LEAD-01].
-  expiresAt        DateTime?             @map("expires_at")
-  /// Internal review notes.
-  notes            String?
-
-  expert     Expert @relation(fields: [expertId], references: [id])
-  reviewedBy User?  @relation("CredentialReviewer", fields: [reviewedByUserId], references: [id])
-
-  @@index([expertId, status])
-  @@map("expert_credentials")
-}
-
-// Phase 0: new table created in migration 001; seeded in phase 0.
-/// Per-domain data retention periods, pending counsel [D-33, L-02, L-03, SYS-10].
-/// Seeded with the periods in Part C of Appendix I.
-model RetentionPolicy {
-  id            String   @id @default(cuid())
-  /// e.g. "identity", "membership", "audit_security", "financial_ledger".
-  dataCategory  String   @map("data_category")
-  /// "RS", "HU" or "DEFAULT" [D-33].
-  jurisdiction  String   @default("DEFAULT")
-  /// Optional service-type qualifier (e.g. "counselling", "legal_advisory").
-  serviceType   String?  @map("service_type")
-  /// Minimum retention in days.
-  minDays       Int      @map("min_days")
-  /// Maximum retention in days; null means no upper bound.
-  maxDays       Int?     @map("max_days")
-  /// Citation of the applicable law or policy.
-  legalBasis    String   @map("legal_basis")
-  /// When this policy takes effect.
-  effectiveFrom DateTime @map("effective_from")
-
-  @@unique([dataCategory, jurisdiction, serviceType])
-  @@map("retention_policies")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// LEGACY MODEL - existing; deprecated in phase 0, removed in phase 2
-// ═════════════════════════════════════════════════════════════════════
-
-// Phase 2: removed by migration 004. Retained during phase 0-1 for
-// backward compatibility.
-/// @deprecated Replaced by OrgUnit [D-16, D-36].
-/// Retained during phase 0-1 for backward compatibility with Channel,
-/// Poll and existing Membership.teamId references.
-model Team {
-  id          String       @id @default(cuid())
-  name        String
-  orgId       String       @map("org_id")
-  org         Organization @relation(fields: [orgId], references: [id])
-  memberships Membership[]
-  channels    Channel[]
-  polls       Poll[]
-
-  @@map("teams")
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// RETAINED MODELS - existing; no structural migration required.
-// Expert.area is kept as a legacy field; see A.2 and A.3.1 for the
-// data migration into ExpertCredential.
-// ═════════════════════════════════════════════════════════════════════
-
-// Existing model; no schema migration. Expert.area retained as a
-// legacy field during phase 0-1; see A.2 for the backfill procedure
-// into ExpertCredential.
-/// An independent professional delivering services.
-/// Relation to ExpertCredential added. The `area` field is retained as
-/// a legacy field during phase 0-1; migration 001 creates one
-/// ExpertCredential per existing Expert row from this value (see A.2).
-/// The PrincipalLoader derives `approvedCategories` from
-/// ExpertCredential rows with status APPROVED, not from `area`.
-/// `area` is dropped in phase 2 after verification.
-model Expert {
-  id          String             @id @default(cuid())
-  userId      String             @unique @map("user_id")
-  /// @deprecated Replaced by ExpertCredential.serviceCategory; see A.2
-  /// for the backfill procedure. Kept during phase 0-1. Dropped in
-  /// phase 2 after verification that all ExpertCredential rows exist.
-  area        SupportArea
-  languages   String[]
-  bio         String?
-  user        User               @relation(fields: [userId], references: [id])
-  contents    ContentItem[]
-  credentials ExpertCredential[]
-
-  @@map("experts")
-}
-
-model ContentItem {
-  id        String      @id @default(cuid())
-  title     String
-  summary   String
-  body      String
-  kind      ContentKind
-  area      SupportArea
-  locale    String      @default("en")
-  expertId  String?     @map("expert_id")
-  expert    Expert?     @relation(fields: [expertId], references: [id])
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
-
-  @@map("content_items")
-}
-
-model Channel {
-  id      String       @id @default(cuid())
-  name    String
-  scope   ChannelScope
-  orgId   String       @map("org_id")
-  teamId  String?      @map("team_id")
-  org     Organization @relation(fields: [orgId], references: [id])
-  team    Team?        @relation(fields: [teamId], references: [id])
-  posts   Post[]
-
-  @@map("channels")
-}
-
-model Post {
-  id        String   @id @default(cuid())
-  body      String
-  channelId String   @map("channel_id")
-  authorId  String   @map("author_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  channel   Channel  @relation(fields: [channelId], references: [id])
-  author    User     @relation(fields: [authorId], references: [id])
-
-  @@map("posts")
-}
-
-model Poll {
-  id        String       @id @default(cuid())
-  question  String
-  teamId    String       @map("team_id")
-  closesAt  DateTime?    @map("closes_at")
-  createdAt DateTime     @default(now()) @map("created_at")
-  team      Team         @relation(fields: [teamId], references: [id])
-  options   PollOption[]
-
-  @@map("polls")
-}
-
-model PollOption {
-  id     String     @id @default(cuid())
-  label  String
-  pollId String     @map("poll_id")
-  poll   Poll       @relation(fields: [pollId], references: [id])
-  votes  PollVote[]
-
-  @@map("poll_options")
-}
-
-model PollVote {
-  id       String     @id @default(cuid())
-  optionId String     @map("option_id")
-  userId   String     @map("user_id")
-  option   PollOption @relation(fields: [optionId], references: [id])
-  user     User       @relation(fields: [userId], references: [id])
-
-  @@unique([optionId, userId])
-  @@map("poll_votes")
-}
-
-model Lead {
-  id        String   @id @default(cuid())
-  kind      LeadKind
-  email     String
-  locale    String
-  source    String?
-  payload   Json
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([kind, createdAt])
-  @@map("leads")
-}
-
-model EventRequest {
-  id           String             @id @default(cuid())
-  orgId        String             @map("org_id")
-  participants Int
-  location     String
-  dateRange    String             @map("date_range")
-  budget       String
-  purpose      String
-  options      String[]
-  status       EventRequestStatus @default(REQUESTED)
-  createdAt    DateTime           @default(now()) @map("created_at")
-  org          Organization       @relation(fields: [orgId], references: [id])
-
-  @@map("event_requests")
-}
+## Appendix A Database schema (Drizzle)
+
+This appendix describes the Drizzle ORM schema that implements every identity, organization, authorization, audit and retention table the decision record (Appendix I) names [D-37]. Legacy enums (`OrgRole`, `PlatformRole`) and the `legacyTeams` table remain but are deprecated; phase 2 removes them after data backfill [D-36]. Sessions live in Redis (see 3.6 Sessions), not in the database [D-06]. The schema files under `apps/api/src/db/schema/` are the source of truth; `drizzle.config.ts` points drizzle-kit at the entry point `src/db/schema/index.ts`.
+
+### A.1 Schema overview and representative excerpt
+
+The schema is split across several files in `apps/api/src/db/schema/`:
+
+| File | Content |
+|------|---------|
+| `_shared.ts` | Column helpers (`idColumn`, `createdAt`, `updatedAt`, `ts`, `tenantPredicate`) |
+| `enums.ts` | `pgEnum` definitions: `orgUnitKind`, `membershipStatus`, `orgRole`, `actorKind`, `auditResult`, `auditCategory`, ... |
+| `identity.ts` | `users`, `externalIdentities`, `experts`, `expertCredentials` |
+| `organization.ts` | `organizations`, `orgUnits`, `orgUnitClosure`, `memberships`, `legacyTeams`, `teams` (pgView) |
+| `authorization.ts` | `permissionTemplates`, `grants`, `assignments`, `approvalAuthorities`, `emergencyAccess` |
+| `invitations.ts` | `invitations`, `ssoConnections`, `ssoDomains` |
+| `audit.ts` | `auditEvents`, `retentionPolicies` |
+| `content.ts` | `channels`, `posts`, `polls`, `pollVotes`, `eventRequests` |
+| `relations.ts` | Drizzle `relations()` definitions for the relational query API |
+| `index.ts` | Re-exports all tables, enums and relations |
+
+**Column conventions:**
+
+| Convention | Implementation |
+|------------|---------------|
+| Primary key ids | `text().primaryKey().$defaultFn(() => createId())` where `createId` returns `gen_random_uuid()::text` |
+| Timestamps | `timestamptz(3)` (millisecond precision) via the `ts()` helper |
+| `created_at` | `timestamp({ mode: 'date', precision: 3, withTimezone: true }).notNull().defaultNow()` |
+| `updated_at` | Same type with `.$onUpdate(() => new Date())` |
+| Casing | `casing: 'snake_case'` in `drizzle.config.ts`; TypeScript uses camelCase, SQL uses snake_case |
+| Enums | `pgEnum` with snake_case SQL names; values are UPPER_CASE strings |
+| RLS policies | `pgPolicy` with `tenantPredicate(t.orgId)` helper; `.enableRLS()` on the table |
+
+**Representative excerpt** (the `memberships` table from `organization.ts`):
+
+```typescript
+export const memberships = pgTable(
+  'memberships',
+  {
+    id: idColumn(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    orgId: text()
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    orgUnitId: text().references(() => orgUnits.id, { onDelete: 'set null', onUpdate: 'cascade' }),
+    costCenterUnitId: text().references(() => orgUnits.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+    lineManagerUserId: text().references(() => users.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+    status: membershipStatus().notNull().default('INVITED'),
+    startDate: ts().notNull(),
+    endDate: ts(),
+    endedReason: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    role: orgRole().notNull().default('EMPLOYEE'),       // deprecated, phase 2 removal [D-36]
+    teamId: text().references(() => legacyTeams.id, {    // deprecated, phase 2 removal [D-36]
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+  },
+  (t) => [
+    uniqueIndex('memberships_user_id_org_id_start_date_key').on(t.userId, t.orgId, t.startDate),
+    index('memberships_org_id_status_idx').on(t.orgId, t.status),
+    uniqueIndex('idx_memberships_one_active')
+      .on(t.userId, t.orgId)
+      .where(sql`${t.status} = 'ACTIVE'`),
+    index('idx_memberships_active_org').on(t.orgId).where(sql`${t.status} = 'ACTIVE'`),
+    pgPolicy('memberships_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicate(t.orgId),
+      withCheck: tenantPredicate(t.orgId),
+    }),
+  ],
+).enableRLS();
 ```
 
 ### A.2 Changes from the existing schema
 
-The table below lists every model, enum and field in the existing `apps/api/prisma/schema.prisma` that is removed, renamed or structurally changed [S-02, D-36].
+The table below lists every model, enum and field from the original Prisma schema that was removed, renamed or structurally changed when the schema moved to Drizzle [S-02, D-36, D-37]. Current file paths: `apps/api/src/db/schema/*.ts`.
 
 | Item | Change | Phase | Backfill procedure |
 |---|---|---|---|
@@ -6614,29 +5784,31 @@ The table below lists every model, enum and field in the existing `apps/api/pris
 
 #### A.3.1 Ordered migrations
 
-All migrations run through `prisma migrate deploy` as a one-off ECS task before each API deployment [D-30]. Custom SQL steps use `prisma migrate dev --create-only` followed by manual edits to the generated SQL file.
+All migrations run through `pnpm --filter @nestself/api db:migrate` (the drizzle-orm migrator, see `apps/api/src/db/migrate.ts`) as a one-off ECS task before each API deployment [D-30, D-37]. Schema-derived migrations are generated by `pnpm --filter @nestself/api db:generate`. Custom SQL migrations (partitions, triggers, role grants) use `pnpm --filter @nestself/api db:generate -- --custom --name=<name>`. Migrations are tracked in the `drizzle.__drizzle_migrations` table.
 
 **Phase 0 (weeks 1-2)**
 
 | # | Migration name | Content | Dependencies |
 |---|---|---|---|
-| 1 | `001_identity_org_auth_audit` | All new enums. New fields on `User` (`emailVerifiedAt`, `suspendedAt`, `deactivatedAt`, `lastSignInAt`). New fields on `Organization` (`country`, `timezone`, `contractStart`, `contractEnd`, `ownerUserId`, `selfApprovalAllowed`, `financialStepUpThresholdMinor`, `cohortThreshold`, `status`). New fields on `Membership` (`orgUnitId`, `costCenterUnitId`, `lineManagerUserId`, `status`, `startDate`, `endDate`, `endedReason`). Backfill existing memberships: `startDate = now()`, `status = 'ACTIVE'` (the production database has no existing memberships because nothing is deployed yet; the only data comes from the seed script, which supplies explicit `startDate` values; `now()` is a safe default for the migration and for any local development data). Drop unique constraint `memberships_user_id_org_id_key`. Add unique constraint `memberships_user_id_org_id_start_date_key`. Create tables: `external_identities`, `org_units`, `org_unit_closure`, `permission_templates`, `grants`, `assignments`, `approval_authorities`, `invitations`, `sso_connections`, `sso_domains`, `emergency_access`, `audit_events`, `expert_credentials`, `retention_policies`. All indexes. Backfill `expert_credentials` from existing `experts` rows: for each Expert, insert one `ExpertCredential` with `serviceCategory` equal to the lowercase string of `Expert.area`, `status = 'APPROVED'`, `effectiveFrom = now()` (no production data exists; the seed script supplies `SAMPLE_EXPERT_CREDENTIALS` explicitly; this backfill covers any local development data). `Expert.area` is not dropped in this migration; it remains as a legacy field (see A.2). | None (first migration). |
-| 2 | `002_audit_immutable_and_partitions` | Raw SQL only. Created with `--create-only`. See A.3.2. | Migration 001. |
+| 1 | `0000_init` | Generated by `drizzle-kit generate` from the Drizzle schema. All enums, tables, indexes, RLS policies, check constraints and the `teams` pgView. | None (first migration). |
+| 2 | `0001_audit_partitions_rls_roles` | Hand-written custom migration. See A.3.2. | Migration 0000. |
 
 **Phase 2 (weeks 9-12)**
 
+Phase 2 migrations are generated by `drizzle-kit generate` from schema changes (new professional-domain tables, column removals) and, where needed, custom SQL migrations for data backfill scripts.
+
 | # | Migration name | Content | Dependencies |
 |---|---|---|---|
-| 3 | `003_backfill_org_units_and_grants` | Data migration script (TypeScript, run as an ECS task): create OrgUnit rows from Team rows, insert closure entries, update `Membership.orgUnitId`, create Grant rows from `Membership.role` and `User.platformRole`. | Phase 1 complete. |
-| 4 | `004_remove_legacy` | Drop `Team` model, `OrgRole` enum, `PlatformRole` enum, `Membership.role`, `Membership.teamId`, `User.platformRole`, `Expert.area`. Update `Channel` and `Poll` to reference `OrgUnit` instead of `Team`. Verify that every `Expert` row has at least one `ExpertCredential` with `status = 'APPROVED'` before dropping `Expert.area`. | Migration 003 verified. |
+| 3 | (generated) | Professional-domain tables with RLS policies. | Phase 1 complete. |
+| 4 | (generated + custom) | Data backfill script (TypeScript, run as an ECS task): create OrgUnit rows from Team rows, insert closure entries, update `memberships.org_unit_id`, create `grants` rows from `memberships.role` and `users.platform_role`. Drop `legacy_teams`, `org_role` enum, `platform_role` enum, deprecated columns. | Migration 3 verified. |
 
-#### A.3.2 Raw SQL that Prisma cannot express
+#### A.3.2 Custom SQL migrations
 
-The following SQL statements go into migration `002_audit_immutable_and_partitions`, created with `prisma migrate dev --create-only` and edited before applying [D-21, D-16, D-15].
+The following SQL statements live in `apps/api/drizzle/0001_audit_partitions_rls_roles.sql`, a hand-written custom migration [D-21, D-16, D-15, D-37]. Statements that drizzle-kit can express (partial indexes, check constraints, the `teams` pgView, RLS policies) are now declared in the schema files and generated into `0000_init.sql`. The custom migration covers features that drizzle-kit does not generate: audit_events monthly range partitions, the `audit_events_ensure_partitions()` function, append-only triggers, the `nestself_app` NOLOGIN role with table privileges (but no UPDATE or DELETE on audit_events), and `FORCE ROW LEVEL SECURITY` on the tenant tables.
 
 **Audit table monthly partitioning**
 
-Prisma creates `audit_events` as a regular table. Convert it to a range-partitioned table before any data is inserted. Run this immediately after migration 001. Column types use the PostgreSQL enum types that migration 001 creates (`"ActorKind"`, `"AuditResult"`, `"AuditCategory"`) so the database schema stays consistent with the Prisma model. Foreign key constraints on `actor_user_id` and `org_id` are preserved; PostgreSQL 12 and later support foreign keys from partitioned tables to regular tables.
+The Drizzle schema declares `audit_events` but drizzle-kit does not emit partitioning DDL. The custom migration drops the regular table and recreates it as range-partitioned before any data is inserted. Column types use the PostgreSQL enum types that `0000_init.sql` creates (snake_case: `actor_kind`, `audit_result`, `audit_category`) so the database schema stays consistent with the Drizzle definitions. Foreign key constraints on `actor_user_id` and `org_id` are preserved; PostgreSQL 12 and later support foreign keys from partitioned tables to regular tables.
 
 ```sql
 -- Step 1: Drop the regular table and recreate as partitioned.
@@ -6753,9 +5925,9 @@ CREATE TRIGGER trg_audit_events_no_delete
 
 **Partial indexes**
 
-Prisma `@@index` cannot express WHERE clauses. These partial indexes accelerate the most frequent authorization and administration queries [D-15, D-18].
+Partial indexes are now declared directly in the Drizzle schema (`.where(sql`...`)` on `uniqueIndex` and `index` calls) and generated into `0000_init.sql`. The SQL below is retained as reference for the original design intent [D-15, D-18].
 
-PostgreSQL unique constraints treat NULL values as distinct, so the Prisma-level `@@unique` on `RetentionPolicy` does not prevent duplicate rows when `serviceType` is NULL. The partial unique index `idx_retention_policy_no_service` below closes this gap.
+PostgreSQL unique constraints treat NULL values as distinct. The partial unique index `idx_retention_policy_no_service` below prevents duplicate `retention_policies` rows when `service_type` is NULL; in the Drizzle schema this is expressed as a `check` constraint.
 
 ```sql
 -- Active grants: not revoked and either indefinite or still valid.
@@ -6786,7 +5958,7 @@ CREATE INDEX idx_invitations_pending
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 -- RetentionPolicy: PostgreSQL unique constraints treat NULL values as distinct,
--- so the Prisma-level @@unique on RetentionPolicy does not prevent duplicate
+-- so a table-level unique constraint on retention_policies does not prevent duplicate
 -- rows when serviceType is NULL. The partial unique index below closes this gap.
 CREATE UNIQUE INDEX idx_retention_policy_no_service
   ON retention_policies (data_category, jurisdiction)
@@ -6795,18 +5967,18 @@ CREATE UNIQUE INDEX idx_retention_policy_no_service
 
 **Closure table maintenance**
 
-The decision record (Appendix I) prescribes service-level maintenance of `OrgUnitClosure` in the same Prisma transaction as create, move and archive operations [D-16]. Database-level functions are an alternative but are not required at pilot scale. The service-layer approach is recommended because Prisma manages the transaction boundary.
+The decision record (Appendix I) prescribes service-level maintenance of `OrgUnitClosure` in the same database transaction as create, move and archive operations [D-16]. Database-level functions are an alternative but are not required at pilot scale. The service-layer approach is recommended because Drizzle manages the transaction boundary.
 
 Service-layer pseudocode (implemented in `OrgUnitService`):
 
 ```typescript
-import { PrismaClient } from '@nestself/api/generated/prisma';
-
-type PrismaTransaction = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
+import type { Transaction } from '../db.service.js';
+import { orgUnitClosure } from '../schema/index.js';
+import { eq, and, inArray, notInArray } from 'drizzle-orm';
 
 /** Insert closure rows when a new org unit is created. */
 async function insertOrgUnitClosure(
-  tx: PrismaTransaction,
+  tx: Transaction,
   unitId: string,
   parentId: string | null,
 ): Promise<void> {
@@ -6814,14 +5986,16 @@ async function insertOrgUnitClosure(
   const selfEntry = { ancestorId: unitId, descendantId: unitId, depth: 0 };
 
   if (!parentId) {
-    await tx.orgUnitClosure.create({ data: selfEntry });
+    await tx.insert(orgUnitClosure).values(selfEntry);
     return;
   }
 
   // 2. For each ancestor of the parent, insert (ancestor, newUnit, parentDepth + 1).
-  const parentAncestors = await tx.orgUnitClosure.findMany({
-    where: { descendantId: parentId },
-  });
+  const parentAncestors = await tx
+    .select()
+    .from(orgUnitClosure)
+    .where(eq(orgUnitClosure.descendantId, parentId));
+
   const entries = parentAncestors.map((row) => ({
     ancestorId: row.ancestorId,
     descendantId: unitId,
@@ -6829,71 +6003,18 @@ async function insertOrgUnitClosure(
   }));
   entries.push(selfEntry);
 
-  await tx.orgUnitClosure.createMany({ data: entries });
-}
-
-/** Move an org unit to a new parent, updating closure rows. */
-async function moveOrgUnit(
-  tx: PrismaTransaction,
-  unitId: string,
-  newParentId: string,
-): Promise<void> {
-  // 1. Cycle check: reject if newParentId is a descendant of unitId.
-  const cycle = await tx.orgUnitClosure.findUnique({
-    where: { ancestorId_descendantId: { ancestorId: unitId, descendantId: newParentId } },
-  });
-  if (cycle) {
-    throw new Error('Moving this unit would create a cycle in the org tree.');
-  }
-
-  // 2. Collect the subtree (all descendants of the moved unit, including itself).
-  const subtree = await tx.orgUnitClosure.findMany({
-    where: { ancestorId: unitId },
-    select: { descendantId: true },
-  });
-  const subtreeIds = subtree.map((r) => r.descendantId);
-
-  // 3. Delete closure rows that link the subtree to ancestors outside the subtree.
-  await tx.orgUnitClosure.deleteMany({
-    where: {
-      descendantId: { in: subtreeIds },
-      ancestorId: { notIn: subtreeIds },
-    },
-  });
-
-  // 4. Insert new rows connecting the subtree to the new parent's ancestors.
-  const newAncestors = await tx.orgUnitClosure.findMany({
-    where: { descendantId: newParentId },
-  });
-  const newEntries: { ancestorId: string; descendantId: string; depth: number }[] = [];
-  for (const ancestor of newAncestors) {
-    for (const desc of subtree) {
-      const innerDepth = await tx.orgUnitClosure.findUnique({
-        where: {
-          ancestorId_descendantId: { ancestorId: unitId, descendantId: desc.descendantId },
-        },
-      });
-      if (innerDepth) {
-        newEntries.push({
-          ancestorId: ancestor.ancestorId,
-          descendantId: desc.descendantId,
-          depth: ancestor.depth + 1 + innerDepth.depth,
-        });
-      }
-    }
-  }
-  await tx.orgUnitClosure.createMany({ data: newEntries });
+  await tx.insert(orgUnitClosure).values(entries);
 }
 
 // On org-unit archive: no closure changes. The archivedAt flag filters active
 // queries. Closure rows remain for historical grant scope resolution.
 ```
 
-If a database-function approach is preferred later, the create and move operations can be wrapped in PL/pgSQL functions called from the service layer. This is deferred to avoid coupling Prisma migrations to procedural SQL at this stage.
+If a database-function approach is preferred later, the create and move operations can be wrapped in PL/pgSQL functions called from the service layer via a custom SQL migration.
 
 #### A.3.3 Seed changes
 
-Fixtures remain in `packages/sample-data` [CLAUDE.md sample-data rule]. The seed file `apps/api/prisma/seed.ts` requires the following changes.
+Fixtures remain in `packages/sample-data` [CLAUDE.md sample-data rule]. The seed runs via `pnpm --filter @nestself/api db:seed` (entry point `apps/api/scripts/seed.ts`, logic in `apps/api/src/db/seed/seed-lib.ts`). Retention reference data lives in `apps/api/src/db/seed/retention-policies.ts`.
 
 **New exports required from `packages/sample-data`:**
 
@@ -6930,10 +6051,9 @@ Fixtures remain in `packages/sample-data` [CLAUDE.md sample-data rule]. The seed
 
 Run each step after applying the phase 0 migrations to confirm the schema is correct.
 
-- [ ] `pnpm --filter @nestself/api exec prisma validate` exits 0.
-- [ ] `pnpm --filter @nestself/api exec prisma generate` produces the client without errors.
-- [ ] `pnpm --filter @nestself/api exec prisma migrate dev --name verify` applies cleanly against a fresh local database (Docker Compose PostgreSQL 17).
-- [ ] All 10 new enums exist in the generated client with the correct values.
+- [ ] `pnpm --filter @nestself/api db:generate` produces no diff on a clean schema (the snapshot matches the schema files).
+- [ ] `pnpm --filter @nestself/api db:migrate` applies cleanly against a fresh local database (Docker Compose PostgreSQL 17).
+- [ ] `pnpm --filter @nestself/api test` with `TEST_DATABASE_URL` runs the schema spec (`apps/api/test/db/schema.spec.ts`).
 - [ ] `OrgUnitClosure` has a composite primary key on `(ancestorId, descendantId)`.
 - [ ] `AuditEvent` has a composite primary key on `(id, occurredAt)`.
 - [ ] `Membership` unique constraint is `(userId, orgId, startDate)`, not the old `(userId, orgId)`.
@@ -6942,13 +6062,14 @@ Run each step after applying the phase 0 migrations to confirm the schema is cor
 - [ ] `SsoDomain.domain` is unique.
 - [ ] `Invitation.tokenHash` is unique.
 - [ ] The append-only triggers on `audit_events` reject an UPDATE and a DELETE (test with a raw SQL statement).
-- [ ] The `nestself_app` database role has SELECT and INSERT but not UPDATE or DELETE on `audit_events` (verify with `SELECT has_table_privilege('nestself_app', 'audit_events', 'UPDATE')` returning false).
+- [ ] `has_table_privilege('nestself_app', 'audit_events', 'UPDATE')` is false.
 - [ ] The partial indexes exist (query `pg_indexes` for `idx_grants_active`, `idx_memberships_one_active`, `idx_memberships_active_org`, `idx_emergency_active`, `idx_invitations_pending`, `idx_retention_policy_no_service`).
 - [ ] The unique partial index `idx_memberships_one_active` rejects a second ACTIVE membership for the same `(user_id, org_id)` pair (test with a raw SQL INSERT).
 - [ ] The audit partition `audit_events_y2026m10` exists and accepts an INSERT with `occurred_at` in October 2026.
-- [ ] The seed script (`pnpm --filter @nestself/api exec prisma db seed`) completes without errors and produces rows in all new tables.
-- [ ] Legacy models (`Team`, `OrgRole`, `PlatformRole`) still exist and the existing Channel, Poll and Membership relations compile.
-- [ ] `pnpm --filter @nestself/api typecheck` passes with the generated Prisma client.
+- [ ] RLS flags: `SELECT relforcerowsecurity FROM pg_class WHERE relname = 'memberships'` returns true (repeat for every tenant table).
+- [ ] The seed script (`pnpm --filter @nestself/api db:seed`) completes without errors and produces rows in all new tables.
+- [ ] Legacy tables (`legacy_teams`, deprecated enums) still exist and the existing Channel, Poll and Membership relations compile.
+- [ ] `pnpm --filter @nestself/api typecheck` passes.
 
 
 ## Appendix B Cognito configuration (IaC)
@@ -8771,7 +7892,7 @@ Run before every deployment to staging or production [D-30].
 
 - [ ] All CI checks pass: lint, typecheck, test, check (token smoke, locale parity, hex-literal scan), build, cdk synth and cdk-nag. Owner: engineering. [D-30]
 - [ ] No critical findings from ECR image scanning on the pushed images. Owner: engineering. [D-24]
-- [ ] Database migrations reviewed: `prisma migrate deploy` runs as a one-off ECS task before the API deployment, never from a developer machine against production. Owner: engineering. [D-30]
+- [ ] Database migrations reviewed: `pnpm --filter @nestself/api db:migrate` runs as a one-off ECS task before the API deployment, never from a developer machine against production. Owner: engineering. [D-30]
 - [ ] Environment variables verified: no placeholder values, no missing secrets, rotated secrets current. Owner: engineering. [D-27]
 - [ ] For production: manual approval granted in the GitHub Actions deployment environment. Owner: founder or designated approver. [D-30]
 - [ ] Rolling deployment completes with the ECS deployment circuit breaker passing. Owner: engineering (automated). [D-24]
@@ -9721,7 +8842,8 @@ See the table in Part C. Access tokens 15 minutes everywhere. Employees: web idl
 
 #### D-16 Organization tree: closure table [settled; phase 0]
 - Decision: `OrgUnit` with `parentId` plus `OrgUnitClosure(ancestorId, descendantId, depth)` maintained in the same transaction as create, move and archive; cycle check before move; per-organization ancestor map cached as `org_tree:{orgId}` (5 minutes, invalidated on change) and the resource's ancestor set passed into `authorize()`. ltree is not used.
-- Why: Prisma 7 compatibility with ltree is unverified; trees are shallow and small; closure tables are plain Prisma.
+- Why: ltree compatibility is unverified; trees are shallow and small; closure tables are plain Drizzle tables.
+- Revision (2026-10-22): "plain Prisma" changed to "plain Drizzle tables" after D-37 moved the data layer to Drizzle ORM.
 
 #### D-17 Grant model, conditions, delegation, templates [settled; phase 2]
 - Decision: `Grant` fields as in Part B. Conditions are a zod discriminated union: `spending_ceiling {amountMinor, currency}`, `categories {allowed[]}`, `confidential_approver {}`, `time_window {days[], from, to}`. Delegation: a delegated grant carries `parentGrantId`; actions, scope and every condition must be within the delegator's effective access and within the parent's `delegationEnvelope`; depth limit 3. Self-approval denied unless `Organization.selfApprovalAllowed`; the approval router always finds an alternate. Seventeen `PermissionTemplate` rows seeded from the specification; an admin assigns a template, sets scope, adjusts conditions, previews, applies. Grant administration endpoints limited to 10 writes per minute per session. Nightly reconciliation ends expired grants and orphaned delegations.
@@ -9730,10 +8852,11 @@ See the table in Part C. Access tokens 15 minutes everywhere. Employees: web idl
 - Decision: After cookie or bearer validation the `PrincipalLoader` builds the `Principal` from `principal:{userId}` (30 seconds, jitter ±5 s) and grants from `grants:{userId}:{orgId}` (60 seconds, jitter ±10 s), assignments from `assignments:{userId}` (60 seconds). Writes to memberships, users, grants, assignments and emergency access publish on the Redis `invalidate` channel; every API task drops the affected keys. A circuit breaker falls back to Postgres with an in-memory LRU (100 entries, 10 seconds) when Redis is down. A cache miss always queries the database; a stale entry is never served after an invalidation. Emergency access expiry is evaluated from the record's `expiresAt` inside `authorize()`, never only by the sweeper.
 
 #### D-19 Enforcement pattern in NestJS and beyond [settled; phase 1 and 2]
-- Decision: A global `AuthenticationGuard` (session cookie or bearer token; `@Public()` bypass) and a global `AuthorizationGuard` driven by `@Authorize(action, resourceResolver)` metadata; routes without either decorator fail the CI default-deny test. `AuthorizationService.require()` for service-layer checks. Management and personal workspaces have separate controllers and DTOs (DR-12). A Prisma client extension adds organization scoping to tenant-aware models as defence in depth (SPIKE-04). BullMQ jobs carry `{ principalId, context }` and re-run `authorize()` at execution; a denied job completes as skipped, not failed. Exports authorize then stream and apply cohort rules. Files are delivered through S3 presigned URLs (5 to 15 minutes) issued after `authorize()`. Real-time: a custom `IoAdapter` with `io.use` middleware validates the session cookie (same-origin handshake) or a 30-second single-use ticket (`ws_ticket:{hash}`, GETDEL), checks Origin, attaches the principal, re-runs `authorize()` per subscription and disconnects on `invalidate` messages. Non-disclosure: 404 when the caller may not know a record exists, 403 when the record is legitimately visible but the action is denied.
+- Decision: A global `AuthenticationGuard` (session cookie or bearer token; `@Public()` bypass) and a global `AuthorizationGuard` driven by `@Authorize(action, resourceResolver)` metadata; routes without either decorator fail the CI default-deny test. `AuthorizationService.require()` for service-layer checks. Management and personal workspaces have separate controllers and DTOs (DR-12). PostgreSQL row-level security policies add organization scoping to tenant-aware tables as defense in depth (D-37; replaces the Prisma client extension from SPIKE-04). BullMQ jobs carry `{ principalId, context }` and re-run `authorize()` at execution; a denied job completes as skipped, not failed. Exports authorize then stream and apply cohort rules. Files are delivered through S3 presigned URLs (5 to 15 minutes) issued after `authorize()`. Real-time: a custom `IoAdapter` with `io.use` middleware validates the session cookie (same-origin handshake) or a 30-second single-use ticket (`ws_ticket:{hash}`, GETDEL), checks Origin, attaches the principal, re-runs `authorize()` per subscription and disconnects on `invalidate` messages. Non-disclosure: 404 when the caller may not know a record exists, 403 when the record is legitimately visible but the action is denied.
+- Revision (2026-10-22): Prisma client extension replaced by PostgreSQL RLS tenant policies (D-37). Section 4.6.3 rewritten.
 
 #### D-20 Confidential domain and emergency access [settled; phase 2]
-- Decision: Data classes: public, internal, confidential, restricted. The professional-interaction module owns restricted data (private intake, conversations, consultation content, professional notes if ever stored) with its own controllers, Prisma models, S3 bucket and KMS key. Access paths: the participant, the assigned expert, an explicit clinical-supervision grant, or an `EmergencyAccess` record. `authorize()` hard-codes a deny for any platform, organization, org-unit or assigned-client scoped grant on restricted actions. Support operators see redacted diagnostics only. Emergency access: requested with a written purpose and a narrow scope (one case or one person's records), approved by a different platform owner (single-approver with mandatory review log while staff are fewer than four), expires after at most 4 hours, read-only, single-record access with exports disabled, requires step-up, every read audited, a CloudWatch alarm fires on every activation, a sweeper runs every 15 minutes. Video rooms: join only through `POST /api/appointments/:id/join` which checks participant and time window; recording off by default.
+- Decision: Data classes: public, internal, confidential, restricted. The professional-interaction module owns restricted data (private intake, conversations, consultation content, professional notes if ever stored) with its own controllers, Drizzle schema tables, S3 bucket and KMS key. Access paths: the participant, the assigned expert, an explicit clinical-supervision grant, or an `EmergencyAccess` record. `authorize()` hard-codes a deny for any platform, organization, org-unit or assigned-client scoped grant on restricted actions. Support operators see redacted diagnostics only. Emergency access: requested with a written purpose and a narrow scope (one case or one person's records), approved by a different platform owner (single-approver with mandatory review log while staff are fewer than four), expires after at most 4 hours, read-only, single-record access with exports disabled, requires step-up, every read audited, a CloudWatch alarm fires on every activation, a sweeper runs every 15 minutes. Video rooms: join only through `POST /api/appointments/:id/join` which checks participant and time window; recording off by default.
 
 #### D-21 Audit log [settled; phase 1]
 - Decision: `AuditEvent` is append-only: the application database role has no UPDATE or DELETE on the table and a trigger rejects both. Categories map to retention tiers (`SECURITY` 3 years, `AUTHORIZATION` 10 years, `FINANCIAL` 10 years, `CONTENT_ACCESS` 1 year, `ADMIN` 10 years) stored as `retainUntil`. Monthly partitions. Nightly export to the audit bucket with Object Lock (Governance). Safe details only: never message bodies, intake text, professional notes, full voucher codes or tokens; `ipHash` and `userAgentFamily` instead of raw values. pino redaction paths plus a CI check that scans test log output for forbidden field names.
@@ -9745,7 +8868,7 @@ See the table in Part C. Access tokens 15 minutes everywhere. Employees: web idl
 - Decision: AWS Organizations with `nestself-staging` and `nestself-production` accounts (dev stays local on Docker Compose); IAM Identity Center with MFA for console access; one VPC per account, two AZs, public subnets (ALB, NAT), private subnets (ECS, RDS, ElastiCache); gateway endpoint for S3; interface endpoints for ECR (api and dkr), CloudWatch Logs, Secrets Manager, STS; managed NAT Gateway in production (single AZ at pilot, second AZ when traffic justifies it); fck-nat in staging only; VPC Flow Logs in production; SCPs in phase 2: deny resource creation outside eu-central-1 (us-east-1 allowed for ACM and CloudFront only), deny stopping CloudTrail, deny public S3.
 
 #### D-24 Compute [settled; phase 1]
-- Decision: One ECS cluster per account; standard Fargate services: `api` (0.5 vCPU, 1 GB, minimum 2 tasks in production, Socket.IO, ALB target group with stickiness), `worker` (0.25 vCPU, 0.5 GB, BullMQ, no ALB), `marketing` (0.25 vCPU, 0.5 GB, Next 16.4 standalone output built with `--webpack`, behind its own CloudFront distribution); a one-off `migrate` task definition runs `prisma migrate deploy` before each API deployment. Autoscaling on CPU and memory defined from the start. Health check `/api/health` verifies database and Redis. Rolling deployments with the ECS deployment circuit breaker. ECR image scanning on push blocks critical findings. ECS Express Mode and OpenNext are not used at launch (Express Mode lacks stickiness configuration; Next 16 is absent from OpenNext's compatibility matrix); re-evaluate OpenNext when the matrix lists Next 16.
+- Decision: One ECS cluster per account; standard Fargate services: `api` (0.5 vCPU, 1 GB, minimum 2 tasks in production, Socket.IO, ALB target group with stickiness), `worker` (0.25 vCPU, 0.5 GB, BullMQ, no ALB), `marketing` (0.25 vCPU, 0.5 GB, Next 16.4 standalone output built with `--webpack`, behind its own CloudFront distribution); a one-off `migrate` task definition runs `pnpm --filter @nestself/api db:migrate` before each API deployment. Autoscaling on CPU and memory defined from the start. Health check `/api/health` verifies database and Redis. Rolling deployments with the ECS deployment circuit breaker. ECR image scanning on push blocks critical findings. ECS Express Mode and OpenNext are not used at launch (Express Mode lacks stickiness configuration; Next 16 is absent from OpenNext's compatibility matrix); re-evaluate OpenNext when the matrix lists Next 16.
 
 #### D-25 Database [founder F-05 default; phase 1]
 - Decision: RDS PostgreSQL 17, `db.t4g.small`, Multi-AZ in production, gp3 20 GB, encrypted with the platform CMK, automated backups 35 days, daily cross-region snapshot copies to eu-west-1; Aurora Serverless v2 (0 ACU pause) in staging; no RDS Proxy at pilot; alarms on CPU credit balance and connections. Single-AZ (saving about $28 per month) only if the founder accepts documented failover risk for the pilot.
@@ -9778,7 +8901,7 @@ See the table in Part C. Access tokens 15 minutes everywhere. Employees: web idl
 Pilot about $235 to $280 per month (Multi-AZ RDS, two API tasks, one worker, one marketing task, Valkey node, ALB, managed NAT single AZ, three CloudFront distributions metered, WAF, EAS Starter); about $150 to $170 with Single-AZ, fck-nat and free EAS; Cognito $0 at pilot; video about $51 per month for 500 half-hour sessions; about $800 to $1,000 per month at 20,000 MAU; about $5,500 to $8,000 per month at 200,000 MAU where Cognito becomes the largest line. Every Frankfurt price must be confirmed in the AWS Pricing Calculator (expect about 15 percent above us-east-1).
 
 #### D-35 Delivery phases [recommended]
-- Phase 0, 2 weeks: Prisma schema and migrations for identity, organization, authorization and audit; contracts (`Principal`, actions, templates, authorization types); `authorize()` with unit, property and golden tests; audit writer; CDK project skeleton, accounts, KMS keys, Route 53; spikes SPIKE-01 to SPIKE-04. Exit: golden table green in CI; spikes decided.
+- Phase 0, 2 weeks: Drizzle schema and migrations for identity, organization, authorization and audit with RLS policies (D-37); contracts (`Principal`, actions, templates, authorization types); `authorize()` with unit, property and golden tests; audit writer; CDK project skeleton, accounts, KMS keys, Route 53; spikes SPIKE-01 to SPIKE-03 (SPIKE-04 superseded by D-37). Exit: golden table green in CI; spikes decided.
 - Phase 1, 6 weeks: Cognito pool and clients via CDK; session service and cookies; sign-in UI in workspace and admin; invitations and activation; email OTP and password plus TOTP; mobile PKCE flows; principal loader and cache; websocket authentication; staging deployment of API, worker, SPAs and marketing; CI/CD; observability baseline; stub auth retired behind the `AUTH_MODE` flag. Exit: an invited employee signs in on web and mobile in staging; a deactivated member loses access within the cache window; default-deny test green.
 - Phase 2, 4 weeks: templates and grant administration UI in admin and organization workspaces; effective-access preview; approval authorities; delegation; confidential-domain controllers and emergency access; step-up; audit queries; SCPs, Security Hub, cdk-nag enforced; production account live. Exit: pilot exit criterion 4 (no employer or generic admin view reveals private content) demonstrated with tests.
 - Phase 3, 3 weeks: first employer SSO connection end to end; home-realm discovery; domain verification; IdentityProviderService implementation; runbook executed with the client; replay cache. Exit: an employee of the SSO client activates through their IdP and a non-invited colleague is refused.
@@ -9788,11 +8911,18 @@ Compliance items run in parallel from phase 0.
 #### D-36 Migration from the stub [settled; phase 1]
 - Decision: `AUTH_MODE=stub|cognito` in the API: stub keeps the HS256 guard for local sample mode only and is refused when `NODE_ENV=production`; cognito enables the session and bearer guards. Sample mode in the clients (`VITE_DATA_SOURCE=sample`, `EXPO_PUBLIC_DATA_SOURCE=sample`) keeps `SAMPLE_SESSIONS` and the `?role=` switcher; real mode uses the auth provider. `JWT_SECRET` and `JWT_EXPIRES_IN` are removed after cutover. The legacy `Session` contract and `canAccessHr`/`canManageTeam` helpers are replaced by `Principal` and `can()`; `platformRole`, `OrgRole`, `PlatformRole` and `Team` are migrated to templates, grants and org units in phase 2 with data backfill.
 
+#### D-37 Data access layer: Drizzle ORM with row-level security [settled; phase 0-1]
+- Decision: The API data layer uses Drizzle ORM (drizzle-orm 0.45.4, drizzle-kit 0.31.11) with PostgreSQL. Table definitions in `apps/api/src/db/schema/*.ts` use `pgTable` with snake_case casing, `pgEnum` for enum types, `pgPolicy` for RLS policies, partial indexes, `check` constraints and `pgView` for the `teams` compatibility view. Migrations in `apps/api/drizzle/` are generated by `pnpm --filter @nestself/api db:generate` and applied by `pnpm --filter @nestself/api db:migrate` (drizzle-orm migrator, table `drizzle.__drizzle_migrations`). Custom hand-written migrations use `db:generate -- --custom --name=<name>`. `DbService` wraps a `pg` Pool and provides `withOrgScope(orgId, fn)` which runs a transaction with `select set_config('app.current_org_id', orgId, true)` for tenant scoping. Repositories under `src/db/repositories/` encapsulate table queries. No generated client; no `prisma generate` step.
+- Why: drizzle-kit expresses RLS policies, partial indexes, check constraints and views directly in the TypeScript schema, replacing the "raw SQL that Prisma cannot express" framing and the planned Prisma client extension (SPIKE-04, T-2.3, section 4.6.3, AUTHZ-R-52). The `set_config` approach gives database-level tenant isolation enforced by PostgreSQL itself, not by application-layer query interception.
+- Conditions: Drizzle must continue to support `pgPolicy`, `enableRLS` and `casing: 'snake_case'` in stable releases. If drizzle-kit drops policy support, the RLS DDL moves to custom migrations.
+- Dissent: None recorded. The Prisma extension approach was never proven (SPIKE-04 did not run).
+- Revision note (2026-10-22): New decision. D-16 and D-19 were revised to remove Prisma references. Appendix A was rewritten for Drizzle. SPIKE-04 marked superseded. T-0.1, T-2.3 and T-2.4 updated.
+
 ---
 
 ### Part B. Canonical names (binding; report anything else in namesIntroduced)
 
-#### Prisma models (PascalCase, `@@map` snake_case tables)
+#### Database tables (Drizzle camelCase exports, snake_case SQL names)
 | Model | Table | Key fields |
 |---|---|---|
 | `User` | `users` | existing, extended: `email` (unique, lowercase), `displayName`, `locale`, `emailVerifiedAt`, `suspendedAt`, `deactivatedAt`, `lastSignInAt`, `createdAt`, `updatedAt`; `platformRole` removed in phase 2 |
@@ -9915,7 +9045,7 @@ SSO: expo-auth-session `useAuthRequest` against the Cognito discovery document w
 Identity data: 10 years after the last obligation ends. Memberships: 10 years after end. Support request metadata: 10 years after closure. Conversation content: 5 years after closure (15 years in Serbia or 30 years in Hungary if the service is classified as healthcare). Professional notes: not stored at pilot; same as conversation content if ever stored. Financial ledger: 20 years. Insurer authorizations: 20 years with masked codes. Audit: security 3 years, authorization and financial and admin 10 years, content access 1 year. Marketing leads: 24 months. Published content: permanent; drafts 2 years. Expert credentials: 10 years after last delivery. Hungarian employment-related records created from 2025-01-01: 3 years after employment ends.
 
 #### Spike list (phase 0, go/no-go)
-SPIKE-01 email OTP through `InitiateAuth`/`AdminInitiateAuth` with `USER_AUTH` from a Node script and from a device without managed login; fallback CUSTOM_AUTH with SES or password plus TOTP. SPIKE-02 custom Redis session service under NestJS 12 on Express 5 (cookie parsing, middleware order, `enableCsrfProtection`). SPIKE-03 Socket.IO long-polling and upgrade through CloudFront `/api/ws` to an ALB with stickiness, across two API tasks. SPIKE-04 Prisma 7 client extension that scopes tenant-aware queries. Later: SPIKE-05 passkey registration from the custom UI (phase 4), SPIKE-06 NestJS 12 `IoAdapter` with `io.use` (phase 1), SPIKE-07 Next 16.4 standalone container build with the transpiled workspace packages (phase 1), SPIKE-08 Chime SDK latency from Belgrade and Budapest (before video ships).
+SPIKE-01 email OTP through `InitiateAuth`/`AdminInitiateAuth` with `USER_AUTH` from a Node script and from a device without managed login; fallback CUSTOM_AUTH with SES or password plus TOTP. SPIKE-02 custom Redis session service under NestJS 12 on Express 5 (cookie parsing, middleware order, `enableCsrfProtection`). SPIKE-03 Socket.IO long-polling and upgrade through CloudFront `/api/ws` to an ALB with stickiness, across two API tasks. SPIKE-04 superseded by D-37 (Drizzle + PostgreSQL RLS replaces the Prisma client extension). Later: SPIKE-05 passkey registration from the custom UI (phase 4), SPIKE-06 NestJS 12 `IoAdapter` with `io.use` (phase 1), SPIKE-07 Next 16.4 standalone container build with the transpiled workspace packages (phase 1), SPIKE-08 Chime SDK latency from Belgrade and Budapest (before video ships).
 
 #### Cost reference points
 See D-34. Cognito scenarios: 500 direct + 50 federated = $0; 2,000 direct + 3,000 federated ≈ $44 per month; 10,000 direct + 500 federated ≈ $6.75; 1,000 direct + 9,000 federated ≈ $134. Component estimates: RDS db.t4g.small Multi-AZ ≈ $59 (Single-AZ ≈ $31), Fargate tasks ≈ $41 to $60, ALB ≈ $27, managed NAT single AZ ≈ $33 plus data, Valkey node ≈ $9 to $13, CloudFront metered small, WAF ≈ $8 to $20, EAS Starter $19, SES ≈ $0.16 per 1,000 emails, Chime ≈ $0.0017 per attendee-minute. All eu-central-1 figures unverified.

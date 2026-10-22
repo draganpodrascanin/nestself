@@ -12,7 +12,7 @@ This is a setup pass. It creates project structure, token loading, local assets,
 | `apps/workspace` | `@nestself/workspace` | Vite SPA with TanStack Router, employee/manager/HR surfaces                | 5173         |
 | `apps/admin`     | `@nestself/admin`     | Vite SPA with TanStack Router, NestSelf back office                        | 5174         |
 | `apps/mobile`    | `@nestself/mobile`    | Expo SDK 58, Expo Router, tabs for Home/Support/Appointments/Messages      | 8081 (Metro) |
-| `apps/api`       | `@nestself/api`       | NestJS 12 with Prisma 7 schema skeleton, health endpoint, role enforcement | 4000         |
+| `apps/api`       | `@nestself/api`       | NestJS 12 with Drizzle ORM schema, PostgreSQL row-level security, health endpoint, grant-based authorization | 4000         |
 
 ## Packages
 
@@ -101,15 +101,15 @@ Or point `DATABASE_URL` in `apps/api/.env` to any running PostgreSQL instance (s
 Run the initial migration and seed:
 
 ```bash
-pnpm --filter @nestself/api prisma:migrate
-pnpm --filter @nestself/api prisma:seed
+pnpm --filter @nestself/api db:migrate
+pnpm --filter @nestself/api db:seed
 ```
 
 The seed script refuses to run when `NODE_ENV` is `production`.
 
 ## Running the API in Docker
 
-To build and run the API as a container alongside Postgres and Redis, copy `docker/api.env.example` to `docker/api.env`, set a real `JWT_SECRET`, and run `pnpm docker:api`. This builds the multi-stage Dockerfile at `apps/api/Dockerfile`, runs Prisma migrations automatically, and starts the API on port 4000. Redis is included for BullMQ job queues that will be added later. See `docker/README.md` for the full service breakdown and CI build instructions.
+To build and run the API as a container alongside Postgres and Redis, copy `docker/api.env.example` to `docker/api.env`, set a real `JWT_SECRET`, and run `pnpm docker:api`. This builds the multi-stage Dockerfile at `apps/api/Dockerfile`, runs the Drizzle migrations automatically, and starts the API on port 4000. Redis is included for BullMQ job queues that will be added later. See `docker/README.md` for the full service breakdown and CI build instructions.
 
 ## Sample mode
 

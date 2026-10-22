@@ -24,7 +24,7 @@ Fictional fixtures live in `packages/sample-data` with the `SAMPLE_` prefix. App
 
 ## Server-side role enforcement
 
-Roles (`employee`, `manager`, `hr_admin`, `expert`, `operations`, `admin`) are enforced on the server by `RolesGuard`, which checks org-scoped membership. UI gating (hiding routes, disabling controls) is a convenience, not access control. Do not rely on frontend checks for authorization.
+Authorization is enforced on the server by two global guards in `apps/api`: `AuthenticationGuard` resolves the `Principal` from the session cookie or bearer token, and `AuthorizationGuard` evaluates `@Authorize(action, resourceResolver)` metadata with the pure `authorize()` engine over grants, assignments and the org tree (`docs/tasks/auth/auth-strategy.md`, section 4). Every controller route carries `@Public()`, `@Authenticated()` or `@Authorize()`; the default-deny CI test fails otherwise. Tenant tables also carry PostgreSQL row-level security policies as defense in depth. The legacy role enums (`employee`, `manager`, `hr_admin`, `expert`, `operations`, `admin`) are deprecated and only feed the sample seed until phase 2. UI gating (hiding routes, disabling controls) is a convenience, not access control. Do not rely on frontend checks for authorization.
 
 ## No installs during parallel work
 

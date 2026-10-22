@@ -1,5 +1,7 @@
 # NestSelf marketing site implementation plan
 
+> **Superseded (2026-10-22):** the API data layer moved from Prisma 7 to Drizzle ORM with PostgreSQL row-level security (decision D-37 in docs/tasks/auth/auth-strategy.md). Prisma commands, schema paths and the generated client referenced below no longer exist; see apps/api/README.md.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the complete, production-looking NestSelf marketing site (English, Serbian Latin and Cyrillic, Hungarian) with generated imagery, working lead capture, resources (webinars, articles, self-assessments, tools) and Docker for Postgres, Redis and the API.

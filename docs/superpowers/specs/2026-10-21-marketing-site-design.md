@@ -1,5 +1,7 @@
 # NestSelf marketing site: design
 
+> **Superseded (2026-10-22):** the API data layer moved from Prisma 7 to Drizzle ORM with PostgreSQL row-level security (decision D-37 in docs/tasks/auth/auth-strategy.md). Prisma commands, schema paths and the generated client referenced below no longer exist; see apps/api/README.md.
+
 Date: 2026-10-21. Status: approved for implementation by the brief ("go ahead and implement all marketing pages, first write what we need to implement"). Market research that informs naming, copy and imagery is in `docs/research/2026-10-21-market-language-guide.md`; this document references it rather than repeating it.
 
 ## 1. Goal and scope
