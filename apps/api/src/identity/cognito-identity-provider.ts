@@ -18,7 +18,7 @@ import {
   AdminUserGlobalSignOutCommand,
   AssociateSoftwareTokenCommand,
   VerifySoftwareTokenCommand,
-  AdminSetUserMFAPreferenceCommand,
+  SetUserMFAPreferenceCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import {
   IdentityProviderService,
@@ -274,12 +274,12 @@ export class CognitoIdentityProvider extends IdentityProviderService {
     }
   }
 
-  async setTotpPreferred(_input: { accessToken: string }): Promise<void> {
+  async setTotpPreferred(input: { accessToken: string }): Promise<void> {
     try {
+      // User-level call: resolves the user from the access token.
       await this.client.send(
-        new AdminSetUserMFAPreferenceCommand({
-          UserPoolId: this.userPoolId,
-          Username: 'unused', // SDK requires it but uses access token
+        new SetUserMFAPreferenceCommand({
+          AccessToken: input.accessToken,
           SoftwareTokenMfaSettings: {
             Enabled: true,
             PreferredMfa: true,

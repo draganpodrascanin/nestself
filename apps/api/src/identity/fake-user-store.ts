@@ -45,6 +45,10 @@ export interface FakeSession {
   challenge: string;
   expiresAt: number;
   newPassword?: string;
+  /** Secret issued by associateSoftwareToken, pending verification. */
+  pendingTotpSecret?: string;
+  /** Set once verifySoftwareToken succeeded for this session (MFA_SETUP). */
+  totpVerified?: boolean;
 }
 
 export const SESSION_TTL_MS = 5 * 60 * 1000;

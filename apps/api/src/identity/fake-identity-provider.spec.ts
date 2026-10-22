@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { FakeIdentityProvider } from './fake-identity-provider.js';
 import { IdentityProviderError, decodeJwtClaims } from './identity-provider.service.js';
+import { computeTotp } from './totp.js';
 
 describe('FakeIdentityProvider', () => {
   let provider: FakeIdentityProvider;
@@ -144,6 +145,91 @@ describe('FakeIdentityProvider', () => {
       if (result.kind === 'challenge') {
         expect(result.challenge).toBe('NEW_PASSWORD_REQUIRED');
       }
+    });
+  });
+
+  describe('MFA_SETUP enrolment (temporary password -> new password -> TOTP)', () => {
+    beforeEach(() => {
+      provider.seedUsers([
+        { email: 'staff@example.com', temporaryPassword: 'TempP@ss1' },
+      ]);
+    });
+
+    async function reachMfaSetup() {
+      const first = await provider.startPassword({
+        email: 'staff@example.com',
+        password: 'TempP@ss1',
+      });
+      if (first.kind !== 'challenge') throw new Error('expected challenge');
+      const second = await provider.respondNewPassword({
+        session: first.session,
+        username: first.username,
+        newPassword: 'NewSecureP@ss1',
+      });
+      if (second.kind !== 'challenge') throw new Error('expected challenge');
+      expect(second.challenge).toBe('MFA_SETUP');
+      return second;
+    }
+
+    it('associates, verifies and completes MFA_SETUP on the same session', async () => {
+      const mfa = await reachMfaSetup();
+      const assoc = await provider.associateSoftwareToken({ session: mfa.session });
+      expect(assoc.secretCode).toMatch(/^[A-Z2-7]+$/);
+      expect(assoc.session).toBe(mfa.session);
+
+      const verified = await provider.verifySoftwareToken({
+        session: assoc.session,
+        code: computeTotp(assoc.secretCode),
+      });
+      const done = await provider.completeMfaSetup({
+        session: verified.session ?? mfa.session,
+        username: mfa.username,
+      });
+      expect(done.kind).toBe('tokens');
+
+      const user = await provider.findUserByEmail('staff@example.com');
+      expect(user?.mfaEnrolled).toBe(true);
+    });
+
+    it('refuses to complete MFA_SETUP before the software token is verified', async () => {
+      const mfa = await reachMfaSetup();
+      await provider.associateSoftwareToken({ session: mfa.session });
+      await expect(
+        provider.completeMfaSetup({ session: mfa.session, username: mfa.username }),
+      ).rejects.toMatchObject({ code: 'not_authorized' });
+    });
+
+    it('rejects a wrong verification code and keeps the session open', async () => {
+      const mfa = await reachMfaSetup();
+      const assoc = await provider.associateSoftwareToken({ session: mfa.session });
+      await expect(
+        provider.verifySoftwareToken({ session: assoc.session, code: '000000' }),
+      ).rejects.toMatchObject({ code: 'invalid_code' });
+      // Still possible to verify with the right code afterwards.
+      await provider.verifySoftwareToken({
+        session: assoc.session,
+        code: computeTotp(assoc.secretCode),
+      });
+    });
+
+    it('enrols a signed-in user through the access-token path', async () => {
+      provider.seedUsers([{ email: 'member@example.com' }]);
+      const start = await provider.startEmailOtp({ email: 'member@example.com' });
+      const tokens = await provider.respondEmailOtp({
+        session: start!.session,
+        username: start!.username,
+        code: provider.sentCodes.at(-1)!.code,
+      });
+      if (tokens.kind !== 'tokens') throw new Error('expected tokens');
+      const accessToken = tokens.tokens.accessToken;
+
+      const assoc = await provider.associateSoftwareToken({ accessToken });
+      await provider.verifySoftwareToken({
+        accessToken,
+        code: computeTotp(assoc.secretCode),
+      });
+      const user = await provider.findUserByEmail('member@example.com');
+      expect(user?.mfaEnrolled).toBe(true);
     });
   });
 

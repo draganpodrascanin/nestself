@@ -1,11 +1,18 @@
 import { Controller, Get } from '@nestjs/common';
-import { Roles, OrgParam } from '../auth/roles.decorator.js';
+import { ACTIONS } from '@nestself/contracts';
+import type { Resource } from '@nestself/contracts';
+import { Authorize } from '../authz/authorize.decorator.js';
 
 @Controller('orgs/:orgId/programme')
-@OrgParam('orgId')
 export class ProgrammeController {
   @Get()
-  @Roles('hr_admin', 'operations', 'admin')
+  @Authorize(ACTIONS['program.overview'], (req: Record<string, unknown>) => {
+    const params = req['params'] as { orgId: string };
+    return {
+      type: 'program',
+      orgId: params.orgId,
+    } satisfies Resource;
+  })
   getProgramme() {
     return {
       sample: true,

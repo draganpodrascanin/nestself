@@ -159,7 +159,7 @@ export const MeResponseSchema = z.object({
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export const EmailOtpVerifyResponseSchema = MeResponseSchema;
-export const ChallengeResponseSchema = MeResponseSchema;
+// Defined after PasswordResponseSchema (same union: next step or the principal).
 export const ContextSwitchResponseSchema = MeResponseSchema;
 
 export const PasswordResponseSchema = z.union([
@@ -167,6 +167,10 @@ export const PasswordResponseSchema = z.union([
   MeResponseSchema,
 ]);
 export type PasswordResponse = z.infer<typeof PasswordResponseSchema>;
+
+/** `POST /auth/challenge`: either a further step or the signed-in principal. */
+export const ChallengeResponseSchema = PasswordResponseSchema;
+export type ChallengeResponse = z.infer<typeof ChallengeResponseSchema>;
 
 export const ContextSwitchRequestSchema = z.object({
   context: ActiveContextSchema,

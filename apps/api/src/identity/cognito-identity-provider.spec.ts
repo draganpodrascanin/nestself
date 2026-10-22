@@ -46,7 +46,7 @@ vi.mock('@aws-sdk/client-cognito-identity-provider', () => {
     VerifySoftwareTokenCommand: class {
       constructor(public input: unknown) {}
     },
-    AdminSetUserMFAPreferenceCommand: class {
+    SetUserMFAPreferenceCommand: class {
       constructor(public input: unknown) {}
     },
     ForgotPasswordCommand: class {
@@ -316,5 +316,27 @@ describe('CognitoIdentityProvider', () => {
         locale: 'sr-Latn',
       });
     });
+  });
+});
+
+describe('CognitoIdentityProvider.setTotpPreferred', () => {
+  it('uses the user-level SetUserMFAPreference call with the access token', async () => {
+    const { CognitoIdentityProvider } = await import('./cognito-identity-provider.js');
+    const provider = new CognitoIdentityProvider('eu-central-1', 'eu-central-1_test', 'web', 'secret');
+    const sent: unknown[] = [];
+    (provider as unknown as { client: { send: (c: unknown) => Promise<unknown> } }).client = {
+      send: async (command: unknown) => {
+        sent.push(command);
+        return {};
+      },
+    };
+
+    await provider.setTotpPreferred({ accessToken: 'at-123' });
+
+    expect(sent).toHaveLength(1);
+    const command = sent[0] as { constructor: { name: string }; input: Record<string, unknown> };
+    expect(command.constructor.name).toBe('SetUserMFAPreferenceCommand');
+    expect(command.input.AccessToken).toBe('at-123');
+    expect(command.input).not.toHaveProperty('Username');
   });
 });

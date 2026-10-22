@@ -1,0 +1,100 @@
+/**
+ * Default-deny test -- every route handler must have an explicit security policy:
+ *   @Public()        -> no authentication required
+ *   @Authenticated() -> valid session or bearer, no authorization action
+ *   @Authorize()     -> authorization check against an action/resource
+ *
+ * If this test fails, a route was added without declaring its security policy.
+ *
+ * @see T-1.6, AUTHZ-R-49
+ */
+import { describe, it, afterAll } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import {
+  DiscoveryModule,
+  DiscoveryService,
+  MetadataScanner,
+  Reflector,
+} from '@nestjs/core';
+/** Internal NestJS metadata key for HTTP method; not re-exported from @nestjs/common in v12. */
+const METHOD_METADATA = 'method';
+import { AppModule } from '../app.module.js';
+import { DbService } from '../db/db.service.js';
+import { IS_PUBLIC_KEY } from './public.decorator.js';
+import { IS_AUTHENTICATED_ONLY_KEY } from './authenticated.decorator.js';
+import { AUTHORIZE_KEY } from './authorize.decorator.js';
+
+describe('Default-deny: every route has @Public, @Authenticated or @Authorize', () => {
+  let module: TestingModule;
+
+  const dbStub = {
+    ping: async () => {},
+    onModuleInit: async () => {},
+    onModuleDestroy: async () => {},
+  };
+
+  afterAll(async () => {
+    if (module) await module.close();
+  });
+
+  it('every handler must declare a security decorator', async () => {
+    module = await Test.createTestingModule({
+      imports: [AppModule, DiscoveryModule],
+    })
+      .overrideProvider(DbService)
+      .useValue(dbStub)
+      .compile();
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const controllers = discovery.getControllers();
+    const violations: string[] = [];
+
+    for (const wrapper of controllers) {
+      const instance = wrapper.instance;
+      if (!instance) continue;
+
+      const controllerClass = instance.constructor;
+      const className = controllerClass.name;
+      const prototype = Object.getPrototypeOf(instance) as object;
+
+      const methods = scanner.getAllMethodNames(prototype);
+      for (const methodName of methods) {
+        const handler = (prototype as Record<string, unknown>)[methodName];
+        if (typeof handler !== 'function') continue;
+
+        const httpMethod = Reflect.getMetadata(METHOD_METADATA, handler);
+        if (httpMethod === undefined) continue;
+
+        const targets = [handler, controllerClass];
+
+        const isPublic = reflector.getAllAndOverride<boolean>(
+          IS_PUBLIC_KEY, targets,
+        );
+        if (isPublic) continue;
+
+        const isAuthOnly = reflector.getAllAndOverride<boolean>(
+          IS_AUTHENTICATED_ONLY_KEY, targets,
+        );
+        if (isAuthOnly) continue;
+
+        const authorize = reflector.getAllAndOverride<unknown>(
+          AUTHORIZE_KEY, targets,
+        );
+        if (authorize) continue;
+
+        violations.push(`${className}.${methodName}`);
+      }
+    }
+
+    if (violations.length > 0) {
+      throw new Error(
+        `Default-deny violation: the following handlers have no @Public(), ` +
+        `@Authenticated() or @Authorize() metadata.\n\n` +
+        violations.map((v) => `  - ${v}`).join('\n'),
+      );
+    }
+  });
+});

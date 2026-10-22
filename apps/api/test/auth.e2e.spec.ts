@@ -1,0 +1,406 @@
+/**
+ * Auth e2e tests — full HTTP round-trips through NestJS with the FakeIdentityProvider.
+ *
+ * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
+ *
+ * @see T-1.4, T-1.6, T-1.7
+ */
+import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { computeTotp } from '../src/identity/totp.js';
+import { seed } from '../src/db/seed/seed-lib.js';
+import { externalIdentities } from '../src/db/schema/index.js';
+import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+
+// ---------------------------------------------------------------------------
+// Guard
+// ---------------------------------------------------------------------------
+
+const TEST_DB_URL = process.env.TEST_DATABASE_URL;
+const shouldRun = !!TEST_DB_URL;
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!shouldRun)('Auth (e2e)', () => {
+  let app: INestApplication;
+  let idp: FakeIdentityProvider;
+  let testDb: TestDatabase;
+
+  // Cookie-jar agent for the employee sign-in flow.
+  let agent: ReturnType<typeof request.agent>;
+  // CSRF token extracted from Set-Cookie after sign-in.
+  let csrfToken: string;
+
+  const jwtSecret = randomBytes(32).toString('hex');
+
+  // -----------------------------------------------------------------------
+  // Bootstrap
+  // -----------------------------------------------------------------------
+
+  beforeAll(async () => {
+    // -- Prepare test database (drop, create, migrate, seed) -------------------
+    testDb = await resetTestDatabase(TEST_DB_URL!, 'auth');
+    await seed(testDb.db);
+
+    // -- Set env for the NestJS app ------------------------------------------
+    process.env.DATABASE_URL = testDb.url;
+    process.env.AUTH_MODE = 'stub';
+    process.env.JWT_SECRET = jwtSecret;
+    process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
+    process.env.NODE_ENV = 'test';
+    // Use in-memory KV store so throttle state is isolated per test run.
+    delete process.env.REDIS_URL;
+
+    // -- Bootstrap NestJS app ------------------------------------------------
+    // AppModule is imported lazily: ConfigModule.forRoot() validates process.env when the
+    // module file is evaluated, so the test database URL above must already be in place.
+    const { AppModule } = await import('../src/app.module.js');
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+
+    // -- Seed FakeIdentityProvider -------------------------------------------
+    idp = app.get(IdentityProviderService) as FakeIdentityProvider;
+    idp.seedUsers([
+      { email: 'user_jovan@example.com' },
+      { email: 'user_stefan@example.com' },
+      { email: 'user_ivana@example.com' },
+      { email: 'user_nikola@example.com', password: 'TempPassword1!', temporaryPassword: 'TempPassword1!' },
+    ]);
+
+    // Link FakeIdentityProvider subs → ExternalIdentity rows.
+    const people = [
+      { localId: 'user_jovan', email: 'user_jovan@example.com' },
+      { localId: 'user_stefan', email: 'user_stefan@example.com' },
+      { localId: 'user_ivana', email: 'user_ivana@example.com' },
+      { localId: 'user_nikola', email: 'user_nikola@example.com' },
+    ];
+    for (const p of people) {
+      const idpUser = await idp.findUserByEmail(p.email);
+      if (!idpUser) throw new Error(`FakeIDP user not found: ${p.email}`);
+      await testDb.db.insert(externalIdentities).values({
+        userId: p.localId,
+        provider: 'cognito',
+        subject: idpUser.sub,
+        cognitoUsername: idpUser.username,
+        email: p.email,
+        emailVerified: true,
+      });
+    }
+
+    agent = request.agent(app.getHttpServer());
+  }, 180_000);
+
+  afterAll(async () => {
+    await app?.close();
+    await testDb?.close();
+  });
+
+  // -----------------------------------------------------------------------
+  // Helpers
+  // -----------------------------------------------------------------------
+
+  function extractCsrf(res: request.Response): string {
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    if (!cookies) throw new Error('No Set-Cookie headers in response');
+    const csrfCookie = cookies.find((c: string) => c.startsWith('nestself_csrf='));
+    if (!csrfCookie) throw new Error('CSRF cookie not found');
+    const match = csrfCookie.match(/nestself_csrf=([^;]+)/);
+    if (!match) throw new Error('Could not parse CSRF token');
+    return match[1]!;
+  }
+
+  // -----------------------------------------------------------------------
+  // 1. Employee email-OTP sign-in
+  // -----------------------------------------------------------------------
+
+  it('employee email-OTP: start → verify → session cookies', async () => {
+    const startRes = await agent
+      .post('/api/auth/email-otp/start')
+      .send({ email: 'user_jovan@example.com' });
+    expect(startRes.status).toBe(200);
+    expect(startRes.body).toHaveProperty('challengeToken');
+    expect(startRes.body).toHaveProperty('codeDeliveryMedium', 'EMAIL');
+
+    const { challengeToken } = startRes.body;
+    const sent = idp.sentCodes;
+    const lastCode = sent.filter((c) => c.email === 'user_jovan@example.com').pop();
+    expect(lastCode).toBeDefined();
+
+    const verifyRes = await agent
+      .post('/api/auth/email-otp/verify')
+      .send({ challengeToken, code: lastCode!.code });
+    expect(verifyRes.status).toBe(200);
+    expect(verifyRes.body).toHaveProperty('principal');
+    expect(verifyRes.body.principal).toHaveProperty('userId', 'user_jovan');
+
+    const setCookies = verifyRes.headers['set-cookie'] as unknown as string[];
+    expect(setCookies.some((c: string) => c.startsWith('nestself_session='))).toBe(true);
+    expect(setCookies.some((c: string) => c.startsWith('nestself_csrf='))).toBe(true);
+
+    csrfToken = extractCsrf(verifyRes);
+  });
+
+  // -----------------------------------------------------------------------
+  // 2. GET /auth/me returns the principal
+  // -----------------------------------------------------------------------
+
+  it('GET /api/auth/me returns authenticated principal', async () => {
+    const res = await agent.get('/api/auth/me');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('principal');
+    expect(res.body.principal.userId).toBe('user_jovan');
+  });
+
+  // -----------------------------------------------------------------------
+  // 3. CSRF rejection: mutating request without X-CSRF-Token → 403
+  // -----------------------------------------------------------------------
+
+  it('POST without X-CSRF-Token is rejected by CsrfGuard', async () => {
+    const res = await agent
+      .post('/api/auth/sign-out-all')
+      .send({});
+    expect(res.status).toBe(403);
+    expect(res.body).toHaveProperty('code', 'csrf_rejected');
+  });
+
+  // -----------------------------------------------------------------------
+  // 4. CSRF acceptance: mutating request with correct header succeeds
+  // -----------------------------------------------------------------------
+
+  it('POST with correct X-CSRF-Token succeeds', async () => {
+    const res = await agent
+      .post('/api/auth/sign-out-all')
+      .set('X-CSRF-Token', csrfToken)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('signedOutOthers', true);
+  });
+
+  // -----------------------------------------------------------------------
+  // 5. Context switch
+  // -----------------------------------------------------------------------
+
+  it('POST /api/auth/context switches the active context', async () => {
+    const res = await agent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ context: { kind: 'personal' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('principal');
+    expect(res.body.principal.context).toEqual({ kind: 'personal' });
+
+    // Switch back to the org context.
+    const backRes = await agent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+    expect(backRes.status).toBe(200);
+    expect(backRes.body.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+  });
+
+  // -----------------------------------------------------------------------
+  // 6. Programme route access control
+  // -----------------------------------------------------------------------
+
+  it('employee is denied access to programme route (403)', async () => {
+    const res = await agent
+      .get('/api/orgs/org_sample/programme')
+      .set('X-CSRF-Token', csrfToken);
+    expect(res.status).toBe(403);
+  });
+
+  it('hr_admin can access programme route', async () => {
+    // Sign in as hr_admin (user_ivana).
+    const hrAgent = request.agent(app.getHttpServer());
+    const startRes = await hrAgent
+      .post('/api/auth/email-otp/start')
+      .send({ email: 'user_ivana@example.com' });
+    expect(startRes.status).toBe(200);
+
+    const sent = idp.sentCodes;
+    const lastCode = sent.filter((c) => c.email === 'user_ivana@example.com').pop();
+    expect(lastCode).toBeDefined();
+
+    const verifyRes = await hrAgent
+      .post('/api/auth/email-otp/verify')
+      .send({ challengeToken: startRes.body.challengeToken, code: lastCode!.code });
+    expect(verifyRes.status).toBe(200);
+
+    const hrCsrf = extractCsrf(verifyRes);
+    const progRes = await hrAgent
+      .get('/api/orgs/org_sample/programme')
+      .set('X-CSRF-Token', hrCsrf);
+    expect(progRes.status).toBe(200);
+
+    // Clean up: sign out.
+    await hrAgent
+      .post('/api/auth/sign-out')
+      .set('X-CSRF-Token', hrCsrf);
+  });
+
+  // -----------------------------------------------------------------------
+  // 7. Staff password + TOTP flow
+  // -----------------------------------------------------------------------
+
+  it('staff password flow: temp password → new password → MFA setup → TOTP → tokens', async () => {
+    const staffAgent = request.agent(app.getHttpServer());
+
+    // Step 1: POST /auth/password with temporary password → NEW_PASSWORD_REQUIRED.
+    const pwRes = await staffAgent
+      .post('/api/auth/password')
+      .send({ email: 'user_nikola@example.com', password: 'TempPassword1!' });
+    expect(pwRes.status).toBe(200);
+    expect(pwRes.body).toHaveProperty('step', 'new_password');
+    let challengeToken = pwRes.body.challengeToken as string;
+
+    // Step 2: Respond with new password → MFA_SETUP (user has no TOTP enrolled).
+    const newPwRes = await staffAgent
+      .post('/api/auth/challenge')
+      .send({ challengeToken, response: 'NewSecurePassword1!' });
+    // A follow-up challenge is a 200 with { step, challengeToken }, like POST /auth/password.
+    expect(newPwRes.status).toBe(200);
+    const mfaSetupToken = newPwRes.body.challengeToken as string;
+    expect(newPwRes.body).toHaveProperty('step', 'totp_enrol');
+    expect(mfaSetupToken).toBeTruthy();
+    challengeToken = mfaSetupToken;
+
+    // Step 3: Enrol TOTP → get secretUri.
+    const enrolRes = await staffAgent
+      .post('/api/auth/totp/enrol')
+      .send({ challengeToken });
+    expect(enrolRes.status).toBe(200);
+    expect(enrolRes.body).toHaveProperty('secretUri');
+    const secretUri = enrolRes.body.secretUri as string;
+    const secretMatch = secretUri.match(/secret=([A-Z2-7]+)/);
+    expect(secretMatch).toBeTruthy();
+    const totpSecret = secretMatch![1]!;
+
+    // Use the new challengeToken if one was returned.
+    if (enrolRes.body.challengeToken) {
+      challengeToken = enrolRes.body.challengeToken as string;
+    }
+
+    // Step 4: Complete MFA setup via /auth/challenge with the enrolment challenge token.
+    // The completeMfaSetup flow skips TOTP verification and issues tokens directly.
+    const completeRes = await staffAgent
+      .post('/api/auth/challenge')
+      .send({ challengeToken, response: computeTotp(totpSecret) });
+    expect(completeRes.status).toBe(200);
+    expect(completeRes.body).toHaveProperty('principal');
+    expect(completeRes.body.principal).toHaveProperty('userId', 'user_nikola');
+
+    const staffCsrf = extractCsrf(completeRes);
+    expect(staffCsrf).toBeTruthy();
+
+    await staffAgent
+      .post('/api/auth/sign-out')
+      .set('X-CSRF-Token', staffCsrf);
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. Sessions list and revoke
+  // -----------------------------------------------------------------------
+
+  it('sessions list includes the current session; revoke destroys another', async () => {
+    // Create a second session for user_jovan.
+    const secondAgent = request.agent(app.getHttpServer());
+    const startRes = await secondAgent
+      .post('/api/auth/email-otp/start')
+      .send({ email: 'user_jovan@example.com' });
+    const code = idp.sentCodes.filter((c) => c.email === 'user_jovan@example.com').pop()!.code;
+    const verifyRes = await secondAgent
+      .post('/api/auth/email-otp/verify')
+      .send({ challengeToken: startRes.body.challengeToken, code });
+    expect(verifyRes.status).toBe(200);
+    const secondCsrf = extractCsrf(verifyRes);
+
+    // List sessions from the second session — should see at least 2.
+    const listRes = await secondAgent
+      .get('/api/auth/sessions')
+      .set('X-CSRF-Token', secondCsrf);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.sessions.length).toBeGreaterThanOrEqual(2);
+    const current = listRes.body.sessions.find((s: { isCurrent: boolean }) => s.isCurrent);
+    expect(current).toBeDefined();
+
+    // Find a non-current session and revoke it.
+    const other = listRes.body.sessions.find((s: { isCurrent: boolean }) => !s.isCurrent);
+    expect(other).toBeDefined();
+    const revokeRes = await secondAgent
+      .delete(`/api/auth/sessions/${other.sessionId}`)
+      .set('X-CSRF-Token', secondCsrf);
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body).toHaveProperty('destroyed', true);
+
+    // The revoked session should no longer appear in the list.
+    const listRes2 = await secondAgent
+      .get('/api/auth/sessions')
+      .set('X-CSRF-Token', secondCsrf);
+    const revoked = listRes2.body.sessions.find(
+      (s: { sessionId: string }) => s.sessionId === other.sessionId,
+    );
+    expect(revoked).toBeUndefined();
+
+    // Keep secondAgent signed in for sign-out test.
+    agent = secondAgent;
+    csrfToken = secondCsrf;
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. Sign-out → subsequent /me returns 401
+  // -----------------------------------------------------------------------
+
+  it('POST /api/auth/sign-out clears session; /me returns 401', async () => {
+    const signOutRes = await agent
+      .post('/api/auth/sign-out')
+      .set('X-CSRF-Token', csrfToken);
+    expect(signOutRes.status).toBe(200);
+    expect(signOutRes.body).toHaveProperty('signedOut', true);
+
+    const meRes = await agent.get('/api/auth/me');
+    expect(meRes.status).toBe(401);
+  });
+
+  // -----------------------------------------------------------------------
+  // 10. Lockout after 5 wrong OTP codes
+  // -----------------------------------------------------------------------
+
+  it('locks out after 5 wrong OTP codes', async () => {
+    const lockAgent = request.agent(app.getHttpServer());
+
+    for (let i = 0; i < 5; i++) {
+      const startRes = await lockAgent
+        .post('/api/auth/email-otp/start')
+        .send({ email: 'user_stefan@example.com' });
+      expect(startRes.status).toBe(200);
+
+      const verifyRes = await lockAgent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code: '000000' });
+      expect(verifyRes.status).toBe(401);
+    }
+
+    // The 6th attempt should be throttled at the start endpoint.
+    const blockedStart = await lockAgent
+      .post('/api/auth/email-otp/start')
+      .send({ email: 'user_stefan@example.com' });
+    expect(blockedStart.status).toBe(429);
+    expect(blockedStart.body).toHaveProperty('code', 'too_many_attempts');
+  });
+});

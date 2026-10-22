@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { ApiExceptionFilter } from './common/api-exception.filter.js';
 import { writeFileSync } from 'node:fs';
 
 async function bootstrap() {
@@ -15,6 +16,16 @@ async function bootstrap() {
 
   app.use(helmet());
 
+  // Trust proxy for X-Forwarded-For when behind a load balancer
+  const trustProxyHops = config.get<number>('TRUST_PROXY_HOPS', 0);
+  if (trustProxyHops > 0) {
+    const expressApp = app.getHttpAdapter().getInstance();
+    expressApp.set('trust proxy', trustProxyHops);
+  }
+
+  // Global exception filter producing the 5.9 error envelope
+  app.useGlobalFilters(new ApiExceptionFilter());
+
   const allowedOrigins = [
     config.get<string>('MARKETING_URL'),
     config.get<string>('WORKSPACE_URL'),
@@ -24,6 +35,7 @@ async function bootstrap() {
   app.enableCors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true,
+    exposedHeaders: ['x-request-id'],
   });
 
   app.setGlobalPrefix('api');

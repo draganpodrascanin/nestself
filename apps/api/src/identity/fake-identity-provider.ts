@@ -15,6 +15,7 @@ import { timingSafeEqual } from 'node:crypto';
 import {
   IdentityProviderService,
   IdentityProviderError,
+  decodeJwtClaims,
 } from './identity-provider.service.js';
 import type {
   AuthOutcome,
@@ -36,6 +37,8 @@ import {
 export class FakeIdentityProvider extends IdentityProviderService {
   private readonly store = new FakeUserStore();
   private readonly sessions = new Map<string, FakeSession>();
+  /** username -> pending TOTP association session id (signed-in enrolment). */
+  private readonly pendingByUsername = new Map<string, string>();
 
   /** Public array of sent OTP codes for test assertions. */
   get sentCodes() {
@@ -79,8 +82,14 @@ export class FakeIdentityProvider extends IdentityProviderService {
     return s;
   }
 
+  private updateSessionChallenge(sessionId: string, challenge: string): void {
+    const s = this.sessions.get(sessionId);
+    if (s) s.challenge = challenge;
+  }
+
   private nextChallenge(user: FakeUser, sessionId: string): AuthOutcome {
     if (user.temporaryPassword) {
+      this.updateSessionChallenge(sessionId, 'NEW_PASSWORD_REQUIRED');
       return {
         kind: 'challenge',
         challenge: 'NEW_PASSWORD_REQUIRED',
@@ -89,6 +98,7 @@ export class FakeIdentityProvider extends IdentityProviderService {
       };
     }
     if (!user.totpEnrolled && user.password) {
+      this.updateSessionChallenge(sessionId, 'MFA_SETUP');
       return {
         kind: 'challenge',
         challenge: 'MFA_SETUP',
@@ -97,6 +107,7 @@ export class FakeIdentityProvider extends IdentityProviderService {
       };
     }
     if (user.totpEnrolled) {
+      this.updateSessionChallenge(sessionId, 'SOFTWARE_TOKEN_MFA');
       return {
         kind: 'challenge',
         challenge: 'SOFTWARE_TOKEN_MFA',
@@ -247,25 +258,66 @@ export class FakeIdentityProvider extends IdentityProviderService {
     if (!user) {
       throw new IdentityProviderError('User not found', 'user_not_found');
     }
+    // Cognito only completes MFA_SETUP after VerifySoftwareToken succeeded
+    // on the same session; mirror that so the flow cannot skip the code.
+    if (!s.totpVerified || !user.totpEnrolled) {
+      throw new IdentityProviderError(
+        'Software token not verified for this session',
+        'not_authorized',
+      );
+    }
     this.sessions.delete(input.session);
     return { kind: 'tokens', tokens: this.store.issueTokens(user) };
   }
 
   // -- TOTP management ------------------------------------------------------
 
+  /** Resolve the user behind a fake access token (claims.username). */
+  private userFromAccessToken(accessToken: string): FakeUser {
+    const claims = decodeJwtClaims(accessToken);
+    const user = claims.username
+      ? this.store.findByUsername(claims.username)
+      : undefined;
+    if (!user) {
+      throw new IdentityProviderError('Invalid access token', 'not_authorized');
+    }
+    return user;
+  }
+
   async associateSoftwareToken(input: {
     session?: string;
     accessToken?: string;
   }): Promise<{ secretCode: string; session?: string }> {
     const secret = generateTotpSecret();
-    const session = input.session ?? randomBytes(16).toString('hex');
-    this.sessions.set(session, {
-      email: '',
-      username: '',
-      challenge: `TOTP_ASSOCIATE:${secret}`,
-      expiresAt: Date.now() + SESSION_TTL_MS,
-    });
-    return { secretCode: secret, session };
+
+    if (input.session) {
+      // MFA_SETUP path: keep the challenge session, attach the pending secret.
+      const s = this.getSession(input.session, 'MFA_SETUP');
+      s.pendingTotpSecret = secret;
+      s.totpVerified = false;
+      return { secretCode: secret, session: input.session };
+    }
+
+    if (input.accessToken) {
+      // Signed-in path: remember the pending secret on a dedicated session
+      // keyed by a fresh id so verifySoftwareToken can find it.
+      const user = this.userFromAccessToken(input.accessToken);
+      const id = randomBytes(16).toString('hex');
+      this.sessions.set(id, {
+        email: user.email,
+        username: user.username,
+        challenge: 'TOTP_ASSOCIATE',
+        expiresAt: Date.now() + SESSION_TTL_MS,
+        pendingTotpSecret: secret,
+      });
+      this.pendingByUsername.set(user.username, id);
+      return { secretCode: secret, session: id };
+    }
+
+    throw new IdentityProviderError(
+      'Either session or accessToken is required',
+      'not_authorized',
+    );
   }
 
   async verifySoftwareToken(input: {
@@ -274,16 +326,35 @@ export class FakeIdentityProvider extends IdentityProviderService {
     code: string;
     friendlyDeviceName?: string;
   }): Promise<{ session?: string }> {
-    const s = this.sessions.get(input.session ?? '');
-    if (!s || !s.challenge.startsWith('TOTP_ASSOCIATE:')) {
+    let sessionId = input.session;
+    if (!sessionId && input.accessToken) {
+      const user = this.userFromAccessToken(input.accessToken);
+      sessionId = this.pendingByUsername.get(user.username);
+    }
+    const s = sessionId ? this.sessions.get(sessionId) : undefined;
+    if (!s || s.expiresAt < Date.now() || !s.pendingTotpSecret) {
       throw new IdentityProviderError('Invalid session', 'expired_session');
     }
-    const secret = s.challenge.slice('TOTP_ASSOCIATE:'.length);
-    if (!verifyTotp(secret, input.code)) {
+    if (!verifyTotp(s.pendingTotpSecret, input.code)) {
       throw new IdentityProviderError('Invalid code', 'invalid_code');
     }
-    this.sessions.delete(input.session ?? '');
-    return { session: input.session };
+    const user = this.store.findUser(s.email);
+    if (!user) {
+      throw new IdentityProviderError('User not found', 'user_not_found');
+    }
+    user.totpSecret = s.pendingTotpSecret;
+    user.totpEnrolled = true;
+    s.pendingTotpSecret = undefined;
+    s.totpVerified = true;
+
+    if (s.challenge === 'TOTP_ASSOCIATE') {
+      // Signed-in enrolment is complete; the session has no further use.
+      this.sessions.delete(sessionId!);
+      this.pendingByUsername.delete(user.username);
+      return {};
+    }
+    // MFA_SETUP: the same session continues to completeMfaSetup().
+    return { session: sessionId };
   }
 
   async setTotpPreferred(_input: { accessToken: string }): Promise<void> {
