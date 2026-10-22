@@ -10,17 +10,25 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedContentRouteImport } from './routes/_authenticated/content'
 import { Route as AuthenticatedEventRequestsRouteImport } from './routes/_authenticated/event-requests'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
+import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
+import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PublicRoute = PublicRouteImport.update({
+  id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
@@ -43,6 +51,16 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
+} as any)
+const PublicResetPasswordRoute = PublicResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicSignInRoute = PublicSignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => PublicRoute,
 } as any)
 const AuthenticatedExpertsIndexRoute =
   AuthenticatedExpertsIndexRouteImport.update({
@@ -68,36 +86,51 @@ const AuthenticatedOrganizationsOrgIdRoute =
     path: '/organizations/$orgId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => PublicRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/content': typeof AuthenticatedContentRoute
   '/event-requests': typeof AuthenticatedEventRequestsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/reset-password': typeof PublicResetPasswordRoute
+  '/sign-in': typeof PublicSignInRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
+  '/invite/$token': typeof PublicInviteTokenRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof AuthenticatedIndexRoute
   '/content': typeof AuthenticatedContentRoute
   '/event-requests': typeof AuthenticatedEventRequestsRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/': typeof AuthenticatedIndexRoute
+  '/reset-password': typeof PublicResetPasswordRoute
+  '/sign-in': typeof PublicSignInRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
+  '/invite/$token': typeof PublicInviteTokenRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_public': typeof PublicRouteWithChildren
   '/_authenticated/content': typeof AuthenticatedContentRoute
   '/_authenticated/event-requests': typeof AuthenticatedEventRequestsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_public/reset-password': typeof PublicResetPasswordRoute
+  '/_public/sign-in': typeof PublicSignInRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
+  '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
 }
@@ -108,35 +141,46 @@ export interface FileRouteTypes {
     | '/content'
     | '/event-requests'
     | '/settings'
+    | '/reset-password'
+    | '/sign-in'
     | '/experts/$expertId'
     | '/organizations/$orgId'
+    | '/invite/$token'
     | '/experts/'
     | '/organizations/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
     | '/content'
     | '/event-requests'
     | '/settings'
-    | '/'
+    | '/reset-password'
+    | '/sign-in'
     | '/experts/$expertId'
     | '/organizations/$orgId'
+    | '/invite/$token'
     | '/experts'
     | '/organizations'
   id:
     | '__root__'
     | '/_authenticated'
+    | '/_public'
     | '/_authenticated/content'
     | '/_authenticated/event-requests'
     | '/_authenticated/settings'
+    | '/_public/reset-password'
+    | '/_public/sign-in'
     | '/_authenticated/'
     | '/_authenticated/experts/$expertId'
     | '/_authenticated/organizations/$orgId'
+    | '/_public/invite/$token'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  PublicRoute: typeof PublicRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -146,6 +190,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_public': {
+      id: '/_public'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof PublicRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -176,6 +227,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_public/reset-password': {
+      id: '/_public/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof PublicResetPasswordRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/sign-in': {
+      id: '/_public/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof PublicSignInRouteImport
+      parentRoute: typeof PublicRoute
+    }
     '/_authenticated/experts/': {
       id: '/_authenticated/experts/'
       path: '/experts'
@@ -203,6 +268,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/organizations/$orgId'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/_public/invite/$token': {
+      id: '/_public/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof PublicInviteTokenRouteImport
+      parentRoute: typeof PublicRoute
     }
   }
 }
@@ -233,8 +305,24 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface PublicRouteChildren {
+  PublicResetPasswordRoute: typeof PublicResetPasswordRoute
+  PublicSignInRoute: typeof PublicSignInRoute
+  PublicInviteTokenRoute: typeof PublicInviteTokenRoute
+}
+
+const PublicRouteChildren: PublicRouteChildren = {
+  PublicResetPasswordRoute: PublicResetPasswordRoute,
+  PublicSignInRoute: PublicSignInRoute,
+  PublicInviteTokenRoute: PublicInviteTokenRoute,
+}
+
+const PublicRouteWithChildren =
+  PublicRoute._addFileChildren(PublicRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  PublicRoute: PublicRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

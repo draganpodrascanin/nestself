@@ -1,9 +1,10 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-import { canManageTeam } from '@nestself/contracts';
+import { can } from '@nestself/contracts';
 
 export const Route = createFileRoute('/_authenticated/_manager')({
   beforeLoad: ({ context }) => {
-    if (!canManageTeam(context.session)) {
+    const { principal, effectiveActions } = context.auth;
+    if (!principal || !can(principal, 'events.request', undefined, effectiveActions)) {
       throw redirect({ to: '/', search: { denied: 'manager' } });
     }
   },

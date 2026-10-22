@@ -68,6 +68,8 @@ export interface InputProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   className?: string;
   id?: string;
+  autoComplete?: string;
+  'aria-describedby'?: string;
 }
 
 export function Input({ density = 'comfortable', className, ...rest }: InputProps) {

@@ -9,6 +9,7 @@ export const namespaces = [
   'workspace',
   'admin',
   'mobile',
+  'auth',
 ] as const;
 export type Namespace = (typeof namespaces)[number];
 

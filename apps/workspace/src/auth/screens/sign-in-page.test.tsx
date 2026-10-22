@@ -1,0 +1,474 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { I18nextProvider } from 'react-i18next';
+import i18next from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import {
+  createRouter,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  RouterProvider,
+  Outlet,
+} from '@tanstack/react-router';
+import { resourcesFor } from '@nestself/i18n';
+import type { Resource } from 'i18next';
+import type { AuthApi } from '@nestself/api-client';
+
+import { IdentifierScreen } from './identifier-screen';
+import { OtpScreen } from './otp-screen';
+import { PasswordScreen } from './password-screen';
+
+const testI18n = i18next.createInstance();
+void testI18n.use(initReactI18next).init({
+  lng: 'en',
+  resources: resourcesFor(['common', 'workspace', 'auth']) as Resource,
+  interpolation: { escapeValue: false },
+  returnNull: false,
+});
+
+function I18nWrapper({ children }: { children: React.ReactNode }) {
+  return <I18nextProvider i18n={testI18n}>{children}</I18nextProvider>;
+}
+
+function makeAuthApi(overrides: Partial<AuthApi> = {}): AuthApi {
+  return {
+    discover: vi.fn(),
+    emailOtpStart: vi.fn(),
+    emailOtpVerify: vi.fn(),
+    password: vi.fn(),
+    totpVerify: vi.fn(),
+    totpEnrolStart: vi.fn(),
+    totpEnrolConfirm: vi.fn(),
+    newPassword: vi.fn(),
+    me: vi.fn(),
+    signOut: vi.fn(),
+    switchContext: vi.fn(),
+    sessions: vi.fn(),
+    sessionRevoke: vi.fn(),
+    stepUpStart: vi.fn(),
+    stepUpVerify: vi.fn(),
+    invitationPreview: vi.fn(),
+    invitationAccept: vi.fn(),
+    passwordResetStart: vi.fn(),
+    passwordResetConfirm: vi.fn(),
+    ...overrides,
+  } as unknown as AuthApi;
+}
+
+function renderInRouter(component: React.ReactNode) {
+  const rootRoute = createRootRoute({ component: () => <Outlet /> });
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => <>{component}</>,
+  });
+  const catchAll = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '$',
+    component: () => null,
+  });
+  const tree = rootRoute.addChildren([indexRoute, catchAll]);
+  const router = createRouter({
+    routeTree: tree,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+
+  return render(
+    <I18nextProvider i18n={testI18n}>
+      <RouterProvider router={router} />
+    </I18nextProvider>,
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* IdentifierScreen                                                    */
+/* ------------------------------------------------------------------ */
+
+describe('IdentifierScreen', () => {
+  const user = userEvent.setup();
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the sign-in heading and email field', () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+  });
+
+  it('shows validation error for empty email', async () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation error for email without @', async () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    await user.type(screen.getByRole('textbox'), 'notanemail');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('calls onSubmit with trimmed email for valid input', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={onSubmit} error={null} />
+      </I18nWrapper>,
+    );
+
+    await user.type(screen.getByRole('textbox'), '  test@example.com  ');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith('test@example.com');
+    });
+  });
+
+  it('shows external error from props', () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error="Something went wrong." />
+      </I18nWrapper>,
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+
+  it('has autocomplete="email" and type="email"', () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveAttribute('autocomplete', 'email');
+    expect(input).toHaveAttribute('type', 'email');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* OtpScreen                                                           */
+/* ------------------------------------------------------------------ */
+
+describe('OtpScreen', () => {
+  const user = userEvent.setup();
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  function renderOtp(overrides: Partial<Parameters<typeof OtpScreen>[0]> = {}) {
+    return render(
+      <I18nWrapper>
+        <OtpScreen
+          email="test@example.com"
+          challengeToken="tok_123"
+          authApi={makeAuthApi()}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          onBack={vi.fn()}
+          {...overrides}
+        />
+      </I18nWrapper>,
+    );
+  }
+
+  it('renders the OTP heading and shows email', () => {
+    renderOtp();
+
+    expect(screen.getByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
+    expect(screen.getByText(/test@example.com/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('has inputMode="numeric" and autocomplete="one-time-code"', () => {
+    renderOtp();
+
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveAttribute('inputmode', 'numeric');
+    expect(input).toHaveAttribute('autocomplete', 'one-time-code');
+  });
+
+  it('shows error for code shorter than 6 digits', async () => {
+    renderOtp();
+
+    await user.type(screen.getByRole('textbox'), '123');
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('calls authApi.emailOtpVerify with the token and code', async () => {
+    const verifyFn = vi.fn().mockResolvedValue({});
+    const onSuccess = vi.fn().mockResolvedValue(undefined);
+
+    renderOtp({
+      authApi: makeAuthApi({ emailOtpVerify: verifyFn }),
+      onSuccess,
+    });
+
+    await user.type(screen.getByRole('textbox'), '654321');
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => {
+      expect(verifyFn).toHaveBeenCalledWith('tok_123', '654321');
+    });
+  });
+
+  it('has aria-live="polite" on the resend countdown', () => {
+    renderOtp();
+
+    const liveRegion = document.querySelector('[aria-live="polite"]');
+    expect(liveRegion).not.toBeNull();
+  });
+
+  it('back button calls onBack', async () => {
+    const onBack = vi.fn();
+    renderOtp({ onBack });
+
+    await user.click(screen.getByRole('button', { name: /back/i }));
+    expect(onBack).toHaveBeenCalled();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* PasswordScreen (needs router for <Link>)                            */
+/* ------------------------------------------------------------------ */
+
+describe('PasswordScreen', () => {
+  const user = userEvent.setup();
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  function renderPassword(
+    overrides: Partial<{
+      email: string;
+      authApi: AuthApi;
+      onSuccess: () => Promise<void>;
+      onChallengeRequired: (step: string, challengeToken: string) => void;
+      onError: (err: unknown) => void;
+      error: string | null;
+      onBack: () => void;
+    }> = {},
+  ) {
+    const props = {
+      email: 'test@example.com',
+      authApi: makeAuthApi(),
+      onSuccess: vi.fn().mockResolvedValue(undefined) as () => Promise<void>,
+      onChallengeRequired: vi.fn(),
+      onError: vi.fn(),
+      error: null as string | null,
+      onBack: vi.fn(),
+      ...overrides,
+    };
+
+    renderInRouter(<PasswordScreen {...props} />);
+    return props;
+  }
+
+  it('renders password heading and shows email', async () => {
+    renderPassword();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter your password' })).toBeInTheDocument();
+    });
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+  });
+
+  it('has autocomplete="current-password" and type="password"', async () => {
+    renderPassword();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter your password' })).toBeInTheDocument();
+    });
+
+    const form = document.querySelector('form')!;
+    const pwInput = form.querySelector('input[name="password"]')!;
+    expect(pwInput).toHaveAttribute('autocomplete', 'current-password');
+    expect(pwInput).toHaveAttribute('type', 'password');
+  });
+
+  it('calls onChallengeRequired when password returns a challenge', async () => {
+    const passwordFn = vi.fn().mockResolvedValue({
+      step: 'totp',
+      challengeToken: 'tok_totp_456',
+    });
+    const props = renderPassword({
+      authApi: makeAuthApi({ password: passwordFn }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter your password' })).toBeInTheDocument();
+    });
+
+    const form = document.querySelector('form')!;
+    const pwInput = form.querySelector('input[name="password"]') as HTMLInputElement;
+    await user.type(pwInput, 'MyPassword123!');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(props.onChallengeRequired).toHaveBeenCalledWith('totp', 'tok_totp_456');
+    });
+  });
+
+  it('calls onSuccess when password returns a principal', async () => {
+    const passwordFn = vi.fn().mockResolvedValue({ principal: {} });
+    const props = renderPassword({
+      authApi: makeAuthApi({ password: passwordFn }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter your password' })).toBeInTheDocument();
+    });
+
+    const form = document.querySelector('form')!;
+    const pwInput = form.querySelector('input[name="password"]') as HTMLInputElement;
+    await user.type(pwInput, 'MyPassword123!');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(props.onSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it('shows error from props', async () => {
+    renderPassword({ error: 'The email or password is not correct.' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+    expect(screen.getByText('The email or password is not correct.')).toBeInTheDocument();
+  });
+
+  it('has a forgot-password link', async () => {
+    renderPassword();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /forgot password/i })).toBeInTheDocument();
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* CLIENT-R-09: neutral copy                                           */
+/* ------------------------------------------------------------------ */
+
+describe('CLIENT-R-09: neutral copy', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('identifier screen never mentions registration status', () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    const html = document.body.innerHTML.toLowerCase();
+    expect(html).not.toContain('not registered');
+    expect(html).not.toContain('no account');
+    expect(html).not.toContain('not found');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Locale leak detection                                               */
+/* ------------------------------------------------------------------ */
+
+describe('locale leak detection', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('identifier screen does not render raw i18n keys', () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error={null} />
+      </I18nWrapper>,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/signIn\.\w/);
+    expect(text).not.toMatch(/error\.\w/);
+    expect(text).not.toMatch(/common:form\.\w/);
+  });
+
+  it('OTP screen does not render raw i18n keys', () => {
+    render(
+      <I18nWrapper>
+        <OtpScreen
+          email="test@example.com"
+          challengeToken="tok_123"
+          authApi={makeAuthApi()}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          onBack={vi.fn()}
+        />
+      </I18nWrapper>,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/otp\.\w/);
+    expect(text).not.toMatch(/error\.\w/);
+    expect(text).not.toMatch(/common:form\.\w/);
+  });
+
+  it('password screen does not render raw i18n keys', async () => {
+    renderInRouter(
+      <PasswordScreen
+        email="test@example.com"
+        authApi={makeAuthApi()}
+        onSuccess={vi.fn().mockResolvedValue(undefined)}
+        onChallengeRequired={vi.fn()}
+        onError={vi.fn()}
+        error={null}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Enter your password' })).toBeInTheDocument();
+    });
+
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/password\.\w/);
+    expect(text).not.toMatch(/error\.\w/);
+    expect(text).not.toMatch(/common:form\.\w/);
+  });
+});

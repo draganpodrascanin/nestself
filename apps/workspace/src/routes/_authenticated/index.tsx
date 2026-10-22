@@ -15,7 +15,7 @@ import type { SupportArea } from '@nestself/contracts';
 import { SAMPLE_BOOKING, SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { formatDateTime } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
-import { useSession } from '../../session';
+import { useAuth } from '../../auth';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
@@ -28,7 +28,7 @@ export const Route = createFileRoute('/_authenticated/')({
 
 function HomePage() {
   const { t, i18n } = useTranslation(['workspace', 'common']);
-  const { session } = useSession();
+  const { principal } = useAuth();
   const { denied } = Route.useSearch();
   const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
 
@@ -53,7 +53,7 @@ function HomePage() {
       ) : null}
 
       <Heading level={1} typeRole="screenTitle">
-        {t('workspace:home.greeting', { name: session.displayName })}
+        {t('workspace:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
 
       {/* Support area cards */}

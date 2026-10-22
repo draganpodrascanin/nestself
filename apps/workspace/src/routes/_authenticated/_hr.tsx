@@ -1,9 +1,10 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-import { canAccessHr } from '@nestself/contracts';
+import { can } from '@nestself/contracts';
 
 export const Route = createFileRoute('/_authenticated/_hr')({
   beforeLoad: ({ context }) => {
-    if (!canAccessHr(context.session)) {
+    const { principal, effectiveActions } = context.auth;
+    if (!principal || !can(principal, 'program.overview', undefined, effectiveActions)) {
       throw redirect({ to: '/', search: { denied: 'hr' } });
     }
   },

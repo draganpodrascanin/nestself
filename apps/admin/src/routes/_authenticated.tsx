@@ -1,7 +1,10 @@
-import { createFileRoute, Outlet, Link } from '@tanstack/react-router';
+import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { House, Users, Buildings, Article, CalendarCheck, GearSix } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
+import { can } from '@nestself/contracts';
+import { useAuth } from '../auth';
+import { isSampleDataMode } from '../data-source';
 import { ApiStatus } from './__root';
 
 function PermissionBlock() {
@@ -20,9 +23,17 @@ function PermissionBlock() {
 
 function AuthenticatedLayout() {
   const { t } = useTranslation('admin');
-  const ctx = Route.useRouteContext();
+  const { principal, effectiveActions } = useAuth();
 
-  if (!ctx.session.platformRole) {
+  // Access gate: must have relevant admin permissions (CLIENT-R-05/06).
+  // Smallest honest rule: at least one of these, or having staff templates.
+  const hasAccess =
+    principal &&
+    (can(principal, 'client.configure', undefined, effectiveActions) ||
+      can(principal, 'content.publish', undefined, effectiveActions) ||
+      principal.staffTemplates.length > 0);
+
+  if (!hasAccess) {
     return <PermissionBlock />;
   }
 
@@ -96,9 +107,10 @@ function AuthenticatedLayout() {
 }
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context }) => {
-    if (!context.session.platformRole) {
-      // The component will render the permission block
+  beforeLoad: ({ context, location }) => {
+    // In sample mode a principal always exists; in real mode redirect to sign-in.
+    if (!isSampleDataMode && !context.auth.principal) {
+      throw redirect({ to: '/sign-in', search: { return: location.pathname } });
     }
   },
   component: AuthenticatedLayout,

@@ -1,23 +1,21 @@
 /**
- * RoleSwitcher — development-only sample role switcher.
- * Rendered inside the ThemeStudio panel.
+ * RoleSwitcher -- development-only sample role switcher.
+ * Rendered inside the ThemeStudio panel when `isSampleDataMode` is true.
  */
-import { orgRoles } from '@nestself/contracts';
-import type { OrgRole } from '@nestself/contracts';
-import { useSession } from '../session';
+import { SAMPLE_ROLE_ORDER, useSampleAuth } from '../auth';
 
 export function RoleSwitcher() {
-  const { session, setRole } = useSession();
+  const { currentRole, setRole } = useSampleAuth();
 
   return (
     <label className="flex flex-col gap-1 type-metadata">
       Sample role
       <select
-        value={session.orgRole ?? 'employee'}
-        onChange={(e) => setRole(e.target.value as OrgRole)}
+        value={currentRole}
+        onChange={(e) => setRole(e.target.value)}
         className="rounded-control border border-border-control bg-surface px-2 py-1"
       >
-        {orgRoles.map((role) => (
+        {SAMPLE_ROLE_ORDER.map((role) => (
           <option key={role} value={role}>
             {role}
           </option>

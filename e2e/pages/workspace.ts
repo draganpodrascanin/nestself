@@ -15,6 +15,7 @@ export const workspacePages: PageEntry[] = [
   { name: 'workspace-settings', url: 'http://localhost:5173/settings' },
   { name: 'workspace-hr', url: 'http://localhost:5173/hr?role=hr_admin', prepare: 'setHrAdminRole' },
   { name: 'workspace-manage', url: 'http://localhost:5173/manage?role=manager', prepare: 'setManagerRole' },
+  { name: 'workspace-sign-in', url: 'http://localhost:5173/sign-in' },
 ];
 
 export const workspacePrepareActions: Record<string, (page: Page) => Promise<void>> = {

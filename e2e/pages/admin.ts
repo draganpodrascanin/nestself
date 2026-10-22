@@ -9,4 +9,5 @@ export const adminPages: PageEntry[] = [
   { name: 'admin-content', url: 'http://localhost:5174/content' },
   { name: 'admin-event-requests', url: 'http://localhost:5174/event-requests' },
   { name: 'admin-settings', url: 'http://localhost:5174/settings' },
+  { name: 'admin-sign-in', url: 'http://localhost:5174/sign-in' },
 ];

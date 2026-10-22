@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, Link, useMatches } from '@tanstack/react-router';
+import { createFileRoute, Outlet, Link, useMatches, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
   House,
@@ -12,15 +12,16 @@ import {
   Buildings,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
-import { canManageTeam, canAccessHr } from '@nestself/contracts';
-import { useSession } from '../session';
+import { can } from '@nestself/contracts';
+import { useAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
+import { isSampleDataMode } from '../data-source';
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context }) => {
-    // With the stub session, this is always true. In production it would redirect to login.
-    if (!context.session) {
-      throw new Error('Session required');
+  beforeLoad: ({ context, location }) => {
+    // In sample mode a principal always exists; in real mode redirect to sign-in.
+    if (!isSampleDataMode && !context.auth.principal) {
+      throw redirect({ to: '/sign-in', search: { return: location.pathname } });
     }
   },
   component: AuthenticatedLayout,
@@ -28,12 +29,11 @@ export const Route = createFileRoute('/_authenticated')({
 
 function AuthenticatedLayout() {
   const { t } = useTranslation('common');
-  const { session } = useSession();
+  const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
 
-  const isActive = (path: string) => {
-    return matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
-  };
+  const isActive = (path: string) =>
+    matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
   const navItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
@@ -45,17 +45,24 @@ function AuthenticatedLayout() {
     { to: '/settings' as const, icon: Gear, label: t('nav.settings') },
   ];
 
-  const managerNav = canManageTeam(session)
+  const showManager = principal
+    ? can(principal, 'events.request', undefined, effectiveActions)
+    : false;
+  const showHr = principal
+    ? can(principal, 'program.overview', undefined, effectiveActions)
+    : false;
+
+  const managerNav = showManager
     ? [{ to: '/manage' as const, icon: Users, label: t('nav.manage') }]
     : [];
 
-  const hrNav = canAccessHr(session)
+  const hrNav = showHr
     ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
     : [];
 
   const allNavItems = [...navItems, ...managerNav, ...hrNav];
 
-  /** Bottom bar: at most 5 items (Home, Support, Appointments, Messages, Channels). */
+  /** Bottom bar: at most 5 items. */
   const bottomBarItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
     { to: '/support' as const, icon: Heart, label: t('nav.support') },

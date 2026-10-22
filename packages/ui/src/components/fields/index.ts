@@ -5,3 +5,5 @@ export * from './switch';
 export * from './chip';
 export * from './fieldset';
 export * from './form-error-summary';
+export * from './password-input';
+export * from './otp-input';

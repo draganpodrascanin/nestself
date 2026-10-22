@@ -1,34 +1,49 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
-import type { Session } from '@nestself/contracts';
-import { SAMPLE_SESSIONS } from '@nestself/sample-data';
+import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { routeTree } from '../routeTree.gen';
 import i18n from '../i18n';
+import type { AuthSnapshot } from '../auth';
 
-function renderWithRouter(opts: { path: string; session: Session }) {
+function renderWithRouter(opts: { path: string; auth: AuthSnapshot }) {
+  // Sync window.location.search so SampleAuthProvider picks the correct role.
+  const roleKey = (Object.keys(SAMPLE_PRINCIPALS) as (keyof typeof SAMPLE_PRINCIPALS)[])
+    .find((k) => SAMPLE_PRINCIPALS[k].principal === opts.auth.principal) ?? 'employee';
+  window.history.replaceState(null, '', `/?role=${roleKey}`);
+
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 
   const router = createRouter({
     routeTree,
-    context: { queryClient, session: opts.session },
+    context: { queryClient, auth: opts.auth },
     history: createMemoryHistory({ initialEntries: [opts.path] }),
   });
 
   return render(<RouterProvider router={router} />);
 }
 
+function authFor(role: keyof typeof SAMPLE_PRINCIPALS): AuthSnapshot {
+  const p = SAMPLE_PRINCIPALS[role];
+  return { principal: p.principal, effectiveActions: p.effectiveActions };
+}
+
 beforeEach(async () => {
   await i18n.changeLanguage('en');
 });
 
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, '', '/');
+});
+
 describe('Admin: Experts table', () => {
   it('renders three expert rows', async () => {
-    renderWithRouter({ path: '/experts', session: SAMPLE_SESSIONS.admin });
+    renderWithRouter({ path: '/experts', auth: authFor('admin') });
 
     // Wait for the heading to appear
     const heading = await screen.findByRole('heading', { name: /experts/i });
@@ -41,7 +56,7 @@ describe('Admin: Experts table', () => {
 
   it('compact toggle changes table density attribute', async () => {
     const user = userEvent.setup();
-    renderWithRouter({ path: '/experts', session: SAMPLE_SESSIONS.admin });
+    renderWithRouter({ path: '/experts', auth: authFor('admin') });
 
     await screen.findByRole('heading', { name: /experts/i });
 
@@ -58,8 +73,8 @@ describe('Admin: Experts table', () => {
 });
 
 describe('Admin: Permission check', () => {
-  it('session without platformRole sees the permission block', async () => {
-    renderWithRouter({ path: '/', session: SAMPLE_SESSIONS.employee });
+  it('user without admin permissions sees the permission block', async () => {
+    renderWithRouter({ path: '/', auth: authFor('employee') });
 
     const permBlock = await screen.findByText(/not available to your role/i);
     expect(permBlock).toBeInTheDocument();

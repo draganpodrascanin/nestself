@@ -1,10 +1,9 @@
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
+import { createRootRouteWithContext, Outlet, useRouter } from '@tanstack/react-router';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { Session } from '@nestself/contracts';
-import { platformRoles } from '@nestself/contracts';
-import type { PlatformRole } from '@nestself/contracts';
+import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 import {
   ThemeProvider,
   ThemeStudio,
@@ -15,16 +14,17 @@ import {
   Badge,
 } from '@nestself/ui';
 import { SampleDataBanner } from '@nestself/ui';
-import { isSampleMode } from '@nestself/sample-data';
 import { healthQueryOptions } from '@nestself/api-client';
 import i18n from '../i18n';
-import { SessionProvider, useSession } from '../session';
+import { isSampleDataMode } from '../data-source';
+import { useAuth, AuthProvider, SampleAuthProvider, SAMPLE_ROLE_ORDER, useSampleAuth } from '../auth';
+import type { AuthSnapshot } from '../auth';
 import { api } from '../api';
 import '../app.css';
 
-export interface RouterContext {
+interface RouterContext {
   queryClient: QueryClient;
-  session: Session;
+  auth: AuthSnapshot;
 }
 
 function ApiStatus() {
@@ -52,18 +52,17 @@ export { ApiStatus };
 
 function AdminRoleSwitcher() {
   const { t } = useTranslation('admin');
-  const { session, setRole } = useSession();
-  const currentRole = session.platformRole ?? 'admin';
+  const { currentRole, setRole } = useSampleAuth();
 
   return (
     <label className="gap-1 flex flex-col type-metadata">
       {t('dev.sampleRole')}
       <select
         value={currentRole}
-        onChange={(e) => setRole(e.target.value as PlatformRole)}
+        onChange={(e) => setRole(e.target.value)}
         className="px-2 py-1 rounded-control border border-border-control bg-surface"
       >
-        {platformRoles.map((role) => (
+        {SAMPLE_ROLE_ORDER.map((role) => (
           <option key={role} value={role}>
             {role}
           </option>
@@ -73,12 +72,45 @@ function AdminRoleSwitcher() {
   );
 }
 
+/** Wraps children in the correct auth provider based on data-source mode. */
+function AuthWrapper({ children }: { children: ReactNode }) {
+  if (isSampleDataMode) {
+    return <SampleAuthProvider>{children}</SampleAuthProvider>;
+  }
+  return <AuthProvider client={api}>{children}</AuthProvider>;
+}
+
+/**
+ * Syncs auth state into the router context so `beforeLoad` gates
+ * can read `context.auth.principal` and `context.auth.effectiveActions`.
+ */
+function AuthRouterSync({ children }: { children: ReactNode }) {
+  const { principal, effectiveActions } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    const currentAuth = router.options.context.auth;
+    if (
+      currentAuth.principal !== principal ||
+      currentAuth.effectiveActions !== effectiveActions
+    ) {
+      router.update({
+        context: {
+          ...router.options.context,
+          auth: { principal, effectiveActions },
+        },
+      });
+      void router.invalidate();
+    }
+  }, [principal, effectiveActions, router]);
+
+  return <>{children}</>;
+}
+
 function RootComponent() {
   const { t } = useTranslation(['common', 'admin']);
   const isDev = import.meta.env.DEV;
   const isWebdriver = typeof navigator !== 'undefined' && navigator.webdriver;
-  const sampleMode =
-    isDev || isSampleMode(import.meta.env as unknown as Record<string, string | undefined>);
   const ctx = Route.useRouteContext();
 
   return (
@@ -87,32 +119,38 @@ function RootComponent() {
         <ThemeProvider>
           <ToastProvider labels={{ dismiss: t('nav.close') }}>
             <AnnouncerProvider>
-              <SessionProvider>
-                {sampleMode ? <SampleDataBanner message={t('sample.banner')} /> : null}
-                <SkipLink>{t('nav.skipToContent')}</SkipLink>
-                <Outlet />
-                {isDev && !isWebdriver ? (
-                  <>
-                    <ThemeStudio
-                      enabled
-                      labels={{
-                        palette: t('theme.palette'),
-                        mode: t('theme.mode'),
-                        font: t('theme.font'),
-                        heading: t('theme.designControls'),
-                      }}
-                    />
-                    <details className="bottom-20 right-4 p-4 fixed z-[var(--z-sticky)] rounded-control border border-border-control bg-surface shadow-menu">
-                      <summary className="cursor-pointer type-label">
-                        {t('admin:dev.sampleRole')}
-                      </summary>
-                      <div className="mt-3">
-                        <AdminRoleSwitcher />
-                      </div>
-                    </details>
-                  </>
-                ) : null}
-              </SessionProvider>
+              <AuthWrapper>
+                <AuthRouterSync>
+                  {isSampleDataMode ? (
+                    <SampleDataBanner message={t('sample.banner')} />
+                  ) : null}
+                  <SkipLink>{t('nav.skipToContent')}</SkipLink>
+                  <Outlet />
+                  {isDev && !isWebdriver ? (
+                    <>
+                      <ThemeStudio
+                        enabled
+                        labels={{
+                          palette: t('theme.palette'),
+                          mode: t('theme.mode'),
+                          font: t('theme.font'),
+                          heading: t('theme.designControls'),
+                        }}
+                      />
+                      {isSampleDataMode ? (
+                        <details className="bottom-20 right-4 p-4 fixed z-[var(--z-sticky)] rounded-control border border-border-control bg-surface shadow-menu">
+                          <summary className="cursor-pointer type-label">
+                            {t('admin:dev.sampleRole')}
+                          </summary>
+                          <div className="mt-3">
+                            <AdminRoleSwitcher />
+                          </div>
+                        </details>
+                      ) : null}
+                    </>
+                  ) : null}
+                </AuthRouterSync>
+              </AuthWrapper>
             </AnnouncerProvider>
           </ToastProvider>
         </ThemeProvider>
