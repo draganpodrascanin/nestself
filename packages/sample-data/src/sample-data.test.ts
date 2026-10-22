@@ -13,9 +13,11 @@ import {
   SAMPLE_HR_PROGRAMME,
   SAMPLE_EVENT_REQUEST,
   SAMPLE_TESTIMONIALS,
+  SAMPLE_ORG_UNITS,
+  SAMPLE_EXPERT_CREDENTIALS,
   isSampleMode,
   assertNotProduction,
-} from './index';
+} from './index.ts';
 const QUOTE_LOCALES = ['en', 'sr-Latn', 'sr-Cyrl', 'hu'] as const;
 
 describe('sample-data fixtures', () => {
@@ -31,6 +33,8 @@ describe('sample-data fixtures', () => {
     SAMPLE_BOOKING,
     SAMPLE_HR_PROGRAMME,
     SAMPLE_EVENT_REQUEST,
+    ...SAMPLE_ORG_UNITS,
+    ...SAMPLE_EXPERT_CREDENTIALS,
   ];
 
   it('every fixture has sample === true', () => {
@@ -92,6 +96,44 @@ describe('SAMPLE_TESTIMONIALS', () => {
         expect(typeof t.quote[locale]).toBe('string');
         expect(t.quote[locale].length).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe('SAMPLE_ORG_UNITS', () => {
+  it('has exactly one COMPANY root', () => {
+    const roots = SAMPLE_ORG_UNITS.filter((u) => u.kind === 'COMPANY');
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.parentId).toBeNull();
+  });
+
+  it('every non-root unit has a parentId in the set', () => {
+    const ids = new Set(SAMPLE_ORG_UNITS.map((u) => u.id));
+    for (const u of SAMPLE_ORG_UNITS) {
+      if (u.parentId !== null) {
+        expect(ids.has(u.parentId)).toBe(true);
+      }
+    }
+  });
+
+  it('TEAM org-unit ids match SAMPLE_TEAMS ids', () => {
+    const teamUnitIds = SAMPLE_ORG_UNITS
+      .filter((u) => u.kind === 'TEAM')
+      .map((u) => u.id)
+      .sort();
+    const legacyTeamIds = [...SAMPLE_TEAMS].map((t) => t.id).sort();
+    expect(teamUnitIds).toEqual(legacyTeamIds);
+  });
+});
+
+describe('SAMPLE_EXPERT_CREDENTIALS', () => {
+  it('has one credential per sample expert', () => {
+    expect(SAMPLE_EXPERT_CREDENTIALS).toHaveLength(SAMPLE_EXPERTS.length);
+  });
+
+  it('every credential has status APPROVED', () => {
+    for (const ec of SAMPLE_EXPERT_CREDENTIALS) {
+      expect(ec.status).toBe('APPROVED');
     }
   });
 });
