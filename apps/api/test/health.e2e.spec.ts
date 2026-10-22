@@ -3,13 +3,11 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
+import { DbService } from '../src/db/db.service.js';
 
 describe('Health (e2e)', () => {
-  const prismaStub = {
-    $connect: async () => {},
-    $disconnect: async () => {},
-    $queryRawUnsafe: async () => [{ '?column?': 1 }],
+  const dbStub = {
+    ping: async () => {},
     onModuleInit: async () => {},
     onModuleDestroy: async () => {},
   };
@@ -18,8 +16,8 @@ describe('Health (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(PrismaService)
-      .useValue(prismaStub)
+      .overrideProvider(DbService)
+      .useValue(dbStub)
       .compile();
 
     const app: INestApplication = moduleFixture.createNestApplication();
@@ -35,8 +33,8 @@ describe('Health (e2e)', () => {
 
   it('GET /api/health returns 503 when database is down', async () => {
     const failingStub = {
-      ...prismaStub,
-      $queryRawUnsafe: async () => {
+      ...dbStub,
+      ping: async () => {
         throw new Error('Connection refused');
       },
     };
@@ -44,7 +42,7 @@ describe('Health (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(PrismaService)
+      .overrideProvider(DbService)
       .useValue(failingStub)
       .compile();
 

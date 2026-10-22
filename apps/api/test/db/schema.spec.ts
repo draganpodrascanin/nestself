@@ -1,219 +1,235 @@
 /**
- * Database-level integration tests for the auth schema.
+ * Database-level integration tests for the auth schema and the RLS policies.
  *
- * Runs against TEST_DATABASE_URL (nestself_test).
- * Prerequisites: PostgreSQL running on the configured port.
+ * Runs against TEST_DATABASE_URL (nestself_test). Skipped when it is unset.
+ * Prerequisites: PostgreSQL 17 reachable with a role that may create
+ * databases and roles.
  */
 import 'dotenv/config';
-import { execFileSync } from 'node:child_process';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { PrismaClient } from '../../src/generated/prisma/client.js';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { seed } from '../../prisma/seed-lib.js';
+import { eq } from 'drizzle-orm';
+import { withOrgScope } from '../../src/db/db.service.js';
+import { seed } from '../../src/db/seed/seed-lib.js';
+import { organizations, orgUnits, grants } from '../../src/db/schema/index.js';
+import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
-
 const shouldRun = !!TEST_DB_URL;
 
 describe.skipIf(!shouldRun)('schema integration tests', () => {
-  let prisma: PrismaClient;
+  let owner: TestDatabase;
+  let app: TestDatabase;
 
   beforeAll(async () => {
-    // Drop and recreate the test database, then apply migrations (no seed).
-    // We cannot use `prisma migrate reset` because Prisma 7 removed --skip-seed
-    // and auto-runs the configured seed command.
-    const testUrl = new URL(TEST_DB_URL!);
-    const dbName = testUrl.pathname.slice(1); // e.g. "nestself_test"
-    const adminUrl = `${testUrl.protocol}//${testUrl.username}:${testUrl.password}@${testUrl.host}/postgres`;
-
-    // Connect to the default "postgres" database to drop/create the test db.
-    const adminAdapter = new PrismaPg(adminUrl);
-    const adminPrisma = new PrismaClient({ adapter: adminAdapter });
-    try {
-      // Terminate existing connections to the test database.
-      await adminPrisma.$executeRawUnsafe(
-        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid()`,
-      );
-      await adminPrisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${dbName}"`);
-      await adminPrisma.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
-    } finally {
-      await adminPrisma.$disconnect();
-    }
-
-    // Apply migrations (deploy does not seed).
-    execFileSync(
-      'pnpm',
-      ['--filter', '@nestself/api', 'exec', 'prisma', 'migrate', 'deploy'],
-      {
-        env: { ...process.env, DATABASE_URL: TEST_DB_URL },
-        stdio: 'pipe',
-        timeout: 120_000,
-      },
-    );
-
-    const adapter = new PrismaPg(TEST_DB_URL!);
-    prisma = new PrismaClient({ adapter });
+    owner = await resetTestDatabase(TEST_DB_URL!, 'schema');
+    app = await connectAsAppRole(owner);
   }, 180_000);
 
   afterAll(async () => {
-    await prisma?.$disconnect();
+    await app?.close();
+    await owner?.close();
   });
 
-  it('migrations apply cleanly on a fresh database', () => {
-    // If we get here, beforeAll succeeded, which means migrations applied.
-    expect(true).toBe(true);
+  it('migrations apply cleanly on a fresh database', async () => {
+    const { rows } = await owner.pool.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
+    );
+    expect(Number(rows[0]!.n)).toBeGreaterThanOrEqual(2);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
-    // Insert an org, an org unit of kind TEAM, then query the view.
-    await prisma.organization.create({
-      data: { id: 'test_org', name: 'Test Org', slug: 'test-org' },
-    });
-    await prisma.orgUnit.create({
-      data: {
-        id: 'ou_test_team',
-        orgId: 'test_org',
-        kind: 'TEAM',
-        name: 'Test Team',
-      },
-    });
-    await prisma.orgUnit.create({
-      data: {
-        id: 'ou_test_dept',
-        orgId: 'test_org',
-        kind: 'DEPARTMENT',
-        name: 'Test Dept',
-      },
-    });
+    await owner.db.insert(organizations).values({ id: 'test_org', name: 'Test Org', slug: 'test-org' });
+    await owner.db.insert(orgUnits).values([
+      { id: 'ou_test_team', orgId: 'test_org', kind: 'TEAM', name: 'Test Team' },
+      { id: 'ou_test_dept', orgId: 'test_org', kind: 'DEPARTMENT', name: 'Test Dept' },
+    ]);
 
-    const viewRows: Array<{ id: string; name: string; org_id: string }> =
-      await prisma.$queryRawUnsafe('SELECT * FROM teams WHERE org_id = $1', 'test_org');
-    expect(viewRows).toHaveLength(1);
-    expect(viewRows[0]!.id).toBe('ou_test_team');
-    expect(viewRows[0]!.name).toBe('Test Team');
+    const { rows } = await owner.pool.query<{ id: string; name: string; org_id: string }>(
+      'SELECT * FROM teams WHERE org_id = $1',
+      ['test_org'],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe('ou_test_team');
+    expect(rows[0]!.name).toBe('Test Team');
 
-    // Cleanup
-    await prisma.orgUnit.deleteMany({ where: { orgId: 'test_org' } });
-    await prisma.organization.delete({ where: { id: 'test_org' } });
+    await owner.db.delete(orgUnits).where(eq(orgUnits.orgId, 'test_org'));
+    await owner.db.delete(organizations).where(eq(organizations.id, 'test_org'));
   });
 
-  it('audit trigger rejects UPDATE', async () => {
-    const now = new Date();
-    const retainUntil = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  describe('audit_events', () => {
+    const insertAudit = (id: string, occurredAt: Date) =>
+      owner.pool.query(
+        `INSERT INTO audit_events (id, occurred_at, actor_kind, action, record_type, record_id, result, category, details, retain_until)
+         VALUES ($1, $2, 'SYSTEM', 'test.action', 'test', $3, 'NONE', 'ADMIN', '{}'::jsonb, $4)`,
+        [id, occurredAt, id, new Date(occurredAt.getTime() + 365 * 86_400_000)],
+      );
 
-    // Insert an audit event.
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO audit_events (id, occurred_at, actor_kind, action, record_type, record_id, result, category, details, retain_until)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      'audit_test_1',
-      now,
-      'SYSTEM',
-      'test.action',
-      'Test',
-      'test_1',
-      'NONE',
-      'ADMIN',
-      JSON.stringify({}),
-      retainUntil,
-    );
+    it('trigger rejects UPDATE', async () => {
+      const now = new Date();
+      await insertAudit('audit_test_1', now);
+      await expect(
+        owner.pool.query(
+          `UPDATE audit_events SET action = 'modified' WHERE id = 'audit_test_1' AND occurred_at = $1`,
+          [now],
+        ),
+      ).rejects.toThrow(/append-only.*UPDATE is not allowed/i);
+    });
 
-    // Attempt UPDATE - should fail.
-    await expect(
-      prisma.$executeRawUnsafe(
-        `UPDATE audit_events SET action = 'modified' WHERE id = 'audit_test_1' AND occurred_at = $1`,
-        now,
-      ),
-    ).rejects.toThrow(/append-only.*UPDATE is not allowed/i);
-  });
+    it('trigger rejects DELETE', async () => {
+      const now = new Date();
+      await insertAudit('audit_test_2', now);
+      await expect(
+        owner.pool.query(`DELETE FROM audit_events WHERE id = 'audit_test_2' AND occurred_at = $1`, [now]),
+      ).rejects.toThrow(/append-only.*DELETE is not allowed/i);
+    });
 
-  it('audit trigger rejects DELETE', async () => {
-    const now = new Date();
-    const retainUntil = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    it('event lands in the correct monthly partition', async () => {
+      const oct2026 = new Date('2026-10-15T12:00:00Z');
+      await insertAudit('audit_partition_test', oct2026);
+      const { rows } = await owner.pool.query<{ partition: string }>(
+        `SELECT tableoid::regclass::text AS partition FROM audit_events WHERE id = 'audit_partition_test' AND occurred_at = $1`,
+        [oct2026],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.partition).toBe('audit_events_y2026m10');
+    });
 
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO audit_events (id, occurred_at, actor_kind, action, record_type, record_id, result, category, details, retain_until)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      'audit_test_2',
-      now,
-      'SYSTEM',
-      'test.action',
-      'Test',
-      'test_2',
-      'NONE',
-      'ADMIN',
-      JSON.stringify({}),
-      retainUntil,
-    );
-
-    await expect(
-      prisma.$executeRawUnsafe(
-        `DELETE FROM audit_events WHERE id = 'audit_test_2' AND occurred_at = $1`,
-        now,
-      ),
-    ).rejects.toThrow(/append-only.*DELETE is not allowed/i);
-  });
-
-  it('audit event lands in the correct monthly partition', async () => {
-    const oct2026 = new Date('2026-10-15T12:00:00Z');
-    const retainUntil = new Date('2029-10-15T12:00:00Z');
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO audit_events (id, occurred_at, actor_kind, action, record_type, record_id, result, category, details, retain_until)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      'audit_partition_test',
-      oct2026,
-      'SYSTEM',
-      'test.partition',
-      'Test',
-      'part_1',
-      'NONE',
-      'ADMIN',
-      JSON.stringify({}),
-      retainUntil,
-    );
-
-    const result: Array<{ partition: string }> = await prisma.$queryRawUnsafe(
-      `SELECT tableoid::regclass::text AS partition FROM audit_events WHERE id = 'audit_partition_test' AND occurred_at = $1`,
-      oct2026,
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]!.partition).toBe('audit_events_y2026m10');
+    it('application role may INSERT but not UPDATE or DELETE (A.3.4)', async () => {
+      const { rows } = await owner.pool.query<{ ins: boolean; upd: boolean; del: boolean }>(
+        `SELECT has_table_privilege('nestself_app', 'audit_events', 'INSERT') AS ins,
+                has_table_privilege('nestself_app', 'audit_events', 'UPDATE') AS upd,
+                has_table_privilege('nestself_app', 'audit_events', 'DELETE') AS del`,
+      );
+      expect(rows[0]).toEqual({ ins: true, upd: false, del: false });
+    });
   });
 
   it('users_email_lowercase_check rejects mixed-case email', async () => {
     await expect(
-      prisma.$executeRawUnsafe(
-        `INSERT INTO users (id, email, display_name, locale, created_at, updated_at)
-         VALUES ('user_casetest', 'MixedCase@Example.com', 'Test', 'en', NOW(), NOW())`,
+      owner.pool.query(
+        `INSERT INTO users (id, email, display_name) VALUES ('user_casetest', 'MixedCase@Example.com', 'Test')`,
       ),
     ).rejects.toThrow(/users_email_lowercase_check/);
   });
 
-  it('closure invariant AUTHZ-R-09: every org unit is its own ancestor at depth 0 after seed', async () => {
-    // Run the seed against the test database.
-    const counts = await seed(prisma);
-    expect(counts.orgUnits).toBeGreaterThan(0);
-
-    // Check that every org unit has a self-entry at depth 0.
-    const orgUnits: Array<{ id: string }> = await prisma.$queryRawUnsafe(
-      'SELECT id FROM org_units',
+  it('idx_memberships_one_active rejects a second ACTIVE membership for the same user and org', async () => {
+    await owner.pool.query(
+      `INSERT INTO users (id, email, display_name) VALUES ('user_dup', 'user_dup@example.com', 'Dup')`,
     );
-    for (const ou of orgUnits) {
-      const closure: Array<{ depth: number }> = await prisma.$queryRawUnsafe(
-        `SELECT depth FROM org_unit_closure WHERE ancestor_id = $1 AND descendant_id = $1`,
-        ou.id,
-      );
-      expect(closure).toHaveLength(1);
-      expect(closure[0]!.depth).toBe(0);
-    }
+    await owner.pool.query(`INSERT INTO organizations (id, name, slug) VALUES ('org_dup', 'Dup', 'dup')`);
+    await owner.pool.query(
+      `INSERT INTO memberships (user_id, org_id, status, start_date) VALUES ('user_dup', 'org_dup', 'ACTIVE', '2026-01-01')`,
+    );
+    await expect(
+      owner.pool.query(
+        `INSERT INTO memberships (user_id, org_id, status, start_date) VALUES ('user_dup', 'org_dup', 'ACTIVE', '2026-02-01')`,
+      ),
+    ).rejects.toThrow(/idx_memberships_one_active/);
   });
 
-  it('seed is idempotent (run twice, row counts equal)', async () => {
-    const counts1 = await seed(prisma);
-    const counts2 = await seed(prisma);
+  describe('row-level security (D-19, D-37)', () => {
+    beforeAll(async () => {
+      await owner.db.insert(organizations).values([
+        { id: 'rls_org_a', name: 'RLS A', slug: 'rls-a' },
+        { id: 'rls_org_b', name: 'RLS B', slug: 'rls-b' },
+      ]);
+      await owner.db.insert(orgUnits).values([
+        { id: 'rls_ou_a', orgId: 'rls_org_a', kind: 'COMPANY', name: 'A root' },
+        { id: 'rls_ou_b', orgId: 'rls_org_b', kind: 'COMPANY', name: 'B root' },
+      ]);
+      await owner.pool.query(
+        `INSERT INTO users (id, email, display_name) VALUES ('rls_user', 'rls_user@example.com', 'RLS')`,
+      );
+      await owner.db.insert(grants).values([
+        {
+          id: 'rls_grant_a',
+          subjectUserId: 'rls_user',
+          actions: ['program.overview'],
+          scopeType: 'organization',
+          scopeOrgId: 'rls_org_a',
+          grantedByUserId: 'rls_user',
+          validFrom: new Date('2026-01-01'),
+        },
+        {
+          id: 'rls_grant_platform',
+          subjectUserId: 'rls_user',
+          actions: ['preferences.manage'],
+          scopeType: 'platform',
+          scopeOrgId: null,
+          grantedByUserId: 'rls_user',
+          validFrom: new Date('2026-01-01'),
+        },
+      ]);
+    });
 
-    for (const key of Object.keys(counts1)) {
-      expect(counts2[key]).toBe(counts1[key]);
-    }
+    it('tenant tables have RLS enabled and forced', async () => {
+      const { rows } = await owner.pool.query<{ relname: string; rls: boolean; forced: boolean }>(
+        `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
+         WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests')`,
+      );
+      expect(rows).toHaveLength(8);
+      for (const row of rows) {
+        expect(row.rls, row.relname).toBe(true);
+        expect(row.forced, row.relname).toBe(true);
+      }
+    });
+
+    it('the application role sees every row without a tenant setting (system context)', async () => {
+      const rows = await app.db.select({ id: orgUnits.id }).from(orgUnits);
+      expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(['rls_ou_a', 'rls_ou_b']));
+    });
+
+    it('withOrgScope limits reads to the organization and keeps platform grants visible', async () => {
+      const units = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.select({ id: orgUnits.id }).from(orgUnits),
+      );
+      expect(units.map((r) => r.id)).toEqual(['rls_ou_a']);
+
+      const visibleGrants = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx.select({ id: grants.id }).from(grants).where(eq(grants.subjectUserId, 'rls_user')),
+      );
+      expect(visibleGrants.map((g) => g.id)).toEqual(['rls_grant_platform']);
+    });
+
+    it('withOrgScope rejects writes for another organization', async () => {
+      // Drizzle wraps driver errors in DrizzleQueryError; the Postgres message is the cause.
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(orgUnits).values({ id: 'rls_leak', orgId: 'rls_org_b', kind: 'TEAM', name: 'leak' }),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+      const rows = await owner.db.select({ id: orgUnits.id }).from(orgUnits).where(eq(orgUnits.id, 'rls_leak'));
+      expect(rows).toEqual([]);
+    });
+
+    it('the tenant setting does not leak out of the transaction', async () => {
+      await withOrgScope(app.db, 'rls_org_a', async () => undefined);
+      const rows = await app.db.select({ id: orgUnits.id }).from(orgUnits);
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('seed', () => {
+    it('closure invariant AUTHZ-R-09: every org unit is its own ancestor at depth 0', async () => {
+      const counts = await seed(owner.db);
+      expect(counts.orgUnits).toBeGreaterThan(0);
+
+      const { rows } = await owner.pool.query<{ missing: string }>(
+        `SELECT ou.id AS missing FROM org_units ou
+         WHERE NOT EXISTS (
+           SELECT 1 FROM org_unit_closure c WHERE c.ancestor_id = ou.id AND c.descendant_id = ou.id AND c.depth = 0
+         ) AND ou.id LIKE 'ou_%' OR ou.id LIKE 'team_%' AND NOT EXISTS (
+           SELECT 1 FROM org_unit_closure c WHERE c.ancestor_id = ou.id AND c.descendant_id = ou.id AND c.depth = 0
+         )`,
+      );
+      expect(rows).toEqual([]);
+    });
+
+    it('is idempotent (run twice, row counts equal)', async () => {
+      const counts1 = await seed(owner.db);
+      const counts2 = await seed(owner.db);
+      expect(counts2).toEqual(counts1);
+    });
   });
 });

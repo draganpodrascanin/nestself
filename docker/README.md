@@ -22,7 +22,9 @@ Redis 7 (Alpine). Reserved for BullMQ job queues (lead notification emails, sche
 
 ### migrate (profile: `api`)
 
-Runs `prisma migrate deploy` against the Postgres service. It uses the `build` stage of the API Dockerfile so all workspace packages and Prisma artifacts are available. Exits after the migration completes.
+Runs the Drizzle migrator (`pnpm --filter @nestself/api db:migrate`) against the Postgres service as the owner role `nestself`. It uses the `build` stage of the API Dockerfile so all workspace packages and `tsx` are available. Exits after the migration completes.
+
+The `api` service connects as `nestself_api`, a login role created by `docker/initdb/01-app-role.sql` on the first start of the Postgres volume. That role is a member of `nestself_app`, which the migrations grant table privileges to, so the row-level-security tenant policies apply to the API but not to migrations.
 
 ### api (profile: `api`)
 

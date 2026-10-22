@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Lead, LeadAccepted } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { PrismaService } from '../prisma/prisma.service.js';
+import { LeadsRepository } from '../db/repositories/leads.repository.js';
 
 const KIND_MAP = {
   demo_request: 'DEMO_REQUEST',
@@ -11,7 +11,7 @@ const KIND_MAP = {
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly leads: LeadsRepository) {}
 
   async accept(lead: Lead): Promise<LeadAccepted> {
     // Honeypot: if website is filled, return a fake-looking but valid response without storing
@@ -26,14 +26,12 @@ export class LeadsService {
     // Strip known columns from the payload; the rest goes into the JSON column
     const { consent: _consent, website: _website, kind, email, locale, source, ...payload } = lead;
 
-    const record = await this.prisma.lead.create({
-      data: {
-        kind: KIND_MAP[kind],
-        email,
-        locale,
-        source: source ?? null,
-        payload,
-      },
+    const record = await this.leads.insert({
+      kind: KIND_MAP[kind],
+      email,
+      locale,
+      source: source ?? null,
+      payload,
     });
 
     // TODO(queue): enqueue a notification job here once BullMQ is wired (REDIS_URL).

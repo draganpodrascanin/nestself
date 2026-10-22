@@ -24,13 +24,8 @@
       "dependsOn": ["@nestself/assets#build"],
       "outputs": ["public/images/**"]
     },
-    "prisma:generate": {
-      "inputs": ["prisma/schema.prisma", "prisma.config.ts"],
-      "outputs": ["src/generated/**"]
-    },
-    "@nestself/api#build": { "dependsOn": ["@nestself/api#prisma:generate", "^build"], "outputs": ["dist/**"] },
-    "@nestself/api#typecheck": { "dependsOn": ["@nestself/api#prisma:generate", "topo"] },
-    "@nestself/api#test": { "dependsOn": ["@nestself/api#prisma:generate", "topo"] },
-    "@nestself/api#dev": { "dependsOn": ["@nestself/api#prisma:generate"], "persistent": true, "cache": false }
+    "@nestself/api#build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "@nestself/api#test": { "dependsOn": ["topo"], "env": ["CI", "TEST_DATABASE_URL", "REDIS_URL"] },
+    "@nestself/api#dev": { "persistent": true, "cache": false }
   }
 }

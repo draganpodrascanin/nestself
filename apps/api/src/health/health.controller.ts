@@ -3,13 +3,13 @@ import { Controller, Get } from '@nestjs/common';
 import { HealthCheckService, HealthCheck } from '@nestjs/terminus';
 import { Public } from '../auth/public.decorator.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { PrismaHealthIndicator } from './prisma.health.js';
+import { DbHealthIndicator } from './db.health.js';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
-    private readonly prismaHealth: PrismaHealthIndicator,
+    private readonly dbHealth: DbHealthIndicator,
   ) {}
 
   @Get()
@@ -17,7 +17,7 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.prismaHealth.isHealthy('database'),
+      () => this.dbHealth.isHealthy('database'),
     ]);
   }
 }

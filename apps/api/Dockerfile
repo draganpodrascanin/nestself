@@ -8,6 +8,7 @@ RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
 WORKDIR /repo
 
 # Fetch every package in the lockfile into the store (cached across builds), then install only the API subtree offline.
+# The `build` stage doubles as the migration image: `pnpm --filter @nestself/api db:migrate` runs the Drizzle migrator.
 FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch
@@ -15,7 +16,7 @@ COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --offline --filter "@nestself/api..."
 
 FROM deps AS build
-RUN pnpm --filter @nestself/api prisma:generate && pnpm --filter @nestself/api build
+RUN pnpm --filter @nestself/api build
 # Production node_modules for the API only (workspace packages are copied in as real directories).
 RUN pnpm --filter @nestself/api --prod deploy --legacy /out
 

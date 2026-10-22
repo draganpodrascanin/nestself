@@ -41,12 +41,11 @@
   "pnpm": {
     "overrides": {
       "react": "19.3.1",
-      "react-dom": "19.3.1"
+      "react-dom": "19.3.1",
+      "@prisma/client": "-",
+      "prisma": "-"
     },
     "onlyBuiltDependencies": [
-      "@prisma/engines",
-      "@prisma/client",
-      "prisma",
       "@swc/core",
       "esbuild",
       "unrs-resolver",

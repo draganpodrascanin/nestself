@@ -6,28 +6,23 @@ import { createHash } from 'node:crypto';
 // Mocks
 // ---------------------------------------------------------------------------
 
-function makePrismaMock() {
+function makeRepoMock() {
   return {
-    auditEvent: {
-      create: vi.fn().mockResolvedValue({ id: 'ae_1' }),
-    },
-    retentionPolicy: {
-      findMany: vi.fn().mockResolvedValue([
-        { dataCategory: 'audit_security', retentionDays: 365 * 3 },
-        { dataCategory: 'audit_authorization', retentionDays: 365 * 10 },
-        { dataCategory: 'audit_financial', retentionDays: 365 * 10 },
-        { dataCategory: 'audit_content_access', retentionDays: 365 },
-        { dataCategory: 'audit_admin', retentionDays: 365 * 10 },
-      ]),
-    },
+    insertEvent: vi.fn().mockResolvedValue(undefined),
+    findRetentionPolicies: vi.fn().mockResolvedValue([
+      { dataCategory: 'audit_security', minDays: 365 * 3 },
+      { dataCategory: 'audit_authorization', minDays: 365 * 10 },
+      { dataCategory: 'audit_financial', minDays: 365 * 10 },
+      { dataCategory: 'audit_content_access', minDays: 365 },
+      { dataCategory: 'audit_admin', minDays: 365 * 10 },
+    ]),
   };
 }
 
-function makeWriter(prisma = makePrismaMock()) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const writer = new AuditWriter(prisma as any);
+function makeWriter(repo = makeRepoMock()) {
+  const writer = new AuditWriter(repo as never);
   writer.strictMode = true;
-  return { writer, prisma };
+  return { writer, repo };
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +32,7 @@ function makeWriter(prisma = makePrismaMock()) {
 describe('AuditWriter', () => {
   describe('record()', () => {
     it('inserts with correct ipHash (SHA-256 truncated to 32 chars)', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'auth.sign_in.succeeded',
         actorUserId: 'u1',
@@ -48,14 +43,14 @@ describe('AuditWriter', () => {
         ip: '203.0.113.42',
       });
 
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
+      const row = repo.insertEvent.mock.calls[0]![0];
       const expected = createHash('sha256').update('203.0.113.42').digest('hex').slice(0, 32);
-      expect(call.data.ipHash).toBe(expected);
-      expect(call.data.ipHash).toHaveLength(32);
+      expect(row.ipHash).toBe(expected);
+      expect(row.ipHash).toHaveLength(32);
     });
 
     it('computes correct userAgentFamily', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'auth.sign_in.succeeded',
         actorUserId: 'u1',
@@ -67,12 +62,12 @@ describe('AuditWriter', () => {
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       });
 
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      expect(call.data.userAgentFamily).toBe('Chrome 120');
+      const row = repo.insertEvent.mock.calls[0]![0];
+      expect(row.userAgentFamily).toBe('Chrome 120');
     });
 
     it('computes correct retainUntil', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       const now = new Date('2026-01-15T12:00:00Z');
       await writer.record({
         action: 'auth.sign_in.succeeded', // SECURITY -> audit_security -> 3 years
@@ -84,8 +79,8 @@ describe('AuditWriter', () => {
         occurredAt: now,
       });
 
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      const retainUntil = call.data.retainUntil as Date;
+      const row = repo.insertEvent.mock.calls[0]![0];
+      const retainUntil = row.retainUntil as Date;
       const diffDays = Math.round(
         (retainUntil.getTime() - now.getTime()) / 86_400_000,
       );
@@ -93,7 +88,7 @@ describe('AuditWriter', () => {
     });
 
     it('sanitises details (removes forbidden keys)', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'auth.sign_in.failed',
         actorUserId: null,
@@ -109,8 +104,8 @@ describe('AuditWriter', () => {
         },
       });
 
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      const details = call.data.details as Record<string, unknown>;
+      const row = repo.insertEvent.mock.calls[0]![0];
+      const details = row.details as Record<string, unknown>;
       expect(details).not.toHaveProperty('password');
       expect(details).not.toHaveProperty('email');
       expect(details).toHaveProperty('emailNormalised', 'a@b.com');
@@ -118,7 +113,7 @@ describe('AuditWriter', () => {
     });
 
     it('sanitises new forbidden keys: tokens, conversationBody, professionalNote, emailAddress', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'content.created',
         actorUserId: 'u1',
@@ -135,8 +130,8 @@ describe('AuditWriter', () => {
         },
       });
 
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      const details = call.data.details as Record<string, unknown>;
+      const row = repo.insertEvent.mock.calls[0]![0];
+      const details = row.details as Record<string, unknown>;
       expect(details).not.toHaveProperty('tokens');
       expect(details).not.toHaveProperty('conversationBody');
       expect(details).not.toHaveProperty('professionalNote');
@@ -145,10 +140,9 @@ describe('AuditWriter', () => {
     });
 
     it('does not throw on write failure in non-strict mode', async () => {
-      const prisma = makePrismaMock();
-      prisma.auditEvent.create.mockRejectedValue(new Error('db down'));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const writer = new AuditWriter(prisma as any);
+      const repo = makeRepoMock();
+      repo.insertEvent.mockRejectedValue(new Error('db down'));
+      const writer = new AuditWriter(repo as never);
       writer.strictMode = false;
 
       await expect(
@@ -164,9 +158,9 @@ describe('AuditWriter', () => {
     });
 
     it('throws on write failure in strict mode', async () => {
-      const prisma = makePrismaMock();
-      prisma.auditEvent.create.mockRejectedValue(new Error('db down'));
-      const { writer } = makeWriter(prisma);
+      const repo = makeRepoMock();
+      repo.insertEvent.mockRejectedValue(new Error('db down'));
+      const { writer } = makeWriter(repo);
 
       await expect(
         writer.record({
@@ -181,7 +175,7 @@ describe('AuditWriter', () => {
     });
 
     it('sets ipHash to null when ip is null', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'auth.sign_in.succeeded',
         actorUserId: 'u1',
@@ -191,12 +185,12 @@ describe('AuditWriter', () => {
         result: 'ALLOWED',
         ip: null,
       });
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      expect(call.data.ipHash).toBeNull();
+      const row = repo.insertEvent.mock.calls[0]![0];
+      expect(row.ipHash).toBeNull();
     });
 
     it('returns unknown for missing user-agent', async () => {
-      const { writer, prisma } = makeWriter();
+      const { writer, repo } = makeWriter();
       await writer.record({
         action: 'auth.sign_in.succeeded',
         actorUserId: 'u1',
@@ -205,8 +199,8 @@ describe('AuditWriter', () => {
         recordId: 's1',
         result: 'ALLOWED',
       });
-      const call = prisma.auditEvent.create.mock.calls[0]![0];
-      expect(call.data.userAgentFamily).toBe('unknown');
+      const row = repo.insertEvent.mock.calls[0]![0];
+      expect(row.userAgentFamily).toBe('unknown');
     });
   });
 });

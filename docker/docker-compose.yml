@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: nestself_dev
       POSTGRES_DB: nestself
     ports: ['5432:5432']
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the nestself_api login role (member of nestself_app) on first start.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U nestself -d nestself']
       interval: 5s
@@ -28,7 +31,8 @@ services:
   migrate:
     profiles: [api]
     build: { context: .., dockerfile: apps/api/Dockerfile, target: build }
-    command: ['pnpm', '--filter', '@nestself/api', 'prisma:deploy']
+    # Migrations run as the owner role (nestself); the API connects as nestself_api so RLS applies.
+    command: ['pnpm', '--filter', '@nestself/api', 'db:migrate']
     environment:
       DATABASE_URL: postgresql://nestself:nestself_dev@postgres:5432/nestself
     depends_on:
@@ -39,7 +43,7 @@ services:
     restart: unless-stopped
     env_file: [api.env]
     environment:
-      DATABASE_URL: postgresql://nestself:nestself_dev@postgres:5432/nestself
+      DATABASE_URL: postgresql://nestself_api:nestself_api_dev@postgres:5432/nestself
       REDIS_URL: redis://redis:6379
     ports: ['4000:4000']
     depends_on:

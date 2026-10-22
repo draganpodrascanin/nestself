@@ -46,6 +46,8 @@ export const envSchema = z
       .default('development'),
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().url(),
+    /** pg Pool size for the API process (D-37). */
+    DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 
     // Auth mode: stub or cognito (D-36)
     AUTH_MODE: z.enum(['stub', 'cognito']).default('stub'),

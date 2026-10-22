@@ -13,7 +13,6 @@ coverage/
 *.tsbuildinfo
 
 # generated
-apps/api/src/generated/
 apps/api/openapi.json
 packages/assets/dist/
 apps/*/public/images/

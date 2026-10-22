@@ -3,21 +3,17 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../app.module.js';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { DbService } from '../db/db.service.js';
+import { LeadsRepository } from '../db/repositories/leads.repository.js';
 
 describe('LeadsController (e2e)', () => {
   let app: INestApplication;
   const leadCreateMock = vi.fn();
 
-  const prismaStub = {
-    $connect: async () => {},
-    $disconnect: async () => {},
-    $queryRawUnsafe: async () => [{ '?column?': 1 }],
+  const dbStub = {
+    ping: async () => {},
     onModuleInit: async () => {},
     onModuleDestroy: async () => {},
-    lead: {
-      create: leadCreateMock,
-    },
   };
 
   beforeEach(async () => {
@@ -30,8 +26,10 @@ describe('LeadsController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(PrismaService)
-      .useValue(prismaStub)
+      .overrideProvider(DbService)
+      .useValue(dbStub)
+      .overrideProvider(LeadsRepository)
+      .useValue({ insert: leadCreateMock })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -66,17 +64,17 @@ describe('LeadsController (e2e)', () => {
       expect(res.body).toHaveProperty('receivedAt');
     });
 
-    it('calls lead.create with correct kind, email, locale and payload containing company', async () => {
+    it('inserts the lead with correct kind, email, locale and payload containing company', async () => {
       await request(app.getHttpServer())
         .post('/api/leads/demo-requests')
         .send(validBody);
 
       expect(leadCreateMock).toHaveBeenCalledTimes(1);
-      const createArg = leadCreateMock.mock.calls[0]![0];
-      expect(createArg.data.kind).toBe('DEMO_REQUEST');
-      expect(createArg.data.email).toBe('test@example.com');
-      expect(createArg.data.locale).toBe('en');
-      expect(createArg.data.payload).toHaveProperty('company', 'Example d.o.o.');
+      const row = leadCreateMock.mock.calls[0]![0];
+      expect(row.kind).toBe('DEMO_REQUEST');
+      expect(row.email).toBe('test@example.com');
+      expect(row.locale).toBe('en');
+      expect(row.payload).toHaveProperty('company', 'Example d.o.o.');
     });
 
     it('returns 400 with issues for an invalid body', async () => {
@@ -89,7 +87,7 @@ describe('LeadsController (e2e)', () => {
       expect(Array.isArray(res.body.issues)).toBe(true);
     });
 
-    it('returns 202 but does not call lead.create for a filled honeypot', async () => {
+    it('returns 202 but does not insert a lead for a filled honeypot', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/leads/demo-requests')
         .send({ ...validBody, website: 'http://spam.com' });

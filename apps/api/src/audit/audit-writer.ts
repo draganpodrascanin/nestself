@@ -13,7 +13,7 @@ import {
   parseUserAgent as _parseUserAgent,
 } from '../common/request-fingerprint.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditRepository } from '../db/repositories/audit.repository.js';
 import { categoryFor, type AuditAction, type AuditCategory } from './audit-events.js';
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ export class AuditWriter {
   private retentionCache: Map<string, number> | null = null;
   private retentionCacheLoadedAt = 0;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly repo: AuditRepository) {}
 
   /** Insert an audit event. Never throws in production (SESS-R-22). */
   async record(input: AuditEventInput): Promise<void> {
@@ -118,24 +118,21 @@ export class AuditWriter {
         ? sanitizeDetails(input.details)
         : {};
 
-      await this.prisma.auditEvent.create({
-        data: {
-          occurredAt: now,
-          actorUserId: input.actorUserId,
-          actorKind: input.actorKind,
-          orgId: input.orgId ?? null,
-          action: input.action,
-          recordType: input.recordType,
-          recordId: input.recordId,
-          result: input.result,
-          category,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma InputJsonValue is structurally compatible
-          details: details as any,
-          sessionId: input.sessionId ?? null,
-          ipHash,
-          userAgentFamily,
-          retainUntil,
-        },
+      await this.repo.insertEvent({
+        occurredAt: now,
+        actorUserId: input.actorUserId,
+        actorKind: input.actorKind,
+        orgId: input.orgId ?? null,
+        action: input.action,
+        recordType: input.recordType,
+        recordId: input.recordId,
+        result: input.result,
+        category,
+        details,
+        sessionId: input.sessionId ?? null,
+        ipHash,
+        userAgentFamily,
+        retainUntil,
       });
     } catch (err) {
       this.logger.error(err, `Failed to write audit event: ${input.action}`);
@@ -159,7 +156,7 @@ export class AuditWriter {
 
   private async loadRetentionCache(): Promise<void> {
     try {
-      const rows = await this.prisma.retentionPolicy.findMany();
+      const rows = await this.repo.findRetentionPolicies();
       const map = new Map<string, number>();
       for (const row of rows) {
         map.set(row.dataCategory, row.minDays);
