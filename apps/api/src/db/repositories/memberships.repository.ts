@@ -3,13 +3,36 @@
  * members feature; keep Drizzle query builders here, not in services.
  */
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, gt, ilike, inArray, isNull, or } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
-import { memberships } from '../schema/index.js';
+import { memberships, orgUnitClosure } from '../schema/index.js';
+import { users } from '../schema/index.js';
 
 export type MembershipRow = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
+
+export interface MemberListOptions {
+  orgId: string;
+  limit: number;
+  cursor?: string;
+  orgUnitId?: string;
+  status?: 'INVITED' | 'ACTIVE' | 'ENDED';
+  search?: string;
+}
+
+export interface MemberListItem {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  orgUnitId: string | null;
+  costCenterUnitId: string | null;
+  lineManagerUserId: string | null;
+  status: 'INVITED' | 'ACTIVE' | 'ENDED';
+  startDate: Date;
+  endDate: Date | null;
+}
 
 @Injectable()
 export class MembershipsRepository {
@@ -59,5 +82,102 @@ export class MembershipsRepository {
       .select()
       .from(memberships)
       .where(eq(memberships.userId, userId));
+  }
+
+  /**
+   * Find an ACTIVE membership for a user in an organization.
+   * Used for validation (e.g. checking lineManagerUserId).
+   */
+  async findActiveByUserAndOrg(
+    userId: string,
+    orgId: string,
+    tx?: DbExecutor,
+  ): Promise<MembershipRow | null> {
+    const [row] = await this.exec(tx)
+      .select()
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.userId, userId),
+          eq(memberships.orgId, orgId),
+          eq(memberships.status, 'ACTIVE'),
+        ),
+      );
+    return row ?? null;
+  }
+
+  /**
+   * List members joined with users, with cursor pagination and filters.
+   * Cursor is the last membership id (stable ordering by id).
+   */
+  async listMembers(
+    opts: MemberListOptions,
+    tx?: DbExecutor,
+  ): Promise<MemberListItem[]> {
+    const conditions = [eq(memberships.orgId, opts.orgId)];
+
+    if (opts.status) {
+      conditions.push(eq(memberships.status, opts.status));
+    }
+
+    if (opts.cursor) {
+      conditions.push(gt(memberships.id, opts.cursor));
+    }
+
+    if (opts.search) {
+      const pattern = `${opts.search}%`;
+      conditions.push(
+        or(
+          ilike(users.displayName, pattern),
+          ilike(users.email, pattern),
+        )!,
+      );
+    }
+
+    // When orgUnitId is set, include descendants via closure table
+    if (opts.orgUnitId) {
+      const descendantIds = this.exec(tx)
+        .select({ id: orgUnitClosure.descendantId })
+        .from(orgUnitClosure)
+        .where(eq(orgUnitClosure.ancestorId, opts.orgUnitId));
+
+      conditions.push(inArray(memberships.orgUnitId, descendantIds));
+    }
+
+    const rows = await this.exec(tx)
+      .select({
+        membershipId: memberships.id,
+        userId: memberships.userId,
+        displayName: users.displayName,
+        email: users.email,
+        orgUnitId: memberships.orgUnitId,
+        costCenterUnitId: memberships.costCenterUnitId,
+        lineManagerUserId: memberships.lineManagerUserId,
+        status: memberships.status,
+        startDate: memberships.startDate,
+        endDate: memberships.endDate,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(and(...conditions))
+      .orderBy(asc(memberships.id))
+      .limit(opts.limit + 1); // fetch one extra to detect next page
+
+    return rows as MemberListItem[];
+  }
+
+  /** Update mutable fields on a membership. */
+  async updateMembership(
+    membershipId: string,
+    orgId: string,
+    values: Partial<Pick<NewMembership, 'orgUnitId' | 'costCenterUnitId' | 'lineManagerUserId'>>,
+    tx?: DbExecutor,
+  ): Promise<MembershipRow | null> {
+    const [row] = await this.exec(tx)
+      .update(memberships)
+      .set(values)
+      .where(and(eq(memberships.id, membershipId), eq(memberships.orgId, orgId)))
+      .returning();
+    return row ?? null;
   }
 }

@@ -23,6 +23,8 @@ import { InvitationsModule } from './invitations/invitations.module.js';
 import { MembersModule } from './members/members.module.js';
 import { UsersModule } from './users/users.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { OrgUnitsModule } from './org-units/org-units.module.js';
+import { WsModule } from './ws/ws.module.js';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { JobsModule } from './jobs/jobs.module.js';
     MembersModule,
     UsersModule,
     JobsModule,
+    OrgUnitsModule,
+    WsModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },

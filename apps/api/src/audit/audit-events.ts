@@ -25,8 +25,13 @@ export const AUDIT_ACTIONS = [
   'invitation.revoked',
   'invitation.expired',
   'membership.activated',
+  'membership.updated',
+  'membership.moved',
   'membership.ended',
   'membership.suspended',
+  'org_unit.created',
+  'org_unit.updated',
+  'org_unit.moved',
   'user.created',
   'user.updated',
   'user.suspended',
@@ -75,6 +80,7 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('identity.')) return 'ADMIN';
   if (action.startsWith('invitation.')) return 'ADMIN';
   if (action.startsWith('membership.')) return 'ADMIN';
+  if (action.startsWith('org_unit.')) return 'ADMIN';
   if (action.startsWith('user.')) return 'ADMIN';
   if (action.startsWith('grant.')) return 'AUTHORIZATION';
   if (action === 'approval_authority.changed') return 'AUTHORIZATION';

@@ -17,7 +17,7 @@ describe('audit-events', () => {
   });
 
   it('identity/invitation/membership/user actions map to ADMIN', () => {
-    const prefixes = ['identity.', 'invitation.', 'membership.', 'user.'];
+    const prefixes = ['identity.', 'invitation.', 'membership.', 'user.', 'org_unit.'];
     for (const action of AUDIT_ACTIONS.filter(
       (a) => prefixes.some((p) => a.startsWith(p)) && a !== 'user.suspended',
     )) {
