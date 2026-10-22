@@ -7,6 +7,10 @@ import { NestSelfAuthStack } from '../lib/auth-stack.js';
 import { NestSelfNetworkStack } from '../lib/network-stack.js';
 import { NestSelfDataStack } from '../lib/data-stack.js';
 import { NestSelfSecurityBaselineStack } from '../lib/security-baseline-stack.js';
+import { NestSelfComputeStack } from '../lib/compute-stack.js';
+import { NestSelfEdgeStack } from '../lib/edge-stack.js';
+import { NestSelfObservabilityStack } from '../lib/observability-stack.js';
+import { NestSelfCiStack } from '../lib/ci-stack.js';
 import type { Stage } from '../lib/config.js';
 import { getStageConfig } from '../lib/config.js';
 
@@ -73,16 +77,37 @@ if (stage !== 'dev') {
     { ...sharedProps, config },
   );
 
-  const _data = new NestSelfDataStack(
+  const _data = new NestSelfDataStack(app, `NestSelf-${stage}-Data`, {
+    ...sharedProps,
+    config,
+    platformKey: securityBaseline.platformKey,
+    vpc: network.vpc,
+  });
+
+  const compute = new NestSelfComputeStack(app, `NestSelf-${stage}-Compute`, {
+    ...sharedProps,
+    config,
+    vpc: network.vpc,
+    platformKey: securityBaseline.platformKey,
+  });
+
+  const _edge = new NestSelfEdgeStack(app, `NestSelf-${stage}-Edge`, {
+    ...sharedProps,
+    config,
+    alb: compute.alb,
+    platformKey: securityBaseline.platformKey,
+  });
+
+  const _observability = new NestSelfObservabilityStack(
     app,
-    `NestSelf-${stage}-Data`,
-    {
-      ...sharedProps,
-      config,
-      platformKey: securityBaseline.platformKey,
-      vpc: network.vpc,
-    },
+    `NestSelf-${stage}-Observability`,
+    { ...sharedProps, config },
   );
+
+  const _ci = new NestSelfCiStack(app, `NestSelf-${stage}-CI`, {
+    ...sharedProps,
+    config,
+  });
 }
 
 // --- cdk-nag ---

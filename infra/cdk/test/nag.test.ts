@@ -6,6 +6,10 @@ import { NestSelfAuthStack } from '../lib/auth-stack.js';
 import { NestSelfNetworkStack } from '../lib/network-stack.js';
 import { NestSelfDataStack } from '../lib/data-stack.js';
 import { NestSelfSecurityBaselineStack } from '../lib/security-baseline-stack.js';
+import { NestSelfComputeStack } from '../lib/compute-stack.js';
+import { NestSelfEdgeStack } from '../lib/edge-stack.js';
+import { NestSelfObservabilityStack } from '../lib/observability-stack.js';
+import { NestSelfCiStack } from '../lib/ci-stack.js';
 import { getStageConfig } from '../lib/config.js';
 
 const sharedEnv = { account: '111111111111', region: 'eu-central-1' };
@@ -67,6 +71,32 @@ describe('cdk-nag AwsSolutions -- staging full synth', () => {
 
     const _auth = new NestSelfAuthStack(
       app, 'NagStagingAuth', { config, env: sharedEnv, ...synthesizerProps },
+    );
+
+    const compute = new NestSelfComputeStack(app, 'NagStagingCompute', {
+      config,
+      env: sharedEnv,
+      vpc: network.vpc,
+      platformKey: securityBaseline.platformKey,
+      ...synthesizerProps,
+    });
+
+    const _edge = new NestSelfEdgeStack(app, 'NagStagingEdge', {
+      config,
+      env: sharedEnv,
+      alb: compute.alb,
+      platformKey: securityBaseline.platformKey,
+      ...synthesizerProps,
+    });
+
+    const _observability = new NestSelfObservabilityStack(
+      app, 'NagStagingObservability',
+      { config, env: sharedEnv, ...synthesizerProps },
+    );
+
+    const _ci = new NestSelfCiStack(
+      app, 'NagStagingCI',
+      { config, env: sharedEnv, ...synthesizerProps },
     );
 
     Validations.of(app).addPlugins(new AwsSolutionsChecks());

@@ -1,14 +1,27 @@
 # NestSelf CDK Infrastructure
 
-AWS CDK project for the NestSelf platform. Defines the auth, network, data and security-baseline stacks.
+AWS CDK project for the NestSelf platform. Defines the auth, network, data, security-baseline, compute, edge, observability and CI stacks.
 
 ## Stages
 
 | Stage | Account | Description |
 |---|---|---|
 | `dev` | shared dev account | Auth stack only. Shared Cognito pool `nestself-dev`, prefix domain, no WAF, no SES, `DESTROY` removal policy, localhost callback URLs. |
-| `staging` | dedicated | All four stacks. Custom domain (follow-up), WAF, SES, `RETAIN`. |
-| `production` | dedicated | All four stacks. Custom domain, WAF, SES, multi-AZ RDS, VPC flow logs, `RETAIN`. |
+| `staging` | dedicated | All eight stacks. Custom domain (follow-up), WAF, SES, `RETAIN`. |
+| `production` | dedicated | All eight stacks. Custom domain, WAF, SES, multi-AZ RDS, VPC flow logs, `RETAIN`. |
+
+## Stacks
+
+| Stack | Key resources | Deployed in |
+|---|---|---|
+| `NestSelfAuthStack` | Cognito user pool, app clients, Lambda triggers, WAF, Secrets Manager | All stages |
+| `NestSelfSecurityBaselineStack` | KMS keys, Route 53 hosted zone, CloudTrail | staging, production |
+| `NestSelfNetworkStack` | VPC, subnets, NAT, VPC endpoints | staging, production |
+| `NestSelfDataStack` | RDS PostgreSQL 17, ElastiCache Valkey | staging, production |
+| `NestSelfComputeStack` | ECS cluster, API/worker/marketing Fargate services, ALB, ECR repos, migrate task definition | staging, production |
+| `NestSelfEdgeStack` | CloudFront distributions (workspace, admin), S3 SPA buckets, response headers policy | staging, production |
+| `NestSelfObservabilityStack` | CloudWatch metric filters, alarms, SNS alarm topic | staging, production |
+| `NestSelfCiStack` | GitHub Actions OIDC provider, deploy role | staging, production |
 
 ## Prerequisites
 
@@ -37,6 +50,13 @@ pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<A
 # Deploy all production stacks
 pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=production -c account=<ACCOUNT_ID>
 
+# Run the migrate task manually (staging)
+aws ecs run-task \
+  --cluster nestself-staging \
+  --task-definition nestself-staging-migrate \
+  --launch-type FARGATE \
+  --network-configuration '<NETWORK_CONFIG_JSON>'
+
 # Extract .env from deployed stack outputs
 node infra/cdk/scripts/env-from-outputs.mjs --stage dev
 node infra/cdk/scripts/env-from-outputs.mjs --stage dev --mobile
@@ -47,18 +67,97 @@ pnpm --filter @nestself/cdk lint
 pnpm --filter @nestself/cdk typecheck
 ```
 
-## Dev stage resources and cost
+## Compute stack
 
-The dev stage creates a single auth stack containing:
+The compute stack creates an ECS cluster with three Fargate services and a migration task definition.
 
-- 1 Cognito User Pool (Essentials plan) with prefix domain `nestself-dev`
-- 3 app clients (web confidential, mobile public, M2M)
-- 2 Lambda triggers (CustomMessage, PreSignUp) on ARM64/Node 22
-- 2 CloudWatch Log Groups (1-week retention)
-- 2 Secrets Manager secrets (web client secret, session encryption key)
-- 2 AwsCustomResource-backed Lambda functions (client secret population)
+| Service | vCPU | Memory | Container port | Prod min tasks | ALB target group |
+|---|---|---|---|---|---|
+| `api` | 0.5 | 1 GB | 4000 | 2 | Yes, with duration-based stickiness (1 day) for Socket.IO |
+| `worker` | 0.25 | 0.5 GB | None | 1 | No |
+| `marketing` | 0.25 | 0.5 GB | 3000 | 1 | Yes, routed by host header |
 
-**Estimated cost**: under $5/month with low usage. Cognito Essentials charges per MAU after the free tier (50 MAU free). Secrets Manager is $0.40/secret/month. Lambda and CloudWatch costs are negligible at dev scale.
+The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `pnpm --filter @nestself/api db:migrate` as a one-off ECS `run-task` before each API deployment and exits when the migration completes.
+
+ECR repositories (`nestself-{stage}-api`, `nestself-{stage}-marketing`) have scan-on-push enabled. Critical findings block deployment via the CI/CD pipeline.
+
+Autoscaling targets: API scales on CPU (70%) and memory (80%). Marketing scales on CPU (70%).
+
+## Edge stack
+
+Two CloudFront distributions serve the workspace and admin SPAs from S3 with Origin Access Control (OAC). Each distribution includes:
+
+- Default behaviour: S3 origin, 403/404 fallback to `/index.html` (SPA routing)
+- `/api/*` behaviour: ALB origin, caching disabled, all headers/cookies/query strings forwarded
+- `/api/ws*` behaviour: ALB origin for Socket.IO WebSocket upgrade
+
+A shared Response Headers Policy sets HSTS (2 years, includeSubDomains, preload), X-Content-Type-Options: nosniff, X-Frame-Options: DENY, and Referrer-Policy: strict-origin-when-cross-origin.
+
+**WAF note**: CloudFront WAF ACLs must reside in us-east-1. The stack does not create a WAF inline (which would require the stack to be in us-east-1). Instead, pass `-c edgeWafArn=<ARN>` with a pre-provisioned WAF ACL ARN from a us-east-1 stack.
+
+## Observability stack
+
+Creates CloudWatch metric filters and alarms on the API log group:
+
+| Alarm | Metric | Threshold |
+|---|---|---|
+| Failed sign-ins | `FailedSignIns` (metric filter) | > 50/min |
+| Principal cache hit rate | `PrincipalCacheHits / (Hits + Misses)` | < 90% |
+| Emergency access activated | `EmergencyAccessActivations` | > 0 (fires on every activation) |
+| ALB 5xx rate | `HTTPCode_Target_5XX_Count / RequestCount` | > 1% |
+| RDS CPU | `CPUUtilization` | > 80% |
+| API task count | `RunningTaskCount` | < min tasks |
+
+All alarms notify the `nestself-{stage}-alarms` SNS topic.
+
+## CI stack
+
+Creates a GitHub Actions OIDC provider and a deploy role (`nestself-{stage}-github-deploy`) with least-privilege policies:
+
+- ECR: push images, describe scan findings
+- ECS: update services, register task definitions, run tasks
+- S3: sync SPA buckets
+- CloudFront: create invalidations
+- IAM: pass task roles
+- CDK: assume bootstrap roles
+- CloudFormation: describe stacks
+
+The trust policy constrains the OIDC `sub` claim: staging trusts `main` branch and pull requests; production trusts `v*` tags.
+
+## Cost estimates
+
+### Dev stage (auth only)
+
+Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month.
+
+### Staging/production (all stacks)
+
+| Resource | Estimated monthly cost |
+|---|---|
+| ECS Fargate (2 API + 1 worker + 1 marketing) | ~$61 |
+| RDS db.t4g.small (single-AZ staging) | ~$26 |
+| ElastiCache cache.t4g.micro | ~$12 |
+| NAT Gateway (managed, production) / fck-nat (staging) | ~$32 / ~$4 |
+| CloudFront (low traffic) | ~$1 |
+| ALB | ~$16 |
+| Secrets Manager (4 secrets) | ~$2 |
+| CloudWatch (logs, alarms) | ~$5 |
+| ECR (2 repos) | ~$1 |
+| **Total (staging)** | **~$128** |
+| **Total (production)** | **~$156** |
+
+Figures are estimates for eu-central-1; confirm with the AWS Pricing Calculator.
+
+## Manual steps for staging and production
+
+1. **Bootstrap**: Run `cdk bootstrap aws://<ACCOUNT_ID>/eu-central-1` in each target account.
+2. **SES domain identity**: Verify the sending domain in SES before deploy.
+3. **Custom Cognito domain**: Create the us-east-1 ACM certificate, then wire `auth.<domain>` into the auth stack.
+4. **Route 53 hosted zone**: Ensure the hosted zone exists and is delegated from the registrar.
+5. **WAF for CloudFront**: Create a WAF web ACL in us-east-1 and pass its ARN as `-c edgeWafArn=<ARN>`.
+6. **KMS keys**: The security-baseline stack creates `alias/nestself-platform`; ensure the deploy role has `kms:CreateKey`.
+7. **GitHub Actions variables**: Set `DEPLOY_ROLE_ARN`, `ECR_REPO_URI`, `ECR_REPO_NAME`, `ECR_REPO_MARKETING_URI`, `MIGRATE_NETWORK_CONFIG`, `SPA_WORKSPACE_BUCKET`, `SPA_ADMIN_BUCKET`, `CF_WORKSPACE_DIST_ID`, `CF_ADMIN_DIST_ID` in each GitHub environment.
+8. **Set `@aws-cdk/core:defaultCrossStackReferences`** to `"weak"` in `cdk.json` after first successful deploy of all stacks.
 
 ## B.13 CDK property verification table
 
@@ -67,28 +166,17 @@ Verified against `aws-cdk-lib@2.274.0`, `cdk-nag@3.0.2`, `constructs@10.8.1`.
 | Property / path | Status | Notes |
 |---|---|---|
 | `UserPool.mfa: OPTIONAL` | L2 supported | `cognito.Mfa.OPTIONAL` enum works directly |
-| `CfnUserPool.UserPoolTier = 'ESSENTIALS'` | L2 supported | `featurePlan: cognito.FeaturePlan.ESSENTIALS` available in 2.274.0; no L1 override needed |
+| `CfnUserPool.UserPoolTier = 'ESSENTIALS'` | L2 supported | `featurePlan: cognito.FeaturePlan.ESSENTIALS` available in 2.274.0 |
 | `UserPool.deletionProtection` | L2 supported | `deletionProtection: true` works directly |
-| `UserPoolClient.authFlows.userAuth` | L2 supported | `authFlows: { user: true }` maps to `ALLOW_USER_AUTH`; no L1 override needed |
-| `CfnUserPoolClient.RefreshTokenRotation` | L2 supported | `refreshTokenRotationGracePeriod` on the L2 sets `RetryGracePeriodSeconds` |
-| `CfnUserPoolClient.EnablePropagateAdditionalUserContextData` | Not used | Threat protection excluded from launch (D-01) |
-| `UserPoolDomain.cloudFrontEndpoint` | Not used (dev) | Dev uses prefix domain; staging/prod custom domain is a follow-up |
+| `UserPoolClient.authFlows.userAuth` | L2 supported | `authFlows: { user: true }` maps to `ALLOW_USER_AUTH` |
+| `CfnUserPoolClient.RefreshTokenRotation` | L2 supported | `refreshTokenRotationGracePeriod` sets `RetryGracePeriodSeconds` |
 | `lambda.Runtime.NODEJS_22_X` | Available | Runtime constant exists in 2.274.0 |
-| `CfnManagedLoginBranding` | Not used | Branding is a follow-up task |
-| WAF rate-based rule `limit: 50` | Valid | Minimum is 10 since March 2024; 50 is accepted |
-| `AwsCustomResource` for `DescribeUserPoolClient` | Works | SDK call shape confirmed via successful synth |
-| `webClient.userPoolClientSecret` cross-stack | Deferred | Auth stack stores secret in Secrets Manager; compute stack reads the ARN from CF outputs |
+| WAF rate-based rule `limit: 50` | Valid | Minimum is 10 since March 2024 |
+| `ecs.FargateService.circuitBreaker` | L2 supported | `circuitBreaker: { enable: true, rollback: true }` |
+| `ecr.Repository.imageScanOnPush` | L2 supported | `imageScanOnPush: true` |
+| `cloudfront.Distribution` with S3 OAC | L2 supported | `S3BucketOrigin.withOriginAccessControl()` |
+| `elbv2.ApplicationTargetGroup` stickiness | L2 + L1 override | Duration-based stickiness via `stickinessCookieDuration` |
 
 ## SignInPolicy (Essentials)
 
 The `signInPolicy.allowedFirstAuthFactors` L2 property is available in 2.274.0 for pools on the Essentials plan. It replaces the older `CfnUserPool` override for `SignInPolicy`. We set `password: true, emailOtp: true, smsOtp: false`.
-
-## Manual steps for staging and production
-
-1. **Bootstrap**: Run `cdk bootstrap aws://<ACCOUNT_ID>/eu-central-1` in each target account.
-2. **SES domain identity**: Verify the sending domain (`nestself.rs` / `staging.nestself.rs`) in SES before deploy.
-3. **Custom Cognito domain**: Create `NestSelfEdgeStack` in us-east-1 for the ACM certificate, then wire `auth.<domain>` into the auth stack.
-4. **Route 53 hosted zone**: Ensure the hosted zone for the domain exists in the target account.
-5. **WAF association**: Staging/production auth stacks attach a WAF WebACL to the user pool. Verify WAF quotas.
-6. **KMS keys**: The security-baseline stack creates `alias/nestself-platform`; ensure the deploy role has `kms:CreateKey`.
-7. **Set `@aws-cdk/core:defaultCrossStackReferences`** to `"weak"` in `cdk.json` after first successful deploy of all stacks (currently `"both"` for the transition).

@@ -1,0 +1,194 @@
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      IMAGE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.10.0'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # 1. Assume OIDC role [D-30, OPS-R-07]
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # 2. Build and push API image (tagged by release tag)
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        run: |
+          docker build -t "$ECR_REPO:$IMAGE_TAG" -f apps/api/Dockerfile .
+          docker push "$ECR_REPO:$IMAGE_TAG"
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO_URI }}
+
+      # 2b. Check ECR scan results [D-24, OPS-R-08]
+      - name: Check ECR scan for critical findings
+        run: |
+          aws ecr wait image-scan-complete \
+            --repository-name "$ECR_REPO_NAME" \
+            --image-id imageTag="$IMAGE_TAG"
+          CRITICAL=$(aws ecr describe-image-scan-findings \
+            --repository-name "$ECR_REPO_NAME" \
+            --image-id imageTag="$IMAGE_TAG" \
+            --query 'imageScanFindings.findingSeverityCounts.CRITICAL' \
+            --output text)
+          if [ "$CRITICAL" != "None" ] && [ "$CRITICAL" != "0" ]; then
+            echo "::error::ECR scan found CRITICAL vulnerabilities"
+            exit 1
+          fi
+        env:
+          ECR_REPO_NAME: ${{ vars.ECR_REPO_NAME }}
+
+      # 3. Run migration task [D-24, OPS-R-09]
+      - name: Run database migration
+        run: |
+          IMAGE_URI="${ECR_REPO}:${IMAGE_TAG}"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster nestself-production \
+            --task-definition nestself-production-migrate \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK_CONFIG" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"migrate\",\"image\":\"${IMAGE_URI}\"}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster nestself-production --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster nestself-production --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Migration failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO_URI }}
+          NETWORK_CONFIG: ${{ vars.MIGRATE_NETWORK_CONFIG }}
+
+      # 4. Update API service
+      - name: Deploy API service
+        run: |
+          IMAGE_URI="${ECR_REPO}:${IMAGE_TAG}"
+          CURRENT_TD=$(aws ecs describe-task-definition \
+            --task-definition nestself-production-api \
+            --query 'taskDefinition' --output json)
+          NEW_TD=$(echo "$CURRENT_TD" | jq \
+            --arg IMAGE "$IMAGE_URI" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status,
+                 .requiresAttributes, .compatibilities,
+                 .registeredAt, .registeredBy)')
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TD" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service \
+            --cluster nestself-production \
+            --service nestself-production-api \
+            --task-definition "$NEW_TD_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster nestself-production \
+            --services nestself-production-api
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO_URI }}
+
+      # 5. Update worker service
+      - name: Deploy worker service
+        run: |
+          IMAGE_URI="${ECR_REPO}:${IMAGE_TAG}"
+          CURRENT_TD=$(aws ecs describe-task-definition \
+            --task-definition nestself-production-worker \
+            --query 'taskDefinition' --output json)
+          NEW_TD=$(echo "$CURRENT_TD" | jq \
+            --arg IMAGE "$IMAGE_URI" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status,
+                 .requiresAttributes, .compatibilities,
+                 .registeredAt, .registeredBy)')
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TD" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service \
+            --cluster nestself-production \
+            --service nestself-production-worker \
+            --task-definition "$NEW_TD_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster nestself-production \
+            --services nestself-production-worker
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO_URI }}
+
+      # 6. Build and sync SPAs, invalidate CloudFront
+      - name: Build workspace SPA
+        run: pnpm --filter @nestself/workspace build
+
+      - name: Build admin SPA
+        run: pnpm --filter @nestself/admin build
+
+      - name: Deploy SPAs to S3 and invalidate CloudFront
+        run: |
+          aws s3 sync apps/workspace/dist "s3://$SPA_WORKSPACE_BUCKET" --delete
+          aws s3 sync apps/admin/dist "s3://$SPA_ADMIN_BUCKET" --delete
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_WORKSPACE_ID" --paths "/*"
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_ADMIN_ID" --paths "/*"
+        env:
+          SPA_WORKSPACE_BUCKET: ${{ vars.SPA_WORKSPACE_BUCKET }}
+          SPA_ADMIN_BUCKET: ${{ vars.SPA_ADMIN_BUCKET }}
+          CF_WORKSPACE_ID: ${{ vars.CF_WORKSPACE_DIST_ID }}
+          CF_ADMIN_ID: ${{ vars.CF_ADMIN_DIST_ID }}
+
+      # 7. Build and deploy marketing [D-24]
+      - name: Deploy marketing service
+        run: |
+          IMAGE_URI="${ECR_REPO_MARKETING}:${IMAGE_TAG}"
+          docker build -t "$IMAGE_URI" -f apps/marketing/Dockerfile .
+          docker push "$IMAGE_URI"
+          CURRENT_TD=$(aws ecs describe-task-definition \
+            --task-definition nestself-production-marketing \
+            --query 'taskDefinition' --output json)
+          NEW_TD=$(echo "$CURRENT_TD" | jq \
+            --arg IMAGE "$IMAGE_URI" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status,
+                 .requiresAttributes, .compatibilities,
+                 .registeredAt, .registeredBy)')
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TD" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service \
+            --cluster nestself-production \
+            --service nestself-production-marketing \
+            --task-definition "$NEW_TD_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster nestself-production \
+            --services nestself-production-marketing
+        env:
+          ECR_REPO_MARKETING: ${{ vars.ECR_REPO_MARKETING_URI }}
