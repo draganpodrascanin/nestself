@@ -208,6 +208,7 @@ export function SignInPage({ returnPath }: Props) {
         <NewPasswordScreen
           challengeToken={screen.challengeToken}
           authApi={authApi}
+          onSuccess={handleSuccess}
           onChallengeRequired={(step, token) => {
             setError(null);
             if (step === 'totp')

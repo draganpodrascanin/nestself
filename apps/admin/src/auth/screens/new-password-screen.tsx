@@ -18,6 +18,8 @@ interface Props {
   challengeToken: string;
   authApi: AuthApi;
   onChallengeRequired: (step: string, challengeToken: string) => void;
+  /** Called when the challenge completed the sign-in (no second factor required). */
+  onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
 }
 
@@ -25,6 +27,7 @@ export function NewPasswordScreen({
   challengeToken,
   authApi,
   onChallengeRequired,
+  onSuccess,
   onError,
 }: Props) {
   const { t } = useTranslation(['auth', 'common']);
@@ -56,11 +59,13 @@ export function NewPasswordScreen({
       // challenge may return MeResponse or ChallengeRequired
       if ('step' in result) {
         onChallengeRequired(result.step, result.challengeToken);
+      } else {
+        await onSuccess();
       }
-      // If MeResponse, the sign-in page's handleSuccess handles it
     } catch (err) {
-      setSubmitting(false);
       onError(err);
+    } finally {
+      setSubmitting(false);
     }
   };
 

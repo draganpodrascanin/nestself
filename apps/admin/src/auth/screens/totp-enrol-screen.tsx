@@ -40,6 +40,8 @@ export function TotpEnrolScreen({
 }: Props) {
   const { t } = useTranslation(['auth', 'common']);
   const [secretUri, setSecretUri] = useState<string | null>(null);
+  // The enrol call rotates the challengeToken; the rotated one completes the step.
+  const [activeToken, setActiveToken] = useState<string>(challengeToken);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -51,9 +53,10 @@ export function TotpEnrolScreen({
     let cancelled = false;
     void (async () => {
       try {
-        const result = await authApi.totpEnrol();
+        const result = await authApi.totpEnrol(challengeToken);
         if (cancelled) return;
         setSecretUri(result.secretUri);
+        if (result.challengeToken) setActiveToken(result.challengeToken);
         const dataUrl = await QRCode.toDataURL(result.secretUri, {
           width: 200,
           margin: 2,
@@ -66,7 +69,7 @@ export function TotpEnrolScreen({
     return () => {
       cancelled = true;
     };
-  }, [authApi, onError]);
+  }, [authApi, challengeToken, onError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,9 +83,8 @@ export function TotpEnrolScreen({
 
     setSubmitting(true);
     try {
-      await authApi.totpConfirm(code);
-      // After confirming enrolment, complete the sign-in challenge
-      await authApi.challenge(challengeToken, code);
+      // Verifies the software token and completes the MFA_SETUP challenge
+      await authApi.challenge(activeToken, code);
       await onSuccess();
     } catch (err) {
       setSubmitting(false);

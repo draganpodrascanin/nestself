@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, forwardRef } from 'react';
 import { Eye, EyeSlash } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';

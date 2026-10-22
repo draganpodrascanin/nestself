@@ -2,7 +2,8 @@
  * TOTP enrolment screen -- QR code + manual key + confirmation code.
  *
  * Uses the `qrcode` package to render a data-URL <img>.
- * Calls `POST /auth/totp/confirm` then `POST /auth/challenge` on success.
+ * Calls `POST /auth/totp/enrol` with the sign-in challengeToken, then completes
+ * the MFA_SETUP step with `POST /auth/challenge` and the authenticator code.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { FormEvent } from 'react';
@@ -46,6 +47,8 @@ export function TotpEnrolScreen({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secretUri, setSecretUri] = useState<string | null>(null);
+  // The enrol call rotates the challengeToken; the rotated one completes the step.
+  const [activeToken, setActiveToken] = useState<string>(challengeToken);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const errorRef = useRef<FormErrorSummaryHandle>(null);
 
@@ -54,9 +57,10 @@ export function TotpEnrolScreen({
     let cancelled = false;
     void (async () => {
       try {
-        const result = await authApi.totpEnrol();
+        const result = await authApi.totpEnrol(challengeToken);
         if (cancelled) return;
         setSecretUri(result.secretUri);
+        if (result.challengeToken) setActiveToken(result.challengeToken);
         const dataUrl = await QRCode.toDataURL(result.secretUri, { width: 200, margin: 2 });
         if (!cancelled) setQrDataUrl(dataUrl);
       } catch (err) {
@@ -64,7 +68,7 @@ export function TotpEnrolScreen({
       }
     })();
     return () => { cancelled = true; };
-  }, [authApi, onError]);
+  }, [authApi, challengeToken, onError]);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -79,8 +83,7 @@ export function TotpEnrolScreen({
 
       setSubmitting(true);
       try {
-        await authApi.totpConfirm(code);
-        await authApi.challenge(challengeToken, code);
+        await authApi.challenge(activeToken, code);
         await onSuccess();
       } catch (err) {
         onError(err);
@@ -88,7 +91,7 @@ export function TotpEnrolScreen({
         setSubmitting(false);
       }
     },
-    [code, challengeToken, authApi, onSuccess, onError, t],
+    [code, activeToken, authApi, onSuccess, onError, t],
   );
 
   const manualKey = secretUri ? extractSecret(secretUri) : '';

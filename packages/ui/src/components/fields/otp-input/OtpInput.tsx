@@ -1,3 +1,5 @@
+'use client';
+
 import { forwardRef, useCallback } from 'react';
 import { cn } from '../../../lib/cn';
 

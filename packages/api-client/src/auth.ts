@@ -114,10 +114,14 @@ export function createAuthApi(client: ApiClient) {
         expectBody: false,
       }),
 
-    /** POST /auth/totp/enrol — start TOTP enrolment (returns secretUri). */
-    totpEnrol: () =>
+    /**
+     * POST /auth/totp/enrol — start TOTP enrolment (returns secretUri).
+     * During sign-in pass the `totp_enrol` challengeToken; the response carries
+     * a fresh challengeToken to use with `challenge()` and the authenticator code.
+     */
+    totpEnrol: (challengeToken?: string) =>
       client.request('/api/auth/totp/enrol', {
-        method: 'POST',
+        ...jsonPost(challengeToken ? { challengeToken } : {}),
         schema: TotpEnrolResponseSchema,
       }),
 

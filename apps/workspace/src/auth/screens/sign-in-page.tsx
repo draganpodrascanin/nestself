@@ -207,6 +207,7 @@ export function SignInPage({ returnPath }: Props) {
           challengeToken={screen.challengeToken}
           authApi={authApi}
           onChallengeRequired={handleChallengeRequired}
+          onSuccess={handleSuccess}
           onError={handleApiError}
         />
       );
