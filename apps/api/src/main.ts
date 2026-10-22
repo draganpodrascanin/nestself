@@ -5,6 +5,7 @@ import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
+import { NestSelfIoAdapter } from './ws/nestself-io.adapter.js';
 import { writeFileSync } from 'node:fs';
 
 async function bootstrap() {
@@ -25,6 +26,9 @@ async function bootstrap() {
 
   // Global exception filter producing the 5.9 error envelope
   app.useGlobalFilters(new ApiExceptionFilter());
+
+  // Socket.IO under /api/ws with session-cookie or single-use-ticket handshake (T-1.11, D-19)
+  app.useWebSocketAdapter(new NestSelfIoAdapter(app));
 
   const allowedOrigins = [
     config.get<string>('MARKETING_URL'),

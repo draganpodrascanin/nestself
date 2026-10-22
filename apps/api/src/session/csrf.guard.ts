@@ -60,6 +60,11 @@ export class CsrfGuard implements CanActivate {
   }
 
   canActivate(ctx: ExecutionContext): boolean {
+    // CSRF is an HTTP-only concern; WebSocket messages are not subject to
+    // cross-site form submission. The handshake already validates origin in
+    // the NestSelfIoAdapter middleware (AUTHZ-R-58).
+    if (ctx.getType() === 'ws') return true;
+
     const req = ctx.switchToHttp().getRequest<HttpReq>();
     if (SAFE_METHODS.has(req.method)) return true;
 

@@ -18,6 +18,9 @@ import {
 } from '@nestjs/core';
 /** Internal NestJS metadata key for HTTP method; not re-exported from @nestjs/common in v12. */
 const METHOD_METADATA = 'method';
+/** NestJS WebSocket metadata keys from @nestjs/websockets/constants. */
+const GATEWAY_METADATA = 'websockets:is_gateway';
+const MESSAGE_MAPPING_METADATA = 'websockets:message_mapping';
 import { AppModule } from '../app.module.js';
 import { DbService } from '../db/db.service.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
@@ -94,6 +97,81 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
         `Default-deny violation: the following handlers have no @Public(), ` +
         `@Authenticated() or @Authorize() metadata.\n\n` +
         violations.map((v) => `  - ${v}`).join('\n'),
+      );
+    }
+  });
+
+  it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const providers = discovery.getProviders();
+    const violations: string[] = [];
+
+    for (const wrapper of providers) {
+      const instance = wrapper.instance;
+      if (!instance) continue;
+
+      const gatewayClass = instance.constructor;
+
+      // Check if this class is a @WebSocketGateway
+      const isGateway = Reflect.getMetadata(GATEWAY_METADATA, gatewayClass);
+      if (!isGateway) continue;
+
+      const className = gatewayClass.name;
+      const prototype = Object.getPrototypeOf(instance) as object;
+      const methods = scanner.getAllMethodNames(prototype);
+
+      for (const methodName of methods) {
+        const handler = (prototype as Record<string, unknown>)[methodName];
+        if (typeof handler !== 'function') continue;
+
+        // Check if method has @SubscribeMessage
+        const isMessageHandler = Reflect.getMetadata(
+          MESSAGE_MAPPING_METADATA,
+          handler,
+        );
+        if (!isMessageHandler) continue;
+
+        const targets = [handler, gatewayClass];
+
+        const isPublic = reflector.getAllAndOverride<boolean>(
+          IS_PUBLIC_KEY,
+          targets,
+        );
+        if (isPublic) continue;
+
+        const isAuthOnly = reflector.getAllAndOverride<boolean>(
+          IS_AUTHENTICATED_ONLY_KEY,
+          targets,
+        );
+        if (isAuthOnly) continue;
+
+        const authorize = reflector.getAllAndOverride<unknown>(
+          AUTHORIZE_KEY,
+          targets,
+        );
+        if (authorize) continue;
+
+        violations.push(`${className}.${methodName}`);
+      }
+    }
+
+    if (violations.length > 0) {
+      throw new Error(
+        `Default-deny violation: the following WebSocket handlers have no @Public(), ` +
+          `@Authenticated() or @Authorize() metadata.\n\n` +
+          violations.map((v) => `  - ${v}`).join('\n'),
       );
     }
   });
