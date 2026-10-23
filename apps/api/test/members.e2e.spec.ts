@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
+import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { externalIdentities, grants, memberships, users } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
@@ -95,15 +96,20 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
       });
     }
 
-    // Insert a grant for user_nikola (operations) to call people.deactivate.
-    // The seeded operations templates do not include this action, so we add
-    // a platform-scoped grant directly (the e2e test needs it).
+    // The seed gives user_nikola the `client_operations` template (scope
+    // assigned_clients, CLIENT assignment to org_sample), which carries
+    // `people.deactivate` for ending memberships of assigned clients. The
+    // platform-level suspension endpoint (`/ops/users/:id/suspend`) has no
+    // organization in its resource, so it needs the `platform_owner`
+    // template. The sample data has no platform owner; create that grant
+    // from the template the way the grant administration would.
+    const platformOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'platform_owner')!;
     await testDb.db.insert(grants).values({
-      id: 'grant_nikola_deactivate',
+      id: 'grant_user_nikola_platform_owner',
       subjectUserId: 'user_nikola',
-      templateKey: null,
-      actions: ['people.deactivate'],
-      scopeType: 'platform',
+      templateKey: platformOwner.key,
+      actions: [...platformOwner.actions],
+      scopeType: platformOwner.scopeType,
       scopeOrgId: null,
       scopeOrgUnitId: null,
       includeDescendants: false,

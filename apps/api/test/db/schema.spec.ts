@@ -7,10 +7,10 @@
  */
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
-import { organizations, orgUnits, grants } from '../../src/db/schema/index.js';
+import { channels, grants, organizations, orgUnitClosure, orgUnits, posts } from '../../src/db/schema/index.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -165,9 +165,10 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     it('tenant tables have RLS enabled and forced', async () => {
       const { rows } = await owner.pool.query<{ relname: string; rls: boolean; forced: boolean }>(
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
-         WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests')`,
+         WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
+                           'posts','polls','poll_options','poll_votes','org_unit_closure')`,
       );
-      expect(rows).toHaveLength(8);
+      expect(rows).toHaveLength(13);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -201,6 +202,45 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(cause.message).toMatch(/row-level security policy/);
       const rows = await owner.db.select({ id: orgUnits.id }).from(orgUnits).where(eq(orgUnits.id, 'rls_leak'));
       expect(rows).toEqual([]);
+    });
+
+    it('tables without an org column are isolated through their join (posts, closure)', async () => {
+      await owner.db.insert(channels).values([
+        { id: 'rls_ch_a', name: 'A general', scope: 'ORGANIZATION', orgId: 'rls_org_a' },
+        { id: 'rls_ch_b', name: 'B general', scope: 'ORGANIZATION', orgId: 'rls_org_b' },
+      ]);
+      await owner.db.insert(posts).values([
+        { id: 'rls_post_a', body: 'a', channelId: 'rls_ch_a', authorId: 'rls_user' },
+        { id: 'rls_post_b', body: 'b', channelId: 'rls_ch_b', authorId: 'rls_user' },
+      ]);
+      await owner.db.insert(orgUnitClosure).values([
+        { ancestorId: 'rls_ou_a', descendantId: 'rls_ou_a', depth: 0 },
+        { ancestorId: 'rls_ou_b', descendantId: 'rls_ou_b', depth: 0 },
+      ]);
+
+      const visiblePosts = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.select({ id: posts.id }).from(posts).where(inArray(posts.id, ['rls_post_a', 'rls_post_b'])),
+      );
+      expect(visiblePosts.map((p) => p.id)).toEqual(['rls_post_a']);
+
+      const visibleClosure = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx
+          .select({ ancestorId: orgUnitClosure.ancestorId })
+          .from(orgUnitClosure)
+          .where(inArray(orgUnitClosure.ancestorId, ['rls_ou_a', 'rls_ou_b'])),
+      );
+      expect(visibleClosure.map((c) => c.ancestorId)).toEqual(['rls_ou_b']);
+
+      // Writing a post into another organization's channel is rejected.
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(posts).values({ id: 'rls_post_leak', body: 'x', channelId: 'rls_ch_b', authorId: 'rls_user' }),
+      ).catch((e: unknown) => e);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // System context still sees both rows.
+      const all = await app.db.select({ id: posts.id }).from(posts).where(inArray(posts.id, ['rls_post_a', 'rls_post_b']));
+      expect(all).toHaveLength(2);
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

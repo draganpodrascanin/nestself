@@ -1,7 +1,7 @@
 /**
  * Experts, content, community (channels, posts, polls), leads and event
- * requests. Retained from the scaffold schema; channels and event requests are
- * tenant-scoped (RLS).
+ * requests. Retained from the scaffold schema; channels, event requests and the
+ * legacy community tables are tenant-scoped (RLS).
  */
 import {
   index,
@@ -22,7 +22,16 @@ import {
 } from './enums.js';
 import { users } from './identity.js';
 import { legacyTeams, organizations } from './organization.js';
-import { createdAt, idColumn, tenantPredicate, textArray, ts, updatedAt } from './_shared.js';
+import {
+  CURRENT_ORG_SETTING,
+  createdAt,
+  idColumn,
+  tenantPredicate,
+  tenantPredicateVia,
+  textArray,
+  ts,
+  updatedAt,
+} from './_shared.js';
 
 /** An independent professional delivering services. */
 export const experts = pgTable(
@@ -96,35 +105,76 @@ export const channels = pgTable(
   ],
 ).enableRLS();
 
-export const posts = pgTable('posts', {
-  id: idColumn(),
-  body: text().notNull(),
-  channelId: text()
-    .notNull()
-    .references(() => channels.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-  authorId: text()
-    .notNull()
-    .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-  createdAt: createdAt(),
-});
+/**
+ * Legacy community tables reach their organization through `channels` or
+ * `legacy_teams`. Their RLS policies correlate through that join so a tenant
+ * context never reads or writes another organization's posts or polls
+ * [D-19, D-37]; phase 2 retires them with the legacy team model.
+ */
+const POSTS_TENANT_EXISTS = `select 1 from "channels" where "channels"."id" = "posts"."channel_id" and "channels"."org_id" = ${CURRENT_ORG_SETTING}`;
+const POLLS_TENANT_EXISTS = `select 1 from "legacy_teams" where "legacy_teams"."id" = "polls"."team_id" and "legacy_teams"."org_id" = ${CURRENT_ORG_SETTING}`;
+const POLL_OPTIONS_TENANT_EXISTS = `select 1 from "polls" join "legacy_teams" on "legacy_teams"."id" = "polls"."team_id" where "polls"."id" = "poll_options"."poll_id" and "legacy_teams"."org_id" = ${CURRENT_ORG_SETTING}`;
+const POLL_VOTES_TENANT_EXISTS = `select 1 from "poll_options" join "polls" on "polls"."id" = "poll_options"."poll_id" join "legacy_teams" on "legacy_teams"."id" = "polls"."team_id" where "poll_options"."id" = "poll_votes"."option_id" and "legacy_teams"."org_id" = ${CURRENT_ORG_SETTING}`;
 
-export const polls = pgTable('polls', {
-  id: idColumn(),
-  question: text().notNull(),
-  teamId: text()
-    .notNull()
-    .references(() => legacyTeams.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-  closesAt: ts(),
-  createdAt: createdAt(),
-});
+export const posts = pgTable(
+  'posts',
+  {
+    id: idColumn(),
+    body: text().notNull(),
+    channelId: text()
+      .notNull()
+      .references(() => channels.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    authorId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  () => [
+    pgPolicy('posts_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(POSTS_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(POSTS_TENANT_EXISTS),
+    }),
+  ],
+).enableRLS();
 
-export const pollOptions = pgTable('poll_options', {
-  id: idColumn(),
-  label: text().notNull(),
-  pollId: text()
-    .notNull()
-    .references(() => polls.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-});
+export const polls = pgTable(
+  'polls',
+  {
+    id: idColumn(),
+    question: text().notNull(),
+    teamId: text()
+      .notNull()
+      .references(() => legacyTeams.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    closesAt: ts(),
+    createdAt: createdAt(),
+  },
+  () => [
+    pgPolicy('polls_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(POLLS_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(POLLS_TENANT_EXISTS),
+    }),
+  ],
+).enableRLS();
+
+export const pollOptions = pgTable(
+  'poll_options',
+  {
+    id: idColumn(),
+    label: text().notNull(),
+    pollId: text()
+      .notNull()
+      .references(() => polls.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+  },
+  () => [
+    pgPolicy('poll_options_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(POLL_OPTIONS_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(POLL_OPTIONS_TENANT_EXISTS),
+    }),
+  ],
+).enableRLS();
 
 export const pollVotes = pgTable(
   'poll_votes',
@@ -137,8 +187,15 @@ export const pollVotes = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
   },
-  (t) => [uniqueIndex('poll_votes_option_id_user_id_key').on(t.optionId, t.userId)],
-);
+  (t) => [
+    uniqueIndex('poll_votes_option_id_user_id_key').on(t.optionId, t.userId),
+    pgPolicy('poll_votes_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(POLL_VOTES_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(POLL_VOTES_TENANT_EXISTS),
+    }),
+  ],
+).enableRLS();
 
 /** Marketing lead captured by the public site forms. */
 export const leads = pgTable(

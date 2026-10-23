@@ -83,7 +83,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'client.create', 'client.configure', 'access.grant', 'access.revoke',
       'access.preview', 'access.emergency.request', 'access.emergency.approve',
       'policy.manage', 'service.enable', 'audit.read', 'platform.configure',
-      'sso.manage', 'session.revoke.any',
+      'sso.manage', 'session.revoke.any', 'people.deactivate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'platform',
@@ -93,6 +93,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     stepUpActions: [
       'access.grant', 'access.revoke', 'access.emergency.request',
       'access.emergency.approve', 'sso.manage', 'session.revoke.any',
+      'people.deactivate',
     ],
     isActive: true,
     legacyRole: 'ADMIN',
@@ -103,15 +104,17 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     workspace: 'operations',
     population: 'staff',
     actions: [
-      'client.configure', 'people.import', 'people.onboard', 'service.configure',
-      'request.view', 'request.route', 'bookings.coordinate',
+      'client.configure', 'people.import', 'people.onboard', 'people.deactivate',
+      'service.configure', 'request.view', 'request.route', 'bookings.coordinate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_clients',
     defaultConditions: [],
     requiredConditionTypes: [],
     requiresSecondFactor: true,
-    stepUpActions: [],
+    // Offboarding on behalf of an assigned client (API-R-27 suspension and
+    // membership end). Step-up class "administration" (3.6.9).
+    stepUpActions: ['people.deactivate'],
     isActive: true,
     legacyRole: 'OPERATIONS',
   },

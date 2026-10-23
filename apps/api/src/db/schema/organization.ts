@@ -18,7 +18,15 @@ import {
 } from 'drizzle-orm/pg-core';
 import { membershipStatus, orgRole, orgUnitKind } from './enums.js';
 import { users } from './identity.js';
-import { createdAt, idColumn, tenantPredicate, ts, updatedAt } from './_shared.js';
+import {
+  CURRENT_ORG_SETTING,
+  createdAt,
+  idColumn,
+  tenantPredicate,
+  tenantPredicateVia,
+  ts,
+  updatedAt,
+} from './_shared.js';
 
 /** An employer client company [D-02, PLAT-01]. */
 export const organizations = pgTable(
@@ -82,6 +90,8 @@ export const orgUnits = pgTable(
   ],
 ).enableRLS();
 
+const ORG_UNIT_CLOSURE_TENANT_EXISTS = `select 1 from "org_units" where "org_units"."id" = "org_unit_closure"."ancestor_id" and "org_units"."org_id" = ${CURRENT_ORG_SETTING}`;
+
 /**
  * Closure table for ancestor and descendant queries on org units [D-16].
  * Every node has a self-referencing entry at depth 0 (AUTHZ-R-09).
@@ -101,8 +111,15 @@ export const orgUnitClosure = pgTable(
   (t) => [
     primaryKey({ columns: [t.ancestorId, t.descendantId] }),
     index('org_unit_closure_descendant_id_idx').on(t.descendantId),
+    // Both ends of a closure row belong to the same organization; correlating
+    // on the ancestor is enough [D-19, D-37].
+    pgPolicy('org_unit_closure_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(ORG_UNIT_CLOSURE_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(ORG_UNIT_CLOSURE_TENANT_EXISTS),
+    }),
   ],
-);
+).enableRLS();
 
 /**
  * A user's eligibility in an organization with effective dates

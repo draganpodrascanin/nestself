@@ -58,3 +58,23 @@ export function tenantPredicate(
     ? sql`(${unscoped} OR ${orgIdColumn} IS NULL OR ${match})`
     : sql`(${unscoped} OR ${match})`;
 }
+
+/**
+ * Row-level-security predicate for tables that reach their organization only
+ * through a join (legacy community tables, the org-unit closure table). The
+ * caller supplies the correlated `EXISTS` body as raw SQL; it must compare the
+ * joined organization column with `current_setting('app.current_org_id', true)`
+ * and correlate on the outer table's columns by their qualified names, for
+ * example `"posts"."channel_id"`.
+ *
+ * Unscoped (system-context) connections see every row, exactly as
+ * {@link tenantPredicate}.
+ */
+export function tenantPredicateVia(existsBody: string): SQL {
+  const current = sql`current_setting('app.current_org_id', true)`;
+  const unscoped = sql`coalesce(${current}, '') = ''`;
+  return sql`(${unscoped} OR EXISTS (${sql.raw(existsBody)}))`;
+}
+
+/** SQL text of the tenant setting, for {@link tenantPredicateVia} bodies. */
+export const CURRENT_ORG_SETTING = "current_setting('app.current_org_id', true)";
