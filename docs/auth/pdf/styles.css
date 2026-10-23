@@ -1,0 +1,95 @@
+/* Print styles for the Markdown-rendered auth guides. Colour values mirror
+   packages/tokens/tokens.css (Forest and Mint, light) and the Onest font ships
+   in packages/assets/fonts. Pagination is automatic; see build.mjs. */
+
+@font-face { font-family: "Onest"; font-weight: 400; font-display: block; src: url("../../../packages/assets/fonts/Onest-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Onest"; font-weight: 600; font-display: block; src: url("../../../packages/assets/fonts/Onest-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "Onest"; font-weight: 700; font-display: block; src: url("../../../packages/assets/fonts/Onest-Bold.woff2") format("woff2"); }
+
+:root {
+  color-scheme: light;
+  --font-body: "Onest", system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-text: #25352D;
+  --color-text-secondary: #4E655A;
+  --color-border-subtle: #DBE5DE;
+  --color-primary: #31594D;
+  --color-accent-soft: #ECF6F1;
+  --color-tint: #E6EDE7;
+  --color-warning-surface: #FFF3D6;
+  --color-info-surface: #EAF1FA;
+}
+
+@page { size: A4; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  font-size: 10pt;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.doc { max-width: 100%; }
+
+h1 { font-size: 22pt; font-weight: 700; line-height: 1.2; margin: 0 0 4mm; color: var(--color-primary); }
+h1 + p { font-size: 11pt; color: var(--color-text-secondary); }
+h2 { font-size: 15pt; font-weight: 700; margin: 9mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 1.5pt solid var(--color-primary); break-after: avoid; color: var(--color-primary); }
+h3 { font-size: 12pt; font-weight: 600; margin: 6mm 0 2mm; break-after: avoid; }
+h4 { font-size: 10.5pt; font-weight: 600; margin: 4mm 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.5mm; }
+ul, ol { margin: 0 0 2.5mm; padding-left: 5mm; }
+li { margin-bottom: 1mm; }
+li > ul, li > ol { margin-top: 1mm; }
+strong { font-weight: 600; }
+a { color: var(--color-primary); text-decoration: none; }
+hr { border: 0; border-top: 1pt solid var(--color-border-subtle); margin: 5mm 0; }
+
+code {
+  font-family: var(--font-code);
+  font-size: 8.6pt;
+  background: var(--color-tint);
+  padding: 0 0.4em;
+  border-radius: 3px;
+}
+pre {
+  font-family: var(--font-code);
+  font-size: 8.4pt;
+  line-height: 1.45;
+  background: var(--color-accent-soft);
+  border: 1pt solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 3mm 4mm;
+  margin: 0 0 3mm;
+  white-space: pre-wrap;
+  word-break: break-word;
+  break-inside: avoid;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 3.5mm;
+  font-size: 8.8pt;
+  break-inside: auto;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th, td { text-align: left; vertical-align: top; padding: 1.4mm 2mm; border-bottom: 1pt solid var(--color-border-subtle); }
+th { background: var(--color-tint); font-weight: 600; }
+td code, th code { font-size: 8pt; white-space: nowrap; }
+
+blockquote {
+  margin: 0 0 3mm;
+  padding: 2.5mm 4mm;
+  border-left: 3pt solid var(--color-primary);
+  background: var(--color-info-surface);
+  break-inside: avoid;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+/* Cover block: the first H1 and its lead paragraph start the document; the
+   first H2 opens a new page so the table of contents stands alone. */
+h1 + p + h2, h1 + p + ul + h2 { break-before: page; }
