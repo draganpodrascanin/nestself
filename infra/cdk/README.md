@@ -2,6 +2,8 @@
 
 AWS CDK project for the NestSelf platform. Defines the auth, network, data, security-baseline, compute, edge, observability and CI stacks.
 
+First-time setup of an AWS account, credentials, IAM permissions and the environment variables the apps need is written step by step in `CDK-setup.md` at the repository root. This file is the reference for the stacks themselves.
+
 ## Stages
 
 | Stage | Account | Description |
@@ -88,8 +90,8 @@ aws ecs run-task \
   --network-configuration '<NETWORK_CONFIG_JSON>'
 
 # Extract .env from deployed stack outputs
-node infra/cdk/scripts/env-from-outputs.mjs --stage dev
-node infra/cdk/scripts/env-from-outputs.mjs --stage dev --mobile
+node infra/cdk/scripts/env-from-outputs.mjs dev
+node infra/cdk/scripts/env-from-outputs.mjs dev --mobile
 
 # Run tests / lint / typecheck
 pnpm --filter @nestself/cdk test
@@ -104,7 +106,7 @@ The compute stack creates an ECS cluster with three Fargate services and a migra
 | Service | vCPU | Memory | Container port | Prod min tasks | ALB target group |
 |---|---|---|---|---|---|
 | `api` | 0.5 | 1 GB | 4000 | 2 | Yes, with duration-based stickiness (1 day) for Socket.IO |
-| `worker` | 0.25 | 0.5 GB | None | 1 | No |
+| `worker` | 0.25 | 0.5 GB | None | 1 | No (runs `node dist/worker/main.js`: the BullMQ scheduler for the nightly maintenance jobs) |
 | `marketing` | 0.25 | 0.5 GB | 3000 | 1 | Yes, routed by host header |
 
 The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `pnpm --filter @nestself/api db:migrate` as a one-off ECS `run-task` before each API deployment and exits when the migration completes.

@@ -18,6 +18,7 @@ NestSelf serves five populations from one platform: employees of client companie
 | Organization structure | A tree of org units with a closure table | Cheap ancestor queries for "manager of this team and everything under it". |
 | Database access | Drizzle ORM with PostgreSQL row-level security | Tenant isolation lives in the database: a query without an organization filter returns nothing. Partial indexes, checks and views are part of the schema. |
 | Audit | Append-only, partitioned `audit_events` with retention tiers | Every consequential action is recorded; nothing sensitive (tokens, message bodies, raw IPs) ever is. |
+| Background work | BullMQ on Redis, run by a separate worker process | Nightly reconciliation (expired grants, stale mobile token families, audit partitions) is audited like any user action and never runs inside the API process. |
 | Enforcement | Every route declares `@Public`, `@Authenticated` or `@Authorize`; a CI test fails otherwise | Default deny cannot be forgotten. |
 | Rollout | Cognito first, platform stacks later, mobile last | Local development stays local; the CDK app deploys only the auth stack unless asked for more. |
 
@@ -48,7 +49,9 @@ NestSelf serves five populations from one platform: employees of client companie
 | Database schema, migrations, seed | `apps/api/src/db/schema/`, `apps/api/drizzle/`, `apps/api/src/db/seed/` |
 | Sessions and Redis keys | `apps/api/src/session/`, `apps/api/src/redis/redis-keys.ts` |
 | Sign-in screens | `apps/workspace/src/auth/screens/`, `apps/admin/src/auth/screens/`, `apps/mobile/src/auth/` |
-| Cognito infrastructure and rollout steps | `infra/cdk/lib/auth-stack.ts`, `infra/cdk/README.md` |
+| Cognito infrastructure and rollout steps | `CDK-setup.md` (repo root), `infra/cdk/lib/auth-stack.ts`, `infra/cdk/README.md` |
+| Nightly jobs and the worker process | `apps/api/src/jobs/`, `apps/api/src/worker/main.ts` |
+| Phase 2 plan | `docs/tasks/auth/phase-2-readiness.md` |
 | Environment variables | `docs/environment.md`, `apps/api/src/config/env.ts` |
 
 ## Running it locally
@@ -58,6 +61,7 @@ pnpm install && pnpm db:up
 cp apps/api/.env.example apps/api/.env
 pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/api db:seed
 pnpm --filter @nestself/api dev
+pnpm --filter @nestself/api worker:dev   # optional: nightly jobs, needs REDIS_URL
 ```
 
 Stub mode uses a fake identity provider pre-loaded with the sample people. Employees (`user_jovan@example.com`, `user_ivana@example.com`, `user_stefan@example.com`) sign in with the code printed in the API log; staff and experts (`user_nikola@example.com`, `user_milica@example.com`) use the password `Nestself-dev-1234!` and enrol an authenticator on first sign-in. Set `VITE_DATA_SOURCE=api` in a web app's `.env.local` to use the real screens.
@@ -74,4 +78,4 @@ Stub mode uses a fake identity provider pre-loaded with the sample people. Emplo
 
 ## What is not done yet
 
-Step-up enforcement, grant administration screens, enterprise SSO, emergency access, nightly reconciliation jobs, and the compliance track (privacy notices, processing agreement, breach procedure) which must land before the first real employee signs in.
+Step-up enforcement, grant administration screens, operations routes for assigned clients, emergency access, enterprise SSO, the remaining nightly jobs (session drift, Cognito user export, retention sweeper, audit export) and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. The ordered plan is `docs/tasks/auth/phase-2-readiness.md`.

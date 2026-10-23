@@ -67,6 +67,8 @@ cp apps/api/.env.example apps/api/.env       # defaults are fine for stub mode
 pnpm --filter @nestself/api db:migrate       # apply apps/api/drizzle/*.sql
 pnpm --filter @nestself/api db:seed          # fictional fixtures from packages/sample-data
 pnpm --filter @nestself/api dev              # http://localhost:4000, Swagger at /api/docs
+pnpm --filter @nestself/api worker:dev       # optional: the nightly jobs (needs REDIS_URL)
+pnpm --filter @nestself/api job:run grants.reconcile   # run one job once, no queue
 ```
 
 The seed creates the sample organization, org units, people, grants and an `external_identities` row per person. The fake identity provider is pre-loaded with the same people (`apps/api/src/identity/identity.module.ts`), so sign-in works out of the box:
@@ -173,7 +175,9 @@ Context switch (`POST /auth/context`, `session-endpoints.service.ts`) changes th
 
 ## 8. Mobile bearer tokens
 
-Mobile apps authenticate against Cognito directly and send `Authorization: Bearer <access token>`. `AuthenticationGuard` passes the token to the `BEARER_VERIFIER` provider (`src/auth/bearer-verifier.ts`): `CognitoBearerVerifier` verifies signature and claims with `aws-jwt-verify` (`tokenUse: 'access'`, the mobile client id) and rejects tokens whose refresh family is listed in `revoked_family:{originJti}`; `StubBearerVerifier` accepts HS256 tokens signed with `JWT_SECRET` in stub mode. The guard then maps `sub` to the user through `external_identities`, records the family in `mobile_families:{userId}` (30-day TTL, AUTHZ-R-64) and assembles the principal with the default context for the user. Bearer callers cannot use `/ops/*` routes (API-R-28) and get 403 `session_required`.
+Mobile apps authenticate against Cognito directly and send `Authorization: Bearer <access token>`. `AuthenticationGuard` passes the token to the `BEARER_VERIFIER` provider (`src/auth/bearer-verifier.ts`): `CognitoBearerVerifier` verifies signature and claims with `aws-jwt-verify` (`tokenUse: 'access'`, the mobile client id) and rejects tokens whose refresh family is listed in `revoked_family:{originJti}`; `StubBearerVerifier` accepts HS256 tokens signed with `JWT_SECRET` in stub mode. The guard then maps `sub` to the user through `external_identities`, records the family in `user_mobile_families:{userId}` and refreshes `mobile_family:{originJti}` (30-day TTL, AUTHZ-R-64) and assembles the principal with the default context for the user. Bearer callers cannot use `/ops/*` routes (API-R-28) and get 403 `session_required`. The nightly `mobile.prune-stale-families` job (section 14) denylists families whose last-seen key has expired.
+
+Cognito access tokens carry `auth_time` but not the method, so `CognitoBearerVerifier` reports `email_otp` with no second factor. That is accurate today: the mobile app client only permits the email-code first factor (`USER_AUTH` with `EMAIL_OTP`), passwords and authenticators are web-only, and SSO (which would set `sso`) is phase 3. Step-up for mobile goes through the application-side step-up endpoints (phase 2), never through claims.
 
 ## 9. Principal, grants and the authorization engine
 
@@ -193,11 +197,11 @@ Mobile apps authenticate against Cognito directly and send `Authorization: Beare
 
 **Schema** (`src/db/schema/`): `identity.ts` (users, external_identities), `organization.ts` (organizations, org_units, org_unit_closure, memberships, legacy_teams and the `teams` view), `authorization.ts` (permission_templates, grants, assignments, approval_authorities, emergency_access), `invitations.ts` (invitations, sso_connections, sso_domains), `audit.ts` (audit_events, retention_policies), `content.ts` (experts, credentials, content, channels, polls, leads, event requests), `relations.ts` for `db.query.*`. Conventions: snake_case columns (`casing: 'snake_case'`), text ids with `gen_random_uuid()::text` defaults, `timestamptz(3)`, `updated_at` maintained by Drizzle.
 
-**Row-level security.** Tables with an organization column (`org_units`, `memberships`, `grants`, `approval_authorities`, `invitations`, `sso_connections`, `channels`, `event_requests`) declare a `pgPolicy` whose predicate is `coalesce(current_setting('app.current_org_id', true), '') = '' OR org_id = current_setting('app.current_org_id', true)` (platform-wide grants with a null organization stay visible). RLS is enabled and forced. `DbService.withOrgScope(orgId, fn)` runs `fn` in a transaction after `select set_config('app.current_org_id', $1, true)`; everything inside sees and writes only that organization. Code that runs without the setting (principal loading, seeds, jobs) is in system context and sees all rows. Policies bind only roles that are neither superuser nor table owner: migrations run as the owner, the API connects as a login that is a member of `nestself_app` (Docker: `nestself_api` created by `docker/initdb/01-app-role.sql`). A local Homebrew superuser is not restricted; `test/db/schema.spec.ts` proves the policies with a non-superuser login.
+**Row-level security.** Tables with an organization column (`org_units`, `memberships`, `grants`, `approval_authorities`, `invitations`, `sso_connections`, `channels`, `event_requests`) declare a `pgPolicy` whose predicate is `coalesce(current_setting('app.current_org_id', true), '') = '' OR org_id = current_setting('app.current_org_id', true)` (platform-wide grants with a null organization stay visible). Tables that reach their organization only through a join use `tenantPredicateVia()` with a correlated `EXISTS`: `posts` through `channels`, `polls`, `poll_options` and `poll_votes` through `legacy_teams`, and `org_unit_closure` through `org_units` (migration `0002_rls_legacy_content_closure.sql`). Every one of the thirteen tenant tables has RLS enabled and forced. `DbService.withOrgScope(orgId, fn)` runs `fn` in a transaction after `select set_config('app.current_org_id', $1, true)`; everything inside sees and writes only that organization. Code that runs without the setting (principal loading, seeds, jobs) is in system context and sees all rows. Policies bind only roles that are neither superuser nor table owner: migrations run as the owner, the API connects as a login that is a member of `nestself_app` (Docker: `nestself_api` created by `docker/initdb/01-app-role.sql`). A local Homebrew superuser is not restricted; `test/db/schema.spec.ts` proves the policies with a non-superuser login.
 
 **Repositories** (`src/db/repositories/`): `identity`, `authorization`, `audit`, `leads`, `invitations`, `memberships`, `org-units`. They are the only place with Drizzle query builders; every method accepts an optional `tx` so services can compose them inside `withOrgScope`. Services depend on repositories, which is why unit tests mock plain methods and app-level tests override `DbService` with `{ ping, onModuleInit, onModuleDestroy }`.
 
-**Migrations.** `pnpm --filter @nestself/api db:generate` diffs the schema against `drizzle/meta` and writes a new SQL file; `db:generate -- --custom --name=<name>` creates an empty file for hand-written SQL; `db:migrate` applies pending files (tracked in `drizzle.__drizzle_migrations`); `db:seed` upserts the fixtures. `0001_audit_partitions_rls_roles.sql` holds what drizzle-kit cannot express: monthly range partitions and `audit_events_ensure_partitions()`, the append-only triggers, the `nestself_app` role and its privileges, `FORCE ROW LEVEL SECURITY`. Never let drizzle-kit alter `audit_events` directly; write a custom migration.
+**Migrations.** `pnpm --filter @nestself/api db:generate` diffs the schema against `drizzle/meta` and writes a new SQL file; `db:generate -- --custom --name=<name>` creates an empty file for hand-written SQL; `db:migrate` applies pending files (tracked in `drizzle.__drizzle_migrations`); `db:seed` upserts the fixtures. `0001_audit_partitions_rls_roles.sql` holds what drizzle-kit cannot express: monthly range partitions and `audit_events_ensure_partitions()`, the append-only triggers, the `nestself_app` role and its privileges, `FORCE ROW LEVEL SECURITY`. `0002_rls_legacy_content_closure.sql` adds the join-based policies above, forces them, and makes `audit_events_ensure_partitions()` `SECURITY DEFINER` so the application role can create partitions from the nightly job. Never let drizzle-kit alter `audit_events` directly; write a custom migration.
 
 ## 11. Organization and operations administration
 
@@ -212,6 +216,8 @@ All `/orgs/:orgId/*` routes require the active context to be that organization (
 
 Invitation tokens are 32 random bytes; only the SHA-256 hash is stored, with a 7-day expiry. In development the create response adds `devToken` and the logging mailer prints the link; with `SES_FROM_EMAIL` set the SES mailer sends it. Membership end sets `ENDED`, revokes the user's grants scoped to the organization and their delegated children (depth 3), audits first, then calls `revokeAllAccess` (SESS-R-22, SESS-R-23). Suspension sets `users.suspended_at`, disables the identity-provider user, audits `user.suspended` (SECURITY tier) and revokes all access; `authorize()` denies suspended users on the next request anyway.
 
+`people.deactivate` is held by three templates: `hr_admin` (organization scope, ends memberships of its own organization through `/orgs/:orgId/members/:id/end`), `platform_owner` (platform scope, the only template that reaches `/ops/users/:id/suspend`, whose resource has no organization) and `client_operations` (scope `assigned_clients`, for offboarding on behalf of an assigned client). The third is declared but not yet reachable over HTTP: `/orgs/:orgId/*` routes require the organization context (API-R-21) and staff hold no membership, so phase 2 adds `/ops/orgs/:orgId/...` routes whose resolver passes the route organization into the resource and lets the engine check the CLIENT assignment. The sample data has no platform owner; tests create that grant from the template.
+
 ## 12. Audit log
 
 `AuditWriter.record()` (`src/audit/audit-writer.ts`) inserts into `audit_events` with the category derived from the action (`audit-events.ts`: `auth.*` and `user.suspended` are SECURITY, `grant.*` and `access.denied` AUTHORIZATION, administration ADMIN, content CONTENT_ACCESS), the retention horizon from `retention_policies` (10-minute cache, defaults per tier), a keyed hash of the IP (HMAC with `IP_HASH_SALT`, falling back to the session encryption key, so it cannot be reversed from a table of all addresses) and the parsed user-agent family. Details are sanitised: forbidden keys (tokens, passwords, message bodies, intake text, notes, voucher codes, raw email) are dropped and strings truncated. `record()` never throws in production; tests set `strictMode`. The table is range-partitioned by month and protected by triggers that reject UPDATE and DELETE; the application role also lacks those privileges. `pino-redaction.ts` redacts the same fields from HTTP logs. Add a new action to `AUDIT_ACTIONS` before using it; the type will not compile otherwise.
@@ -222,7 +228,21 @@ Invitation tokens are 32 random bytes; only the SHA-256 hash is stored, with a 7
 
 ## 14. Background jobs
 
-`JobAuthorization` (`src/jobs/job-authorization.ts`) wraps BullMQ processors. A job payload carries `{ principalId, context, action, resource, data }` and never tokens or grants (AUTHZ-R-54). At execution the wrapper reloads the principal, rebuilds the context and calls `authorize()`; an unknown, suspended or denied principal completes the job as `skipped` (not failed, so no retry) with an `access.denied` audit event, while allowed jobs run the handler and audit with `actorKind: 'JOB'`. Queues themselves are not wired yet.
+Two kinds of job live in `src/jobs/`.
+
+**Jobs on behalf of a principal.** `JobAuthorization` (`job-authorization.ts`) wraps BullMQ processors. A job payload carries `{ principalId, context, action, resource, data }` and never tokens or grants (AUTHZ-R-54). At execution the wrapper reloads the principal, rebuilds the context and calls `authorize()`; an unknown, suspended or denied principal completes the job as `skipped` (not failed, so no retry) with an `access.denied` audit event, while allowed jobs run the handler and audit with `actorKind: 'JOB'`. Feature modules that enqueue work (exports, imports) wrap their processors with it.
+
+**System maintenance jobs.** `MaintenanceJobsService` (`maintenance-jobs.service.ts`) holds three idempotent jobs that run in system context (no tenant setting) and audit with `actorKind: 'JOB'`, `actorUserId: null`:
+
+| Job | Schedule (local) | What it does |
+|---|---|---|
+| `audit.ensure-partitions` | 01:00 | Calls `audit_events_ensure_partitions(3)` so the next three months' partitions exist (D-21) |
+| `grants.reconcile` | 02:15 | Closes grants whose `valid_until` passed (`grant.expired`), revokes delegations whose parent is revoked (`grant.delegation_revoked`), revokes organization-scoped grants whose subject has no ACTIVE membership (`grant.revoked`, reason `membership_ended`), then invalidates each affected principal (T-2.10, D-17) |
+| `mobile.prune-stale-families` | 02:30 | Scans `user_mobile_families:*`; a family whose `mobile_family:{jti}` key has expired (30 days unseen) is denylisted in `revoked_family:{jti}` for 90 days, removed from the set and audited as `auth.mobile_family.revoked` (AUTHZ-R-64) |
+
+`JobSchedulerService` (`job-scheduler.service.ts`) registers these as BullMQ job schedulers on the `nestself-maintenance` queue (its own ioredis connection to `REDIS_URL`, cron in `JOBS_TIMEZONE`, default `Europe/Belgrade`, three attempts with exponential backoff) and runs a worker with concurrency 1. It is started only by the worker process: `src/worker/main.ts` boots the application context without an HTTP listener and calls `start()`; the ECS `worker` service runs `node dist/worker/main.js` from the same image as the API, locally `pnpm --filter @nestself/api worker:dev`. Without `REDIS_URL` the worker exits with an error. `pnpm --filter @nestself/api job:run <name>` executes one job immediately through `scripts/run-job.ts` and prints its report, which is how to verify a job after a deploy or catch up after downtime. `KeyValueStore.scan()` exists for these jobs only; request paths never call it.
+
+Unit tests (`maintenance-jobs.service.test.ts`) use mocked repositories and the in-memory store; `test/jobs.e2e.spec.ts` runs the reconciliation and partition jobs against the real database and checks the audit trail and the application role's permission to create partitions.
 
 ## 15. Web clients
 
@@ -246,7 +266,9 @@ pnpm --filter @nestself/cdk exec cdk deploy NestSelf-dev-Auth -c stage=dev -c ac
 node infra/cdk/scripts/env-from-outputs.mjs dev >> apps/api/.env     # COGNITO_* and the secret
 ```
 
-Then set `AUTH_MODE=cognito`, `REDIS_URL` and `SESSION_ENCRYPTION_KEY` (from the stack secret) in `apps/api/.env`. Users must exist in the pool: create them through an invitation (the accept flow calls `AdminCreateUser`) or with the AWS console for a first test; the API links them by `sub` on first sign-in only when an `external_identities` row exists, so onboarding goes through invitations. `env-from-outputs.mjs <stage> --mobile` prints the `EXPO_PUBLIC_*` values for the app.
+The step-by-step account setup, credentials, IAM permissions and every environment variable are in `CDK-setup.md` at the repository root. Then set `AUTH_MODE=cognito`, `REDIS_URL` and `SESSION_ENCRYPTION_KEY` (from the stack secret) in `apps/api/.env`. Users must exist in the pool: create them through an invitation (the accept flow calls `AdminCreateUser`) or with the AWS console for a first test; the API links them by `sub` on first sign-in only when an `external_identities` row exists, so onboarding goes through invitations. `env-from-outputs.mjs <stage> --mobile` prints the `EXPO_PUBLIC_*` values for the app (`EXPO_PUBLIC_COGNITO_CLIENT_ID` is the name `apps/mobile/src/auth/config.ts` reads).
+
+The API process needs AWS credentials for the Cognito admin calls (`AdminInitiateAuth`, `AdminRespondToAuthChallenge`, `AdminCreateUser`, `AdminDeleteUser`, `AdminDisableUser`, `AdminEnableUser`, `AdminGetUser`, `AdminSetUserPassword`, `AdminUserGlobalSignOut`, `GetTokensFromRefreshToken`, `RevokeToken`, `ListUsers`, `DescribeUserPoolClient`) and, when `SES_FROM_EMAIL` is set, `ses:SendEmail`. In AWS these come from the ECS task role (`infra/cdk/lib/constructs/ecs-task-roles.ts`); locally from the default credential chain (`AWS_PROFILE`). The compute stack's `worker` service runs `node dist/worker/main.js` (section 14) with the worker task role.
 
 ## 18. Configuration reference
 
@@ -266,6 +288,7 @@ Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
 | `MARKETING_URL`, `WORKSPACE_URL`, `ADMIN_URL`, `API_PUBLIC_URL` | Allowed origins for CORS, CSRF and WebSocket handshakes; invitation links |
 | `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction |
 | `SES_FROM_EMAIL` | Enables the SES invitation mailer |
+| `JOBS_TIMEZONE` | Worker process: IANA timezone of the nightly job schedules (default `Europe/Belgrade`) |
 | `FAKE_IDP_FIXED_OTP` | Stub mode: an always-accepted six-digit code |
 | `TEST_DATABASE_URL` | Integration tests; suites create `<name>_schema`, `<name>_auth`, ... databases |
 
@@ -274,7 +297,8 @@ Redis keys and TTLs are listed in `apps/api/src/redis/redis-keys.ts`.
 ## 19. Testing
 
 - Unit tests sit next to the code (`*.test.ts`, `*.spec.ts`) and mock repositories and services. The authorization engine has unit, property and golden-table tests.
-- Integration suites in `apps/api/test/` boot the real application against a disposable PostgreSQL (`TEST_DATABASE_URL`, one database per suite via `test/db/test-database.ts`), use the fake identity provider and the in-memory store (the test environment ignores `.env` and `REDIS_URL`). `auth.e2e.spec.ts` covers sign-in, CSRF, context switch, profile, sessions and lockout; `invitations`, `members`, `org-admin` and `ws` cover their areas; `db/schema.spec.ts` proves migrations, partitions, append-only triggers and RLS.
+- Integration suites in `apps/api/test/` boot the real application against a disposable PostgreSQL (`TEST_DATABASE_URL`, one database per suite via `test/db/test-database.ts`), use the fake identity provider and the in-memory store (the test environment ignores `.env` and `REDIS_URL`). `auth.e2e.spec.ts` covers sign-in, CSRF, context switch, profile, sessions and lockout; `invitations`, `members`, `org-admin` and `ws` cover their areas; `jobs.e2e.spec.ts` runs the maintenance jobs; `db/schema.spec.ts` proves migrations, partitions, append-only triggers and RLS on all thirteen tenant tables.
+- Browser journeys for sign-in live in `e2e/auth/` and run with `pnpm e2e:auth` (`playwright.auth.config.ts`): they need the API in stub mode with `FAKE_IDP_FIXED_OTP=123456` and the web apps in `api` data mode; see `e2e/README.md`.
 - `pnpm --filter @nestself/api test` runs everything; `pnpm test` runs the whole repository. CI (`.github/workflows/ci.yml`) provides Postgres and Redis service containers.
 
 ## 20. Recipes
@@ -293,11 +317,13 @@ Redis keys and TTLs are listed in `apps/api/src/redis/redis-keys.ts`.
 
 ## 21. Known gaps and next steps
 
-- Step-up re-authentication is annotated but not enforced; `/auth/step-up/*` is phase 2.
-- Enterprise SSO (phase 3): the connection management, home-realm discovery and callback are stubs.
-- Grant administration endpoints and UI, approval authorities, emergency access, confidential-domain tables and their RLS policies (phase 2).
-- Nightly jobs (stale mobile families, grant reconciliation, audit partition creation) and BullMQ queue wiring.
-- Playwright sign-in journeys in `e2e/`; the compliance track (privacy notices, DPA, breach procedure) before the first real employee.
-- No operations template currently carries `people.deactivate`; the suspension test inserts the grant directly.
-- Row-level security covers the tables that carry `org_id`. The legacy community tables (`posts`, `polls`, `poll_options`, `poll_votes`) and `org_unit_closure` reach their organization only through a join, so code must always join through `channels` or `org_units`; phase 2 either adds `org_id` columns with policies or retires those tables with the legacy team model.
-- Cognito access tokens do not say how the user authenticated, so bearer principals report `email_otp` without a second factor; step-up decisions for mobile must use the application-side step-up endpoints (phase 2).
+Phase 1 is complete; `docs/tasks/auth/phase-2-readiness.md` lists the phase 2 work in order with its preconditions. What remains open, and why:
+
+- **Step-up re-authentication** is annotated (`req.stepUpClass`, `lastStepUpAt` in the session, `STEP_UP_MAX_AGE_SECONDS`) but not enforced. Enforcing it needs the `/auth/step-up/start|verify` endpoints first, otherwise administrators would be locked out of `people.deactivate` after 30 minutes. Phase 2, T-2.6.
+- **Grant administration** (endpoints and screens), approval authorities, delegation, effective-access preview, emergency access and the confidential-domain tables with their RLS policies. Phase 2, T-2.1 to T-2.5.
+- **Operations routes for assigned clients.** `client_operations` holds `people.import`, `people.onboard` and `people.deactivate` for assigned clients, but every administration route lives under `/orgs/:orgId/*`, which requires the organization context (API-R-21). Phase 2 adds `/ops/orgs/:orgId/...` routes with a resolver that passes the route organization into the resource.
+- **Enterprise SSO** (phase 3): connection management, home-realm discovery and the callback are stubs.
+- **Nightly jobs not yet written:** session TTL-drift reconciliation (SESS-R-16), the weekly Cognito user export (T-2.12), the retention sweeper (pending counsel on L-02 and L-03), the audit export to S3 with Object Lock (AUDIT-R-06) and the SSO certificate-expiry check (SSO-R-14). The scheduler and worker exist; each is a method on `MaintenanceJobsService` plus a schedule entry.
+- **Compliance track** before the first real employee signs in: privacy notices, processing agreement, breach procedure, data-subject-rights endpoints (T-C.4).
+- **Legacy community tables** (`posts`, `polls`, `poll_options`, `poll_votes`) and `legacy_teams` are now tenant-isolated but still deprecated; phase 2 retires them with the legacy team model (strategy Appendix A).
+- **Mobile authentication strength** is reported as `email_otp` without a second factor because that is the only first factor the mobile client allows; it must be revisited when mobile gains passkeys or SSO.
