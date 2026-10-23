@@ -190,6 +190,9 @@ export class FakeUserStore {
   seedUsers(
     users: Array<{
       email: string;
+      /** Deterministic subject (sample fixtures); random when omitted. */
+      sub?: string;
+      username?: string;
       password?: string;
       temporaryPassword?: string;
       totpSecret?: string;
@@ -201,8 +204,8 @@ export class FakeUserStore {
     for (const u of users) {
       const email = u.email.toLowerCase();
       this.users.set(email, {
-        username: randomUUID(),
-        sub: randomUUID(),
+        username: u.username ?? randomUUID(),
+        sub: u.sub ?? randomUUID(),
         email,
         password: u.password ?? null,
         temporaryPassword: u.temporaryPassword ?? null,

@@ -18,6 +18,7 @@ import {
   SAMPLE_CONTENT,
   SAMPLE_ORG_UNITS,
   SAMPLE_EXPERT_CREDENTIALS,
+  SAMPLE_EXTERNAL_IDENTITIES,
 } from '@nestself/sample-data';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
@@ -135,6 +136,25 @@ export async function seed(db: Database): Promise<Record<string, number>> {
           set: { role, status: 'ACTIVE', orgUnitId: defaultTeamId },
         });
     }
+  }
+
+  // ── External identities (fake pool subjects, D-04) ──
+  for (const identity of SAMPLE_EXTERNAL_IDENTITIES) {
+    await db
+      .insert(t.externalIdentities)
+      .values({
+        id: `ext_${identity.userId}`,
+        userId: identity.userId,
+        provider: identity.provider,
+        subject: identity.subject,
+        cognitoUsername: identity.cognitoUsername,
+        email: identity.email,
+        emailVerified: true,
+      })
+      .onConflictDoUpdate({
+        target: [t.externalIdentities.provider, t.externalIdentities.subject],
+        set: { email: identity.email, cognitoUsername: identity.cognitoUsername },
+      });
   }
 
   // ── Channels and posts ──
@@ -357,6 +377,7 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     orgUnits: t.orgUnits,
     orgUnitClosures: t.orgUnitClosure,
     users: t.users,
+    externalIdentities: t.externalIdentities,
     memberships: t.memberships,
     channels: t.channels,
     posts: t.posts,

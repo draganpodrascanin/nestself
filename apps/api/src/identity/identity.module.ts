@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { IdentityProviderService } from './identity-provider.service.js';
 import { CognitoIdentityProvider } from './cognito-identity-provider.js';
 import { FakeIdentityProvider } from './fake-identity-provider.js';
+import { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from '@nestself/sample-data';
 
 @Module({
   providers: [
@@ -28,7 +29,22 @@ import { FakeIdentityProvider } from './fake-identity-provider.js';
             config.get<string>('COGNITO_WEB_CLIENT_SECRET')!,
           );
         }
-        return new FakeIdentityProvider();
+        const fake = new FakeIdentityProvider();
+        // Local development: the sample people exist in the fake pool with the
+        // same subjects the database seed links (SAMPLE_EXTERNAL_IDENTITIES).
+        // Tests seed their own users and skip this.
+        if (config.get<string>('NODE_ENV') !== 'test') {
+          fake.seedUsers(
+            SAMPLE_EXTERNAL_IDENTITIES.map((identity) => ({
+              email: identity.email,
+              sub: identity.subject,
+              username: identity.cognitoUsername,
+              locale: 'sr-Latn',
+              ...(identity.signIn === 'password' ? { password: SAMPLE_DEV_PASSWORD } : {}),
+            })),
+          );
+        }
+        return fake;
       },
     },
   ],

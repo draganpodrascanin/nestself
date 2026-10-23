@@ -12,4 +12,5 @@ export type { SampleTestimonial } from './fixtures/testimonials.ts';
 export { SAMPLE_ORG_UNITS } from './fixtures/org-units.ts';
 export { SAMPLE_EXPERT_CREDENTIALS } from './fixtures/credentials.ts';
 export { SAMPLE_PRINCIPALS } from './fixtures/principals.ts';
+export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';

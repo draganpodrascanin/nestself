@@ -183,19 +183,22 @@ Circuit breaker: 3 consecutive Redis failures open the breaker for 5s. LRU fallb
 
 ### Signing in locally (stub mode)
 
-Set `AUTH_MODE=stub` (default) and `JWT_SECRET` (any 32+ char string).
+Set `AUTH_MODE=stub` (default) and `JWT_SECRET` (any 32+ char string). The fake
+identity provider is pre-loaded with the sample people (`identity.module.ts`,
+`SAMPLE_EXTERNAL_IDENTITIES`) and the database seed links them, so every seeded
+person can sign in after `db:migrate` and `db:seed`.
 
-**Employee (email OTP)**:
+**Employee (email OTP)**, e.g. `user_jovan@example.com`:
 1. `POST /api/auth/discover` with email → `method: "email_otp"`
 2. `POST /api/auth/email-otp/start` → `challengeToken`
-3. Read the OTP code from the API log: `FakeIdentityProvider: OTP for user@example.com is 123456`
+3. Read the code from the API log: `Fake identity provider: OTP for user_jovan@example.com is 123456` (or set `FAKE_IDP_FIXED_OTP`)
 4. `POST /api/auth/email-otp/verify` with `{ challengeToken, code }` → session cookies set
 
-**Staff (password + TOTP)**:
+**Staff and experts (password + TOTP)**, e.g. `user_nikola@example.com`:
 1. `POST /api/auth/discover` → `method: "password"`
-2. `POST /api/auth/password` with the dev temporary password (env `FAKE_IDP_DEV_TEMP_PASSWORD`, default `Nestself-dev-1234!`)
-3. Follow the challenge chain: `new_password` → `totp_enrol` → `totp/enrol` → `challenge` with TOTP code
-4. The fake provider accepts `000000` as a valid TOTP code
+2. `POST /api/auth/password` with `Nestself-dev-1234!` (`SAMPLE_DEV_PASSWORD`) → `{ step: "totp_enrol", challengeToken }` on first sign-in
+3. `POST /api/auth/totp/enrol` with the challengeToken → `secretUri` and a rotated `challengeToken`
+4. `POST /api/auth/challenge` with the authenticator code → session cookies set; later sign-ins ask for the code directly (`step: "totp"`)
 
 Set `SESSION_COOKIE_INSECURE_DEV=true` to drop the `__Host-` prefix and `Secure` flag for HTTP localhost.
 
