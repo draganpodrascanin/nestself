@@ -18,6 +18,7 @@ import {
 } from '@nestself/ui';
 import type { FormErrorSummaryHandle } from '@nestself/ui';
 import type { AuthApi } from '@nestself/api-client';
+import type { TotpEnrolResponse } from '@nestself/contracts';
 
 interface Props {
   challengeToken: string;
@@ -52,12 +53,21 @@ export function TotpEnrolScreen({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const errorRef = useRef<FormErrorSummaryHandle>(null);
 
-  // Fetch the TOTP secret on mount
+  // The enrol call consumes the single-use challenge token, so it must be
+  // issued exactly once per token. React StrictMode runs effects twice in
+  // development; the ref survives that and the second run reuses the same
+  // in-flight request instead of spending an already-consumed token.
+  const enrolRequest = useRef<{ token: string; promise: Promise<TotpEnrolResponse> } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
+    if (!enrolRequest.current || enrolRequest.current.token !== challengeToken) {
+      enrolRequest.current = { token: challengeToken, promise: authApi.totpEnrol(challengeToken) };
+    }
+    const request = enrolRequest.current.promise;
     void (async () => {
       try {
-        const result = await authApi.totpEnrol(challengeToken);
+        const result = await request;
         if (cancelled) return;
         setSecretUri(result.secretUri);
         if (result.challengeToken) setActiveToken(result.challengeToken);
