@@ -53,7 +53,8 @@ if (isMobile) {
   // Mobile .env.local (Expo public vars, no secrets)
   console.log(`EXPO_PUBLIC_COGNITO_REGION=${cognitoRegion}`);
   console.log(`EXPO_PUBLIC_COGNITO_USER_POOL_ID=${poolId}`);
-  console.log(`EXPO_PUBLIC_COGNITO_MOBILE_CLIENT_ID=${mobileClientId}`);
+  // apps/mobile/src/auth/config.ts reads EXPO_PUBLIC_COGNITO_CLIENT_ID.
+  console.log(`EXPO_PUBLIC_COGNITO_CLIENT_ID=${mobileClientId}`);
   console.log(`EXPO_PUBLIC_COGNITO_DOMAIN=${cognitoDomain}`);
   console.log(`EXPO_PUBLIC_COGNITO_ISSUER=${cognitoIssuer}`);
 } else {
