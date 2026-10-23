@@ -121,6 +121,20 @@ export class RedisKeyValueStore implements KeyValueStore {
     return this.wrap(this.client.sMembers(key));
   }
 
+  async scan(pattern: string): Promise<string[]> {
+    const keys: string[] = [];
+    try {
+      for await (const batch of this.client.scanIterator({ MATCH: pattern, COUNT: 500 })) {
+        // node-redis v5 yields string[] batches; v4 yielded single keys.
+        if (Array.isArray(batch)) keys.push(...batch);
+        else keys.push(batch as unknown as string);
+      }
+    } catch (err) {
+      throw new RedisUnavailableError('Redis command failed', err);
+    }
+    return keys;
+  }
+
   async publish(channel: string, message: string): Promise<number> {
     return this.wrap(this.client.publish(channel, message));
   }

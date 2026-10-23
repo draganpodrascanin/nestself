@@ -23,6 +23,7 @@ function createMocks() {
     sAdd: vi.fn(),
     sRem: vi.fn(),
     sMembers: vi.fn(),
+    scan: vi.fn(),
     publish: vi.fn(),
     ping: vi.fn(),
     close: vi.fn(),

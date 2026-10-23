@@ -146,6 +146,18 @@ export class MemoryKeyValueStore implements KeyValueStore {
     return [...(this.sets.get(key) ?? [])];
   }
 
+  async scan(pattern: string): Promise<string[]> {
+    const re = globToRegExp(pattern);
+    const keys = new Set<string>();
+    for (const key of this.data.keys()) {
+      if (this.getEntry(key) && re.test(key)) keys.add(key);
+    }
+    for (const key of this.sets.keys()) {
+      if (re.test(key)) keys.add(key);
+    }
+    return [...keys];
+  }
+
   async publish(channel: string, message: string): Promise<number> {
     const handlers = this.subs.get(channel);
     if (!handlers || handlers.size === 0) return 0;
@@ -185,4 +197,10 @@ export class MemoryKeyValueStore implements KeyValueStore {
     this.sets.clear();
     this.subs.clear();
   }
+}
+
+/** Redis glob (`*`, `?`) to RegExp; every other character is literal. */
+function globToRegExp(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+  return new RegExp(`^${escaped}$`);
 }

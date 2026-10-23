@@ -131,6 +131,15 @@ describe.skipIf(!reachable)('RedisKeyValueStore', () => {
     expect((await store.sMembers(key)).sort()).toEqual(['a', 'c']);
   });
 
+  it('scan returns keys matching a pattern', async () => {
+    await ensureConnected();
+    await store.set(k('scan:one'), '1');
+    await store.set(k('scan:two'), '2');
+    await store.set(k('other'), '3');
+    const keys = await store.scan(`${prefix}scan:*`);
+    expect(keys.sort()).toEqual([k('scan:one'), k('scan:two')].sort());
+  });
+
   it('expire updates TTL', async () => {
     await ensureConnected();
     const key = k('exp');

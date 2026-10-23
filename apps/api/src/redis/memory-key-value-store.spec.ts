@@ -25,6 +25,17 @@ describe('MemoryKeyValueStore', () => {
     expect(await store.get('k')).toBe('v');
   });
 
+  it('scan matches globs over values and sets, skipping expired keys', async () => {
+    await store.set('mobile_family:a', '1');
+    await store.set('mobile_family:b', '1', { ttlSeconds: 1 });
+    await store.sAdd('user_mobile_families:u1', 'a');
+    await store.set('other:z', '1');
+    vi.advanceTimersByTime(1500);
+    expect((await store.scan('mobile_family:*')).sort()).toEqual(['mobile_family:a']);
+    expect(await store.scan('user_mobile_families:*')).toEqual(['user_mobile_families:u1']);
+    expect(await store.scan('nothing:*')).toEqual([]);
+  });
+
   // -- TTL expiry -----------------------------------------------------------
 
   it('expires a key after the TTL elapses', async () => {

@@ -4,7 +4,7 @@
  * authorization context need from Postgres.
  */
 import { Injectable } from '@nestjs/common';
-import { and, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, lte, notExists, or, sql } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import {
@@ -12,6 +12,7 @@ import {
   emergencyAccess,
   expertCredentials,
   grants,
+  memberships,
   organizations,
   orgUnitClosure,
   orgUnits,
@@ -96,6 +97,46 @@ export class AuthorizationRepository {
       .update(grants)
       .set({ revokedAt: revoked.at, revokedByUserId: revoked.byUserId, revokedReason: revoked.reason })
       .where(and(inArray(grants.id, grantIds), isNull(grants.revokedAt)));
+  }
+
+  // ── Nightly reconciliation (T-2.10, D-17) ─────────────────────────────
+
+  /** Unrevoked grants whose validity window has closed. */
+  async findExpiredUnrevokedGrants(now: Date, tx?: DbExecutor): Promise<GrantRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(isNull(grants.revokedAt), isNotNull(grants.validUntil), lte(grants.validUntil, now)));
+  }
+
+  /** Unrevoked delegated grants whose parent grant is revoked (or gone). */
+  async findOrphanedDelegations(tx?: DbExecutor): Promise<GrantRow[]> {
+    const parent = sql`(select 1 from ${grants} as parent where parent.id = ${grants.parentGrantId} and parent.revoked_at is null)`;
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(isNull(grants.revokedAt), isNotNull(grants.parentGrantId), notExists(parent)));
+  }
+
+  /**
+   * Unrevoked organization-scoped grants whose subject has no ACTIVE
+   * membership in that organization (membership ended without the cascade).
+   */
+  async findGrantsWithoutActiveMembership(tx?: DbExecutor): Promise<GrantRow[]> {
+    const active = this.exec(tx)
+      .select({ one: sql`1` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.userId, grants.subjectUserId),
+          eq(memberships.orgId, grants.scopeOrgId),
+          eq(memberships.status, 'ACTIVE'),
+        ),
+      );
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(isNull(grants.revokedAt), isNotNull(grants.scopeOrgId), notExists(active)));
   }
 
   async createGrant(input: typeof grants.$inferInsert, tx?: DbExecutor): Promise<GrantRow> {

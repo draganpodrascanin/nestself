@@ -95,6 +95,9 @@ export const envSchema = z
     // Email
     SES_FROM_EMAIL: optionalEmail,
 
+    // Maintenance jobs (worker process only): IANA timezone for the cron schedules
+    JOBS_TIMEZONE: optionalString,
+
     // Proxy
     TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 

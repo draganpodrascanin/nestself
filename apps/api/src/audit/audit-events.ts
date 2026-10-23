@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = [
   'auth.step_up.failed',
   'auth.token.refreshed',
   'auth.token.revoked',
+  'auth.mobile_family.revoked',
   'auth.mfa.enrolled',
   'auth.mfa.removed',
   'identity.created',

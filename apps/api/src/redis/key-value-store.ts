@@ -54,6 +54,13 @@ export interface KeyValueStore {
   /** Return all members of a set. */
   sMembers(key: string): Promise<string[]>;
 
+  /**
+   * Return every key matching a glob pattern (`SCAN` in Redis, a filter in
+   * memory). For maintenance jobs only: it walks the whole keyspace, so request
+   * paths must never call it.
+   */
+  scan(pattern: string): Promise<string[]>;
+
   /** Publish a message to a channel. */
   publish(channel: string, message: string): Promise<number>;
 

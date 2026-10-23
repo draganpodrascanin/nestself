@@ -46,6 +46,14 @@ export const REVOKED_FAMILY_TTL = 1200;
 /** Mobile family last-seen: 30 days. */
 export const MOBILE_FAMILY_TTL = 30 * 24 * 3600;
 
+/**
+ * Denylist TTL for a family the nightly job revokes because it was not seen
+ * for MOBILE_FAMILY_TTL (AUTHZ-R-64). The API never holds the device's refresh
+ * token, so the denylist must outlive the longest mobile refresh token
+ * (90 days, B.4) to be equivalent to revoking it.
+ */
+export const STALE_FAMILY_DENYLIST_TTL = 90 * 24 * 3600;
+
 /** Idempotency key: 24 h. */
 export const IDEMPOTENCY_TTL = 86400;
 
