@@ -148,6 +148,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(verifyRes.status).toBe(200);
     expect(verifyRes.body).toHaveProperty('principal');
     expect(verifyRes.body.principal).toHaveProperty('userId', 'user_jovan');
+    expect(verifyRes.body.principal.auth).toMatchObject({ method: 'email_otp', secondFactor: false });
 
     const setCookies = verifyRes.headers['set-cookie'] as unknown as string[];
     expect(setCookies.some((c: string) => c.startsWith('nestself_session='))).toBe(true);
@@ -243,6 +244,18 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       .send({ context: { kind: 'organization', orgId: 'org_sample' } });
     expect(backRes.status).toBe(200);
     expect(backRes.body.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+
+    // An employee cannot claim the operations or expert contexts (AUTHZ-R-32).
+    for (const context of [{ kind: 'operations' }, { kind: 'expert' }, { kind: 'organization', orgId: 'org_other' }]) {
+      const denied = await agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', csrfToken)
+        .send({ context });
+      expect(denied.status).toBe(403);
+      expect(denied.body).toHaveProperty('code', 'invalid_context');
+    }
+    const me = await agent.get('/api/auth/me');
+    expect(me.body.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
   });
 
   // -----------------------------------------------------------------------
@@ -335,6 +348,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(completeRes.status).toBe(200);
     expect(completeRes.body).toHaveProperty('principal');
     expect(completeRes.body.principal).toHaveProperty('userId', 'user_nikola');
+    expect(completeRes.body.principal.auth).toMatchObject({ method: 'password_totp', secondFactor: true });
 
     const staffCsrf = extractCsrf(completeRes);
     expect(staffCsrf).toBeTruthy();

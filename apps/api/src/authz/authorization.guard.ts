@@ -62,11 +62,21 @@ export class AuthorizationGuard implements CanActivate {
     );
     if (isAuthOnly) return true;
 
-    // Skip routes without @Authorize metadata (they are auth-only)
+    // A handler without any security decorator is a programming error that
+    // the default-deny CI test catches; deny at runtime as well (AUTHZ-R-49).
     const meta = this.reflector.getAllAndOverride<
       AuthorizeMetadata | undefined
     >(AUTHORIZE_KEY, [context.getHandler(), context.getClass()]);
-    if (!meta) return true;
+    if (!meta) {
+      this.logger.error(
+        `${context.getClass().name}.${context.getHandler().name} has no @Public, @Authenticated or @Authorize decorator`,
+      );
+      throw new ApiHttpException({
+        status: 403,
+        code: 'forbidden',
+        message: 'Access denied',
+      });
+    }
 
     const req = context.switchToHttp().getRequest<HttpReq>();
     const principal = req.principal;
@@ -125,7 +135,6 @@ export class AuthorizationGuard implements CanActivate {
         status: 403,
         code: 'forbidden',
         message: 'Access denied',
-        details: { reason: decision.denialReason },
       });
     }
 

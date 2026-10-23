@@ -22,7 +22,7 @@ import type {
   TokenSet,
   IdpUser,
 } from './identity-provider.service.js';
-import { verifyTotp, generateTotpSecret } from './totp.js';
+import { verifyTotp, generateTotpSecret, codesEqual } from './totp.js';
 import {
   FakeUserStore,
   SESSION_TTL_MS,
@@ -163,8 +163,8 @@ export class FakeIdentityProvider extends IdentityProviderService {
     const fixedOtp = process.env.FAKE_IDP_FIXED_OTP;
 
     const codeMatches =
-      (fixedOtp && /^\d{6}$/.test(fixedOtp) && input.code === fixedOtp) ||
-      (otp && otp.expiresAt >= Date.now() && otp.code === input.code);
+      (fixedOtp && /^\d{6}$/.test(fixedOtp) && codesEqual(fixedOtp, input.code)) ||
+      (otp && otp.expiresAt >= Date.now() && codesEqual(otp.code, input.code));
 
     if (!codeMatches) {
       throw new IdentityProviderError('Invalid code', 'invalid_code');

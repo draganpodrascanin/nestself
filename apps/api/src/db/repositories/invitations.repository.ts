@@ -10,6 +10,7 @@ import {
   invitations,
   ssoConnections,
   ssoDomains,
+  organizations,
 } from '../schema/index.js';
 
 export type InvitationRow = typeof invitations.$inferSelect;
@@ -35,6 +36,15 @@ export class InvitationsRepository {
       where: eq(invitations.id, id),
     });
     return row ?? null;
+  }
+
+  /** Organization display name for invitation emails; null when unknown. */
+  async findOrganizationName(orgId: string, tx?: DbExecutor): Promise<string | null> {
+    const [row] = await this.exec(tx)
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, orgId));
+    return row?.name ?? null;
   }
 
   /** Find an invitation by id, also checking it belongs to the given org. */

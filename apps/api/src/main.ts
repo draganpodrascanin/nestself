@@ -37,7 +37,8 @@ async function bootstrap() {
   ].filter(Boolean) as string[];
 
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    // No configured origins means no cross-origin access, never a wildcard.
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     exposedHeaders: ['x-request-id'],
   });

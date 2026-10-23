@@ -86,13 +86,13 @@ describe('AuthorizationGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('bypasses routes without @Authorize metadata', async () => {
+  it('denies routes without any security decorator (runtime default deny, AUTHZ-R-49)', async () => {
     mocks.reflector.getAllAndOverride
       .mockReturnValueOnce(false)   // IS_PUBLIC_KEY
       .mockReturnValueOnce(false)   // IS_AUTHENTICATED_ONLY_KEY
       .mockReturnValueOnce(undefined); // AUTHORIZE_KEY
-    const result = await guard.canActivate(mockContext({}));
-    expect(result).toBe(true);
+    await expect(guard.canActivate(mockContext({}))).rejects.toMatchObject({ code: 'forbidden' });
+    expect(mocks.contextLoader.build).not.toHaveBeenCalled();
   });
 
   it('allows when authorize() returns allowed', async () => {

@@ -55,17 +55,22 @@ export class SessionEndpointsService {
       });
     }
 
-    if (newContext.kind === 'organization') {
-      const hasMembership = loaded.memberships.some(
-        (m) => m.orgId === newContext.orgId && m.status === 'ACTIVE',
-      );
-      if (!hasMembership) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'invalid_context',
-          message: 'No active membership for this organization',
-        });
-      }
+    // The requested context must be backed by a current membership, expert
+    // record or staff grants (AUTHZ-R-32); @Authenticated routes trust it.
+    const contextAllowed =
+      newContext.kind === 'personal' ||
+      (newContext.kind === 'organization' &&
+        loaded.memberships.some(
+          (m) => m.orgId === newContext.orgId && m.status === 'ACTIVE',
+        )) ||
+      (newContext.kind === 'expert' && loaded.expert != null) ||
+      (newContext.kind === 'operations' && loaded.staffTemplates.length > 0);
+    if (!contextAllowed) {
+      throw new ApiHttpException({
+        status: 403,
+        code: 'invalid_context',
+        message: 'The requested context is not available to this user',
+      });
     }
 
     const population = this.resolvePopulation(loaded, newContext);
@@ -113,8 +118,14 @@ export class SessionEndpointsService {
         message: 'Cannot destroy current session via this endpoint',
       });
     }
-    await this.store.del(`session:${targetSessionIdHash}`);
-    await this.store.sRem(`user_sessions:${userId}`, targetSessionIdHash);
+    const destroyed = await this.sessions.destroyOwnedByHash(userId, targetSessionIdHash);
+    if (!destroyed) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Session not found',
+      });
+    }
   }
 
   async getSessions(
@@ -145,12 +156,12 @@ export class SessionEndpointsService {
     };
   }
 
-  async createWsTicket(userId: string): Promise<string> {
+  async createWsTicket(userId: string, auth?: Principal['auth']): Promise<string> {
     const ticket = randomBytes(32).toString('base64url');
     const hash = createHash('sha256').update(ticket).digest('hex');
     await this.store.set(
       wsTicketKey(hash),
-      JSON.stringify({ userId, createdAt: new Date().toISOString() }),
+      JSON.stringify({ userId, createdAt: new Date().toISOString(), auth: auth ?? null }),
       { ttlSeconds: WS_TICKET_TTL },
     );
     return ticket;

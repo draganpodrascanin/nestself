@@ -41,7 +41,7 @@ export class NestSelfIoAdapter extends IoAdapter {
       ...options,
       path: '/api/ws',
       cors: {
-        origin: this.allowedOrigins.length > 0 ? this.allowedOrigins : true,
+        origin: this.allowedOrigins.length > 0 ? this.allowedOrigins : false,
         credentials: true,
       },
     };

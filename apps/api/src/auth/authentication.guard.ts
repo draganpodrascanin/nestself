@@ -114,14 +114,17 @@ export class AuthenticationGuard implements CanActivate {
     req: HttpReq,
     sessionId: string,
   ): Promise<boolean> {
-    const record = await this.sessions.get(sessionId);
-    if (!record) {
+    const stored = await this.sessions.get(sessionId);
+    if (!stored) {
       throw new ApiHttpException({
         status: 401,
         code: 'session_expired',
         message: 'Session not found or expired',
       });
     }
+    // Refresh the Cognito access token when it is about to expire (3.6.5);
+    // a failed refresh destroys the session and surfaces session_expired.
+    const record = await this.sessions.ensureFreshAccessToken(stored);
 
     const loaded = await this.principalLoader.load(record.userId);
     if (!loaded) {

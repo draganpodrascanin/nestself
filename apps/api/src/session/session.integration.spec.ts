@@ -158,7 +158,7 @@ describe.skipIf(!reachable)('SessionService integration (Valkey)', () => {
     expect(record!.context).toEqual({ kind: 'personal' });
 
     // -- regenerate --
-    const newId = await service.regenerate(sessionId);
+    const { sessionId: newId } = await service.regenerate(sessionId);
     const newHash = hashId(newId);
     trackKey(sessionKey(newHash));
     expect(newId).not.toBe(sessionId);

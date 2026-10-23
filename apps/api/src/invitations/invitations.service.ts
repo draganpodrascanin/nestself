@@ -103,12 +103,13 @@ export class InvitationsService {
     });
 
     // Send email (fire-and-forget).
+    const names = await this.mailNames(orgId, actorUserId);
     this.mailer
       .send({
         email: body.email,
         token,
-        organizationName: orgId, // TODO: resolve org name
-        inviterDisplayName: actorUserId,
+        organizationName: names.organizationName,
+        inviterDisplayName: names.inviterDisplayName,
       })
       .catch((err) => this.logger.warn(`Failed to send invitation email: ${String(err)}`));
 
@@ -159,6 +160,7 @@ export class InvitationsService {
 
     let created = 0;
     let skipped = 0;
+    const names = await this.mailNames(orgId, actorUserId);
 
     await this.dbs.withOrgScope(orgId, async (tx) => {
       // Validate org units upfront (deduplicated).
@@ -235,8 +237,8 @@ export class InvitationsService {
           .send({
             email: inv.email,
             token,
-            organizationName: orgId,
-            inviterDisplayName: actorUserId,
+            organizationName: names.organizationName,
+            inviterDisplayName: names.inviterDisplayName,
           })
           .catch((err) => this.logger.warn(`Failed to send invitation email: ${String(err)}`));
       }
@@ -293,6 +295,21 @@ export class InvitationsService {
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
+
+  /** Display names for the invitation email; falls back to ids when unknown. */
+  private async mailNames(
+    orgId: string,
+    actorUserId: string,
+  ): Promise<{ organizationName: string; inviterDisplayName: string }> {
+    const [organizationName, inviter] = await Promise.all([
+      this.invitations.findOrganizationName(orgId),
+      this.identities.findUserById(actorUserId),
+    ]);
+    return {
+      organizationName: organizationName ?? orgId,
+      inviterDisplayName: inviter?.displayName ?? 'Your organization',
+    };
+  }
 
   private validateTemplateKey(key: string): void {
     if (!TEMPLATE_KEYS.has(key as never)) {

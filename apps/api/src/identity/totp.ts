@@ -4,7 +4,7 @@
  * Used by the FakeIdentityProvider for local development
  * and tests without AWS. HMAC-SHA1, 30-second step, 6 digits.
  */
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 // ---------------------------------------------------------------------------
 // Base32
@@ -115,11 +115,21 @@ export function verifyTotp(
   const time = timeMs ?? Date.now();
   const counter = BigInt(Math.floor(time / 1000 / STEP_SECONDS));
 
+  // Check every slot and compare in constant time so neither the matching
+  // slot nor the matching prefix is observable through timing.
+  let matched = false;
   for (let i = -window; i <= window; i++) {
     const expected = hotp(key, counter + BigInt(i));
-    if (expected === code) return true;
+    if (codesEqual(expected, code)) matched = true;
   }
-  return false;
+  return matched;
+}
+
+/** Constant-time equality for short numeric codes. */
+export function codesEqual(expected: string, actual: string): boolean {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(actual);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**

@@ -355,7 +355,7 @@ export class AuthController {
   @Post('ws-ticket')
   @HttpCode(200)
   async wsTicket(@CurrentPrincipal() principal: Principal) {
-    const ticket = await this.sessionEndpoints.createWsTicket(principal.userId);
+    const ticket = await this.sessionEndpoints.createWsTicket(principal.userId, principal.auth);
     return { ticket };
   }
 

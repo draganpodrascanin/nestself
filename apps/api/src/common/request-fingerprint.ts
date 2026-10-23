@@ -4,12 +4,22 @@
  * Canonical implementations of IP hashing and user-agent parsing,
  * imported by both session-helpers and audit-writer.
  */
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { UAParser } from 'ua-parser-js';
 
-/** SHA-256 hex of the raw IP, truncated to 32 characters. */
+/**
+ * Keyed hash of the client IP (HMAC-SHA256, 32 hex characters). The key is
+ * `IP_HASH_SALT`, falling back to `SESSION_ENCRYPTION_KEY`, so hashes stay
+ * comparable within one deployment but cannot be reversed with a precomputed
+ * table of the IPv4 space. Read once at module load (D-21).
+ */
+const IP_HASH_KEY =
+  process.env['IP_HASH_SALT'] ||
+  process.env['SESSION_ENCRYPTION_KEY'] ||
+  'nestself-dev-ip-hash-key';
+
 export function hashIp(ip: string): string {
-  return createHash('sha256').update(ip).digest('hex').slice(0, 32);
+  return createHmac('sha256', IP_HASH_KEY).update(ip).digest('hex').slice(0, 32);
 }
 
 /** Browser name + major version, or 'unknown'. */

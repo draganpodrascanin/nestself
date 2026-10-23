@@ -29,6 +29,7 @@ function createMockInvitations() {
       createdAt: new Date(),
     }),
     findPendingByEmailAndOrg: vi.fn().mockResolvedValue(null),
+    findOrganizationName: vi.fn().mockResolvedValue('Example d.o.o.'),
     findByIdAndOrg: vi.fn(),
     revoke: vi.fn(),
   };
@@ -43,6 +44,7 @@ function createMockMemberships() {
 function createMockIdentities() {
   return {
     findUserByEmail: vi.fn().mockResolvedValue(null),
+    findUserById: vi.fn().mockResolvedValue({ id: 'user_ivana', displayName: 'Ivana Jovanović' }),
   };
 }
 

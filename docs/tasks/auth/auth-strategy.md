@@ -1084,7 +1084,7 @@ Each web session is stored in Redis as a JSON document at `session:{sessionId}`.
 | `idleExpiresAt` | string (ISO 8601) | Computed from `lastActivityAt` plus the idle timeout. |
 | `absoluteExpiresAt` | string (ISO 8601) | Fixed at creation; the session cannot be extended past this time. |
 | `rememberDevice` | boolean | Whether the "remember this device" option was selected. |
-| `ipHash` | string | SHA-256 of the client IP; never the raw address. |
+| `ipHash` | string | Keyed hash (HMAC-SHA256 with `IP_HASH_SALT`, 32 hex characters) of the client IP; never the raw address and not reversible from a precomputed table. |
 | `userAgentFamily` | string | Parsed user-agent family (browser name and major version). |
 | `csrfToken` | string | The value written into the readable `__Host-nestself_csrf` cookie. |
 

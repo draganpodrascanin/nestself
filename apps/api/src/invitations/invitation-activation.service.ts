@@ -100,8 +100,8 @@ export class InvitationActivationService {
 
   async accept(
     token: string,
-    _surface: 'workspace' | 'admin',
-    _meta: { ip: string | null; userAgent: string | null },
+    surface: 'workspace' | 'admin',
+    meta: { ip: string | null; userAgent: string | null },
   ): Promise<InvitationAcceptResponse> {
     const tokenHash = hashToken(token);
     const now = new Date();
@@ -146,7 +146,7 @@ export class InvitationActivationService {
     // Idempotent: if already accepted, return the same response shape with a
     // fresh challenge (do not create a second membership).
     if (invitation.acceptedAt) {
-      return this.buildSignInResponse(invitation, template);
+      return this.buildSignInResponse(invitation, template, surface, meta);
     }
 
     // Determine the temporary password for staff/expert populations.
@@ -259,7 +259,7 @@ export class InvitationActivationService {
     await this.principalLoader.invalidateUser(userId, [invitation.orgId]);
 
     // Build sign-in response based on population.
-    return this.buildSignInResponse(invitation, template, tempPassword);
+    return this.buildSignInResponse(invitation, template, surface, meta, tempPassword);
   }
 
   // -----------------------------------------------------------------------
@@ -377,6 +377,8 @@ export class InvitationActivationService {
   private async buildSignInResponse(
     invitation: InvitationRow,
     template: PermissionTemplateDefinition,
+    surface: 'workspace' | 'admin',
+    meta: { ip: string | null; userAgent: string | null },
     tempPassword?: string,
   ): Promise<InvitationAcceptResponse> {
     // Check SSO first.
@@ -396,7 +398,6 @@ export class InvitationActivationService {
     }
 
     const population = template.population;
-    const dummyMeta = { ip: null, userAgent: null };
 
     // Staff/expert/employer_admin: password flow with temporary password.
     if (population !== 'employee' && tempPassword) {
@@ -404,8 +405,8 @@ export class InvitationActivationService {
         const result = await this.signIn.passwordSignIn(
           invitation.email,
           tempPassword,
-          'workspace',
-          dummyMeta,
+          surface,
+          meta,
         );
         if ('step' in result) {
           // Only new_password and totp_enrol are valid invitation-acceptance
@@ -430,7 +431,7 @@ export class InvitationActivationService {
 
     // Employee population, or fallback: email OTP.
     try {
-      const otpResult = await this.signIn.emailOtpStart(invitation.email, dummyMeta);
+      const otpResult = await this.signIn.emailOtpStart(invitation.email, meta);
       return {
         method: 'email_otp',
         challengeToken: otpResult.challengeToken,

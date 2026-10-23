@@ -44,6 +44,7 @@ function reject(reason: string): never {
 @Injectable()
 export class CsrfGuard implements CanActivate {
   private readonly allowedOrigins: Set<string>;
+  private readonly publicOrigin: string | null;
 
   constructor(
     private readonly cookies: SessionCookies,
@@ -57,6 +58,8 @@ export class CsrfGuard implements CanActivate {
         config.get<string>('API_PUBLIC_URL'),
       ].filter(Boolean) as string[],
     );
+    const publicUrl = config.get<string>('API_PUBLIC_URL');
+    this.publicOrigin = publicUrl ? new URL(publicUrl).origin : null;
   }
 
   canActivate(ctx: ExecutionContext): boolean {
@@ -83,7 +86,9 @@ export class CsrfGuard implements CanActivate {
     // -- Origin check --
     const origin = req.headers['origin'] as string | undefined;
     if (origin) {
-      const ownOrigin = `${req.protocol}://${req.get('host')}`;
+      // `trust proxy` (TRUST_PROXY_HOPS) makes req.protocol honour X-Forwarded-Proto;
+      // API_PUBLIC_URL is the authoritative own origin behind CloudFront/ALB.
+      const ownOrigin = this.publicOrigin ?? `${req.protocol}://${req.get('host')}`;
       if (!this.allowedOrigins.has(origin) && origin !== ownOrigin) {
         reject('origin not allowed');
       }

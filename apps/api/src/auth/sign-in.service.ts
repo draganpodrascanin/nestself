@@ -151,7 +151,8 @@ export class SignInService {
         });
         return { step, challengeToken: token };
       }
-      return this.identity.resolveOutcome(outcome, email, surface, meta, true);
+      // Tokens without a challenge: a password only, no second factor presented.
+      return this.identity.resolveOutcome(outcome, email, surface, meta, true, false);
     } catch (err) {
       if (err instanceof IdentityProviderError) {
         await this.throttle.recordFailure(email);
@@ -235,7 +236,8 @@ export class SignInService {
         return { step, challengeToken: newToken };
       }
 
-      return this.identity.resolveOutcome(outcome, challenge.email, effectiveSurface, meta, true);
+      const secondFactor = challenge.kind === 'totp' || challenge.kind === 'totp_enrol';
+      return this.identity.resolveOutcome(outcome, challenge.email, effectiveSurface, meta, true, secondFactor);
     } catch (err) {
       if (err instanceof IdentityProviderError) {
         this.identity.auditSignInFailed(challenge.email, meta);

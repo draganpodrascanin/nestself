@@ -65,6 +65,8 @@ export class IdentityResolutionService {
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
     wasPassword: boolean,
+    /** True only when a TOTP code or MFA enrolment was verified in this sign-in. */
+    secondFactor = false,
   ): Promise<SessionCreationResult> {
     if (outcome.kind !== 'tokens') {
       throw new ApiHttpException({
@@ -74,7 +76,7 @@ export class IdentityResolutionService {
       });
     }
     return this.resolveIdentityAndCreateSession(
-      outcome.tokens, email, surface, meta, wasPassword,
+      outcome.tokens, email, surface, meta, wasPassword, secondFactor,
     );
   }
 
@@ -84,6 +86,7 @@ export class IdentityResolutionService {
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
     wasPassword: boolean,
+    secondFactor = false,
   ): Promise<SessionCreationResult> {
     const { decodeJwtClaims } = await import('../identity/identity-provider.service.js');
     const claims = decodeJwtClaims(tokens.idToken);
@@ -133,7 +136,7 @@ export class IdentityResolutionService {
         auth: {
           method: authMethod,
           time: new Date().toISOString(),
-          secondFactor: wasPassword,
+          secondFactor,
         },
         rememberDevice: false,
         ip: meta.ip,
@@ -154,7 +157,7 @@ export class IdentityResolutionService {
       auth: {
         method: authMethod,
         time: new Date().toISOString(),
-        secondFactor: wasPassword,
+        secondFactor,
         lastStepUpAt: null,
       },
       sessionId,

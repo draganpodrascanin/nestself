@@ -81,7 +81,7 @@ function createMocks() {
     config: { get: vi.fn().mockReturnValue(0) },
     bearer: { verify: vi.fn() },
     principalLoader: { load: vi.fn() },
-    sessions: { get: vi.fn() },
+    sessions: { get: vi.fn(), ensureFreshAccessToken: vi.fn(async (r: unknown) => r) },
     cookies: { parse: vi.fn().mockReturnValue({ sessionId: null }) },
     identities: { findExternalIdentity: vi.fn() },
     store: { set: vi.fn(), get: vi.fn(), sAdd: vi.fn(), expire: vi.fn() },

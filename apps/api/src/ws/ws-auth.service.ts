@@ -161,9 +161,9 @@ export class WsAuthService {
       );
     }
 
-    let data: { userId: string; createdAt: string };
+    let data: { userId: string; createdAt: string; auth?: AuthInfo | null };
     try {
-      data = JSON.parse(raw) as { userId: string; createdAt: string };
+      data = JSON.parse(raw) as { userId: string; createdAt: string; auth?: AuthInfo | null };
     } catch {
       throw new WsAuthError('Malformed ticket payload', 'invalid_ticket');
     }
@@ -190,9 +190,10 @@ export class WsAuthService {
     // Default context for ticket/bearer callers (same logic as AuthenticationGuard)
     const context = this.defaultContext(loaded);
 
+    // Carry the issuing session's authentication strength (never upgrade it).
     return this.assemblePrincipal(loaded, {
       context,
-      auth: {
+      auth: data.auth ?? {
         method: 'email_otp',
         time: new Date().toISOString(),
         secondFactor: false,

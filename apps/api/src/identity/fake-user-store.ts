@@ -4,7 +4,8 @@
  * Extracted to keep fake-identity-provider.ts under the ~400 line limit.
  * The store holds users, refresh tokens, and provides user-management methods.
  */
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
+import { codesEqual } from './totp.js';
 import { Logger } from '@nestjs/common';
 import type { IdpUser, TokenSet } from './identity-provider.service.js';
 import { IdentityProviderError } from './identity-provider.service.js';
@@ -90,7 +91,7 @@ export class FakeUserStore {
   }
 
   sendOtp(email: string): string {
-    const code = String(Math.floor(100_000 + Math.random() * 900_000));
+    const code = String(randomInt(100_000, 1_000_000));
     this.otps.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS });
     this.sentCodes.push({ email, code, sentAt: new Date() });
     if (this.sentCodes.length > MAX_SENT_CODES) this.sentCodes.shift();
@@ -177,7 +178,7 @@ export class FakeUserStore {
       throw new IdentityProviderError('User not found', 'user_not_found');
     }
     const otp = this.otps.get(user.email);
-    if (!otp || otp.expiresAt < Date.now() || otp.code !== input.code) {
+    if (!otp || otp.expiresAt < Date.now() || !codesEqual(otp.code, input.code)) {
       throw new IdentityProviderError('Invalid code', 'invalid_code');
     }
     user.password = input.newPassword;

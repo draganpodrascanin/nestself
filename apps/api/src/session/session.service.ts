@@ -150,8 +150,11 @@ export class SessionService {
     return this.decryptRecord(stored, sessionId);
   }
 
-  /** @see SESS-R-10 */
-  async regenerate(sessionId: string): Promise<string> {
+  /**
+   * New session id and a new CSRF token for the same record (sign-in and
+   * step-up). Callers must set both cookies again. @see SESS-R-10
+   */
+  async regenerate(sessionId: string): Promise<{ sessionId: string; csrfToken: string }> {
     const oldHash = hashSessionId(sessionId);
     const raw = await this.store.get(sessionKey(oldHash));
     if (!raw) throw new SessionExpiredError();
@@ -160,6 +163,7 @@ export class SessionService {
     const newHash = hashSessionId(newId);
     // Re-encrypt on regenerate if needed
     this.reEncryptIfNeeded(stored);
+    stored.csrfToken = generateCsrfToken();
     const remaining = Math.max(
       1, Math.floor((new Date(stored.absoluteExpiresAt).getTime() - Date.now()) / 1_000),
     );
@@ -167,7 +171,7 @@ export class SessionService {
     await this.store.del(sessionKey(oldHash));
     await this.store.sRem(userSessionsKey(stored.userId), oldHash);
     await this.store.sAdd(userSessionsKey(stored.userId), newHash);
-    return newId;
+    return { sessionId: newId, csrfToken: stored.csrfToken };
   }
 
   /** Update context; recompute lifetimes but never extend absoluteExpiresAt. */
@@ -208,6 +212,21 @@ export class SessionService {
     const raw = await this.store.get(sessionKey(hash));
     if (!raw) return;
     await this.destroyByHash(hash, JSON.parse(raw) as StoredRecord, opts);
+  }
+
+  /**
+   * Destroy one of the user's sessions by its hash (the id the session list
+   * exposes). Revokes the refresh token and publishes the invalidation like
+   * every other destroy path. Returns false when the hash is not one of the
+   * user's sessions. @see SESS-R-17
+   */
+  async destroyOwnedByHash(userId: string, hash: string): Promise<boolean> {
+    const raw = await this.store.get(sessionKey(hash));
+    if (!raw) return false;
+    const stored = JSON.parse(raw) as StoredRecord;
+    if (stored.userId !== userId) return false;
+    await this.destroyByHash(hash, stored, { revokeTokens: true });
+    return true;
   }
 
   /** @see SESS-R-15 */

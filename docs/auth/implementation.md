@@ -116,7 +116,7 @@ Four global guards run in this order for every HTTP request (`apps/api/src/app.m
 
 1. **`AuthenticationGuard`** (`src/auth/authentication.guard.ts`). Skips `@Public()` routes. Otherwise it reads the session cookie or the `Authorization: Bearer` header, resolves a `Principal` and attaches `request.principal`, `request.session` (web only), `request.authMeta` and `request.csrfToken`. Missing or invalid credentials end the request with 401.
 2. **`CsrfGuard`** (`src/session/csrf.guard.ts`). Only when a session cookie is present and the method is not safe: it checks `Sec-Fetch-Site`, the `Origin` header against the allowed surfaces and the double-submit token (`X-CSRF-Token` header must equal the CSRF cookie). WebSocket contexts are skipped. Failure is 403 `csrf_rejected`.
-3. **`AuthorizationGuard`** (`src/authz/authorization.guard.ts`). Skips `@Public()` and `@Authenticated()` routes. For `@Authorize(action, resolver)` it calls the resolver to derive the `Resource`, builds the context with `ContextLoader`, calls `authorize()`, writes an `access.denied` audit event on denial and answers 404 when the caller has no visibility into the organization and 403 otherwise (AUTHZ-R-61).
+3. **`AuthorizationGuard`** (`src/authz/authorization.guard.ts`). Skips `@Public()` and `@Authenticated()` routes. For `@Authorize(action, resolver)` it calls the resolver to derive the `Resource`, builds the context with `ContextLoader`, calls `authorize()`, writes an `access.denied` audit event on denial (the engine's reason is recorded there, never returned to the client) and answers 404 when the caller has no visibility into the organization and 403 otherwise (AUTHZ-R-61). A handler that carries no decorator at all is denied at runtime as well as by the CI test.
 4. **`ThrottlerGuard`** (NestJS throttler, 60 requests per minute by default; sign-in routes carry tighter `@Throttle` values).
 
 Decorators (`src/authz/`):
@@ -214,7 +214,7 @@ Invitation tokens are 32 random bytes; only the SHA-256 hash is stored, with a 7
 
 ## 12. Audit log
 
-`AuditWriter.record()` (`src/audit/audit-writer.ts`) inserts into `audit_events` with the category derived from the action (`audit-events.ts`: `auth.*` and `user.suspended` are SECURITY, `grant.*` and `access.denied` AUTHORIZATION, administration ADMIN, content CONTENT_ACCESS), the retention horizon from `retention_policies` (10-minute cache, defaults per tier), a truncated SHA-256 of the IP and the parsed user-agent family. Details are sanitised: forbidden keys (tokens, passwords, message bodies, intake text, notes, voucher codes, raw email) are dropped and strings truncated. `record()` never throws in production; tests set `strictMode`. The table is range-partitioned by month and protected by triggers that reject UPDATE and DELETE; the application role also lacks those privileges. `pino-redaction.ts` redacts the same fields from HTTP logs. Add a new action to `AUDIT_ACTIONS` before using it; the type will not compile otherwise.
+`AuditWriter.record()` (`src/audit/audit-writer.ts`) inserts into `audit_events` with the category derived from the action (`audit-events.ts`: `auth.*` and `user.suspended` are SECURITY, `grant.*` and `access.denied` AUTHORIZATION, administration ADMIN, content CONTENT_ACCESS), the retention horizon from `retention_policies` (10-minute cache, defaults per tier), a keyed hash of the IP (HMAC with `IP_HASH_SALT`, falling back to the session encryption key, so it cannot be reversed from a table of all addresses) and the parsed user-agent family. Details are sanitised: forbidden keys (tokens, passwords, message bodies, intake text, notes, voucher codes, raw email) are dropped and strings truncated. `record()` never throws in production; tests set `strictMode`. The table is range-partitioned by month and protected by triggers that reject UPDATE and DELETE; the application role also lacks those privileges. `pino-redaction.ts` redacts the same fields from HTTP logs. Add a new action to `AUDIT_ACTIONS` before using it; the type will not compile otherwise.
 
 ## 13. WebSockets
 
@@ -260,6 +260,7 @@ Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
 | `JWT_SECRET`, `JWT_EXPIRES_IN` | Stub-mode bearer tokens only; removed after cutover |
 | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_WEB_CLIENT_ID`, `COGNITO_WEB_CLIENT_SECRET`, `COGNITO_MOBILE_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_ISSUER` | Pool coordinates; `env-from-outputs.mjs` prints them |
 | `SESSION_ENCRYPTION_KEY`, `SESSION_ENCRYPTION_KEY_PREVIOUS` | 32-byte hex keys for token encryption at rest; derived from `JWT_SECRET` in stub mode |
+| `IP_HASH_SALT` | Key for the audit and session IP hashes; defaults to the session encryption key |
 | `SESSION_COOKIE_NAME`, `CSRF_COOKIE_NAME`, `SESSION_COOKIE_INSECURE_DEV` | Cookie names and the localhost switch |
 | `SESSION_LIFETIME_OVERRIDES` | JSON overrides per `population:context` |
 | `MARKETING_URL`, `WORKSPACE_URL`, `ADMIN_URL`, `API_PUBLIC_URL` | Allowed origins for CORS, CSRF and WebSocket handshakes; invitation links |
@@ -298,3 +299,5 @@ Redis keys and TTLs are listed in `apps/api/src/redis/redis-keys.ts`.
 - Nightly jobs (stale mobile families, grant reconciliation, audit partition creation) and BullMQ queue wiring.
 - Playwright sign-in journeys in `e2e/`; the compliance track (privacy notices, DPA, breach procedure) before the first real employee.
 - No operations template currently carries `people.deactivate`; the suspension test inserts the grant directly.
+- Row-level security covers the tables that carry `org_id`. The legacy community tables (`posts`, `polls`, `poll_options`, `poll_votes`) and `org_unit_closure` reach their organization only through a join, so code must always join through `channels` or `org_units`; phase 2 either adds `org_id` columns with policies or retires those tables with the legacy team model.
+- Cognito access tokens do not say how the user authenticated, so bearer principals report `email_otp` without a second factor; step-up decisions for mobile must use the application-side step-up endpoints (phase 2).

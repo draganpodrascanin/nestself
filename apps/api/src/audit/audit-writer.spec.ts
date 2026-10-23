@@ -44,8 +44,9 @@ describe('AuditWriter', () => {
       });
 
       const row = repo.insertEvent.mock.calls[0]![0];
-      const expected = createHash('sha256').update('203.0.113.42').digest('hex').slice(0, 32);
-      expect(row.ipHash).toBe(expected);
+      // Keyed hash: equal to the shared helper, never the bare SHA-256 of the address.
+      expect(row.ipHash).toBe(hashIp('203.0.113.42'));
+      expect(row.ipHash).not.toBe(createHash('sha256').update('203.0.113.42').digest('hex').slice(0, 32));
       expect(row.ipHash).toHaveLength(32);
     });
 

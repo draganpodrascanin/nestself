@@ -68,6 +68,9 @@ export const envSchema = z
     COGNITO_DOMAIN: optionalUrl,
     COGNITO_ISSUER: optionalUrl,
 
+    // Keyed IP hashing for audit and session records (falls back to SESSION_ENCRYPTION_KEY)
+    IP_HASH_SALT: optionalString,
+
     // Session encryption
     SESSION_ENCRYPTION_KEY: optionalHexKey64,
     SESSION_ENCRYPTION_KEY_PREVIOUS: optionalHexKey64,

@@ -18,11 +18,9 @@ export class DiscoverService {
   async discover(email: string): Promise<DiscoverResponse> {
     const start = Date.now();
     const user = await this.idp.findUserByEmail(email);
-    if (!user) {
-      await neutralDelay(start);
-      return { method: 'email_otp', ssoStartUrl: null, connection: null };
-    }
-    if (user.hasPassword) {
+    // Known and unknown addresses must take the same time (SESS-R-21, API-R-01).
+    await neutralDelay(start);
+    if (user?.hasPassword) {
       return { method: 'password', ssoStartUrl: null, connection: null };
     }
     return { method: 'email_otp', ssoStartUrl: null, connection: null };

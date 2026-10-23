@@ -67,7 +67,6 @@ export class AuthorizationService {
         status: 403,
         code: 'forbidden',
         message: 'Access denied',
-        details: { reason: decision.denialReason },
       });
     }
   }

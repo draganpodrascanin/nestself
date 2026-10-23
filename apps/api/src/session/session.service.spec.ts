@@ -94,6 +94,22 @@ describe('SessionService', () => {
     expect(record!.cognito.accessToken).toBe('access-tok');
   });
 
+  it('destroyOwnedByHash destroys only the owner\'s session and revokes its refresh token', async () => {
+    const a = await service.create(baseInput);
+    const b = await service.create(baseInput);
+    const listed = await service.listForUser('user_1', a.sessionId);
+    const other = listed.find((s) => !s.isCurrent)!;
+
+    expect(await service.destroyOwnedByHash('someone_else', other.sessionIdHash)).toBe(false);
+    expect(await service.get(b.sessionId)).not.toBeNull();
+
+    expect(await service.destroyOwnedByHash('user_1', other.sessionIdHash)).toBe(true);
+    expect(await service.get(b.sessionId)).toBeNull();
+    expect(await service.get(a.sessionId)).not.toBeNull();
+    expect(idp.revokeRefreshToken).toHaveBeenCalled();
+    expect(await service.destroyOwnedByHash('user_1', other.sessionIdHash)).toBe(false);
+  });
+
   it('get returns null for unknown session', async () => {
     const result = await service.get('nonexistent');
     expect(result).toBeNull();
@@ -121,8 +137,10 @@ describe('SessionService', () => {
 
   it('regenerate produces a new id and invalidates the old', async () => {
     const { sessionId } = await service.create(baseInput);
-    const newId = await service.regenerate(sessionId);
+    const before = await service.get(sessionId);
+    const { sessionId: newId, csrfToken } = await service.regenerate(sessionId);
     expect(newId).not.toBe(sessionId);
+    expect(csrfToken).not.toBe(before!.csrfToken);
 
     const oldResult = await service.get(sessionId);
     expect(oldResult).toBeNull();
