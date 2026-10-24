@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import {
+  INVALIDATE_CHANNEL,
   mobileFamilyKey,
   revokedFamilyKey,
+  sessionKey,
   userMobileFamiliesKey,
+  userSessionsKey,
 } from '../redis/redis-keys.js';
+import { SessionService } from '../session/session.service.js';
 import { MaintenanceJobsService } from './maintenance-jobs.service.js';
 
 const NOW = new Date('2026-10-23T02:15:00.000Z');
@@ -48,6 +52,7 @@ describe('MaintenanceJobsService', () => {
   let audit: { record: ReturnType<typeof vi.fn> };
   let principals: { invalidateUser: ReturnType<typeof vi.fn> };
   let store: MemoryKeyValueStore;
+  let idp: { revokeRefreshToken: ReturnType<typeof vi.fn> };
   let service: MaintenanceJobsService;
 
   beforeEach(() => {
@@ -63,12 +68,19 @@ describe('MaintenanceJobsService', () => {
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     principals = { invalidateUser: vi.fn().mockResolvedValue(undefined) };
     store = new MemoryKeyValueStore();
+    idp = { revokeRefreshToken: vi.fn().mockResolvedValue(undefined) };
+    const cipher = {
+      encrypt: (v: string) => `enc:${v}`,
+      decrypt: (v: string) => ({ plaintext: v.replace(/^enc:/, ''), usedPreviousKey: false }),
+    };
+    const sessions = new SessionService(store, idp as never, cipher as never, { get: () => undefined } as never);
     service = new MaintenanceJobsService(
       authzRepo as never,
       auditRepo as never,
       audit as never,
       principals as never,
       store,
+      sessions,
     );
   });
 
@@ -228,6 +240,71 @@ describe('MaintenanceJobsService', () => {
     it('reports zero work when nothing has expired', async () => {
       expect(await service.sweepExpiredEmergencyAccess(NOW)).toEqual({ expired: [] });
       expect(authzRepo.revokeEmergencyAccess).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sessions.reconcile-ttl', () => {
+    /** A stored record as SessionService writes it, with the raw session id never persisted. */
+    async function storeSession(hash: string, userId: string, absoluteExpiresAt: string): Promise<void> {
+      const record = {
+        userId,
+        surface: 'workspace',
+        population: 'employee',
+        context: { kind: 'personal' },
+        cognito: {
+          username: `${userId}@example.test`,
+          accessToken: 'enc:access',
+          idToken: 'enc:id',
+          refreshToken: `enc:refresh_${hash}`,
+          accessExpiresAt: absoluteExpiresAt,
+        },
+        auth: { method: 'email_otp', time: '2026-10-01T08:00:00.000Z', secondFactor: false },
+        lastStepUpAt: null,
+        createdAt: '2026-10-01T08:00:00.000Z',
+        lastActivityAt: '2026-10-01T08:00:00.000Z',
+        idleExpiresAt: absoluteExpiresAt,
+        absoluteExpiresAt,
+        rememberDevice: false,
+        ipHash: '',
+        userAgentFamily: 'Chrome',
+        csrfToken: 'csrf',
+      };
+      // No TTL: the drift this job exists for is a key that outlived its absolute expiry.
+      await store.set(sessionKey(hash), JSON.stringify(record));
+      await store.sAdd(userSessionsKey(userId), hash);
+    }
+
+    it('destroys sessions past their absolute expiry through SessionService and keeps live ones', async () => {
+      await storeSession('hash_expired', 'user_s', '2026-10-23T02:00:00.000Z');
+      await storeSession('hash_live', 'user_s', '2026-10-23T09:00:00.000Z');
+      const invalidations: string[] = [];
+      await store.subscribe(INVALIDATE_CHANNEL, (m) => invalidations.push(m));
+
+      const report = await service.run('sessions.reconcile-ttl', NOW);
+
+      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: ['hash_expired'] });
+      expect(await store.get(sessionKey('hash_expired'))).toBeNull();
+      expect(await store.get(sessionKey('hash_live'))).not.toBeNull();
+      expect(await store.sMembers(userSessionsKey('user_s'))).toEqual(['hash_live']);
+      expect(idp.revokeRefreshToken).toHaveBeenCalledTimes(1);
+      expect(idp.revokeRefreshToken).toHaveBeenCalledWith('refresh_hash_expired');
+      expect(invalidations).toHaveLength(1);
+      expect(JSON.parse(invalidations[0]!)).toMatchObject({ userId: 'user_s', sessionIdHash: 'hash_expired' });
+    });
+
+    it('counts a malformed record as scanned and leaves it alone', async () => {
+      await store.set(sessionKey('hash_garbage'), 'not json');
+      await store.set(sessionKey('hash_shapeless'), JSON.stringify({ userId: 'user_s' }));
+
+      const report = await service.reconcileSessionTtl(NOW);
+
+      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: [] });
+      expect(await store.get(sessionKey('hash_garbage'))).toBe('not json');
+      expect(idp.revokeRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('reports zero work when no session exists', async () => {
+      expect(await service.reconcileSessionTtl(NOW)).toEqual({ job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [] });
     });
   });
 });

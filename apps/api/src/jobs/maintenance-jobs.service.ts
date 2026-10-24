@@ -20,8 +20,10 @@ import {
   STALE_FAMILY_DENYLIST_TTL,
   mobileFamilyKey,
   revokedFamilyKey,
+  sessionKey,
   userMobileFamiliesKey,
 } from '../redis/redis-keys.js';
+import { SessionService } from '../session/session.service.js';
 
 /** Months of `audit_events` partitions kept ahead of today (D-21). */
 export const AUDIT_PARTITION_MONTHS_AHEAD = 3;
@@ -31,6 +33,7 @@ export const MAINTENANCE_JOB_NAMES = [
   'grants.reconcile',
   'mobile.prune-stale-families',
   'emergency.sweep-expired',
+  'sessions.reconcile-ttl',
 ] as const;
 export type MaintenanceJobName = (typeof MAINTENANCE_JOB_NAMES)[number];
 
@@ -54,11 +57,19 @@ export interface EmergencySweepReport {
   expired: string[];
 }
 
+export interface SessionTtlReport {
+  job: 'sessions.reconcile-ttl';
+  scanned: number;
+  /** Hashes of the destroyed sessions (the id the session list exposes). */
+  destroyed: string[];
+}
+
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
   | ({ job: 'grants.reconcile' } & GrantReconciliationReport)
   | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport)
-  | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport);
+  | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport)
+  | SessionTtlReport;
 
 @Injectable()
 export class MaintenanceJobsService {
@@ -70,6 +81,7 @@ export class MaintenanceJobsService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principals: PrincipalLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
   ) {}
 
   /** Run one job by name. */
@@ -83,6 +95,8 @@ export class MaintenanceJobsService {
         return { job: name, ...(await this.pruneStaleMobileFamilies()) };
       case 'emergency.sweep-expired':
         return { job: name, ...(await this.sweepExpiredEmergencyAccess(now)) };
+      case 'sessions.reconcile-ttl':
+        return this.reconcileSessionTtl(now);
     }
   }
 
@@ -192,6 +206,35 @@ export class MaintenanceJobsService {
   }
 
   /**
+   * Session TTL-drift reconciliation (SESS-R-16, T-2.10). A session key's TTL
+   * is its remaining absolute lifetime, but a key that outlived
+   * `absoluteExpiresAt` (a lost TTL, a restore, a write that reset it) would
+   * otherwise live on until someone presents its cookie. Each such record is
+   * destroyed through `SessionService.destroyOwnedByHash`, which revokes the
+   * encrypted refresh token, removes the hash from the user's session set and
+   * publishes the invalidation. A record that does not parse, or lacks a
+   * user id or a valid expiry, is counted in `scanned` and left alone.
+   */
+  async reconcileSessionTtl(now = new Date()): Promise<SessionTtlReport> {
+    const report: SessionTtlReport = { job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [] };
+    const prefix = sessionKey('');
+    const keys = await this.store.scan(sessionKey('*'));
+    for (const key of keys) {
+      report.scanned += 1;
+      const raw = await this.store.get(key);
+      if (!raw) continue;
+      const record = parseSessionExpiry(raw);
+      if (!record || record.absoluteExpiresAt >= now.getTime()) continue;
+      const hash = key.slice(prefix.length);
+      if (await this.sessions.destroyOwnedByHash(record.userId, hash)) {
+        report.destroyed.push(hash);
+      }
+    }
+    this.logger.log(`sessions reconciled: ${report.scanned} scanned, ${report.destroyed.length} destroyed`);
+    return report;
+  }
+
+  /**
    * Mobile token families not seen for 30 days (AUTHZ-R-64, D-07). The
    * bearer verifier refreshes `mobile_family:{jti}` on every request with a
    * 30-day TTL, so a family whose key is gone is stale. The API never holds
@@ -231,4 +274,19 @@ export class MaintenanceJobsService {
     );
     return report;
   }
+}
+
+/** The two fields the TTL reconciliation needs, or null for a malformed record. */
+function parseSessionExpiry(raw: string): { userId: string; absoluteExpiresAt: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { userId, absoluteExpiresAt } = parsed as { userId?: unknown; absoluteExpiresAt?: unknown };
+  if (typeof userId !== 'string' || typeof absoluteExpiresAt !== 'string') return null;
+  const expiresAt = Date.parse(absoluteExpiresAt);
+  return Number.isNaN(expiresAt) ? null : { userId, absoluteExpiresAt: expiresAt };
 }

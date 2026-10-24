@@ -31,6 +31,7 @@ export const MAINTENANCE_SCHEDULES: Record<MaintenanceJobName, string> = {
   'grants.reconcile': '15 2 * * *',
   'mobile.prune-stale-families': '30 2 * * *',
   'emergency.sweep-expired': '*/15 * * * *',
+  'sessions.reconcile-ttl': '45 2 * * *',
 };
 
 @Injectable()
