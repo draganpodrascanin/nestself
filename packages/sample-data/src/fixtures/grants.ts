@@ -28,7 +28,7 @@ function templatesFor(orgRole: string | null, platformRole: string | null) {
   return matching;
 }
 
-export const SAMPLE_GRANTS: SampleGrant[] = SAMPLE_PEOPLE.flatMap((person) =>
+const DERIVED_GRANTS: SampleGrant[] = SAMPLE_PEOPLE.flatMap((person) =>
   templatesFor(person.orgRole, person.platformRole).map((tmpl): SampleGrant => {
     const orgId = person.orgId;
     const scope =
@@ -55,3 +55,31 @@ export const SAMPLE_GRANTS: SampleGrant[] = SAMPLE_PEOPLE.flatMap((person) =>
     };
   }),
 );
+
+const OWNER_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner');
+
+/**
+ * The sample HR admin is also the organization's employer owner. The owner
+ * template has no legacy role, so this grant is added explicitly rather than
+ * derived; it matches `SAMPLE_PRINCIPALS.hr_admin.effectiveActions`.
+ */
+const OWNER_GRANT: SampleGrant = {
+  id: 'grant_user_ivana_employer_owner',
+  subjectUserId: 'user_ivana',
+  templateKey: 'employer_owner',
+  actions: [...(OWNER_TEMPLATE?.actions ?? [])],
+  scopeType: 'organization',
+  scopeOrgId: 'org_sample',
+  scopeOrgUnitId: null,
+  includeDescendants: false,
+  conditions: [],
+  validFrom: GRANTED_AT,
+  validUntil: null,
+  parentGrantId: null,
+  grantedByUserId: GRANTED_BY,
+  grantedAt: GRANTED_AT,
+  revokedAt: null,
+  sample: true,
+};
+
+export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT];

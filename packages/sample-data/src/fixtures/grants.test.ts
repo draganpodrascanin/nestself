@@ -26,6 +26,17 @@ describe('SAMPLE_GRANTS', () => {
     expect(keysOf('user_milica')).not.toContain('employee');
   });
 
+  it('gives user_ivana the employer owner template at organization scope', () => {
+    const owner = SAMPLE_GRANTS.find((g) => g.id === 'grant_user_ivana_employer_owner');
+    expect(owner).toBeDefined();
+    expect(owner!.subjectUserId).toBe('user_ivana');
+    expect(owner!.templateKey).toBe('employer_owner');
+    expect(owner!.scopeType).toBe('organization');
+    expect(owner!.scopeOrgId).toBe('org_sample');
+    expect(owner!.scopeOrgUnitId).toBeNull();
+    expect(SAMPLE_GRANTS.filter((g) => g.templateKey === 'employer_owner')).toHaveLength(1);
+  });
+
   it('copies template actions and resolves scope', () => {
     for (const g of SAMPLE_GRANTS) {
       const tmpl = PERMISSION_TEMPLATES.find((t) => t.key === g.templateKey)!;
