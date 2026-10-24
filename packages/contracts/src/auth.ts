@@ -310,6 +310,7 @@ export const AUTH_ERROR_CODES = [
   'missing_conditions',
   'self_approval_denied',
   'emergency_not_active',
+  'idempotency_conflict',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

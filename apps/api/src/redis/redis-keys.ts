@@ -64,6 +64,9 @@ export const STEP_UP_BEARER_TTL = 1800;
 /** Idempotency key: 24 h. */
 export const IDEMPOTENCY_TTL = 86400;
 
+/** In-flight reservation of an idempotency key: 60 s. */
+export const IDEMPOTENCY_IN_FLIGHT_TTL = 60;
+
 /** Session lock: 5 s. */
 export const SESSION_LOCK_TTL = 5;
 
@@ -146,9 +149,12 @@ export function stepUpKey(originJti: string): string {
   return `stepup:${originJti}`;
 }
 
-/** `idempotency:{key}` */
-export function idempotencyKey(key: string): string {
-  return `idempotency:${key}`;
+/**
+ * `idempotency:{scope}:{userId}:{key}`. The scope separates unrelated
+ * endpoints; the user id keeps one user's key from ever matching another's.
+ */
+export function idempotencyKey(scope: string, userId: string, key: string): string {
+  return `idempotency:${scope}:${userId}:${key}`;
 }
 
 /** `throttle:{route}:{key}` */
