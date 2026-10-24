@@ -40,6 +40,9 @@ export interface SampleWebinar {
   readonly id: string;
   /** Null for the `all_eligible` audience (CW-R-23). */
   readonly orgId: string | null;
+  // Per locale here, while the 5.2 `title` and `description` columns are single
+  // text: the T-CW-2.1 seed inserts the `sr-Latn` value (the platform default);
+  // the other locales are kept for the sample-mode UI.
   readonly title: Readonly<Record<SampleLocale, string>>;
   readonly description: Readonly<Record<SampleLocale, string>>;
   /** `all_eligible`, or the organisation id of an organisation-scoped occurrence (D-CW-17). */

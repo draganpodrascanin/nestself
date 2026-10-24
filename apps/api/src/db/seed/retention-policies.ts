@@ -87,4 +87,18 @@ export const RETENTION_POLICIES: readonly RetentionPolicyRow[] = [
   // Ephemeral location text on call_sessions (F-CW-04): deleted when the
   // session ends (SECURITY tier).
   row('call_session_location_text', 0, 0),
+  // Planning assumptions under D-CW-29 for the tables it does not name.
+  // Occurrences, hosts, certificates and recording rows: 7 years (FINANCIAL tier).
+  row('webinars', 7 * YEAR, 7 * YEAR),
+  row('webinar_hosts', 7 * YEAR, 7 * YEAR),
+  row('webinar_certificates', 7 * YEAR, 7 * YEAR),
+  row('webinar_recordings', 7 * YEAR, 7 * YEAR),
+  // Consent records: with the session, 7 years (FINANCIAL tier).
+  row('call_consents', 7 * YEAR, 7 * YEAR),
+  // Registrations: 24 months (ADMIN tier).
+  row('webinar_registrations', 730, 730),
+  // Polls, options and aggregate results: 1 year (CONTENT_ACCESS tier).
+  row('webinar_polls', 1 * YEAR, 1 * YEAR),
+  row('webinar_poll_options', 1 * YEAR, 1 * YEAR),
+  row('webinar_poll_results', 1 * YEAR, 1 * YEAR),
 ];
