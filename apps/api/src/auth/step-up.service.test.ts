@@ -125,6 +125,26 @@ describe('StepUpService', () => {
       expect(mocks.sessions.markStepUp).not.toHaveBeenCalled();
     });
 
+    it("audits another user's challenge as auth.step_up.failed (foreign_challenge) without token or code", async () => {
+      mocks.challenges.consume.mockResolvedValue({ ...STEP_UP_CHALLENGE, stepUp: { userId: 'user-2' } });
+
+      await expect(service.verify(SESSION_PRINCIPAL, 'challenge-token', '12345678', META)).rejects.toMatchObject({
+        code: 'invalid_challenge',
+      });
+
+      expect(mocks.audit.record).toHaveBeenCalledTimes(1);
+      const event = mocks.audit.record.mock.calls[0]![0];
+      expect(event).toMatchObject({
+        action: 'auth.step_up.failed',
+        actorUserId: 'user-1',
+        result: 'DENIED',
+        details: { method: 'email_otp', reason: 'foreign_challenge' },
+      });
+      const serialized = JSON.stringify(event);
+      expect(serialized).not.toContain('challenge-token');
+      expect(serialized).not.toContain('12345678');
+    });
+
     it('refuses a sign-in challenge that carries no step-up binding', async () => {
       const { stepUp: _omit, ...signIn } = STEP_UP_CHALLENGE;
       mocks.challenges.consume.mockResolvedValue(signIn);
