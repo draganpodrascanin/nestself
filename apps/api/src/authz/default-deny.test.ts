@@ -194,6 +194,78 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     });
   });
 
+  it('covers the webinar controllers: canonical actions, and @Authenticated() where the service decides (T-CW-2.1, CW-R-31a)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const policiesOf = (controller: string): Record<string, string> => {
+      const wrapper = discovery.getControllers().find((w) => w.instance?.constructor.name === controller);
+      expect(wrapper, `${controller} is registered`).toBeDefined();
+      const instance = wrapper!.instance as object;
+      const prototype = Object.getPrototypeOf(instance) as object;
+      const policies: Record<string, string> = {};
+      for (const methodName of scanner.getAllMethodNames(prototype)) {
+        const handler = (prototype as Record<string, unknown>)[methodName];
+        if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+        const targets = [handler, instance.constructor];
+        const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+        const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+        const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+        policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+      }
+      return policies;
+    };
+
+    expect(policiesOf('WebinarsController')).toEqual({
+      list: 'event.register',
+      // Attendee, registrant, host or moderating staff: decided in the service.
+      get: 'authenticated',
+      register: 'event.register',
+      unregister: 'event.register',
+      // Hosts and registered attendees (WBN-07, WBN-16).
+      join: 'authenticated',
+      // event.present or event.moderate on the occurrence, checked in the service (CW-R-31a).
+      start: 'authenticated',
+      end: 'authenticated',
+      // Attendees (event.register) and hosts (WBN-37) alike.
+      createMessage: 'authenticated',
+      listMessages: 'authenticated',
+      publishMessage: 'event.moderate',
+      answerMessage: 'event.moderate',
+      dismissMessage: 'event.moderate',
+      raiseHand: 'event.register',
+      lowerHand: 'event.register',
+      // event.moderate or event.present (WBN-25).
+      giveFloor: 'authenticated',
+      takeFloor: 'authenticated',
+      createPoll: 'event.moderate',
+      openPoll: 'event.moderate',
+      closePoll: 'event.moderate',
+      vote: 'event.register',
+    });
+
+    expect(policiesOf('WebinarsOpsController')).toEqual({
+      // The admin index (an addition to the canonical routes): manage or moderate, in the service.
+      list: 'authenticated',
+      create: 'event.manage',
+      update: 'event.manage',
+      publish: 'event.manage',
+      cancel: 'event.manage',
+      // event.manage or event.moderate (WBN-33), in the service.
+      attendance: 'authenticated',
+    });
+  });
+
   it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {
     if (!module) {
       module = await Test.createTestingModule({

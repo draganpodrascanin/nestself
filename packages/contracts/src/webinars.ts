@@ -337,6 +337,22 @@ export const WebinarListResponseSchema = z.strictObject({
 });
 export type WebinarListResponse = z.infer<typeof WebinarListResponseSchema>;
 
+/**
+ * `GET /ops/webinars`: the admin index of the occurrences the caller may
+ * manage or moderate (T-CW-2.1, an addition to the decision record's route
+ * list). Same filters and paging as `GET /webinars`, every status; `orgId`
+ * narrows to one organisation's occurrences.
+ */
+export const WebinarOpsListQuerySchema = WebinarListQuerySchema;
+export type WebinarOpsListQuery = WebinarListQuery;
+
+export const WebinarOpsListResponseSchema = z.strictObject({
+  items: z.array(WebinarSchema),
+  /** Pass as `cursor` for the next page; null on the last page. */
+  nextCursor: z.string().nullable(),
+});
+export type WebinarOpsListResponse = z.infer<typeof WebinarOpsListResponseSchema>;
+
 // ---------------------------------------------------------------------------
 // Registration (`POST` and `DELETE /webinars/:id/register`, WBN-02, WBN-03)
 // ---------------------------------------------------------------------------
