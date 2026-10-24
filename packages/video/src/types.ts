@@ -150,6 +150,11 @@ export interface CallSessionControllerApi {
   leave(): Promise<void>;
 
   setMuted(muted: boolean): void;
+  /**
+   * Audio capability change (a webinar attendee given or losing the floor).
+   * Never enables video. Optional so existing implementations stay valid.
+   */
+  setAudioCapability?(enabled: boolean): Promise<void>;
   setCameraOn(on: boolean): Promise<void>;
   setScreenShare(on: boolean): Promise<void>;
   bindVideoTile(tileId: number, element: HTMLVideoElement): void;

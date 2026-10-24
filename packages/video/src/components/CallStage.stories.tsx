@@ -55,6 +55,7 @@ function Consultation({ participantRole = 'employee', scene = 'connected' }: { p
     <div className="h-[40rem] w-full">
       <CallStage
         ref={stageRef}
+        fullscreen={fullscreen.isFullscreen}
         controller={controller}
         remoteName="Sample name"
         onRejoin={() => controller.simulate.connected()}

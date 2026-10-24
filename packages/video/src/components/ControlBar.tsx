@@ -163,6 +163,7 @@ export function ControlBar({
   const { t } = useTranslation('calls');
   const wide = useMediaQuery(CONTROL_BAR_WIDE_QUERY);
   const noticeMotion = useMotionPreset('popover');
+  const overflowBlurDescriptionId = useId();
 
   const isAttendee = participantRole === 'attendee';
   const isExpert = participantRole === 'expert';
@@ -327,10 +328,28 @@ export function ControlBar({
               <TriggerContent icon={<DotsThree size={22} weight="bold" />} label={t('controls.more')} wide={wide} />
             </MenuTrigger>
             <MenuPopup aria-label={t('controls.more')} className="min-w-64">
-              {showBlur ? (
-                <MenuItem onClick={blurUnavailable || blur.loading ? undefined : onToggleBlur} className="gap-3">
+              {showBlur && (blurUnavailable || blur.loading) ? (
+                // Disabled with the same explanation as the inline toggle (CW-R-55b); not a Base UI item, so it cannot be activated.
+                <div
+                  role="menuitem"
+                  aria-disabled="true"
+                  aria-describedby={blurUnavailable ? overflowBlurDescriptionId : undefined}
+                  className="gap-3 min-h-11 px-3 py-2 flex cursor-not-allowed items-center rounded-small text-disabled-text"
+                >
                   <Sparkle size={18} aria-hidden />
-                  {blurUnavailable ? t('controls.blurUnavailable') : blurLabel}
+                  <span className="gap-0.5 flex flex-col">
+                    <span>{blurLabel}</span>
+                    {blurUnavailable ? (
+                      <span id={overflowBlurDescriptionId} className="type-metadata">
+                        {t('controls.blurUnavailable')}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+              ) : showBlur ? (
+                <MenuItem onClick={onToggleBlur} className="gap-3">
+                  <Sparkle size={18} aria-hidden />
+                  {blurLabel}
                 </MenuItem>
               ) : null}
               {showShare ? (

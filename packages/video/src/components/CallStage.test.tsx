@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { useRef } from 'react';
 import userEvent from '@testing-library/user-event';
 import { expectNoA11yViolations } from '@nestself/ui/test';
 import { renderWithI18n, t } from '../test/i18n';
 import { FakeCallSessionController } from '../testing/fake-controller';
+import { useFullscreen } from '../hooks/useFullscreen';
+import type { CallSessionControllerApi } from '../types';
 import { CallStage } from './CallStage';
+import { CrisisResourcesButton } from './CrisisBlock';
 
 async function connected(role: 'employee' | 'expert' = 'employee') {
   const controller = new FakeCallSessionController({ role });
@@ -43,6 +47,16 @@ describe('CallStage (UX-10, UX-20, CALL-08)', () => {
     await waitFor(() => expect(screen.queryByLabelText(t('stage.selfView'))).toBeNull());
     await user.click(screen.getByRole('button', { name: t('stage.showSelfView') }));
     expect(await screen.findByLabelText(t('stage.selfView'))).toBeInTheDocument();
+  });
+
+  it('animates the self-view in, and keeps it mounted while it animates out when the camera turns off', async () => {
+    const controller = await connected();
+    renderWithI18n(<CallStage controller={controller} />);
+    const pip = screen.getByLabelText(t('stage.selfView')).closest('[style]') as HTMLElement;
+    expect(pip.style.opacity).not.toBe('');
+    act(() => void controller.setCameraOn(false));
+    expect(screen.queryByTestId('self-view')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('self-view')).toBeNull());
   });
 
   it('moves the self-view between corners with the keyboard', async () => {
@@ -108,5 +122,65 @@ describe('CallStage (UX-10, UX-20, CALL-08)', () => {
     });
     const { container } = renderWithI18n(<CallStage controller={controller} remoteName="Ana" />);
     await expectNoA11yViolations(container);
+  });
+});
+
+describe('CallStage fullscreen', () => {
+  let fullscreenElement: Element | null = null;
+  // Only the document element is ever made fullscreen here.
+  const requestFullscreen = vi.fn(() => {
+    fullscreenElement = document.documentElement;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    return Promise.resolve();
+  });
+
+  afterEach(() => {
+    fullscreenElement = null;
+    Reflect.deleteProperty(document, 'fullscreenElement');
+    Reflect.deleteProperty(document, 'fullscreenEnabled');
+    Reflect.deleteProperty(document.documentElement, 'requestFullscreen');
+    Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen');
+  });
+
+  function Harness({ controller }: { controller: CallSessionControllerApi }) {
+    const stageRef = useRef<HTMLElement>(null);
+    const fullscreen = useFullscreen(stageRef);
+    return (
+      <CallStage
+        ref={stageRef}
+        controller={controller}
+        fullscreen={fullscreen.isFullscreen}
+        header={<CrisisResourcesButton />}
+        controls={
+          <button type="button" onClick={() => void fullscreen.toggle()}>
+            {t('controls.fullscreen')}
+          </button>
+        }
+      />
+    );
+  }
+
+  it('makes the document fullscreen, pins the stage, and the crisis sheet stays visible', async () => {
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', { configurable: true, value: requestFullscreen });
+    const stageRequest = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: stageRequest });
+
+    const user = userEvent.setup();
+    const controller = await connected();
+    renderWithI18n(<Harness controller={controller} />);
+    await user.click(screen.getByRole('button', { name: t('controls.fullscreen') }));
+
+    expect(requestFullscreen.mock.contexts[0]).toBe(document.documentElement);
+    expect(stageRequest).not.toHaveBeenCalled();
+    const stage = screen.getByRole('region', { name: t('stage.label') });
+    await waitFor(() => expect(stage).toHaveAttribute('data-fullscreen', 'true'));
+    expect(stage.className).toMatch(/\bfixed\b/);
+
+    await user.click(within(stage).getByRole('button', { name: t('crisis.open') }));
+    const sheet = await screen.findByRole('dialog', { name: t('crisis.title') });
+    expect(document.fullscreenElement?.contains(sheet)).toBe(true);
+    expect(within(sheet).getByRole('link', { name: /112/ })).toBeInTheDocument();
   });
 });

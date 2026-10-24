@@ -37,8 +37,13 @@ export interface CallStageProps {
   supportHref?: string;
   /** A failed rejoin, already translated (for example a closed join window). */
   error?: string | null;
-  /** The stage element, for fullscreen. */
+  /** The stage element. */
   ref?: Ref<HTMLElement>;
+  /**
+   * The document is fullscreen (`useFullscreen().isFullscreen`): the stage
+   * pins itself to the viewport, and popups that portal to the body stay visible.
+   */
+  fullscreen?: boolean;
   className?: string;
 }
 
@@ -88,6 +93,7 @@ export function CallStage({
   supportHref,
   error,
   ref,
+  fullscreen = false,
   className,
 }: CallStageProps) {
   const { t } = useTranslation('calls');
@@ -157,7 +163,12 @@ export function CallStage({
         {...stageMotion}
         ref={stageRef}
         aria-label={t('stage.label')}
-        className={cn('relative isolate h-full min-h-96 w-full overflow-hidden bg-canvas text-text', className)}
+        data-fullscreen={fullscreen || undefined}
+        className={cn(
+          'isolate overflow-hidden bg-canvas text-text',
+          fullscreen ? 'fixed inset-0 z-[var(--z-sticky)] h-dvh w-screen' : 'relative h-full min-h-96 w-full',
+          className,
+        )}
       >
         {/* Live call audio; live captions are out of scope for this epic (D-CW-23). */}
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -177,55 +188,59 @@ export function CallStage({
           </div>
         ) : null}
 
-        {tiles.localTileId !== null && live ? (
-          <MotionLayoutFeatures>
-            <m.div
-              data-testid="self-view"
-              data-corner={corner}
-              layout={!reduced}
-              transition={{ layout: { duration: motionDuration.standard, ease: motionEase } }}
-              onPointerDown={onPointerDown}
-              onPointerUp={onPointerUp}
-              className={cn('absolute z-10 touch-none', CORNER_CLASSES[corner])}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {selfViewHidden ? (
-                  <m.div key="hidden" {...pipMotion} className="origin-center">
-                    <Button variant="secondary" size="sm" leadingIcon={<Eye size={18} />} onClick={() => setSelfViewHidden(false)}>
-                      {t('stage.showSelfView')}
-                    </Button>
-                  </m.div>
-                ) : (
-                  <m.div
-                    key="shown"
-                    {...pipMotion}
-                    className="relative w-28 overflow-hidden rounded-control border border-border-subtle bg-tint shadow-modal sm:w-44 origin-center"
-                  >
-                    <TileVideo controller={controller} tileId={tiles.localTileId} label={t('stage.selfView')} className="aspect-[3/4] w-full -scale-x-100 object-cover sm:aspect-video" />
-                    <div className="gap-1 p-1 absolute inset-x-0 bottom-0 flex justify-end">
-                      <button
-                        type="button"
-                        aria-label={t('stage.moveSelfView')}
-                        onClick={() => setCorner(NEXT_CORNER[corner])}
-                        className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-control bg-surface text-text focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
-                      >
-                        <ArrowsOutCardinal size={18} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t('stage.hideSelfView')}
-                        onClick={() => setSelfViewHidden(true)}
-                        className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-control bg-surface text-text focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
-                      >
-                        <EyeSlash size={18} aria-hidden />
-                      </button>
-                    </div>
-                  </m.div>
-                )}
-              </AnimatePresence>
-            </m.div>
-          </MotionLayoutFeatures>
-        ) : null}
+        <MotionLayoutFeatures>
+          <AnimatePresence>
+            {tiles.localTileId !== null && live ? (
+              <m.div
+                key="self-view"
+                data-testid="self-view"
+                data-corner={corner}
+                layout={!reduced}
+                transition={{ layout: { duration: motionDuration.standard, ease: motionEase } }}
+                onPointerDown={onPointerDown}
+                onPointerUp={onPointerUp}
+                className={cn('absolute z-10 touch-none', CORNER_CLASSES[corner])}
+              >
+                {/* The self-view pops in and out with the popover preset; `propagate` runs its exit when the whole picture-in-picture leaves. */}
+                <AnimatePresence mode="wait" propagate>
+                  {selfViewHidden ? (
+                    <m.div key="hidden" {...pipMotion} className="origin-center">
+                      <Button variant="secondary" size="sm" leadingIcon={<Eye size={18} />} onClick={() => setSelfViewHidden(false)}>
+                        {t('stage.showSelfView')}
+                      </Button>
+                    </m.div>
+                  ) : (
+                    <m.div
+                      key="shown"
+                      {...pipMotion}
+                      className="relative w-28 overflow-hidden rounded-control border border-border-subtle bg-tint shadow-modal sm:w-44 origin-center"
+                    >
+                      <TileVideo controller={controller} tileId={tiles.localTileId} label={t('stage.selfView')} className="aspect-[3/4] w-full -scale-x-100 object-cover sm:aspect-video" />
+                      <div className="gap-1 p-1 absolute inset-x-0 bottom-0 flex justify-end">
+                        <button
+                          type="button"
+                          aria-label={t('stage.moveSelfView')}
+                          onClick={() => setCorner(NEXT_CORNER[corner])}
+                          className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-control bg-surface text-text focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
+                        >
+                          <ArrowsOutCardinal size={18} aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={t('stage.hideSelfView')}
+                          onClick={() => setSelfViewHidden(true)}
+                          className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-control bg-surface text-text focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
+                        >
+                          <EyeSlash size={18} aria-hidden />
+                        </button>
+                      </div>
+                    </m.div>
+                  )}
+                </AnimatePresence>
+              </m.div>
+            ) : null}
+          </AnimatePresence>
+        </MotionLayoutFeatures>
 
         {header ? <div className="gap-2 p-3 absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between">{header}</div> : null}
         {controls ? (

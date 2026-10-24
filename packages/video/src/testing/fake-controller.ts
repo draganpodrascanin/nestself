@@ -232,6 +232,10 @@ export class FakeCallSessionController implements CallSessionControllerApi {
     this.update({ media: { muted } });
   }
 
+  async setAudioCapability(enabled: boolean): Promise<void> {
+    this.update({ devices: { canSendAudio: enabled }, media: { muted: true } });
+  }
+
   async setCameraOn(on: boolean): Promise<void> {
     if (!this.snapshot.devices.canSendVideo) return;
     this.update({
@@ -270,7 +274,6 @@ export class FakeCallSessionController implements CallSessionControllerApi {
   async destroy(): Promise<void> {
     for (const stop of this.streams.values()) stop();
     this.streams.clear();
-    this.listeners.clear();
   }
 
   private record(eventName: ClientEventRequest['eventName'], metrics?: CallQualityMetrics): void {

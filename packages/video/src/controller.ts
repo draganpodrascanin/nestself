@@ -129,6 +129,11 @@ function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
+/** The SDK reports packet loss in percent (0 to 100); the contracts carry a fraction (0 to 1). */
+function percentToFraction(percent: number | undefined): number | undefined {
+  return percent === undefined ? undefined : Math.min(1, Math.max(0, percent / 100));
+}
+
 function compact(metrics: CallQualityMetrics): CallQualityMetrics {
   return Object.fromEntries(Object.entries(metrics).filter(([, value]) => value !== undefined)) as CallQualityMetrics;
 }
@@ -167,8 +172,11 @@ export class CallSessionController implements CallSessionControllerApi {
   private joinStartedAt = 0;
   private speakerAnswer: ((heard: boolean) => void) | null = null;
   private speakerHeard: boolean | null = null;
+  /** An answer given while the tone was still starting. */
+  private earlySpeakerAnswer: boolean | null = null;
 
-  private samples: CallQualityMetrics[] = [];
+  /** Per-second samples: `metrics` for the badge and the API, `outgoing` for degraded mode. */
+  private samples: Array<{ metrics: CallQualityMetrics; outgoing: CallQualityMetrics }> = [];
   private poorIntervals = 0;
   private recoveringSince: number | null = null;
   private statsTimer: ReturnType<typeof setInterval> | null = null;
@@ -540,15 +548,15 @@ export class CallSessionController implements CallSessionControllerApi {
       const sdk = await this.ensureSdk();
       const preview = await this.ensurePreviewSession();
       await this.stopInputs(preview.audioVideo);
-      this.checker ??= new sdk.DefaultMeetingReadinessChecker(this.logger!, preview);
+      const checker = (this.checker ??= new sdk.DefaultMeetingReadinessChecker(this.logger!, preview));
       await this.refreshDevices();
 
       if (audio) {
-        const feedback = await this.checker.checkAudioInput(this.audioInput());
+        const feedback = await checker.checkAudioInput(this.audioInput());
         this.recordCheck('microphone', feedback === sdk.CheckAudioInputFeedback.Succeeded ? 'passed' : feedback === sdk.CheckAudioInputFeedback.PermissionDenied ? 'denied' : 'failed');
       }
       if (video) {
-        const feedback = await this.checker.checkVideoInput(this.devices.selected.camera ?? {});
+        const feedback = await checker.checkVideoInput(this.devices.selected.camera ?? {});
         this.recordCheck('camera', feedback === sdk.CheckVideoInputFeedback.Succeeded ? 'passed' : feedback === sdk.CheckVideoInputFeedback.PermissionDenied ? 'denied' : 'failed');
       }
       // Labels appear once a permission was granted.
@@ -608,27 +616,36 @@ export class CallSessionController implements CallSessionControllerApi {
   }
 
   async testSpeaker(): Promise<void> {
-    const sdk = await this.ensureSdk();
-    const preview = await this.ensurePreviewSession();
-    this.checker ??= new sdk.DefaultMeetingReadinessChecker(this.logger!, preview);
     this.speakerHeard = null;
+    this.earlySpeakerAnswer = null;
     this.update({ readiness: { speaker: 'playing' } });
-    const feedback = await this.checker.checkAudioOutput(this.devices.selected.speaker ?? 'default', () => {
-      return new Promise<boolean>((resolve) => {
-        this.speakerAnswer = (heard) => {
-          this.speakerHeard = heard;
-          resolve(heard);
-        };
+    try {
+      const sdk = await this.ensureSdk();
+      const preview = await this.ensurePreviewSession();
+      const checker = (this.checker ??= new sdk.DefaultMeetingReadinessChecker(this.logger!, preview));
+      const feedback = await checker.checkAudioOutput(this.devices.selected.speaker ?? 'default', () => {
+        return new Promise<boolean>((resolve) => {
+          this.speakerAnswer = (heard) => {
+            this.speakerHeard = heard;
+            resolve(heard);
+          };
+          if (this.earlySpeakerAnswer !== null) this.speakerAnswer(this.earlySpeakerAnswer);
+        });
       });
-    });
-    this.speakerAnswer = null;
-    const speaker =
-      feedback === sdk.CheckAudioOutputFeedback.Succeeded ? 'heard' : this.speakerHeard === false ? 'not_heard' : 'failed';
-    this.update({ readiness: { speaker } });
+      const speaker =
+        feedback === sdk.CheckAudioOutputFeedback.Succeeded ? 'heard' : this.speakerHeard === false ? 'not_heard' : 'failed';
+      this.update({ readiness: { speaker } });
+    } catch {
+      // The SDK did not load or the tone could not play: the screen says so instead of waiting forever.
+      this.update({ readiness: { speaker: 'failed' } });
+    } finally {
+      this.speakerAnswer = null;
+    }
   }
 
   confirmSpeaker(heard: boolean): void {
-    this.speakerAnswer?.(heard);
+    if (this.speakerAnswer) this.speakerAnswer(heard);
+    else if (this.snapshot.readiness.speaker === 'playing') this.earlySpeakerAnswer = heard;
   }
 
   /* ---------------------------------------------------------------------- */
@@ -836,6 +853,29 @@ export class CallSessionController implements CallSessionControllerApi {
     this.update({ media: { muted } });
   }
 
+  /**
+   * Turns the microphone path on or off for a participant whose capability
+   * changed: a webinar attendee given the floor, then the floor taken back
+   * (D-CW-15, T-CW-2.3). Audio only: video is never touched, so an attendee
+   * can never send video (D-CW-35). The microphone starts muted; the
+   * attendee unmutes to speak.
+   */
+  async setAudioCapability(enabled: boolean): Promise<void> {
+    if (enabled === this.devices.canSendAudio) return;
+    const av = this.session?.audioVideo;
+    if (enabled) {
+      this.update({ devices: { canSendAudio: true }, media: { muted: true } });
+      if (!av || !this.isActive) return;
+      av.realtimeMuteLocalAudio();
+      await this.startAudioInputSafely();
+      return;
+    }
+    av?.realtimeMuteLocalAudio();
+    if (this.audioInputActive) await av?.stopAudioInput().catch(() => undefined);
+    this.audioInputActive = false;
+    this.update({ devices: { canSendAudio: false }, media: { muted: true } });
+  }
+
   async setCameraOn(on: boolean): Promise<void> {
     if (!this.devices.canSendVideo) return;
     const av = this.session?.audioVideo;
@@ -933,28 +973,44 @@ export class CallSessionController implements CallSessionControllerApi {
 
   private onMetrics(report: ClientMetricReport): void {
     const observed = report.getObservableMetrics() as Record<string, unknown>;
-    const loss = finite(observed.audioPacketsReceivedFractionLoss);
-    const sample = compact({
-      rtt: finite(observed.currentRoundTripTimeMs) ?? finite(observed.audioUpstreamRoundTripTimeMs),
-      jitter: finite(observed.audioUpstreamJitterMs) ?? finite(observed.audioDownstreamJitterMs),
-      packetLoss: loss === undefined ? undefined : Math.min(1, loss),
-      // Without outgoing video the bandwidth estimate stays low by design; it only counts while video is sent.
-      outgoingBitrate: this.sendingVideo ? finite(observed.availableOutgoingBitrate) : undefined,
-    });
+    // Both loss metrics are percentages in SDK 3.x: received (downstream) and sent (upstream) audio.
+    const downstreamLoss = percentToFraction(finite(observed.audioPacketsReceivedFractionLoss));
+    const upstreamLoss = percentToFraction(finite(observed.audioPacketLossPercent));
+    const rtt = finite(observed.currentRoundTripTimeMs) ?? finite(observed.audioUpstreamRoundTripTimeMs);
+    // Without outgoing video the bandwidth estimate stays low by design; it only counts while video is sent.
+    const outgoingBitrate = this.sendingVideo ? finite(observed.availableOutgoingBitrate) : undefined;
+    const losses = [downstreamLoss, upstreamLoss].filter((value): value is number => value !== undefined);
+    const sample = {
+      // The badge and the API get the worse direction.
+      metrics: compact({
+        rtt,
+        jitter: finite(observed.audioUpstreamJitterMs) ?? finite(observed.audioDownstreamJitterMs),
+        packetLoss: losses.length ? Math.max(...losses) : undefined,
+        outgoingBitrate,
+      }),
+      // Pausing outgoing video only helps the upstream path, so degraded mode reads upstream loss where the SDK has it.
+      outgoing: compact({
+        rtt,
+        jitter: finite(observed.audioUpstreamJitterMs),
+        packetLoss: upstreamLoss ?? downstreamLoss,
+        outgoingBitrate,
+      }),
+    };
     this.samples.push(sample);
     if (this.samples.length > MAX_BUFFERED_SAMPLES) this.samples.shift();
-    if (this.snapshot.quality.videoPaused) this.checkRecovery(sample);
+    if (this.snapshot.quality.videoPaused) this.checkRecovery(sample.outgoing, classifyQuality(sample.metrics));
   }
 
   private onStatsInterval(): void {
     if (this.snapshot.session.status !== 'connected') return;
     const samples = this.samples.splice(0);
     if (!samples.length) return;
-    const metrics = aggregateMetrics(samples);
+    const metrics = aggregateMetrics(samples.map((sample) => sample.metrics));
     const level = classifyQuality(metrics);
+    const outgoingLevel = classifyQuality(aggregateMetrics(samples.map((sample) => sample.outgoing)));
     this.emit('connectionStats', { metrics });
     this.update({ quality: { level, metrics } });
-    void this.applyDegradedMode(level);
+    void this.applyDegradedMode(outgoingLevel);
   }
 
   private async applyDegradedMode(level: QualityState['level']): Promise<void> {
@@ -982,8 +1038,8 @@ export class CallSessionController implements CallSessionControllerApi {
     }
   }
 
-  private checkRecovery(sample: CallQualityMetrics): void {
-    const level = classifyQuality(sample);
+  private checkRecovery(outgoing: CallQualityMetrics, overall: QualityState['level']): void {
+    const level = classifyQuality(outgoing);
     if (level === 'poor') {
       this.recoveringSince = null;
       return;
@@ -997,7 +1053,7 @@ export class CallSessionController implements CallSessionControllerApi {
     this.poorIntervals = 0;
     void this.setOutgoingQuality(DEFAULT_VIDEO_QUALITY);
     av.startLocalVideoTile();
-    this.update({ quality: { videoPaused: false, lowResolution: false, level } });
+    this.update({ quality: { videoPaused: false, lowResolution: false, level: overall } });
   }
 
   private async setOutgoingQuality(quality: { width: number; height: number; frameRate: number }): Promise<void> {
@@ -1032,14 +1088,24 @@ export class CallSessionController implements CallSessionControllerApi {
     return this.events.splice(0);
   }
 
+  /**
+   * Leaves, releases the camera and microphone and drops every SDK object.
+   * The controller stays usable: a later call re-creates what it needs, so a
+   * React StrictMode effect replay (destroy, then use again) is harmless.
+   */
   async destroy(): Promise<void> {
     await this.leave();
     await this.stopInputs(this.av);
     this.deviceController?.removeDeviceChangeObserver(this.deviceChangeObserver);
+    this.deviceController = null;
+    this.checker = null;
     await this.transformDevice?.stop().catch(() => undefined);
     this.transformDevice = null;
     await this.previewSession?.destroy().catch(() => undefined);
     this.previewSession = null;
-    this.listeners.clear();
+    this.update({
+      readiness: { status: 'idle', camera: 'pending', microphone: 'pending', network: 'pending', speaker: 'idle' },
+      devices: { blur: { ...this.devices.blur, enabled: false, loading: false } },
+    });
   }
 }

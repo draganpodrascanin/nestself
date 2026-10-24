@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import type { CallJoinResponse } from '@nestself/contracts';
+import type { CallSessionControllerOptions } from '../controller';
 import type { CallSessionControllerApi, CallSessionStatus } from '../types';
+import { useOptionalCallSessionController } from './useCallSessionController';
 import { useControllerSlice } from './useControllerSlice';
 
 const IN_CALL: ReadonlySet<CallSessionStatus> = new Set(['joining', 'connected', 'reconnecting']);
@@ -14,11 +16,22 @@ export interface UseCallSessionOptions {
   onEndForEveryone?: () => Promise<void> | void;
 }
 
+function isControllerApi(source: CallSessionControllerApi | CallSessionControllerOptions): source is CallSessionControllerApi {
+  return typeof (source as Partial<CallSessionControllerApi>).getSnapshot === 'function';
+}
+
 /**
  * The join state machine for React: status, readiness, media state and the
  * actions that drive them (guidelines 11.2).
+ *
+ * Pass an existing controller (the caller owns and destroys it), or
+ * controller options: the hook then creates the controller once, destroys
+ * it on unmount and returns it as `controller` for the components. Do not
+ * switch between the two forms while mounted.
  */
-export function useCallSession(controller: CallSessionControllerApi, options: UseCallSessionOptions = {}) {
+export function useCallSession(source: CallSessionControllerApi | CallSessionControllerOptions, options: UseCallSessionOptions = {}) {
+  const owned = useOptionalCallSessionController(isControllerApi(source) ? null : source);
+  const controller: CallSessionControllerApi = owned ?? (source as CallSessionControllerApi);
   const session = useControllerSlice(controller, 'session');
   const readiness = useControllerSlice(controller, 'readiness');
   const devices = useControllerSlice(controller, 'devices');
@@ -29,6 +42,8 @@ export function useCallSession(controller: CallSessionControllerApi, options: Us
     const microphoneReady = !devices.canSendAudio || devices.permissions.microphone === 'granted';
     return {
       ...session,
+      /** The controller in use: the one passed in, or the one this hook owns. */
+      controller,
       readiness,
       media,
       /** The pre-join check finished and the microphone works (CW-R-55a, CALL-03). */

@@ -114,6 +114,20 @@ describe('ControlBar (UX-22, CALL-08)', () => {
     expect(blur).toHaveAccessibleDescription(t('controls.blurUnavailable'));
   });
 
+  it('shows blur as a disabled overflow item with the explanation at mobile width', async () => {
+    setWide(false);
+    const user = userEvent.setup();
+    const base = props({ blur: { supported: false, enabled: false, loading: false } });
+    renderWithI18n(<ControlBar {...base} />);
+    await user.click(screen.getByRole('button', { name: t('controls.more') }));
+    const menu = await screen.findByRole('menu');
+    const blur = within(menu).getByRole('menuitem', { name: new RegExp(t('controls.blurOn')) });
+    expect(blur).toHaveAttribute('aria-disabled', 'true');
+    expect(blur).toHaveAccessibleDescription(t('controls.blurUnavailable'));
+    await user.click(blur);
+    expect(base.onToggleBlur).not.toHaveBeenCalled();
+  });
+
   it('never offers a camera control to a webinar attendee (D-CW-35)', async () => {
     setWide(true);
     const user = userEvent.setup();

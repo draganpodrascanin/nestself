@@ -6,17 +6,24 @@ function subscribe(listener: () => void) {
   return () => document.removeEventListener('fullscreenchange', listener);
 }
 
-/** Fullscreen for the call stage: whether it is on, and a toggle for the control bar. */
-export function useFullscreen(target: RefObject<HTMLElement | null>) {
+/**
+ * Fullscreen for a call. The whole document goes fullscreen, not the stage:
+ * menus, sheets and dialogs portal to `document.body`, which a fullscreen
+ * stage element would hide (the crisis sheet among them). Pass `isFullscreen`
+ * to `CallStage`'s `fullscreen` prop so the stage pins itself to the viewport.
+ *
+ * @param _stage kept for compatibility; the stage is no longer the fullscreen element.
+ */
+export function useFullscreen(_stage?: RefObject<HTMLElement | null>) {
   const isFullscreen = useSyncExternalStore(
     subscribe,
-    () => !!document.fullscreenElement && document.fullscreenElement === target.current,
+    () => !!document.fullscreenElement && document.fullscreenElement === document.documentElement,
     () => false,
   );
   const toggle = useCallback(async () => {
     if (document.fullscreenElement) await document.exitFullscreen?.();
-    else await target.current?.requestFullscreen?.();
-  }, [target]);
+    else await document.documentElement.requestFullscreen?.();
+  }, []);
   const supported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
   return { isFullscreen, toggle, supported };
 }

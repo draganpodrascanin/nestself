@@ -18,6 +18,7 @@ const h = vi.hoisted(() => {
     audioInputFeedback: 0,
     videoInputFeedback: 0,
     blurSupported: true,
+    speakerError: false,
     transformDevices: [] as Array<{ device: unknown; stop: () => Promise<void> }>,
     cameras: [
       { deviceId: 'cam-1', label: 'Built-in camera', kind: 'videoinput', groupId: 'g1' },
@@ -126,7 +127,10 @@ vi.mock('amazon-chime-sdk-js', () => {
   class DefaultMeetingReadinessChecker {
     checkAudioInput = vi.fn(async () => h.state.audioInputFeedback);
     checkVideoInput = vi.fn(async () => h.state.videoInputFeedback);
-    checkAudioOutput = vi.fn(async (_device: unknown, verify: () => Promise<boolean>) => ((await verify()) ? 0 : 1));
+    checkAudioOutput = vi.fn(async (_device: unknown, verify: () => Promise<boolean>) => {
+      if (h.state.speakerError) throw new Error('The audio context could not start');
+      return (await verify()) ? 0 : 1;
+    });
   }
   class DefaultVideoTransformDevice {
     device: unknown;
@@ -213,6 +217,7 @@ beforeEach(() => {
   h.state.audioInputFeedback = 0;
   h.state.videoInputFeedback = 0;
   h.state.blurSupported = true;
+  h.state.speakerError = false;
   store = createMemoryPreferenceStore();
 });
 
@@ -387,6 +392,26 @@ describe('CallSessionController: readiness and devices (D-CW-21, CALL-03, CALL-0
     expect(controller.getSnapshot().readiness.speaker).toBe('not_heard');
   });
 
+  it('marks the speaker test failed when the tone cannot play', async () => {
+    h.state.speakerError = true;
+    const controller = create();
+    await controller.checkReadiness();
+    await controller.testSpeaker();
+    expect(controller.getSnapshot().readiness.speaker).toBe('failed');
+  });
+
+  it('stays usable after destroy (a StrictMode effect replay destroys, then uses it again)', async () => {
+    const controller = create();
+    await controller.checkReadiness();
+    await controller.destroy();
+    expect(controller.getSnapshot().readiness.status).toBe('idle');
+    const seen = vi.fn();
+    controller.subscribe(seen);
+    await controller.checkReadiness();
+    expect(controller.getSnapshot().readiness).toMatchObject({ status: 'done', camera: 'passed', microphone: 'passed' });
+    expect(seen).toHaveBeenCalled();
+  });
+
   it('enables blur on demand, persists it and joins with the blur device', async () => {
     const controller = create();
     await controller.checkReadiness();
@@ -422,6 +447,29 @@ describe('CallSessionController: webinar attendees never send video (D-CW-35)', 
   });
 });
 
+describe('CallSessionController: audio capability for an attendee given the floor (D-CW-15)', () => {
+  it('turns the microphone on muted and off again, and never enables video', async () => {
+    const controller = create('attendee');
+    const { av } = await joined(controller, { ...JOIN, role: 'attendee', format: 'webinar' });
+    expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+
+    await controller.setAudioCapability(true);
+    expect(controller.getSnapshot().devices).toMatchObject({ canSendAudio: true, canSendVideo: false });
+    expect(controller.getSnapshot().media).toMatchObject({ muted: true, cameraOn: false });
+    expect(av.startAudioInput).toHaveBeenCalledOnce();
+    controller.setMuted(false);
+    expect(av.realtimeUnmuteLocalAudio).toHaveBeenCalled();
+    await controller.setCameraOn(true);
+
+    await controller.setAudioCapability(false);
+    expect(controller.getSnapshot().devices).toMatchObject({ canSendAudio: false, canSendVideo: false });
+    expect(controller.getSnapshot().media.muted).toBe(true);
+    expect(av.stopAudioInput).toHaveBeenCalled();
+    expect(av.startVideoInput).not.toHaveBeenCalled();
+    expect(av.startLocalVideoTile).not.toHaveBeenCalled();
+  });
+});
+
 describe('CallSessionController: quality and degraded mode (guidelines 11.6)', () => {
   it('aggregates 30 seconds of samples into a level and a connectionStats event', async () => {
     vi.useFakeTimers();
@@ -437,7 +485,7 @@ describe('CallSessionController: quality and degraded mode (guidelines 11.6)', (
   it('lowers resolution first, pauses video after two poor intervals, resumes after 10 s of recovery', async () => {
     vi.useFakeTimers();
     const { controller, av } = await joined();
-    const poor = metrics({ currentRoundTripTimeMs: 450, audioPacketsReceivedFractionLoss: 0.05 });
+    const poor = metrics({ currentRoundTripTimeMs: 450, audioPacketLossPercent: 5, audioPacketsReceivedFractionLoss: 5 });
 
     av.emit('metricsDidReceive', poor);
     await vi.advanceTimersByTimeAsync(30_000);
@@ -460,6 +508,40 @@ describe('CallSessionController: quality and degraded mode (guidelines 11.6)', (
     expect(controller.getSnapshot().quality).toMatchObject({ videoPaused: false, lowResolution: false, level: 'degraded' });
     expect(av.chooseVideoInputQuality).toHaveBeenLastCalledWith(960, 540, 15);
     expect(av.startLocalVideoTile).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads SDK packet loss as a percentage (0.5 % good, 1.5 % degraded, 3 % poor)', async () => {
+    vi.useFakeTimers();
+    const { controller, av } = await joined();
+    const cases: Array<[number, string, number]> = [
+      [0.5, 'good', 0.005],
+      [1.5, 'degraded', 0.015],
+      [3, 'poor', 0.03],
+    ];
+    for (const [percent, level, fraction] of cases) {
+      av.emit('metricsDidReceive', metrics({ currentRoundTripTimeMs: 40, audioPacketsReceivedFractionLoss: percent }));
+      await vi.advanceTimersByTimeAsync(30_000);
+      const quality = controller.getSnapshot().quality;
+      expect(quality.level).toBe(level);
+      expect(quality.metrics?.packetLoss).toBeCloseTo(fraction, 6);
+    }
+    const sent = controller.getClientEvents().filter((e) => e.eventName === 'connectionStats');
+    expect(sent.map((e) => e.metrics?.packetLoss)).toEqual([0.005, 0.015, 0.03]);
+  });
+
+  it('bases degraded mode on upstream loss: heavy received loss alone does not touch outgoing video', async () => {
+    vi.useFakeTimers();
+    const { controller, av } = await joined();
+    const downstreamOnly = metrics({ currentRoundTripTimeMs: 40, audioPacketsReceivedFractionLoss: 5, audioPacketLossPercent: 0.2 });
+    av.emit('metricsDidReceive', downstreamOnly);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(controller.getSnapshot().quality).toMatchObject({ level: 'poor', lowResolution: false });
+    expect(av.chooseVideoInputQuality).not.toHaveBeenCalled();
+
+    av.emit('metricsDidReceive', metrics({ currentRoundTripTimeMs: 40, audioPacketsReceivedFractionLoss: 0, audioPacketLossPercent: 4 }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(controller.getSnapshot().quality).toMatchObject({ level: 'poor', lowResolution: true });
+    expect(av.chooseVideoInputQuality).toHaveBeenLastCalledWith(640, 360, 15);
   });
 
   it('a poor sample during recovery restarts the 10-second clock', async () => {

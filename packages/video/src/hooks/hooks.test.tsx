@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { CallJoinResponse } from '@nestself/contracts';
+import { StrictMode } from 'react';
+import { CallSessionController } from '../controller';
 import { FakeCallSessionController } from '../testing/fake-controller';
+import { useCallSessionController } from './useCallSessionController';
 import { createMemoryPreferenceStore, VIDEO_STORAGE_KEYS } from '../preferences';
 import { useCallSession } from './useCallSession';
 import { useDevices } from './useDevices';
@@ -146,5 +149,49 @@ describe('useVideoTiles', () => {
     result.current.unbind(remote);
     expect(bind).toHaveBeenCalledWith(remote, element);
     expect(unbind).toHaveBeenCalledWith(remote);
+  });
+});
+
+describe('useCallSessionController and owned sessions (guidelines 11.2)', () => {
+  const options = () => ({ role: 'employee' as const, store: createMemoryPreferenceStore() });
+
+  it('creates one controller and destroys it on unmount', async () => {
+    const destroy = vi.spyOn(CallSessionController.prototype, 'destroy');
+    const { result, rerender, unmount } = renderHook(() => useCallSessionController(options()));
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+    expect(first).toBeInstanceOf(CallSessionController);
+    unmount();
+    await waitFor(() => expect(destroy).toHaveBeenCalledOnce());
+    destroy.mockRestore();
+  });
+
+  it('survives a StrictMode effect replay without destroying the live controller', async () => {
+    const destroy = vi.spyOn(CallSessionController.prototype, 'destroy');
+    const { unmount } = renderHook(() => useCallSessionController(options()), { wrapper: StrictMode });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(destroy).not.toHaveBeenCalled();
+    unmount();
+    await waitFor(() => expect(destroy).toHaveBeenCalled());
+    destroy.mockRestore();
+  });
+
+  it('useCallSession owns a controller when given options, and only then', async () => {
+    const destroy = vi.spyOn(CallSessionController.prototype, 'destroy');
+    const owned = renderHook(() => useCallSession(options()));
+    expect(owned.result.current.controller).toBeInstanceOf(CallSessionController);
+    expect(owned.result.current.status).toBe('idle');
+    owned.unmount();
+    await waitFor(() => expect(destroy).toHaveBeenCalledOnce());
+    destroy.mockRestore();
+
+    const external = new FakeCallSessionController();
+    const destroyExternal = vi.spyOn(external, 'destroy');
+    const borrowed = renderHook(() => useCallSession(external));
+    expect(borrowed.result.current.controller).toBe(external);
+    borrowed.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(destroyExternal).not.toHaveBeenCalled();
   });
 });
