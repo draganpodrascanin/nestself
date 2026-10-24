@@ -113,6 +113,9 @@ export const envSchema = z
     MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().optional(),
     MEDIA_BUCKET: optionalString,
     MEDIA_KMS_KEY_ARN: optionalString,
+
+    // Content link host allowlist (FMT-R-06, Appendix A)
+    CONTENT_LINK_HOST_ALLOWLIST: optionalString,
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production

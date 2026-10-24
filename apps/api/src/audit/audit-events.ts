@@ -65,6 +65,9 @@ export const AUDIT_ACTIONS = [
   'media.rejected',
   'media.updated',
   'media.deleted',
+  'content.submitted',
+  'content.approved',
+  'publication.created',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
