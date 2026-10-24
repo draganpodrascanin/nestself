@@ -60,7 +60,6 @@ const ACTIVE_MEMBERSHIP = {
   orgUnitId: null,
   costCenterUnitId: null,
   lineManagerUserId: null,
-  role: 'EMPLOYEE',
   teamId: null,
   createdAt: new Date(),
   updatedAt: new Date(),

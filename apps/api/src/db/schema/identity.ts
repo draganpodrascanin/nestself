@@ -10,7 +10,6 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { platformRole } from './enums.js';
 import { createdAt, idColumn, ts, updatedAt } from './_shared.js';
 
 /**
@@ -36,8 +35,6 @@ export const users = pgTable(
     lastSignInAt: ts(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
-    /** @deprecated Removed in phase 2; use templates and grants [D-36]. */
-    platformRole: platformRole(),
   },
   (t) => [
     uniqueIndex('users_email_key').on(t.email),

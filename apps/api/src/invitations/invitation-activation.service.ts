@@ -209,7 +209,6 @@ export class InvitationActivationService {
               orgUnitId: invitation.orgUnitId,
               status: 'ACTIVE',
               startDate: now,
-              role: 'EMPLOYEE',
             })
             .returning();
 

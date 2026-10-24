@@ -61,14 +61,6 @@ export const expertCredentialStatus = pgEnum('expert_credential_status', [
   'REVOKED',
 ]);
 
-// ─── Legacy enums (deprecated; removed in phase 2, D-36) ─────────────────
-
-/** @deprecated Use permission templates and grants [D-36]. */
-export const orgRole = pgEnum('org_role', ['EMPLOYEE', 'MANAGER', 'HR_ADMIN']);
-
-/** @deprecated Use permission templates and grants [D-36]. */
-export const platformRole = pgEnum('platform_role', ['EXPERT', 'OPERATIONS', 'ADMIN']);
-
 // ─── Retained enums ──────────────────────────────────────────────────────
 
 export const supportArea = pgEnum('support_area', ['PSYCHOLOGICAL', 'LEGAL', 'FINANCIAL']);

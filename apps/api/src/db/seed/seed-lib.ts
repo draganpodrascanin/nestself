@@ -105,7 +105,6 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   const hrAdmin = SAMPLE_PEOPLE.find((p) => p.orgRole === 'hr_admin');
 
   for (const person of SAMPLE_PEOPLE) {
-    const platformRole = upperRole<'EXPERT' | 'OPERATIONS' | 'ADMIN'>(person.platformRole);
     await upsertById(
       db,
       t.users,
@@ -114,19 +113,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         email: `${person.id}@example.com`,
         displayName: person.displayName,
         locale: 'sr-Latn',
-        platformRole,
       },
-      { displayName: person.displayName, platformRole },
+      { displayName: person.displayName },
     );
 
+    // The org role is no longer stored: it only selects the templates below.
     if (person.orgId && person.orgRole) {
-      const role = upperRole<'EMPLOYEE' | 'MANAGER' | 'HR_ADMIN'>(person.orgRole)!;
       await db
         .insert(t.memberships)
         .values({
           userId: person.id,
           orgId: person.orgId,
-          role,
           status: 'ACTIVE',
           startDate: SAMPLE_START_DATE,
           orgUnitId: defaultTeamId,
@@ -134,7 +131,7 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         })
         .onConflictDoUpdate({
           target: [t.memberships.userId, t.memberships.orgId, t.memberships.startDate],
-          set: { role, status: 'ACTIVE', orgUnitId: defaultTeamId },
+          set: { status: 'ACTIVE', orgUnitId: defaultTeamId },
         });
     }
   }
@@ -301,21 +298,11 @@ export async function seed(db: Database): Promise<Record<string, number>> {
 
     for (const tmpl of templatesForLegacyRoles(legacyRole, platformRole)) {
       const scope = resolveSampleScope(tmpl.scopeType, person.orgId ?? null, defaultTeamId);
-      const conditions: unknown[] = [];
-      if (tmpl.scopeType === 'assigned_cases' && tmpl.key === 'expert') {
-        const expert = await db.query.experts.findFirst({
-          where: eq(t.experts.userId, person.id),
-          with: { credentials: { where: eq(t.expertCredentials.status, 'APPROVED') } },
-        });
-        const categories = expert?.credentials.map((c) => c.serviceCategory) ?? [];
-        if (categories.length > 0) conditions.push({ type: 'categories', allowed: categories });
-      }
-
       const update = {
         actions: [...tmpl.actions],
         scopeType: tmpl.scopeType,
         ...scope,
-        conditions: conditions.length > 0 ? conditions : null,
+        conditions: await derivedGrantConditions(db, tmpl, person.id),
       };
       await db
         .insert(t.grants)
@@ -422,7 +409,26 @@ export function templatesForLegacyRoles(
   return matching;
 }
 
-function resolveSampleScope(scopeType: string, orgId: string | null, defaultTeamId: string | null) {
+/**
+ * Conditions a derived grant carries: the expert template is limited to the
+ * expert's approved service categories. Null when there are none.
+ */
+export async function derivedGrantConditions(
+  db: Database,
+  tmpl: PermissionTemplateDefinition,
+  userId: string,
+): Promise<unknown[] | null> {
+  if (tmpl.scopeType !== 'assigned_cases' || tmpl.key !== 'expert') return null;
+  const expert = await db.query.experts.findFirst({
+    where: eq(t.experts.userId, userId),
+    with: { credentials: { where: eq(t.expertCredentials.status, 'APPROVED') } },
+  });
+  const categories = expert?.credentials.map((c) => c.serviceCategory) ?? [];
+  return categories.length > 0 ? [{ type: 'categories', allowed: categories }] : null;
+}
+
+/** Grant scope columns for a template's scope type. */
+export function resolveSampleScope(scopeType: string, orgId: string | null, defaultTeamId: string | null) {
   switch (scopeType) {
     case 'org_unit':
       return { scopeOrgId: orgId, scopeOrgUnitId: defaultTeamId, includeDescendants: true };

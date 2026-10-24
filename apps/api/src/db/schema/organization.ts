@@ -16,7 +16,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { membershipStatus, orgRole, orgUnitKind } from './enums.js';
+import { membershipStatus, orgUnitKind } from './enums.js';
 import { users } from './identity.js';
 import {
   CURRENT_ORG_SETTING,
@@ -155,8 +155,6 @@ export const memberships = pgTable(
     endedReason: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
-    /** @deprecated Replaced by templates and grants in phase 2 [D-36]. */
-    role: orgRole().notNull().default('EMPLOYEE'),
     /** @deprecated Replaced by orgUnitId; removed in phase 2 [D-36]. */
     teamId: text().references(() => legacyTeams.id, { onDelete: 'set null', onUpdate: 'cascade' }),
   },

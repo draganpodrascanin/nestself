@@ -36,6 +36,13 @@
       "when": 1792852546055,
       "tag": "0004_emergency_access_request",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792858358076,
+      "tag": "0005_drop_legacy_roles",
+      "breakpoints": true
     }
   ]
 }
