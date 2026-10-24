@@ -32,6 +32,7 @@ import {
 // SAMPLE_CALL_SESSIONS (which points at a sample webinar), wait for the
 // webinars tables of T-CW-2.1.
 import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
+import { toDbAppointmentStatus } from '../../appointments/appointments.repository.js';
 import {
   toDbFormat,
   toDbOutcomeStatus,
@@ -492,7 +493,7 @@ export function sampleAppointmentRow(appointment: SampleAppointment): typeof t.a
     employeeUserId: appointment.employeeUserId,
     startsAt: new Date(appointment.startsAt),
     endsAt: new Date(appointment.endsAt),
-    status: appointment.status.toUpperCase() as (typeof t.appointmentStatus.enumValues)[number],
+    status: toDbAppointmentStatus(appointment.status),
     serviceCategory: appointment.serviceCategory,
     timeZone: appointment.timeZone,
     fundingRef: appointment.fundingRef,

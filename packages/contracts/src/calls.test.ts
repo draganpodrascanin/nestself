@@ -20,6 +20,7 @@ import {
   CALL_LOCATION_TEXT_MAX_LENGTH,
   CallFeedbackRequestSchema,
   CallJoinRequestSchema,
+  CallLocationResponseSchema,
   CallSignalPayloadSchema,
   CallSignalRequestSchema,
   ClientEventBatchRequestSchema,
@@ -367,6 +368,18 @@ describe('CallSignalRequestSchema and CallSignalPayloadSchema (D-CW-27, CW-R-35)
     expect(CallSignalPayloadSchema.parse(payload)).toEqual(payload);
     expect(CallSignalPayloadSchema.safeParse({ ...payload, userId: 'user_milica' }).success).toBe(false);
     expect(CallSignalPayloadSchema.safeParse({ ...payload, displayName: 'Milica' }).success).toBe(false);
+  });
+});
+
+describe('CallLocationResponseSchema (CALL-34)', () => {
+  it('carries the shared location or null and nothing else', () => {
+    expect(CallLocationResponseSchema.parse({ locationText: 'Novi Sad' })).toEqual({ locationText: 'Novi Sad' });
+    expect(CallLocationResponseSchema.parse({ locationText: null })).toEqual({ locationText: null });
+    expect(issuePaths(CallLocationResponseSchema.safeParse({}))).toEqual(['locationText']);
+    expect(CallLocationResponseSchema.safeParse({ locationText: null, userId: 'user_jovan' }).success).toBe(false);
+    expect(
+      issuePaths(CallLocationResponseSchema.safeParse({ locationText: 'a'.repeat(CALL_LOCATION_TEXT_MAX_LENGTH + 1) })),
+    ).toEqual(['locationText']);
   });
 });
 

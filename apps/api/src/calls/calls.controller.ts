@@ -7,6 +7,7 @@
  * POST /appointments/:id/outcome           delivery.record    appointmentResource    10/60 s
  * POST /appointments/:id/feedback          consultation.join  appointmentResource     5/60 s  employee only (service)
  * POST /appointments/:id/signal            consultation.join  appointmentResource    30/60 s
+ * GET  /appointments/:id/location          consultation.join  appointmentResource             expert only (service), Cache-Control: no-store
  * POST /calls/:sessionId/client-events     consultation.join  callSessionResource    60/60 s
  * GET  /ops/calls/:sessionId/diagnostics   diagnostic.read    operationsResource('call')
  *
@@ -32,6 +33,7 @@ import {
   type CallFeedbackRequest,
   type CallJoinRequest,
   type CallJoinResponse,
+  type CallLocationResponse,
   type CallOutcomeRequest,
   type CallSignalRequest,
   type ClientEventBatchRequest,
@@ -116,6 +118,14 @@ export class CallsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<void> {
     return this.calls.signal(id, principal, body);
+  }
+
+  /** CALL-34 criterion 3: the location the employee shared, for the assigned expert while the session is live. */
+  @Get('appointments/:id/location')
+  @Header('Cache-Control', 'no-store')
+  @Authorize(ACTIONS['consultation.join'], appointmentResource)
+  location(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<CallLocationResponse> {
+    return this.calls.location(id, principal);
   }
 
   @Post('calls/:sessionId/client-events')

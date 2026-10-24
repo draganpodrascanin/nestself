@@ -3,14 +3,18 @@
  * and feedback (T-CW-1.1). Every method returns contract spellings; the
  * UPPER_CASE enums are mapped in `call-mapper.ts` (CW-R-19a).
  *
- * Reads without a `tx` run in system context: the resolver and the join path
- * look a session up before they know its organization, and the caller is
- * authorized on the appointment first. Writes run inside
- * `DbService.withOrgScope` (RLS). No method reads or writes a join token: the
- * credentials live in Redis only (D-CW-08, CW-R-13).
+ * Every method takes an optional `tx`. The service passes a
+ * `DbService.withOrgScope` transaction (RLS) for every write and for every
+ * read where the organization is already known (from the appointment or the
+ * session). Without a `tx` a read runs in system context; that is left to
+ * the lookups that precede the organization: the `callSessionResource`
+ * resolver and the first read of a session by id (client events,
+ * diagnostics), each after the caller is authorized. No method reads or
+ * writes a join token: the credentials live in Redis only (D-CW-08,
+ * CW-R-13).
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import {
   CLIENT_EVENT_NAMES,
   type CallFormat,
@@ -205,6 +209,17 @@ export class CallsRepository {
     return row ? toSessionRecord(row) : null;
   }
 
+  /** The appointment's most recent session in any status, a FAILED one included. */
+  async findLatestSessionByAppointment(appointmentId: string, tx?: DbExecutor): Promise<CallSessionRecord | null> {
+    const [row] = await this.exec(tx)
+      .select()
+      .from(callSessions)
+      .where(eq(callSessions.appointmentId, appointmentId))
+      .orderBy(desc(callSessions.createdAt), desc(callSessions.id))
+      .limit(1);
+    return row ? toSessionRecord(row) : null;
+  }
+
   /**
    * The appointment's live session, created PENDING with its scheduled window
    * when there is none. Concurrent callers converge on one row: the insert
@@ -249,8 +264,22 @@ export class CallsRepository {
     return row ? toSessionRecord(row) : null;
   }
 
+  /** Sets or clears the CALL-34 location text whatever the status (clearing on outcome). */
   async setLocationText(id: string, locationText: string | null, tx?: DbExecutor): Promise<void> {
     await this.exec(tx).update(callSessions).set({ locationText }).where(eq(callSessions.id, id));
+  }
+
+  /**
+   * Stores the CALL-34 location text only on an ACTIVE session, so it never
+   * lands on a row that fails or never starts (CW-R-80a). False otherwise.
+   */
+  async setLocationTextIfActive(id: string, locationText: string, tx?: DbExecutor): Promise<boolean> {
+    const updated = await this.exec(tx)
+      .update(callSessions)
+      .set({ locationText })
+      .where(and(eq(callSessions.id, id), eq(callSessions.status, toDbSessionStatus('active'))))
+      .returning({ id: callSessions.id });
+    return updated.length > 0;
   }
 
   // ── Participants ──────────────────────────────────────────────────────────

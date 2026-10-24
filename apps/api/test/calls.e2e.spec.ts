@@ -27,6 +27,7 @@ import { and, eq, like } from 'drizzle-orm';
 import {
   AppointmentResponseSchema,
   CallJoinResponseSchema,
+  CallLocationResponseSchema,
   DIAGNOSTICS_PARTICIPANT_FIELDS,
   DIAGNOSTICS_RESPONSE_FIELDS,
   DiagnosticsResponseSchema,
@@ -155,6 +156,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     who.agent.post(`/api${path}`).set('X-CSRF-Token', who.csrf).send(body as object);
   const join = (who: SignedIn, id = APPT_NOW, body: unknown = {}) => post(who, `/appointments/${id}/join`, body);
   const diagnostics = (who: SignedIn, id: string) => who.agent.get(`/api/ops/calls/${id}/diagnostics`);
+  const location = (who: SignedIn, id = APPT_NOW) => who.agent.get(`/api/appointments/${id}/location`);
 
   /** A 404 that tells the caller nothing: the bare error envelope. */
   function expectNotFound(res: request.Response) {
@@ -252,12 +254,40 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
   // ── Join (CALL-02, CALL-20, PLT-01, PLT-03, D-CW-07, D-CW-08) ──────────────
 
   it('concurrent first joins of the expert and the employee create exactly one meeting', async () => {
-    const create = vi.spyOn(video, 'createSession');
-    create.mockClear();
+    // Race-proof: the lock winner is held inside the provider call until the other join has lost the lock.
+    const lockResults: boolean[] = [];
+    let signalLockLost!: () => void;
+    const lockLost = new Promise<void>((resolve) => {
+      signalLockLost = resolve;
+    });
+    const realSet = kv.set.bind(kv);
+    const set = vi.spyOn(kv, 'set').mockImplementation(async (key, value, opts) => {
+      const result = await realSet(key, value, opts);
+      if (key.endsWith(':create') && opts?.onlyIfAbsent) {
+        lockResults.push(result);
+        if (!result) signalLockLost();
+      }
+      return result;
+    });
+    const realCreate = video.createSession.bind(video);
+    const create = vi.spyOn(video, 'createSession').mockImplementation(async (input) => {
+      await lockLost;
+      return realCreate(input);
+    });
     const add = vi.spyOn(video, 'createParticipant');
     add.mockClear();
 
-    const [expertRes, employeeRes] = await Promise.all([join(milica), join(jovan)]);
+    let expertRes: request.Response;
+    let employeeRes: request.Response;
+    try {
+      [expertRes, employeeRes] = await Promise.all([join(milica), join(jovan)]);
+      expect(lockResults.filter((won) => !won)).toHaveLength(1);
+      expect(lockResults.filter((won) => won)).toHaveLength(1);
+      expect(create).toHaveBeenCalledTimes(1);
+    } finally {
+      set.mockRestore();
+      create.mockRestore();
+    }
 
     for (const res of [expertRes, employeeRes]) {
       expect(res.status).toBe(200);
@@ -270,7 +300,6 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     employeeJoin = CallJoinResponseSchema.parse(employeeRes.body);
     sessionId = expertJoin.sessionId;
 
-    expect(create).toHaveBeenCalledTimes(1);
     expect(add).toHaveBeenCalledTimes(1);
     expect(employeeJoin.sessionId).toBe(sessionId);
     expect(employeeJoin.meeting.MeetingId).toBe(expertJoin.meeting.MeetingId);
@@ -333,6 +362,31 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     expect(await kv.get(callParticipantCredentialsKey(sessionId, employeeJoin.participantId))).not.toBeNull();
   });
 
+  // ── Location (CALL-34, CW-R-80a) ────────────────────────────────────────────
+
+  it('the expert reads the location the employee shared; the employee gets 403, everyone else 404', async () => {
+    expect((await location(milica)).body).toEqual({ locationText: null });
+
+    const shared = await join(jovan, APPT_NOW, { locationText: 'Novi Sad, at home' });
+    expect(shared.status).toBe(200);
+    const [row] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, sessionId));
+    expect(row!.locationText).toBe('Novi Sad, at home');
+
+    const read = await location(milica);
+    expect(read.status).toBe(200);
+    expect(read.headers['cache-control']).toBe('no-store');
+    expect(CallLocationResponseSchema.parse(read.body)).toEqual({ locationText: 'Novi Sad, at home' });
+
+    const byEmployee = await location(jovan);
+    expect(byEmployee.status).toBe(403);
+    expect(byEmployee.body).toMatchObject({ status: 403, code: 'forbidden' });
+    for (const who of [ivana, stefan, ana]) expectNotFound(await location(who));
+
+    // Only the employee shares a location.
+    const fromExpert = await join(milica, APPT_NOW, { locationText: 'Belgrade' });
+    expect(fromExpert.status).toBe(400);
+  });
+
   it('non-participant 404, outside the window 403 join_window_closed, canceled 409 appointment_not_joinable', async () => {
     expectNotFound(await join(ana));
     expectNotFound(await join(jovan, 'appt_missing'));
@@ -364,6 +418,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       post(who, `/appointments/${APPT_NOW}/signal`, { type: 'cannot_hear' }),
       post(who, `/calls/${sessionId}/client-events`, { events: [{ eventName: 'meetingFailed' }] }),
       diagnostics(who, sessionId),
+      location(who),
     ];
     for (const who of [ivana, stefan]) {
       for (const res of await Promise.all(routes(who))) expectNotFound(res);
@@ -510,6 +565,11 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       .where(and(eq(auditEvents.action, 'call.ended'), eq(auditEvents.recordId, sessionId)));
     expect(ended!.details).toEqual({ sessionId, endedByUserId: 'user_milica' });
 
+    // The location is gone and no longer readable (CW-R-80a).
+    const locationAfterEnd = await location(milica);
+    expect(locationAfterEnd.status).toBe(409);
+    expect(locationAfterEnd.body.code).toBe('appointment_not_joinable');
+
     // The room is closed: no rejoin.
     const rejoin = await join(jovan);
     expect(rejoin.status).toBe(409);
@@ -574,7 +634,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
 
   // ── Token and audit hygiene (CW-R-13, CW-R-33a, CW-R-69) ────────────────────
 
-  it('no join token is written to PostgreSQL, and call audit events carry identifiers only', async () => {
+  it('no join token or location text is kept in PostgreSQL, and call audit events carry identifiers only', async () => {
     for (const table of [
       'call_sessions',
       'call_participants',
@@ -589,6 +649,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
         `SELECT coalesce(string_agg(row_to_json(t)::text, ''), '') AS dump FROM ${table} t`,
       );
       expect(rows[0]!.dump, table).not.toContain('fake-token-');
+      expect(rows[0]!.dump, table).not.toContain('Novi Sad');
       expect(rows[0]!.dump.toLowerCase(), table).not.toContain('jointoken');
     }
 

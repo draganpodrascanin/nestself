@@ -134,3 +134,11 @@ describe('join token never reaches audit details (CW-R-69)', () => {
     });
   });
 });
+
+describe('the CALL-34 location text never reaches audit details (CW-R-80a)', () => {
+  it('sanitizeDetails strips locationText in any spelling and at any depth', () => {
+    expect(
+      sanitizeDetails({ locationText: 'Novi Sad', location_text: 'Subotica', session: { LocationText: 'Sombor', id: 's1' } }),
+    ).toEqual({ session: { id: 's1' } });
+  });
+});

@@ -45,6 +45,11 @@ const TO_DB_STATUS: Readonly<Record<AppointmentStatus, DbAppointmentStatus>> = {
   no_show: 'NO_SHOW',
 };
 
+/** The UPPER_CASE database spelling of a contract status (CW-R-19a); the seed uses it too. */
+export function toDbAppointmentStatus(status: AppointmentStatus): DbAppointmentStatus {
+  return TO_DB_STATUS[status];
+}
+
 /** An appointment row with the contract spelling of its status. */
 export type AppointmentRecord = Omit<AppointmentRow, 'status'> & { status: AppointmentStatus };
 

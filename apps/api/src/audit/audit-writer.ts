@@ -71,6 +71,8 @@ const FORBIDDEN_KEY_NAMES = [
   'professionalNote',
   'voucherCode',
   'emailAddress',
+  // Crisis-readiness location an employee shares before a consultation (CALL-34, CW-R-80a)
+  'locationText',
   'ip',
 ];
 

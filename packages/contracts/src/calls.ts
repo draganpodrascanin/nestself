@@ -199,6 +199,16 @@ export const CallJoinRequestSchema = z.strictObject({
 });
 export type CallJoinRequest = z.infer<typeof CallJoinRequestSchema>;
 
+/**
+ * `GET /appointments/:id/location`: the location the employee shared, for
+ * the assigned expert only while the session is live; null until shared
+ * (CALL-34 criterion 3). Served with `Cache-Control: no-store`.
+ */
+export const CallLocationResponseSchema = z.strictObject({
+  locationText: z.string().min(1).max(CALL_LOCATION_TEXT_MAX_LENGTH).nullable(),
+});
+export type CallLocationResponse = z.infer<typeof CallLocationResponseSchema>;
+
 /** Served with `Cache-Control: no-store` (CW-R-70). */
 export const CallJoinResponseSchema = z.object({
   sessionId: z.string().min(1),

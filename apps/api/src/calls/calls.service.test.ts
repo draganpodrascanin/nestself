@@ -140,6 +140,19 @@ class InMemoryCallsRepository {
     if (session) session.locationText = locationText;
   }
 
+  async setLocationTextIfActive(id: string, locationText: string): Promise<boolean> {
+    const session = this.sessions.get(id);
+    if (session?.status !== 'active') return false;
+    session.locationText = locationText;
+    return true;
+  }
+
+  async findLatestSessionByAppointment(appointmentId: string): Promise<CallSessionRecord | null> {
+    const sessions = [...this.sessions.values()].filter((session) => session.appointmentId === appointmentId);
+    const latest = sessions[sessions.length - 1];
+    return latest ? { ...latest } : null;
+  }
+
   async findParticipant(sessionId: string, userId: string): Promise<CallParticipantRecord | null> {
     for (const p of this.participants.values()) {
       if (p.sessionId === sessionId && p.userId === userId) return { ...p };
@@ -521,6 +534,44 @@ describe('CallsService', () => {
       await expectApiError(service.join('appt_1', principal(EMPLOYEE), { locationText: 'Subotica' }), 400, 'validation');
     });
 
+    it('a failed creation clears the location text on the FAILED row (CW-R-80a)', async () => {
+      const pending = await repo.createSessionForAppointment(appointment());
+      repo.sessions.get(pending.id)!.locationText = 'Stale text';
+      vi.spyOn(video, 'createSession').mockRejectedValueOnce(
+        new ApiHttpException({ status: 503, code: 'video_provider_unavailable', message: 'down' }),
+      );
+      await expectApiError(
+        service.join('appt_1', principal(EMPLOYEE), { locationText: 'Novi Sad' }),
+        503,
+        'video_provider_unavailable',
+      );
+      expect(repo.sessions.get(pending.id)).toMatchObject({ status: 'failed', locationText: null });
+    });
+
+    it('stores the location only once the session is active: a join that never reaches the meeting leaves none', async () => {
+      service.pollTimeoutMs = 30;
+      const session = await repo.createSessionForAppointment(appointment());
+      await kv.set(callCreateLockKey(session.id), 'another-joiner', { onlyIfAbsent: true, ttlSeconds: 30 });
+
+      await expectApiError(
+        service.join('appt_1', principal(EMPLOYEE), { locationText: 'Novi Sad' }),
+        503,
+        'video_provider_unavailable',
+      );
+      expect(repo.sessions.get(session.id)).toMatchObject({ status: 'pending', locationText: null });
+    });
+
+    it('releases the creation lock only while it still holds it', async () => {
+      const realCreate = video.createSession.bind(video);
+      vi.spyOn(video, 'createSession').mockImplementationOnce(async (input) => {
+        // The lock expired during a slow provider call and another joiner took it.
+        await kv.set(callCreateLockKey(input.sessionId), 'another-joiner');
+        return realCreate(input);
+      });
+      const joined = await service.join('appt_1', principal(EXPERT), {});
+      expect(await kv.get(callCreateLockKey(joined.sessionId))).toBe('another-joiner');
+    });
+
     it('never puts a join token in audit details, logs or room events (CW-R-69)', async () => {
       await Promise.all([
         service.join('appt_1', principal(EXPERT), {}),
@@ -632,6 +683,26 @@ describe('CallsService', () => {
       ]);
     });
 
+    it('clears the location text when the outcome is recorded without an explicit end (CW-R-80a)', async () => {
+      const joined = await service.join('appt_1', principal(EMPLOYEE), { locationText: 'Novi Sad' });
+      expect(repo.sessions.get(joined.sessionId)!.locationText).toBe('Novi Sad');
+      await service.recordOutcome('appt_1', principal(EXPERT), { status: 'completed' });
+      expect(repo.sessions.get(joined.sessionId)!.locationText).toBeNull();
+    });
+
+    it('attaches a technical failure to the latest session, even a FAILED one, rather than a new empty one', async () => {
+      vi.spyOn(video, 'createSession').mockRejectedValueOnce(
+        new ApiHttpException({ status: 503, code: 'video_provider_unavailable', message: 'down' }),
+      );
+      await expectApiError(service.join('appt_1', principal(EXPERT), {}), 503, 'video_provider_unavailable');
+      const [failed] = [...repo.sessions.values()];
+
+      await service.recordOutcome('appt_1', principal(EXPERT), { status: 'technical_failure' });
+
+      expect(repo.sessions.size).toBe(1);
+      expect(repo.outcomes).toEqual([expect.objectContaining({ sessionId: failed!.id, status: 'technical_failure' })]);
+    });
+
     it('answers 409 when the appointment is no longer confirmed, and 404 to anyone but the expert', async () => {
       await service.recordOutcome('appt_1', principal(EXPERT), { status: 'completed' });
       await expectApiError(
@@ -641,6 +712,29 @@ describe('CallsService', () => {
       );
       expect(repo.outcomes).toHaveLength(1);
       await expectApiError(service.recordOutcome('appt_1', principal(OUTSIDER), { status: 'completed' }), 404, 'not_found');
+    });
+  });
+
+  // ── Location read (CALL-34 criterion 3) ──────────────────────────────────
+
+  describe('location', () => {
+    it('the expert reads the shared location while the session is live; never logged', async () => {
+      expect(await service.location('appt_1', principal(EXPERT))).toEqual({ locationText: null });
+      await service.join('appt_1', principal(EMPLOYEE), { locationText: 'Novi Sad' });
+      expect(await service.location('appt_1', principal(EXPERT))).toEqual({ locationText: 'Novi Sad' });
+      expect(JSON.stringify(logged)).not.toContain('Novi Sad');
+      expect(JSON.stringify(audit.record.mock.calls)).not.toContain('Novi Sad');
+    });
+
+    it('the employee gets a 403 that stays a 403, anyone else 404, and nobody reads it after the end', async () => {
+      await service.join('appt_1', principal(EMPLOYEE), { locationText: 'Novi Sad' });
+      const error = await expectApiError(service.location('appt_1', principal(EMPLOYEE)), 403, 'forbidden');
+      expect(error).toBeInstanceOf(ParticipantForbiddenException);
+      await expectApiError(service.location('appt_1', principal(OUTSIDER)), 404, 'not_found');
+
+      await service.join('appt_1', principal(EXPERT), {});
+      await service.end('appt_1', principal(EXPERT));
+      await expectApiError(service.location('appt_1', principal(EXPERT)), 409, 'appointment_not_joinable');
     });
   });
 
