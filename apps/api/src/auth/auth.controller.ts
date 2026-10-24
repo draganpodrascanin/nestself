@@ -302,7 +302,12 @@ export class AuthController {
         message: 'Context switch requires an active session',
       });
     }
-    return this.sessionEndpoints.switchContext(session.sessionId, principal, context);
+    return this.sessionEndpoints.switchContext(
+      session.sessionId,
+      principal,
+      context,
+      session.lastPersonalOrgId,
+    );
   }
 
   // -----------------------------------------------------------------------

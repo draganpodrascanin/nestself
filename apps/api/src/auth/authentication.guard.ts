@@ -34,6 +34,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { requestMeta, type RequestMeta } from '../common/request-meta.js';
 import type { SessionRecord } from '../session/session.types.js';
+import { resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
   userMobileFamiliesKey,
@@ -259,37 +260,15 @@ export class AuthenticationGuard implements CanActivate {
   }
 
   private defaultContext(loaded: LoadedPrincipal): ActiveContext {
+    // Staff → operations, expert → expert, everyone else → personal (item 2).
     if (loaded.staffTemplates.length > 0) {
       return { kind: 'operations' };
     }
     if (loaded.expert) {
       return { kind: 'expert' };
     }
-    const activeMembership = loaded.memberships.find(
-      (m) => m.status === 'ACTIVE',
-    );
-    if (activeMembership) {
-      return { kind: 'organization', orgId: activeMembership.orgId };
-    }
     // ACC-R-12: personal context carries a resolved orgId when possible.
-    const orgId = this.resolveDefaultPersonalOrgId(loaded.memberships);
+    const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
     return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
-  }
-
-  private resolveDefaultPersonalOrgId(
-    memberships: readonly { orgId: string; status: string; startDate: string; endDate: string | null }[],
-  ): string | undefined {
-    const now = new Date();
-    const active = memberships.filter((m) => {
-      if (m.status !== 'ACTIVE') return false;
-      if (new Date(m.startDate) > now) return false;
-      if (m.endDate != null && new Date(m.endDate) <= now) return false;
-      return true;
-    });
-    if (active.length === 0) return undefined;
-    const sorted = [...active].sort(
-      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-    );
-    return sorted[0]?.orgId;
   }
 }

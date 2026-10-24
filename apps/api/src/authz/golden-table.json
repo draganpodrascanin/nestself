@@ -4438,7 +4438,7 @@
     }
   },
   {
-    "label": "SYS-12: membership ended - invalid context",
+    "label": "SYS-12: membership ended - org context expired",
     "principal": {
       "userId": "u21",
       "displayName": "Ended",
@@ -4510,11 +4510,11 @@
     },
     "expected": {
       "allowed": false,
-      "denialReason": "invalid_context"
+      "denialReason": "org_context_expired"
     }
   },
   {
-    "label": "SYS-13: membership not yet started - invalid context",
+    "label": "SYS-13: membership not yet started - org context expired",
     "principal": {
       "userId": "u22",
       "displayName": "Future",
@@ -4586,7 +4586,7 @@
     },
     "expected": {
       "allowed": false,
-      "denialReason": "invalid_context"
+      "denialReason": "org_context_expired"
     }
   },
   {

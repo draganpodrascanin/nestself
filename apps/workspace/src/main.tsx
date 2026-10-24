@@ -26,7 +26,7 @@ const router = createRouter({
   routeTree,
   context: {
     queryClient,
-    auth: { principal: null, effectiveActions: [] },
+    auth: { principal: null, effectiveActions: [], availableContexts: [] },
   },
   defaultPreload: 'intent',
   scrollRestoration: true,

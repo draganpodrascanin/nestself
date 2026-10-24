@@ -85,24 +85,25 @@ function AuthWrapper({ children }: { children: ReactNode }) {
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions } = useAuth();
+  const { principal, effectiveActions, availableContexts } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
     if (
       currentAuth.principal !== principal ||
-      currentAuth.effectiveActions !== effectiveActions
+      currentAuth.effectiveActions !== effectiveActions ||
+      currentAuth.availableContexts !== availableContexts
     ) {
       router.update({
         context: {
           ...router.options.context,
-          auth: { principal, effectiveActions },
+          auth: { principal, effectiveActions, availableContexts },
         },
       });
       void router.invalidate();
     }
-  }, [principal, effectiveActions, router]);
+  }, [principal, effectiveActions, availableContexts, router]);
 
   return <>{children}</>;
 }

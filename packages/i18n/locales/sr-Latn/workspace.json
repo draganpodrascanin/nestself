@@ -118,5 +118,15 @@
   "api": {
     "connected": "API je povezan",
     "sampleMode": "API nije povezan (probni podaci)"
+  },
+  "contextSwitcher": {
+    "label": "Promeni radni prostor",
+    "personal": "Moj prostor",
+    "personalWithOrg": "Moj prostor · {{orgName}}",
+    "organization": "Upravljanje · {{orgName}}",
+    "expert": "Ekspert",
+    "operations": "Operacije",
+    "switchFailed": "Promena radnog prostora nije uspela. Pokušajte ponovo.",
+    "current": "Trenutni"
   }
 }

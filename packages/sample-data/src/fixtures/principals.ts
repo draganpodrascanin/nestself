@@ -6,7 +6,7 @@
  * templates so that `can()` works without a server.
  */
 import { PrincipalSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
-import type { Principal } from '@nestself/contracts';
+import type { Principal, AvailableContextEntry } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -170,36 +170,48 @@ const adminPrincipal: Principal = PrincipalSchema.parse({
 // Export
 // ---------------------------------------------------------------------------
 
+const ORG_SAMPLE_CONTEXTS: AvailableContextEntry[] = [
+  { kind: 'personal', orgId: 'org_sample' },
+  { kind: 'organization', orgId: 'org_sample' },
+];
+
 export const SAMPLE_PRINCIPALS: Record<
   LegacyRole,
-  { principal: Principal; effectiveActions: readonly string[] }
+  { principal: Principal; effectiveActions: readonly string[]; availableContexts: readonly AvailableContextEntry[] }
 > = {
   employee: {
     principal: employeePrincipal,
     effectiveActions: actionsForTemplates('employee'),
+    availableContexts: ORG_SAMPLE_CONTEXTS,
   },
   employee_personal: {
     principal: employeePersonalPrincipal,
     effectiveActions: actionsForTemplates('employee'),
+    availableContexts: ORG_SAMPLE_CONTEXTS,
   },
   manager: {
     principal: managerPrincipal,
     effectiveActions: actionsForTemplates('employee', 'team_manager'),
+    availableContexts: ORG_SAMPLE_CONTEXTS,
   },
   hr_admin: {
     principal: hrAdminPrincipal,
     effectiveActions: actionsForTemplates('employee', 'hr_admin'),
+    availableContexts: ORG_SAMPLE_CONTEXTS,
   },
   expert: {
     principal: expertPrincipal,
     effectiveActions: actionsForTemplates('expert'),
+    availableContexts: [{ kind: 'expert' }],
   },
   operations: {
     principal: operationsPrincipal,
     effectiveActions: actionsForTemplates('client_operations', 'support_operator'),
+    availableContexts: [{ kind: 'operations' }],
   },
   admin: {
     principal: adminPrincipal,
     effectiveActions: actionsForTemplates('platform_owner'),
+    availableContexts: [{ kind: 'operations' }],
   },
 };

@@ -11,6 +11,7 @@ import { useAuth } from './auth-context';
 const sampleMe = {
   principal: SAMPLE_PRINCIPALS.employee.principal,
   effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+  availableContexts: [],
 };
 
 function createMockClient(requestImpl: (...args: unknown[]) => Promise<unknown>): ApiClient {
@@ -108,6 +109,7 @@ describe('AuthProvider', () => {
         context: { kind: 'personal' as const, orgId: 'org_b' },
       },
       effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+      availableContexts: [],
     };
 
     let callCount = 0;

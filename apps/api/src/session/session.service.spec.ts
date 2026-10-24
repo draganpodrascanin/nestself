@@ -205,6 +205,24 @@ describe('SessionService', () => {
     expect(org).toBeNull();
   });
 
+  it('destroyAllForUser with orgId filter also destroys personal-with-orgId sessions', async () => {
+    const barePersonal = await service.create(baseInput);
+    const personalWithOrg = await service.create({
+      ...baseInput,
+      context: { kind: 'personal' as const, orgId: 'org_1' },
+    });
+    const orgSession = await service.create({
+      ...baseInput,
+      context: { kind: 'organization' as const, orgId: 'org_1' },
+    });
+
+    await service.destroyAllForUser('user_1', { orgId: 'org_1' });
+
+    expect(await service.get(barePersonal.sessionId)).not.toBeNull();
+    expect(await service.get(personalWithOrg.sessionId)).toBeNull();
+    expect(await service.get(orgSession.sessionId)).toBeNull();
+  });
+
   it('listForUser returns display fields only', async () => {
     const { sessionId } = await service.create(baseInput);
     const list = await service.listForUser('user_1', sessionId);

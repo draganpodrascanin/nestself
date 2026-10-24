@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Principal, ActiveContext } from '@nestself/contracts';
+import type { Principal, ActiveContext, AvailableContextEntry } from '@nestself/contracts';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { AuthContext } from './auth-context';
@@ -27,12 +27,14 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [effectiveActions, setEffectiveActions] = useState<readonly string[]>([]);
+  const [availableContexts, setAvailableContexts] = useState<readonly AvailableContextEntry[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
   const applyMe = useCallback(
-    (data: { principal: Principal; effectiveActions: string[] }) => {
+    (data: { principal: Principal; effectiveActions: string[]; availableContexts: AvailableContextEntry[] }) => {
       setPrincipal(data.principal);
       setEffectiveActions(data.effectiveActions);
+      setAvailableContexts(data.availableContexts);
       setStatus('authenticated');
       setError(null);
     },
@@ -47,6 +49,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
       if (err instanceof ApiError && err.status === 401) {
         setPrincipal(null);
         setEffectiveActions([]);
+        setAvailableContexts([]);
         setStatus('unauthenticated');
         setError(null);
       } else {
@@ -77,6 +80,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     }
     setPrincipal(null);
     setEffectiveActions([]);
+    setAvailableContexts([]);
     setStatus('unauthenticated');
     queryClient.cancelQueries();
     queryClient.clear();
@@ -105,13 +109,14 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
       status,
       principal,
       effectiveActions,
+      availableContexts,
       signOut,
       switchContext,
       stepUp,
       refreshPrincipal,
       error,
     }),
-    [status, principal, effectiveActions, signOut, switchContext, stepUp, refreshPrincipal, error],
+    [status, principal, effectiveActions, availableContexts, signOut, switchContext, stepUp, refreshPrincipal, error],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

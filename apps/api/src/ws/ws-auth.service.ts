@@ -23,6 +23,7 @@ import {
   type KeyValueStore,
 } from '../redis/key-value-store.js';
 import { wsTicketKey, WS_TICKET_TTL } from '../redis/redis-keys.js';
+import { resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 
 export class WsAuthError extends Error {
@@ -233,18 +234,15 @@ export class WsAuthService {
   }
 
   private defaultContext(loaded: LoadedPrincipal): ActiveContext {
+    // Staff → operations, expert → expert, everyone else → personal (item 2).
     if (loaded.staffTemplates.length > 0) {
       return { kind: 'operations' };
     }
     if (loaded.expert) {
       return { kind: 'expert' };
     }
-    const activeMembership = loaded.memberships.find(
-      (m) => m.status === 'ACTIVE',
-    );
-    if (activeMembership) {
-      return { kind: 'organization', orgId: activeMembership.orgId };
-    }
-    return { kind: 'personal' };
+    // ACC-R-12: personal context carries a resolved orgId when possible.
+    const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
+    return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
   }
 }

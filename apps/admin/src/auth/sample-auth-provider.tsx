@@ -98,6 +98,7 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
       status: 'authenticated' as const,
       principal: sample.principal,
       effectiveActions: sample.effectiveActions,
+      availableContexts: sample.availableContexts,
       signOut,
       switchContext,
       stepUp,

@@ -118,5 +118,15 @@
   "api": {
     "connected": "API connected",
     "sampleMode": "API not connected (sample mode)"
+  },
+  "contextSwitcher": {
+    "label": "Switch workspace",
+    "personal": "My space",
+    "personalWithOrg": "My space · {{orgName}}",
+    "organization": "Manage · {{orgName}}",
+    "expert": "Expert",
+    "operations": "Operations",
+    "switchFailed": "Could not switch workspace. Please try again.",
+    "current": "Current"
   }
 }

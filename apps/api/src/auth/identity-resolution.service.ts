@@ -26,6 +26,10 @@ import type {
   TokenSet,
 } from '../identity/identity-provider.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import {
+  resolveDefaultPersonalOrgId,
+  computeAvailableContexts,
+} from '../authz/personal-context.js';
 import type {
   Principal,
   ActiveContext,
@@ -170,10 +174,14 @@ export class IdentityResolutionService {
   }
 
   async buildMeResponse(
-    _loaded: LoadedPrincipal,
+    loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
-    return { principal, effectiveActions: [] };
+    return {
+      principal,
+      effectiveActions: [],
+      availableContexts: computeAvailableContexts(loaded),
+    };
   }
 
   resolvePopulation(
@@ -186,34 +194,12 @@ export class IdentityResolutionService {
   }
 
   defaultContext(loaded: LoadedPrincipal): ActiveContext {
+    // Staff → operations, expert → expert, everyone else → personal (item 2).
     if (loaded.staffTemplates.length > 0) return { kind: 'operations' };
     if (loaded.expert) return { kind: 'expert' };
-    const active = loaded.memberships.find((m) => m.status === 'ACTIVE');
-    if (active) return { kind: 'organization', orgId: active.orgId };
     // ACC-R-12: personal context carries a resolved orgId when possible.
-    const orgId = this.resolveDefaultPersonalOrgId(loaded.memberships);
+    const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
     return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
-  }
-
-  /**
-   * Resolve the default orgId for personal context: the ACTIVE, date-current
-   * membership with the earliest `startDate`.
-   */
-  private resolveDefaultPersonalOrgId(
-    memberships: readonly { orgId: string; status: string; startDate: string; endDate: string | null }[],
-  ): string | undefined {
-    const now = new Date();
-    const active = memberships.filter((m) => {
-      if (m.status !== 'ACTIVE') return false;
-      if (new Date(m.startDate) > now) return false;
-      if (m.endDate != null && new Date(m.endDate) <= now) return false;
-      return true;
-    });
-    if (active.length === 0) return undefined;
-    const sorted = [...active].sort(
-      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-    );
-    return sorted[0]?.orgId;
   }
 
   // -- Audit helpers (fire-and-forget) ----------------------------------------

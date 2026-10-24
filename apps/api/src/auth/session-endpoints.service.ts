@@ -15,9 +15,13 @@ import {
   WS_TICKET_TTL,
 } from '../redis/redis-keys.js';
 import { ApiHttpException } from '../common/api-error.js';
+import {
+  hasActiveDateCurrentMembership,
+  resolveDefaultPersonalOrgId,
+  computeAvailableContexts,
+} from '../authz/personal-context.js';
 import type {
   Principal,
-  PrincipalMembership,
   ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
@@ -39,13 +43,18 @@ export class SessionEndpointsService {
         message: 'User not found',
       });
     }
-    return { principal, effectiveActions: [] };
+    return {
+      principal,
+      effectiveActions: [],
+      availableContexts: computeAvailableContexts(loaded),
+    };
   }
 
   async switchContext(
     sessionId: string,
     principal: Principal,
     newContext: ActiveContext,
+    lastPersonalOrgId?: string,
   ): Promise<MeResponse> {
     const loaded = await this.principalLoader.load(principal.userId);
     if (!loaded) {
@@ -62,7 +71,7 @@ export class SessionEndpointsService {
     if (newContext.kind === 'personal') {
       if (newContext.orgId) {
         // (1) personal with orgId → verify ACTIVE, date-current membership.
-        if (!this.hasActiveDateCurrentMembership(loaded.memberships, newContext.orgId)) {
+        if (!hasActiveDateCurrentMembership(loaded.memberships, newContext.orgId)) {
           throw new ApiHttpException({
             status: 403,
             code: 'invalid_context',
@@ -71,10 +80,12 @@ export class SessionEndpointsService {
         }
         resolvedContext = { kind: 'personal', orgId: newContext.orgId };
       } else {
-        // (2) personal without orgId → resolve default.
-        const defaultOrgId = this.resolveDefaultPersonalOrgId(
+        // (2) personal without orgId → resolve default using sticky orgId.
+        const lastUsed = lastPersonalOrgId
+          ?? (principal.context.kind === 'personal' ? principal.context.orgId : undefined);
+        const defaultOrgId = resolveDefaultPersonalOrgId(
           loaded.memberships,
-          principal.context.kind === 'personal' ? principal.context.orgId : undefined,
+          lastUsed,
         );
         resolvedContext = defaultOrgId
           ? { kind: 'personal', orgId: defaultOrgId }
@@ -104,6 +115,7 @@ export class SessionEndpointsService {
     return {
       principal: { ...principal, context: resolvedContext },
       effectiveActions: [],
+      availableContexts: computeAvailableContexts(loaded),
     };
   }
 
@@ -190,50 +202,6 @@ export class SessionEndpointsService {
       { ttlSeconds: WS_TICKET_TTL },
     );
     return ticket;
-  }
-
-  /**
-   * Resolve the default orgId for a personal context (ACC-R-12):
-   * the `lastUsed` orgId if it still has an ACTIVE date-current membership,
-   * else the ACTIVE date-current membership with the earliest `startDate`.
-   */
-  resolveDefaultPersonalOrgId(
-    memberships: readonly PrincipalMembership[],
-    lastUsed?: string,
-  ): string | undefined {
-    const now = new Date();
-    const active = memberships.filter((m) => {
-      if (m.status !== 'ACTIVE') return false;
-      if (new Date(m.startDate) > now) return false;
-      if (m.endDate != null && new Date(m.endDate) <= now) return false;
-      return true;
-    });
-
-    if (active.length === 0) return undefined;
-
-    if (lastUsed && active.some((m) => m.orgId === lastUsed)) {
-      return lastUsed;
-    }
-
-    // Earliest startDate among ACTIVE, date-current memberships.
-    const sorted = [...active].sort(
-      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-    );
-    return sorted[0]?.orgId;
-  }
-
-  /** Check that the user holds an ACTIVE, date-current membership in `orgId`. */
-  private hasActiveDateCurrentMembership(
-    memberships: readonly PrincipalMembership[],
-    orgId: string,
-  ): boolean {
-    const now = new Date();
-    return memberships.some((m) => {
-      if (m.orgId !== orgId || m.status !== 'ACTIVE') return false;
-      if (new Date(m.startDate) > now) return false;
-      if (m.endDate != null && new Date(m.endDate) <= now) return false;
-      return true;
-    });
   }
 
   private resolvePopulation(

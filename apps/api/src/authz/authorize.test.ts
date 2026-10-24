@@ -138,7 +138,7 @@ describe('Step 2: Context validity', () => {
     });
     const d = authorize(p, 'people.invite', baseResource, makeCtx());
     expect(d.allowed).toBe(false);
-    expect(d.denialReason).toBe('invalid_context');
+    expect(d.denialReason).toBe('org_context_expired');
   });
 
   it('denies personal context without any active membership', () => {

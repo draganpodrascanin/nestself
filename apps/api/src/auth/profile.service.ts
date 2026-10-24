@@ -16,6 +16,7 @@ import { PrincipalLoader } from '../principal/principal-loader.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { computeAvailableContexts } from '../authz/personal-context.js';
 
 type Meta = { ip: string | null; userAgent: string | null };
 
@@ -34,7 +35,11 @@ export class ProfileService {
 
   async updateLocale(principal: Principal, locale: Locale, meta: Meta): Promise<MeResponse> {
     await this.apply(principal, { locale }, meta);
-    return { principal: { ...principal, locale }, effectiveActions: [] };
+    return {
+      principal: { ...principal, locale },
+      effectiveActions: [],
+      availableContexts: computeAvailableContexts(principal),
+    };
   }
 
   async updateDisplayName(principal: Principal, displayName: string, meta: Meta): Promise<MeResponse> {
@@ -42,6 +47,7 @@ export class ProfileService {
     return {
       principal: { ...principal, displayName, initials: computeInitials(displayName) },
       effectiveActions: [],
+      availableContexts: computeAvailableContexts(principal),
     };
   }
 

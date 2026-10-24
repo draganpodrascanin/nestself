@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SessionEndpointsService } from './session-endpoints.service.js';
+import { resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
 import { ApiHttpException } from '../common/api-error.js';
 import type { Principal, PrincipalMembership } from '@nestself/contracts';
 
@@ -190,20 +191,9 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
   });
 });
 
-describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
-  let service: SessionEndpointsService;
-
-  beforeEach(() => {
-    const mocks = createMocks();
-    service = new SessionEndpointsService(
-      mocks.sessions as never,
-      mocks.principalLoader as never,
-      mocks.store as never,
-    );
-  });
-
+describe('resolveDefaultPersonalOrgId (shared helper)', () => {
   it('returns lastUsed when it is still ACTIVE and date-current', () => {
-    const result = service.resolveDefaultPersonalOrgId(
+    const result = resolveDefaultPersonalOrgId(
       [ACTIVE_MEMBERSHIP, EARLIER_MEMBERSHIP],
       'org_a',
     );
@@ -211,7 +201,7 @@ describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
   });
 
   it('falls back to earliest startDate when lastUsed is not found', () => {
-    const result = service.resolveDefaultPersonalOrgId(
+    const result = resolveDefaultPersonalOrgId(
       [ACTIVE_MEMBERSHIP, EARLIER_MEMBERSHIP],
       'org_gone',
     );
@@ -219,7 +209,7 @@ describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
   });
 
   it('returns undefined when no ACTIVE memberships exist', () => {
-    const result = service.resolveDefaultPersonalOrgId([], undefined);
+    const result = resolveDefaultPersonalOrgId([], undefined);
     expect(result).toBeUndefined();
   });
 
@@ -228,7 +218,7 @@ describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
       ...EARLIER_MEMBERSHIP,
       endDate: '2024-01-01T00:00:00Z',
     };
-    const result = service.resolveDefaultPersonalOrgId([expired, ACTIVE_MEMBERSHIP]);
+    const result = resolveDefaultPersonalOrgId([expired, ACTIVE_MEMBERSHIP]);
     expect(result).toBe('org_a');
   });
 
@@ -237,7 +227,7 @@ describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
       ...EARLIER_MEMBERSHIP,
       startDate: '2099-01-01T00:00:00Z',
     };
-    const result = service.resolveDefaultPersonalOrgId([future, ACTIVE_MEMBERSHIP]);
+    const result = resolveDefaultPersonalOrgId([future, ACTIVE_MEMBERSHIP]);
     expect(result).toBe('org_a');
   });
 
@@ -246,7 +236,7 @@ describe('SessionEndpointsService.resolveDefaultPersonalOrgId', () => {
       ...EARLIER_MEMBERSHIP,
       status: 'INVITED',
     };
-    const result = service.resolveDefaultPersonalOrgId([invited, ACTIVE_MEMBERSHIP]);
+    const result = resolveDefaultPersonalOrgId([invited, ACTIVE_MEMBERSHIP]);
     expect(result).toBe('org_a');
   });
 });

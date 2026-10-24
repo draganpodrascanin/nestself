@@ -116,9 +116,10 @@ export function evaluate(
   // -----------------------------------------------------------------------
   // Step 2: Context validity
   // -----------------------------------------------------------------------
-  if (!isContextValid(principal, ctx)) {
-    trace?.push('Step 2: context is invalid — denied');
-    return deny('invalid_context', trace ?? []);
+  const contextResult = isContextValid(principal, ctx);
+  if (!contextResult.valid) {
+    trace?.push(`Step 2: context is invalid (${contextResult.code}) — denied`);
+    return deny(contextResult.code, trace ?? []);
   }
   trace?.push(`Step 2: context ${principal.context.kind} is valid`);
 

@@ -118,5 +118,15 @@
   "api": {
     "connected": "API csatlakoztatva",
     "sampleMode": "API nincs csatlakoztatva (mintaadatok mód)"
+  },
+  "contextSwitcher": {
+    "label": "Munkaterület váltása",
+    "personal": "Saját terület",
+    "personalWithOrg": "Saját terület · {{orgName}}",
+    "organization": "Kezelés · {{orgName}}",
+    "expert": "Szakértő",
+    "operations": "Operációk",
+    "switchFailed": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra.",
+    "current": "Aktuális"
   }
 }

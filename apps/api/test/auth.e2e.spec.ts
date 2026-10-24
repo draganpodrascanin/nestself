@@ -235,7 +235,8 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       .send({ context: { kind: 'personal' } });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('principal');
-    expect(res.body.principal.context).toEqual({ kind: 'personal' });
+    // ACC-R-12: personal context resolves orgId from ACTIVE date-current membership.
+    expect(res.body.principal.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
 
     // Switch back to the org context.
     const backRes = await agent
@@ -287,6 +288,14 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(verifyRes.status).toBe(200);
 
     const hrCsrf = extractCsrf(verifyRes);
+
+    // Item 2: hr_admin now signs in with personal context; switch to org first.
+    const ctxRes = await hrAgent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', hrCsrf)
+      .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+    expect(ctxRes.status).toBe(200);
+
     const progRes = await hrAgent
       .get('/api/orgs/org_sample/programme')
       .set('X-CSRF-Token', hrCsrf);
