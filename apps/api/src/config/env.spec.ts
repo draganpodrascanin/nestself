@@ -194,6 +194,30 @@ describe('envSchema: video provider (T-CW-0.2, D-CW-05, D-CW-06)', () => {
     ).toBe(false);
   });
 
+  it('treats blank video variables as unset, the way .env.example leaves them (T-CW-1.2)', () => {
+    const parsed = envSchema.parse({
+      ...baseEnv,
+      VIDEO_PROVIDER: '',
+      CHIME_REGION: '',
+      CHIME_EVENTS_QUEUE_URL: '',
+      CHIME_EVENTS_QUEUE_ARN: '',
+      RECORDINGS_BUCKET: '',
+      VIDEO_SMOKE_ENABLED: '',
+    });
+    expect(parsed.VIDEO_PROVIDER).toBe('none');
+    expect(parsed.CHIME_REGION).toBeUndefined();
+    expect(parsed.CHIME_EVENTS_QUEUE_URL).toBeUndefined();
+    expect(parsed.CHIME_EVENTS_QUEUE_ARN).toBeUndefined();
+    expect(parsed.RECORDINGS_BUCKET).toBeUndefined();
+    expect(parsed.VIDEO_SMOKE_ENABLED).toBe(false);
+  });
+
+  it('still requires the chime variables when they are blank', () => {
+    const messages = messagesOf({ ...chimeEnv, CHIME_REGION: '', CHIME_EVENTS_QUEUE_URL: '' });
+    expect(messages).toContain('CHIME_REGION is required when VIDEO_PROVIDER=chime');
+    expect(messages).toContain('CHIME_EVENTS_QUEUE_URL is required when VIDEO_PROVIDER=chime');
+  });
+
   it('parses VIDEO_SMOKE_ENABLED as a boolean flag, so "false" stays false', () => {
     expect(envSchema.parse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'false' }).VIDEO_SMOKE_ENABLED).toBe(false);
     expect(envSchema.parse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'true' }).VIDEO_SMOKE_ENABLED).toBe(true);

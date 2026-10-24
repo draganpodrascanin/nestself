@@ -351,6 +351,119 @@ describe('NestSelfVideoStack -- dev stage (own key)', () => {
   });
 });
 
+interface AlarmProperties {
+  AlarmName: string;
+  AlarmDescription: string;
+  ComparisonOperator: string;
+  Threshold: number;
+  EvaluationPeriods: number;
+  TreatMissingData?: string;
+  Namespace?: string;
+  MetricName?: string;
+  Statistic?: string;
+  ExtendedStatistic?: string;
+  Period?: number;
+  Dimensions?: { Name: string; Value: unknown }[];
+  AlarmActions?: unknown[];
+  Metrics?: {
+    Id: string;
+    Expression?: string;
+    ReturnData?: boolean;
+    MetricStat?: { Metric: { Namespace: string; MetricName: string; Dimensions?: unknown[] }; Period: number; Stat: string };
+  }[];
+}
+
+function alarms(template: Template): Record<string, AlarmProperties> {
+  const resources = template.findResources('AWS::CloudWatch::Alarm') as Record<string, { Properties: AlarmProperties }>;
+  return Object.fromEntries(Object.values(resources).map((r) => [r.Properties.AlarmName, r.Properties]));
+}
+
+describe('NestSelfVideoStack -- call alarms (D-CW-13, CW-R-40)', () => {
+  const { template } = synthDev();
+  const byName = alarms(template);
+  const stageDimension = [{ Name: 'Stage', Value: 'dev' }];
+
+  it('defines the three D-CW-13 alarms and the dead-letter queue alarm, and nothing else', () => {
+    expect(Object.keys(byName).sort()).toEqual([
+      'nestself-dev-chime-events-dlq-depth',
+      'nestself-dev-video-join-failure-rate',
+      'nestself-dev-video-meeting-failed-burst',
+      'nestself-dev-video-meeting-start-p95',
+    ]);
+  });
+
+  it('join failure rate: JoinFailures / JoinAttempts above 5 percent over 15 minutes', () => {
+    const alarm = byName['nestself-dev-video-join-failure-rate']!;
+    expect(alarm).toMatchObject({ ComparisonOperator: 'GreaterThanThreshold', Threshold: 5, EvaluationPeriods: 1, TreatMissingData: 'notBreaching' });
+    const metrics = Object.fromEntries((alarm.Metrics ?? []).map((m) => [m.Id, m]));
+    expect(metrics.failures?.MetricStat).toEqual({
+      Metric: { Namespace: 'NestSelf/Video', MetricName: 'JoinFailures', Dimensions: stageDimension },
+      Period: 900,
+      Stat: 'Sum',
+    });
+    expect(metrics.attempts?.MetricStat).toEqual({
+      Metric: { Namespace: 'NestSelf/Video', MetricName: 'JoinAttempts', Dimensions: stageDimension },
+      Period: 900,
+      Stat: 'Sum',
+    });
+    const expression = (alarm.Metrics ?? []).find((m) => m.ReturnData !== false);
+    expect(expression?.Expression).toBe('IF(attempts > 0, 100 * failures / attempts, 0)');
+  });
+
+  it('p95 meetingStartDurationMs above 5 seconds', () => {
+    expect(byName['nestself-dev-video-meeting-start-p95']).toMatchObject({
+      Namespace: 'NestSelf/Video',
+      MetricName: 'MeetingStartDurationMs',
+      ExtendedStatistic: 'p95',
+      Dimensions: stageDimension,
+      Period: 900,
+      ComparisonOperator: 'GreaterThanThreshold',
+      Threshold: 5000,
+      TreatMissingData: 'notBreaching',
+    });
+  });
+
+  it('meetingFailed burst: more than 3 in 5 minutes', () => {
+    expect(byName['nestself-dev-video-meeting-failed-burst']).toMatchObject({
+      Namespace: 'NestSelf/Video',
+      MetricName: 'MeetingFailed',
+      Statistic: 'Sum',
+      Dimensions: stageDimension,
+      Period: 300,
+      ComparisonOperator: 'GreaterThanThreshold',
+      Threshold: 3,
+      EvaluationPeriods: 1,
+      TreatMissingData: 'notBreaching',
+    });
+  });
+
+  it('dead-letter queue depth above 0 (CW-R-40)', () => {
+    const dlq = template.findResources('AWS::SQS::Queue', { Properties: { QueueName: 'nestself-dev-chime-events-dlq' } });
+    const dlqId = Object.keys(dlq)[0]!;
+    expect(byName['nestself-dev-chime-events-dlq-depth']).toMatchObject({
+      Namespace: 'AWS/SQS',
+      MetricName: 'ApproximateNumberOfMessagesVisible',
+      Dimensions: [{ Name: 'QueueName', Value: { 'Fn::GetAtt': [dlqId, 'QueueName'] } }],
+      ComparisonOperator: 'GreaterThanThreshold',
+      Threshold: 0,
+    });
+  });
+
+  it('labels the D-CW-13 thresholds as planning assumptions', () => {
+    for (const name of [
+      'nestself-dev-video-join-failure-rate',
+      'nestself-dev-video-meeting-start-p95',
+      'nestself-dev-video-meeting-failed-burst',
+    ]) {
+      expect(byName[name]!.AlarmDescription, name).toMatch(/planning assumption/i);
+    }
+  });
+
+  it('has no alarm actions until the stack gets a notification topic', () => {
+    for (const alarm of Object.values(byName)) expect(alarm.AlarmActions ?? []).toEqual([]);
+  });
+});
+
 describe('NestSelfVideoStack -- props', () => {
   it.each(['staging', 'production'] as const)('refuses the %s stage without the platform key', (stage) => {
     const app = new cdk.App();

@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Validations } from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -28,6 +29,30 @@ export interface VideoStackProps extends cdk.StackProps {
 const RECORDINGS_RAW_PREFIX = 'raw/';
 
 /**
+ * Namespace of the call metrics the API emits from the client events of
+ * `POST /calls/:sessionId/client-events` (D-CW-13): `JoinAttempts` and
+ * `JoinFailures` (`meetingStartSucceeded` plus `meetingStartFailed`, and
+ * `meetingStartFailed`), `MeetingStartDurationMs` (the `durationMs` of
+ * `meetingStartSucceeded`) and `MeetingFailed`, each with a `Stage`
+ * dimension.
+ */
+export const VIDEO_METRICS_NAMESPACE = 'NestSelf/Video';
+
+/**
+ * D-CW-13 alarm thresholds. Planning assumptions: no traffic has been
+ * observed yet, so they are to be revisited after the first weeks of real
+ * consultations (guidelines 16.2).
+ */
+export const VIDEO_ALARM_THRESHOLDS = {
+  /** Percent of joins that fail, over 15 minutes. */
+  joinFailureRatePercent: 5,
+  /** p95 of meetingStartDurationMs, over 15 minutes. */
+  meetingStartP95Ms: 5_000,
+  /** meetingFailed events in 5 minutes. */
+  meetingFailedPer5Minutes: 3,
+} as const;
+
+/**
  * NS-CALLS-01 video infrastructure (D-CW-31): the `chime-events` queue fed by
  * `CreateMeeting` notifications and an EventBridge backstop (D-CW-12), the
  * webinar recordings bucket (D-CW-18), and the managed policies for the API
@@ -40,6 +65,7 @@ export class NestSelfVideoStack extends cdk.Stack {
   public readonly recordingsBucket: s3.Bucket;
   public readonly videoApiPolicy: iam.ManagedPolicy;
   public readonly videoWorkerPolicy: iam.ManagedPolicy;
+  public readonly alarms: cloudwatch.Alarm[];
 
   constructor(scope: Construct, id: string, props: VideoStackProps) {
     super(scope, id, props);
@@ -293,6 +319,70 @@ export class NestSelfVideoStack extends cdk.Stack {
         reason: 'D-CW-18: Recording object keys are created per webinar at run time; the wildcard covers objects of this one bucket only.',
       },
     );
+
+    // ── Alarms (D-CW-13, CW-R-40) ────────────────────────────────────
+    // No actions yet: the auth and video stacks have no notification topic
+    // (the platform's SNS topic lives in the observability stack, which dev
+    // does not deploy). The alarms show in the CloudWatch console; wiring an
+    // action is a README follow-up.
+    const videoMetric = (metricName: string, statistic: string, period: cdk.Duration) =>
+      new cloudwatch.Metric({
+        namespace: VIDEO_METRICS_NAMESPACE,
+        metricName,
+        dimensionsMap: { Stage: stage },
+        statistic,
+        period,
+      });
+    const planning = 'Threshold is a planning assumption (D-CW-13), to revisit once real traffic exists.';
+    this.alarms = [
+      new cloudwatch.Alarm(this, 'JoinFailureRateAlarm', {
+        alarmName: `nestself-${stage}-video-join-failure-rate`,
+        alarmDescription: `More than ${VIDEO_ALARM_THRESHOLDS.joinFailureRatePercent}% of call joins failed over 15 minutes (meetingStartFailed). ${planning}`,
+        metric: new cloudwatch.MathExpression({
+          expression: 'IF(attempts > 0, 100 * failures / attempts, 0)',
+          usingMetrics: {
+            failures: videoMetric('JoinFailures', 'Sum', cdk.Duration.minutes(15)),
+            attempts: videoMetric('JoinAttempts', 'Sum', cdk.Duration.minutes(15)),
+          },
+          period: cdk.Duration.minutes(15),
+          label: 'Join failure rate (%)',
+        }),
+        threshold: VIDEO_ALARM_THRESHOLDS.joinFailureRatePercent,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+      new cloudwatch.Alarm(this, 'MeetingStartP95Alarm', {
+        alarmName: `nestself-${stage}-video-meeting-start-p95`,
+        alarmDescription: `p95 meetingStartDurationMs above ${VIDEO_ALARM_THRESHOLDS.meetingStartP95Ms} ms over 15 minutes. ${planning}`,
+        metric: videoMetric('MeetingStartDurationMs', 'p95', cdk.Duration.minutes(15)),
+        threshold: VIDEO_ALARM_THRESHOLDS.meetingStartP95Ms,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+      new cloudwatch.Alarm(this, 'MeetingFailedBurstAlarm', {
+        alarmName: `nestself-${stage}-video-meeting-failed-burst`,
+        alarmDescription: `More than ${VIDEO_ALARM_THRESHOLDS.meetingFailedPer5Minutes} meetingFailed client events in 5 minutes. ${planning}`,
+        metric: videoMetric('MeetingFailed', 'Sum', cdk.Duration.minutes(5)),
+        threshold: VIDEO_ALARM_THRESHOLDS.meetingFailedPer5Minutes,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+      new cloudwatch.Alarm(this, 'ChimeEventsDlqDepthAlarm', {
+        alarmName: `nestself-${stage}-chime-events-dlq-depth`,
+        alarmDescription: 'A Chime event failed 5 receives and sits in the dead-letter queue (CW-R-40): inspect it, fix the cause, redrive.',
+        metric: this.chimeEventsDlq.metricApproximateNumberOfMessagesVisible({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Maximum',
+        }),
+        threshold: 0,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    ];
 
     // ── Outputs (D-CW-31, CW-R-66) ───────────────────────────────────
     new cdk.CfnOutput(this, 'ChimeEventsQueueUrl', {

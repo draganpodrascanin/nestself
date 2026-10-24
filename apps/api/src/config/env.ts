@@ -27,6 +27,15 @@ const optionalString = z.union([
   z.string(),
 ]).optional();
 
+/**
+ * Blank as unset for schemas that are not plain strings (enums, literals,
+ * flags): `.env.example` leaves optional variables as `NAME=`, and the empty
+ * string must then behave as if the line were absent, defaults included.
+ */
+function blankAsUnset<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema);
+}
+
 const hexKey64 = z
   .string()
   .regex(/^[0-9a-f]{64}$/i, 'Must be a 64-character hex string (32 bytes)');
@@ -112,18 +121,20 @@ export const envSchema = z
     STAGE: optionalString.transform((v) => v ?? 'dev'),
 
     // Video provider (NS-CALLS-01, D-CW-05, D-CW-06): `none` selects the fake
-    VIDEO_PROVIDER: z.enum(VIDEO_PROVIDER_NAMES).default('none'),
+    VIDEO_PROVIDER: blankAsUnset(z.enum(VIDEO_PROVIDER_NAMES).default('none')),
     // Only Frankfurt is accepted, even outside the chime refinement (CW-R-68)
-    CHIME_REGION: z.literal('eu-central-1').optional(),
+    CHIME_REGION: blankAsUnset(z.literal('eu-central-1').optional()),
     CHIME_EVENTS_QUEUE_URL: optionalUrl,
     CHIME_EVENTS_QUEUE_ARN: optionalString,
     RECORDINGS_BUCKET: optionalString,
     // Nightly real-provider smoke test (CI only). Parsed like the other boolean
     // flags: `z.coerce.boolean()` would turn the string "false" into true.
-    VIDEO_SMOKE_ENABLED: z
-      .enum(['true', 'false'])
-      .optional()
-      .transform((v) => v === 'true'),
+    VIDEO_SMOKE_ENABLED: blankAsUnset(
+      z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => v === 'true'),
+    ),
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production

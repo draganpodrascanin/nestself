@@ -35,7 +35,7 @@ aws cognito-idp delete-user-pool --user-pool-id <id>
 | Stack | Key resources | Deployed in |
 |---|---|---|
 | `NestSelfAuthStack` | Cognito user pool, app clients, Lambda triggers, WAF, Secrets Manager | All stages |
-| `NestSelfVideoStack` | `chime-events` SQS queue and DLQ, EventBridge rule, recordings bucket, `VideoApiPolicy` and `VideoWorkerPolicy` | dev (alone, own key); staging and production (platform key) |
+| `NestSelfVideoStack` | `chime-events` SQS queue and DLQ, EventBridge rule, recordings bucket, `VideoApiPolicy` and `VideoWorkerPolicy`, call alarms | dev (alone, own key); staging and production (platform key) |
 | `NestSelfSecurityBaselineStack` | KMS keys, Route 53 hosted zone, CloudTrail | staging, production |
 | `NestSelfNetworkStack` | VPC, subnets, NAT, VPC endpoints | staging, production |
 | `NestSelfDataStack` | RDS PostgreSQL 17, ElastiCache Valkey | staging, production |
@@ -131,6 +131,17 @@ pnpm --filter @nestself/cdk typecheck
 | `nestself-<stage>-video-api` managed policy | Meeting and attendee actions plus `chime:TagResource` on `*` (the meetings actions have no resource-level permissions). No media pipeline actions (CW-R-79a). |
 | `nestself-<stage>-video-worker` managed policy | Consume the queue, meeting cleanup (`chime:GetMeeting` and `chime:DeleteMeeting` on `*`, for `calls.cleanup` and `calls.reconcile`, D-CW-31), media capture and concatenation pipelines (on `*`), the media pipelines service-linked role, put, get, list and read the bucket policy on the recordings bucket, decrypt and generate data keys on the key. |
 
+Alarms (D-CW-13, CW-R-40). The first three read the `NestSelf/Video` metrics the API is to emit from the client events of `POST /calls/:sessionId/client-events`, each with a `Stage` dimension: `JoinAttempts` and `JoinFailures` (`meetingStartSucceeded` plus `meetingStartFailed`, and `meetingStartFailed`), `MeetingStartDurationMs` (the `durationMs` of `meetingStartSucceeded`) and `MeetingFailed`. Their thresholds are planning assumptions, set before any real traffic and to be revisited after the first weeks of consultations (`VIDEO_ALARM_THRESHOLDS` in `lib/video-stack.ts`). Missing data never breaches.
+
+| Alarm | Metric | Threshold |
+|---|---|---|
+| `nestself-<stage>-video-join-failure-rate` | `100 * JoinFailures / JoinAttempts`, sums over 15 minutes | above 5 percent (planning assumption) |
+| `nestself-<stage>-video-meeting-start-p95` | p95 `MeetingStartDurationMs` over 15 minutes | above 5,000 ms (planning assumption) |
+| `nestself-<stage>-video-meeting-failed-burst` | sum of `MeetingFailed` over 5 minutes | above 3 (planning assumption) |
+| `nestself-<stage>-chime-events-dlq-depth` | `ApproximateNumberOfMessagesVisible` on the dead-letter queue | above 0 (CW-R-40): an event failed 5 receives; inspect, fix, redrive |
+
+The alarms have no actions yet: neither the auth stack nor the video stack has a notification topic, and the observability stack's `nestself-<stage>-alarms` topic is not deployed in dev. They show their state in the CloudWatch console; add an SNS action (or pass the observability topic in) when the video stack is deployed with the platform stacks.
+
 Outputs and the variables `env-from-outputs.mjs` prints from them (API mode only):
 
 | Output | API env variable |
@@ -216,7 +227,7 @@ The trust policy constrains the OIDC `sub` claim: staging trusts `main` branch a
 
 ### Dev stage (auth and video)
 
-Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month. The video stack adds up to $3/month for its KMS key with rotation ($1 for the key, the first two rotations add $1 each); SQS, EventBridge and S3 cost cents at dev volume. Chime SDK meeting and media pipeline minutes are billed per use and are not included.
+Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month. The video stack adds up to $3/month for its KMS key with rotation ($1 for the key, the first two rotations add $1 each) and about $0.50 for its four alarms (standard alarms are billed per metric, and the join failure rate reads two); SQS, EventBridge and S3 cost cents at dev volume. Chime SDK meeting and media pipeline minutes are billed per use and are not included.
 
 ### Staging/production (all stacks)
 
