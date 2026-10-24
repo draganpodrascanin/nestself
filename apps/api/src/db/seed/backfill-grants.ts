@@ -7,6 +7,11 @@
  * `grant_{userId}_{templateKey}`, or `grant_{userId}_{orgId}_{templateKey}`
  * when that id already holds the same template for another organization, and
  * an existing grant is never overwritten.
+ *
+ * A legacy MANAGER whose membership has no org unit would get an `org_unit`
+ * grant without a unit, which never matches. Such a grant is scoped to the
+ * organization instead and reported in `widened` (and one warning naming the
+ * user id) so the operator can review or narrow it.
  */
 import { eq, sql } from 'drizzle-orm';
 import type { Database } from '../db.service.js';
@@ -16,6 +21,8 @@ import { derivedGrantConditions, resolveSampleScope, templatesForLegacyRoles } f
 export interface BackfillResult {
   created: string[];
   skipped: string[];
+  /** Created grants scoped to the organization because the membership had no org unit. */
+  widened: string[];
 }
 
 interface Subject {
@@ -27,7 +34,11 @@ interface Subject {
   grantedByUserId: string;
 }
 
-export async function backfillGrants(db: Database, now: Date): Promise<BackfillResult> {
+export async function backfillGrants(
+  db: Database,
+  now: Date,
+  warn: (message: string) => void = (message) => console.warn(message),
+): Promise<BackfillResult> {
   const platformUsers = await db.execute<{ id: string; platform_role: string }>(
     sql`select id, platform_role from users where platform_role is not null order by id`,
   );
@@ -67,10 +78,13 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
     })),
   ];
 
-  const result: BackfillResult = { created: [], skipped: [] };
+  const result: BackfillResult = { created: [], skipped: [], widened: [] };
   for (const subject of subjects) {
     for (const tmpl of templatesForLegacyRoles(subject.orgRole, subject.platformRole)) {
-      const scope = resolveSampleScope(tmpl.scopeType, subject.orgId, subject.orgUnitId);
+      // An org_unit grant without a unit never matches: scope it to the organization.
+      const widen = tmpl.scopeType === 'org_unit' && subject.orgUnitId === null;
+      const scopeType = widen ? 'organization' : tmpl.scopeType;
+      const scope = resolveSampleScope(scopeType, subject.orgId, subject.orgUnitId);
       // The seed id stays for the first organization (sample parity). A grant
       // already under that id for another organization means a second active
       // membership: its grant gets an org-suffixed id instead of being lost.
@@ -94,7 +108,7 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
           subjectUserId: subject.userId,
           templateKey: tmpl.key,
           actions: [...tmpl.actions],
-          scopeType: tmpl.scopeType,
+          scopeType,
           ...scope,
           conditions: await derivedGrantConditions(db, tmpl, subject.userId),
           grantedByUserId: subject.grantedByUserId,
@@ -103,7 +117,18 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
         })
         .onConflictDoNothing({ target: t.grants.id })
         .returning({ id: t.grants.id });
-      (inserted.length > 0 ? result.created : result.skipped).push(id);
+      if (inserted.length === 0) {
+        result.skipped.push(id);
+        continue;
+      }
+      result.created.push(id);
+      if (widen) {
+        result.widened.push(id);
+        warn(
+          `Grant backfill: ${subject.userId} has no org unit in ${subject.orgId ?? 'platform'}; ` +
+            `${tmpl.key} grant ${id} is scoped to the whole organization, review it`,
+        );
+      }
     }
   }
   return result;

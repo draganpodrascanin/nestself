@@ -181,6 +181,44 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     );
   });
 
+  it('scopes a MANAGER grant to the organization when the membership has no org unit, and reports it', async () => {
+    await testDb.db.insert(organizations).values({ id: 'org_third', name: 'Third Org', slug: 'third-org' });
+    await testDb.db.insert(memberships).values({
+      userId: 'user_jovan',
+      orgId: 'org_third',
+      orgUnitId: null,
+      status: 'ACTIVE',
+      startDate: NOW,
+    });
+    await testDb.pool.query(
+      "UPDATE memberships SET role = 'MANAGER' WHERE user_id = 'user_jovan' AND org_id = 'org_third'",
+    );
+    const warnings: string[] = [];
+
+    const result = await backfillGrants(testDb.db, NOW, (message) => warnings.push(message));
+
+    const thirdOrgGrants = await testDb.db.select().from(grants).where(eq(grants.scopeOrgId, 'org_third'));
+    const row = thirdOrgGrants.find((g) => g.templateKey === 'team_manager');
+    expect(row).toBeDefined();
+    const widenedId = row!.id;
+    expect(result.created).toContain(widenedId);
+    expect(result.widened).toEqual([widenedId]);
+    expect(row).toMatchObject({
+      templateKey: 'team_manager',
+      scopeType: 'organization',
+      scopeOrgId: 'org_third',
+      scopeOrgUnitId: null,
+      includeDescendants: false,
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('user_jovan');
+    expect(warnings[0]).not.toContain('@');
+
+    const again = await backfillGrants(testDb.db, NOW, () => {});
+    expect(again.widened).toEqual([]);
+    expect(again.skipped).toContain(widenedId);
+  });
+
   it('0005 applies after the backfill and drops the legacy columns', async () => {
     for (const statement of MIGRATION_0005) await testDb.pool.query(statement);
 
