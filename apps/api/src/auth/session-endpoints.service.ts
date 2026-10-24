@@ -20,6 +20,7 @@ import type {
   ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
+import { MeResponseBuilder } from './me-response.builder.js';
 
 @Injectable()
 export class SessionEndpointsService {
@@ -27,6 +28,7 @@ export class SessionEndpointsService {
     @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    @Inject(forwardRef(() => MeResponseBuilder)) private readonly meResponse: MeResponseBuilder,
   ) {}
 
   async getMe(principal: Principal): Promise<MeResponse> {
@@ -38,7 +40,7 @@ export class SessionEndpointsService {
         message: 'User not found',
       });
     }
-    return { principal, effectiveActions: [] };
+    return this.meResponse.build(principal);
   }
 
   async switchContext(
@@ -76,10 +78,7 @@ export class SessionEndpointsService {
     const population = this.resolvePopulation(loaded, newContext);
     await this.sessions.updateContext(sessionId, newContext, population);
 
-    return {
-      principal: { ...principal, context: newContext },
-      effectiveActions: [],
-    };
+    return this.meResponse.build({ ...principal, context: newContext });
   }
 
   async signOut(sessionId: string): Promise<void> {

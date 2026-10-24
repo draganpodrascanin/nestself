@@ -81,7 +81,7 @@ describe('StepUpService', () => {
       mocks.sessions as never,
       mocks.identities as never,
       // Real error mapping; its collaborators are unused by mapIdpError.
-      new IdentityResolutionService({} as never, {} as never, {} as never, {} as never, {} as never),
+      new IdentityResolutionService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never),
       mocks.audit as never,
       mocks.store as never,
     );

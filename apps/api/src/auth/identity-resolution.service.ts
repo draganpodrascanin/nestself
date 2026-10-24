@@ -32,6 +32,7 @@ import type {
   MeResponse,
 } from '@nestself/contracts';
 import type { AuthMethod } from '../session/session.types.js';
+import { MeResponseBuilder } from './me-response.builder.js';
 
 /** Exported so sign-in.service can use it. */
 export type SessionCreationResult = MeResponse & {
@@ -56,6 +57,7 @@ export class IdentityResolutionService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => SignInThrottle)) private readonly throttle: SignInThrottle,
+    @Inject(forwardRef(() => MeResponseBuilder)) private readonly meResponse: MeResponseBuilder,
   ) {}
 
   /** Resolve a token-bearing outcome into a session + MeResponse. */
@@ -173,7 +175,7 @@ export class IdentityResolutionService {
     _loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
-    return { principal, effectiveActions: [] };
+    return this.meResponse.build(principal);
   }
 
   resolvePopulation(

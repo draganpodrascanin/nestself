@@ -20,6 +20,7 @@ import { StepUpService } from './step-up.service.js';
 import { AuthorizationGuard } from '../authz/authorization.guard.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ContextLoader } from '../authz/context-loader.js';
+import { MeResponseBuilder } from './me-response.builder.js';
 import { SessionModule } from '../session/session.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
@@ -50,6 +51,7 @@ import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
     SignInThrottle,
     AccessRevocationService,
     ProfileService,
+    MeResponseBuilder,
     StepUpService,
     AuthorizationGuard,
     AuthorizationService,

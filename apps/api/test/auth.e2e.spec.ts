@@ -749,4 +749,46 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       await ivanaAgent.post('/api/auth/sign-out').set('X-CSRF-Token', newCsrf);
     });
   });
+
+  describe('effective actions', () => {
+    async function signInAs(email: string) {
+      const agent = request.agent(app.getHttpServer());
+      const startRes = await agent.post('/api/auth/email-otp/start').send({ email });
+      const code = idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+      const verifyRes = await agent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code });
+      expect(verifyRes.status).toBe(200);
+      return { agent, csrf: extractCsrf(verifyRes), body: verifyRes.body as { effectiveActions: string[] } };
+    }
+
+    it("ivana's /me in the organization context lists program.overview and access.preview", async () => {
+      const ivana = await signInAs('user_ivana@example.com');
+      const ctxRes = await ivana.agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+      expect(ctxRes.status).toBe(200);
+      expect(ctxRes.body.effectiveActions).toEqual(expect.arrayContaining(['program.overview', 'access.preview']));
+
+      const me = await ivana.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toEqual(
+        expect.arrayContaining(['program.overview', 'access.preview', 'access.delegate', 'content.read']),
+      );
+      await ivana.agent.post('/api/auth/sign-out').set('X-CSRF-Token', ivana.csrf);
+    });
+
+    it("jovan's /me lists content.read but not program.overview", async () => {
+      const jovan = await signInAs('user_jovan@example.com');
+      expect(jovan.body.effectiveActions).toContain('content.read');
+
+      const me = await jovan.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toContain('content.read');
+      expect(me.body.effectiveActions).not.toContain('program.overview');
+      expect(me.body.effectiveActions).not.toContain('access.preview');
+      await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
+  });
 });

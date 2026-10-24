@@ -16,6 +16,7 @@ import { PrincipalLoader } from '../principal/principal-loader.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { MeResponseBuilder } from './me-response.builder.js';
 
 type Meta = { ip: string | null; userAgent: string | null };
 
@@ -30,19 +31,17 @@ export class ProfileService {
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
+    @Inject(forwardRef(() => MeResponseBuilder)) private readonly meResponse: MeResponseBuilder,
   ) {}
 
   async updateLocale(principal: Principal, locale: Locale, meta: Meta): Promise<MeResponse> {
     await this.apply(principal, { locale }, meta);
-    return { principal: { ...principal, locale }, effectiveActions: [] };
+    return this.meResponse.build({ ...principal, locale });
   }
 
   async updateDisplayName(principal: Principal, displayName: string, meta: Meta): Promise<MeResponse> {
     await this.apply(principal, { displayName }, meta);
-    return {
-      principal: { ...principal, displayName, initials: computeInitials(displayName) },
-      effectiveActions: [],
-    };
+    return this.meResponse.build({ ...principal, displayName, initials: computeInitials(displayName) });
   }
 
   private async apply(
