@@ -233,6 +233,8 @@
     },
     "errors": {
       "loadTitle": "Pristup nije moguće učitati",
+      "membersLoadTitle": "Članove nije moguće učitati",
+      "orgUnitsLoadTitle": "Organizacione jedinice nije moguće učitati",
       "missingConditions": "Ovaj šablon zahteva da popuniš sve obavezne uslove.",
       "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
       "templateInactive": "Ovaj šablon više nije dostupan.",

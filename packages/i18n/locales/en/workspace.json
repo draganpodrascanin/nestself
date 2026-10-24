@@ -233,6 +233,8 @@
     },
     "errors": {
       "loadTitle": "Access could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "orgUnitsLoadTitle": "Org units could not be loaded",
       "missingConditions": "This template needs every required condition filled in.",
       "subjectNotMember": "This person is not an active member of the organization.",
       "templateInactive": "This template is no longer available.",

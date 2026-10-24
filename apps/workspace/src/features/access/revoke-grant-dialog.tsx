@@ -102,6 +102,7 @@ export function RevokeGrantDialog({
         cancelLabel={t('workspace:access.revoke.cancel')}
         destructive
         onConfirm={handleConfirm}
+        confirmPending={revokeGrant.isPending}
       >
         <form ref={formRef} noValidate onSubmit={(e) => e.preventDefault()} className="space-y-4">
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />

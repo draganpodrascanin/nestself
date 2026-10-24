@@ -23,6 +23,7 @@ import { useDelegateGrant } from './use-org-admin';
 const IDS = {
   member: 'delegate-member',
   actions: 'delegate-actions',
+  actionsError: 'delegate-actions-error',
   form: 'delegate-form',
 } as const;
 
@@ -112,7 +113,10 @@ export function DelegateGrantDialog({ parent, onClose, adminApi, orgId, members 
             />
           </Field>
           <div id={IDS.actions} tabIndex={-1}>
-            <CheckboxGroup legend={t('workspace:access.delegate.actions')}>
+            <CheckboxGroup
+              legend={t('workspace:access.delegate.actions')}
+              aria-describedby={errorFor(IDS.actions) ? IDS.actionsError : undefined}
+            >
               {(parent?.actions ?? []).map((action) => (
                 <Checkbox key={action} checked={actions.includes(action)} onCheckedChange={(c) => toggle(action, c)}>
                   {action}
@@ -120,7 +124,9 @@ export function DelegateGrantDialog({ parent, onClose, adminApi, orgId, members 
               ))}
             </CheckboxGroup>
             {errorFor(IDS.actions) ? (
-              <p className="mt-1 type-metadata text-danger">{errorFor(IDS.actions)}</p>
+              <p id={IDS.actionsError} className="mt-1 type-metadata text-danger">
+                {errorFor(IDS.actions)}
+              </p>
             ) : null}
           </div>
           <DialogActions>

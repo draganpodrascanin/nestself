@@ -83,6 +83,10 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
   const members = sampleMode ? sampleMembers(orgId) : (membersQuery.data ?? []);
   const orgUnits = sampleMode ? sampleOrgUnits(orgId) : (orgUnitsQuery.data ?? []);
   const loadError = sampleMode ? null : switchError ?? (grantsQuery.isError ? accessErrorKey(grantsQuery.error) : null);
+  // Members and org units only name things: on failure the table still renders
+  // (with user ids and a generic unit label) and an alert says what is missing.
+  const membersError = !sampleMode && membersQuery.isError ? accessErrorKey(membersQuery.error) ?? 'unknown' : null;
+  const orgUnitsError = !sampleMode && orgUnitsQuery.isError ? accessErrorKey(orgUnitsQuery.error) ?? 'unknown' : null;
   const nameOf = (userId: string) => members.find((m) => m.userId === userId)?.displayName ?? userId;
 
   return (
@@ -103,6 +107,18 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
             {t('workspace:access.assign.open')}
           </Button>
         </div>
+      ) : null}
+
+      {membersError ? (
+        <Alert tone="danger" title={t('workspace:access.errors.membersLoadTitle')}>
+          {t(`workspace:access.errors.${membersError}`)}
+        </Alert>
+      ) : null}
+
+      {orgUnitsError ? (
+        <Alert tone="danger" title={t('workspace:access.errors.orgUnitsLoadTitle')}>
+          {t(`workspace:access.errors.${orgUnitsError}`)}
+        </Alert>
       ) : null}
 
       {loadError ? (

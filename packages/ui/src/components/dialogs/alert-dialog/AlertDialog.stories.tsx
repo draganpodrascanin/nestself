@@ -53,3 +53,19 @@ export const Open: StoryObj = {
     </AlertDialog>
   ),
 };
+
+/** The confirmed action is running: the confirm button is disabled and busy. */
+export const ConfirmPending: StoryObj = {
+  render: () => (
+    <AlertDialog defaultOpen>
+      <AlertDialogContent
+        title="Revoke this grant?"
+        description="The person loses these permissions straight away."
+        confirmLabel="Revoke grant"
+        cancelLabel="Keep grant"
+        destructive
+        confirmPending
+      />
+    </AlertDialog>
+  ),
+};

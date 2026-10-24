@@ -233,6 +233,8 @@
     },
     "errors": {
       "loadTitle": "A hozzáférés nem tölthető be",
+      "membersLoadTitle": "A tagok nem tölthetők be",
+      "orgUnitsLoadTitle": "A szervezeti egységek nem tölthetők be",
       "missingConditions": "Ehhez a sablonhoz minden kötelező feltételt ki kell töltened.",
       "subjectNotMember": "Ez a személy nem aktív tagja a szervezetnek.",
       "templateInactive": "Ez a sablon már nem érhető el.",

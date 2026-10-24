@@ -229,6 +229,27 @@ describe('AccessScreen: grant table', () => {
     expect(screen.queryByText('English rate_limited')).not.toBeInTheDocument();
   });
 
+  it('shows the mapped message when the members cannot be loaded and keeps the table', async () => {
+    renderScreen({
+      adminApi: makeAdminApi({ listMembers: vi.fn().mockRejectedValue(apiError(429, 'rate_limited')) }),
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(t('workspace:access.errors.membersLoadTitle'));
+    expect(alert).toHaveTextContent(t('workspace:access.errors.rateLimited'));
+    expect(screen.getByText(t('workspace:access.templates.team_manager'))).toBeInTheDocument();
+  });
+
+  it('shows the fallback message when the org units cannot be loaded and keeps the table', async () => {
+    renderScreen({
+      adminApi: makeAdminApi({ listOrgUnits: vi.fn().mockRejectedValue(apiError(500, 'internal_error')) }),
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(t('workspace:access.errors.orgUnitsLoadTitle'));
+    expect(alert).toHaveTextContent(t('workspace:access.errors.unknown'));
+    expect(screen.queryByText('English internal_error')).not.toBeInTheDocument();
+    expect(await screen.findByText('Stefan Marković')).toBeInTheDocument();
+  });
+
   it('shows the empty state when the organization has no grants', async () => {
     renderScreen({ adminApi: makeAdminApi({ listGrants: vi.fn().mockResolvedValue({ items: [] }) }) });
     expect(await screen.findByText(t('workspace:access.empty'))).toBeInTheDocument();
@@ -487,6 +508,24 @@ describe('RevokeGrantDialog', () => {
     expect(adminApi.revokeGrant).toHaveBeenCalledTimes(1);
   });
 
+  it('disables the confirm button while the revoke runs', async () => {
+    const user = userEvent.setup();
+    let finish: (value: GrantResponse) => void = () => {};
+    const revokeGrant = vi.fn(() => new Promise<GrantResponse>((resolve) => (finish = resolve)));
+    renderScreen({ adminApi: makeAdminApi({ revokeGrant }) });
+    const dialog = await openRevoke(user, t('workspace:access.templates.team_manager'), 'Stefan Marković');
+
+    await user.type(within(dialog).getByLabelText(new RegExp(`^${t('workspace:access.reason.label')}`)), 'Left the team');
+    await user.click(within(dialog).getByRole('button', { name: t('workspace:access.revoke.confirm') }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: t('workspace:access.revoke.confirm') })).toBeDisabled(),
+    );
+    finish(GRANTS[1]!);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(revokeGrant).toHaveBeenCalledTimes(1);
+  });
+
   it('closes quietly when the user cancels step-up', async () => {
     const user = userEvent.setup();
     const auth = makeAuth({ stepUp: vi.fn().mockResolvedValue(false) });
@@ -544,6 +583,9 @@ describe('DelegateGrantDialog', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       t('workspace:access.errors.actionsRequired'),
     );
+    expect(
+      within(dialog).getByRole('group', { name: t('workspace:access.delegate.actions') }),
+    ).toHaveAccessibleDescription(t('workspace:access.errors.actionsRequired'));
     expect(adminApi.delegateGrant).not.toHaveBeenCalled();
   });
 

@@ -72,11 +72,18 @@ export interface CheckboxGroupProps {
   legend: string;
   children: ReactNode;
   className?: string;
+  /** Ids of a hint or error message that describes the whole group. */
+  'aria-describedby'?: string;
 }
 
-export function CheckboxGroup({ legend, children, className }: CheckboxGroupProps) {
+export function CheckboxGroup({
+  legend,
+  children,
+  className,
+  'aria-describedby': ariaDescribedBy,
+}: CheckboxGroupProps) {
   return (
-    <fieldset className={cn('gap-2 flex flex-col', className)}>
+    <fieldset aria-describedby={ariaDescribedBy} className={cn('gap-2 flex flex-col', className)}>
       <legend className="mb-1 type-label text-text">{legend}</legend>
       {children}
     </fieldset>

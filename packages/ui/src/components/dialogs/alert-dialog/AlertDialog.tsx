@@ -62,6 +62,8 @@ export interface AlertDialogContentProps {
   cancelLabel: string;
   destructive?: boolean;
   onConfirm?: () => void;
+  /** The confirmed action is running: the confirm button is disabled and marked busy. */
+  confirmPending?: boolean;
   children?: ReactNode;
   className?: string;
 }
@@ -73,6 +75,7 @@ export function AlertDialogContent({
   cancelLabel,
   destructive = false,
   onConfirm,
+  confirmPending = false,
   children,
   className,
 }: AlertDialogContentProps) {
@@ -119,12 +122,15 @@ export function AlertDialogContent({
                 </BaseAlertDialog.Close>
                 <BaseAlertDialog.Close
                   onClick={onConfirm}
+                  disabled={confirmPending}
+                  aria-busy={confirmPending || undefined}
                   className={cn(
                     'inline-flex items-center justify-center gap-2 rounded-control border border-transparent font-[var(--font-weight-label)] leading-normal min-h-11 px-5 py-2.5',
                     destructive
                       ? 'btn-danger bg-danger text-surface hover:brightness-95'
                       : 'bg-primary text-on-primary hover:bg-primary-hover',
                     'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+                    'disabled:cursor-not-allowed disabled:opacity-60',
                     'pointer-coarse:min-h-12',
                   )}
                 >
