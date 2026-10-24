@@ -40,7 +40,7 @@ aws cognito-idp delete-user-pool --user-pool-id <id>
 | `NestSelfNetworkStack` | VPC, subnets, NAT, VPC endpoints | staging, production |
 | `NestSelfDataStack` | RDS PostgreSQL 17, ElastiCache Valkey | staging, production |
 | `NestSelfComputeStack` | ECS cluster, API/worker/marketing Fargate services, ALB, ECR repos, migrate task definition | staging, production |
-| `NestSelfEdgeStack` | CloudFront distributions (workspace, admin), S3 SPA buckets, response headers policy | staging, production |
+| `NestSelfEdgeStack` | CloudFront distributions (workspace, admin), S3 SPA buckets, per-app response headers policies (CSP, HSTS, Permissions-Policy) | staging, production |
 | `NestSelfObservabilityStack` | CloudWatch metric filters, alarms, SNS alarm topic | staging, production |
 | `NestSelfCiStack` | GitHub Actions OIDC provider, deploy role | staging, production |
 
@@ -190,7 +190,13 @@ Two CloudFront distributions serve the workspace and admin SPAs from S3 with Ori
 - `/api/*` behaviour: ALB origin, caching disabled, all headers/cookies/query strings forwarded
 - `/api/ws*` behaviour: ALB origin for Socket.IO WebSocket upgrade
 
-A shared Response Headers Policy sets HSTS (2 years, includeSubDomains, preload), X-Content-Type-Options: nosniff, X-Frame-Options: DENY, and Referrer-Policy: strict-origin-when-cross-origin.
+Each distribution has its own response headers policy (`nestself-<stage>-workspace-security-headers`, `nestself-<stage>-admin-security-headers`) on the SPA and `/api/*` behaviours. Both set:
+
+- `Content-Security-Policy`: the header form of the apps' policy in `apps/<app>/src/security/content-security-policy.ts` (directives and reasons in `docs/web/csp.md`): Chime signalling, control and SDK assets in `connect-src`, `'wasm-unsafe-eval'`, `blob:` and `*.sdkassets.chime.aws` for the background blur and Voice Focus workers, the hash of the inline theme script read from `apps/<app>/index.html` at synth time, the app's own origin (and its `wss:` form) as the API origin, and `frame-ancestors 'none'`. `lib/web-security-headers.ts` builds it; `test/web-security-headers.test.ts` fails if it drifts from the apps' module.
+- `Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), fullscreen=(self)`.
+- HSTS (2 years, includeSubDomains, preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
+
+In deployed stages the header is the source of truth: it covers every response, including non-HTML navigations, and a proxy cannot strip it from the page. The `<meta http-equiv="Content-Security-Policy">` that the Vite build injects stays as the fallback for `vite preview`, dev builds and other static hosts. Browsers enforce both when both are present, so a change to the policy goes into the apps' module first; the drift test then fails here until the two match again.
 
 **WAF note**: CloudFront WAF ACLs must reside in us-east-1. The stack does not create a WAF inline (which would require the stack to be in us-east-1). Instead, pass `-c edgeWafArn=<ARN>` with a pre-provisioned WAF ACL ARN from a us-east-1 stack.
 
