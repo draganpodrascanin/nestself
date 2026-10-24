@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallJoinResponse } from '@nestself/contracts';
 import { ClientEventRequestSchema } from '@nestself/contracts';
-import { CallSessionController } from './controller';
+import { CallSessionController, loadChimeSdk } from './controller';
 import { VIDEO_STORAGE_KEYS, createMemoryPreferenceStore } from './preferences';
 import type { PreferenceStore } from './preferences';
 
@@ -19,6 +19,8 @@ const h = vi.hoisted(() => {
     videoInputFeedback: 0,
     blurSupported: true,
     speakerError: false,
+    /** `typeof globalThis.global` when the SDK module evaluated (DEF-1). */
+    globalAtEvaluation: 'not evaluated' as string,
     transformDevices: [] as Array<{ device: unknown; stop: () => Promise<void> }>,
     cameras: [
       { deviceId: 'cam-1', label: 'Built-in camera', kind: 'videoinput', groupId: 'g1' },
@@ -83,6 +85,8 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('amazon-chime-sdk-js', () => {
+  // The real 3.32.0 module reads `global` at evaluation (cspmonitor/CSPMonitor.js).
+  h.state.globalAtEvaluation = typeof (globalThis as { global?: unknown }).global;
   class ConsoleLogger {}
   class DefaultDeviceController {
     addDeviceChangeObserver = vi.fn();
@@ -228,6 +232,37 @@ afterEach(() => {
 /* ------------------------------------------------------------------------ */
 /* Tests                                                                     */
 /* ------------------------------------------------------------------------ */
+
+// Runs first: the mocked SDK module evaluates on the first load in this file.
+describe('loadChimeSdk (DEF-1)', () => {
+  it('defines global before the SDK module evaluates, as browsers have none', async () => {
+    const scope = globalThis as { global?: typeof globalThis };
+    const original = scope.global;
+    delete scope.global;
+    try {
+      expect(typeof scope.global).toBe('undefined');
+      const sdk = await loadChimeSdk();
+      expect(h.state.globalAtEvaluation).toBe('object');
+      expect(scope.global).toBe(globalThis);
+      expect(sdk.NoOpEventReporter).toBeDefined();
+    } finally {
+      scope.global = original ?? globalThis;
+    }
+  });
+
+  it('leaves an existing global alone', async () => {
+    const scope = globalThis as { global?: unknown };
+    const original = scope.global;
+    const marker = { marker: true };
+    scope.global = marker;
+    try {
+      await loadChimeSdk();
+      expect(scope.global).toBe(marker);
+    } finally {
+      scope.global = original;
+    }
+  });
+});
 
 describe('CallSessionController: join', () => {
   it('builds the session from the join response with a NoOpEventReporter and no ingestion URL (CW-R-48)', async () => {

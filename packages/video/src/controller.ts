@@ -71,8 +71,22 @@ type ChimeSdk = typeof ChimeSdkModule;
 
 let sdkPromise: Promise<ChimeSdk> | null = null;
 
+/**
+ * `amazon-chime-sdk-js` 3.32.0 evaluates `'document' in global` when its
+ * module loads (`cspmonitor/CSPMonitor.js`). Browsers have no `global`, and
+ * the apps' bundlers do not define one, so every session constructor threw
+ * a ReferenceError (DEF-1). Alias it to `globalThis` first; Node and jsdom
+ * already have one, which is left alone.
+ */
+function ensureGlobalAlias(): void {
+  if (typeof globalThis === 'undefined') return;
+  const scope = globalThis as { global?: typeof globalThis };
+  if (typeof scope.global === 'undefined') scope.global = globalThis;
+}
+
 /** Loads `amazon-chime-sdk-js` once, on first use. */
 export function loadChimeSdk(): Promise<ChimeSdk> {
+  ensureGlobalAlias();
   sdkPromise ??= import('amazon-chime-sdk-js');
   return sdkPromise;
 }
