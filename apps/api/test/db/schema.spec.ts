@@ -271,5 +271,47 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       const counts2 = await seed(owner.db);
       expect(counts2).toEqual(counts1);
     });
+
+    // -- Seed grant correctness (Defect 1, T-C1.02) ---------------------------
+
+    /** Template keys that must never appear in seed grants unless explicitly assigned. */
+    const EXPLICITLY_ASSIGNED_ONLY = ['employer_owner', 'approver', 'employer_finance', 'reporting_user', 'event_supplier'];
+
+    async function grantTemplateKeysFor(userId: string): Promise<string[]> {
+      const rows = await owner.db
+        .select({ templateKey: grants.templateKey })
+        .from(grants)
+        .where(eq(grants.subjectUserId, userId));
+      return rows.map((r) => r.templateKey).filter((k): k is string => k != null);
+    }
+
+    it('plain employee has only the employee grant', async () => {
+      await seed(owner.db);
+      const keys = await grantTemplateKeysFor('user_jovan');
+      expect(keys).toEqual(['employee']);
+    });
+
+    it('HR admin has employee + hr_admin grants', async () => {
+      await seed(owner.db);
+      const keys = await grantTemplateKeysFor('user_ivana');
+      expect(keys.sort()).toEqual(['employee', 'hr_admin']);
+    });
+
+    it('manager has employee + team_manager grants', async () => {
+      await seed(owner.db);
+      const keys = await grantTemplateKeysFor('user_stefan');
+      expect(keys.sort()).toEqual(['employee', 'team_manager']);
+    });
+
+    it('no member has explicitly-assigned-only templates unless fixtures assign them', async () => {
+      await seed(owner.db);
+      const { rows } = await owner.pool.query<{ user_id: string; template_key: string }>(
+        `SELECT subject_user_id AS user_id, template_key
+         FROM grants
+         WHERE template_key = ANY($1::text[])`,
+        [EXPLICITLY_ASSIGNED_ONLY],
+      );
+      expect(rows).toEqual([]);
+    });
   });
 });

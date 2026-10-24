@@ -14,7 +14,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import { ContextLoader } from '../authz/context-loader.js';
-import { effectiveActions as engineEffectiveActions } from '../authz/effective-access.js';
+import { contextScopedEffectiveActions } from '../authz/effective-access.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
@@ -73,7 +73,7 @@ export class ProfileService {
       : undefined;
     const resource = { type: 'synthetic', orgId };
     const ctx = await this.contextLoader.build(principal, resource);
-    return engineEffectiveActions(principal, ctx);
+    return contextScopedEffectiveActions(principal, ctx);
   }
 
   private async apply(

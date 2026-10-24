@@ -298,8 +298,11 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     // grants from their staff or expert template.
     if (!person.orgId && !platformRole) continue;
 
+    // Templates with legacyRole: null are assigned explicitly, never derived.
     const matching = PERMISSION_TEMPLATES.filter(
-      (tmpl) => tmpl.legacyRole === legacyRole || tmpl.legacyRole === platformRole,
+      (tmpl) =>
+        tmpl.legacyRole != null &&
+        (tmpl.legacyRole === legacyRole || tmpl.legacyRole === platformRole),
     );
     // Every org member also receives the employee template.
     if (legacyRole && !matching.some((tmpl) => tmpl.key === 'employee')) {

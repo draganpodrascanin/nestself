@@ -21,7 +21,7 @@ import {
   resolveDefaultPersonalOrgId,
   computeAvailableContexts,
 } from '../authz/personal-context.js';
-import { effectiveActions as engineEffectiveActions } from '../authz/effective-access.js';
+import { contextScopedEffectiveActions } from '../authz/effective-access.js';
 import type {
   Principal,
   ActiveContext,
@@ -228,9 +228,9 @@ export class SessionEndpointsService {
 
   /**
    * Load the effective actions for the given context using the authorization
-   * engine (Ruling F). Evaluates `effectiveActions()` against the same
-   * `ContextLoader` the guard uses, so personal-context users do not see
-   * actions from organization-workspace templates.
+   * engine (Ruling F). Evaluates `contextScopedEffectiveActions()` against
+   * the same `ContextLoader` the guard uses, so personal-context users do
+   * not see actions from organization-workspace templates.
    */
   private async loadEffectiveActions(
     principal: Principal,
@@ -240,7 +240,7 @@ export class SessionEndpointsService {
     const orgId = contextOrgId(principal.context) ?? 'platform';
     const resource = { type: 'synthetic', orgId: orgId === 'platform' ? undefined : orgId };
     const ctx = await this.contextLoader.build(principal, resource);
-    return engineEffectiveActions(principal, ctx);
+    return contextScopedEffectiveActions(principal, ctx);
   }
 
   private resolvePopulation(

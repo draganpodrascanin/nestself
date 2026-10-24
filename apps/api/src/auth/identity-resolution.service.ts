@@ -31,7 +31,7 @@ import {
   computeAvailableContexts,
 } from '../authz/personal-context.js';
 import { ContextLoader } from '../authz/context-loader.js';
-import { effectiveActions as engineEffectiveActions } from '../authz/effective-access.js';
+import { contextScopedEffectiveActions } from '../authz/effective-access.js';
 import type {
   Principal,
   ActiveContext,
@@ -191,7 +191,7 @@ export class IdentityResolutionService {
     };
   }
 
-  /** Engine-based effective actions (ruling 4, T-C1.02). */
+  /** Engine-based effective actions, workspace-scoped (ruling 4, T-C1.02). */
   private async loadEffectiveActions(principal: Principal): Promise<string[]> {
     const orgId =
       principal.context.kind === 'personal' ? principal.context.orgId
@@ -199,7 +199,7 @@ export class IdentityResolutionService {
       : undefined;
     const resource = { type: 'synthetic', orgId };
     const ctx = await this.contextLoader.build(principal, resource);
-    return engineEffectiveActions(principal, ctx);
+    return contextScopedEffectiveActions(principal, ctx);
   }
 
   resolvePopulation(

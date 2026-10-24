@@ -481,7 +481,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   // 11. Item 1: /me checks for employee and HR admin
   // -----------------------------------------------------------------------
 
-  it('/me for employee: personal entry has orgName, org entry from null-legacyRole grants, effectiveActions includes content.read not program.overview', async () => {
+  it('/me for employee: personal entry has orgName, no organization entry, effectiveActions includes content.read not program.overview', async () => {
     // Sign in as employee (user_jovan).
     const empAgent = request.agent(app.getHttpServer());
     const startRes = await empAgent
@@ -508,11 +508,10 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(personalEntry).toBeDefined();
     expect(personalEntry!.kind === 'personal' && personalEntry!.orgName).toBeTruthy();
 
-    // The seed gives every org member grants from templates with legacyRole
-    // null (employer_owner, approver, etc.) which are organization-workspace,
-    // so an organization entry IS present.
+    // A plain employee has no organization-workspace grants, so no
+    // organization entry in availableContexts.
     const orgEntries = me.availableContexts.filter((c) => c.kind === 'organization');
-    expect(orgEntries.length).toBeGreaterThanOrEqual(1);
+    expect(orgEntries).toHaveLength(0);
 
     // effectiveActions includes content.read; program.overview is only on
     // hr_admin (legacyRole HR_ADMIN) which the employee does not receive.
@@ -523,7 +522,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     await empAgent.post('/api/auth/sign-out').set('X-CSRF-Token', empCsrf);
   });
 
-  it('/me for HR admin: organization entry with orgName; program.overview present in both personal and organization contexts', async () => {
+  it('/me for HR admin: organization entry with orgName; program.overview only after switching to organization context', async () => {
     // Sign in as hr_admin (user_ivana).
     const hrAgent = request.agent(app.getHttpServer());
     const startRes = await hrAgent
@@ -548,10 +547,12 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(orgEntry).toBeDefined();
     expect(orgEntry!.kind === 'organization' && orgEntry!.orgName).toBeTruthy();
 
-    // In personal context with orgId, the effective-actions engine loads all
-    // grants for the org (no workspace filter), so program.overview IS present
-    // in both personal-with-orgId and organization contexts.
-    expect(personalBody.effectiveActions).toContain('program.overview');
+    // In personal context, organization-workspace actions are excluded.
+    // program.overview (hr_admin template, workspace 'organization') must
+    // NOT appear in personal context.
+    expect(personalBody.effectiveActions).not.toContain('program.overview');
+    // Employee-workspace actions are still present.
+    expect(personalBody.effectiveActions).toContain('content.read');
 
     // Switch to organization context.
     const ctxRes = await hrAgent
@@ -561,7 +562,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(ctxRes.status).toBe(200);
     const orgBody = MeResponseSchema.parse(ctxRes.body);
 
-    // In organization context, program.overview is present as well.
+    // In organization context, program.overview IS present.
     expect(orgBody.effectiveActions).toContain('program.overview');
 
     await hrAgent.post('/api/auth/sign-out').set('X-CSRF-Token', hrCsrf);
