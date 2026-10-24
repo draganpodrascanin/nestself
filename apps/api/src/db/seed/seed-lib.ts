@@ -21,6 +21,8 @@ import {
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_CASE,
+  SAMPLE_CATEGORIES,
+  SAMPLE_CATEGORY_LABELS,
 } from '@nestself/sample-data';
 import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
@@ -267,6 +269,49 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         effectiveFrom: SAMPLE_START_DATE,
       },
       { status: ec.status },
+    );
+  }
+
+  // ── Categories and labels (T-C1.04) ──
+  for (const cat of SAMPLE_CATEGORIES) {
+    await upsertById(
+      db,
+      t.categories,
+      { id: cat.id, slug: cat.slug, sortOrder: cat.sortOrder },
+      { slug: cat.slug, sortOrder: cat.sortOrder },
+    );
+  }
+  for (const label of SAMPLE_CATEGORY_LABELS) {
+    await upsertById(
+      db,
+      t.categoryLabels,
+      {
+        id: label.id,
+        categoryId: label.categoryId,
+        locale: label.locale,
+        name: label.name,
+        description: label.description,
+      },
+      { name: label.name, description: label.description },
+    );
+  }
+
+  // ── Organization content capabilities (T-C1.04) ──
+  // Every seeded organization gets the 'library' capability enabled.
+  const orgIds = [SAMPLE_ORG.id];
+  for (const orgId of orgIds) {
+    const capId = `org_cap_${orgId}_library`;
+    await upsertById(
+      db,
+      t.orgContentCapabilities,
+      {
+        id: capId,
+        orgId,
+        capability: 'library',
+        enabledFrom: SAMPLE_START_DATE,
+        configuredByUserId: hrAdmin?.id ?? SAMPLE_PEOPLE[0]!.id,
+      },
+      { enabledFrom: SAMPLE_START_DATE },
     );
   }
 
@@ -578,6 +623,9 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     conversations: t.conversations,
     conversationMessages: t.conversationMessages,
     intakeRecords: t.intakeRecords,
+    categories: t.categories,
+    categoryLabels: t.categoryLabels,
+    orgContentCapabilities: t.orgContentCapabilities,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

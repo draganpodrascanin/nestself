@@ -8,6 +8,17 @@ import { memberships, organizations, orgUnitClosure, orgUnits } from './organiza
 import { assignments, grants, permissionTemplates } from './authorization.js';
 import { invitations, ssoConnections, ssoDomains } from './invitations.js';
 import { expertCredentials, experts } from './content.js';
+import { categories, categoryLabels } from './taxonomy.js';
+import {
+  contentPublicationAudiences,
+  contentPublications,
+  contentResources,
+  contentRevisionMedia,
+  contentRevisions,
+  contentVariants,
+} from './cms.js';
+import { mediaAssets, mediaRenditions } from './media.js';
+import { outboxDeliveries, outboxEvents } from './notifications.js';
 
 export const usersRelations = relations(users, ({ many, one }) => ({
   externalIdentities: many(externalIdentities),
@@ -107,4 +118,100 @@ export const expertsRelations = relations(experts, ({ one, many }) => ({
 
 export const expertCredentialsRelations = relations(expertCredentials, ({ one }) => ({
   expert: one(experts, { fields: [expertCredentials.expertId], references: [experts.id] }),
+}));
+
+// ─── CMS relations ──────────────────────────────────────────────────────
+
+export const categoriesRelations = relations(categories, ({ many }) => ({
+  labels: many(categoryLabels),
+  resources: many(contentResources),
+}));
+
+export const categoryLabelsRelations = relations(categoryLabels, ({ one }) => ({
+  category: one(categories, { fields: [categoryLabels.categoryId], references: [categories.id] }),
+}));
+
+export const contentResourcesRelations = relations(contentResources, ({ one, many }) => ({
+  primaryCategory: one(categories, {
+    fields: [contentResources.primaryCategoryId],
+    references: [categories.id],
+  }),
+  owner: one(users, {
+    fields: [contentResources.ownerUserId],
+    references: [users.id],
+    relationName: 'resourceOwner',
+  }),
+  variants: many(contentVariants),
+}));
+
+export const contentVariantsRelations = relations(contentVariants, ({ one, many }) => ({
+  resource: one(contentResources, {
+    fields: [contentVariants.contentResourceId],
+    references: [contentResources.id],
+  }),
+  revisions: many(contentRevisions),
+  publications: many(contentPublications),
+}));
+
+export const contentRevisionsRelations = relations(contentRevisions, ({ one, many }) => ({
+  variant: one(contentVariants, {
+    fields: [contentRevisions.contentVariantId],
+    references: [contentVariants.id],
+  }),
+  media: many(contentRevisionMedia),
+}));
+
+export const contentRevisionMediaRelations = relations(contentRevisionMedia, ({ one }) => ({
+  revision: one(contentRevisions, {
+    fields: [contentRevisionMedia.contentRevisionId],
+    references: [contentRevisions.id],
+  }),
+  asset: one(mediaAssets, {
+    fields: [contentRevisionMedia.mediaAssetId],
+    references: [mediaAssets.id],
+  }),
+}));
+
+export const contentPublicationsRelations = relations(contentPublications, ({ one, many }) => ({
+  variant: one(contentVariants, {
+    fields: [contentPublications.contentVariantId],
+    references: [contentVariants.id],
+  }),
+  revision: one(contentRevisions, {
+    fields: [contentPublications.contentRevisionId],
+    references: [contentRevisions.id],
+  }),
+  audiences: many(contentPublicationAudiences),
+}));
+
+export const contentPublicationAudiencesRelations = relations(
+  contentPublicationAudiences,
+  ({ one }) => ({
+    publication: one(contentPublications, {
+      fields: [contentPublicationAudiences.publicationId],
+      references: [contentPublications.id],
+    }),
+  }),
+);
+
+export const mediaAssetsRelations = relations(mediaAssets, ({ many }) => ({
+  renditions: many(mediaRenditions),
+}));
+
+export const mediaRenditionsRelations = relations(mediaRenditions, ({ one }) => ({
+  asset: one(mediaAssets, {
+    fields: [mediaRenditions.mediaAssetId],
+    references: [mediaAssets.id],
+  }),
+}));
+
+export const outboxEventsRelations = relations(outboxEvents, ({ many }) => ({
+  deliveries: many(outboxDeliveries),
+}));
+
+export const outboxDeliveriesRelations = relations(outboxDeliveries, ({ one }) => ({
+  event: one(outboxEvents, {
+    fields: [outboxDeliveries.outboxEventId],
+    references: [outboxEvents.id],
+  }),
 }));

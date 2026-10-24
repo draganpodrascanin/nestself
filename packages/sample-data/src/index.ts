@@ -23,3 +23,8 @@ export {
   SAMPLE_EDITORIAL_STAFF,
 } from './fixtures/editorial-staff.ts';
 export type { SampleCategoryId } from './fixtures/editorial-staff.ts';
+export {
+  SAMPLE_CATEGORIES,
+  SAMPLE_CATEGORY_LABELS,
+} from './fixtures/categories.ts';
+export type { SampleCategory, SampleCategoryLabel } from './fixtures/categories.ts';
