@@ -40,6 +40,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
+import { VIDEO_PROVIDER_EVENT_TYPES, type VideoProviderEventType } from '../video/video-provider.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from './calls.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -87,6 +88,11 @@ interface Effects {
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
+}
+
+/** The event names the applier acts on, as the fake provider emits them; null for any other. */
+function knownEventType(name: string): VideoProviderEventType | null {
+  return (VIDEO_PROVIDER_EVENT_TYPES as readonly string[]).includes(name) ? (name as VideoProviderEventType) : null;
 }
 
 @Injectable()
@@ -149,7 +155,10 @@ export class EventApplier {
   }
 
   private async applyState(event: CallProviderEvent, session: CallSessionRecord, tx: DbExecutor): Promise<Effects> {
-    switch (event.eventType) {
+    const eventType = knownEventType(event.eventType);
+    // Any other name (OPS-10) is stored and otherwise ignored.
+    if (!eventType) return {};
+    switch (eventType) {
       case 'MeetingStarted':
         return { scheduleCleanup: session.status !== 'ended' && session.status !== 'failed' };
       case 'AttendeeJoined': {
@@ -181,8 +190,10 @@ export class EventApplier {
         );
         return closed ? { closed } : {};
       }
-      default:
-        return {};
+      default: {
+        const unhandled: never = eventType;
+        throw new Error(`Unhandled provider event ${String(unhandled)}`);
+      }
     }
   }
 
@@ -195,7 +206,14 @@ export class EventApplier {
         this.logger.warn({ sessionId: session.id, operation: 'scheduleCleanup', error: errorName(error) }, 'Cleanup not scheduled');
       }
     }
-    if (effects.left) this.calls.notifyParticipantLeft(session.id, effects.left);
+    if (effects.left) {
+      try {
+        this.calls.notifyParticipantLeft(session.id, effects.left);
+      } catch (error) {
+        this.logger.warn({ sessionId: session.id, operation: 'notifyLeft', error: errorName(error) }, 'Leave not announced');
+      }
+    }
+    // Never throws: the event is committed, and its redelivery would be a duplicate.
     if (effects.closed) await this.lifecycle.announceClosed(effects.closed);
   }
 

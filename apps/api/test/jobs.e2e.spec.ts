@@ -326,6 +326,7 @@ describe.skipIf(!shouldRun)('Calls jobs and provider events (e2e)', () => {
       { KEY_VALUE_STORE },
       { VIDEO_PROVIDER },
       { RoomEmitter },
+      { DbService },
     ] = await Promise.all([
       import('../src/app.module.js'),
       import('../src/appointments/appointments.service.js'),
@@ -339,17 +340,23 @@ describe.skipIf(!shouldRun)('Calls jobs and provider events (e2e)', () => {
       import('../src/redis/key-value-store.js'),
       import('../src/video/video-provider.js'),
       import('../src/ws/room-emitter.js'),
+      import('../src/db/db.service.js'),
     ]);
 
     // The calls queue gets Redis on its own, under a run-specific prefix.
     redisUp = await redisAnswers(REDIS_URL);
     const schedulerConfig = { get: (key: string) => (key === 'REDIS_URL' && redisUp ? REDIS_URL : undefined) };
-    scheduler = new CallsJobSchedulerService(schedulerConfig as unknown as ConfigService);
-    scheduler.prefix = prefix;
 
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CallsJobSchedulerService)
-      .useValue(scheduler)
+      .useFactory({
+        inject: [DbService],
+        factory: (dbs: InstanceType<typeof DbService>) => {
+          scheduler = new CallsJobSchedulerService(schedulerConfig as unknown as ConfigService, dbs);
+          scheduler.prefix = prefix;
+          return scheduler;
+        },
+      })
       .compile();
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -637,7 +644,10 @@ describe.skipIf(!shouldRun)('Calls jobs and provider events (e2e)', () => {
     if (redisUp) {
       expect(await scheduler.scheduleNoShowFollowUp(APPT_CLEANUP)).toBe(true);
       const job = await scheduler.getQueue()!.getJob(callsJobId('calls.no_show_followup', APPT_CLEANUP));
-      expect(job?.delay).toBe(48 * 60 * MINUTE);
+      // 48 hours after the appointment's end, not after the outcome.
+      const [appointment] = await testDb.db.select().from(appointments).where(eq(appointments.id, APPT_CLEANUP));
+      expect(Math.abs(job!.timestamp + job!.delay - (appointment!.endsAt.getTime() + 48 * 60 * MINUTE))).toBeLessThan(5_000);
+      expect(job!.delay).toBeLessThan(48 * 60 * MINUTE);
     }
   });
 });

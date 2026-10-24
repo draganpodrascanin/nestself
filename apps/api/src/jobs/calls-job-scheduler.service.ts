@@ -16,8 +16,11 @@
  *   - `appointment.remind` at each `REMINDER_OFFSETS_MINUTES` offset still in
  *     the future, from `AppointmentsService` on creation; removed on cancel
  *     (D-CW-26, CW-R-46).
- *   - `calls.no_show_followup` 48 hours after a `no_show_employee` outcome
- *     ({@link scheduleNoShowFollowUp}, called by the outcome path).
+ *   - `calls.no_show_followup` 48 hours after the appointment's `endsAt`
+ *     (at once when that has passed), when the outcome path records
+ *     `no_show_employee` ({@link scheduleNoShowFollowUp}). The scheduler reads
+ *     the appointment's end itself, straight from `appointments`: it cannot
+ *     depend on `AppointmentsModule`, which imports it.
  * - Consumer (worker only, {@link start}): the 5-minute `calls.reconcile`
  *   job scheduler (`upsertJobScheduler`, `JOBS_TIMEZONE`, default
  *   Europe/Belgrade) and the `Worker` that hands every job to the
@@ -41,7 +44,11 @@ import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
+import { eq } from 'drizzle-orm';
 import { CALL_ROOM_CLOSE_AFTER_MINUTES, REMINDER_OFFSETS_MINUTES } from '@nestself/contracts';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { DbService } from '../db/db.service.js';
+import { appointments } from '../db/schema/index.js';
 
 export const CALLS_QUEUE = 'nestself-calls';
 
@@ -81,7 +88,7 @@ export interface CallsJobHandler {
 /** Every 5 minutes (D-CW-09, CW-R-38). */
 export const CALLS_RECONCILE_PATTERN = '*/5 * * * *';
 
-/** `calls.no_show_followup` runs 48 hours after the outcome (CALL-07). */
+/** `calls.no_show_followup` runs 48 hours after the appointment ends (CALL-07, guidelines 9). */
 export const NO_SHOW_FOLLOW_UP_DELAY_MS = 48 * 60 * 60_000;
 
 const MINUTE_MS = 60_000;
@@ -102,6 +109,11 @@ export function reminderSchedule(startsAt: Date, now: Date): { offsetMinutes: nu
     offsetMinutes,
     delayMs: startsAt.getTime() - offsetMinutes * MINUTE_MS - now.getTime(),
   })).filter((entry) => entry.delayMs > 0);
+}
+
+/** Delay of `calls.no_show_followup`: until `endsAt + 48 hours`, at least 0. */
+export function noShowFollowUpDelayMs(endsAt: Date, now: Date): number {
+  return Math.max(0, endsAt.getTime() + NO_SHOW_FOLLOW_UP_DELAY_MS - now.getTime());
 }
 
 /** Deterministic job id: the job name and the entity ids, joined with `/`. */
@@ -133,7 +145,10 @@ export class CallsJobSchedulerService implements OnModuleDestroy {
   /** BullMQ key prefix (BullMQ's default). Tests set a run-specific one before first use. */
   prefix = 'bull';
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly dbs: DbService,
+  ) {}
 
   // ── Consumer (worker process) ─────────────────────────────────────────────
 
@@ -212,15 +227,25 @@ export class CallsJobSchedulerService implements OnModuleDestroy {
   }
 
   /**
-   * `calls.no_show_followup` 48 hours from now. The outcome path calls it when
-   * the expert records `no_show_employee` (CALL-07).
+   * `calls.no_show_followup` 48 hours after the appointment's end. The outcome
+   * path calls it when the expert records `no_show_employee` (CALL-07). False
+   * without Redis or when the appointment does not exist.
    */
-  async scheduleNoShowFollowUp(appointmentId: string): Promise<boolean> {
+  async scheduleNoShowFollowUp(appointmentId: string, now: Date = new Date()): Promise<boolean> {
+    if (!this.ensureQueue()) return false;
+    const [appointment] = await this.dbs.db
+      .select({ endsAt: appointments.endsAt })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId));
+    if (!appointment) {
+      this.logger.warn({ appointmentId, operation: 'scheduleNoShowFollowUp' }, 'No such appointment; no follow-up scheduled');
+      return false;
+    }
     return this.add(
       'calls.no_show_followup',
       { appointmentId },
       callsJobId('calls.no_show_followup', appointmentId),
-      NO_SHOW_FOLLOW_UP_DELAY_MS,
+      noShowFollowUpDelayMs(appointment.endsAt, now),
     );
   }
 

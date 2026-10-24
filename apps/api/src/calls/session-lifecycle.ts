@@ -10,12 +10,15 @@
  * update moved the row then announces it: every
  * `call:{sessionId}:participant:*` credential key is deleted (D-CW-08),
  * `call.session.ended` goes to `call:{sessionId}` with `{ sessionId,
- * endedAt }`, and `call.ended` is audited with the reason and no user.
+ * endedAt }`, and `call.ended` is audited with the reason and no user: as
+ * `SYSTEM` for a provider end, as `JOB` for `cleanup` and `reconcile`. An
+ * expert end is audited by `CallsService.end()`, which owns it.
  *
- * The announcement runs after the commit and is best effort for Redis and
- * the room: the row is the truth, the join path refuses an ENDED session
- * before it reads any cached credential, and the keys expire when the room
- * closes anyway. The expert's own end stays in `CallsService.end()`.
+ * The announcement runs after the commit and never throws: the row is the
+ * truth, the join path refuses an ENDED session before it reads any cached
+ * credential, the keys expire when the room closes anyway, and a failed
+ * audit is logged (a redelivered event would be a duplicate, so throwing
+ * would not bring it back).
  */
 import { Inject, Injectable, Logger } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -59,7 +62,14 @@ export class CallSessionLifecycle {
     return this.repo.closeSession(sessionId, close, tx);
   }
 
-  /** After the commit: credentials, room event and audit, for the caller that closed it. */
+  /**
+   * After the commit: credentials, room event and audit, for the caller that
+   * closed it. Never throws: the row is already ENDED, and a redelivered event
+   * is a duplicate, so anything that failed here would never be retried; a
+   * failure is logged instead. An `expert` end is audited by
+   * `CallsService.end()`, even when the provider event or a job closed the
+   * row first, so it is not audited here.
+   */
   async announceClosed(session: CallSessionRecord): Promise<void> {
     const endedAt = session.endedAt ?? new Date();
     const reason = session.endReason ?? 'provider';
@@ -72,20 +82,30 @@ export class CallSessionLifecycle {
       // The ENDED row already refuses every join; the keys expire when the room closes.
       this.logger.warn({ sessionId: session.id, operation: 'dropCredentials', error: errorName(error) }, 'Credential keys not deleted');
     }
-    this.rooms.emit(callRoom(session.id), 'call.session.ended', {
-      sessionId: session.id,
-      endedAt: endedAt.toISOString(),
-    });
-    await this.audit.record({
-      action: 'call.ended',
-      actorUserId: null,
-      actorKind: reason === 'provider' ? 'SYSTEM' : 'JOB',
-      orgId: session.orgId,
-      recordType: 'call_session',
-      recordId: session.id,
-      result: 'ALLOWED',
-      details: { sessionId: session.id, endReason: reason },
-    });
+    try {
+      this.rooms.emit(callRoom(session.id), 'call.session.ended', {
+        sessionId: session.id,
+        endedAt: endedAt.toISOString(),
+      });
+    } catch (error) {
+      this.logger.warn({ sessionId: session.id, operation: 'emit', error: errorName(error) }, 'Session end not announced');
+    }
+    if (reason !== 'expert') {
+      try {
+        await this.audit.record({
+          action: 'call.ended',
+          actorUserId: null,
+          actorKind: reason === 'cleanup' || reason === 'reconcile' ? 'JOB' : 'SYSTEM',
+          orgId: session.orgId,
+          recordType: 'call_session',
+          recordId: session.id,
+          result: 'ALLOWED',
+          details: { sessionId: session.id, endReason: reason },
+        });
+      } catch (error) {
+        this.logger.error({ sessionId: session.id, operation: 'audit', error: errorName(error) }, 'call.ended not audited');
+      }
+    }
     this.logger.log({ sessionId: session.id, operation: 'close', endReason: reason }, 'Call session closed');
   }
 

@@ -319,6 +319,36 @@ describe('EventApplier', () => {
     expect(audits).toHaveLength(1);
   });
 
+  it('reports MeetingEnded as applied even when the audit after the commit fails', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const failing = new EventApplier(
+      repo as unknown as CallsRepository,
+      new CallSessionLifecycle(
+        repo as unknown as CallsRepository,
+        {
+          withOrgScope: <T>(_org: string, fn: (tx: undefined) => Promise<T>) => fn(undefined),
+          withTransaction: <T>(fn: (tx: undefined) => Promise<T>) => fn(undefined),
+        } as unknown as DbService,
+        kv,
+        { emit } as unknown as RoomEmitter,
+        { record: async () => Promise.reject(new Error('audit db down')) } as unknown as AuditWriter,
+      ),
+      { notifyParticipantLeft } as unknown as CallsService,
+      { scheduleCleanup } as unknown as CallsJobSchedulerService,
+    );
+    await expect(failing.apply(event('MeetingEnded', 1800))).resolves.toBe('applied');
+    expect(repo.sessions.get(SESSION)).toMatchObject({ status: 'ended', endReason: 'provider' });
+    expect(emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not audit an expert end the provider event happened to close (end() audits it)', async () => {
+    await repo.stampEndReason(SESSION, 'expert');
+    await applier.apply(event('MeetingEnded', 1800));
+    expect(repo.sessions.get(SESSION)).toMatchObject({ status: 'ended', endReason: 'expert' });
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(audits).toEqual([]);
+  });
+
   it('keeps a reason stamped before the provider call (expert, cleanup, reconcile)', async () => {
     await repo.stampEndReason(SESSION, 'cleanup');
     await applier.apply(event('MeetingEnded', 1800));
