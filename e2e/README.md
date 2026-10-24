@@ -88,22 +88,17 @@ A separate Playwright config (`playwright.auth.config.ts`) exercises the real si
 
 ### Prerequisites
 
-1. **PostgreSQL** running on the port in `apps/api/.env` (default 54329):
+1. **PostgreSQL and Redis** running (`pnpm db:up` starts both via Docker Compose).
+
+2. **`TEST_DATABASE_URL`** (or `E2E_DATABASE_URL`) in your shell. The stub API never uses the developer database in `apps/api/.env`: it gets its own, `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server, or exactly `E2E_DATABASE_URL` when that is set. `<prefix>` is `TEST_DATABASE_PREFIX` or the first eight hex characters of the SHA-1 of the repository root, the same rule as the API integration suites, so two git worktrees never share the database. Without either variable the run stops at once with a message saying so.
 
    ```bash
-   pnpm db:up          # starts Postgres + Redis via Docker Compose
+   export TEST_DATABASE_URL=postgresql://nestself:nestself_dev@localhost:54329/nestself_test
    ```
 
-2. **Database migrated and seeded**:
+   Every run resets that database. `e2e/global-setup.ts` drops and recreates it, applies the migrations and runs the sample seed through the API's own scripts (`scripts/reset-database.ts`, `scripts/migrate.ts`, `scripts/seed.ts`) with `DATABASE_URL` overridden; dotenv never overrides a variable that is already set, so `.env` cannot redirect them. Playwright starts web servers before global setup and the API pings its database on boot, so the API web server command first runs the same file with `--ensure` (create if missing, migrate). The journeys need the seeded sample people: `hr-access.spec.ts` signs in as the sample HR admin (`user_ivana`), whom the seed also makes the employer owner (`grant_user_ivana_employer_owner`).
 
-   ```bash
-   pnpm --filter @nestself/api db:migrate
-   pnpm --filter @nestself/api db:seed
-   ```
-
-   The journeys need the seeded sample people. `hr-access.spec.ts` signs in as the sample HR admin (`user_ivana`), whom the seed also makes the employer owner (`grant_user_ivana_employer_owner`): that grant is what opens `/hr/access`. The seed must run before the first `pnpm e2e:auth`. Nothing in the suite seeds automatically, so it never writes to a database you did not choose.
-
-3. **`apps/api/.env`** present with a valid `DATABASE_URL` and `REDIS_URL`.
+3. **Redis** reachable at the `REDIS_URL` in `apps/api/.env` (the API still reads everything except `DATABASE_URL` from there).
 
 4. **Chromium** installed for Playwright:
 
@@ -127,17 +122,20 @@ If the API process is restarted but the secret file still exists the test will f
 
 ### Reused dev servers
 
-Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5174. An API started with `pnpm --filter @nestself/api dev` reads `AUTH_MODE` from `apps/api/.env`. If that is `cognito`, the email-code journeys fail because the fixed code `123456` only works in stub mode. Stop that server before `pnpm e2e:auth`, or start it yourself with `AUTH_MODE=stub FAKE_IDP_FIXED_OTP=123456 SESSION_COOKIE_INSECURE_DEV=true`.
+Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5174. An API started with `pnpm --filter @nestself/api dev` reads `AUTH_MODE` from `apps/api/.env`. If that is `cognito`, the email-code journeys fail because the fixed code `123456` only works in stub mode. Stop that server before `pnpm e2e:auth`. A reused server also keeps its own `DATABASE_URL`, so global setup resets the e2e database while the tests hit whatever that server uses; if you start one yourself, give it `DATABASE_URL` set to the e2e database as well as `AUTH_MODE=stub FAKE_IDP_FIXED_OTP=123456 SESSION_COOKIE_INSECURE_DEV=true`.
 
 ### HR grant administration journey
 
-`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row to the database the API uses; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
+`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row, which the next run's reset removes; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
 
 `pnpm e2e:auth` runs six tests in total: four in `workspace-sign-in.spec.ts`, one in `admin-sign-in.spec.ts` and one in `hr-access.spec.ts`.
 
 ### File structure
 
 ```
+e2e/
+  global-setup.ts               -- resets, migrates and seeds the e2e database
+  e2e-database.ts               -- which database that is (E2E_DATABASE_URL / TEST_DATABASE_URL)
 e2e/auth/
   totp.ts                       -- RFC 6238 TOTP helper (node:crypto only)
   workspace-sign-in.spec.ts     -- employee email-code, sign-out, guards, error

@@ -11,16 +11,21 @@
  *   pnpm e2e:auth
  *
  * Prerequisites:
- *   - PostgreSQL reachable (54329 or as configured in apps/api/.env)
+ *   - TEST_DATABASE_URL (or E2E_DATABASE_URL) in the environment. The stub
+ *     API runs against its own database, `nestself_e2e_<prefix>` on the
+ *     TEST_DATABASE_URL server (see e2e/e2e-database.ts), which
+ *     e2e/global-setup.ts drops, recreates, migrates and seeds on every run.
+ *     The developer database in apps/api/.env is never touched.
  *   - Redis reachable (localhost:6379)
- *   - `apps/api/.env` present with a valid DATABASE_URL
- *   - DB migrated and seeded (`pnpm --filter @nestself/api db:migrate`,
- *     `pnpm --filter @nestself/api db:seed`)
  *   - Chromium installed: `pnpm exec playwright install chromium`
  */
 import { defineConfig } from '@playwright/test';
+import { e2eDatabaseUrl } from './e2e/e2e-database.ts';
 
 const CI = !!process.env.CI;
+
+/** null when neither variable is set: the API command then fails fast. */
+const E2E_DATABASE_URL = e2eDatabaseUrl();
 
 export default defineConfig({
   testDir: './e2e/auth',
@@ -37,6 +42,7 @@ export default defineConfig({
     ? 'github'
     : [['list'], ['html', { open: 'never', outputFolder: 'e2e/auth-report' }]],
   outputDir: 'e2e/auth-results',
+  globalSetup: './e2e/global-setup.ts',
   timeout: 60_000,
   use: {
     locale: 'en-GB',
@@ -55,11 +61,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter @nestself/api dev',
+      /**
+       * Global setup runs after the web servers start, but the API pings its
+       * database on boot: create and migrate the e2e database first. Global
+       * setup then resets and seeds it before the first test.
+       */
+      command:
+        'pnpm --filter @nestself/api exec tsx ../../e2e/global-setup.ts --ensure && pnpm --filter @nestself/api dev',
       url: 'http://localhost:4000/api/health',
       reuseExistingServer: !CI,
       timeout: 180_000,
       env: {
+        ...(E2E_DATABASE_URL ? { DATABASE_URL: E2E_DATABASE_URL } : {}),
         AUTH_MODE: 'stub',
         FAKE_IDP_FIXED_OTP: '123456',
         SESSION_COOKIE_INSECURE_DEV: 'true',
