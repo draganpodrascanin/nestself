@@ -89,6 +89,7 @@ function createMocks() {
     listPlatformGrants: vi.fn(async () => [row({ id: 'grant_platform', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null })]),
     findActiveOwnerGrants: vi.fn(async (_orgId: string, _now: Date, _tx?: unknown): Promise<GrantRow[]> => []),
     revokeGrants: vi.fn(async (ids: string[], _revoked: unknown, _tx?: unknown) => ids),
+    reparentActiveChildren: vi.fn(async (_from: string, _to: string, _tx?: unknown): Promise<GrantRow[]> => []),
   };
   const orgUnits = {
     findByIdAndOrg: vi.fn(async (id: string) => ({ id, orgId: ORG })),
@@ -467,6 +468,45 @@ describe('GrantsService', () => {
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ivana', [ORG]);
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
       expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_owner_ivana']);
+    });
+
+    it("re-parents the old owner grant's active children to the new owner grant, audits and invalidates them", async () => {
+      const child = row({
+        id: 'grant_child_stefan',
+        subjectUserId: 'user_jovan',
+        templateKey: null,
+        actions: ['access.preview'],
+        scopeType: 'organization',
+        scopeOrgUnitId: null,
+        parentGrantId: 'grant_new',
+      });
+      m.authzRepo.reparentActiveChildren.mockResolvedValueOnce([child]);
+      await svc.transferOwnership(ORG, BODY, ACTOR);
+
+      expect(m.authzRepo.reparentActiveChildren).toHaveBeenCalledWith('grant_owner_ivana', 'grant_new', null);
+      // Re-parenting runs after the new grant exists, inside the same transaction.
+      expect(m.authzRepo.createGrant.mock.invocationCallOrder[0]!).toBeLessThan(
+        m.authzRepo.reparentActiveChildren.mock.invocationCallOrder[0]!,
+      );
+      expect(m.db.withOrgScope).toHaveBeenCalledTimes(1);
+      expect(m.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'grant.adjusted',
+          actorUserId: 'user_ivana',
+          orgId: ORG,
+          recordType: 'grant',
+          recordId: 'grant_child_stefan',
+          details: expect.objectContaining({ reparented: true, fromGrantId: 'grant_owner_ivana' }),
+        }),
+      );
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_jovan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_new']);
+    });
+
+    it('re-parents nothing when the staff route creates the first owner', async () => {
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValue([]);
+      await svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true });
+      expect(m.authzRepo.reparentActiveChildren).not.toHaveBeenCalled();
     });
 
     it('does not create the new grant when the revoke step fails (one transaction)', async () => {

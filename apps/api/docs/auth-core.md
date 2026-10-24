@@ -226,23 +226,29 @@ All routes under the global `/api` prefix.
 (unrevoked, not expired) `employer_owner` grant per `scopeOrgId`:
 `AuthorizationRepository.findActiveOwnerGrants` takes a transaction-scoped
 advisory lock on the organization's ownership and returns the active owner
-grants, and `create`, an owner grant's window `update`, the transfer and
-invitation acceptance answer a second owner with 409 `owner_exists`
+grants, and `create`, an owner grant's window `update`, the transfer,
+invitation create/import and invitation acceptance answer a second owner with 409 `owner_exists`
 (`details.currentOwnerUserId`).
 
 `transferOwnership` (both transfer routes) runs in one `withOrgScope`
 transaction: the organization route requires the caller's own started owner
 grant (403 `forbidden`), both routes require the new owner's ACTIVE membership
 (409 `subject_not_member`) and refuse the current owner (409 `conflict`). It
-revokes the old owner grant only (reason `ownership_transferred`; delegations
-made from it are not revoked here, though the engine stops honouring them
-because their parent is revoked, and the nightly sweep revokes them as
-`parent_revoked`), creates the new grant from the template and audits
+revokes the old owner grant only (reason `ownership_transferred`), creates
+the new grant from the template, and re-parents the old grant's active
+(unrevoked) children to the new grant
+(`AuthorizationRepository.reparentActiveChildren`); the bounds still hold
+because the new grant has the same template and actions. It audits
 `grant.revoked` + `grant.created` with `details.transfer = true` (and
-`byStaff = true` on the ops route). The response is
+`byStaff = true` on the ops route) and one `grant.adjusted`
+(`details.reparented = true`, `fromGrantId`) per moved child. The response is
 `OwnershipTransferResponse` (`revokedGrantId`, null when staff created the
-first owner, and `createdGrant`). Both subjects and the old grant's delegatees
-are invalidated afterwards.
+first owner, and `createdGrant`). Afterwards the old and new owners, the moved
+children's subjects and the delegatees below both grants are invalidated.
+
+`InvitationsService.create` refuses an `employer_owner` invitation while the
+organization has an active owner (409 `owner_exists`); `import` reports such
+rows in `errors` with reason `owner_exists`.
 
 ### Principal cache (T-1.7)
 

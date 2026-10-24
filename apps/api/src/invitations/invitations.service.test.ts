@@ -54,6 +54,12 @@ function createMockAudit() {
   };
 }
 
+function createMockAuthz() {
+  return {
+    findActiveOwnerGrants: vi.fn().mockResolvedValue([]),
+  };
+}
+
 function createMockMailer() {
   return {
     send: vi.fn().mockResolvedValue(undefined),
@@ -76,6 +82,7 @@ describe('InvitationsService', () => {
   let identities: ReturnType<typeof createMockIdentities>;
   let audit: ReturnType<typeof createMockAudit>;
   let mailer: ReturnType<typeof createMockMailer>;
+  let authzRepo: ReturnType<typeof createMockAuthz>;
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -85,6 +92,7 @@ describe('InvitationsService', () => {
     identities = createMockIdentities();
     audit = createMockAudit();
     mailer = createMockMailer();
+    authzRepo = createMockAuthz();
 
     service = new InvitationsService(
       dbs as never,
@@ -93,6 +101,7 @@ describe('InvitationsService', () => {
       identities as never,
       audit as never,
       mailer as never,
+      authzRepo as never,
     );
   });
 
@@ -201,6 +210,63 @@ describe('InvitationsService', () => {
           false,
         ),
       ).rejects.toThrow(expect.objectContaining({ code: 'already_member' }));
+    });
+  });
+
+  // -- owner model (2026-10-24) -----------------------------------------------
+
+  describe('employer_owner invitations', () => {
+    const OWNER = { id: 'grant_user_ivana_employer_owner', subjectUserId: 'user_ivana' };
+
+    it('create refuses employer_owner with 409 owner_exists while the organization has an owner', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([OWNER]);
+      await expect(
+        service.create('org_sample', { email: 'owner2@example.com', templateKey: 'employer_owner' }, 'user_ivana', false),
+      ).rejects.toThrow(
+        expect.objectContaining({ code: 'owner_exists', details: { currentOwnerUserId: 'user_ivana' } }),
+      );
+      expect(authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith('org_sample', expect.any(Date), expect.anything());
+      expect(invitations.create).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it('create does not look up owners for other templates', async () => {
+      await service.create('org_sample', { email: 'new@example.com', templateKey: 'hr_admin' }, 'user_ivana', false);
+      expect(authzRepo.findActiveOwnerGrants).not.toHaveBeenCalled();
+    });
+
+    it('import puts an employer_owner row in errors (owner_exists) and creates the other rows', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([OWNER]);
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'owner2@example.com', templateKey: 'employer_owner' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([{ email: 'owner2@example.com', reason: 'owner_exists' }]);
+      expect(invitations.create).toHaveBeenCalledOnce();
+      expect(invitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'ok@example.com' }),
+        expect.anything(),
+      );
+    });
+
+    it('import accepts an employer_owner row when the organization has no owner', async () => {
+      const result = await service.import(
+        'org_sample',
+        { invitations: [{ email: 'owner@example.com', templateKey: 'employer_owner' }] },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([]);
     });
   });
 

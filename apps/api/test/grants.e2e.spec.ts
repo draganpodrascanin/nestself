@@ -55,7 +55,7 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     await app.init();
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
-    const people = ['user_ivana', 'user_jovan', 'user_stefan'];
+    const people = ['user_ivana', 'user_jovan', 'user_stefan', 'user_ana'];
     idp.seedUsers(people.map((id) => ({ email: `${id}@example.com` })));
     for (const id of people) {
       const email = `${id}@example.com`;
@@ -427,6 +427,7 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
 
   describe('organization owner', () => {
     const TRANSFER = `${BASE}/transfer-ownership`;
+    let ana: Awaited<ReturnType<typeof signIn>>;
 
     it('rejects a second employer_owner grant for stefan: 409 owner_exists', async () => {
       const res = await ivana.agent
@@ -459,6 +460,22 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
         .send({ newOwnerUserId: 'user_milica' });
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('subject_not_member');
+    });
+
+    let anaPreviewGrantId: string;
+
+    it("ivana delegates access.preview from her owner grant to ana: ana can list grants", async () => {
+      const res = await ivana.agent
+        .post(`${BASE}/delegate`)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ parentGrantId: IVANA_EMPLOYER_OWNER, subjectUserId: 'user_ana', actions: ['access.preview'] });
+      expect(res.status).toBe(201);
+      expect(res.body.parentGrantId).toBe(IVANA_EMPLOYER_OWNER);
+      anaPreviewGrantId = res.body.id as string;
+
+      ana = await signIn('user_ana');
+      const list = await ana.agent.get(BASE);
+      expect(list.status).toBe(200);
     });
 
     it('ivana transfers ownership to stefan: 200, her grant revoked, audited, access moves', async () => {
@@ -500,6 +517,21 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       const ivanaMe = await ivana.agent.get('/api/auth/me');
       expect(ivanaMe.status).toBe(200);
       expect(ivanaMe.body.effectiveActions).not.toContain('access.grant');
+
+      // Ana's delegation from the old owner grant now hangs below stefan's.
+      const [child] = await testDb.db.select().from(grants).where(eq(grants.id, anaPreviewGrantId));
+      expect(child!.revokedAt).toBeNull();
+      expect(child!.parentGrantId).toBe(newOwnerGrantId);
+      const adjusted = await testDb.db
+        .select({ action: auditEvents.action, details: auditEvents.details })
+        .from(auditEvents)
+        .where(eq(auditEvents.recordId, anaPreviewGrantId));
+      expect(adjusted.find((e) => e.action === 'grant.adjusted')!.details).toMatchObject({
+        reparented: true,
+        fromGrantId: IVANA_EMPLOYER_OWNER,
+      });
+      const anaList = await ana.agent.get(BASE);
+      expect(anaList.status).toBe(200);
     });
 
     it('ivana, no longer the owner, cannot transfer again: 403', async () => {

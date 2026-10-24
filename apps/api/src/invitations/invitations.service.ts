@@ -13,6 +13,7 @@ import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
+import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { generateToken, hashToken } from './invitation-token.js';
@@ -20,7 +21,7 @@ import { InvitationMailer } from './invitation-mailer.js';
 import { orgUnits } from '../db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../db/db.service.js';
-import { findInvitableTemplate } from '../grants/grant-rules.js';
+import { OWNER_TEMPLATE_KEY, findInvitableTemplate, ownerExists } from '../grants/grant-rules.js';
 
 /** Milliseconds in 7 days. */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -36,6 +37,7 @@ export class InvitationsService {
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => InvitationMailer)) private readonly mailer: InvitationMailer,
+    @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -56,6 +58,12 @@ export class InvitationsService {
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
 
     const row = await this.dbs.withOrgScope(orgId, async (tx) => {
+      // Owner model (2026-10-24): one active employer_owner per organization.
+      if (body.templateKey === OWNER_TEMPLATE_KEY) {
+        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
+        if (current) throw ownerExists(current.subjectUserId);
+      }
+
       // Validate orgUnitId belongs to the org.
       if (body.orgUnitId) {
         await this.assertOrgUnitBelongsToOrg(body.orgUnitId, orgId, tx);
@@ -173,6 +181,17 @@ export class InvitationsService {
             errors.push({ email: r.email, reason: `Org unit ${ouId} does not belong to this organization` });
           }
           // Remove them from valid list (mutating the iteration is fine; we filter below).
+        }
+      }
+
+      // Owner model (2026-10-24): employer_owner rows are refused while the
+      // organization has an active owner.
+      if (validRows.some((r) => r.templateKey === OWNER_TEMPLATE_KEY)) {
+        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
+        if (current) {
+          for (const r of validRows.filter((v) => v.templateKey === OWNER_TEMPLATE_KEY)) {
+            errors.push({ email: r.email, reason: 'owner_exists' });
+          }
         }
       }
 

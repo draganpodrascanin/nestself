@@ -326,6 +326,19 @@ export class AuthorizationRepository {
       .orderBy(grants.grantedAt, grants.id);
   }
 
+  /**
+   * Move the unrevoked direct children of `fromGrantId` under `toGrantId`
+   * (ownership transfer); returns the updated rows. Revoked children keep
+   * their history. Run inside the grants' `withOrgScope(orgId)`.
+   */
+  async reparentActiveChildren(fromGrantId: string, toGrantId: string, tx?: DbExecutor): Promise<GrantRow[]> {
+    return this.exec(tx)
+      .update(grants)
+      .set({ parentGrantId: toGrantId })
+      .where(and(eq(grants.parentGrantId, fromGrantId), isNull(grants.revokedAt)))
+      .returning();
+  }
+
   /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
   async findActiveMembership(
     userId: string,

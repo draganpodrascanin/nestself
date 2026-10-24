@@ -219,6 +219,40 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
     expect(res.body).toHaveProperty('templateKey', 'hr_admin');
   });
 
+  it('refuses a second employer_owner invitation while ivana owns org_sample: 409 owner_exists', async () => {
+    const res = await createInvitation({ email: 'second-owner@example.com', templateKey: 'employer_owner' });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toHaveProperty('code', 'owner_exists');
+    expect(res.body.details).toEqual({ currentOwnerUserId: 'user_ivana' });
+    const stored = await testDb.db
+      .select({ email: invitations.email })
+      .from(invitations)
+      .where(eq(invitations.email, 'second-owner@example.com'));
+    expect(stored).toEqual([]);
+  });
+
+  it('import reports an employer_owner row as owner_exists and creates the other row', async () => {
+    const res = await hrAgent
+      .post('/api/orgs/org_sample/invitations/import')
+      .set('X-CSRF-Token', hrCsrf)
+      .send({
+        invitations: [
+          { email: 'import-ok-2@example.com', templateKey: 'employee' },
+          { email: 'import-second-owner@example.com', templateKey: 'employer_owner' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(1);
+    expect(res.body.errors).toEqual([{ email: 'import-second-owner@example.com', reason: 'owner_exists' }]);
+    const stored = await testDb.db
+      .select({ email: invitations.email })
+      .from(invitations)
+      .where(eq(invitations.email, 'import-second-owner@example.com'));
+    expect(stored).toEqual([]);
+  });
+
   it('import reports a platform template row in errors and creates only the valid row', async () => {
     const res = await hrAgent
       .post('/api/orgs/org_sample/invitations/import')

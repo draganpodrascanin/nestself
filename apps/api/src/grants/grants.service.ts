@@ -442,10 +442,11 @@ export class GrantsService {
    * requirement; an organization without an owner simply gets one.
    *
    * One org-scoped transaction revokes every active owner grant (reason
-   * `ownership_transferred`; delegations made from it are left as they are)
-   * and creates the new owner's grant from the template. Audits
-   * `grant.revoked` and `grant.created` with `details.transfer = true`
-   * (`byStaff = true` on the staff route).
+   * `ownership_transferred`), creates the new owner's grant from the
+   * template and re-parents the old grant's active delegations to it (same
+   * template and actions, so the bounds still hold). Audits `grant.revoked`
+   * and `grant.created` with `details.transfer = true` (`byStaff = true` on
+   * the staff route) and `grant.adjusted` (`reparented`) per moved child.
    */
   async transferOwnership(
     orgId: string,
@@ -521,16 +522,38 @@ export class GrantsService {
           ...staffDetail,
         }),
       );
-      return { previous: previous.filter((g) => revokedIds.includes(g.id)), created };
+      const revokedPrevious = previous.filter((g) => revokedIds.includes(g.id));
+      const reparented: GrantRow[] = [];
+      for (const old of revokedPrevious) {
+        const children = await this.authzRepo.reparentActiveChildren(old.id, created.id, tx);
+        for (const child of children) {
+          await this.audit.record(
+            grantEvent('grant.adjusted', child, actor, orgId, {
+              subjectUserId: child.subjectUserId,
+              reparented: true,
+              fromGrantId: old.id,
+              ...staffDetail,
+            }),
+          );
+        }
+        reparented.push(...children);
+      }
+      return { previous: revokedPrevious, created, reparented };
     });
 
-    const subjects = new Set([...result.previous.map((g) => g.subjectUserId), result.created.subjectUserId]);
+    const subjects = new Set([
+      ...result.previous.map((g) => g.subjectUserId),
+      result.created.subjectUserId,
+      ...result.reparented.map((g) => g.subjectUserId),
+    ]);
     for (const userId of subjects) {
       await this.principalLoader.invalidateUser(userId, [orgId]);
     }
     if (result.previous.length > 0) {
-      // Delegatees cache the old owner grant as an ancestor of theirs.
+      // Delegatees cached the old owner grant as an ancestor of theirs; after
+      // re-parenting they hang below the new grant.
       await this.principalLoader.invalidateDelegatees(result.previous.map((g) => g.id));
+      await this.principalLoader.invalidateDelegatees([result.created.id]);
     }
     return {
       revokedGrantId: result.previous[0]?.id ?? null,
