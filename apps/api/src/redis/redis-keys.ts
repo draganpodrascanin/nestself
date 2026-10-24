@@ -54,6 +54,13 @@ export const MOBILE_FAMILY_TTL = 30 * 24 * 3600;
  */
 export const STALE_FAMILY_DENYLIST_TTL = 90 * 24 * 3600;
 
+/**
+ * Bearer step-up record (`stepUpKey(originJti)`): 30 min, the longest step-up
+ * class maximum age (administration), after which it can no longer satisfy
+ * any class.
+ */
+export const STEP_UP_BEARER_TTL = 1800;
+
 /** Idempotency key: 24 h. */
 export const IDEMPOTENCY_TTL = 86400;
 

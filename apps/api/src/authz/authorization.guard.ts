@@ -27,8 +27,10 @@ import { ContextLoader } from './context-loader.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from './authorize.js';
 import { ApiHttpException } from '../common/api-error.js';
-import type { Principal, Resource } from '@nestself/contracts';
-import { STEP_UP_CLASS_BY_ACTION } from '@nestself/contracts';
+import type { Principal, Resource, StepUpClass } from '@nestself/contracts';
+import { STEP_UP_CLASS_BY_ACTION, STEP_UP_MAX_AGE_SECONDS } from '@nestself/contracts';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { stepUpKey } from '../redis/redis-keys.js';
 
 interface HttpReq {
   principal?: Principal;
@@ -45,6 +47,7 @@ export class AuthorizationGuard implements CanActivate {
     @Inject(forwardRef(() => Reflector)) private readonly reflector: Reflector,
     @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
+    @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -97,7 +100,7 @@ export class AuthorizationGuard implements CanActivate {
     });
     const decision = authorize(principal, meta.action, resource, ctx);
 
-    // Annotate step-up class for later (phase 2)
+    // Annotate the step-up class; enforced below once the action is allowed.
     const stepUpClass = STEP_UP_CLASS_BY_ACTION[meta.action];
     if (stepUpClass) {
       req.stepUpClass = stepUpClass;
@@ -138,7 +141,46 @@ export class AuthorizationGuard implements CanActivate {
       });
     }
 
+    if (stepUpClass) await this.assertFreshAuthentication(principal, stepUpClass);
+
     return true;
+  }
+
+  /**
+   * 403 `step_up_required` when the most recent of the authentication, the
+   * session step-up and the bearer family's step-up is older than the class
+   * allows. @see 3.6.9, AUTHZ-R-46, T-2.6
+   */
+  private async assertFreshAuthentication(
+    principal: Principal,
+    stepUpClass: StepUpClass,
+  ): Promise<void> {
+    const maxAge = STEP_UP_MAX_AGE_SECONDS[stepUpClass];
+    const times = [principal.auth.time, principal.auth.lastStepUpAt];
+    if (principal.tokenFamily) {
+      times.push(await this.bearerStepUpAt(principal.tokenFamily));
+    }
+    const latest = Math.max(
+      ...times.map((t) => (t ? new Date(t).getTime() : Number.NaN)).filter((t) => !Number.isNaN(t)),
+    );
+    if (Date.now() - latest <= maxAge * 1_000) return;
+
+    throw new ApiHttpException({
+      status: 403,
+      code: 'step_up_required',
+      message: 'Re-authentication required for this action',
+      details: { stepUpClass, maxAge, method: 'email_otp' },
+    });
+  }
+
+  private async bearerStepUpAt(tokenFamily: string): Promise<string | null> {
+    const raw = await this.store.get(stepUpKey(tokenFamily));
+    if (!raw) return null;
+    try {
+      return (JSON.parse(raw) as { lastStepUpAt?: string }).lastStepUpAt ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private hasOrgVisibility(principal: Principal, resource: Resource): boolean {

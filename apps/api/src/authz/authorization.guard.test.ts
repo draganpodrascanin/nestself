@@ -45,6 +45,7 @@ function createMocks() {
     reflector: { getAllAndOverride: vi.fn().mockReturnValue(undefined) },
     contextLoader: { build: vi.fn().mockResolvedValue({}) },
     audit: { record: vi.fn().mockResolvedValue(undefined) },
+    store: { get: vi.fn().mockResolvedValue(null) },
   };
 }
 
@@ -53,6 +54,7 @@ function createGuard(mocks: ReturnType<typeof createMocks>) {
     mocks.reflector as never,
     mocks.contextLoader as never,
     mocks.audit as never,
+    mocks.store as never,
   );
 }
 
@@ -238,5 +240,115 @@ describe('AuthorizationGuard', () => {
       expect(err).toBeInstanceOf(ApiHttpException);
       expect((err as ApiHttpException).getStatus()).toBe(401);
     }
+  });
+  // -------------------------------------------------------------------------
+  // Step-up freshness (T-2.6)
+  // -------------------------------------------------------------------------
+
+  describe('step-up freshness', () => {
+    const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    // `people.deactivate` is in the administration class (maximum age 1800 s).
+    const ADMIN_META = {
+      action: 'people.deactivate' as const,
+      resolver: vi.fn().mockResolvedValue(RESOURCE),
+    };
+
+    function allowWith(meta: { action: string; resolver: unknown }) {
+      mocks.reflector.getAllAndOverride
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(meta);
+      mockAuthorize.mockReturnValue({
+        allowed: true, grantIds: ['g-1'], assignmentIds: [], denialReason: null, explanation: [],
+      });
+    }
+
+    function principalWith(auth: { time: string; lastStepUpAt: string | null }, extra: Record<string, unknown> = {}) {
+      return { ...PRINCIPAL, auth: { ...PRINCIPAL.auth, ...auth }, ...extra };
+    }
+
+    it('throws 403 step_up_required when the authentication is older than the class allows', async () => {
+      allowWith(ADMIN_META);
+      const req: Record<string, unknown> = {
+        principal: principalWith({ time: minutesAgo(31), lastStepUpAt: null }), params: {},
+      };
+
+      try {
+        await guard.canActivate(mockContext(req));
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiHttpException);
+        expect((err as ApiHttpException).getStatus()).toBe(403);
+        expect((err as ApiHttpException).code).toBe('step_up_required');
+        expect((err as ApiHttpException).details).toEqual({
+          stepUpClass: 'administration', maxAge: 1800, method: 'email_otp',
+        });
+      }
+      expect(req.stepUpClass).toBe('administration');
+    });
+
+    it('allows a stale authentication with a recent step-up', async () => {
+      allowWith(ADMIN_META);
+      const req = { principal: principalWith({ time: minutesAgo(31), lastStepUpAt: minutesAgo(2) }), params: {} };
+      await expect(guard.canActivate(mockContext(req))).resolves.toBe(true);
+    });
+
+    it('allows a recent authentication even when the last step-up is old', async () => {
+      allowWith(ADMIN_META);
+      const req = { principal: principalWith({ time: minutesAgo(2), lastStepUpAt: minutesAgo(40) }), params: {} };
+      await expect(guard.canActivate(mockContext(req))).resolves.toBe(true);
+    });
+
+    it('allows a bearer caller whose token family has a fresh step-up record', async () => {
+      allowWith(ADMIN_META);
+      mocks.store.get.mockResolvedValue(JSON.stringify({ lastStepUpAt: minutesAgo(1) }));
+      const req = {
+        principal: principalWith(
+          { time: minutesAgo(45), lastStepUpAt: null },
+          { sessionId: null, tokenFamily: 'family-1' },
+        ),
+        params: {},
+      };
+      await expect(guard.canActivate(mockContext(req))).resolves.toBe(true);
+      expect(mocks.store.get).toHaveBeenCalledWith('stepup:family-1');
+    });
+
+    it('refuses a bearer caller without a step-up record', async () => {
+      allowWith(ADMIN_META);
+      const req = {
+        principal: principalWith(
+          { time: minutesAgo(45), lastStepUpAt: null },
+          { sessionId: null, tokenFamily: 'family-1' },
+        ),
+        params: {},
+      };
+      await expect(guard.canActivate(mockContext(req))).rejects.toMatchObject({ code: 'step_up_required' });
+    });
+
+    it('never checks freshness for an action without a step-up class', async () => {
+      allowWith({ action: 'wellbeing_checkin:read', resolver: vi.fn().mockResolvedValue(RESOURCE) });
+      const req: Record<string, unknown> = {
+        principal: principalWith(
+          { time: minutesAgo(600), lastStepUpAt: null },
+          { sessionId: null, tokenFamily: 'family-1' },
+        ),
+        params: {},
+      };
+      await expect(guard.canActivate(mockContext(req))).resolves.toBe(true);
+      expect(mocks.store.get).not.toHaveBeenCalled();
+      expect(req.stepUpClass).toBeUndefined();
+    });
+
+    it('does not ask a denied caller to step up', async () => {
+      mocks.reflector.getAllAndOverride
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(ADMIN_META);
+      mockAuthorize.mockReturnValue({
+        allowed: false, grantIds: [], assignmentIds: [], denialReason: 'no_grant', explanation: [],
+      });
+      const req = { principal: principalWith({ time: minutesAgo(31), lastStepUpAt: null }), params: {} };
+      await expect(guard.canActivate(mockContext(req))).rejects.toMatchObject({ code: 'forbidden' });
+    });
   });
 });

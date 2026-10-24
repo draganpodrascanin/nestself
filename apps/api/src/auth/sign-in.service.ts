@@ -85,7 +85,8 @@ export class SignInService {
     meta: { ip: string | null; userAgent: string | null },
   ): Promise<SessionCreationResult> {
     const challenge = await this.challengeStore.consume(challengeToken);
-    if (!challenge || challenge.kind !== 'email_otp') {
+    // A step-up challenge must never mint a new session.
+    if (!challenge || challenge.kind !== 'email_otp' || challenge.stepUp) {
       throw new ApiHttpException({
         status: 401,
         code: 'invalid_challenge',

@@ -21,6 +21,8 @@ export interface ChallengeRecord {
   session: string;
   surface?: string;
   dummy?: boolean;
+  /** Set on step-up challenges: only this user may verify it, and sign-in refuses it. */
+  stepUp?: { userId: string };
 }
 
 @Injectable()
