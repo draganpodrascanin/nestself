@@ -2,7 +2,7 @@
 
 How identity, sessions, authorization, the data layer and the clients fit together, where each piece lives in the repository, and how to work on it. The companion `quick-guide.md` gives the one-page version and the reasoning; `docs/tasks/auth/auth-strategy.md` is the full specification (requirement ids such as `D-06` or `AUTHZ-R-61` below refer to it).
 
-Last updated 2026-10-24 on branch `feat/auth-foundation`, after auth phase 2 (plan: `docs/superpowers/plans/2026-10-24-auth-phase-2.md`; status per task: `docs/tasks/auth/phase-2-readiness.md`).
+Last updated 2026-10-24 on branch `feat/auth-foundation`, after auth phase 2 (plan: `docs/superpowers/plans/2026-10-24-auth-phase-2.md`; status per task: `docs/tasks/auth/phase-2-readiness.md`). Section 22 (consultation calls and video) was added on `feat/calls-p0`.
 
 ## Contents
 
@@ -27,6 +27,7 @@ Last updated 2026-10-24 on branch `feat/auth-foundation`, after auth phase 2 (pl
 19. [Testing](#19-testing)
 20. [Recipes](#20-recipes)
 21. [Known gaps and next steps](#21-known-gaps-and-next-steps)
+22. [Consultation calls and video](#22-consultation-calls-and-video-ns-calls-01)
 
 ## 1. The system in one picture
 
@@ -109,6 +110,7 @@ Switching to a real Cognito pool is described in section 17.
 | `apps/api/src/grants/` | Grant administration: `grants.controller.ts` (`/orgs/:orgId/grants`), `approval-authorities.controller.ts`, `ops-grants.controller.ts` (`/ops/grants`, `/ops/orgs/:orgId/grants`, `/ops/users/:userId/access`), `grants.service.ts`, `approval-authorities.service.ts`, `grant-rules.ts` (template, scope, condition and delegation-bound rules), `grant-mapper.ts` |
 | `apps/api/src/professional/` | Confidential-domain reads under `/professional/*`; `professional-records.ts` holds the resource shape and the response views shared with emergency reads |
 | `apps/api/src/emergency/` | Emergency access request, approval, denial, revocation and record reads under `/ops/emergency-access/*` |
+| `apps/api/src/appointments/`, `calls/`, `video/` | Appointment routes and `AppointmentNonDisclosureFilter`, consultation call routes, and the `VideoProvider` contract with its Chime and fake adapters (section 22) |
 | `apps/api/src/ws/` | Socket.IO adapter, gateway, handshake authentication, invalidation |
 | `apps/api/src/jobs/`, `apps/api/src/worker/` | `maintenance-jobs.service.ts` (system jobs), `job-scheduler.service.ts` (BullMQ schedules), `job-authorization.ts` (wrapper for principal-bound processors); `worker/main.ts` is the worker entrypoint |
 | `apps/api/src/common/` | `api-error.ts` (error envelope), exception filter, request metadata, Zod pipe |
@@ -434,6 +436,7 @@ Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
 | `JOBS_TIMEZONE` | Worker process: IANA timezone of the nightly job schedules (default `Europe/Belgrade`) |
 | `FAKE_IDP_FIXED_OTP` | Stub mode: an always-accepted six-digit code |
 | `TEST_DATABASE_URL` | Integration tests; suites create `<name>_schema`, `<name>_auth`, ... databases |
+| `VIDEO_PROVIDER`, `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN`, `RECORDINGS_BUCKET`, `VIDEO_SMOKE_ENABLED`, `STAGE` | Video provider (`none` by default) and its AWS resources; `chime` requires the region, queue and bucket (section 22) |
 | `AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, `AWS_SESSION_TOKEN`, `HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS` | Not declared in `envSchema`, but passed through to `process.env` for the AWS SDK and the HTTP stack; see the merge in `validateEnv` and section 17.1 |
 
 Anything not declared in `envSchema` is still forwarded to `process.env`, because `validateEnv` returns `{ ...config, ...appEnv }`. Removing that spread re-breaks every library that reads `process.env` directly instead of through `ConfigService`.
@@ -522,3 +525,53 @@ Phase 2 (`docs/superpowers/plans/2026-10-24-auth-phase-2.md`) is done; `docs/tas
 - **Email-code locale.** Sign-in and resend send the screen's language (section 6), but step-up start and the invitation-acceptance code still call `startEmailOtp` without one, and a `custom:locale` attribute on the pool user always wins over `ClientMetadata` in the trigger.
 - **Mobile authentication strength** is reported as `email_otp` without a second factor because that is the only first factor the mobile client allows; it must be revisited when mobile gains passkeys or SSO.
 - **The email code length is AWS's, not ours.** Cognito's managed `EMAIL_OTP` challenge always sends eight digits: there is no pool setting, no CDK property and no CLI parameter for it (verified 2026-10-24 against `describe-user-pool`, `update-user-pool` and `UserPoolProps`). Shortening it to four or six means leaving the managed flow for `CUSTOM_AUTH` with Define, Create and Verify Auth Challenge triggers, where the code, its delivery through SES, its expiry and its attempt counter all become ours. That is a deliberate trade: shorter codes are friendlier to type and materially weaker (four digits is 10,000 combinations), and the throttle would have to tighten to compensate. Not started.
+
+## 22. Consultation calls and video (NS-CALLS-01)
+
+Code: `apps/api/src/appointments/`, `apps/api/src/calls/` and `apps/api/src/video/`. Decisions (`D-CW-*`) are in `docs/tasks/calls-webinars/02-decisions.md`, rules (`CW-R-*`) in `06-implementation-guidelines.md` there, and the environment variables in `docs/environment.md` ("Video").
+
+### 22.1 Who can do what today
+
+- **NestSelf operations create appointments.** `POST /orgs/:orgId/appointments` needs `bookings.coordinate` through `operationsOrgResource('appointment')`: a web session in the operations context and, for `client_operations`, a CLIENT assignment to that organization. `service_coordinator` (queue scope) and `platform_owner` (no `bookings.coordinate`) cannot create yet. The employee must be an active member (409 `subject_not_member`) and the engine must allow the expert `consultation.join` on the planned appointment, `categories` condition included (400 `validation` on `expertUserId`). The appointment starts `confirmed`, the expert gets a CASE assignment on its id, and `appointment.created` is audited.
+- **The employee** reads, joins, signals and cancels a `confirmed` appointment (`appointment.cancel`, `employee` template; any other status answers 409 `appointment_not_joinable`), and gives feedback once per session after joining.
+- **The expert** reads, joins, ends the call for everyone, sends "running late" and records the outcome (`delivery.record`). The expert cannot cancel: only the `employee` template holds `appointment.cancel`, so the route answers 404 (guidelines 4.5 and CALL-27 say either party; the code follows the templates table).
+- **Employer-scoped principals** (employer owner, HR, team manager, reporting user) get 404 on every appointment and call route, the list and diagnostics included (CALL-17, D-CW-30).
+- **Support** reads diagnostics with `diagnostic.read`, audited (22.4).
+- **A cancel keeps the expert's CASE assignment**, so the expert can still read the appointment and an allow decision alone proves nothing about joining. The join paths check the status themselves: join and signal require `confirmed`, end requires an active session, and the outcome requires a transition the current status allows.
+
+### 22.2 Join authorization
+
+`POST /appointments/:id/join` is `@Authorize(ACTIONS['consultation.join'], appointmentResource)`. The resolver loads the appointment (404 when missing) and returns `{ type: 'appointment', id, orgId, ownerId: employeeUserId, category: serviceCategory }`, so the engine allows the employee through `own` and the expert, in the expert context, through `assigned_cases` with the CASE assignment and the `categories` condition. `CallsService` then requires the caller to be the appointment's expert or employee (404 otherwise, even when a grant allowed the action), the status to be `confirmed` (409 `appointment_not_joinable`) and the time to be inside the window, 15 minutes before the start to 10 minutes after the end (403 `join_window_closed`). End, outcome, feedback and signal use the same resolver and participant check. `POST /calls/:sessionId/client-events` uses `callSessionResource`, which resolves the session to its appointment, and stores events only for a participant of that session.
+
+`AppointmentNonDisclosureFilter`, on both controllers, turns every 403 `forbidden` and `context_mismatch` into 404 `not_found`; the guard has already audited `access.denied`. The exception is `ParticipantForbiddenException`: a participant asking for the other participant's step (the employee ending the call or sending "running late", the expert giving feedback) keeps 403 `forbidden`, because it discloses nothing new. `session_required`, `step_up_required` and domain errors keep their status.
+
+### 22.3 Join tokens
+
+The join response carries the Chime meeting and attendee, including `JoinToken`, a credential with no clock expiry (D-CW-08):
+
+- The route sets `Cache-Control: no-store` and allows 20 requests per minute.
+- The credentials are cached in Redis as plain JSON under `call:{sessionId}:participant:{participantId}` until `endsAt + 15 minutes`, so a rejoin gets the same ones; ending the call deletes every entry. They pass through the contract schemas first, which drop `EventIngestionUrl`, `MeetingArn` and `TenantIds`.
+- No table has a column for them: `call_sessions` and `call_participants` keep provider ids only.
+- `PINO_REDACT_PATHS` redacts `joinToken` and `JoinToken` up to three levels deep, and `locationText`. The Chime adapter logs the operation, ids and latency, never a response, and keeps the provider's error message out of logs and responses.
+- `joinToken` and `credentials` are forbidden audit detail keys, matched after lower-casing and dropping separators, so `join_token` is caught too. Call audit details carry identifiers only.
+- `ExternalUserId` is the `call_participants.id`, never a user id, name or email; `TenantIds` is the encoded organization id (the webinar id for webinars).
+
+### 22.4 Diagnostics
+
+`GET /ops/calls/:sessionId/diagnostics` is `@Authorize(ACTIONS['diagnostic.read'], operationsResource('call', ...))`, so it needs a web session in the operations context (bearer callers get 403 `session_required`). Only `support_operator` holds `diagnostic.read`, at `assigned_cases` scope, so the caller also needs a SUPPORT_CASE (or CASE) assignment whose target is the session id; D-CW-28 also names `support.troubleshoot`, which the route does not accept. The response holds exactly the fields of auth strategy 4.7.5: `DIAGNOSTICS_RESPONSE_FIELDS` and `DIAGNOSTICS_PARTICIPANT_FIELDS` in `packages/contracts/src/calls.ts`, parsed through strict schemas in `toDiagnosticsResponse` (`call-mapper.ts`), so an extra field fails the request instead of reaching support. It carries no user id, participant id, name, service category or location text. Each view is audited as `call.diagnostics.viewed` (CONTENT_ACCESS) with `{ sessionId, viewedByUserId }`.
+
+### 22.5 Recording consent schema
+
+`call_consents` (`src/db/schema/calls.ts`, migration `0007_calls.sql`) is shaped for per-participant, per-session, timestamped and revocable consent: `session_id`, `participant_id` and the nullable `org_id`, each a foreign key with `ON DELETE restrict`; `consent_type` (`RECORDING` or `TRANSCRIPTION`, upper case like every database enum, where the guidelines write lower case); `given_at`; `revoked_at`; `created_at`. It has an index on `session_id`, forced RLS with the calls tenant policy (a null organization is visible in every tenant context) and a seven-year retention row. Nothing writes it: consultations and workshops are not recorded (D-CW-19, D-CW-34), no appointment route starts a recording, and the `video-api` policy has no media-pipeline action. A later epic may enable consultation recording after the DPIA.
+
+### 22.6 Serbian launch checklist
+
+The launch market is Serbia; Hungarian is a language, not a jurisdiction (D-CW-38). Section 10 of `docs/tasks/calls-webinars/02-decisions.md` lists the legal items. They gate the production launch, not development:
+
+1. DPIA under ZZPL Art. 54 (and GDPR Art. 35 for the processor), run alongside development.
+2. Webinar recording notice at registration, in the confirmation email and in the lobby; an attendee given the floor is told their voice is recorded.
+3. Product copy says "encrypted in transit and at rest" and claims nothing stronger (LAW-07).
+4. Expert confidentiality: psychologists' professional secrecy, and an employer never learns a diagnosis, which is why the follow-up approval item carries no category.
+5. Client-company network note: `*.chime.aws` on UDP 3478 and TCP 443, `*.sdkassets.chime.aws` on TCP 443.
+
+The crisis block (`CrisisBlock` in `@nestself/video`, T-CW-1.4) lists Serbian hotlines only. Hungarian hotlines, and the Hungarian legal items (LAW-19 to LAW-25), come with a later Hungarian launch.

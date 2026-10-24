@@ -71,6 +71,22 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 | --- | --- | --- |
 | `JOBS_TIMEZONE` | IANA timezone for the maintenance schedules (`pnpm --filter @nestself/api worker:dev`, ECS `worker` service). The worker boots the same application module as the API, so it needs every API variable too (`DATABASE_URL`, `AUTH_MODE` and the `COGNITO_*` values, `SESSION_ENCRYPTION_KEY`: the `sessions.reconcile-ttl` job revokes refresh tokens through the session service) and exits without `REDIS_URL` | `Europe/Belgrade` |
 
+### Video (NS-CALLS-01)
+
+`apps/api/src/video/video.module.ts` picks the provider from these values. With `VIDEO_PROVIDER=chime` the schema refuses start-up unless `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` are all set (D-CW-06). `node infra/cdk/scripts/env-from-outputs.mjs <stage>` prints the queue and bucket values once `NestSelf-<stage>-Video` is deployed (`infra/cdk/README.md`, "Video stack"). None of these variables is in `apps/api/.env.example` yet. How calls are authorized is in `docs/auth/implementation.md`, section 22.
+
+| Variable | Type | Meaning | Default |
+| --- | --- | --- | --- |
+| `VIDEO_PROVIDER` | `none` or `chime` | `none` selects `FakeVideoProvider`: deterministic stub credentials, lifecycle events in process, no network and no AWS credentials. `chime` selects `ChimeVideoProvider` (Amazon Chime SDK) | `none` |
+| `CHIME_REGION` | the literal `eu-central-1` | Data-residency guard: any other value fails start-up, whatever the provider. The adapter hard-codes `eu-central-1` for the control, media and media-pipeline regions and does not read this value (CW-R-68) | unset; required with `chime` |
+| `CHIME_EVENTS_QUEUE_URL` | URL | The `nestself-<stage>-chime-events` SQS queue (stack output `ChimeEventsQueueUrl`). Only validated today: its reader is the queue consumer of T-CW-1.2, which is not in the code yet | unset; required with `chime` |
+| `CHIME_EVENTS_QUEUE_ARN` | string | The same queue's ARN (`ChimeEventsQueueArn`). Every meeting the adapter creates sends its lifecycle events there (`NotificationsConfiguration.SqsQueueArn`, D-CW-12) | unset; required with `chime` |
+| `RECORDINGS_BUCKET` | string | The recordings bucket (`RecordingsBucketName`). Webinar capture pipelines write under `raw/{sessionId}/`, which expires after 30 days (D-CW-18). Consultations are not recorded | unset; required with `chime` |
+| `VIDEO_SMOKE_ENABLED` | `true` or `false` | Gate for the nightly real-provider smoke test (D-CW-33, CW-R-90). The `video-smoke` workflow does not exist yet; the SPIKE-CW-08 script reads the raw value and skips in CI unless it is `true`. Only these two strings parse, not `z.coerce.boolean()` as guidelines 14.2 sketch, because coercion turns `"false"` into true | `false` |
+| `STAGE` | string | Deployment stage, set by the compute stack. The Chime adapter tags every meeting with `stage`, `format` and, when the session has one, `orgId`, never personal data (D-CW-11, CW-R-04) | `dev` |
+
+Unlike the other optional variables, `CHIME_REGION` and `VIDEO_SMOKE_ENABLED` do not treat an empty value as unset: a blank `CHIME_REGION=` or `VIDEO_SMOKE_ENABLED=` line fails start-up, so delete the line instead. Locally and in every test the API runs with `VIDEO_PROVIDER=none`. With `chime` the API process needs AWS credentials that carry the `nestself-<stage>-video-api` managed policy (meeting and attendee actions only); in dev that policy is attached to the `nestself-dev` identity by hand (`infra/cdk/README.md`).
+
 ## Workspace and Admin (`apps/workspace/.env.local`, `apps/admin/.env.local`)
 
 | Variable | Meaning | Default |
@@ -114,5 +130,5 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - The `DATABASE_URL` default matches the Docker Compose service in `docker/docker-compose.yml` (user `nestself`, password `nestself_dev`, database `nestself` on port 5432). For Docker deployments, `DATABASE_URL` should use the `nestself_api` login role (created by `docker/initdb/01-app-role.sql`). Migrations run as the database owner, not as `nestself_api`.
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
 - The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
-- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables.
+- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables. The consultations and webinars epic added the video variables above.
 - Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
