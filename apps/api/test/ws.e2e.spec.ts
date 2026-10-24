@@ -227,6 +227,39 @@ describe.skipIf(!shouldRun)('WebSocket auth (e2e)', () => {
   });
 
   // -----------------------------------------------------------------------
+  // 3b. Call room (T-CW-1.6): the session's employee joins `call:{sessionId}`;
+  //     hr_admin, a signed-in non-participant, is refused as for an unknown
+  //     room, whatever action and resource the client names.
+  // -----------------------------------------------------------------------
+
+  it('subscribe: call room is open to the session participant only', async () => {
+    const room = 'call:call_session_sample_consultation';
+
+    const { cookie: employeeCookie } = await signIn('user_jovan@example.com');
+    const employee = new TestSocket({ baseUrl, cookie: employeeCookie, origin: 'http://localhost:5173' });
+    await employee.connect(5000);
+    await employee.emitEvent('subscribe', { room });
+    expect(await employee.waitForEvent('subscribe:ok', 5000)).toEqual({ room });
+    await employee.disconnect();
+
+    const { cookie: hrCookie } = await signIn('user_ivana@example.com');
+    const hr = new TestSocket({ baseUrl, cookie: hrCookie, origin: 'http://localhost:5173' });
+    await hr.connect(5000);
+    await hr.emitEvent('subscribe', {
+      room,
+      action: 'consultation.join',
+      resource: { type: 'call_session', id: 'call_session_sample_consultation' },
+    });
+    expect(await hr.waitForEvent('subscribe:denied', 5000)).toEqual({ room, reason: 'not_found' });
+    await hr.emitEvent('subscribe', { room: 'call:no_such_session' });
+    expect(await hr.waitForEvent('subscribe:denied', 5000)).toEqual({
+      room: 'call:no_such_session',
+      reason: 'not_found',
+    });
+    await hr.disconnect();
+  });
+
+  // -----------------------------------------------------------------------
   // 4. Mobile: ticket auth works
   // -----------------------------------------------------------------------
 

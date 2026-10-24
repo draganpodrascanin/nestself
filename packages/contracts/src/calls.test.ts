@@ -46,7 +46,22 @@ import {
   WORKSHOP_CAPACITY,
   WebinarMessageKindSchema,
   WebinarMessageStatusSchema,
+  CALL_ROOM_EVENT_NAMES,
+  CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  CallLocationSharedPayloadSchema,
+  CallParticipantJoinedPayloadSchema,
+  CallParticipantLeftPayloadSchema,
+  CallRoomEventNameSchema,
+  CallSessionEndedPayloadSchema,
+  FollowUpConfirmedPayloadSchema,
+  FollowUpDeclinedPayloadSchema,
+  FollowUpProposedPayloadSchema,
+  TimesSuggestedPayloadSchema,
+  callRoomName,
+  type CallRoomEventName,
+  type CallRoomEventPayload,
 } from './calls.ts';
+import { FOLLOW_UP_DURATION_MAX_MINUTES, FOLLOW_UP_MAX_SUGGESTED_WINDOWS } from './appointments.ts';
 import * as entry from './index.ts';
 
 function issuePaths(result: { success: boolean; error?: { issues: { path: PropertyKey[] }[] } }) {
@@ -368,6 +383,135 @@ describe('CallSignalRequestSchema and CallSignalPayloadSchema (D-CW-27, CW-R-35)
     expect(CallSignalPayloadSchema.parse(payload)).toEqual(payload);
     expect(CallSignalPayloadSchema.safeParse({ ...payload, userId: 'user_milica' }).success).toBe(false);
     expect(CallSignalPayloadSchema.safeParse({ ...payload, displayName: 'Milica' }).success).toBe(false);
+  });
+});
+
+describe('call room events (D-CW-16, D-CW-37, CW-R-36)', () => {
+  const START = '2026-11-25T15:00:00.000Z';
+  const END = '2026-11-25T15:50:00.000Z';
+
+  /** One valid payload per event: ids, roles, statuses and times only. */
+  const VALID: { [E in CallRoomEventName]: CallRoomEventPayload<E> } = {
+    'call.participant.joined': { participantId: 'participant_1', role: 'employee' },
+    'call.participant.left': { participantId: 'participant_1', role: 'expert' },
+    'call.session.ended': { sessionId: 'session_1', endedAt: END },
+    'call.signal': { type: 'cannot_hear', fromRole: 'employee' },
+    'call.location.shared': { sessionId: 'session_1' },
+    'appointment.follow_up.proposed': {
+      appointmentId: 'appt_1',
+      followUpId: 'appt_2',
+      startsAt: START,
+      durationMinutes: 50,
+    },
+    'appointment.follow_up.confirmed': { appointmentId: 'appt_1', followUpId: 'appt_2', status: 'confirmed' },
+    'appointment.follow_up.declined': { appointmentId: 'appt_1', followUpId: 'appt_2' },
+    'appointment.times_suggested': {
+      appointmentId: 'appt_1',
+      followUpId: 'appt_2',
+      windows: [{ startsAt: START, endsAt: END }],
+    },
+  };
+
+  it('names the call room after the session (decision record section 7)', () => {
+    expect(callRoomName('session_1')).toBe('call:session_1');
+  });
+
+  it('lists the canonical call room events, plus the content-free location event', () => {
+    expect(CALL_ROOM_EVENT_NAMES).toEqual([
+      'call.participant.joined',
+      'call.participant.left',
+      'call.session.ended',
+      'call.signal',
+      'call.location.shared',
+      'appointment.follow_up.proposed',
+      'appointment.follow_up.confirmed',
+      'appointment.follow_up.declined',
+      'appointment.times_suggested',
+    ]);
+    expect(CallRoomEventNameSchema.options).toEqual([...CALL_ROOM_EVENT_NAMES]);
+    expect(Object.keys(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS)).toEqual([...CALL_ROOM_EVENT_NAMES]);
+  });
+
+  it('maps each event to its payload schema', () => {
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.participant.joined']).toBe(CallParticipantJoinedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.participant.left']).toBe(CallParticipantLeftPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.session.ended']).toBe(CallSessionEndedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.signal']).toBe(CallSignalPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.location.shared']).toBe(CallLocationSharedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.proposed']).toBe(FollowUpProposedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.confirmed']).toBe(FollowUpConfirmedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.declined']).toBe(FollowUpDeclinedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.times_suggested']).toBe(TimesSuggestedPayloadSchema);
+  });
+
+  it.each(CALL_ROOM_EVENT_NAMES)('%s accepts its payload unchanged', (event) => {
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event].parse(VALID[event])).toEqual(VALID[event]);
+  });
+
+  it.each(CALL_ROOM_EVENT_NAMES)('%s refuses a name, an email, a location text, a token or a note', (event) => {
+    const schema = CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event];
+    for (const extra of [
+      { displayName: 'Milica' },
+      { email: 'milica@example.com' },
+      { locationText: 'Home office' },
+      { joinToken: 'secret' },
+      { note: 'See you soon' },
+    ]) {
+      expect(schema.safeParse({ ...VALID[event], ...extra }).success).toBe(false);
+    }
+  });
+
+  it('carries the joining and leaving participant as an id and a role', () => {
+    expect(issuePaths(CallParticipantJoinedPayloadSchema.safeParse({ participantId: '', role: 'expert' }))).toEqual([
+      'participantId',
+    ]);
+    expect(issuePaths(CallParticipantLeftPayloadSchema.safeParse({ participantId: 'p', role: 'host' }))).toEqual(['role']);
+  });
+
+  it('dates the end of the session as an ISO instant', () => {
+    expect(issuePaths(CallSessionEndedPayloadSchema.safeParse({ sessionId: 'session_1', endedAt: 'today' }))).toEqual([
+      'endedAt',
+    ]);
+  });
+
+  it('keeps the follow-up proposal within the proposable durations', () => {
+    const proposal = VALID['appointment.follow_up.proposed'];
+    expect(FollowUpProposedPayloadSchema.safeParse({ ...proposal, durationMinutes: 0 }).success).toBe(false);
+    expect(
+      FollowUpProposedPayloadSchema.safeParse({ ...proposal, durationMinutes: FOLLOW_UP_DURATION_MAX_MINUTES + 1 }).success,
+    ).toBe(false);
+    expect(issuePaths(FollowUpProposedPayloadSchema.safeParse({ ...proposal, startsAt: 'soon' }))).toEqual(['startsAt']);
+  });
+
+  it('confirms a follow-up as confirmed or awaiting approval only', () => {
+    const confirmed = VALID['appointment.follow_up.confirmed'];
+    expect(FollowUpConfirmedPayloadSchema.parse({ ...confirmed, status: 'awaiting_approval' }).status).toBe(
+      'awaiting_approval',
+    );
+    expect(issuePaths(FollowUpConfirmedPayloadSchema.safeParse({ ...confirmed, status: 'declined' }))).toEqual(['status']);
+  });
+
+  it('suggests one to three windows that end after they start', () => {
+    const suggested = VALID['appointment.times_suggested'];
+    const window = { startsAt: START, endsAt: END };
+    expect(TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [] }).success).toBe(false);
+    expect(
+      TimesSuggestedPayloadSchema.safeParse({
+        ...suggested,
+        windows: Array.from({ length: FOLLOW_UP_MAX_SUGGESTED_WINDOWS + 1 }, () => window),
+      }).success,
+    ).toBe(false);
+    expect(
+      issuePaths(TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [{ startsAt: END, endsAt: START }] })),
+    ).toEqual(['windows.0.endsAt']);
+    expect(
+      TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [{ ...window, label: 'after work' }] }).success,
+    ).toBe(false);
+  });
+
+  it('is exported from the package entry for the clients', () => {
+    expect(entry.CALL_ROOM_EVENT_PAYLOAD_SCHEMAS).toBe(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS);
+    expect(entry.callRoomName).toBe(callRoomName);
   });
 });
 

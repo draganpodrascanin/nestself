@@ -38,6 +38,14 @@
  *   joined, once per session; never readable by the employer or the expert.
  * - Signal (`POST /appointments/:id/signal`, D-CW-27): emitted as
  *   `call.signal` on `call:{sessionId}`, never persisted.
+ * - Room (T-CW-1.6, D-CW-16): registers the `call:{sessionId}` resolver
+ *   with `RoomAccessRegistry`. A subscription is authorised as
+ *   `consultation.join` on the session's appointment, derived here, and only
+ *   for the appointment's expert or employee; anyone else reads as an
+ *   unknown room. The room carries the `ROOM_EVENTS` call events
+ *   (`call.participant.joined`, `call.participant.left`, `call.session.ended`,
+ *   `call.signal`, `call.location.shared` and the four follow-up events),
+ *   each payload checked against its schema by `RoomEmitter` (CW-R-36).
  * - Client events (`POST /calls/:sessionId/client-events`, D-CW-13).
  * - Diagnostics (`GET /ops/calls/:sessionId/diagnostics`, D-CW-28).
  *
@@ -47,10 +55,11 @@
  * organization's RLS scope wherever the organization is already known.
  */
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ConfigService } from '@nestjs/config';
 import {
+  ACTIONS,
   CALL_TICKET_TTL_SECONDS,
   CallJoinResponseSchema,
   CallLocationResponseSchema,
@@ -69,11 +78,15 @@ import {
   type CallSignalRequest,
   type ClientEventBatchRequest,
   type DiagnosticsResponse,
+  type FollowUpConfirmedPayload,
+  type FollowUpDeclinedPayload,
+  type FollowUpProposedPayload,
   type Principal,
+  type TimesSuggestedPayload,
 } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import { ParticipantForbiddenException } from '../appointments/appointment-non-disclosure.filter.js';
-import { toAppointmentResponse } from '../appointments/appointment-mapper.js';
+import { appointmentResourceOf, toAppointmentResponse } from '../appointments/appointment-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AppointmentsRepository, type AppointmentRecord } from '../appointments/appointments.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -88,6 +101,8 @@ import {
   type ProviderSession,
   type VideoProvider,
 } from '../video/video-provider.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { RoomAccessRegistry, type RoomTarget } from '../ws/room-access.registry.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { RoomEmitter } from '../ws/room-emitter.js';
 import {
@@ -146,7 +161,7 @@ function errorName(error: unknown): string {
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 @Injectable()
-export class CallsService {
+export class CallsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CallsService.name);
 
   /** Interval and limit of the lock loser's wait for the meeting id (guidelines 4.1). Tests shorten them. */
@@ -162,7 +177,16 @@ export class CallsService {
     private readonly rooms: RoomEmitter,
     private readonly audit: AuditWriter,
     private readonly config: ConfigService,
+    private readonly roomAccess: RoomAccessRegistry,
   ) {}
+
+  onModuleInit(): void {
+    this.roomAccess.register('call', (sessionId, principal) => this.callRoomTarget(sessionId, principal));
+  }
+
+  onModuleDestroy(): void {
+    this.roomAccess.unregister('call');
+  }
 
   // ── Join ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +224,11 @@ export class CallsService {
     // Only now is the session ACTIVE: a location never lands on a row that fails or never starts (CW-R-80a).
     if (body.locationText !== undefined) {
       const locationText = body.locationText;
-      await this.scoped(appointment.orgId, (tx) => this.repo.setLocationTextIfActive(session.id, locationText, tx));
+      const stored = await this.scoped(appointment.orgId, (tx) =>
+        this.repo.setLocationTextIfActive(session.id, locationText, tx),
+      );
+      // Content free: the expert's client reads GET /appointments/:id/location (CALL-34).
+      if (stored) this.rooms.emit(callRoom(session.id), 'call.location.shared', { sessionId: session.id });
     }
 
     await this.record(principal.userId, appointment.orgId, session.id, 'call.joined', {
@@ -523,8 +551,9 @@ export class CallsService {
   /**
    * The location the employee shared, for the assigned expert only, while the
    * session is live: null before it is shared, 409 once the session ended.
-   * Never logged. T-CW-1.6 pushes a content-free `call.location.shared` event
-   * on `call:{sessionId}` so the expert client refetches this route.
+   * Never logged. `join` pushes a content-free `call.location.shared` event
+   * on `call:{sessionId}` when it stores one, so the expert client refetches
+   * this route.
    */
   async location(appointmentId: string, principal: Principal): Promise<CallLocationResponse> {
     const { appointment, role } = await this.participation(appointmentId, principal);
@@ -578,6 +607,47 @@ export class CallsService {
     const payload = CallSignalPayloadSchema.parse({ type: body.type, etaMinutes: body.etaMinutes, fromRole: role });
     this.rooms.emit(callRoom(session.id), 'call.signal', payload);
     this.logger.log({ sessionId: session.id, operation: 'signal', signal: body.type }, 'Call signal sent');
+  }
+
+  // ── Room (T-CW-1.6, D-CW-16, D-CW-37) ────────────────────────────────────
+
+  /**
+   * The `call:{sessionId}` subscription target: `consultation.join` on the
+   * session's appointment, derived here from the database, never from the
+   * client. Null (read as `not_found`) for an unknown session, one without
+   * an appointment, and anyone who is not the appointment's expert or
+   * employee, whatever their grants. Not bound to the session status: the
+   * post-call screens subscribe after the end for the follow-up events.
+   */
+  private async callRoomTarget(sessionId: string, principal: Principal): Promise<RoomTarget | null> {
+    const session = await this.repo.findSessionById(sessionId);
+    if (!session?.appointmentId) return null;
+    const appointment = await this.appointments.findById(session.appointmentId);
+    if (!appointment) return null;
+    if (principal.userId !== appointment.expertUserId && principal.userId !== appointment.employeeUserId) return null;
+    return { action: ACTIONS['consultation.join'], resource: appointmentResourceOf(appointment) };
+  }
+
+  /**
+   * Follow-up events on `call:{sessionId}` (D-CW-37), for the follow-up
+   * routes of T-CW-1.9. `appointmentId` is the finished appointment and
+   * `followUpId` the proposed one. Ids, statuses and times only; false when
+   * the payload fails its schema or no Socket.IO server runs.
+   */
+  emitFollowUpProposed(sessionId: string, payload: FollowUpProposedPayload): boolean {
+    return this.rooms.emit(callRoom(sessionId), 'appointment.follow_up.proposed', payload);
+  }
+
+  emitFollowUpConfirmed(sessionId: string, payload: FollowUpConfirmedPayload): boolean {
+    return this.rooms.emit(callRoom(sessionId), 'appointment.follow_up.confirmed', payload);
+  }
+
+  emitFollowUpDeclined(sessionId: string, payload: FollowUpDeclinedPayload): boolean {
+    return this.rooms.emit(callRoom(sessionId), 'appointment.follow_up.declined', payload);
+  }
+
+  emitTimesSuggested(sessionId: string, payload: TimesSuggestedPayload): boolean {
+    return this.rooms.emit(callRoom(sessionId), 'appointment.times_suggested', payload);
   }
 
   // ── Client events (D-CW-13) ───────────────────────────────────────────────

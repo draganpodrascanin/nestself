@@ -9,6 +9,12 @@
  * @see docs/tasks/calls-webinars/06-implementation-guidelines.md section 6
  */
 import { z } from 'zod';
+import {
+  AppointmentStatusSchema,
+  FOLLOW_UP_DURATION_MAX_MINUTES,
+  FOLLOW_UP_DURATION_MIN_MINUTES,
+  FOLLOW_UP_MAX_SUGGESTED_WINDOWS,
+} from './appointments.ts';
 import { AUTH_ERROR_CODES } from './auth.ts';
 
 // ---------------------------------------------------------------------------
@@ -282,6 +288,136 @@ export const CallSignalPayloadSchema = z.strictObject({
   fromRole: CallParticipantRoleSchema,
 });
 export type CallSignalPayload = z.infer<typeof CallSignalPayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// Socket.IO room `call:{sessionId}` (D-CW-16, D-CW-37, CW-R-36)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Socket.IO room of a call session. A client subscribes with
+ * `{ room: callRoomName(sessionId) }`; the server derives the authorisation
+ * (`consultation.join` on the session's appointment, participants only).
+ */
+export function callRoomName(sessionId: string): string {
+  return `call:${sessionId}`;
+}
+
+/**
+ * Every payload on the call room is strict and carries ids, roles, statuses
+ * and times only: never a name, an email, the location text, a note or a
+ * token. The API validates each payload against its schema before emitting
+ * and drops one that fails.
+ */
+const roomId = z.string().min(1);
+const instant = z.string().datetime();
+
+/** `call.participant.joined`: on every join, a rejoin included. */
+export const CallParticipantJoinedPayloadSchema = z.strictObject({
+  participantId: roomId,
+  role: CallParticipantRoleSchema,
+});
+export type CallParticipantJoinedPayload = z.infer<typeof CallParticipantJoinedPayloadSchema>;
+
+/** `call.participant.left`: the provider reported the attendee left or dropped. */
+export const CallParticipantLeftPayloadSchema = z.strictObject({
+  participantId: roomId,
+  role: CallParticipantRoleSchema,
+});
+export type CallParticipantLeftPayload = z.infer<typeof CallParticipantLeftPayloadSchema>;
+
+/** `call.session.ended`: the expert ended the session for everyone (D-CW-09). */
+export const CallSessionEndedPayloadSchema = z.strictObject({
+  sessionId: roomId,
+  endedAt: instant,
+});
+export type CallSessionEndedPayload = z.infer<typeof CallSessionEndedPayloadSchema>;
+
+/**
+ * `call.location.shared`: the employee shared a location (CALL-34). Content
+ * free: the expert's client then reads `GET /appointments/:id/location`.
+ */
+export const CallLocationSharedPayloadSchema = z.strictObject({
+  sessionId: roomId,
+});
+export type CallLocationSharedPayload = z.infer<typeof CallLocationSharedPayloadSchema>;
+
+/**
+ * `appointment.follow_up.proposed`: the expert proposed a follow-up (D-CW-37).
+ * `appointmentId` is the finished appointment, `followUpId` the new one.
+ */
+export const FollowUpProposedPayloadSchema = z.strictObject({
+  appointmentId: roomId,
+  followUpId: roomId,
+  startsAt: instant,
+  durationMinutes: z.number().int().min(FOLLOW_UP_DURATION_MIN_MINUTES).max(FOLLOW_UP_DURATION_MAX_MINUTES),
+});
+export type FollowUpProposedPayload = z.infer<typeof FollowUpProposedPayloadSchema>;
+
+/**
+ * `appointment.follow_up.confirmed`: the employee confirmed. The status is
+ * `awaiting_approval` when the organisation requires a manager's approval.
+ */
+export const FollowUpConfirmedPayloadSchema = z.strictObject({
+  appointmentId: roomId,
+  followUpId: roomId,
+  status: AppointmentStatusSchema.extract(['confirmed', 'awaiting_approval']),
+});
+export type FollowUpConfirmedPayload = z.infer<typeof FollowUpConfirmedPayloadSchema>;
+
+/** `appointment.follow_up.declined`: the employee declined the proposal. */
+export const FollowUpDeclinedPayloadSchema = z.strictObject({
+  appointmentId: roomId,
+  followUpId: roomId,
+});
+export type FollowUpDeclinedPayload = z.infer<typeof FollowUpDeclinedPayloadSchema>;
+
+const SuggestedWindowPayloadSchema = z
+  .strictObject({ startsAt: instant, endsAt: instant })
+  .refine((window) => Date.parse(window.endsAt) > Date.parse(window.startsAt), {
+    path: ['endsAt'],
+    message: 'endsAt must be after startsAt',
+  });
+
+/** `appointment.times_suggested`: the employee suggested one to three other windows (CALL-37). */
+export const TimesSuggestedPayloadSchema = z.strictObject({
+  appointmentId: roomId,
+  followUpId: roomId,
+  windows: z.array(SuggestedWindowPayloadSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS),
+});
+export type TimesSuggestedPayload = z.infer<typeof TimesSuggestedPayloadSchema>;
+
+/** The events of the `call:{sessionId}` room (decision record section 7, plus `call.location.shared`). */
+export const CALL_ROOM_EVENT_NAMES = [
+  'call.participant.joined',
+  'call.participant.left',
+  'call.session.ended',
+  'call.signal',
+  'call.location.shared',
+  'appointment.follow_up.proposed',
+  'appointment.follow_up.confirmed',
+  'appointment.follow_up.declined',
+  'appointment.times_suggested',
+] as const;
+export const CallRoomEventNameSchema = z.enum(CALL_ROOM_EVENT_NAMES);
+export type CallRoomEventName = z.infer<typeof CallRoomEventNameSchema>;
+
+/** The payload schema of each call room event, for the API's emitter and the clients' listeners. */
+export const CALL_ROOM_EVENT_PAYLOAD_SCHEMAS = {
+  'call.participant.joined': CallParticipantJoinedPayloadSchema,
+  'call.participant.left': CallParticipantLeftPayloadSchema,
+  'call.session.ended': CallSessionEndedPayloadSchema,
+  'call.signal': CallSignalPayloadSchema,
+  'call.location.shared': CallLocationSharedPayloadSchema,
+  'appointment.follow_up.proposed': FollowUpProposedPayloadSchema,
+  'appointment.follow_up.confirmed': FollowUpConfirmedPayloadSchema,
+  'appointment.follow_up.declined': FollowUpDeclinedPayloadSchema,
+  'appointment.times_suggested': TimesSuggestedPayloadSchema,
+} as const satisfies { readonly [E in CallRoomEventName]: z.ZodType };
+
+export type CallRoomEventPayloads = {
+  [E in CallRoomEventName]: z.infer<(typeof CALL_ROOM_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};
+export type CallRoomEventPayload<E extends CallRoomEventName> = CallRoomEventPayloads[E];
 
 // ---------------------------------------------------------------------------
 // Client telemetry (POST /calls/:sessionId/client-events, D-CW-13)

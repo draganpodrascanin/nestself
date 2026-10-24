@@ -30,6 +30,7 @@ import type { DbService } from '../db/db.service.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis-keys.js';
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
+import { RoomAccessRegistry } from '../ws/room-access.registry.js';
 import type { RoomEmitter } from '../ws/room-emitter.js';
 import { toDiagnosticsResponse } from './call-mapper.js';
 import type {
@@ -289,6 +290,7 @@ describe('CallsService', () => {
       rooms as unknown as RoomEmitter,
       audit as unknown as AuditWriter,
       { get: () => 'none' } as never,
+      new RoomAccessRegistry(),
     );
     service.pollIntervalMs = 5;
     logged = [];
