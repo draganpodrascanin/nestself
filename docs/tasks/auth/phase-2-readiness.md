@@ -16,6 +16,7 @@ Phase 2 was carried out on `feat/auth-foundation` following `docs/superpowers/pl
 | T-2.10 Nightly jobs | Partly done | `sessions.reconcile-ttl` and `emergency.sweep-expired` added; Redis in the health check; `worker:dev` and `job:run` run through the Nest compiler. Weekly Cognito export (T-2.12), retention sweeper, audit export and SSO certificate check deferred | `68545ae`, `f12e5ea`, `06742bf` |
 | Review gaps from `implementation.md` section 21 | Done | Email code retypable three times per challenge, lock checked on verify, code emails in the screen's language | `bfce0f6`, `df83b8c` |
 | Browser journey | Done | `pnpm e2e:auth` runs six tests, including `hr-access.spec.ts` | `be65cf3` |
+| Organization owner model (2026-10-24) | Done | One `employer_owner` per organization with `access.grant` and `access.revoke`; `POST /orgs/:orgId/grants/transfer-ownership` (owner) and `/ops/orgs/:orgId/grants/transfer-ownership` (staff), delegations re-parented in the same transaction; owner invitations refused while an owner exists; transfer dialogs in both web apps; `hr-access.spec.ts` assigns and revokes; dedicated e2e database and per-worktree test database names; screenshots in the guides | `002c7d6`, `1172c72`, `f08d958`, `0c22c68`, `6e9b297`, `aeea027`, `f08c865`, `4ec3bb0`, `1876e87` |
 | T-2.8 Security baseline, SCPs, production account | Deferred | Waits for staging | |
 | T-2.9, T-2.11 File delivery and export authorization | Deferred | No files or exports exist to authorize | |
 | T-2.12 Weekly Cognito user export | Deferred | Needs the S3 archive bucket (staging) | |
@@ -120,13 +121,14 @@ Privacy notices, the processing agreement, the breach procedure and the data-sub
 
 ## 4. Open decisions for the product owner
 
+Resolved on 2026-10-24: who administers grants inside an organization. Exactly one `employer_owner` per organization holds `access.grant` and `access.revoke` and can transfer the role; NestSelf staff can change anything, including the owner (`docs/auth/implementation.md` section 11.1, strategy 4.4 amendment; plan `docs/superpowers/plans/2026-10-24-auth-owner-model.md`).
+
 | Question | Why it blocks | Default if undecided |
 | --- | --- | --- |
 | Does webinar delivery need a `presenter` template (GAP-H02)? | Affects the template table and the golden cases in T-2.1 | `content_publisher` keeps replay review; presenters use `expert` |
 | Retention periods per domain (L-02, L-03) | The retention sweeper cannot be written without them | Current defaults in `audit-writer.ts` (1 to 10 years) stay |
 | Who may approve emergency access, and is a second approver required? | T-2.5 request and approval flow | `platform_owner` approves; one approver |
 | Staging deployment date | T-2.8, T-2.9, T-2.11 and the real SES, S3 and WAF behaviour | Local development continues; use `cdk synth -c platform=true` to keep the stacks reviewed |
-| Should `employer_owner` or `hr_admin` hold `access.grant` and `access.revoke`? (raised 2026-10-24) | No organization template holds them, so inside an organization only staff (`platform_owner`, through `/ops/orgs/:orgId/grants`) assign and revoke; owners preview and delegate | Staff administer organization grants |
 | Step-up method for the `emergency` class (raised 2026-10-24) | The strategy asks for an authenticator; Cognito cannot issue one without a password first | Email code for every class |
 | A `cases(id, org_id)` table before conversation writes (raised 2026-10-24) | `case_id` has no organization binding; blocks any route that creates conversations or intakes | No write routes |
 

@@ -112,7 +112,7 @@ A separate Playwright config (`playwright.auth.config.ts`) exercises the real si
 pnpm e2e:auth
 ```
 
-This starts the API (stub mode, fixed OTP `123456`, insecure-dev cookies), the workspace app (`VITE_DATA_SOURCE=api`) and the admin app (`VITE_DATA_SOURCE=api`), then runs all specs under `e2e/auth/` with a single worker.
+This starts the API (stub mode, fixed OTP `123456`, insecure-dev cookies), the workspace app (`VITE_DATA_SOURCE=api`) and the admin app (`VITE_DATA_SOURCE=api`), then runs all specs under `e2e/auth/` with a single worker (project `auth-desktop`; the `screenshots` project below runs only when asked for).
 
 ### TOTP enrolment state caveat
 
@@ -126,7 +126,7 @@ Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5
 
 ### HR grant administration journey
 
-`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row, which the next run's reset removes; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
+`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. Since the owner model of 2026-10-24 gave `employer_owner` `access.grant` and `access.revoke`, it then assigns `team_manager` to Ana on the Product unit and revokes that same grant (found by the id in the create response) with a reason. Repeated delegations are accepted, so a run against a database that was not reset adds one more delegated row; the test only requires at least one. Ownership transfer is not run (it would move Ivana's owner grant away); component tests and the API e2e suite cover it. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
 
 `pnpm e2e:auth` runs six tests in total: four in `workspace-sign-in.spec.ts`, one in `admin-sign-in.spec.ts` and one in `hr-access.spec.ts`.
 
@@ -140,11 +140,32 @@ e2e/auth/
   totp.ts                       -- RFC 6238 TOTP helper (node:crypto only)
   workspace-sign-in.spec.ts     -- employee email-code, sign-out, guards, error
   admin-sign-in.spec.ts         -- staff password + TOTP enrol / challenge
-  hr-access.spec.ts             -- HR admin: grant table, access preview, delegation
+  hr-access.spec.ts             -- HR admin: grant table, access preview, delegation, assign and revoke
+e2e/screenshots/
+  shots.ts                      -- shot() and pick() helpers, output directory
+  workspace.shot.ts             -- workspace sign-in, access screen, dialogs, step-up
+  admin.shot.ts                 -- admin sign-in, enrolment, platform and organization access
   README section                -- this section
 ```
 
 Reports and results are written to `e2e/auth-report/` and `e2e/auth-results/` (both git-ignored).
+
+### Screenshots for the auth guides (`e2e/screenshots/`)
+
+The PDFs in `docs/auth/` carry screenshots of the real screens. Regenerate them with the same stack and prerequisites as `pnpm e2e:auth`, then rebuild the PDFs:
+
+```bash
+export TEST_DATABASE_URL=postgresql://nestself:nestself_dev@localhost:54329/nestself_test
+pnpm docs:auth:screenshots   # PNGs in docs/auth/screenshots/
+pnpm docs:auth:pdf           # docs/auth/implementation.pdf and quick-guide.pdf
+```
+
+`docs:auth:screenshots` runs the `screenshots` project of `playwright.auth.config.ts`: `e2e/screenshots/*.shot.ts` (not `*.spec.ts`, so `pnpm e2e` never picks them up), 1280×800, light colour scheme, device scale factor 1, reduced motion, viewport-only PNGs well under 300 KB. Global setup resets the e2e database first, so the screens show only the fictional sample people.
+
+- `workspace.shot.ts` signs in as Ivana and captures the sign-in steps, `/hr/access`, the effective-access panel, the assign and transfer dialogs (both cancelled, nothing is created) and the step-up dialog. To open the step-up dialog without waiting 30 minutes it answers the first `POST /orgs/:orgId/grants` in the browser with the API's own 403 `step_up_required` body; the dialog then starts a real challenge against the stub API.
+- `admin.shot.ts` inserts `grant_user_nikola_platform_owner_screenshots` into the e2e database (the sample data has no platform owner, and the admin access pages need `access.preview`), then signs in as Nikola and captures the password step, authenticator enrolment, `/access`, the user-access lookup and the organization Access tab. Enrolment appears only on the first sign-in against a fresh API process; if an API on port 4000 is reused the test stops with a message, so stop it first. The secret is persisted to `e2e/.auth-state/` like `admin-sign-in.spec.ts` does.
+
+Add a screenshot by adding a `shot(page, '<name>')` call (`e2e/screenshots/shots.ts`) and embedding `![alt](screenshots/<name>.png)` followed by an `*italic caption*` line in the guide; `docs/auth/pdf/build.mjs` turns that pair into a captioned figure and fails when an image is missing.
 
 ## Motion suite (`e2e/motion/`)
 

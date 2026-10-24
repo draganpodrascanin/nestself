@@ -21,6 +21,7 @@ NestSelf serves five populations from one platform: employees of client companie
 | Background work | BullMQ on Redis, run by a separate worker process | Reconciliation (expired grants, stale mobile token families, audit partitions, expired sessions, expired emergency access) is audited like any user action and never runs inside the API process. |
 | Step-up | Sensitive actions need a sign-in or a fresh email code from the last 5 to 30 minutes, depending on the action's class | Granting access, ending memberships, reading confidential records and emergency access stay safe on an unattended screen. Every class uses an email code for now; the authenticator for the emergency class is an owner decision. |
 | Legacy roles | Removed from the database; every permission is a grant | One source of truth. `db:backfill-grants` converted the old role columns before migration `0005` dropped them. |
+| Organization ownership | Exactly one `employer_owner` per organization: the organization's superadmin, who grants and revokes access and can hand the role to another member. NestSelf staff can change anything for an organization, including transferring its ownership | One accountable person per client, support never locked out. A second owner is refused with 409 `owner_exists`. |
 | Enforcement | Every route declares `@Public`, `@Authenticated` or `@Authorize`; a CI test fails otherwise | Default deny cannot be forgotten. |
 | Rollout | Cognito first, platform stacks later, mobile last | Local development stays local; the CDK app deploys only the auth stack unless asked for more. |
 
@@ -40,12 +41,35 @@ NestSelf serves five populations from one platform: employees of client companie
 - **Invitation**: HR invites by email; the link previews the organization name and activates the membership on acceptance, then runs the matching sign-in.
 - **Mobile**: email code directly against Cognito; the app refreshes tokens itself and uses short-lived tickets to open WebSockets.
 
+![Workspace sign-in](screenshots/workspace-sign-in-identifier.png)
+*Workspace sign-in: one field first; the address decides the method.*
+
+![Email code step](screenshots/workspace-sign-in-code.png)
+*Employees then type the code from the email.*
+
+![Authenticator enrolment](screenshots/admin-totp-enrol.png)
+*Staff and experts enrol an authenticator on their first sign-in to the admin app.*
+
 ## Step-up and the access screens
 
 - **Step-up**: when the API answers `step_up_required`, the web apps open a dialog, email a fresh code and retry the action once the code is accepted. Cancelling leaves the action undone without an error. Wrong codes follow the same three-tries rule as sign-in. Mobile has no step-up screen yet.
-- **Workspace, `/hr/access`**: for HR administrators who are also employer owners (the sample Ivana). Shows the organization's grants, previews any member's effective access and delegates part of one's own grant. Assign and revoke appear only for holders of `access.grant` and `access.revoke`, which no organization template carries yet.
-- **Admin, organization Access tab and `/access`**: for platform owners. Assigns organization templates to an organization's members (organization-wide; org-unit grants are HR's job), assigns staff templates, revokes organization grants and looks up any user's access per context.
+- **Workspace, `/hr/access`**: for the organization's owner (the sample Ivana, who is also its HR administrator). Shows the organization's grants, previews any member's effective access, assigns and revokes templates, delegates part of one's own grant and transfers ownership to another active member.
+- **Admin, organization Access tab and `/access`**: for platform owners. Assigns organization templates to an organization's members (organization-wide; org-unit grants are HR's job), transfers an organization's ownership (also when it has no owner yet), assigns staff templates, revokes grants and looks up any user's access per context.
 - **Sample mode** shows the same screens over fixtures with every change disabled.
+
+![Step-up dialog](screenshots/step-up-dialog.png)
+*Step-up: a fresh email code before a sensitive change, here an assignment.*
+
+![Workspace access screen](screenshots/workspace-access.png)
+*Workspace `/hr/access` for the owner.*
+
+![Transfer ownership](screenshots/workspace-transfer-ownership.png)
+*Transfer ownership: only the current owner sees it; the old owner's delegations move to the new owner.*
+
+![Admin organization access](screenshots/admin-org-access.png)
+*The same organization seen by staff in the admin app.*
+
+The screenshots are of the real screens against the stub API with the fictional sample people; `pnpm docs:auth:screenshots` regenerates them (`implementation.md`, section 19).
 
 ## Where to look
 
@@ -93,4 +117,4 @@ A real Cognito dev pool exists since 2026-10-24 (`eu-central-1_g6OGYONQ0` in acc
 
 ## What is not done yet
 
-Enterprise SSO (phase 3), mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Open owner decisions: whether employer owners or HR administrators may grant and revoke access, the authenticator for emergency step-up, and a `cases` table before anything writes conversations. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.
+Enterprise SSO (phase 3), mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Screens for members and invitations, org units, approval authorities, emergency access, sessions and suspension come next. Open owner decisions: the authenticator for emergency step-up and a `cases` table before anything writes conversations. Who administers grants inside an organization was decided on 2026-10-24: the single employer owner, and NestSelf staff. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.
