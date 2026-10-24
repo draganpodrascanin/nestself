@@ -194,14 +194,14 @@ describe('MembersService', () => {
     );
 
     const grantEvents = audit.record.mock.calls
-      .map(([e]) => e as { action: string; recordId: string })
+      .map(([e]) => e as { action: string; recordId: string; details: { reason: string } })
       .filter((e) => e.action.startsWith('grant.'))
-      .map((e) => [e.action, e.recordId]);
+      .map((e) => [e.action, e.recordId, e.details.reason]);
     expect(grantEvents).toEqual([
-      ['grant.revoked', 'g-parent'],
-      ['grant.delegation_revoked', 'g-received'],
-      ['grant.delegation_revoked', 'g-child'],
-      ['grant.delegation_revoked', 'g-grandchild'],
+      ['grant.revoked', 'g-parent', 'membership_ended'],
+      ['grant.delegation_revoked', 'g-received', 'membership_ended'],
+      ['grant.delegation_revoked', 'g-child', 'parent_revoked'],
+      ['grant.delegation_revoked', 'g-grandchild', 'parent_revoked'],
     ]);
   });
 

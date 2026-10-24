@@ -87,14 +87,19 @@ export class MembersService {
         );
         allRevokedIds.push(...roots, ...children);
 
+        // Roots carry membership_ended; descendants parent_revoked (as stored
+        // by revokeGrantTree). The per-event `depth` detail of the old
+        // depth-limited cascade is dropped deliberately.
         const delegated = new Set(directGrants.filter((g) => g.parentGrantId).map((g) => g.id));
         for (const id of roots) {
           auditEvents.push(
-            this.grantRevokedEvent(id, delegated.has(id), actorUserId, orgId, membershipId),
+            this.grantRevokedEvent(id, delegated.has(id), 'membership_ended', actorUserId, orgId, membershipId),
           );
         }
         for (const id of children) {
-          auditEvents.push(this.grantRevokedEvent(id, true, actorUserId, orgId, membershipId));
+          auditEvents.push(
+            this.grantRevokedEvent(id, true, 'parent_revoked', actorUserId, orgId, membershipId),
+          );
         }
       }
 
@@ -149,10 +154,11 @@ export class MembersService {
     };
   }
 
-  /** Audit event for one grant revoked because its subject's membership ended. */
+  /** Audit event for one grant revoked by a membership end (directly or as a descendant). */
   private grantRevokedEvent(
     grantId: string,
     isDelegation: boolean,
+    reason: 'membership_ended' | 'parent_revoked',
     actorUserId: string,
     orgId: string,
     membershipId: string,
@@ -165,7 +171,7 @@ export class MembersService {
       recordType: 'grant',
       recordId: grantId,
       result: 'ALLOWED',
-      details: { reason: 'membership_ended', membershipId },
+      details: { reason, membershipId },
     };
   }
 }

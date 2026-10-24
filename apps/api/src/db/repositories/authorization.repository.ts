@@ -114,7 +114,8 @@ export class AuthorizationRepository {
 
   /**
    * Revoke the root grants and every unrevoked descendant delegated from
-   * them, all with the same revocation record. `roots` lists the roots this
+   * them. Roots get the caller's reason; descendants get `parent_revoked`
+   * (same `at` and `byUserId`), matching the nightly orphan sweep. `roots` lists the roots this
    * call revoked; `children` every descendant it revoked, breadth first.
    * Run inside the root grants' tenant scope (`withOrgScope(orgId)`) or the
    * system context; descendants of an org grant share its organization.
@@ -134,7 +135,7 @@ export class AuthorizationRepository {
       if (next.length === 0) break;
       const revokedIds = await this.revokeGrants(
         next.map((g) => g.id),
-        revoked,
+        { ...revoked, reason: 'parent_revoked' },
         tx,
       );
       children.push(...revokedIds);

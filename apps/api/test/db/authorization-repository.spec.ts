@@ -101,7 +101,7 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     expect(rows.every((r) => r.scopeOrgId === null)).toBe(true);
   });
 
-  it('revokeGrantTree revokes the root and every descendant with the reason', async () => {
+  it('revokeGrantTree revokes the root with the reason and descendants as parent_revoked', async () => {
     const at = new Date('2026-10-24T10:00:00.000Z');
     const result = await dbs.withOrgScope(ORG, (tx) =>
       repo.revokeGrantTree(['tree_root'], { at, byUserId: 'user_ivana', reason: 'manual' }, tx),
@@ -117,7 +117,7 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     for (const r of rows) {
       expect(r.revokedAt?.toISOString()).toBe(at.toISOString());
       expect(r.revokedByUserId).toBe('user_ivana');
-      expect(r.revokedReason).toBe('manual');
+      expect(r.revokedReason).toBe(r.id === 'tree_root' ? 'manual' : 'parent_revoked');
     }
 
     // Revoking again is a no-op.
