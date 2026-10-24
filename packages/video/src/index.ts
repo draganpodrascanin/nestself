@@ -63,6 +63,32 @@ export { useVideoTiles } from './hooks/useVideoTiles';
 export type { UseVideoTilesResult } from './hooks/useVideoTiles';
 export { useFullscreen } from './hooks/useFullscreen';
 
+// Components
+export { PreJoinCheck } from './components/PreJoinCheck';
+export type { PreJoinCheckProps } from './components/PreJoinCheck';
+export { CallStage } from './components/CallStage';
+export type { CallStageProps, SelfViewCorner } from './components/CallStage';
+export { ControlBar, CONTROL_BAR_WIDE_QUERY } from './components/ControlBar';
+export type { ControlBarProps } from './components/ControlBar';
+export { ConnectionBadge } from './components/ConnectionBadge';
+export type { ConnectionBadgeProps } from './components/ConnectionBadge';
+export { SessionTimer } from './components/SessionTimer';
+export { formatClock } from './components/format-clock';
+export type { SessionTimerProps } from './components/SessionTimer';
+export { CrisisBlock, CrisisResourcesButton } from './components/CrisisBlock';
+export { SERBIA_CRISIS_LINES } from './components/crisis-lines';
+export type { CrisisAudience, CrisisBlockProps, CrisisResourcesButtonProps } from './components/CrisisBlock';
+export { FollowUpCard } from './components/FollowUpCard';
+export type {
+  EmployeeFollowUpCardProps,
+  EmployeeFollowUpStatus,
+  ExpertFollowUpCardProps,
+  ExpertFollowUpStatus,
+  FollowUpCardProps,
+  FollowUpProposal,
+} from './components/FollowUpCard';
+export { formatInZone, zonedDateTimeToIso } from './time-zone';
+
 // Fake controller for stories, tests and sample mode
 export { FakeCallSessionController } from './testing/fake-controller';
 export type { FakeCallSessionControllerOptions } from './testing/fake-controller';
