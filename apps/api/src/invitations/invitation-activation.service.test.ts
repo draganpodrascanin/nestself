@@ -236,8 +236,8 @@ describe('InvitationActivationService', () => {
       expect(principalLoader.invalidateUser).toHaveBeenCalled();
     });
 
-    it('returns password/new_password challenge for staff template', async () => {
-      const inv = validInvitation({ templateKey: 'client_operations' });
+    it('returns password/new_password challenge for an employer admin template', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();
       invitations.findByTokenHash.mockResolvedValue(inv);
 
@@ -251,6 +251,34 @@ describe('InvitationActivationService', () => {
         expect.any(String), // temporary password
         'workspace',
         expect.any(Object),
+      );
+    });
+
+    it.each(['platform_owner', 'client_operations', 'expert'])(
+      'refuses a stored invitation with the non-organization template %s and creates nothing',
+      async (templateKey) => {
+        const inv = validInvitation({ templateKey });
+        const { service, invitations, identities, authzRepo } = buildService();
+        invitations.findByTokenHash.mockResolvedValue(inv);
+
+        await expect(service.accept(token, surface, meta)).rejects.toThrow(
+          expect.objectContaining({ code: 'invalid_invitation' }),
+        );
+        expect(identities.createUser).not.toHaveBeenCalled();
+        expect(authzRepo.createGrant).not.toHaveBeenCalled();
+      },
+    );
+
+    it('creates an organization-scoped default grant for an organization template', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+
+      await service.accept(token, surface, meta);
+
+      expect(authzRepo.createGrant).toHaveBeenCalledWith(
+        expect.objectContaining({ templateKey: 'hr_admin', scopeType: 'organization', scopeOrgId: 'org_sample' }),
+        expect.anything(),
       );
     });
 
@@ -298,8 +326,8 @@ describe('InvitationActivationService', () => {
       expect(signIn.emailOtpStart).toHaveBeenCalled();
     });
 
-    it('falls back to email OTP when password flow fails for staff', async () => {
-      const inv = validInvitation({ templateKey: 'client_operations' });
+    it('falls back to email OTP when password flow fails for an employer admin', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();
       invitations.findByTokenHash.mockResolvedValue(inv);
       signIn.passwordSignIn.mockRejectedValue(new Error('IdP error'));

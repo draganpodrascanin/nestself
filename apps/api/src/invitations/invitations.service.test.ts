@@ -149,6 +149,29 @@ describe('InvitationsService', () => {
       ).rejects.toThrow(expect.objectContaining({ code: 'validation' }));
     });
 
+    it.each(['platform_owner', 'client_operations', 'nestself_finance', 'expert', 'expert_lead'])(
+      'rejects the staff or platform template %s with 400 validation (details.templateKey)',
+      async (templateKey) => {
+        await expect(
+          service.create('org_sample', { email: 'new@example.com', templateKey }, 'user_ivana', false),
+        ).rejects.toThrow(
+          expect.objectContaining({ code: 'validation', details: { templateKey } }),
+        );
+        expect(invitations.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['hr_admin', 'employer_owner', 'team_manager', 'employee'])(
+      'accepts the organization template %s',
+      async (templateKey) => {
+        await service.create('org_sample', { email: 'new@example.com', templateKey }, 'user_ivana', false);
+        expect(invitations.create).toHaveBeenCalledWith(
+          expect.objectContaining({ templateKey }),
+          expect.anything(),
+        );
+      },
+    );
+
     it('rejects duplicate pending invitation with 409', async () => {
       invitations.findPendingByEmailAndOrg.mockResolvedValue({
         id: 'existing',
@@ -178,6 +201,38 @@ describe('InvitationsService', () => {
           false,
         ),
       ).rejects.toThrow(expect.objectContaining({ code: 'already_member' }));
+    });
+  });
+
+  // -- import ---------------------------------------------------------------
+
+  describe('import()', () => {
+    it('reports a platform template row in errors and creates only the valid rows', async () => {
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'owner@example.com', templateKey: 'platform_owner' },
+            { email: 'ops@example.com', templateKey: 'client_operations' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ email: 'owner@example.com' }),
+          expect.objectContaining({ email: 'ops@example.com' }),
+        ]),
+      );
+      expect(invitations.create).toHaveBeenCalledOnce();
+      expect(invitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'ok@example.com', templateKey: 'employee' }),
+        expect.anything(),
+      );
     });
   });
 

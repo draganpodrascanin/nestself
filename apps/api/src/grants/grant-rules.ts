@@ -39,6 +39,31 @@ export function findActiveTemplate(
   return template?.isActive ? template : null;
 }
 
+/**
+ * Workspaces whose templates an organization invitation may carry: the
+ * organization's own roles and the employee template. Operations (staff,
+ * platform) and expert templates are granted by NestSelf, never through an
+ * organization invitation.
+ */
+export const INVITABLE_TEMPLATE_WORKSPACES: readonly PermissionTemplateDefinition['workspace'][] = [
+  'organization',
+  'employee',
+];
+
+/** True when an invitation may carry this template (organization or employee workspace). */
+export function isInvitableTemplate(template: PermissionTemplateDefinition): boolean {
+  return INVITABLE_TEMPLATE_WORKSPACES.includes(template.workspace);
+}
+
+/** The active, invitable template with that key, or null. */
+export function findInvitableTemplate(
+  key: string,
+  templates: readonly PermissionTemplateDefinition[] = PERMISSION_TEMPLATES,
+): PermissionTemplateDefinition | null {
+  const template = findActiveTemplate(key, templates);
+  return template && isInvitableTemplate(template) ? template : null;
+}
+
 export function isOrgScopeType(scopeType: ScopeType): scopeType is OrgGrantScopeType {
   return (ORG_GRANT_SCOPE_TYPES as readonly string[]).includes(scopeType);
 }

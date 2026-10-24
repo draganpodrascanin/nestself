@@ -27,6 +27,7 @@ import { ApiHttpException } from '../common/api-error.js';
 import { hashToken, constantTimeHashCompare } from './invitation-token.js';
 import { memberships, organizations } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
+import { isInvitableTemplate } from '../grants/grant-rules.js';
 import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
 
@@ -134,8 +135,11 @@ export class InvitationActivationService {
       });
     }
 
+    // Only organization and employee templates are honoured (C1): an
+    // invitation stored before the create-time check cannot mint a staff,
+    // expert or platform grant.
     const template = TEMPLATE_MAP.get(invitation.templateKey ?? '');
-    if (!template) {
+    if (!template || !isInvitableTemplate(template)) {
       throw new ApiHttpException({
         status: 401,
         code: 'invalid_invitation',
@@ -343,7 +347,12 @@ export class InvitationActivationService {
     now: Date,
     tx: DbExecutor,
   ): Promise<void> {
-    const scopeOrgId = template.scopeType === 'platform' ? null : orgId;
+    // Belt and braces (C1): an invitation never creates a grant outside the
+    // inviting organization.
+    if (!isInvitableTemplate(template) || template.scopeType === 'platform') {
+      throw new Error(`Invitation template ${template.key} is not an organization template`);
+    }
+    const scopeOrgId = orgId;
     const scopeOrgUnitId = template.scopeType === 'org_unit' ? orgUnitId : null;
 
     await this.authzRepo.createGrant(

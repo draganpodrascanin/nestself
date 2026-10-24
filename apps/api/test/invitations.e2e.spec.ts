@@ -15,7 +15,8 @@ import request from 'supertest';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { externalIdentities } from '../src/db/schema/index.js';
+import { externalIdentities, invitations } from '../src/db/schema/index.js';
+import { eq } from 'drizzle-orm';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 // ---------------------------------------------------------------------------
@@ -197,6 +198,48 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty('code', 'validation');
+  });
+
+  // -----------------------------------------------------------------------
+  // 4b. Only organization templates can be invited (C1)
+  // -----------------------------------------------------------------------
+
+  it('rejects the platform_owner template with 400 validation and details.templateKey', async () => {
+    const res = await createInvitation({ email: 'escalate@example.com', templateKey: 'platform_owner' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('code', 'validation');
+    expect(res.body.details).toEqual({ templateKey: 'platform_owner' });
+  });
+
+  it('accepts the hr_admin organization template (201)', async () => {
+    const res = await createInvitation({ email: 'second-hr@example.com', templateKey: 'hr_admin' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('templateKey', 'hr_admin');
+  });
+
+  it('import reports a platform template row in errors and creates only the valid row', async () => {
+    const res = await hrAgent
+      .post('/api/orgs/org_sample/invitations/import')
+      .set('X-CSRF-Token', hrCsrf)
+      .send({
+        invitations: [
+          { email: 'import-ok@example.com', templateKey: 'employee' },
+          { email: 'import-owner@example.com', templateKey: 'platform_owner' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(1);
+    expect(res.body.errors).toEqual([
+      expect.objectContaining({ email: 'import-owner@example.com' }),
+    ]);
+    const stored = await testDb.db
+      .select({ email: invitations.email })
+      .from(invitations)
+      .where(eq(invitations.email, 'import-owner@example.com'));
+    expect(stored).toEqual([]);
   });
 
   // -----------------------------------------------------------------------

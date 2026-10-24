@@ -6,7 +6,6 @@
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
-  PERMISSION_TEMPLATES,
   type InvitationCreateRequest,
   type InvitationImportRequest,
 } from '@nestself/contracts';
@@ -21,11 +20,10 @@ import { InvitationMailer } from './invitation-mailer.js';
 import { orgUnits } from '../db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../db/db.service.js';
+import { findInvitableTemplate } from '../grants/grant-rules.js';
 
 /** Milliseconds in 7 days. */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
-
-const TEMPLATE_KEYS = new Set(PERMISSION_TEMPLATES.map((t) => t.key));
 
 @Injectable()
 export class InvitationsService {
@@ -143,7 +141,7 @@ export class InvitationsService {
 
     for (const inv of body.invitations) {
       // Template key check.
-      if (!TEMPLATE_KEYS.has(inv.templateKey as never)) {
+      if (!findInvitableTemplate(inv.templateKey)) {
         errors.push({ email: inv.email, reason: `Invalid template key: ${inv.templateKey}` });
         continue;
       }
@@ -311,12 +309,14 @@ export class InvitationsService {
     };
   }
 
+  /** Only active organization and employee templates may be invited (C1). */
   private validateTemplateKey(key: string): void {
-    if (!TEMPLATE_KEYS.has(key as never)) {
+    if (!findInvitableTemplate(key)) {
       throw new ApiHttpException({
         status: 400,
         code: 'validation',
         message: `Invalid template key: ${key}`,
+        details: { templateKey: key },
       });
     }
   }

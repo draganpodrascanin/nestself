@@ -10,6 +10,7 @@ import {
 import {
   checkDelegationBounds,
   findActiveTemplate,
+  findInvitableTemplate,
   isOrgScopeType,
   missingConditionTypes,
 } from './grant-rules.js';
@@ -175,5 +176,23 @@ describe('checkDelegationBounds (parent grant as the bound, AUTHZ-R-37)', () => 
     expect(
       checkDelegationBounds(grant(), child({ conditions: [{ type: 'spending_ceiling', amountMinor: 5, currency: 'EUR' }] }), []),
     ).toBeNull();
+  });
+});
+
+describe('findInvitableTemplate', () => {
+  it('returns organization and employee templates', () => {
+    expect(findInvitableTemplate('hr_admin')?.key).toBe('hr_admin');
+    expect(findInvitableTemplate('employee')?.key).toBe('employee');
+  });
+
+  it('refuses operations, expert, unknown and inactive templates', () => {
+    expect(findInvitableTemplate('platform_owner')).toBeNull();
+    expect(findInvitableTemplate('client_operations')).toBeNull();
+    expect(findInvitableTemplate('expert')).toBeNull();
+    expect(findInvitableTemplate('nonexistent')).toBeNull();
+    const inactive = PERMISSION_TEMPLATES.map((t) =>
+      t.key === 'hr_admin' ? { ...t, isActive: false } : t,
+    );
+    expect(findInvitableTemplate('hr_admin', inactive)).toBeNull();
   });
 });
