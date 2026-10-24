@@ -17,11 +17,14 @@ import { Route as AuthenticatedEventRequestsRouteImport } from './routes/_authen
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
+import { Route as AuthenticatedAccessIndexRouteImport } from './routes/_authenticated/access/index'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
+import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
+import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -62,6 +65,12 @@ const PublicSignInRoute = PublicSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => PublicRoute,
 } as any)
+const AuthenticatedAccessIndexRoute =
+  AuthenticatedAccessIndexRouteImport.update({
+    id: '/access/',
+    path: '/access/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedExpertsIndexRoute =
   AuthenticatedExpertsIndexRouteImport.update({
     id: '/experts/',
@@ -91,6 +100,18 @@ const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => PublicRoute,
 } as any)
+const AuthenticatedOrganizationsOrgIdIndexRoute =
+  AuthenticatedOrganizationsOrgIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
+const AuthenticatedOrganizationsOrgIdAccessRoute =
+  AuthenticatedOrganizationsOrgIdAccessRouteImport.update({
+    id: '/access',
+    path: '/access',
+    getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -100,10 +121,13 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
-  '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
+  '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/access/': typeof AuthenticatedAccessIndexRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
@@ -113,10 +137,12 @@ export interface FileRoutesByTo {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
-  '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/access': typeof AuthenticatedAccessIndexRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
+  '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -129,10 +155,13 @@ export interface FileRoutesById {
   '/_public/sign-in': typeof PublicSignInRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
-  '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRoute
+  '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/_public/invite/$token': typeof PublicInviteTokenRoute
+  '/_authenticated/access/': typeof AuthenticatedAccessIndexRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -146,8 +175,11 @@ export interface FileRouteTypes {
     | '/experts/$expertId'
     | '/organizations/$orgId'
     | '/invite/$token'
+    | '/access/'
     | '/experts/'
     | '/organizations/'
+    | '/organizations/$orgId/access'
+    | '/organizations/$orgId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -157,10 +189,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/experts/$expertId'
-    | '/organizations/$orgId'
     | '/invite/$token'
+    | '/access'
     | '/experts'
     | '/organizations'
+    | '/organizations/$orgId/access'
+    | '/organizations/$orgId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -174,8 +208,11 @@ export interface FileRouteTypes {
     | '/_authenticated/experts/$expertId'
     | '/_authenticated/organizations/$orgId'
     | '/_public/invite/$token'
+    | '/_authenticated/access/'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
+    | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/organizations/$orgId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -241,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicSignInRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_authenticated/access/': {
+      id: '/_authenticated/access/'
+      path: '/access'
+      fullPath: '/access/'
+      preLoaderRoute: typeof AuthenticatedAccessIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/experts/': {
       id: '/_authenticated/experts/'
       path: '/experts'
@@ -276,8 +320,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicInviteTokenRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_authenticated/organizations/$orgId/': {
+      id: '/_authenticated/organizations/$orgId/'
+      path: '/'
+      fullPath: '/organizations/$orgId/'
+      preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdIndexRouteImport
+      parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
+    '/_authenticated/organizations/$orgId/access': {
+      id: '/_authenticated/organizations/$orgId/access'
+      path: '/access'
+      fullPath: '/organizations/$orgId/access'
+      preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
+      parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
   }
 }
+
+interface AuthenticatedOrganizationsOrgIdRouteChildren {
+  AuthenticatedOrganizationsOrgIdAccessRoute: typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  AuthenticatedOrganizationsOrgIdIndexRoute: typeof AuthenticatedOrganizationsOrgIdIndexRoute
+}
+
+const AuthenticatedOrganizationsOrgIdRouteChildren: AuthenticatedOrganizationsOrgIdRouteChildren =
+  {
+    AuthenticatedOrganizationsOrgIdAccessRoute:
+      AuthenticatedOrganizationsOrgIdAccessRoute,
+    AuthenticatedOrganizationsOrgIdIndexRoute:
+      AuthenticatedOrganizationsOrgIdIndexRoute,
+  }
+
+const AuthenticatedOrganizationsOrgIdRouteWithChildren =
+  AuthenticatedOrganizationsOrgIdRoute._addFileChildren(
+    AuthenticatedOrganizationsOrgIdRouteChildren,
+  )
 
 interface AuthenticatedRouteChildren {
   AuthenticatedContentRoute: typeof AuthenticatedContentRoute
@@ -285,7 +361,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
-  AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+  AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
   AuthenticatedExpertsIndexRoute: typeof AuthenticatedExpertsIndexRoute
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
 }
@@ -296,7 +373,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedExpertsExpertIdRoute: AuthenticatedExpertsExpertIdRoute,
-  AuthenticatedOrganizationsOrgIdRoute: AuthenticatedOrganizationsOrgIdRoute,
+  AuthenticatedOrganizationsOrgIdRoute:
+    AuthenticatedOrganizationsOrgIdRouteWithChildren,
+  AuthenticatedAccessIndexRoute: AuthenticatedAccessIndexRoute,
   AuthenticatedExpertsIndexRoute: AuthenticatedExpertsIndexRoute,
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
 }

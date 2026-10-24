@@ -1,83 +1,57 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { Heading, Table, Th, Td, MetricCard } from '@nestself/ui';
-import {
-  SAMPLE_ORG,
-  SAMPLE_TEAMS,
-  SAMPLE_PEOPLE,
-  SAMPLE_HR_PROGRAMME,
-} from '@nestself/sample-data';
-import { formatCurrency, isLocale } from '@nestself/i18n';
-import type { Locale } from '@nestself/i18n';
-import i18n from '../../../i18n';
+import { can } from '@nestself/contracts';
+import { Heading } from '@nestself/ui';
+import { SAMPLE_ORG } from '@nestself/sample-data';
+import { useAuth } from '../../../auth';
 
-function OrgDetailPage() {
+const TAB_CLASS = 'px-3 py-2 -mb-px border-b-2 no-underline type-label';
+const INACTIVE_TAB = { className: 'border-transparent text-text-secondary' };
+const ACTIVE_TAB = { className: 'border-primary text-primary', 'aria-current': 'page' as const };
+
+/** Organization detail: heading and section links; the sections are child routes. */
+function OrgDetailLayout() {
   const { orgId } = Route.useParams();
   const { t } = useTranslation('admin');
-
-  const teams = SAMPLE_TEAMS.filter((team) => team.orgId === orgId);
-  const members = SAMPLE_PEOPLE.filter((p) => p.orgId === orgId);
-
-  const resolved = i18n.resolvedLanguage ?? 'en';
-  const locale: Locale = isLocale(resolved) ? resolved : 'en';
+  const { principal, effectiveActions } = useAuth();
+  const showAccess = principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
   return (
     <div>
       <Heading level={1}>{t('organizations.detail')}</Heading>
       <Heading level={2} className="mt-6">{SAMPLE_ORG.name}</Heading>
 
-      <Heading level={3} className="mt-8">{t('organizations.teams')}</Heading>
-      <div className="mt-4">
-        <Table caption={t('organizations.teams')}>
-          <thead>
-            <tr>
-              <Th>{t('organizations.name')}</Th>
-              <Th numeric>{t('organizations.members')}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map((team) => {
-              const count = members.filter(
-                // Team assignment is not in sample data, so show org-level count per team
-                () => true,
-              ).length;
-              return (
-                <tr key={team.id}>
-                  <Td>{team.name}</Td>
-                  <Td numeric>{count}</Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
-      </div>
+      <nav aria-label={t('organizations.tabsLabel')} className="mt-6 flex gap-2 border-b border-border-subtle">
+        <Link
+          to="/organizations/$orgId"
+          params={{ orgId }}
+          activeOptions={{ exact: true }}
+          className={TAB_CLASS}
+          inactiveProps={INACTIVE_TAB}
+          activeProps={ACTIVE_TAB}
+        >
+          {t('organizations.tabs.overview')}
+        </Link>
+        {showAccess ? (
+          <Link
+            to="/organizations/$orgId/access"
+            params={{ orgId }}
+            className={TAB_CLASS}
+            inactiveProps={INACTIVE_TAB}
+            activeProps={ACTIVE_TAB}
+          >
+            {t('organizations.tabs.access')}
+          </Link>
+        ) : null}
+      </nav>
 
-      <Heading level={3} className="mt-8">{t('organizations.programme')}</Heading>
-      <dl className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <MetricCard
-            label={t('organizations.employees')}
-            value={String(SAMPLE_HR_PROGRAMME.eligibleEmployees)}
-          />
-        </div>
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <MetricCard
-            label={t('dashboard.totalUsers')}
-            value={String(SAMPLE_HR_PROGRAMME.activatedAccounts)}
-          />
-        </div>
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <MetricCard
-            label={formatCurrency(SAMPLE_HR_PROGRAMME.availableFund, SAMPLE_HR_PROGRAMME.currency, locale)}
-            value={formatCurrency(SAMPLE_HR_PROGRAMME.reserved, SAMPLE_HR_PROGRAMME.currency, locale)}
-            hint={t('organizations.programme')}
-          />
-        </div>
-      </dl>
+      <div className="mt-8">
+        <Outlet />
+      </div>
     </div>
   );
 }
 
 export const Route = createFileRoute('/_authenticated/organizations/$orgId')({
-  component: OrgDetailPage,
+  component: OrgDetailLayout,
 });
