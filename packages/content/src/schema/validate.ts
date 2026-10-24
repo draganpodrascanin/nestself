@@ -36,6 +36,10 @@ import { extensions } from './extensions.ts';
 // Error codes (Appendix B Part B)
 // ---------------------------------------------------------------------------
 
+/**
+ * Content validation error codes. Translated later with the `cms`
+ * i18n namespace for user-facing display.
+ */
 export type ContentErrorCode =
   | 'content_invalid_block'
   | 'content_invalid_link'
@@ -77,6 +81,54 @@ interface RawNode {
   content?: RawNode[];
   marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
   text?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Code-point length helper (Minor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Count characters in code points (not UTF-16 code units).
+ * Used consistently across all text-length checks.
+ */
+function codePointLength(s: string): number {
+  // Spread iterator yields code points; for-of on .length counts UTF-16 units.
+  let n = 0;
+  for (const _ of s) n++;
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Text length helper
+// ---------------------------------------------------------------------------
+
+function sumTextLength(nodes: RawNode[]): number {
+  let total = 0;
+  for (const n of nodes) {
+    if (n.type === 'text' && n.text) total += codePointLength(n.text);
+  }
+  return total;
+}
+
+// ---------------------------------------------------------------------------
+// Tree walker
+// ---------------------------------------------------------------------------
+
+function walkRawNodes(
+  node: RawNode,
+  visitor: (node: RawNode, path: string) => void,
+  path = '',
+): void {
+  visitor(node, path);
+  if (node.content) {
+    for (let i = 0; i < node.content.length; i++) {
+      walkRawNodes(
+        node.content[i]!,
+        visitor,
+        path ? `${path}.content.${i}` : `content.${i}`,
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -150,17 +202,17 @@ function validateDocumentRules(
     });
   }
 
-  // --- Text length constraints (I2) ---
-  for (let i = 0; i < content.length; i++) {
-    const node = content[i]!;
-
+  // --- Text length constraints at every depth (N5, I2) ---
+  // Walk the full tree so paragraph/checklistItem/heading limits apply
+  // inside quote, professionalNote, practicalStep, listItem, etc.
+  walkRawNodes(doc as unknown as RawNode, (node, path) => {
     if (node.type === 'sectionHeading' && node.content) {
       const totalText = sumTextLength(node.content);
       if (totalText > MAX_HEADING_TEXT) {
         errors.push({
           code: 'content_invalid_block',
-          message: `sectionHeading text at content.${i} is ${totalText} characters; max ${MAX_HEADING_TEXT}.`,
-          path: `content.${i}`,
+          message: `sectionHeading text at ${path} is ${totalText} code points; max ${MAX_HEADING_TEXT}.`,
+          path,
         });
       }
     }
@@ -170,8 +222,19 @@ function validateDocumentRules(
       if (totalText > MAX_PARAGRAPH_TEXT) {
         errors.push({
           code: 'content_invalid_block',
-          message: `paragraph text at content.${i} is ${totalText} characters; max ${MAX_PARAGRAPH_TEXT}.`,
-          path: `content.${i}`,
+          message: `paragraph text at ${path} is ${totalText} code points; max ${MAX_PARAGRAPH_TEXT}.`,
+          path,
+        });
+      }
+    }
+
+    if (node.type === 'checklistItem' && node.content) {
+      const totalText = sumTextLength(node.content);
+      if (totalText > MAX_PARAGRAPH_TEXT) {
+        errors.push({
+          code: 'content_invalid_block',
+          message: `checklistItem text at ${path} is ${totalText} code points; max ${MAX_PARAGRAPH_TEXT}.`,
+          path,
         });
       }
     }
@@ -184,12 +247,12 @@ function validateDocumentRules(
       if (transcriptText > MAX_TRANSCRIPT_TEXT) {
         errors.push({
           code: 'content_invalid_block',
-          message: `transcript text at content.${i} is ${transcriptText} characters; max ${MAX_TRANSCRIPT_TEXT}.`,
-          path: `content.${i}`,
+          message: `transcript text at ${path} is ${transcriptText} code points; max ${MAX_TRANSCRIPT_TEXT}.`,
+          path,
         });
       }
     }
-  }
+  });
 
   // --- Transcript rules (FMT-R-23, C-05, 17) ---
   const seenTranscriptMedia = new Set<string>();
@@ -262,7 +325,7 @@ function validateDocumentRules(
         if (mark.type === 'link' && mark.attrs?.href) {
           const href = mark.attrs.href as string;
           // Internal links pass without allowlist check
-          if (/^nestself:content\/[A-Za-z0-9_-]{1,64}$/.test(href)) return;
+          if (/^nestself:content\/[A-Za-z0-9_-]{1,64}$/.test(href)) continue;
 
           try {
             const url = new URL(href);
@@ -272,7 +335,7 @@ function validateDocumentRules(
                 message: `Invalid link href "${href}" at ${path}.`,
                 path,
               });
-              return;
+              continue;
             }
             if (!allowlist.includes(url.hostname)) {
               errors.push({
@@ -296,35 +359,6 @@ function validateDocumentRules(
   return errors;
 }
 
-function sumTextLength(nodes: RawNode[]): number {
-  let total = 0;
-  for (const n of nodes) {
-    if (n.type === 'text' && n.text) total += n.text.length;
-  }
-  return total;
-}
-
-// ---------------------------------------------------------------------------
-// Tree walker
-// ---------------------------------------------------------------------------
-
-function walkRawNodes(
-  node: RawNode,
-  visitor: (node: RawNode, path: string) => void,
-  path = '',
-): void {
-  visitor(node, path);
-  if (node.content) {
-    for (let i = 0; i < node.content.length; i++) {
-      walkRawNodes(
-        node.content[i]!,
-        visitor,
-        path ? `${path}.content.${i}` : `content.${i}`,
-      );
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // ProseMirror schema (lazy singleton)
 // ---------------------------------------------------------------------------
@@ -339,27 +373,43 @@ function getPmSchema() {
 }
 
 // ---------------------------------------------------------------------------
-// Error code mapping (I13)
+// Error code mapping (N4, I13)
 // ---------------------------------------------------------------------------
 
 /**
  * Map Zod issue codes and paths to ContentErrorCode.
  * Uses Zod issue code and path, never English message text.
+ *
+ * N4: per-field `too_big` maps to `content_invalid_block` (only the
+ * document-level size maps to `content_too_large`).
+ * `content_invalid_link` only for href failures.
  */
 function inferErrorCode(issue: { code: string; path: PropertyKey[] }): ContentErrorCode {
   const pathStr = issue.path.map(String).join('.');
 
-  // Link-related paths
-  if (pathStr.includes('href') || pathStr.includes('marks')) {
+  // Link href failures only
+  if (pathStr.endsWith('.href')) {
     return 'content_invalid_link';
   }
 
-  // Size issues
-  if (issue.code === 'too_big') {
-    return 'content_too_large';
-  }
-
+  // All field-level issues (including too_big) are block-level errors
   return 'content_invalid_block';
+}
+
+// ---------------------------------------------------------------------------
+// ProseMirror path extraction (N4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the best available path from a ProseMirror error.
+ * ProseMirror errors like "Invalid content for node X at N" contain
+ * position information we can map back to a content path.
+ */
+function extractPmPath(message: string): string | undefined {
+  // Try to extract node position from the error message
+  const match = /at (\d+)/.exec(message);
+  if (match) return `content.${match[1]}`;
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -411,12 +461,14 @@ export function validateContentDocument(
     pmNode.check();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const path = extractPmPath(message);
     return {
       ok: false,
       errors: [
         {
           code: 'content_invalid_block',
           message: `ProseMirror structural validation failed: ${message}`,
+          path,
         },
       ],
     };

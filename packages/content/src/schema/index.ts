@@ -1,20 +1,17 @@
 // ---------------------------------------------------------------------------
 // Content document schema, validation, canonicalization and transliteration
 // Exported from @nestself/content/schema
+//
+// Public surface only — internal sub-schemas (individual mark schemas,
+// inline node schemas, href schema, capability/media-kind schemas) are
+// not re-exported. Consumers use BlockNodeSchema or the typed unions.
 // ---------------------------------------------------------------------------
 
 // --- Block catalogue, schemas and types (C-05, I14) ---
 export {
-  // Schemas
+  // Schemas — public surface
   ContentIdSchema,
-  LinkHrefSchema,
-  BoldMarkSchema,
-  ItalicMarkSchema,
-  LinkMarkSchema,
   MarkSchema,
-  TextNodeSchema,
-  HardBreakNodeSchema,
-  InlineNodeSchema,
   SectionHeadingSchema,
   ParagraphSchema,
   ListItemSchema,
@@ -35,12 +32,11 @@ export {
   CTA_KINDS,
   MEDIA_KINDS,
   CONTENT_CAPABILITIES,
-  ContentCapabilitySchema,
-  MediaKindSchema,
   // Types (I14: typed unions for the renderer)
   type Mark,
   type CtaKind,
   type MediaKind,
+  type ContentCapability,
   type TextNode,
   type HardBreak,
   type InlineNode,

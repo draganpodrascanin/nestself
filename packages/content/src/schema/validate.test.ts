@@ -3,7 +3,9 @@
  *
  * Covers: transcript rules (orphans, duplicates), count constraints,
  * size limit (R3, UTF-8 bytes), text length limits (I2), schema
- * version check (I7/I8), ProseMirror value, bounded nesting (I3).
+ * version check (I7/I8), ProseMirror value, bounded nesting (I3),
+ * error code mapping (N4), nested paragraph/checklistItem limits (N5),
+ * content_schema_version error code, code point counting.
  *
  * XSS/injection tests are in xss.test.ts (R5).
  */
@@ -174,7 +176,7 @@ describe('validateContentDocument — size limit (R3)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Text length limits (I2)
+// Text length limits (I2) — top-level nodes
 // ---------------------------------------------------------------------------
 
 describe('validateContentDocument — text length limits (I2)', () => {
@@ -195,8 +197,6 @@ describe('validateContentDocument — text length limits (I2)', () => {
   });
 
   it('rejects paragraph whose total text exceeds MAX_PARAGRAPH_TEXT', () => {
-    // Use multiple text nodes that individually fit the Zod .max(5000) per-node
-    // limit but collectively exceed MAX_PARAGRAPH_TEXT.
     const perNode = Math.ceil((MAX_PARAGRAPH_TEXT + 1) / 3);
     const para = {
       type: 'paragraph',
@@ -212,12 +212,10 @@ describe('validateContentDocument — text length limits (I2)', () => {
   });
 
   it('accepts paragraph text at exactly MAX_PARAGRAPH_TEXT', () => {
-    // Single text node at 5000 is within both per-node .max(5000) and total limit.
     expect(validate(doc([paragraph('x'.repeat(MAX_PARAGRAPH_TEXT))])).ok).toBe(true);
   });
 
   it('rejects transcript text exceeding MAX_TRANSCRIPT_TEXT', () => {
-    // Use enough paragraphs to exceed the limit
     const charsPerPara = Math.ceil((MAX_TRANSCRIPT_TEXT + 1) / 5);
     const paras = Array.from({ length: 5 }, () => paragraph('x'.repeat(charsPerPara)));
     const result = validate(doc([
@@ -230,7 +228,84 @@ describe('validateContentDocument — text length limits (I2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Schema version (I7, I8)
+// N5: Nested paragraph and checklistItem text limits at every depth
+// ---------------------------------------------------------------------------
+
+describe('validateContentDocument — nested text limits (N5)', () => {
+  const overlong = 'x'.repeat(MAX_PARAGRAPH_TEXT + 1);
+
+  it('rejects overlong paragraph inside a quote', () => {
+    const result = validate(doc([{
+      type: 'quote', attrs: { attribution: null },
+      content: [paragraph(overlong)],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+      expect(result.errors.some((e) => e.path?.includes('content'))).toBe(true);
+    }
+  });
+
+  it('rejects overlong paragraph inside a professionalNote', () => {
+    const result = validate(doc([{
+      type: 'professionalNote', attrs: { noteKind: 'tip' },
+      content: [paragraph(overlong)],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('rejects overlong paragraph inside a practicalStep', () => {
+    const result = validate(doc([{
+      type: 'practicalStep', attrs: { stepNumber: 1, title: 'Step' },
+      content: [paragraph(overlong)],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('rejects overlong paragraph inside a listItem', () => {
+    const result = validate(doc([{
+      type: 'bulletList',
+      content: [{ type: 'listItem', content: [paragraph(overlong)] }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('rejects overlong checklistItem text', () => {
+    const result = validate(doc([{
+      type: 'checklist',
+      content: [{
+        type: 'checklistItem', attrs: { label: 'Check' },
+        content: [{ type: 'text', text: overlong }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('accepts paragraph at limit inside a quote', () => {
+    expect(validate(doc([{
+      type: 'quote', attrs: { attribution: null },
+      content: [paragraph('x'.repeat(MAX_PARAGRAPH_TEXT))],
+    }])).ok).toBe(true);
+  });
+
+  it('counts code points, not UTF-16 code units', () => {
+    // U+1F600 (emoji) is 1 code point but 2 UTF-16 code units
+    const emoji = '\u{1F600}';
+    // MAX_PARAGRAPH_TEXT code points of emoji = 2x MAX_PARAGRAPH_TEXT UTF-16 units
+    const text = emoji.repeat(MAX_PARAGRAPH_TEXT);
+    expect(validate(doc([paragraph(text)])).ok).toBe(true);
+    // One more code point over the limit
+    const overText = emoji.repeat(MAX_PARAGRAPH_TEXT + 1);
+    expect(validate(doc([paragraph(overText)])).ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Schema version (I7, I8) — content_schema_version error code
 // ---------------------------------------------------------------------------
 
 describe('validateContentDocument — schema version (I7, I8)', () => {
@@ -238,6 +313,77 @@ describe('validateContentDocument — schema version (I7, I8)', () => {
     const result = validate({ type: 'doc', schemaVersion: 99, content: [paragraph()] });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.some((e) => e.code === 'content_schema_version')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N4: Error code mapping
+// ---------------------------------------------------------------------------
+
+describe('validateContentDocument — error code mapping (N4)', () => {
+  it('href with a number produces content_invalid_link', () => {
+    // Non-string href fails at the Zod layer
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 5 } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_link')).toBe(true);
+  });
+
+  it('heading level 4 produces content_invalid_block', () => {
+    const result = validate(doc([{
+      type: 'sectionHeading', attrs: { level: 4 },
+      content: [{ type: 'text', text: 'H4' }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('CTA missing required targetId produces content_invalid_block', () => {
+    const result = validate(doc([{
+      type: 'cta', attrs: { ctaKind: 'open_content' },
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('unknown mark type produces content_invalid_block', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'a', marks: [{ type: 'underline' }] }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+  });
+
+  it('21 list items (too_big) produces content_invalid_block, not content_too_large', () => {
+    const result = validate(doc([{
+      type: 'bulletList',
+      content: Array.from({ length: 21 }, () => ({
+        type: 'listItem', content: [paragraph('item')],
+      })),
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+      expect(result.errors.every((e) => e.code !== 'content_too_large')).toBe(true);
+    }
+  });
+
+  it('U+00A0 in href produces content_invalid_link', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/ path' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_link')).toBe(true);
   });
 });
 
@@ -256,6 +402,14 @@ describe('validateContentDocument — ProseMirror adds value', () => {
       content: [{ type: 'text', text: 'Title' }, { type: 'hardBreak' }],
     }])).ok).toBe(false);
   });
+
+  it('ProseMirror errors include path when available', () => {
+    const result = validate({ type: 'doc', schemaVersion: 1, content: [{ type: 'text', text: 'orphan' }] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.code === 'content_invalid_block')).toBe(true);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -273,5 +427,56 @@ describe('validateContentDocument — bounded nesting (I3)', () => {
     }
     const result = validate(doc(innerContent as unknown[]));
     expect(result.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Link validation (content_invalid_link only for href failures)
+// ---------------------------------------------------------------------------
+
+describe('validateContentDocument — link validation', () => {
+  it('rejects http:// links (requires https://)', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'http://example.com' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts internal nestself:content/ links', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'nestself:content/abc-123' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects links to hosts not on the allowlist', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://evil.com/phish' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((e) => e.code === 'content_invalid_link')).toBe(true);
+  });
+
+  it('accepts links to hosts on the allowlist', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/page' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(true);
   });
 });

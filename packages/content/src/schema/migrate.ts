@@ -17,9 +17,12 @@ import { type ContentDocument, CURRENT_SCHEMA_VERSION } from './document.ts';
  * Each entry is a function from version N to version N+1.
  * The key is the source version.
  */
-type MigrationFn = (doc: Record<string, unknown>) => Record<string, unknown>;
+export type MigrationFn = (doc: Record<string, unknown>) => Record<string, unknown>;
 
-const MIGRATIONS: Record<number, MigrationFn> = {
+/**
+ * The default migration table. Exported for testing (I16).
+ */
+export const MIGRATIONS: Record<number, MigrationFn> = {
   // Version 1 is the current version — identity migration.
   // When version 2 is introduced, add:
   //   1: (doc) => { /* transform v1 → v2 */ return { ...doc, schemaVersion: 2 }; },
@@ -39,8 +42,13 @@ const MIGRATIONS: Record<number, MigrationFn> = {
  * Use for **reads** of stored documents. Writes require
  * `schemaVersion === CURRENT_SCHEMA_VERSION` (enforced by
  * `validateContentDocument`).
+ *
+ * The `migrations` parameter is injectable for testing (I16).
  */
-export function migrateDocument(input: unknown): ContentDocument {
+export function migrateDocument(
+  input: unknown,
+  migrations: Record<number, MigrationFn> = MIGRATIONS,
+): ContentDocument {
   if (input === null || typeof input !== 'object') {
     throw new Error('migrateDocument expects a non-null object.');
   }
@@ -64,7 +72,7 @@ export function migrateDocument(input: unknown): ContentDocument {
 
   // Apply migrations sequentially
   while (version < CURRENT_SCHEMA_VERSION) {
-    const migrate = MIGRATIONS[version];
+    const migrate = migrations[version];
     if (!migrate) {
       throw new Error(
         `No migration registered for version ${version} → ${version + 1}.`,

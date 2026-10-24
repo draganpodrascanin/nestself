@@ -15,8 +15,16 @@
 
 import exceptions from '../scripts/transliteration-exceptions.json' with { type: 'json' };
 
-const protectedTerms: string[] = exceptions.protected;
-const wordOverrides: Record<string, string> = exceptions.wordOverrides;
+// ---------------------------------------------------------------------------
+// Exception lists — exported so tests can drive from them (Minor)
+// ---------------------------------------------------------------------------
+
+export const protectedTerms: string[] = exceptions.protected;
+export const wordOverrides: Record<string, string> = exceptions.wordOverrides;
+
+// ---------------------------------------------------------------------------
+// Character maps
+// ---------------------------------------------------------------------------
 
 // Digraphs first (longest), then single letters
 const digraphMap: ReadonlyArray<readonly [string, string]> = [
@@ -55,9 +63,38 @@ const singleMap: ReadonlyArray<readonly [string, string]> = [
   ['Š', 'Ш'], ['š', 'ш'],
 ];
 
+// ---------------------------------------------------------------------------
+// Module-scope compiled regexes (hoisted from per-call, Minor)
+// ---------------------------------------------------------------------------
+
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/** Patterns that should be preserved verbatim during transliteration. */
+const preservePatterns: string[] = [
+  // Protected terms (exact match)
+  ...protectedTerms.map(escapeRegex),
+  // {{placeholders}}
+  '\\{\\{[^}]+\\}\\}',
+  // <html tags>
+  '<[^>]+>',
+  // URLs
+  'https?://[^\\s"\'<>]+',
+];
+
+const preserveRegex = new RegExp(`(${preservePatterns.join('|')})`, 'g');
+
+/** Word-override regexes, compiled once at module scope. */
+const compiledWordOverrides: Array<{ regex: RegExp; cyrillic: string }> =
+  Object.entries(wordOverrides).map(([latin, cyrillic]) => ({
+    regex: new RegExp(`\\b${escapeRegex(latin)}\\b`, 'gi'),
+    cyrillic,
+  }));
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Transliterate a single string from Serbian Latin to Cyrillic.
@@ -66,25 +103,6 @@ function escapeRegex(str: string): string {
  */
 export function transliterate(input: string): string {
   if (typeof input !== 'string') return input;
-
-  // Build patterns to preserve
-  const preservePatterns: string[] = [];
-
-  // Protected terms (exact match)
-  for (const term of protectedTerms) {
-    preservePatterns.push(escapeRegex(term));
-  }
-
-  // {{placeholders}}
-  preservePatterns.push('\\{\\{[^}]+\\}\\}');
-
-  // <html tags>
-  preservePatterns.push('<[^>]+>');
-
-  // URLs
-  preservePatterns.push('https?://[^\\s"\'<>]+');
-
-  const preserveRegex = new RegExp(`(${preservePatterns.join('|')})`, 'g');
 
   // Split text into preservable and transliterable segments
   const segments = input.split(preserveRegex);
@@ -107,8 +125,8 @@ export function transliterate(input: string): string {
 function transliterateSegment(text: string): string {
   // Apply word overrides on whole words (case-insensitively, preserving initial capital)
   let result = text;
-  for (const [latin, cyrillic] of Object.entries(wordOverrides)) {
-    const regex = new RegExp(`\\b${escapeRegex(latin)}\\b`, 'gi');
+  for (const { regex, cyrillic } of compiledWordOverrides) {
+    regex.lastIndex = 0;
     result = result.replace(regex, (match) => {
       // Preserve case of first letter
       if (match[0] === match[0]!.toUpperCase() && match[0] !== match[0]!.toLowerCase()) {

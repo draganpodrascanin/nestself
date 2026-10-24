@@ -42,7 +42,8 @@ export interface ApprovalHashInput {
   relatedResourceIds: string[];
   cta: unknown;
   reviewDiscipline: string;
-  proposedAudience: string[];
+  /** Nullable jsonb column — canonicalized through sortKeys. */
+  proposedAudience: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,26 +69,55 @@ function sortKeys(value: unknown): unknown {
 }
 
 /**
+ * Normalize mark order on text nodes so equivalent documents hash equally.
+ * Sorts marks by `type` lexicographically. Operates on a deep-cloned tree.
+ */
+function normalizeMarks(node: unknown): unknown {
+  if (node === null || node === undefined || typeof node !== 'object') return node;
+  if (Array.isArray(node)) return node.map(normalizeMarks);
+  const obj = node as Record<string, unknown>;
+  const out = Object.create(null) as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    out[key] = normalizeMarks(obj[key]);
+  }
+  if (
+    out.type === 'text' &&
+    Array.isArray(out.marks) &&
+    out.marks.length > 1
+  ) {
+    out.marks = [...(out.marks as Array<{ type: string }>)].sort((a, b) =>
+      a.type < b.type ? -1 : a.type > b.type ? 1 : 0,
+    );
+  }
+  return out;
+}
+
+/**
  * Produce a deterministic JSON string for the given approval-hash input.
  *
  * Rules:
  * - Keys sorted lexicographically at every level
  * - No whitespace
  * - `undefined` normalized to `null`
+ * - Array-valued fields `mediaAssetIds` and `relatedResourceIds` are sorted
+ *   before hashing so insertion order does not affect the hash (FMT-R-08)
+ * - Mark order on text nodes is normalized (sorted by type)
  * - The version tag is prepended as the first element of a wrapping array
  */
 export function canonicalize(input: ApprovalHashInput): string {
   const normalized: Record<string, unknown> = {
-    body: input.body,
+    body: normalizeMarks(input.body),
     title: input.title,
     summary: input.summary,
     outcome: input.outcome ?? null,
-    durationSeconds: input.durationSeconds,
+    durationSeconds: typeof input.durationSeconds === 'number' && !Number.isNaN(input.durationSeconds)
+      ? input.durationSeconds
+      : null,
     difficulty: input.difficulty,
     sources: input.sources,
     locale: input.locale,
-    mediaAssetIds: input.mediaAssetIds,
-    relatedResourceIds: input.relatedResourceIds,
+    mediaAssetIds: [...input.mediaAssetIds].sort(),
+    relatedResourceIds: [...input.relatedResourceIds].sort(),
     cta: input.cta,
     reviewDiscipline: input.reviewDiscipline,
     proposedAudience: input.proposedAudience,

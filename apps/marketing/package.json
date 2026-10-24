@@ -10,8 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "check": "node --experimental-strip-types scripts/check-content.mjs",
-    "content:cyrillic": "node --experimental-strip-types scripts/transliterate-content.mjs --write",
+    "check": "node scripts/check-content.mjs",
+    "content:cyrillic": "node scripts/transliterate-content.mjs --write",
     "images:sync": "node ../../packages/assets/scripts/sync-images.mjs public/images"
   },
   "dependencies": {

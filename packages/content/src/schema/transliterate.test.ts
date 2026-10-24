@@ -1,24 +1,26 @@
 /**
  * Tests for transliterateText() and transliterateDocument().
  *
- * Covers: table-driven transliteration from the exception JSON plus
+ * Covers: table-driven transliteration from the exception exports plus
  * uppercase digraphs LJ, NJ, DŽ, Lj, Nj, Dž (I16), document walk
- * preserving ids/hrefs/marks, mark arrays not shared with input (17).
+ * preserving ids/hrefs/marks, mark arrays not shared with input (17),
+ * all block types including checklistItem label, approvedMedia caption,
+ * and transcript text (Minor).
  */
 import { describe, expect, it } from 'vitest';
 
-// Load the exception JSON for table-driven tests
-import exceptions from '../../../i18n/scripts/transliteration-exceptions.json' with { type: 'json' };
+// Import exceptions from the canonical i18n export (Minor)
+import { protectedTerms, wordOverrides } from '@nestself/i18n/transliterate';
 
 import type { ContentDocument } from './document.ts';
 import { transliterateDocument, transliterateText } from './transliterate.ts';
 
 // ---------------------------------------------------------------------------
-// Table-driven: protected terms from exceptions JSON (I16)
+// Table-driven: protected terms from i18n export (Minor)
 // ---------------------------------------------------------------------------
 
 describe('transliterateText — protected terms (table-driven)', () => {
-  for (const term of exceptions.protected) {
+  for (const term of protectedTerms) {
     it(`preserves protected term "${term}"`, () => {
       const input = `pre ${term} post`;
       const result = transliterateText(input);
@@ -28,11 +30,11 @@ describe('transliterateText — protected terms (table-driven)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Table-driven: word overrides from exceptions JSON (I16)
+// Table-driven: word overrides from i18n export (Minor)
 // ---------------------------------------------------------------------------
 
 describe('transliterateText — word overrides (table-driven)', () => {
-  for (const [latin, cyrillic] of Object.entries(exceptions.wordOverrides)) {
+  for (const [latin, cyrillic] of Object.entries(wordOverrides)) {
     it(`transliterates "${latin}" to "${cyrillic}"`, () => {
       expect(transliterateText(latin)).toBe(cyrillic);
     });
@@ -90,7 +92,7 @@ describe('transliterateText', () => {
 });
 
 // ---------------------------------------------------------------------------
-// transliterateDocument
+// transliterateDocument — every block type (Minor)
 // ---------------------------------------------------------------------------
 
 describe('transliterateDocument', () => {
@@ -107,7 +109,7 @@ describe('transliterateDocument', () => {
     expect(result.schemaVersion).toBe(1);
   });
 
-  it('transliterates text nodes', () => {
+  it('transliterates text nodes in paragraphs', () => {
     const result = transliterateDocument(
       makeDoc([{ type: 'paragraph', content: [{ type: 'text', text: 'tekst' }] }]),
       'sr-Cyrl',
@@ -172,6 +174,92 @@ describe('transliterateDocument', () => {
     const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
     expect(attrs.stepNumber).toBe(1);
     expect(attrs.title).toBe('Корак један');
+  });
+
+  it('transliterates sectionHeading text', () => {
+    const result = transliterateDocument(
+      makeDoc([{ type: 'sectionHeading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Naslov' }] }]),
+      'sr-Cyrl',
+    );
+    const heading = result.content[0] as Record<string, unknown>;
+    const nodes = heading.content as Array<{ text: string }>;
+    expect(nodes[0]!.text).toBe('Наслов');
+  });
+
+  it('transliterates checklistItem label', () => {
+    const result = transliterateDocument(
+      makeDoc([{
+        type: 'checklist',
+        content: [{ type: 'checklistItem', attrs: { label: 'Proveri tekst' } }],
+      }]),
+      'sr-Cyrl',
+    );
+    const checklist = result.content[0] as Record<string, unknown>;
+    const items = checklist.content as Array<Record<string, unknown>>;
+    expect((items[0]!.attrs as Record<string, unknown>).label).toBe('Провери текст');
+  });
+
+  it('transliterates approvedMedia caption', () => {
+    const result = transliterateDocument(
+      makeDoc([{ type: 'approvedMedia', attrs: { mediaAssetId: 'vid-1', kind: 'video', caption: 'Video opis' } }]),
+      'sr-Cyrl',
+    );
+    const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
+    expect(attrs.mediaAssetId).toBe('vid-1');
+    expect(attrs.kind).toBe('video');
+    expect(attrs.caption).toBe('Видео опис');
+  });
+
+  it('transliterates transcript text content', () => {
+    const result = transliterateDocument(
+      makeDoc([{
+        type: 'transcript', attrs: { mediaAssetId: 'aud-1' },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'tekst transkripta' }] }],
+      }]),
+      'sr-Cyrl',
+    );
+    const transcript = result.content[0] as Record<string, unknown>;
+    const paras = transcript.content as Array<Record<string, unknown>>;
+    const texts = paras[0]!.content as Array<{ text: string }>;
+    expect(texts[0]!.text).toBe('текст транскрипта');
+  });
+
+  it('transliterates bulletList/orderedList text', () => {
+    const result = transliterateDocument(
+      makeDoc([{
+        type: 'bulletList',
+        content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'stavka' }] }] }],
+      }]),
+      'sr-Cyrl',
+    );
+    const list = result.content[0] as Record<string, unknown>;
+    const items = list.content as Array<Record<string, unknown>>;
+    const paras = items[0]!.content as Array<Record<string, unknown>>;
+    const texts = paras[0]!.content as Array<{ text: string }>;
+    expect(texts[0]!.text).toBe('ставка');
+  });
+
+  it('preserves relatedResource contentResourceId', () => {
+    const result = transliterateDocument(
+      makeDoc([{ type: 'relatedResource', attrs: { contentResourceId: 'res-123' } }]),
+      'sr-Cyrl',
+    );
+    const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
+    expect(attrs.contentResourceId).toBe('res-123');
+  });
+
+  it('transliterates professionalNote text', () => {
+    const result = transliterateDocument(
+      makeDoc([{
+        type: 'professionalNote', attrs: { noteKind: 'tip' },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'savet' }] }],
+      }]),
+      'sr-Cyrl',
+    );
+    const note = result.content[0] as Record<string, unknown>;
+    const paras = note.content as Array<Record<string, unknown>>;
+    const texts = paras[0]!.content as Array<{ text: string }>;
+    expect(texts[0]!.text).toBe('савет');
   });
 
   it('preserves hardBreak inside a paragraph', () => {

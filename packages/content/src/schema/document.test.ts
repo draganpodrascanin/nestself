@@ -142,7 +142,7 @@ describe('ContentDocumentSchema — valid blocks', () => {
     for (const ctaKind of ['open_content', 'open_collection'] as const) {
       expect(ContentDocumentSchema.safeParse(doc([{ type: 'cta', attrs: { ctaKind, targetId: 'res-1' } }])).success, ctaKind).toBe(true);
     }
-    expect(ContentDocumentSchema.safeParse(doc([{ type: 'cta', attrs: { ctaKind: 'open_service', targetId: 'checkin' } }])).success).toBe(true);
+    expect(ContentDocumentSchema.safeParse(doc([{ type: 'cta', attrs: { ctaKind: 'open_service', targetId: 'library' } }])).success).toBe(true);
   });
 
   it('accepts hardBreak inside a paragraph (R1)', () => {
@@ -405,6 +405,6 @@ describe('ContentDocumentSchema — CTA discriminated union (I6)', () => {
   });
 
   it('accepts open_service with valid capability', () => {
-    expect(ContentDocumentSchema.safeParse(doc([{ type: 'cta', attrs: { ctaKind: 'open_service', targetId: 'checkin' } }])).success).toBe(true);
+    expect(ContentDocumentSchema.safeParse(doc([{ type: 'cta', attrs: { ctaKind: 'open_service', targetId: 'library' } }])).success).toBe(true);
   });
 });

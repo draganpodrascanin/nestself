@@ -202,3 +202,10 @@ export * from './org-admin.ts';
 // ---------------------------------------------------------------------------
 
 export * from './ops-admin.ts';
+
+// ---------------------------------------------------------------------------
+// Content capabilities (C-11)
+// ---------------------------------------------------------------------------
+
+export { CONTENT_CAPABILITIES } from './content/capabilities.ts';
+export type { ContentCapability } from './content/capabilities.ts';

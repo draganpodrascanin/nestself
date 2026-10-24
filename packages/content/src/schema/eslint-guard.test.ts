@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /**
- * Proves the ESLint guard rejects React, editor and render imports
- * from schema/ and search/ (I12).
+ * Proves the ESLint guard rejects React, editor, render, and motion
+ * imports from schema/ and search/ (I12, N3).
  *
  * Runs ESLint programmatically on fixture strings to verify the
  * `no-restricted-imports` rule fires for all restricted patterns.
@@ -12,12 +12,21 @@ import { join } from 'node:path';
 
 const contentRoot = join(import.meta.dirname!, '..', '..');
 
+// Shared ESLint instance — reusing avoids the cold-start penalty that
+// causes timeouts under parallel vitest runs.
+let _eslint: ESLint | null = null;
+function getEslint(): ESLint {
+  if (!_eslint) {
+    _eslint = new ESLint({
+      overrideConfigFile: join(contentRoot, 'eslint.config.js'),
+      cwd: contentRoot,
+    });
+  }
+  return _eslint;
+}
+
 async function lintFixture(code: string, filename: string): Promise<ESLint.LintResult[]> {
-  const eslint = new ESLint({
-    overrideConfigFile: join(contentRoot, 'eslint.config.js'),
-    cwd: contentRoot,
-  });
-  return eslint.lintText(code, { filePath: filename });
+  return getEslint().lintText(code, { filePath: filename });
 }
 
 function hasRestrictedImport(results: ESLint.LintResult[]): boolean {
@@ -25,10 +34,10 @@ function hasRestrictedImport(results: ESLint.LintResult[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Forbidden imports from schema/ and search/
+// Forbidden imports from schema/ and search/ (I12)
 // ---------------------------------------------------------------------------
 
-describe('ESLint guard — forbidden imports (I12)', () => {
+describe('ESLint guard — forbidden imports (I12)', { timeout: 15_000 }, () => {
   const forbidden = [
     'react',
     'react/jsx-runtime',
@@ -58,10 +67,19 @@ describe('ESLint guard — forbidden imports (I12)', () => {
     });
   }
 
-  // Relative editor/render paths
-  for (const pattern of ['../editor/foo', '../render/bar']) {
+  // Relative editor/render paths (I12, N3: regex pattern)
+  for (const pattern of ['../editor/foo', '../render/bar', './render', './render/index.ts', '../editor']) {
     it(`rejects relative '${pattern}' from schema/`, async () => {
       const code = `import something from '${pattern}';\nexport default something;\n`;
+      const results = await lintFixture(code, 'src/schema/test-fixture.ts');
+      expect(hasRestrictedImport(results)).toBe(true);
+    });
+  }
+
+  // N3: framer-motion and motion/react paths merged from base config
+  for (const mod of ['framer-motion', 'motion/react']) {
+    it(`rejects '${mod}' from schema/ (N3 motion paths)`, async () => {
+      const code = `import { motion } from '${mod}';\nexport { motion };\n`;
       const results = await lintFixture(code, 'src/schema/test-fixture.ts');
       expect(hasRestrictedImport(results)).toBe(true);
     });
@@ -90,16 +108,32 @@ describe('ESLint guard — allowed imports', () => {
     const results = await lintFixture(code, 'src/components/test-fixture.ts');
     expect(hasRestrictedImport(results)).toBe(false);
   });
+
+  it('allows ../renderer-utils (not render or editor)', async () => {
+    const code = `import something from '../renderer-utils';\nexport default something;\n`;
+    const results = await lintFixture(code, 'src/schema/test-fixture.ts');
+    expect(hasRestrictedImport(results)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// .mjs files covered
+// Multiple file extensions covered (N3: widened files glob)
 // ---------------------------------------------------------------------------
 
-describe('ESLint guard — .mjs files', () => {
-  it('rejects react from schema .mjs file', async () => {
-    const code = `import something from 'react';\nexport default something;\n`;
-    const results = await lintFixture(code, 'src/schema/test-fixture.mjs');
-    expect(hasRestrictedImport(results)).toBe(true);
-  });
+describe('ESLint guard — file extensions (N3)', () => {
+  for (const ext of ['.ts', '.tsx', '.mjs', '.js', '.jsx', '.mts', '.cjs', '.cts']) {
+    it(`rejects react from schema ${ext} file`, async () => {
+      const code = `import something from 'react';\nexport default something;\n`;
+      const results = await lintFixture(code, `src/schema/test-fixture${ext}`);
+      expect(hasRestrictedImport(results)).toBe(true);
+    });
+  }
+
+  for (const ext of ['.ts', '.mjs']) {
+    it(`rejects react from search ${ext} file`, async () => {
+      const code = `import something from 'react';\nexport default something;\n`;
+      const results = await lintFixture(code, `src/search/test-fixture${ext}`);
+      expect(hasRestrictedImport(results)).toBe(true);
+    });
+  }
 });

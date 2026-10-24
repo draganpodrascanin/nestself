@@ -15,6 +15,7 @@
  * - CTA is a discriminated union on 'ctaKind' (I6).
  * - Link hrefs are validated at the Zod layer (I3/I4, R4).
  */
+import { CONTENT_CAPABILITIES, type ContentCapability } from '@nestself/contracts';
 import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
@@ -118,17 +119,11 @@ export type CtaKind = (typeof CTA_KINDS)[number];
 
 /**
  * Content capability keys for the open_service CTA.
- * Matches the content_capability enum values.
+ * Shared from @nestself/contracts to match the content_capability DB enum (N2).
  */
-export const CONTENT_CAPABILITIES = [
-  'checkin',
-  'journal',
-  'peer_support',
-  'expert_session',
-  'group_session',
-  'event',
-] as const;
-export const ContentCapabilitySchema = z.enum(CONTENT_CAPABILITIES);
+export { CONTENT_CAPABILITIES };
+export type { ContentCapability };
+const ContentCapabilitySchema = z.enum(CONTENT_CAPABILITIES);
 
 // ---------------------------------------------------------------------------
 // Media kind (C-05: audio, video, pdf)
@@ -316,54 +311,30 @@ export const RelatedResourceSchema = z.strictObject({
 export type RelatedResource = z.infer<typeof RelatedResourceSchema>;
 
 // ---------------------------------------------------------------------------
-// CTA — discriminated union on ctaKind (I6)
+// CTA — single strictObject, attrs discriminated on ctaKind (N4, I6)
 // ---------------------------------------------------------------------------
 
-/** CTAs that require a targetId (content/collection reference). */
-const CtaWithTargetSchema = z.strictObject({
-  type: z.literal('cta'),
-  attrs: z.strictObject({
-    ctaKind: z.enum(['open_content', 'open_collection']),
-    targetId: ContentIdSchema,
-    label: z.string().max(100).nullable().optional(),
-  }),
-});
+const CtaLabel = z.string().max(100).nullable().optional();
 
-/** CTA for open_service — requires a capability key. */
-const CtaServiceSchema = z.strictObject({
-  type: z.literal('cta'),
-  attrs: z.strictObject({
-    ctaKind: z.literal('open_service'),
-    targetId: ContentCapabilitySchema,
-    label: z.string().max(100).nullable().optional(),
-  }),
-});
-
-/** CTAs that forbid targetId (accept null from ProseMirror defaults). */
-const CtaNoTargetSchema = z.strictObject({
-  type: z.literal('cta'),
-  attrs: z.strictObject({
-    ctaKind: z.enum(['suggest_topic', 'ask_general_question', 'express_event_interest']),
-    targetId: z.null().optional(),
-    label: z.string().max(100).nullable().optional(),
-  }),
-});
-
-export const CtaSchema = z.union([
-  CtaWithTargetSchema,
-  CtaServiceSchema,
-  CtaNoTargetSchema,
+/** Attrs discriminated union on ctaKind. */
+const CtaAttrsSchema = z.discriminatedUnion('ctaKind', [
+  z.strictObject({ ctaKind: z.enum(['open_content', 'open_collection']), targetId: ContentIdSchema, label: CtaLabel }),
+  z.strictObject({ ctaKind: z.literal('open_service'), targetId: ContentCapabilitySchema, label: CtaLabel }),
+  z.strictObject({ ctaKind: z.enum(['suggest_topic', 'ask_general_question', 'express_event_interest']), targetId: z.null().optional(), label: CtaLabel }),
 ]);
+
+export const CtaSchema = z.strictObject({
+  type: z.literal('cta'),
+  attrs: CtaAttrsSchema,
+});
 export type Cta = z.infer<typeof CtaSchema>;
 
 // ---------------------------------------------------------------------------
-// Block node union — discriminated union on 'type' (I13)
+// Block node union — single discriminatedUnion on 'type' (N4, I13)
 // HardBreak is inline-only and NOT included here (R1).
-// CTA is appended via z.union because it shares 'type: cta' across
-// its own discriminated variants.
 // ---------------------------------------------------------------------------
 
-const DiscriminatedBlockSchema = z.discriminatedUnion('type', [
+export const BlockNodeSchema = z.discriminatedUnion('type', [
   SectionHeadingSchema,
   ParagraphSchema,
   BulletListSchema,
@@ -376,9 +347,8 @@ const DiscriminatedBlockSchema = z.discriminatedUnion('type', [
   ApprovedMediaSchema,
   TranscriptSchema,
   RelatedResourceSchema,
+  CtaSchema,
 ]);
-
-export const BlockNodeSchema = z.union([DiscriminatedBlockSchema, CtaSchema]);
 
 /**
  * The typed union of all block nodes. Used by ContentDocument and
