@@ -17,7 +17,7 @@ import { IdentityProviderService } from '../src/identity/identity-provider.servi
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, externalIdentities, grants } from '../src/db/schema/index.js';
+import { auditEvents, externalIdentities, grants, organizations } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -341,4 +341,118 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
       expect(res.body.createdGrant).toMatchObject({ subjectUserId: 'user_ivana', templateKey: 'employer_owner' });
     });
   });
+
+  describe('organizations from the operations workspace', () => {
+    type Org = { id: string; name: string; slug: string; status: string; createdAt: string };
+
+    it('inserts two more clients for search and paging', async () => {
+      await testDb.db.insert(organizations).values([
+        { id: 'org_test_alpha', name: 'Alpha Test Org', slug: 'alpha-test', status: 'ONBOARDING' },
+        { id: 'org_test_beta', name: 'Beta Test Org', slug: 'beta_test', status: 'ACTIVE' },
+      ]);
+    });
+
+    it('GET /ops/organizations lists clients by name with the five public fields', async () => {
+      const res = await nikola.agent.get('/api/ops/organizations').query({ limit: 100 });
+      expect(res.status).toBe(200);
+      expect(res.body.nextCursor).toBeNull();
+      const items = res.body.items as Org[];
+      expect(items.map((o) => o.id)).toEqual(expect.arrayContaining([ORG, 'org_test_alpha', 'org_test_beta']));
+      const names = items.map((o) => o.name);
+      expect([...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))).toEqual(names);
+      expect(Object.keys(items.find((o) => o.id === 'org_test_alpha')!).sort()).toEqual(['createdAt', 'id', 'name', 'slug', 'status']);
+      expect(items.find((o) => o.id === 'org_test_alpha')).toMatchObject({ slug: 'alpha-test', status: 'ONBOARDING' });
+    });
+
+    it('pages with the cursor through exactly the full list', async () => {
+      const full = await nikola.agent.get('/api/ops/organizations').query({ limit: 100 });
+      const all = (full.body.items as Org[]).map((o) => o.id);
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: request.Response = await nikola.agent
+          .get('/api/ops/organizations')
+          .query(cursor ? { limit: 1, cursor } : { limit: 1 });
+        expect(page.status).toBe(200);
+        seen.push(...(page.body.items as Org[]).map((o) => o.id));
+        cursor = page.body.nextCursor as string | null;
+      } while (cursor);
+      expect(seen).toEqual(all);
+    });
+
+    it('search matches a name or slug prefix, case-insensitively, with LIKE wildcards taken literally', async () => {
+      const byName = await nikola.agent.get('/api/ops/organizations').query({ search: 'alpha' });
+      expect((byName.body.items as Org[]).map((o) => o.id)).toEqual(['org_test_alpha']);
+
+      const bySlug = await nikola.agent.get('/api/ops/organizations').query({ search: 'BETA_' });
+      expect((bySlug.body.items as Org[]).map((o) => o.id)).toEqual(['org_test_beta']);
+
+      const wildcard = await nikola.agent.get('/api/ops/organizations').query({ search: '%' });
+      expect(wildcard.status).toBe(200);
+      expect(wildcard.body.items).toEqual([]);
+    });
+
+    it('GET /ops/organizations/:orgId returns one client; an unknown id is 404', async () => {
+      const res = await nikola.agent.get(`/api/ops/organizations/${ORG}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        id: ORG,
+        name: 'Example d.o.o.',
+        slug: 'example',
+        status: 'ACTIVE',
+        createdAt: expect.any(String),
+      });
+
+      const missing = await nikola.agent.get('/api/ops/organizations/org_missing');
+      expect(missing.status).toBe(404);
+      expect(missing.body.code).toBe('not_found');
+    });
+
+    it('outside the operations context both routes are refused with context_mismatch', async () => {
+      const toPersonal = await nikola.agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', nikola.csrf)
+        .send({ context: { kind: 'personal' } });
+      expect(toPersonal.status).toBe(200);
+
+      const list = await nikola.agent.get('/api/ops/organizations');
+      expect(list.status).toBe(403);
+      expect(list.body.code).toBe('context_mismatch');
+      const one = await nikola.agent.get(`/api/ops/organizations/${ORG}`);
+      expect(one.status).toBe(403);
+
+      const back = await nikola.agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', nikola.csrf)
+        .send({ context: { kind: 'operations' } });
+      expect(back.status).toBe(200);
+    });
+
+    it('unauthenticated requests are 401', async () => {
+      expect((await request(app.getHttpServer()).get('/api/ops/organizations')).status).toBe(401);
+    });
+  });
+
+  describe('pending invitations from the operations workspace', () => {
+    it('GET /ops/orgs/:orgId/invitations lists a staff-created invitation until it is revoked', async () => {
+      const created = await nikola.agent
+        .post(`/api/ops/orgs/${ORG}/invitations`)
+        .set('X-CSRF-Token', nikola.csrf)
+        .send({ email: 'ops-listed@example.com', templateKey: 'employee' });
+      expect(created.status).toBe(201);
+
+      const list = await nikola.agent.get(`/api/ops/orgs/${ORG}/invitations`);
+      expect(list.status).toBe(200);
+      expect(list.body.items[0]).toMatchObject({ id: created.body.id, email: 'ops-listed@example.com', revokedAt: null });
+      expect(list.body.items[0]).not.toHaveProperty('devToken');
+
+      const revoke = await nikola.agent
+        .delete(`/api/ops/orgs/${ORG}/invitations/${created.body.id}`)
+        .set('X-CSRF-Token', nikola.csrf);
+      expect(revoke.status).toBe(200);
+      const after = await nikola.agent.get(`/api/ops/orgs/${ORG}/invitations`).query({ limit: 100 });
+      expect((after.body.items as Array<{ id: string }>).map((i) => i.id)).not.toContain(created.body.id);
+    });
+  });
 });
+

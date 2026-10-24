@@ -32,6 +32,7 @@ function createMockInvitations() {
     findOrganizationName: vi.fn().mockResolvedValue('Example d.o.o.'),
     findByIdAndOrg: vi.fn(),
     revoke: vi.fn(),
+    listPending: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -363,6 +364,58 @@ describe('InvitationsService', () => {
       await expect(
         service.revoke('org_sample', 'inv_nonexistent', 'user_ivana'),
       ).rejects.toThrow(expect.objectContaining({ code: 'not_found' }));
+    });
+  });
+
+  describe('listPending', () => {
+    const pending = (id: string) => ({
+      id,
+      email: `${id}@example.com`,
+      orgId: 'org_sample',
+      orgUnitId: null,
+      templateKey: 'employee',
+      tokenHash: 'hash',
+      expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      revokedAt: null,
+      acceptedAt: null,
+      invitedByUserId: 'user_ivana',
+      importBatchId: null,
+      createdAt: new Date('2026-10-25T00:00:00.000Z'),
+    });
+
+    it('reads inside the organization scope and returns nextCursor when a further row exists', async () => {
+      invitations.listPending.mockResolvedValue([pending('inv_3'), pending('inv_2'), pending('inv_1')]);
+
+      const res = await service.listPending('org_sample', { limit: 2, cursor: 'inv_4', status: 'pending' });
+
+      expect(dbs.withOrgScope).toHaveBeenCalledWith('org_sample', expect.any(Function));
+      expect(invitations.listPending).toHaveBeenCalledWith(
+        'org_sample',
+        { limit: 2, cursor: 'inv_4', now: expect.any(Date) },
+        {},
+      );
+      expect(res.items.map((i) => i.id)).toEqual(['inv_3', 'inv_2']);
+      expect(res.nextCursor).toBe('inv_2');
+    });
+
+    it('never returns the token hash or a devToken, and ends with nextCursor null', async () => {
+      invitations.listPending.mockResolvedValue([pending('inv_1')]);
+
+      const res = await service.listPending('org_sample', { limit: 25, status: 'pending' });
+
+      expect(res.nextCursor).toBeNull();
+      expect(res.items[0]).toEqual({
+        id: 'inv_1',
+        email: 'inv_1@example.com',
+        orgId: 'org_sample',
+        orgUnitId: null,
+        templateKey: 'employee',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        revokedAt: null,
+        acceptedAt: null,
+        invitedByUserId: 'user_ivana',
+        createdAt: '2026-10-25T00:00:00.000Z',
+      });
     });
   });
 });

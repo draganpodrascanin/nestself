@@ -6,7 +6,7 @@
  * The create methods serve the seed and tests.
  */
 import { Injectable } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import { conversationMessages, conversations, intakeRecords } from '../schema/index.js';
@@ -17,6 +17,8 @@ export type ConversationMessageRow = typeof conversationMessages.$inferSelect;
 export type NewConversationMessage = typeof conversationMessages.$inferInsert;
 export type IntakeRecordRow = typeof intakeRecords.$inferSelect;
 export type NewIntakeRecord = typeof intakeRecords.$inferInsert;
+/** A conversation row with its message count; never a message body. */
+export type ConversationSummaryRow = ConversationRow & { messageCount: number };
 
 @Injectable()
 export class ProfessionalRepository {
@@ -29,6 +31,38 @@ export class ProfessionalRepository {
   async findConversation(id: string, tx?: DbExecutor): Promise<ConversationRow | null> {
     const [row] = await this.exec(tx).select().from(conversations).where(eq(conversations.id, id));
     return row ?? null;
+  }
+
+  /** Conversations of the given cases with their message counts, newest first. */
+  async listConversationsByCaseIds(caseIds: string[], tx?: DbExecutor): Promise<ConversationSummaryRow[]> {
+    if (caseIds.length === 0) return [];
+    return this.listSummaries(inArray(conversations.caseId, caseIds), tx);
+  }
+
+  /** Conversations in which the user is the employee participant, newest first. */
+  async listConversationsByEmployee(userId: string, tx?: DbExecutor): Promise<ConversationSummaryRow[]> {
+    return this.listSummaries(eq(conversations.employeeUserId, userId), tx);
+  }
+
+  private async listSummaries(
+    where: SQL,
+    tx?: DbExecutor,
+  ): Promise<ConversationSummaryRow[]> {
+    return this.exec(tx)
+      .select({
+        id: conversations.id,
+        orgId: conversations.orgId,
+        caseId: conversations.caseId,
+        employeeUserId: conversations.employeeUserId,
+        expertUserId: conversations.expertUserId,
+        createdAt: conversations.createdAt,
+        messageCount: sql<number>`count(${conversationMessages.id})::int`,
+      })
+      .from(conversations)
+      .leftJoin(conversationMessages, eq(conversationMessages.conversationId, conversations.id))
+      .where(where)
+      .groupBy(conversations.id)
+      .orderBy(desc(conversations.createdAt), desc(conversations.id));
   }
 
   /** Messages of one conversation, oldest first. */

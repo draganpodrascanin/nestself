@@ -448,4 +448,116 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
 
     expect(res.status).toBe(401);
   });
+
+  // -----------------------------------------------------------------------
+  // 14. GET /orgs/:orgId/invitations — pending list
+  // -----------------------------------------------------------------------
+
+  describe('pending invitation list', () => {
+    type Item = { id: string; email: string; createdAt: string; revokedAt: string | null; acceptedAt: string | null; expiresAt: string };
+
+    it('lists only pending invitations, newest first, without tokens', async () => {
+      // An expired, never-accepted row must not appear.
+      await testDb.db.insert(invitations).values({
+        id: 'inv_test_expired',
+        email: 'expired@example.com',
+        orgId: 'org_sample',
+        templateKey: 'employee',
+        tokenHash: 'hash_test_expired',
+        expiresAt: new Date('2026-01-02T00:00:00.000Z'),
+        invitedByUserId: 'user_ivana',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+
+      const res = await hrAgent.get('/api/orgs/org_sample/invitations').query({ limit: 100 });
+      expect(res.status).toBe(200);
+      expect(res.body.nextCursor).toBeNull();
+      const items = res.body.items as Item[];
+      expect(items.length).toBeGreaterThan(0);
+
+      const emails = items.map((i) => i.email);
+      expect(emails).not.toContain('newhire@example.com'); // accepted
+      expect(emails).not.toContain('torevoke@example.com'); // revoked
+      expect(emails).not.toContain('revoke2@example.com'); // revoked
+      expect(emails).not.toContain('expired@example.com');
+      for (const item of items) {
+        expect(item.revokedAt).toBeNull();
+        expect(item.acceptedAt).toBeNull();
+        expect(new Date(item.expiresAt).getTime()).toBeGreaterThan(Date.now());
+        expect(item).not.toHaveProperty('devToken');
+        expect(item).not.toHaveProperty('tokenHash');
+      }
+      const created = items.map((i) => i.createdAt);
+      expect([...created].sort().reverse()).toEqual(created);
+    });
+
+    it('pages with the cursor through exactly the full list', async () => {
+      const full = await hrAgent.get('/api/orgs/org_sample/invitations').query({ limit: 100 });
+      const all = (full.body.items as Item[]).map((i) => i.id);
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: request.Response = await hrAgent
+          .get('/api/orgs/org_sample/invitations')
+          .query(cursor ? { limit: 1, cursor } : { limit: 1 });
+        expect(page.status).toBe(200);
+        expect(page.body.items.length).toBeLessThanOrEqual(1);
+        seen.push(...(page.body.items as Item[]).map((i) => i.id));
+        cursor = page.body.nextCursor as string | null;
+      } while (cursor);
+      expect(seen).toEqual(all);
+    });
+
+    it('a newly created invitation is first; once revoked it leaves the list', async () => {
+      const created = await createInvitation({ email: 'listed@example.com', templateKey: 'employee' });
+      expect(created.status).toBe(201);
+      const first = await hrAgent.get('/api/orgs/org_sample/invitations').query({ limit: 1 });
+      expect(first.body.items[0].id).toBe(created.body.id);
+
+      await hrAgent.delete(`/api/orgs/org_sample/invitations/${created.body.id}`).set('X-CSRF-Token', hrCsrf);
+      const after = await hrAgent.get('/api/orgs/org_sample/invitations').query({ limit: 100 });
+      expect((after.body.items as Item[]).map((i) => i.id)).not.toContain(created.body.id);
+    });
+
+    it('an unknown cursor yields an empty page; a bad status or limit is 400', async () => {
+      const unknown = await hrAgent.get('/api/orgs/org_sample/invitations').query({ cursor: 'inv_missing' });
+      expect(unknown.status).toBe(200);
+      expect(unknown.body).toEqual({ items: [], nextCursor: null });
+
+      const status = await hrAgent.get('/api/orgs/org_sample/invitations').query({ status: 'revoked' });
+      expect(status.status).toBe(400);
+      const limit = await hrAgent.get('/api/orgs/org_sample/invitations').query({ limit: 500 });
+      expect(limit.status).toBe(400);
+    });
+
+    it('another organization in the route is refused with context_mismatch', async () => {
+      const res = await hrAgent.get('/api/orgs/org_other/invitations');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('context_mismatch');
+    });
+
+    it('an employee without people.invite is refused with 403', async () => {
+      const empAgent = request.agent(app.getHttpServer());
+      const startRes = await empAgent.post('/api/auth/email-otp/start').send({ email: 'user_jovan@example.com' });
+      const code = idp.sentCodes.filter((c) => c.email === 'user_jovan@example.com').pop()!.code;
+      const verifyRes = await empAgent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code });
+      const csrf = (verifyRes.headers['set-cookie'] as unknown as string[])
+        .find((c) => c.startsWith('nestself_csrf='))!
+        .match(/nestself_csrf=([^;]+)/)![1]!;
+      await empAgent.post('/api/auth/context').set('X-CSRF-Token', csrf).send({ context: { kind: 'organization', orgId: 'org_sample' } });
+
+      const res = await empAgent.get('/api/orgs/org_sample/invitations');
+      expect(res.status).toBe(403);
+      expect(res.body).not.toHaveProperty('items');
+    });
+
+    it('unauthenticated list returns 401', async () => {
+      const res = await request(app.getHttpServer()).get('/api/orgs/org_sample/invitations');
+      expect(res.status).toBe(401);
+    });
+  });
 });
+

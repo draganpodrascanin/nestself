@@ -8,6 +8,9 @@ import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   type InvitationCreateRequest,
   type InvitationImportRequest,
+  type InvitationListQuery,
+  type InvitationListResponse,
+  type InvitationResponse,
 } from '@nestself/contracts';
 import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
@@ -262,6 +265,23 @@ export class InvitationsService {
     });
 
     return { created, skipped, errors };
+  }
+
+  // -----------------------------------------------------------------------
+  // List pending
+  // -----------------------------------------------------------------------
+
+  /** Pending invitations of the organization, newest first, one page at a time. */
+  async listPending(orgId: string, query: InvitationListQuery): Promise<InvitationListResponse> {
+    const rows = await this.dbs.withOrgScope(orgId, (tx) =>
+      this.invitations.listPending(orgId, { limit: query.limit, cursor: query.cursor, now: new Date() }, tx),
+    );
+    const hasMore = rows.length > query.limit;
+    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    return {
+      items: items.map((row) => this.toResponse(row) as InvitationResponse),
+      nextCursor: hasMore ? items[items.length - 1]!.id : null,
+    };
   }
 
   // -----------------------------------------------------------------------

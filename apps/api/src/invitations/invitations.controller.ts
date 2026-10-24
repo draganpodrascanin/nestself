@@ -1,5 +1,5 @@
 /**
- * Org-scoped invitation routes: create, import, revoke.
+ * Org-scoped invitation routes: list pending, create, import, revoke.
  *
  * All routes under `/orgs/:orgId/invitations`. Require authorization via
  * `@Authorize()` with the appropriate action.
@@ -10,20 +10,26 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ACTIONS } from '@nestself/contracts';
 import type { Principal } from '@nestself/contracts';
 import {
   InvitationCreateRequestSchema,
   InvitationImportRequestSchema,
+  InvitationListQuerySchema,
+  type InvitationListQuery,
+  type InvitationListResponse,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
 import { orgResourceFromContext } from '../authz/resolvers.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { InvitationsService } from './invitations.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -62,6 +68,19 @@ export class InvitationsController {
     config: ConfigService,
   ) {
     this.isProduction = config.get<string>('NODE_ENV') === 'production';
+  }
+
+  // -----------------------------------------------------------------------
+  // GET /orgs/:orgId/invitations?cursor&limit&status=pending
+  // -----------------------------------------------------------------------
+
+  @Authorize(ACTIONS['people.invite'], orgResourceFromContext('invitation'))
+  @Get()
+  async list(
+    @Param('orgId') orgId: string,
+    @Query(new ZodValidationPipe(InvitationListQuerySchema)) query: InvitationListQuery,
+  ): Promise<InvitationListResponse> {
+    return this.invitations.listPending(orgId, query);
   }
 
   // -----------------------------------------------------------------------

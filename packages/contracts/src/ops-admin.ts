@@ -93,3 +93,34 @@ export const EmergencyRecordResponseSchema = z.object({
   content: z.unknown(),
 });
 export type EmergencyRecordResponse = z.infer<typeof EmergencyRecordResponseSchema>;
+
+// --- Organizations (client list for the operations workspace) ---
+
+/** Lifecycle of an employer client (`organizations.status`). */
+export const ORGANIZATION_STATUSES = ['ONBOARDING', 'ACTIVE', 'SUSPENDED', 'ENDED'] as const;
+export const OrganizationStatusSchema = z.enum(ORGANIZATION_STATUSES);
+export type OrganizationStatus = z.infer<typeof OrganizationStatusSchema>;
+
+/** `GET /ops/organizations`: ordered by name, then id; `search` matches a name or slug prefix. */
+export const OrganizationListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().min(1).max(200).optional(),
+});
+export type OrganizationListQuery = z.infer<typeof OrganizationListQuerySchema>;
+
+export const OrganizationResponseSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  slug: z.string(),
+  status: OrganizationStatusSchema,
+  createdAt: z.string().datetime(),
+});
+export type OrganizationResponse = z.infer<typeof OrganizationResponseSchema>;
+
+export const OrganizationListResponseSchema = z.object({
+  items: z.array(OrganizationResponseSchema),
+  /** Id of the last item; pass it back as `cursor` for the next page. */
+  nextCursor: z.string().nullable(),
+});
+export type OrganizationListResponse = z.infer<typeof OrganizationListResponseSchema>;

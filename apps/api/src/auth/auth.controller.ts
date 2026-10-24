@@ -236,10 +236,26 @@ export class AuthController {
   ) {
     const parsed = validate(TotpEnrolRequestSchema, body);
     // Public route: req.session is only present when the AuthenticationGuard ran
-    // (it does not for @Public), so the signed-in path is served by the
-    // challengeToken-less call from an authenticated client in a later phase.
+    // (it does not for @Public), so a signed-in caller uses POST
+    // /auth/me/totp/enrol below instead of omitting the challengeToken here.
     const accessToken = req.session?.cognito?.accessToken;
     return this.totp.totpEnrol(parsed.challengeToken, accessToken);
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/me/totp/enrol — authenticator enrolment for a signed-in user
+  // -----------------------------------------------------------------------
+
+  /**
+   * Starts enrolment with the session's identity-provider access token and
+   * returns `{ secretUri, challengeToken: null }`; the caller confirms with
+   * POST /auth/totp/confirm.
+   */
+  @Authenticated()
+  @Post('me/totp/enrol')
+  @HttpCode(200)
+  async totpEnrolSignedIn(@Req() req: HttpReq) {
+    return this.totp.totpEnrol(undefined, req.session?.cognito?.accessToken);
   }
 
   // -----------------------------------------------------------------------

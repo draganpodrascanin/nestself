@@ -5,6 +5,9 @@ import {
   EmergencyAccessListResponseSchema,
   EmergencyAccessResponseSchema,
   EmergencyRecordResponseSchema,
+  OrganizationListQuerySchema,
+  OrganizationListResponseSchema,
+  OrganizationResponseSchema,
   PlatformGrantCreateRequestSchema,
   UserAccessResponseSchema,
 } from './ops-admin.ts';
@@ -140,5 +143,26 @@ describe('ops-admin schemas', () => {
   it('AUTH_ERROR_CODES includes the emergency access codes', () => {
     expect(AUTH_ERROR_CODES).toContain('self_approval_denied');
     expect(AUTH_ERROR_CODES).toContain('emergency_not_active');
+  });
+
+  describe('organizations', () => {
+    const ORG = { id: 'org_1', name: 'Sample Org', slug: 'sample-org', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z' };
+
+    it('OrganizationResponseSchema accepts the five fields and strips the rest', () => {
+      expect(OrganizationResponseSchema.parse({ ...ORG, ownerUserId: 'user_ivana' })).toEqual(ORG);
+    });
+
+    it('OrganizationResponseSchema rejects an unknown status', () => {
+      expect(OrganizationResponseSchema.safeParse({ ...ORG, status: 'DELETED' }).success).toBe(false);
+    });
+
+    it('OrganizationListQuerySchema trims search and drops an empty one as invalid', () => {
+      expect(OrganizationListQuerySchema.parse({ search: '  sam ' })).toEqual({ limit: 25, search: 'sam' });
+      expect(OrganizationListQuerySchema.safeParse({ search: '   ' }).success).toBe(false);
+    });
+
+    it('OrganizationListResponseSchema accepts a last page', () => {
+      expect(OrganizationListResponseSchema.parse({ items: [ORG], nextCursor: null })).toEqual({ items: [ORG], nextCursor: null });
+    });
   });
 });

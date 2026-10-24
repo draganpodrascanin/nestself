@@ -39,10 +39,13 @@ function setup() {
     findConversation: vi.fn().mockResolvedValue(CONVERSATION),
     listMessages: vi.fn().mockResolvedValue([MESSAGE]),
     findIntake: vi.fn().mockResolvedValue(INTAKE),
+    listConversationsByCaseIds: vi.fn().mockResolvedValue([]),
+    listConversationsByEmployee: vi.fn().mockResolvedValue([]),
   };
-  const authz = { require: vi.fn().mockResolvedValue(undefined) };
-  const service = new ProfessionalService(repo as never, authz as never);
-  return { repo, authz, service };
+  const authz = { require: vi.fn().mockResolvedValue(undefined), allows: vi.fn().mockResolvedValue(true) };
+  const authzRepo = { findActiveAssignments: vi.fn().mockResolvedValue([]) };
+  const service = new ProfessionalService(repo as never, authz as never, authzRepo as never);
+  return { repo, authz, authzRepo, service };
 }
 
 const FORBIDDEN = new ApiHttpException({ status: 403, code: 'forbidden', message: 'Access denied' });
@@ -125,6 +128,83 @@ describe('ProfessionalService', () => {
     it('propagates a denial', async () => {
       ctx.authz.require.mockRejectedValue(FORBIDDEN);
       await expect(ctx.service.readAssignedIntake(PRINCIPAL, 'intake_1')).rejects.toBe(FORBIDDEN);
+    });
+  });
+
+  describe('conversation lists (metadata only)', () => {
+    const SUMMARY_ROW = { ...CONVERSATION, messageCount: 3 };
+    const OTHER_ROW = { ...CONVERSATION, id: 'conv_2', caseId: 'case_2', messageCount: 0 };
+    const assignment = (kind: string, targetId: string) => ({ id: `a_${kind}_${targetId}`, kind, targetId });
+
+    it('listAssignedConversations reads only CASE and SUPPORT_CASE targets, de-duplicated', async () => {
+      ctx.authzRepo.findActiveAssignments.mockResolvedValue([
+        assignment('CASE', 'case_1'),
+        assignment('SUPPORT_CASE', 'case_2'),
+        assignment('CASE', 'case_1'),
+        assignment('CLIENT', 'org_1'),
+        assignment('QUEUE', 'queue_1'),
+      ]);
+      ctx.repo.listConversationsByCaseIds.mockResolvedValue([SUMMARY_ROW, OTHER_ROW]);
+
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
+
+      expect(ctx.authzRepo.findActiveAssignments).toHaveBeenCalledWith('user_milica', expect.any(Date));
+      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith(['case_1', 'case_2']);
+      expect(res.items).toEqual([
+        {
+          id: 'conv_1',
+          caseId: 'case_1',
+          orgId: 'org_1',
+          employeeUserId: 'user_jovan',
+          expertUserId: 'user_milica',
+          createdAt: CREATED.toISOString(),
+          messageCount: 3,
+        },
+        expect.objectContaining({ id: 'conv_2', messageCount: 0 }),
+      ]);
+    });
+
+    it('listAssignedConversations drops rows the engine denies and never calls require (no audit, no step-up)', async () => {
+      ctx.authzRepo.findActiveAssignments.mockResolvedValue([assignment('CASE', 'case_1'), assignment('CASE', 'case_2')]);
+      ctx.repo.listConversationsByCaseIds.mockResolvedValue([SUMMARY_ROW, OTHER_ROW]);
+      ctx.authz.allows.mockImplementation(async (_p: unknown, _a: unknown, r: { id: string }) => r.id === 'case_2');
+
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
+
+      expect(res.items.map((i) => i.id)).toEqual(['conv_2']);
+      expect(ctx.authz.allows).toHaveBeenCalledWith(PRINCIPAL, 'conversation.read.assigned', {
+        type: 'conversation',
+        id: 'case_1',
+        orgId: 'org_1',
+        ownerId: 'user_jovan',
+        isConfidential: true,
+      });
+      expect(ctx.authz.require).not.toHaveBeenCalled();
+    });
+
+    it('listAssignedConversations returns an empty list without assignments', async () => {
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
+      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith([]);
+      expect(res).toEqual({ items: [] });
+    });
+
+    it('listOwnConversations reads by employee and filters with conversation.participate', async () => {
+      const jovan = { userId: 'user_jovan' } as Principal;
+      ctx.repo.listConversationsByEmployee.mockResolvedValue([SUMMARY_ROW]);
+
+      const res = await ctx.service.listOwnConversations(jovan);
+
+      expect(ctx.repo.listConversationsByEmployee).toHaveBeenCalledWith('user_jovan');
+      expect(ctx.authz.allows).toHaveBeenCalledWith(jovan, 'conversation.participate', expect.objectContaining({ ownerId: 'user_jovan' }));
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0]).not.toHaveProperty('messages');
+      expect(res.items[0]).not.toHaveProperty('body');
+    });
+
+    it('listOwnConversations returns nothing when the engine denies (for example a personal context)', async () => {
+      ctx.repo.listConversationsByEmployee.mockResolvedValue([SUMMARY_ROW]);
+      ctx.authz.allows.mockResolvedValue(false);
+      await expect(ctx.service.listOwnConversations(PRINCIPAL)).resolves.toEqual({ items: [] });
     });
   });
 });
