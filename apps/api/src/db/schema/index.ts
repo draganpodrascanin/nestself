@@ -13,4 +13,5 @@ export * from './content.js';
 export * from './professional.js';
 export * from './appointments.js';
 export * from './calls.js';
+export * from './appointment-approvals.js';
 export * from './relations.js';

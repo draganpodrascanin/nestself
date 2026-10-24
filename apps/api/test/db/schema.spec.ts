@@ -49,7 +49,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(10);
+    expect(Number(rows[0]!.n)).toBe(11);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -184,9 +184,9 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
                            'conversations','conversation_messages','intake_records','appointments',
                            'call_sessions','call_participants','call_events','call_client_events',
-                           'call_outcomes','call_feedback','call_consents')`,
+                           'call_outcomes','call_feedback','call_consents','appointment_approvals')`,
       );
-      expect(rows).toHaveLength(24);
+      expect(rows).toHaveLength(25);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
