@@ -2,6 +2,7 @@
 import nextConfig from 'eslint-config-next';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier/flat';
+import { motionImportRule } from './base.js';
 
 /** @type {import('eslint').Linter.Config[]} */
 export const next = [
@@ -13,6 +14,7 @@ export const next = [
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-restricted-imports': motionImportRule,
     },
   },
 ];

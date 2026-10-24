@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Field, Input, Textarea, Select } from './Field';
 import { expectNoA11yViolations } from '../../../test/axe';
@@ -117,5 +117,45 @@ describe('Select', () => {
     await user.keyboard('{Enter}');
     // The chosen value should be exposed via onValueChange
     expect(handleChange).toHaveBeenCalledWith('a', expect.anything());
+  });
+});
+
+describe('Select motion', () => {
+  const choices = [
+    { value: 'a', label: 'Alpha' },
+    { value: 'b', label: 'Beta' },
+  ];
+
+  it('typing on the closed, focused trigger still picks an option', async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(
+      <Field label="Choice">
+        <Select options={choices} placeholder="Pick one" onValueChange={handleChange} />
+      </Field>,
+    );
+    screen.getByRole('combobox').focus();
+    await user.keyboard('B');
+    await waitFor(() => expect(handleChange).toHaveBeenCalledWith('b', expect.anything()));
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('animates the listbox open, hides it after closing and reopens it', async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(
+      <Field label="Choice">
+        <Select options={choices} placeholder="Pick one" onValueChange={handleChange} />
+      </Field>,
+    );
+    const trigger = screen.getByRole('combobox');
+    await user.click(trigger);
+    const listbox = await screen.findByRole('listbox');
+    expect(listbox.style.transform).toMatch(/^scale\(/);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+    await user.click(trigger);
+    await user.click(await screen.findByRole('option', { name: 'Beta' }));
+    expect(handleChange).toHaveBeenCalledWith('b', expect.anything());
   });
 });

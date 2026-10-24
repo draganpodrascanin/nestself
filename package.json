@@ -15,6 +15,7 @@
     "verify": "pnpm lint && pnpm lint:root && pnpm typecheck && pnpm test && pnpm check && pnpm build",
     "e2e": "playwright test",
     "e2e:auth": "playwright test -c playwright.auth.config.ts",
+    "e2e:motion": "playwright test -c playwright.motion.config.ts",
     "e2e:update": "playwright test --update-snapshots",
     "storybook": "pnpm --filter @nestself/ui dev",
     "images:build": "pnpm --filter @nestself/assets build",
@@ -24,7 +25,7 @@
     "db:up": "docker compose -f docker/docker-compose.yml up -d postgres redis",
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "docker:api": "docker compose -f docker/docker-compose.yml --profile api up --build",
-    "lint:root": "eslint e2e playwright.config.ts playwright.auth.config.ts eslint.config.js"
+    "lint:root": "eslint e2e playwright.config.ts playwright.auth.config.ts playwright.motion.config.ts eslint.config.js"
   },
   "devDependencies": {
     "@axe-core/playwright": "catalog:",

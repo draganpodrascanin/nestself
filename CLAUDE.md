@@ -12,6 +12,18 @@ All shared dependency versions are pinned once in the `catalog:` section of `pnp
 
 Component and app code references semantic tokens only (`bg-primary`, `text-text-secondary`, `border-border-control`, `var(--color-focus)` and so on). No hex colour literal anywhere outside `packages/tokens/tokens.css`, `packages/tokens/tokens.json` and the token smoke test. The smoke check (`pnpm check`) scans `packages/ui/src`, `packages/ui-native/src` and `apps/*/src` and fails on a violation.
 
+## Motion rule
+
+Anything that appears, disappears, pops out, slides or expands is animated, on the way in and on the way out. That covers dialogs, alert dialogs, sheets and drawers, menus and dropdowns, selects, popovers, tooltips, comboboxes, toasts, accordions and collapsibles, the mobile navigation and any other disclosure, and indicators that move between positions (tabs). An exit is never an instant unmount, and a popout is never shown or hidden by toggling `display` alone.
+
+1. **Use Motion (`motion`, formerly Framer Motion) through `@nestself/ui`.** Components import `m`, `AnimatePresence`, `MotionFeatures` and `useMotionPreset` from `packages/ui/src/motion`; apps import the same names from `@nestself/ui` and never from `motion/*` or `framer-motion` (ESLint and `pnpm check` fail otherwise). Wrap animated parts in `MotionFeatures` (LazyMotion; `MotionLayoutFeatures` only where `layout` is needed), never the full `motion.*` component.
+2. **Base UI popups follow Base UI's Motion pattern.** Control `open`, put `<X.Portal keepMounted>` inside `<AnimatePresence>`, and compose `Popup` and `Backdrop` with `render={<m.div {...useMotionPreset('dialog')} />}`. `Select` always renders its portal and animates by `open` (see `Field.tsx`), because Base UI mounts the closed popup early for typeahead and keeps it mounted. Accordion and Collapsible panels are the exception: Base UI measures them, so they transition `height` from `--accordion-panel-height` (or `--collapsible-panel-height`) with `data-starting-style` / `data-ending-style` on the tokens. Hover, press, colour, switch thumbs, carets and tab indicators on always-mounted elements use CSS transitions on the tokens.
+3. **Timing comes from the tokens only:** fast 120 ms (hover, press, colour, small exits), standard 200 ms (menus, dialogs, content), slow 280 ms (sheets, drawers, larger context changes), easing `cubic-bezier(.2,0,0,1)`. Use the presets (`backdrop`, `dialog`, `popover`, `sheet-bottom|left|right`, `toast`, `disclosure`) or `motionDuration` / `motionEase`, and `duration-[var(--motion-*)] ease-standard` in classes (a bare `transition-*` utility already defaults to `--motion-fast` and the standard easing). No literal durations, delays or easings outside `packages/ui/src/motion`, `tokens.css` and `tokens.json`. Exits are no slower than entries.
+4. **Smoothness.** Animate `opacity` and a full `transform` string: Motion runs exactly those through the Web Animations API on the compositor, so they stay smooth while React mounts the popup's content, and Base UI can detect them to time the unmount. The `x` / `y` / `scale` shorthands run on the main thread and are only for `layout` animations (toasts). The only layout properties that animate are a disclosure's height, a progress fill's width and the tabs indicator's width (absolutely positioned, so nothing else reflows).
+5. **Reduced motion.** `useMotionPreset` switches to an opacity fade of at most 50 ms with no translate or scale, and the CSS tokens drop to 0 ms (design system: "Reduced 0 ms; optional brief fade up to 50 ms").
+6. **Prove it.** Each animated component has unit tests for its open and close lifecycle (the exit keeps it mounted, then it unmounts) and an entry in the Playwright motion suite (`pnpm e2e:motion`, `e2e/motion/`, against Storybook), which records every frame in Chromium and asserts token durations and easing, compositor-only properties, in-between frames on entry and exit, no flicker, and the reduced-motion fade. The motion contract check (`pnpm check`, `packages/ui/src/motion/motion-contract.test.ts`) parses `packages/ui/src` and the web apps and fails on an un-animated Base UI popup, portal, toast or collapsible panel, or on literal timing in classes, inline styles or CSS.
+7. **Native.** Motion does not support React Native. When `packages/ui-native` gains a popout, animate it with React Native's `Animated` or Reanimated on `nativeMotion` from `@nestself/tokens/native` and honour the system Reduce Motion setting.
+
 ## Content rule
 
 No client logos, invented statistics, availability promises ("24/7"), response-time promises, privacy guarantees, fake bookings, payments or messages. Interactive demonstrations state that nothing was created. Stock and generated people are never named experts or customers. Sample data is flagged and banner-labelled in the apps.
@@ -34,16 +46,18 @@ After the initial `pnpm install`, no worker runs `pnpm install`, `pnpm add`, `pn
 
 - **Unit and component tests**: colocated next to the source file as `*.test.ts` or `*.test.tsx`, run by Vitest (`pnpm test`).
 - **End-to-end tests**: in `e2e/` at the repo root, run by Playwright (`pnpm e2e`). See `e2e/README.md`.
-- **Check scripts** (token smoke, locale parity): run by `pnpm check`.
+- **Motion tests**: real-browser animation checks in `e2e/motion/`, run by Playwright against Storybook (`pnpm e2e:motion`).
+- **Check scripts** (token smoke, locale parity, motion contract): run by `pnpm check`.
 
 ## How to add a component
 
 1. Create the component file in `packages/ui/src/components/` (web) or `packages/ui-native/src/components/` (native).
 2. Export it from the package's `src/index.ts`.
 3. Use only semantic token references for colours -- no hex literals.
-4. Write a colocated test (`*.test.tsx`) covering keyboard interaction, error states and any accessibility contract.
-5. For web components, add a Storybook story in the same directory.
-6. Run `pnpm --filter <package> lint && pnpm --filter <package> typecheck && pnpm --filter <package> test` before committing.
+4. If any part of it pops out, slides or expands, animate it per the Motion rule and add it to `e2e/motion/`.
+5. Write a colocated test (`*.test.tsx`) covering keyboard interaction, error states and any accessibility contract.
+6. For web components, add a Storybook story in the same directory.
+7. Run `pnpm --filter <package> lint && pnpm --filter <package> typecheck && pnpm --filter <package> test` before committing.
 
 ## How to add a route
 

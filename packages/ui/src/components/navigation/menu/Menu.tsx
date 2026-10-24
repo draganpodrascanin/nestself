@@ -1,14 +1,26 @@
+'use client';
+
 import { Menu as BaseMenu } from '@base-ui/react/menu';
+import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
+import { AnimatePresence, m, MotionFeatures, useMotionPreset } from '../../../motion';
+
+/** Lets `MenuPopup` see the open state so the exit animation can play before unmount. */
+const MenuOpenContext = createContext(false);
 
 export interface MenuProps {
   children: ReactNode;
 }
 
 export function Menu({ children }: MenuProps) {
-  return <BaseMenu.Root>{children}</BaseMenu.Root>;
+  const [open, setOpen] = useState(false);
+  return (
+    <BaseMenu.Root open={open} onOpenChange={setOpen}>
+      <MenuOpenContext.Provider value={open}>{children}</MenuOpenContext.Provider>
+    </BaseMenu.Root>
+  );
 }
 
 export interface MenuTriggerProps {
@@ -44,20 +56,29 @@ export interface MenuPopupProps {
 }
 
 export function MenuPopup({ children, className, 'aria-label': ariaLabel }: MenuPopupProps) {
+  const open = useContext(MenuOpenContext);
+  const popupMotion = useMotionPreset('popover');
   return (
-    <BaseMenu.Portal>
-      <BaseMenu.Positioner>
-        <BaseMenu.Popup
-          aria-label={ariaLabel}
-          className={cn(
-            'shadow-menu rounded-control bg-surface z-[var(--z-dropdown)] p-1',
-            className,
-          )}
-        >
-          {children}
-        </BaseMenu.Popup>
-      </BaseMenu.Positioner>
-    </BaseMenu.Portal>
+    <MotionFeatures>
+      <AnimatePresence>
+        {open ? (
+          <BaseMenu.Portal keepMounted>
+            <BaseMenu.Positioner className="z-[var(--z-dropdown)]">
+              <BaseMenu.Popup
+                aria-label={ariaLabel}
+                render={<m.div {...popupMotion} />}
+                className={cn(
+                  'shadow-menu rounded-control bg-surface z-[var(--z-dropdown)] p-1 origin-[var(--transform-origin)]',
+                  className,
+                )}
+              >
+                {children}
+              </BaseMenu.Popup>
+            </BaseMenu.Positioner>
+          </BaseMenu.Portal>
+        ) : null}
+      </AnimatePresence>
+    </MotionFeatures>
   );
 }
 

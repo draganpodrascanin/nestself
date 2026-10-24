@@ -79,3 +79,33 @@ describe('Sheet', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });
+
+describe('Sheet motion', () => {
+  it.each(['bottom', 'left', 'right'] as const)('slides in from the %s edge', async (side) => {
+    render(
+      <Sheet defaultOpen>
+        <SheetContent title="Drawer" side={side}>
+          Body
+        </SheetContent>
+      </Sheet>,
+    );
+    const popup = await screen.findByRole('dialog');
+    expect(popup).toHaveAttribute('data-side', side);
+    expect(popup.style.transform).toMatch(/^translate3d\(/);
+  });
+
+  it('keeps the drawer mounted while it slides out, then unmounts it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Sheet defaultOpen>
+        <SheetContent title="Drawer" side="right">
+          Body
+        </SheetContent>
+      </Sheet>,
+    );
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  });
+});

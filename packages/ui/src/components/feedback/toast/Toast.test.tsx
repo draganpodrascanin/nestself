@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToastProvider } from './ToastProvider';
 import { useToast } from './useToast';
@@ -48,5 +48,24 @@ describe('Toast', () => {
       </ToastProvider>,
     );
     await expectNoA11yViolations(container);
+  });
+});
+
+describe('Toast motion', () => {
+  it('rises into the stack and is removed once its exit finishes', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider labels={toastLabels}>
+        <ToastTrigger title="Animated toast" />
+      </ToastProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Show toast' }));
+    const title = await screen.findByText('Animated toast');
+    const toast = title.closest<HTMLElement>('[class*="rounded-control"]');
+    expect(toast?.style.transform).toMatch(/translateY\(/);
+    expect(toast?.style.opacity).not.toBe('');
+    // Base UI hides the close button from assistive technology; Escape is the keyboard path.
+    await user.click(screen.getByLabelText('Dismiss'));
+    await waitFor(() => expect(screen.queryByText('Animated toast')).not.toBeInTheDocument());
   });
 });

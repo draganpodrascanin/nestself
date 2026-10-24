@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dialog, DialogTrigger, DialogContent } from './Dialog';
@@ -124,5 +124,51 @@ describe('Dialog', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Open via button child' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('Dialog motion', () => {
+  it('enters through the dialog preset (opacity and a composited transform)', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent title="Motion">Body</DialogContent>
+      </Dialog>,
+    );
+    const popup = await screen.findByRole('dialog');
+    expect(popup.style.transform).toMatch(/^translate3d\(.+\) scale\(.+\)$/);
+    expect(popup.style.opacity).not.toBe('');
+  });
+
+  it('keeps the popup mounted while the exit plays, then unmounts it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog defaultOpen>
+        <DialogContent title="Exit">Body</DialogContent>
+      </Dialog>,
+    );
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  });
+
+  it('controlled: reports Escape through onOpenChange and animates out when the prop closes', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const { rerender } = render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent title="Controlled">Body</DialogContent>
+      </Dialog>,
+    );
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    rerender(
+      <Dialog open={false} onOpenChange={onOpenChange}>
+        <DialogContent title="Controlled">Body</DialogContent>
+      </Dialog>,
+    );
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   });
 });

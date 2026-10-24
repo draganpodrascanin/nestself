@@ -48,6 +48,9 @@
   --font-weight-strong: var(--font-weight-strong);
 
   --ease-standard: var(--motion-ease);
+  /* A bare transition-* utility uses the motion tokens, not Tailwind's 150 ms default. */
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--motion-ease);
 
   --container-marketing: var(--content-marketing);
   --container-employee: var(--content-employee);

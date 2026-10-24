@@ -48,3 +48,14 @@ describe('Tabs', () => {
     await expectNoA11yViolations(container);
   });
 });
+
+describe('Tabs motion', () => {
+  it('renders one sliding indicator in the tab list, timed by the motion tokens', () => {
+    render(<TabsFixture />);
+    const tablist = screen.getByRole('tablist');
+    const indicators = tablist.querySelectorAll('span');
+    expect(indicators).toHaveLength(1);
+    expect(indicators[0]!.className).toContain('translate-x-[var(--active-tab-left)]');
+    expect(indicators[0]!.className).toContain('duration-[var(--motion-standard)]');
+  });
+});

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { List, X } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
+import { m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 export interface SiteHeaderLink {
   label: string;
@@ -38,7 +39,10 @@ export function SiteHeader({
   className,
 }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
+  /** True once the collapse has finished; the row then leaves the layout. */
+  const [collapsed, setCollapsed] = useState(true);
   const navId = 'site-nav';
+  const navMotion = useMotionPreset('disclosure');
 
   return (
     <header
@@ -55,13 +59,16 @@ export function SiteHeader({
         {brand.label}
       </a>
 
-      <div className="ml-auto flex items-center gap-1 @min-[1001px]:order-1">
+      <div className="ml-auto flex items-center gap-1 @min-[1000px]:order-1">
         {utilities}
         <button
           type="button"
           aria-expanded={open}
           aria-controls={navId}
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={() => {
+            setCollapsed(false);
+            setOpen((prev) => !prev);
+          }}
           className={cn(
             'min-h-11 min-w-11 pointer-coarse:min-h-12 pointer-coarse:min-w-12 hidden items-center justify-center rounded-control @max-[1000px]:inline-flex',
             'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
@@ -72,30 +79,52 @@ export function SiteHeader({
         </button>
       </div>
 
-      <nav
-        id={navId}
-        className={cn(
-          'gap-4 flex items-center ml-auto',
-          '@max-[1000px]:gap-1 @max-[1000px]:pt-4 @max-[1000px]:hidden @max-[1000px]:flex-[0_0_100%] @max-[1000px]:flex-col @max-[1000px]:items-stretch',
-          open && '@max-[1000px]:flex',
-        )}
-      >
-        {links.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            aria-current={link.current ? 'page' : undefined}
+      {/*
+        Below 1000 px the wrapper is the collapsible row that animates open and
+        closed; once collapsed it is `display: none`, so a closed menu adds no
+        row gap. That class is lifted before the row expands, so Motion measures
+        the real `auto` height. From 1000 px (`@min-[1000px]` meets
+        `@max-[1000px]`, which means below 1000 px) the wrapper is
+        `display: contents`: its height, opacity and visibility never reach the
+        inline navigation (the nav re-asserts `visible`, which inherits).
+      */}
+      <MotionFeatures>
+        <m.div
+          initial={false}
+          animate={open ? navMotion.animate : navMotion.exit}
+          onAnimationComplete={() => {
+            if (!open) setCollapsed(true);
+          }}
+          className={cn(
+            'overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1000px]:contents',
+            collapsed && '@max-[1000px]:hidden',
+          )}
+        >
+          <nav
+            id={navId}
             className={cn(
-              'text-[0.9375rem] text-text no-underline hover:text-primary hover:underline',
-              'min-h-11 @max-[1000px]:px-3 @max-[1000px]:min-h-12 flex items-center',
-              'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'gap-4 flex items-center ml-auto @min-[1000px]:visible',
+              '@max-[1000px]:gap-1 @max-[1000px]:pt-4 @max-[1000px]:flex-col @max-[1000px]:items-stretch',
             )}
           >
-            {link.label}
-          </a>
-        ))}
-        {actions}
-      </nav>
+            {links.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                aria-current={link.current ? 'page' : undefined}
+                className={cn(
+                  'text-[0.9375rem] text-text no-underline hover:text-primary hover:underline',
+                  'min-h-11 @max-[1000px]:px-3 @max-[1000px]:min-h-12 flex items-center',
+                  'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+                )}
+              >
+                {link.label}
+              </a>
+            ))}
+            {actions}
+          </nav>
+        </m.div>
+      </MotionFeatures>
     </header>
   );
 }

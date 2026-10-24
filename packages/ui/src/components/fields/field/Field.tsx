@@ -1,8 +1,12 @@
+'use client';
+
 import { Field as BaseField } from '@base-ui/react/field';
 import { Select as BaseSelect } from '@base-ui/react/select';
 import { CaretDown, Check } from '@phosphor-icons/react/dist/ssr';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
+import { m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 export interface FieldProps {
   label: string;
@@ -148,6 +152,21 @@ export function Select({
   'aria-labelledby': ariaLabelledBy,
   className,
 }: SelectProps) {
+  const [open, setOpen] = useState(false);
+  const popupMotion = useMotionPreset('popover');
+  /*
+   * The portal is always rendered: Base UI mounts the closed popup early (on
+   * focus) so typing on the closed trigger can pick an option, and keeps it
+   * mounted after closing. The popup therefore animates by `open` instead of
+   * through AnimatePresence; one that mounts closed starts at its exit state.
+   */
+  const motionElement = (
+    <m.div
+      initial={open ? popupMotion.initial : false}
+      animate={open ? popupMotion.animate : popupMotion.exit}
+    />
+  );
+
   return (
     <BaseSelect.Root
       value={value}
@@ -156,45 +175,57 @@ export function Select({
       disabled={disabled}
       name={name}
       items={options.map((opt) => ({ value: opt.value, label: opt.label }))}
+      open={open}
+      onOpenChange={setOpen}
     >
       <BaseSelect.Trigger
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         className={cn(
-          'min-h-12 px-3 inline-flex items-center justify-between rounded-control border border-border-control bg-surface text-text',
+          'group min-h-12 px-3 inline-flex items-center justify-between rounded-control border border-border-control bg-surface text-text',
           'data-disabled:bg-tint data-disabled:text-text-secondary',
           'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
           className,
         )}
       >
         <BaseSelect.Value placeholder={placeholder} />
-        <BaseSelect.Icon>
+        <BaseSelect.Icon
+          className={cn(
+            'transition-transform duration-[var(--motion-standard)] ease-standard motion-reduce:transition-none',
+            'group-data-popup-open:rotate-180',
+          )}
+        >
           <CaretDown size={16} aria-hidden />
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
-      <BaseSelect.Portal>
-        <BaseSelect.Positioner>
-          <BaseSelect.Popup className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu">
-            {options.map((opt) => (
-              <BaseSelect.Item
-                key={opt.value}
-                value={opt.value}
-                label={opt.label}
-                className={cn(
-                  'px-3 py-2 flex cursor-pointer items-center',
-                  'data-highlighted:bg-tint',
-                  'data-selected:font-[var(--font-weight-label)]',
-                )}
-              >
-                <BaseSelect.ItemText>{opt.label}</BaseSelect.ItemText>
-                <BaseSelect.ItemIndicator className="ml-auto">
-                  <Check size={16} aria-hidden="true" />
-                </BaseSelect.ItemIndicator>
-              </BaseSelect.Item>
-            ))}
-          </BaseSelect.Popup>
-        </BaseSelect.Positioner>
-      </BaseSelect.Portal>
+      <MotionFeatures>
+        <BaseSelect.Portal>
+          <BaseSelect.Positioner className="z-[var(--z-dropdown)]">
+            <BaseSelect.Popup
+              render={motionElement}
+              className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu origin-[var(--transform-origin)]"
+            >
+              {options.map((opt) => (
+                <BaseSelect.Item
+                  key={opt.value}
+                  value={opt.value}
+                  label={opt.label}
+                  className={cn(
+                    'px-3 py-2 flex cursor-pointer items-center',
+                    'data-highlighted:bg-tint',
+                    'data-selected:font-[var(--font-weight-label)]',
+                  )}
+                >
+                  <BaseSelect.ItemText>{opt.label}</BaseSelect.ItemText>
+                  <BaseSelect.ItemIndicator className="ml-auto">
+                    <Check size={16} aria-hidden="true" />
+                  </BaseSelect.ItemIndicator>
+                </BaseSelect.Item>
+              ))}
+            </BaseSelect.Popup>
+          </BaseSelect.Positioner>
+        </BaseSelect.Portal>
+      </MotionFeatures>
     </BaseSelect.Root>
   );
 }
