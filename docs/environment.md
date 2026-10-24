@@ -14,7 +14,7 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `DATABASE_POOL_MAX` | Maximum connections in the pg Pool | `10` |
 | `TEST_DATABASE_URL` | Integration tests only: a server and base name the suites may drop and recreate databases under (`<name>_<prefix>_schema`, `<name>_<prefix>_auth` ...) | unset (suites skip) |
 | `TEST_DATABASE_PREFIX` | Integration tests only: the `<prefix>` in test database names (letters, digits, underscores) | first 8 hex characters of the SHA-1 of the repository root path |
-| `E2E_DATABASE_URL` | `pnpm e2e:auth` only: the database the stub API uses; dropped, recreated, migrated and seeded on every run | `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server |
+| `E2E_DATABASE_URL` | `pnpm e2e:auth` only: the database the stub API uses; dropped, recreated, migrated and seeded on every run, so it must name a `nestself_e2e_*` or `nestself_test_*` database (others are refused) | `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server |
 | `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction (set to 1 or more behind a load balancer) | `0` |
 
 ### Authentication mode

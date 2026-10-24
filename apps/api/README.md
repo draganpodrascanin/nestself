@@ -57,7 +57,7 @@ Unit tests sit next to the code. The integration suites in `test/` boot the appl
 
 Each suite's database is `<base>_<prefix>_<suffix>`, where `<base>` is the database in `TEST_DATABASE_URL`, `<suffix>` names the suite and `<prefix>` is `TEST_DATABASE_PREFIX` or, when that is unset, the first eight hex characters of the SHA-1 of the repository root path (`test/db/test-database-name.ts`). Git worktrees of the repository therefore get separate databases on the same server and can run the same suite at the same time. Set `TEST_DATABASE_PREFIX` in CI or when you want a readable name; old databases are not removed automatically.
 
-`scripts/reset-database.ts <name> [--ensure]` drops and recreates (or, with `--ensure`, only creates) the database in `DATABASE_URL`, and refuses unless `<name>` matches that database. The Playwright auth stack uses it with `db:migrate` and `db:seed` to prepare `nestself_e2e_<prefix>`; it does not run against the `.env` database unless you name it.
+`scripts/reset-database.ts <name> [--ensure]` drops and recreates (or, with `--ensure`, only creates) the database in `DATABASE_URL`, and refuses unless `<name>` matches that database and is a `nestself_e2e_*` / `nestself_test_*` database (never `postgres` or a template); it drops `WITH (FORCE)`, falling back to terminating sessions on servers older than PostgreSQL 13. The Playwright auth stack uses it with `db:migrate` and `db:seed` to prepare `nestself_e2e_<prefix>`; it does not run against the `.env` database unless you name it.
 
 ### Schema changes
 

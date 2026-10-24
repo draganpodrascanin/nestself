@@ -10,7 +10,7 @@
  * the Playwright config can import it.
  */
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 /** PostgreSQL truncates identifiers longer than this many bytes. */
@@ -51,7 +51,8 @@ export function testDatabasePrefix(opts: TestDatabaseNameOptions = {}): string {
     }
     return lowered;
   }
-  const root = findRepositoryRoot(opts.cwd ?? process.cwd());
+  // realpath so a symlinked checkout hashes the same as its target.
+  const root = realpathSync(findRepositoryRoot(opts.cwd ?? process.cwd()));
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
 
@@ -73,4 +74,33 @@ export function testDatabaseName(
     throw new Error(`Test database suffix "${suffix}" is too long for a PostgreSQL identifier`);
   }
   return `${baseName.slice(0, room)}${tail}`;
+}
+
+/** Databases a reset must never touch, whatever their URL says. */
+const PROTECTED_DATABASES = new Set(['postgres', 'template0', 'template1']);
+
+/** Only databases created for tests or the e2e stack may be dropped. */
+const DISPOSABLE_DATABASE = /^nestself_(e2e|test)_[a-z0-9_]+$/;
+
+/**
+ * Why `name` must not be dropped and recreated, or null when it is a
+ * disposable test database (`nestself_e2e_*` / `nestself_test_*`, at most
+ * 63 characters). Shared by `scripts/reset-database.ts` and the Playwright
+ * setup so a stray `E2E_DATABASE_URL` (for example the dev `nestself`) is
+ * refused before anything runs.
+ */
+export function disposableDatabaseProblem(name: string): string | null {
+  if (PROTECTED_DATABASES.has(name)) return `"${name}" is a PostgreSQL system database`;
+  if (name.length > MAX_IDENTIFIER_LENGTH) {
+    return `"${name}" is longer than ${MAX_IDENTIFIER_LENGTH} characters`;
+  }
+  if (!DISPOSABLE_DATABASE.test(name)) {
+    return `"${name}" does not match nestself_e2e_* or nestself_test_* (letters, digits, underscores)`;
+  }
+  return null;
+}
+
+/** `nestself_e2e_<prefix>`, capped at PostgreSQL's identifier limit. */
+export function e2eDatabaseName(opts: TestDatabaseNameOptions = {}): string {
+  return `nestself_e2e_${testDatabasePrefix(opts)}`.slice(0, MAX_IDENTIFIER_LENGTH);
 }

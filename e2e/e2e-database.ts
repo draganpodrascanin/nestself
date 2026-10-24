@@ -6,20 +6,38 @@
  * suites' rule (`TEST_DATABASE_PREFIX`, else a hash of the repository root)
  * so worktrees never share, and never drop, one another's database.
  */
-import { testDatabasePrefix } from '../apps/api/test/db/test-database-name.ts';
+import {
+  disposableDatabaseProblem,
+  e2eDatabaseName,
+} from '../apps/api/test/db/test-database-name.ts';
 
 export const MISSING_DATABASE_MESSAGE =
   'pnpm e2e:auth needs a disposable database: set TEST_DATABASE_URL (for example ' +
   'postgresql://nestself:nestself_dev@localhost:54329/nestself_test) or E2E_DATABASE_URL. ' +
   'The run drops and recreates that database; it never uses DATABASE_URL from apps/api/.env.';
 
+/**
+ * The e2e database URL, or null when neither variable is set. Throws when
+ * `E2E_DATABASE_URL` names a database the reset must not drop (anything but
+ * `nestself_e2e_*` / `nestself_test_*`), so the run stops before any server
+ * starts.
+ */
 export function e2eDatabaseUrl(env: Record<string, string | undefined> = process.env): string | null {
   const explicit = env.E2E_DATABASE_URL?.trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    const problem = disposableDatabaseProblem(databaseNameOf(explicit));
+    if (problem) {
+      throw new Error(
+        `E2E_DATABASE_URL is refused: ${problem}. pnpm e2e:auth drops and recreates this ` +
+          'database, so it must be a disposable nestself_e2e_* or nestself_test_* database.',
+      );
+    }
+    return explicit;
+  }
   const base = env.TEST_DATABASE_URL?.trim();
   if (!base) return null;
   const url = new URL(base);
-  url.pathname = `/nestself_e2e_${testDatabasePrefix({ env })}`;
+  url.pathname = `/${e2eDatabaseName({ env })}`;
   return url.toString();
 }
 

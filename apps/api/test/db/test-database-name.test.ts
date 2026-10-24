@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   MAX_IDENTIFIER_LENGTH,
+  disposableDatabaseProblem,
+  e2eDatabaseName,
   findRepositoryRoot,
   testDatabaseName,
 } from './test-database-name.js';
@@ -60,5 +62,38 @@ describe('testDatabaseName', () => {
     expect(name).toHaveLength(MAX_IDENTIFIER_LENGTH);
     expect(name).toMatch(/_[0-9a-f]{8}_authzrepo$/);
     expect(testDatabaseName('short', 'x', { env: {}, cwd: root }).length).toBeLessThan(63);
+  });
+});
+
+describe('e2eDatabaseName', () => {
+  it('uses the same per-root prefix and stays within the identifier limit', () => {
+    const root = fakeRepo();
+    expect(e2eDatabaseName({ env: {}, cwd: root })).toMatch(/^nestself_e2e_[0-9a-f]{8}$/);
+    const long = e2eDatabaseName({ env: { TEST_DATABASE_PREFIX: 'p'.repeat(80) } });
+    expect(long).toHaveLength(MAX_IDENTIFIER_LENGTH);
+  });
+});
+
+describe('disposableDatabaseProblem', () => {
+  it.each(['nestself_e2e_7f1eee9b', 'nestself_test_7f1eee9b_grants', 'nestself_test_ci_auth'])(
+    'accepts %s',
+    (name) => {
+      expect(disposableDatabaseProblem(name)).toBeNull();
+    },
+  );
+
+  it.each(['postgres', 'template0', 'template1'])('refuses the system database %s', (name) => {
+    expect(disposableDatabaseProblem(name)).toMatch(/system database/);
+  });
+
+  it.each(['nestself', 'nestself_test', 'nestself_e2e', 'other_e2e_x', 'nestself_e2e_A"x'])(
+    'refuses %s',
+    (name) => {
+      expect(disposableDatabaseProblem(name)).toMatch(/does not match/);
+    },
+  );
+
+  it('refuses a name over the identifier limit', () => {
+    expect(disposableDatabaseProblem(`nestself_e2e_${'a'.repeat(60)}`)).toMatch(/longer than/);
   });
 });
