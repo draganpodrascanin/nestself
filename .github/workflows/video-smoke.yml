@@ -1,0 +1,144 @@
+# Nightly real-provider smoke test for consultation calls (PLT-13, OPS-33,
+# D-CW-33, guidelines 17.5, CW-R-90).
+#
+# Starts the API with VIDEO_PROVIDER=chime against the dev account
+# (eu-central-1 only), then e2e/calls/video-smoke.spec.ts joins one real
+# Amazon Chime SDK meeting from two Chromium contexts with fake camera and
+# microphone (--use-fake-device-for-media-stream) and asserts that each side
+# receives the other's audio (bytes and audio energy) and video for 30 s.
+# The expert then ends the meeting for everyone, which deletes it.
+#
+# Gated on the VIDEO_SMOKE_ENABLED secret: without it (or with any value
+# other than "true") the smoke job is skipped, not failed. Never a pull
+# request check: nightly schedule and manual dispatch only. A failure does
+# not block CI; it opens (or comments on) a `video-smoke` issue.
+#
+# Secrets: VIDEO_SMOKE_ENABLED ("true"), VIDEO_SMOKE_ROLE_ARN (an IAM role in
+# the dev account trusted for this repository's OIDC, allowed the Chime SDK
+# meetings calls and the events queue), CHIME_EVENTS_QUEUE_URL,
+# CHIME_EVENTS_QUEUE_ARN and RECORDINGS_BUCKET (from
+# `node infra/cdk/scripts/env-from-outputs.mjs dev`).
+name: video-smoke
+
+on:
+  schedule:
+    # 02:30 UTC every night.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: video-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          VIDEO_SMOKE_ENABLED: ${{ secrets.VIDEO_SMOKE_ENABLED }}
+        run: |
+          if [ "$VIDEO_SMOKE_ENABLED" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=video-smoke skipped::VIDEO_SMOKE_ENABLED is not set to true."
+          fi
+
+  smoke:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: nestself
+          POSTGRES_PASSWORD: nestself_dev
+          POSTGRES_DB: postgres
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd="pg_isready -U nestself"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      CI: 'true'
+      VIDEO_SMOKE_ENABLED: 'true'
+      # e2e/calls/start-api.mjs: the real provider instead of FakeVideoProvider.
+      E2E_CALLS_VIDEO_PROVIDER: chime
+      CHIME_REGION: eu-central-1
+      AWS_REGION: eu-central-1
+      STAGE: dev
+      CHIME_EVENTS_QUEUE_URL: ${{ secrets.CHIME_EVENTS_QUEUE_URL }}
+      CHIME_EVENTS_QUEUE_ARN: ${{ secrets.CHIME_EVENTS_QUEUE_ARN }}
+      RECORDINGS_BUCKET: ${{ secrets.RECORDINGS_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.10.0'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # The journeys' database helpers use psql (preinstalled) and redis-cli.
+      - run: sudo apt-get update && sudo apt-get install -y redis-tools
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.VIDEO_SMOKE_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Real Chime meeting from two Chromium contexts
+        run: pnpm exec playwright test -c playwright.calls.config.ts --project=video-smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: video-smoke-results
+          path: e2e/test-results/calls/
+          retention-days: 7
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="video-smoke failed"
+          number=$(gh issue list --state open --label video-smoke --search "$title in:title" --json number --jq '.[0].number')
+          body="The nightly real-provider smoke test failed: $RUN_URL"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh label create video-smoke --color B60205 --description "Nightly Chime smoke test" 2>/dev/null || true
+            gh issue create --title "$title" --label video-smoke --body "$body"
+          fi
