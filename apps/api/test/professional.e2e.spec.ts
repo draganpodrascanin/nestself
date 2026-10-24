@@ -85,7 +85,7 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     };
     // Milica reaches the case through her seeded expert grant
     // (assigned_cases) and the seeded CASE assignment. Nikola gets a
-    // platform_owner grant to prove a platform grant never reaches
+    // platform_owner grant listing the action, to show it returns no
     // confidential content.
     const platformOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'platform_owner')!;
     await testDb.db.insert(grants).values({
@@ -201,9 +201,11 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   it('a platform_owner grant does not reach the conversation', async () => {
     const nikola = await signInStaff('user_nikola', { kind: 'operations' });
     const res = await nikola.get(CONV);
-    // AuthorizationService.require answers 404 only to callers without any
-    // visibility into the organization; staff templates count as visibility,
-    // so platform staff get 403. Either way no content is returned.
+    // Nikola holds no CASE assignment, so the engine denies at the
+    // assignment step (no_matching_assignment) before grants are matched;
+    // the exclusion of platform and other administrative scopes is proven by
+    // the golden rows CONF-DENY-01/02/05/06. Staff templates count as
+    // organization visibility, so require() answers 403, not 404.
     expect(res.status).toBe(403);
     expect(res.body).not.toHaveProperty('messages');
 

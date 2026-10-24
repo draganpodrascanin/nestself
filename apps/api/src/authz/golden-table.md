@@ -28,5 +28,18 @@ paths, self-approval, emergency access lifecycle, confidential-domain
 isolation, membership edge cases, and user-state denials.
 
 Labels use prefixes: EMP, MGR, ORG, PLAT, EXP, FIN, CLFIN, COORD, CMS,
-LEAD, OPS, EVT, SYS, CONF-DENY (professional-module resource shape:
-administrative grants denied, CASE assignment and participant paths allowed).
+LEAD, OPS, EVT, SYS, CONF-DENY.
+
+CONF-DENY rows use the professional module's resource shape (`id` = case
+id, `ownerId` = employee, `isConfidential: true`) on
+`conversation.read.assigned` / `conversation.participate`:
+
+- CONF-DENY-01: `platform` grant (platform_owner), matching CASE assignment: denied `no_matching_grant`.
+- CONF-DENY-02: `organization` grant (hr_admin), matching CASE assignment: denied `no_matching_grant`.
+- CONF-DENY-03: `assigned_cases` grant (expert), matching CASE assignment: allowed.
+- CONF-DENY-04: `own` grant (employee), participant: allowed.
+- CONF-DENY-05: `org_unit` grant with descendants (team_manager), matching CASE assignment: denied `no_matching_grant`.
+- CONF-DENY-06: `assigned_clients` grant (client_operations), matching CASE and CLIENT assignments: denied `no_matching_grant`.
+
+The deny rows carry a matching CASE assignment, so step 4 passes and the
+denial comes from the step 5 administrative-scope exclusion.

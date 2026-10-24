@@ -26,6 +26,9 @@ export const conversations = pgTable(
     orgId: text()
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    // TODO(phase-2-readiness): case_id is unconstrained and CASE assignments
+    // match on targetId only. Blocker for any write path: add a
+    // cases(id, org_id) table and FK this column to it.
     caseId: text().notNull(),
     employeeUserId: text()
       .notNull()
@@ -78,6 +81,9 @@ export const intakeRecords = pgTable(
     orgId: text()
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    // TODO(phase-2-readiness): case_id is unconstrained and CASE assignments
+    // match on targetId only. Blocker for any write path: add a
+    // cases(id, org_id) table and FK this column to it.
     caseId: text().notNull(),
     employeeUserId: text()
       .notNull()
