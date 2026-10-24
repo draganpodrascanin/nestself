@@ -10,6 +10,7 @@ import { NestSelfComputeStack } from '../lib/compute-stack.js';
 import { NestSelfEdgeStack } from '../lib/edge-stack.js';
 import { NestSelfObservabilityStack } from '../lib/observability-stack.js';
 import { NestSelfCiStack } from '../lib/ci-stack.js';
+import { NestSelfVideoStack } from '../lib/video-stack.js';
 import { getStageConfig } from '../lib/config.js';
 
 const sharedEnv = { account: '111111111111', region: 'eu-central-1' };
@@ -38,6 +39,21 @@ describe('cdk-nag AwsSolutions -- auth stack', () => {
     const app = new cdk.App();
     const config = getStageConfig('production');
     const _stack = new NestSelfAuthStack(app, 'NagProdAuth', {
+      config,
+      env: sharedEnv,
+      ...synthesizerProps,
+    });
+    Validations.of(app).addPlugins(new AwsSolutionsChecks());
+    const assembly = app.synth();
+    expect(assembly).toBeDefined();
+  });
+});
+
+describe('cdk-nag AwsSolutions -- video stack', () => {
+  it('dev video stack (own key) synthesizes with nag plugin without violations', () => {
+    const app = new cdk.App();
+    const config = getStageConfig('dev');
+    const _stack = new NestSelfVideoStack(app, 'NagDevVideo', {
       config,
       env: sharedEnv,
       ...synthesizerProps,
@@ -98,6 +114,13 @@ describe('cdk-nag AwsSolutions -- staging full synth', () => {
       app, 'NagStagingCI',
       { config, env: sharedEnv, ...synthesizerProps },
     );
+
+    const _video = new NestSelfVideoStack(app, 'NagStagingVideo', {
+      config,
+      env: sharedEnv,
+      platformKey: securityBaseline.platformKey,
+      ...synthesizerProps,
+    });
 
     Validations.of(app).addPlugins(new AwsSolutionsChecks());
     const assembly = app.synth();

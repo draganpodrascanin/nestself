@@ -1,6 +1,6 @@
 # NestSelf CDK Infrastructure
 
-AWS CDK project for the NestSelf platform. Defines the auth, network, data, security-baseline, compute, edge, observability and CI stacks.
+AWS CDK project for the NestSelf platform. Defines the auth, video, network, data, security-baseline, compute, edge, observability and CI stacks.
 
 First-time setup of an AWS account, credentials, IAM permissions and the environment variables the apps need is written step by step in `CDK-setup.md` at the repository root. This file is the reference for the stacks themselves.
 
@@ -8,9 +8,9 @@ First-time setup of an AWS account, credentials, IAM permissions and the environ
 
 | Stage | Account | Description |
 |---|---|---|
-| `dev` | shared dev account | Auth stack only. Shared Cognito pool `nestself-dev`, prefix domain, no WAF, no SES, `DESTROY` removal policy, localhost callback URLs. |
-| `staging` | dedicated | All eight stacks. Custom domain (follow-up), WAF, SES, `RETAIN`. |
-| `production` | dedicated | All eight stacks. Custom domain, WAF, SES, multi-AZ RDS, VPC flow logs, `RETAIN`. |
+| `dev` | shared dev account | Auth and video stacks only. Shared Cognito pool `nestself-dev`, prefix domain, no WAF, no SES, `DESTROY` removal policy, localhost callback URLs. The video stack brings its own KMS key. |
+| `staging` | dedicated | All nine stacks. Custom domain (follow-up), WAF, SES, `RETAIN`. |
+| `production` | dedicated | All nine stacks. Custom domain, WAF, SES, multi-AZ RDS, VPC flow logs, `RETAIN`. |
 
 ## Deployed environments
 
@@ -35,6 +35,7 @@ aws cognito-idp delete-user-pool --user-pool-id <id>
 | Stack | Key resources | Deployed in |
 |---|---|---|
 | `NestSelfAuthStack` | Cognito user pool, app clients, Lambda triggers, WAF, Secrets Manager | All stages |
+| `NestSelfVideoStack` | `chime-events` SQS queue and DLQ, EventBridge rule, recordings bucket, `VideoApiPolicy` and `VideoWorkerPolicy` | dev (alone, own key); staging and production (platform key) |
 | `NestSelfSecurityBaselineStack` | KMS keys, Route 53 hosted zone, CloudTrail | staging, production |
 | `NestSelfNetworkStack` | VPC, subnets, NAT, VPC endpoints | staging, production |
 | `NestSelfDataStack` | RDS PostgreSQL 17, ElastiCache Valkey | staging, production |
@@ -62,7 +63,7 @@ Deployment happens in three steps, matching the product rollout. Each step is an
 | 2. Web applications | After the first features are complete | All platform stacks (network, data, compute, edge, observability, CI) | `cdk deploy --all -c stage=staging -c account=<ACCOUNT_ID> -c platform=true` |
 | 3. Mobile | After everything is verified end to end | No new stacks: the mobile client already exists in the auth stack; EAS builds point at the staging or production pool | `node infra/cdk/scripts/env-from-outputs.mjs <stage> --mobile` |
 
-Without `-c platform=true` the CDK app contains only the auth stack for every stage, so `cdk deploy --all` and `cdk synth` touch nothing else. The CI nag gate synthesizes with `-c platform=true` so the platform stacks stay reviewed while they are not deployed.
+Without `-c platform=true` the CDK app contains only the auth stack for every stage, plus the video stack for `dev`, so `cdk deploy --all` and `cdk synth` touch nothing else. The CI nag gate synthesizes with `-c platform=true` so the platform stacks stay reviewed while they are not deployed.
 
 ### Step 1: connect the API to a real Cognito pool
 
@@ -116,6 +117,41 @@ pnpm --filter @nestself/cdk test
 pnpm --filter @nestself/cdk lint
 pnpm --filter @nestself/cdk typecheck
 ```
+
+## Video stack
+
+`NestSelf-<stage>-Video` (`lib/video-stack.ts`, NS-CALLS-01, D-CW-31) holds what the Chime SDK integration needs outside the API process. Dev deploys it alone, next to `NestSelf-dev-Auth`, with its own KMS key (`alias/nestself-dev-video`); staging and production deploy it with the platform stacks and encrypt with the security baseline's platform key.
+
+| Resource | Details |
+|---|---|
+| `nestself-<stage>-chime-events` queue | SSE-KMS, visibility timeout 60 s, long polling 20 s, dead-letter queue after 5 receives. Queue policy lets `meetings.chime.amazonaws.com` send (`CreateMeeting` `NotificationsConfiguration`) with `aws:SourceAccount` and `aws:SourceArn` conditions; the key policy lets it encrypt (OPS-16). |
+| `nestself-<stage>-chime-events-dlq` | SSE-KMS, 14-day retention. |
+| `nestself-<stage>-chime-meeting-state-change` rule | `source: aws.chime`, `detail-type: Chime Meeting State Change`, to the queue: the backstop to the direct notifications, so events arrive at least once (D-CW-12). |
+| `nestself-<stage>-recordings-<account>` bucket | SSE-KMS with an S3 bucket key, block public access, TLS only, server access logs to `nestself-<stage>-recordings-logs-<account>`. Capture pipelines write under `raw/` (expired after 30 days), concatenation writes under `concatenated/`. Bucket and key policies let `mediapipelines.chime.amazonaws.com` put, read and list with `aws:SourceAccount` and `aws:SourceArn` conditions (WEB-27). |
+| `nestself-<stage>-video-api` managed policy | Meeting and attendee actions plus `chime:TagResource` on `*` (the meetings actions have no resource-level permissions). No media pipeline actions (CW-R-79a). |
+| `nestself-<stage>-video-worker` managed policy | Consume the queue, media capture and concatenation pipelines (on `*`), the media pipelines service-linked role, put, get and list on the recordings bucket, decrypt and generate data keys on the key. |
+
+Outputs and the variables `env-from-outputs.mjs` prints from them (API mode only):
+
+| Output | API env variable |
+|---|---|
+| `ChimeEventsQueueUrl` | `CHIME_EVENTS_QUEUE_URL` |
+| `ChimeEventsQueueArn` | `CHIME_EVENTS_QUEUE_ARN` |
+| `RecordingsBucketName` | `RECORDINGS_BUCKET` |
+| `VideoApiPolicyArn` | none; printed on stderr |
+| `VideoWorkerPolicyArn` | none; printed on stderr |
+
+When the video stack is not deployed, the script says so on stderr and prints none of the three variables, so nothing empty lands in `apps/api/.env`.
+
+Deploying it to dev (not done yet):
+
+```bash
+aws sts get-caller-identity   # must print 634972095709
+pnpm --filter @nestself/cdk exec cdk deploy NestSelf-dev-Video -c stage=dev -c account=$AWS_ACCOUNT_DEV
+node infra/cdk/scripts/env-from-outputs.mjs dev   # replace the COGNITO_* block, add the three video lines
+```
+
+The local API and worker run as the developer identity, so in dev both managed policies are attached to the identity behind the `nestself-dev` profile (D-CW-31): `aws iam attach-user-policy` (or `attach-role-policy`) with the two ARNs the script prints. That needs IAM rights the day-to-day profile may not have. In staging and production the compute stack is to attach them to the API and worker task roles when `videoEnabled` is set for the stage; that wiring is not in place yet.
 
 ## Compute stack
 
@@ -176,9 +212,9 @@ The trust policy constrains the OIDC `sub` claim: staging trusts `main` branch a
 
 ## Cost estimates
 
-### Dev stage (auth only)
+### Dev stage (auth and video)
 
-Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month.
+Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month. The video stack adds $1/month for its KMS key; SQS, EventBridge and S3 cost cents at dev volume. Chime SDK meeting and media pipeline minutes are billed per use and are not included.
 
 ### Staging/production (all stacks)
 
