@@ -383,22 +383,44 @@ describe('CallsService', () => {
       expect(repo.sessions.size).toBe(0);
     });
 
-    it('opens the window 15 minutes before the start and closes it 10 minutes after the end (403 join_window_closed)', async () => {
+    it('opens the window 15 minutes before the start; a first join closes 10 minutes after the start (CALL-06, CALL-07)', async () => {
       const startsAt = appointment().startsAt.getTime();
-      const endsAt = appointment().endsAt.getTime();
       const opens = startsAt - CALL_JOIN_WINDOW_BEFORE_MINUTES * MINUTE;
-      const closes = endsAt + CALL_JOIN_WINDOW_AFTER_MINUTES * MINUTE;
+      const firstJoinCloses = startsAt + CALL_JOIN_WINDOW_AFTER_MINUTES * MINUTE;
 
       vi.setSystemTime(opens - 1);
       await expectApiError(service.join('appt_1', principal(EMPLOYEE), {}), 403, 'join_window_closed');
-      vi.setSystemTime(closes + 1);
+      vi.setSystemTime(firstJoinCloses + 1);
       await expectApiError(service.join('appt_1', principal(EMPLOYEE), {}), 403, 'join_window_closed');
       expect(repo.sessions.size).toBe(0);
 
       vi.setSystemTime(opens);
       await expect(service.join('appt_1', principal(EMPLOYEE), {})).resolves.toBeDefined();
-      vi.setSystemTime(closes);
+      vi.setSystemTime(firstJoinCloses);
       await expect(service.join('appt_1', principal(EXPERT), {})).resolves.toBeDefined();
+    });
+
+    it('a first join at start + 11 minutes is 403 join_window_closed, even when the other participant is in (CALL-07)', async () => {
+      await service.join('appt_1', principal(EXPERT), {});
+      vi.setSystemTime(appointment().startsAt.getTime() + (CALL_JOIN_WINDOW_AFTER_MINUTES + 1) * MINUTE);
+      await expectApiError(service.join('appt_1', principal(EMPLOYEE), {}), 403, 'join_window_closed');
+      expect([...repo.participants.values()].map((p) => p.userId)).toEqual([EXPERT]);
+    });
+
+    it('a participant who already joined rejoins until the room closes, 15 minutes after the end', async () => {
+      const first = await service.join('appt_1', principal(EMPLOYEE), {});
+      const endsAt = appointment().endsAt.getTime();
+
+      vi.setSystemTime(endsAt + 5 * MINUTE);
+      const rejoin = await service.join('appt_1', principal(EMPLOYEE), {});
+      expect(rejoin.participantId).toBe(first.participantId);
+      // The other participant never joined: their first join closed long ago.
+      await expectApiError(service.join('appt_1', principal(EXPERT), {}), 403, 'join_window_closed');
+
+      vi.setSystemTime(endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE);
+      await expect(service.join('appt_1', principal(EMPLOYEE), {})).resolves.toBeDefined();
+      vi.setSystemTime(endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE + 1);
+      await expectApiError(service.join('appt_1', principal(EMPLOYEE), {}), 403, 'join_window_closed');
     });
 
     it('creates the meeting on the first join: session ACTIVE, credentials cached until the room closes, audited', async () => {
@@ -598,7 +620,8 @@ describe('CallsService', () => {
       const first = await service.join('appt_1', principal(EXPERT), {});
       await repo.closeSession(first.sessionId, { endedAt: new Date(), reason: 'provider' });
 
-      vi.setSystemTime(appointment().endsAt.getTime() + (CALL_JOIN_WINDOW_AFTER_MINUTES + 1) * MINUTE);
+      // The expert already joined, so only the room's close ends the rejoin window.
+      vi.setSystemTime(appointment().endsAt.getTime() + (CALL_ROOM_CLOSE_AFTER_MINUTES + 1) * MINUTE);
       await expectApiError(service.join('appt_1', principal(EXPERT), {}), 403, 'join_window_closed');
       vi.setSystemTime(NOW);
       appointments.rows.set('appt_1', appointment({ status: 'completed' }));

@@ -63,14 +63,26 @@ export const fromDbOutcomeStatus = (status: DbOutcomeStatus): CallOutcomeStatus 
 /** The Socket.IO room of a call session (decision record section 7): the clients' `callRoomName`. */
 export const callRoom: (sessionId: string) => string = callRoomName;
 
+/** A participant's first join of a consultation, or a rejoin after they already joined. */
+export type JoinKind = 'first' | 'rejoin';
+
 /**
- * Consultation join window (D-CW-07, guidelines 4.3): from 15 minutes before
- * the start to 10 minutes after the end, both bounds included.
+ * Consultation join window (D-CW-07, CALL-06, CALL-07, guidelines 4.3),
+ * both bounds included. It opens `CALL_JOIN_WINDOW_BEFORE_MINUTES` (15)
+ * before the start. A first join closes `CALL_JOIN_WINDOW_AFTER_MINUTES` (10)
+ * after the start: later, the participant missed the session. A rejoin of a
+ * participant who already joined stays open until the room closes,
+ * `CALL_ROOM_CLOSE_AFTER_MINUTES` (15) after the end (D-CW-09).
  */
-export function isWithinJoinWindow(window: { startsAt: Date; endsAt: Date }, now: Date): boolean {
+export function joinWindowCloses(window: { startsAt: Date; endsAt: Date }, kind: JoinKind): Date {
+  return kind === 'first'
+    ? new Date(window.startsAt.getTime() + CALL_JOIN_WINDOW_AFTER_MINUTES * MINUTE_MS)
+    : new Date(window.endsAt.getTime() + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE_MS);
+}
+
+export function isWithinJoinWindow(window: { startsAt: Date; endsAt: Date }, now: Date, kind: JoinKind): boolean {
   const opens = window.startsAt.getTime() - CALL_JOIN_WINDOW_BEFORE_MINUTES * MINUTE_MS;
-  const closes = window.endsAt.getTime() + CALL_JOIN_WINDOW_AFTER_MINUTES * MINUTE_MS;
-  return now.getTime() >= opens && now.getTime() <= closes;
+  return now.getTime() >= opens && now.getTime() <= joinWindowCloses(window, kind).getTime();
 }
 
 /** Seconds until the room closes (`endsAt + 15 minutes`), at least 1 (D-CW-08). */

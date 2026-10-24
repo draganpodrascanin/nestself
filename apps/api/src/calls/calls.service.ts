@@ -5,7 +5,11 @@
  *   4.3): the caller must be the appointment's expert or employee (404
  *   otherwise, D-CW-30), the appointment `confirmed` (409
  *   `appointment_not_joinable`) and the time inside the window (403
- *   `join_window_closed`). The session row is created PENDING on first use.
+ *   `join_window_closed`): from 15 minutes before the start, until 10
+ *   minutes after the start for a first join (CALL-06, CALL-07) and until
+ *   the room closes, 15 minutes after the end, for a participant who already
+ *   joined the appointment's latest session (a rejoin). The session row is
+ *   created PENDING on first use.
  *   The first joiner takes the `call:{sessionId}:create` lock, moves the
  *   session to CREATING, calls `createSession` (meeting plus attendee) and
  *   moves it to ACTIVE; a concurrent joiner polls for the meeting id for up
@@ -219,7 +223,7 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
   async join(appointmentId: string, principal: Principal, body: CallJoinRequest): Promise<CallJoinResponse> {
     const started = Date.now();
     const { appointment, role } = await this.participation(appointmentId, principal);
-    this.assertJoinable(appointment);
+    await this.assertCanJoin(appointment, principal.userId);
     if (body.locationText !== undefined && !(role === 'employee' && appointment.serviceCategory === PSYCHOLOGICAL_CATEGORY)) {
       throw apiError(400, 'validation', 'Only the employee of a psychological consultation can share a location', {
         field: 'locationText',
@@ -816,10 +820,34 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     throw notFound();
   }
 
-  /** 409 unless `confirmed` (CALL-20), then 403 outside the window (CALL-07). */
+  /**
+   * 409 unless `confirmed` (CALL-20), then 403 while the room is not open:
+   * from 15 minutes before the start to its close, 15 minutes after the end.
+   * Signals use it; a join also needs {@link assertCanJoin}.
+   */
   private assertJoinable(appointment: AppointmentRecord): void {
     if (appointment.status !== 'confirmed') throw notJoinable();
-    if (!isWithinJoinWindow(appointment, new Date())) throw windowClosed();
+    if (!isWithinJoinWindow(appointment, new Date(), 'rejoin')) throw windowClosed();
+  }
+
+  /**
+   * The join rule (CALL-06, CALL-07): a first join closes 10 minutes after
+   * the start; a participant who already joined the appointment's latest
+   * session rejoins until the room closes.
+   */
+  private async assertCanJoin(appointment: AppointmentRecord, userId: string): Promise<void> {
+    this.assertJoinable(appointment);
+    const now = new Date();
+    if (isWithinJoinWindow(appointment, now, 'first')) return;
+    if (!(await this.hasJoined(appointment, userId))) throw windowClosed();
+  }
+
+  /** Whether the user is a participant of the appointment's latest session. */
+  private async hasJoined(appointment: AppointmentRecord, userId: string): Promise<boolean> {
+    return this.scoped(appointment.orgId, async (tx) => {
+      const session = await this.repo.findLatestSessionByAppointment(appointment.id, tx);
+      return session ? (await this.repo.findParticipant(session.id, userId, tx)) !== null : false;
+    });
   }
 
   /** The appointment's live session, created PENDING on first use. */
