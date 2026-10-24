@@ -28,6 +28,7 @@ import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
+import { MediaModule } from './media/media.module.js';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { EmergencyModule } from './emergency/emergency.module.js';
     ProfessionalModule,
     EmergencyModule,
     WsModule,
+    MediaModule.register(),
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },

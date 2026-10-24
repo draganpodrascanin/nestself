@@ -209,3 +209,9 @@ export * from './ops-admin.ts';
 
 export { CONTENT_CAPABILITIES } from './content/capabilities.ts';
 export type { ContentCapability } from './content/capabilities.ts';
+
+// ---------------------------------------------------------------------------
+// Media contracts (C-14, 8.15)
+// ---------------------------------------------------------------------------
+
+export * from './content/media.ts';

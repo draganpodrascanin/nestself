@@ -14,6 +14,8 @@ import { IDEMPOTENT_KEY, type IdempotentMetadata } from './idempotent.metadata.j
 export interface IdempotentOptions {
   /** Reject requests without an `Idempotency-Key` header (400). Default false. */
   required?: boolean;
+  /** Override the in-flight reservation TTL in seconds (default 60). Use for long uploads. */
+  inFlightTtlSeconds?: number;
 }
 
 export const Idempotent = (scope: string, options: IdempotentOptions = {}) =>
@@ -21,6 +23,7 @@ export const Idempotent = (scope: string, options: IdempotentOptions = {}) =>
     SetMetadata(IDEMPOTENT_KEY, {
       scope,
       required: options.required ?? false,
+      inFlightTtlSeconds: options.inFlightTtlSeconds,
     } satisfies IdempotentMetadata),
     UseInterceptors(IdempotencyInterceptor),
   );

@@ -21,6 +21,10 @@ class TestController {
   @Post('req')
   @Idempotent('test', { required: true })
   required() {}
+
+  @Post('long')
+  @Idempotent('test', { inFlightTtlSeconds: 900 })
+  longUpload() {}
 }
 
 function ctx(
@@ -193,6 +197,24 @@ describe('IdempotencyInterceptor', () => {
     await expect(call(proto.optional, { ...withKey({}), userId: null })).rejects.toMatchObject({
       status: 401,
     });
+  });
+
+  it('uses custom inFlightTtlSeconds for the reservation', async () => {
+    // Start a request that will not complete yet
+    const holder = interceptor.intercept(ctx(proto.longUpload, withKey({ a: 1 }), {}), {
+      handle: () => of({ slow: true }),
+    });
+    const obs = await holder; // reserved, not yet subscribed
+
+    // The reservation should exist with the custom TTL (900 s)
+    const k = idempotencyKey('test', 'u1', KEY);
+    const ttl = await store.ttl(k);
+    // TTL should be close to 900 (allow a few seconds of test execution)
+    expect(ttl).toBeGreaterThan(850);
+    expect(ttl).toBeLessThanOrEqual(900);
+
+    // Complete the request
+    await firstValueFrom(obs);
   });
 });
 

@@ -106,6 +106,13 @@ export const envSchema = z
       z.literal('').transform(() => undefined),
       z.string().regex(/^\d{6}$/),
     ]).optional(),
+
+    // Media storage (MED-R-01, MED-R-02)
+    MEDIA_STORAGE: z.enum(['local', 's3']).default('local'),
+    MEDIA_LOCAL_DIR: optionalString,
+    MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().optional(),
+    MEDIA_BUCKET: optionalString,
+    MEDIA_KMS_KEY_ARN: optionalString,
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -123,6 +130,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         message: 'JWT_SECRET is required when AUTH_MODE=stub',
         path: ['JWT_SECRET'],
+      });
+    }
+
+    // MED-R-01: local driver refused in production
+    if (data.MEDIA_STORAGE === 'local' && data.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MEDIA_STORAGE=local is not allowed when NODE_ENV=production',
+        path: ['MEDIA_STORAGE'],
       });
     }
 

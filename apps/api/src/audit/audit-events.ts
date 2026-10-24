@@ -61,6 +61,8 @@ export const AUDIT_ACTIONS = [
   'sso_connection.activated',
   'sso_connection.deactivated',
   'data.erasure.requested',
+  'media.uploaded',
+  'media.rejected',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -93,6 +95,7 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('content.')) return 'CONTENT_ACCESS';
   if (action.startsWith('sso_connection.')) return 'ADMIN';
   if (action === 'data.erasure.requested') return 'ADMIN';
+  if (action.startsWith('media.')) return 'CONTENT_ACCESS';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

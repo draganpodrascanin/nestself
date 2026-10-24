@@ -131,10 +131,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const fingerprint = requestFingerprint(req.method, path, req.body);
     const key = idempotencyKey(meta.scope, userId, header);
 
+    const inFlightTtl = meta.inFlightTtlSeconds ?? IDEMPOTENCY_IN_FLIGHT_TTL;
     const reserved = await this.store.set(
       key,
       JSON.stringify({ state: 'processing', fingerprint } satisfies Record_),
-      { onlyIfAbsent: true, ttlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL },
+      { onlyIfAbsent: true, ttlSeconds: inFlightTtl },
     );
 
     if (!reserved) {
