@@ -55,6 +55,19 @@ describe('NestSelfComputeStack -- staging', () => {
     template.resourceCountIs('AWS::ECR::Repository', 2);
   });
 
+  it('lets the API task role list users and read one with AdminGetUser (MFA enrolment lookup)', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['cognito-idp:AdminGetUser', 'cognito-idp:ListUsers']),
+            Effect: 'Allow',
+          }),
+        ]),
+      },
+    });
+  });
+
   it('creates an ALB', () => {
     template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
   });
