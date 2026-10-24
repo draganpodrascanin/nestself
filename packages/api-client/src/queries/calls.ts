@@ -1,0 +1,122 @@
+/**
+ * TanStack Query options for the appointment and call routes (guidelines
+ * 12.3). There is no option for `join`: its response holds meeting
+ * credentials, and a query or mutation would keep them in a cache (CW-R-59).
+ */
+import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
+import type {
+  CallFeedbackRequest,
+  CallOutcomeRequest,
+  CallSignalRequest,
+  FollowUpProposeRequest,
+  FollowUpScheduleRequest,
+  FollowUpSuggestTimesRequest,
+} from '@nestself/contracts';
+import { ApiError } from '../errors';
+import type { AppointmentListParams, CallsApi } from '../calls';
+
+export const appointmentKeys = {
+  all: ['appointments'] as const,
+  lists: () => [...appointmentKeys.all, 'list'] as const,
+  list: (params: Omit<AppointmentListParams, 'cursor'>) => [...appointmentKeys.lists(), params] as const,
+  detail: (appointmentId: string) => [...appointmentKeys.all, 'detail', appointmentId] as const,
+  location: (appointmentId: string) => [...appointmentKeys.all, 'location', appointmentId] as const,
+};
+
+/** A 4xx answer will not change on a retry; a network failure or a 5xx may. */
+export function retryUnlessClientError(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+  return failureCount < 1;
+}
+
+/** `GET /appointments`, cursor-paged: `fetchNextPage()` loads the next `nextCursor`. */
+export const appointmentListQuery = (api: CallsApi, params: Omit<AppointmentListParams, 'cursor'> = {}) =>
+  infiniteQueryOptions({
+    queryKey: appointmentKeys.list(params),
+    queryFn: ({ pageParam }) => api.listAppointments({ ...params, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /appointments/:id` */
+export const appointmentDetailQuery = (api: CallsApi, appointmentId: string) =>
+  queryOptions({
+    queryKey: appointmentKeys.detail(appointmentId),
+    queryFn: () => api.getAppointment(appointmentId),
+    retry: retryUnlessClientError,
+  });
+
+/**
+ * `GET /appointments/:id/location` (expert, CALL-34). Never kept after the
+ * screen that reads it is gone (`gcTime: 0`), matching the server's
+ * `Cache-Control: no-store`.
+ */
+export const appointmentLocationQuery = (api: CallsApi, appointmentId: string) =>
+  queryOptions({
+    queryKey: appointmentKeys.location(appointmentId),
+    queryFn: () => api.getLocation(appointmentId),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+
+export const endCallMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'end'],
+    mutationFn: () => api.end(appointmentId),
+  });
+
+export const recordOutcomeMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'outcome'],
+    mutationFn: (body: CallOutcomeRequest) => api.recordOutcome(appointmentId, body),
+  });
+
+export const submitFeedbackMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'feedback'],
+    mutationFn: (body: CallFeedbackRequest) => api.submitFeedback(appointmentId, body),
+  });
+
+export const sendSignalMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'signal'],
+    mutationFn: (signal: CallSignalRequest) => api.sendSignal(appointmentId, signal),
+  });
+
+export const cancelAppointmentMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'cancel'],
+    mutationFn: () => api.cancel(appointmentId),
+  });
+
+export const proposeFollowUpMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'follow-up'],
+    mutationFn: (body: FollowUpProposeRequest) => api.proposeFollowUp(appointmentId, body),
+  });
+
+export const confirmFollowUpMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'confirm'],
+    mutationFn: () => api.confirmFollowUp(appointmentId),
+  });
+
+export const suggestFollowUpTimesMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'suggest-times'],
+    mutationFn: (body: FollowUpSuggestTimesRequest) => api.suggestFollowUpTimes(appointmentId, body),
+  });
+
+export const scheduleFollowUpMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'schedule'],
+    mutationFn: (body: FollowUpScheduleRequest) => api.scheduleFollowUp(appointmentId, body),
+  });
+
+export const declineFollowUpMutation = (api: CallsApi, appointmentId: string) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.detail(appointmentId), 'decline'],
+    mutationFn: () => api.declineFollowUp(appointmentId),
+  });
