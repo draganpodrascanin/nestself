@@ -21,7 +21,11 @@
  *   its calendar file, to the employee and the expert in their own locale,
  *   while the appointment is still `confirmed` and has not started. Who has
  *   been sent the email is kept in the job data, so a retry sends only what
- *   is missing.
+ *   is missing. Each recipient also gets the in-app reminder toast,
+ *   `appointment.remind` on their `user:{userId}` room (CALL-01 criterion 5,
+ *   T-CW-1.10), whether or not they may get an email.
+ * - `appointment.approval.remind` and `appointment.approval.expire`
+ *   (T-CW-1.10, CALL-40): handed to `ApprovalService`.
  * - `calls.no_show_followup` (CALL-07): the `appointment.no_show_followup`
  *   email to the employee, while the appointment is still `no_show` and its
  *   latest outcome is `no_show_employee`.
@@ -36,6 +40,8 @@ import { toAppointmentResponse } from '../appointments/appointment-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AppointmentsRepository, type AppointmentRecord } from '../appointments/appointments.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ApprovalService } from '../appointments/approval.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsRepository, type CallSessionRecord } from '../calls/calls.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallSessionLifecycle } from '../calls/session-lifecycle.js';
@@ -44,6 +50,8 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { Mailer } from '../mailer/mailer.js';
 import { VIDEO_PROVIDER, type VideoProvider } from '../video/video-provider.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { RoomEmitter } from '../ws/room-emitter.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import {
   CallsJobSchedulerService,
@@ -107,6 +115,8 @@ export class CallsJobsService implements CallsJobHandler {
     private readonly mailer: Mailer,
     private readonly identities: IdentityRepository,
     private readonly config: ConfigService,
+    private readonly rooms: RoomEmitter,
+    private readonly approvals: ApprovalService,
   ) {}
 
   handle<N extends CallsJobName>(name: N, data: CallsJobData[N], context: CallsJobContext<N>): Promise<unknown> {
@@ -122,6 +132,13 @@ export class CallsJobsService implements CallsJobHandler {
         );
       case 'calls.no_show_followup':
         return this.noShowFollowUp(data as CallsJobData['calls.no_show_followup']);
+      case 'appointment.approval.remind':
+        return this.approvals.remindDeciders(
+          data as CallsJobData['appointment.approval.remind'],
+          context as unknown as CallsJobContext<'appointment.approval.remind'>,
+        );
+      case 'appointment.approval.expire':
+        return this.approvals.expire((data as CallsJobData['appointment.approval.expire']).approvalId);
       default:
         throw new Error(`Unknown calls job: ${String(name)}`);
     }
@@ -199,7 +216,9 @@ export class CallsJobsService implements CallsJobHandler {
     const window = this.windowOf(appointment);
     for (const role of ['employee', 'expert'] as const) {
       if (sentTo.includes(role)) continue;
-      const user = await this.recipient(role === 'expert' ? appointment.expertUserId : appointment.employeeUserId);
+      const userId = role === 'expert' ? appointment.expertUserId : appointment.employeeUserId;
+      this.toast(userId, appointment, data.offsetMinutes);
+      const user = await this.recipient(userId);
       if (user) {
         await this.mailer.send({
           to: user.email,
@@ -238,6 +257,26 @@ export class CallsJobsService implements CallsJobHandler {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** The in-app reminder on the user's own room; best effort, ids and times only. */
+  private toast(userId: string, appointment: AppointmentRecord, offsetMinutes: number): void {
+    try {
+      const payload = {
+        appointmentId: appointment.id,
+        startsAt: appointment.startsAt.toISOString(),
+        offsetMinutes,
+        timeZone: appointment.timeZone,
+      };
+      if (!this.rooms.emitToUser(userId, 'appointment.remind', payload)) {
+        this.logger.warn({ appointmentId: appointment.id, operation: 'remindToast' }, 'Reminder toast not emitted');
+      }
+    } catch (error) {
+      this.logger.error(
+        { appointmentId: appointment.id, operation: 'remindToast', error: errorName(error) },
+        'Reminder toast not emitted',
+      );
+    }
+  }
 
   /** An active user's address and locale; null for a missing, suspended or deactivated user. */
   private async recipient(userId: string): Promise<{ email: string; locale: Locale } | null> {

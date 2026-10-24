@@ -18,8 +18,10 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as CallAppointmentIdRouteImport } from './routes/call/$appointmentId'
+import { Route as AuthenticatedHrFollowUpPolicyRouteImport } from './routes/_authenticated/_hr/follow-up-policy'
 import { Route as AuthenticatedAppointmentsIndexRouteImport } from './routes/_authenticated/appointments/index'
 import { Route as AuthenticatedAppointmentsAppointmentIdRouteImport } from './routes/_authenticated/appointments/$appointmentId'
+import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelsChannelIdRouteImport } from './routes/_authenticated/channels/$channelId'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
@@ -78,6 +80,12 @@ const CallAppointmentIdRoute = CallAppointmentIdRouteImport.update({
   path: '/call/$appointmentId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedHrFollowUpPolicyRoute =
+  AuthenticatedHrFollowUpPolicyRouteImport.update({
+    id: '/follow-up-policy',
+    path: '/follow-up-policy',
+    getParentRoute: () => AuthenticatedHrRoute,
+  } as any)
 const AuthenticatedAppointmentsIndexRoute =
   AuthenticatedAppointmentsIndexRouteImport.update({
     id: '/appointments/',
@@ -88,6 +96,12 @@ const AuthenticatedAppointmentsAppointmentIdRoute =
   AuthenticatedAppointmentsAppointmentIdRouteImport.update({
     id: '/appointments/$appointmentId',
     path: '/appointments/$appointmentId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedApprovalsIndexRoute =
+  AuthenticatedApprovalsIndexRouteImport.update({
+    id: '/approvals/',
+    path: '/approvals/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedChannelsIndexRoute =
@@ -188,12 +202,14 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
   '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/appointments/': typeof AuthenticatedAppointmentsIndexRoute
+  '/approvals/': typeof AuthenticatedApprovalsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/polls/': typeof AuthenticatedPollsIndexRoute
@@ -213,12 +229,14 @@ export interface FileRoutesByTo {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
   '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/appointments': typeof AuthenticatedAppointmentsIndexRoute
+  '/approvals': typeof AuthenticatedApprovalsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/polls': typeof AuthenticatedPollsIndexRoute
@@ -243,12 +261,14 @@ export interface FileRoutesById {
   '/_public/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/_hr/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
   '/_authenticated/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/appointments/': typeof AuthenticatedAppointmentsIndexRoute
+  '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
@@ -270,12 +290,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/call/$appointmentId'
+    | '/follow-up-policy'
     | '/appointments/$appointmentId'
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
     | '/appointments/'
+    | '/approvals/'
     | '/channels/'
     | '/messages/'
     | '/polls/'
@@ -295,12 +317,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/call/$appointmentId'
+    | '/follow-up-policy'
     | '/appointments/$appointmentId'
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
     | '/appointments'
+    | '/approvals'
     | '/channels'
     | '/messages'
     | '/polls'
@@ -324,12 +348,14 @@ export interface FileRouteTypes {
     | '/_public/sign-in'
     | '/call/$appointmentId'
     | '/_authenticated/'
+    | '/_authenticated/_hr/follow-up-policy'
     | '/_authenticated/appointments/$appointmentId'
     | '/_authenticated/channels/$channelId'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
     | '/_public/invite/$token'
     | '/_authenticated/appointments/'
+    | '/_authenticated/approvals/'
     | '/_authenticated/channels/'
     | '/_authenticated/messages/'
     | '/_authenticated/polls/'
@@ -415,6 +441,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallAppointmentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/_hr/follow-up-policy': {
+      id: '/_authenticated/_hr/follow-up-policy'
+      path: '/follow-up-policy'
+      fullPath: '/follow-up-policy'
+      preLoaderRoute: typeof AuthenticatedHrFollowUpPolicyRouteImport
+      parentRoute: typeof AuthenticatedHrRoute
+    }
     '/_authenticated/appointments/': {
       id: '/_authenticated/appointments/'
       path: '/appointments'
@@ -427,6 +460,13 @@ declare module '@tanstack/react-router' {
       path: '/appointments/$appointmentId'
       fullPath: '/appointments/$appointmentId'
       preLoaderRoute: typeof AuthenticatedAppointmentsAppointmentIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/approvals/': {
+      id: '/_authenticated/approvals/'
+      path: '/approvals'
+      fullPath: '/approvals/'
+      preLoaderRoute: typeof AuthenticatedApprovalsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/channels/': {
@@ -545,6 +585,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedHrRouteChildren {
+  AuthenticatedHrFollowUpPolicyRoute: typeof AuthenticatedHrFollowUpPolicyRoute
   AuthenticatedHrHrAccessRoute: typeof AuthenticatedHrHrAccessRoute
   AuthenticatedHrHrEligibilityRoute: typeof AuthenticatedHrHrEligibilityRoute
   AuthenticatedHrHrEventsRoute: typeof AuthenticatedHrHrEventsRoute
@@ -553,6 +594,7 @@ interface AuthenticatedHrRouteChildren {
 }
 
 const AuthenticatedHrRouteChildren: AuthenticatedHrRouteChildren = {
+  AuthenticatedHrFollowUpPolicyRoute: AuthenticatedHrFollowUpPolicyRoute,
   AuthenticatedHrHrAccessRoute: AuthenticatedHrHrAccessRoute,
   AuthenticatedHrHrEligibilityRoute: AuthenticatedHrHrEligibilityRoute,
   AuthenticatedHrHrEventsRoute: AuthenticatedHrHrEventsRoute,
@@ -591,6 +633,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
   AuthenticatedAppointmentsIndexRoute: typeof AuthenticatedAppointmentsIndexRoute
+  AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPollsIndexRoute: typeof AuthenticatedPollsIndexRoute
@@ -608,6 +651,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,
   AuthenticatedAppointmentsIndexRoute: AuthenticatedAppointmentsIndexRoute,
+  AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPollsIndexRoute: AuthenticatedPollsIndexRoute,

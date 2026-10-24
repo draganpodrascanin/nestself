@@ -28,7 +28,14 @@ describe('calls job scheduling rules', () => {
   it('uses the canonical queue and job names (decision record section 7)', () => {
     expect(CALLS_QUEUE).toBe('nestself-calls');
     expect([...CALLS_JOB_NAMES].sort()).toEqual(
-      ['appointment.remind', 'calls.cleanup', 'calls.no_show_followup', 'calls.reconcile'].sort(),
+      [
+        'appointment.remind',
+        'appointment.approval.remind',
+        'appointment.approval.expire',
+        'calls.cleanup',
+        'calls.no_show_followup',
+        'calls.reconcile',
+      ].sort(),
     );
     expect(isCallsJobName('calls.cleanup')).toBe(true);
     expect(isCallsJobName('grants.reconcile')).toBe(false);
@@ -113,6 +120,41 @@ describe('CallsJobSchedulerService.scheduleNoShowFollowUp', () => {
   });
 });
 
+describe('CallsJobSchedulerService approval jobs (T-CW-1.10, CALL-40)', () => {
+  const config = { get: () => undefined } as unknown as ConfigService;
+
+  it('schedules the reminder and the expiry of an approval at their instants', async () => {
+    const scheduler = new CallsJobSchedulerService(config, dbWith(null));
+    const add = vi.fn(async () => ({}));
+    vi.spyOn(scheduler as unknown as { ensureQueue: () => unknown }, 'ensureQueue').mockReturnValue({ add });
+    const remindAt = new Date(NOW.getTime() + 7 * 24 * 60 * MINUTE);
+    const expireAt = new Date(NOW.getTime() + 14 * 24 * 60 * MINUTE);
+
+    expect(await scheduler.scheduleApprovalJobs('appr_1', { remindAt, expireAt }, NOW)).toBe(true);
+    expect(add).toHaveBeenCalledWith(
+      'appointment.approval.remind',
+      { approvalId: 'appr_1' },
+      expect.objectContaining({ jobId: 'appointment.approval.remind/appr_1', delay: 7 * 24 * 60 * MINUTE }),
+    );
+    expect(add).toHaveBeenCalledWith(
+      'appointment.approval.expire',
+      { approvalId: 'appr_1' },
+      expect.objectContaining({ jobId: 'appointment.approval.expire/appr_1', delay: 14 * 24 * 60 * MINUTE }),
+    );
+  });
+
+  it('removes both jobs of a decided approval', async () => {
+    const scheduler = new CallsJobSchedulerService(config, dbWith(null));
+    const remove = vi.fn(async () => 1);
+    vi.spyOn(scheduler as unknown as { ensureQueue: () => unknown }, 'ensureQueue').mockReturnValue({ remove });
+    await scheduler.cancelApprovalJobs('appr_1');
+    expect(remove.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
+      'appointment.approval.remind/appr_1',
+      'appointment.approval.expire/appr_1',
+    ]);
+  });
+});
+
 describe('CallsJobSchedulerService without Redis', () => {
   const config = { get: () => undefined } as unknown as ConfigService;
 
@@ -123,6 +165,8 @@ describe('CallsJobSchedulerService without Redis', () => {
     expect(await scheduler.scheduleReminders({ id: 'a', startsAt: new Date(NOW.getTime() + 2 * 24 * 60 * MINUTE) }, NOW)).toBe(0);
     expect(await scheduler.scheduleNoShowFollowUp('a')).toBe(false);
     await expect(scheduler.cancelAppointmentJobs('a')).resolves.toBeUndefined();
+    expect(await scheduler.scheduleApprovalJobs('r', { remindAt: NOW, expireAt: NOW }, NOW)).toBe(false);
+    await expect(scheduler.cancelApprovalJobs('r')).resolves.toBeUndefined();
     expect(await scheduler.start({ handle: async () => undefined })).toBe(false);
     expect(scheduler.getQueue()).toBeNull();
     await scheduler.onModuleDestroy();

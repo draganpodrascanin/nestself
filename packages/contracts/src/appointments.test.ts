@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPOINTMENT_APPROVAL_ITEM_FIELDS,
   APPOINTMENT_APPROVAL_STATUSES,
   APPOINTMENT_SEAM_FIELDS,
   APPOINTMENT_STATUSES,
   APPOINTMENT_STATUS_TRANSITIONS,
+  APPROVAL_FOLLOW_UP_DESCRIPTION,
   APPROVAL_SAFE_REASON_MAX_LENGTH,
   AppointmentApprovalDecisionRequestSchema,
+  AppointmentApprovalItemSchema,
+  AppointmentApprovalListResponseSchema,
   AppointmentApprovalStatusSchema,
   AppointmentCreateRequestSchema,
   AppointmentFollowUpRequestSchema,
@@ -18,11 +22,14 @@ import {
   AppointmentStatusSchema,
   AppointmentSuggestTimesRequestSchema,
   AppointmentRemindPayloadSchema,
+  FOLLOW_UP_APPROVAL_CATEGORY,
   FOLLOW_UP_APPROVAL_POLICIES,
   FOLLOW_UP_APPROVAL_POLICY_DEFAULT,
   FOLLOW_UP_DURATION_MAX_MINUTES,
   FOLLOW_UP_DURATION_MIN_MINUTES,
   FOLLOW_UP_MAX_SUGGESTED_WINDOWS,
+  FollowUpApprovalPolicyRequestSchema,
+  FollowUpApprovalPolicyResponseSchema,
   FollowUpApprovalPolicySchema,
   FollowUpConfirmRequestSchema,
   FollowUpDeclineRequestSchema,
@@ -33,6 +40,7 @@ import {
   USER_ROOM_EVENT_NAMES,
   canTransitionAppointment,
   isIanaTimeZone,
+  stripControlCharacters,
   userRoomName,
   type AppointmentStatus,
 } from './appointments.ts';
@@ -513,5 +521,79 @@ describe('AppointmentResponseSchema participants (display only)', () => {
     expect(issuePaths(AppointmentResponseSchema.safeParse({ ...appointment, employee: { firstName: '' } }))).toEqual([
       'employee.firstName',
     ]);
+  });
+});
+
+describe('Follow-up approval items (T-CW-1.10, D-CW-37, CW-R-119)', () => {
+  const item = {
+    id: 'appr_1',
+    appointmentId: 'appt_2',
+    status: 'pending',
+    employeeDisplayName: 'Jovan Petrović',
+    description: APPROVAL_FOLLOW_UP_DESCRIPTION,
+    startsAt: '2026-11-20T14:00:00.000Z',
+    durationMinutes: 50,
+  } as const;
+
+  it('the approver sees exactly the four facts, ids and the status', () => {
+    expect(APPROVAL_FOLLOW_UP_DESCRIPTION).toBe('follow-up session with a NestSelf expert');
+    expect(FOLLOW_UP_APPROVAL_CATEGORY).toBe('consultation_follow_up');
+    expect(APPOINTMENT_APPROVAL_ITEM_FIELDS).toEqual([
+      'id',
+      'appointmentId',
+      'status',
+      'employeeDisplayName',
+      'description',
+      'startsAt',
+      'durationMinutes',
+    ]);
+    expect(Object.keys(AppointmentApprovalItemSchema.shape).sort()).toEqual([...APPOINTMENT_APPROVAL_ITEM_FIELDS].sort());
+    expect(AppointmentApprovalItemSchema.parse(item)).toEqual(item);
+  });
+
+  it('refuses any other field: no category, no expert, no content', () => {
+    for (const extra of [
+      { serviceCategory: 'psychological' },
+      { expertUserId: 'user_milica' },
+      { expert: { firstName: 'Milica' } },
+      { reason: 'x' },
+      { employeeUserId: 'user_jovan' },
+    ]) {
+      expect(AppointmentApprovalItemSchema.safeParse({ ...item, ...extra }).success).toBe(false);
+    }
+    expect(issuePaths(AppointmentApprovalItemSchema.safeParse({ ...item, description: 'therapy' }))).toEqual(['description']);
+    expect(issuePaths(AppointmentApprovalItemSchema.safeParse({ ...item, durationMinutes: 0 }))).toEqual(['durationMinutes']);
+  });
+
+  it('the list wraps the items', () => {
+    expect(AppointmentApprovalListResponseSchema.parse({ items: [item] })).toEqual({ items: [item] });
+  });
+});
+
+describe('Safe rejection reason (CW-R-109, T-CW-1.10)', () => {
+  it('strips control and bidirectional formatting characters', () => {
+    expect(stripControlCharacters('Budget\u0000 closed‮.\u0007')).toBe('Budget closed.');
+    expect(stripControlCharacters('line one\nline two\ttab')).toBe('line one line two tab');
+  });
+
+  it('the decision request stores the stripped, trimmed reason', () => {
+    expect(AppointmentApprovalDecisionRequestSchema.parse({ safeReason: '  Not this month\u0000.  ' })).toEqual({
+      safeReason: 'Not this month.',
+    });
+  });
+
+  it('a reason of control characters only is blank', () => {
+    expect(issuePaths(AppointmentApprovalDecisionRequestSchema.safeParse({ safeReason: '\u0000\u0001‮' }))).toEqual([
+      'safeReason',
+    ]);
+  });
+});
+
+describe('Follow-up approval policy setting (CALL-41)', () => {
+  it('accepts the two policies and nothing else', () => {
+    expect(FollowUpApprovalPolicyRequestSchema.parse({ policy: 'manager_approval' })).toEqual({ policy: 'manager_approval' });
+    expect(issuePaths(FollowUpApprovalPolicyRequestSchema.safeParse({ policy: 'MANAGER_APPROVAL' }))).toEqual(['policy']);
+    expect(FollowUpApprovalPolicyRequestSchema.safeParse({ policy: 'automatic', extra: true }).success).toBe(false);
+    expect(FollowUpApprovalPolicyResponseSchema.parse({ policy: 'automatic' })).toEqual({ policy: 'automatic' });
   });
 });

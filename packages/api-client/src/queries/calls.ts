@@ -5,10 +5,12 @@
  */
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type {
+  AppointmentApprovalDecisionRequest,
   CallFeedbackRequest,
   CallProblemReportRequest,
   CallOutcomeRequest,
   CallSignalRequest,
+  FollowUpApprovalPolicy,
   FollowUpProposeRequest,
   FollowUpScheduleRequest,
   FollowUpSuggestTimesRequest,
@@ -127,4 +129,50 @@ export const reportProblemMutation = (api: CallsApi, sessionId: string) =>
   mutationOptions({
     mutationKey: ['calls', sessionId, 'problem-report'],
     mutationFn: (body: CallProblemReportRequest) => api.reportProblem(sessionId, body),
+  });
+
+// ── Follow-up approvals and the organization policy (T-CW-1.10) ───────────
+
+export const approvalKeys = {
+  all: ['appointment-approvals'] as const,
+  list: (orgId: string) => [...approvalKeys.all, orgId] as const,
+};
+
+export const followUpPolicyKeys = {
+  detail: (orgId: string) => ['follow-up-policy', orgId] as const,
+};
+
+/** `GET /orgs/:orgId/appointment-approvals` */
+export const approvalListQuery = (api: CallsApi, orgId: string) =>
+  queryOptions({
+    queryKey: approvalKeys.list(orgId),
+    queryFn: () => api.listApprovals(orgId),
+    retry: retryUnlessClientError,
+  });
+
+export const approveApprovalMutation = (api: CallsApi) =>
+  mutationOptions({
+    mutationKey: [...approvalKeys.all, 'approve'],
+    mutationFn: (approvalId: string) => api.approveApproval(approvalId),
+  });
+
+export const rejectApprovalMutation = (api: CallsApi) =>
+  mutationOptions({
+    mutationKey: [...approvalKeys.all, 'reject'],
+    mutationFn: ({ approvalId, ...body }: { approvalId: string } & AppointmentApprovalDecisionRequest) =>
+      api.rejectApproval(approvalId, body),
+  });
+
+/** `GET /orgs/:orgId/settings/follow-up-approval` (HR). */
+export const followUpPolicyQuery = (api: CallsApi, orgId: string) =>
+  queryOptions({
+    queryKey: followUpPolicyKeys.detail(orgId),
+    queryFn: () => api.getFollowUpPolicy(orgId),
+    retry: retryUnlessClientError,
+  });
+
+export const setFollowUpPolicyMutation = (api: CallsApi, orgId: string) =>
+  mutationOptions({
+    mutationKey: [...followUpPolicyKeys.detail(orgId), 'set'],
+    mutationFn: (policy: FollowUpApprovalPolicy) => api.setFollowUpPolicy(orgId, policy),
   });

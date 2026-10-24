@@ -1,8 +1,9 @@
 /**
  * CallsJobsService unit tests (T-CW-1.2): `calls.cleanup` and
  * `calls.reconcile` against the real `FakeVideoProvider` (D-CW-09, CW-R-16,
- * CW-R-17, CW-R-38), `appointment.remind` (D-CW-26) and
- * `calls.no_show_followup` (CALL-07) with an in-memory mailer.
+ * CW-R-17, CW-R-38), `appointment.remind` (D-CW-26) with its in-app toast,
+ * `calls.no_show_followup` (CALL-07) with an in-memory mailer, and the
+ * hand-off of the approval jobs (T-CW-1.10).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
@@ -23,6 +24,7 @@ import type { Mailer, MailInput } from '../mailer/mailer.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import type { RoomEmitter } from '../ws/room-emitter.js';
+import type { ApprovalService } from '../appointments/approval.service.js';
 import type { CallsJobContext, CallsJobSchedulerService } from './calls-job-scheduler.service.js';
 import { CallsJobsService } from './calls-jobs.service.js';
 
@@ -91,6 +93,8 @@ describe('CallsJobsService', () => {
   let mailer: { send: ReturnType<typeof vi.fn> };
   let scheduleCleanup: ReturnType<typeof vi.fn>;
   let emit: ReturnType<typeof vi.fn>;
+  let emitToUser: ReturnType<typeof vi.fn>;
+  let approvals: { remindDeciders: ReturnType<typeof vi.fn>; expire: ReturnType<typeof vi.fn> };
   let current: AppointmentRecord | null;
   let jobs: CallsJobsService;
 
@@ -134,6 +138,11 @@ describe('CallsJobsService', () => {
     mailer = { send: vi.fn(async (input: MailInput) => void mail.push(input)) };
     scheduleCleanup = vi.fn(async () => true);
     emit = vi.fn(() => true);
+    emitToUser = vi.fn(() => true);
+    approvals = {
+      remindDeciders: vi.fn(async () => ({ approvalId: 'appr_1', sentTo: [] })),
+      expire: vi.fn(async () => ({ approvalId: 'appr_1', expired: true })),
+    };
     current = appointment();
 
     const dbs = {
@@ -160,6 +169,8 @@ describe('CallsJobsService', () => {
       mailer as unknown as Mailer,
       { findUserById: async (id: string) => USERS[id] ?? null } as unknown as IdentityRepository,
       config,
+      { emitToUser } as unknown as RoomEmitter,
+      approvals as unknown as ApprovalService,
     );
   });
 
@@ -280,6 +291,29 @@ describe('CallsJobsService', () => {
     expect(ctx.updates.at(-1)).toEqual({ appointmentId: 'appt_1', offsetMinutes: 60, sentTo: ['employee', 'expert'] });
   });
 
+  it('shows the in-app reminder on each participant’s own room, ids and times only (T-CW-1.10)', async () => {
+    await jobs.remind({ appointmentId: 'appt_1', offsetMinutes: 60 }, context(), NOW);
+    const payload = {
+      appointmentId: 'appt_1',
+      startsAt: current!.startsAt.toISOString(),
+      offsetMinutes: 60,
+      timeZone: 'Europe/Belgrade',
+    };
+    expect(emitToUser.mock.calls).toEqual([
+      ['user_jovan', 'appointment.remind', payload],
+      ['user_milica', 'appointment.remind', payload],
+    ]);
+  });
+
+  it('a failed toast never stops the email', async () => {
+    emitToUser.mockImplementation(() => {
+      throw new Error('store down');
+    });
+    const result = await jobs.remind({ appointmentId: 'appt_1', offsetMinutes: 60 }, context(), NOW);
+    expect(result.sentTo).toEqual(['employee', 'expert']);
+    expect(mail).toHaveLength(2);
+  });
+
   it('on a retry sends only to whoever did not get it', async () => {
     mailer.send.mockImplementationOnce(async (input: MailInput) => void mail.push(input));
     mailer.send.mockRejectedValueOnce(new Error('ses throttled'));
@@ -290,6 +324,7 @@ describe('CallsJobsService', () => {
     mail.length = 0;
     await jobs.remind({ appointmentId: 'appt_1', offsetMinutes: 60, sentTo: ['employee'] }, context(), NOW);
     expect(mail.map((m) => m.to)).toEqual(['milica@example.test']);
+    expect(emitToUser.mock.calls.at(-1)?.[0]).toBe('user_milica');
   });
 
   it('skips an appointment that is no longer confirmed, has started or is gone', async () => {
@@ -300,6 +335,7 @@ describe('CallsJobsService', () => {
     current = null;
     expect(await jobs.remind({ appointmentId: 'appt_1', offsetMinutes: 60 }, context(), NOW)).toMatchObject({ skipped: 'not_found' });
     expect(mailer.send).not.toHaveBeenCalled();
+    expect(emitToUser).not.toHaveBeenCalled();
   });
 
   it('falls back to the default locale and skips a suspended user', async () => {
@@ -351,5 +387,13 @@ describe('CallsJobsService', () => {
     expect(cleanup).toHaveBeenCalledWith('s', 'cleanup');
     expect(reconcile).toHaveBeenCalled();
     expect(followUp).toHaveBeenCalledWith({ appointmentId: 'a' });
+  });
+
+  it('hands the approval jobs to the approval service', async () => {
+    const ctx = { updateData: async () => undefined };
+    await jobs.handle('appointment.approval.remind', { approvalId: 'appr_1' }, ctx);
+    await jobs.handle('appointment.approval.expire', { approvalId: 'appr_1' }, ctx);
+    expect(approvals.remindDeciders).toHaveBeenCalledWith({ approvalId: 'appr_1' }, ctx);
+    expect(approvals.expire).toHaveBeenCalledWith('appr_1');
   });
 });

@@ -16,6 +16,10 @@
  *   - `appointment.remind` at each `REMINDER_OFFSETS_MINUTES` offset still in
  *     the future, from `AppointmentsService` on creation; removed on cancel
  *     (D-CW-26, CW-R-46).
+ *   - `appointment.approval.remind` and `appointment.approval.expire` per
+ *     follow-up approval item, five and ten working days after the request
+ *     (T-CW-1.10, CALL-40; `ApprovalService` computes the instants); removed
+ *     once the item is decided.
  *   - `calls.no_show_followup` 48 hours after the appointment's `endsAt`
  *     (at once when that has passed), when the outcome path records
  *     `no_show_employee` ({@link scheduleNoShowFollowUp}). The scheduler reads
@@ -57,6 +61,8 @@ export const CALLS_JOB_NAMES = [
   'calls.reconcile',
   'appointment.remind',
   'calls.no_show_followup',
+  'appointment.approval.remind',
+  'appointment.approval.expire',
 ] as const;
 export type CallsJobName = (typeof CALLS_JOB_NAMES)[number];
 
@@ -66,6 +72,9 @@ export function isCallsJobName(name: string): name is CallsJobName {
 
 export type ReminderRecipient = 'employee' | 'expert';
 
+/** Who an approval reminder goes to (CALL-40). */
+export type ApprovalReminderRecipient = 'approver' | 'alternate';
+
 /** Every delayed job carries the ids it needs to re-read the current state (CW-R-37). */
 export interface CallsJobData {
   'calls.cleanup': { sessionId: string; appointmentId: string | null };
@@ -73,6 +82,9 @@ export interface CallsJobData {
   /** `sentTo` records who already got the email, so a retry does not send it twice. */
   'appointment.remind': { appointmentId: string; offsetMinutes: number; sentTo?: ReminderRecipient[] };
   'calls.no_show_followup': { appointmentId: string };
+  /** `sentTo` as for `appointment.remind`. */
+  'appointment.approval.remind': { approvalId: string; sentTo?: ApprovalReminderRecipient[] };
+  'appointment.approval.expire': { approvalId: string };
 }
 
 export interface CallsJobContext<N extends CallsJobName = CallsJobName> {
@@ -258,6 +270,39 @@ export class CallsJobSchedulerService implements OnModuleDestroy {
       callsJobId('calls.no_show_followup', appointmentId),
     ];
     for (const id of ids) await queue.remove(id);
+  }
+
+  /**
+   * `appointment.approval.remind` at `remindAt` and `appointment.approval.expire`
+   * at `expireAt` for one approval item (T-CW-1.10). False without Redis.
+   */
+  async scheduleApprovalJobs(
+    approvalId: string,
+    at: { remindAt: Date; expireAt: Date },
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    if (!this.ensureQueue()) return false;
+    await this.add(
+      'appointment.approval.remind',
+      { approvalId },
+      callsJobId('appointment.approval.remind', approvalId),
+      at.remindAt.getTime() - now.getTime(),
+    );
+    await this.add(
+      'appointment.approval.expire',
+      { approvalId },
+      callsJobId('appointment.approval.expire', approvalId),
+      at.expireAt.getTime() - now.getTime(),
+    );
+    return true;
+  }
+
+  /** Removes a decided approval item's reminder and expiry jobs. */
+  async cancelApprovalJobs(approvalId: string): Promise<void> {
+    const queue = this.ensureQueue();
+    if (!queue) return;
+    await queue.remove(callsJobId('appointment.approval.remind', approvalId));
+    await queue.remove(callsJobId('appointment.approval.expire', approvalId));
   }
 
   /** The queue, for tests and the worker's own inspection. Null without Redis. */

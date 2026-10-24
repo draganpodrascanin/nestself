@@ -2,7 +2,8 @@
  * `appointment.approval.decided`: the employee, when the approver decides a
  * follow-up (CALL-39, guidelines 10.5). Approved: the join link and the
  * calendar file. Rejected: the approver's safe reason, if any, and no
- * calendar file.
+ * calendar file. Expired (T-CW-1.10): nobody decided within ten working days,
+ * so the follow-up is not booked; no reason and no calendar file.
  */
 import { icsUid } from '../../calendar/ics-generator.js';
 import {
@@ -35,31 +36,44 @@ export type ApprovalDecidedData =
       /** The approver's safe reason (CW-R-109), shown as written. */
       reason?: string | null;
       appointmentUrl: string;
+    }
+  | {
+      appointment: AppointmentWindow;
+      decision: 'expired';
+      appointmentUrl: string;
     };
 
-export const messages: Messages<'subject' | 'approved' | 'rejected' | 'reason'> = {
+export const messages: Messages<'subject' | 'approved' | 'rejected' | 'expired' | 'reason'> = {
   en: {
     subject: 'Your session approval has a decision',
     approved: 'Your follow-up session on {{date}} at {{time}} was approved.',
     rejected: 'Your follow-up session on {{date}} at {{time}} was not approved.',
+    expired:
+      'The approval of your follow-up session on {{date}} at {{time}} was not decided in time, so the session is not booked. You can ask your expert for a new proposal.',
     reason: 'Reason: {{reason}}',
   },
   'sr-Latn': {
     subject: 'Doneta je odluka o odobrenju vaše sesije',
     approved: 'Vaša naredna sesija {{date}} u {{time}} je odobrena.',
     rejected: 'Vaša naredna sesija {{date}} u {{time}} nije odobrena.',
+    expired:
+      'O odobrenju vaše naredne sesije {{date}} u {{time}} nije odlučeno na vreme, pa sesija nije zakazana. Možete zamoliti svog stručnjaka za novi predlog.',
     reason: 'Razlog: {{reason}}',
   },
   'sr-Cyrl': {
     subject: 'Донета је одлука о одобрењу ваше сесије',
     approved: 'Ваша наредна сесија {{date}} у {{time}} је одобрена.',
     rejected: 'Ваша наредна сесија {{date}} у {{time}} није одобрена.',
+    expired:
+      'О одобрењу ваше наредне сесије {{date}} у {{time}} није одлучено на време, па сесија није заказана. Можете замолити свог стручњака за нови предлог.',
     reason: 'Разлог: {{reason}}',
   },
   hu: {
     subject: 'Döntés született az alkalma jóváhagyásáról',
     approved: 'A következő alkalmát ({{date}}, {{time}}) jóváhagyták.',
     rejected: 'A következő alkalmát ({{date}}, {{time}}) nem hagyták jóvá.',
+    expired:
+      'A következő alkalma ({{date}}, {{time}}) jóváhagyásáról nem született döntés időben, ezért az alkalom nincs lefoglalva. Kérjen új javaslatot a szakértőjétől.',
     reason: 'Indoklás: {{reason}}',
   },
 };
@@ -88,6 +102,13 @@ export function render(locale: MailLocale, data: ApprovalDecidedData, envelope: 
         }),
       ],
     );
+  }
+
+  if (data.decision === 'expired') {
+    return composeMail(locale, copy.subject, [
+      paragraph(interpolate(copy.expired, when)),
+      link(shared.openAction, data.appointmentUrl),
+    ]);
   }
 
   const reason = data.reason?.trim();

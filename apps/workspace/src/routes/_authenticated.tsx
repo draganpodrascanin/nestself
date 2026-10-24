@@ -11,6 +11,8 @@ import {
   Users,
   Buildings,
   ShieldCheck,
+  SealCheck,
+  SlidersHorizontal,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -73,7 +75,16 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...accessNav];
+  // Follow-up approvals (T-CW-1.10): the approver's items, and HR's policy under the `_hr` gate.
+  const showApprovals = principal ? can(principal, 'approval.decide', undefined, effectiveActions) : false;
+  const approvalsNav = showApprovals
+    ? [{ to: '/approvals' as const, icon: SealCheck, label: t('nav.approvals') }]
+    : [];
+  const followUpPolicyNav = showHr
+    ? [{ to: '/follow-up-policy' as const, icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
+    : [];
+
+  const allNavItems = [...navItems, ...managerNav, ...approvalsNav, ...hrNav, ...accessNav, ...followUpPolicyNav];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [

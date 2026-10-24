@@ -312,10 +312,32 @@ export type FollowUpScheduleRequest = z.infer<typeof FollowUpScheduleRequestSche
 // ---------------------------------------------------------------------------
 
 /**
- * `POST /appointment-approvals/:id/reject` body. Approve takes no body.
+ * C0 and C1 control characters and the bidirectional formatting characters
+ * (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) of a safe text.
+ */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
+const UNSAFE_TEXT_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+/**
+ * A safe free text as stored and shown: every line break and tab becomes a
+ * space, every other control or bidirectional formatting character is
+ * dropped (T-CW-1.10). The caller trims.
+ */
+export function stripControlCharacters(value: string): string {
+  return value.replace(/[\t\n\r]/g, ' ').replace(UNSAFE_TEXT_CHARACTERS, '');
+}
+
+/**
+ * `POST /appointment-approvals/:id/reject` body. Approve takes no body. The
+ * reason is the one free text of the approval flow (D-CW-37): shown to the
+ * employee, never written to the audit log; stripped of control characters,
+ * trimmed, 1 to 300 characters.
  */
 export const AppointmentApprovalDecisionRequestSchema = z.object({
-  safeReason: z.string().trim().min(1).max(APPROVAL_SAFE_REASON_MAX_LENGTH),
+  safeReason: z
+    .string()
+    .transform(stripControlCharacters)
+    .pipe(z.string().trim().min(1).max(APPROVAL_SAFE_REASON_MAX_LENGTH)),
 });
 export type AppointmentApprovalDecisionRequest = z.infer<
   typeof AppointmentApprovalDecisionRequestSchema
@@ -361,3 +383,66 @@ export const AppointmentRemindPayloadSchema = z.strictObject({
   timeZone: TimeZoneSchema,
 });
 export type AppointmentRemindPayload = z.infer<typeof AppointmentRemindPayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// Approval items (T-CW-1.10, D-CW-37, CW-R-119, LAW-14)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the approver is told the session is, in the API's fixed English; the
+ * apps render their own translation (`calls:approval.followUpLabel`). Never
+ * the service category, the expert or their specialty.
+ */
+export const APPROVAL_FOLLOW_UP_DESCRIPTION = 'follow-up session with a NestSelf expert';
+
+/**
+ * The approval-authority category that covers follow-ups (D-CW-37): an
+ * authority routes them when its `categories` are empty or contain it.
+ */
+export const FOLLOW_UP_APPROVAL_CATEGORY = 'consultation_follow_up';
+
+/**
+ * Every field an approver sees: the item and appointment ids, the status and
+ * four facts (the employee's display name, the fixed description, the start
+ * and the duration). A serialisation test in the API asserts nothing else
+ * leaves the server.
+ */
+export const APPOINTMENT_APPROVAL_ITEM_FIELDS = [
+  'id',
+  'appointmentId',
+  'status',
+  'employeeDisplayName',
+  'description',
+  'startsAt',
+  'durationMinutes',
+] as const;
+
+/** One approval item as the approver sees it (`GET /orgs/:orgId/appointment-approvals`, approve, reject). */
+export const AppointmentApprovalItemSchema = z.strictObject({
+  id: idField,
+  appointmentId: idField,
+  status: AppointmentApprovalStatusSchema,
+  employeeDisplayName: z.string().min(1).max(200),
+  description: z.literal(APPROVAL_FOLLOW_UP_DESCRIPTION),
+  startsAt: isoDateTime,
+  durationMinutes: z.number().int().positive(),
+});
+export type AppointmentApprovalItem = z.infer<typeof AppointmentApprovalItemSchema>;
+
+/** `GET /orgs/:orgId/appointment-approvals`: the caller's items, pending first, then decided, newest first. */
+export const AppointmentApprovalListResponseSchema = z.object({
+  items: z.array(AppointmentApprovalItemSchema),
+});
+export type AppointmentApprovalListResponse = z.infer<typeof AppointmentApprovalListResponseSchema>;
+
+/** `PATCH /orgs/:orgId/settings/follow-up-approval` body (CALL-41). */
+export const FollowUpApprovalPolicyRequestSchema = z.strictObject({
+  policy: FollowUpApprovalPolicySchema,
+});
+export type FollowUpApprovalPolicyRequest = z.infer<typeof FollowUpApprovalPolicyRequestSchema>;
+
+/** `GET` and `PATCH /orgs/:orgId/settings/follow-up-approval` response. */
+export const FollowUpApprovalPolicyResponseSchema = z.object({
+  policy: FollowUpApprovalPolicySchema,
+});
+export type FollowUpApprovalPolicyResponse = z.infer<typeof FollowUpApprovalPolicyResponseSchema>;

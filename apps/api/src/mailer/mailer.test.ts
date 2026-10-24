@@ -353,6 +353,26 @@ describe('bodies', () => {
     expect(mail.text).not.toContain('Reason');
   });
 
+  it('renders the expired approval in every locale with no reason and no calendar file (T-CW-1.10)', () => {
+    const expected: Record<Locale, string> = {
+      en: 'was not decided in time',
+      'sr-Latn': 'nije odlučeno na vreme',
+      'sr-Cyrl': 'није одлучено на време',
+      hu: 'nem született döntés időben',
+    };
+    for (const locale of locales) {
+      const mail = render({
+        to: 'a@example.test',
+        locale,
+        template: 'appointment.approval.decided',
+        data: { appointment: APPOINTMENT, decision: 'expired', appointmentUrl: APPOINTMENT_URL },
+      });
+      expect(mail.text).toContain(expected[locale]);
+      expect(mail.text).toContain(APPOINTMENT_URL);
+      expect(mail.attachments ?? []).toEqual([]);
+    }
+  });
+
   it('omits the booking link of the no-show follow-up until a booking URL exists', () => {
     const mail = render({
       to: 'a@example.test',

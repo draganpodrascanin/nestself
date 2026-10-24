@@ -10,19 +10,27 @@
  * drops it (CW-R-59, CW-R-69); there is deliberately no query or mutation
  * option for it, because both would hold the credentials in a cache.
  *
+ * The approval and policy methods serve T-CW-1.10's routes: the approver
+ * sees four facts per item and nothing else (D-CW-37), which the strict item
+ * schema enforces on the client too.
+ *
  * The follow-up methods serve T-CW-1.9's routes; each answers the appointment
  * it changed or created, with the participants' first names and, for a
  * proposal the employee answered with other times, the suggested windows.
  */
 import { z } from 'zod';
 import {
+  AppointmentApprovalItemSchema,
+  AppointmentApprovalListResponseSchema,
   AppointmentListResponseSchema,
   AppointmentResponseSchema,
   CLIENT_EVENT_BATCH_MAX,
   CallJoinResponseSchema,
   CallLocationResponseSchema,
+  FollowUpApprovalPolicyResponseSchema,
 } from '@nestself/contracts';
 import type {
+  AppointmentApprovalDecisionRequest,
   AppointmentStatus,
   CallFeedbackRequest,
   CallProblemReportRequest,
@@ -30,6 +38,7 @@ import type {
   CallOutcomeRequest,
   CallSignalRequest,
   ClientEventRequest,
+  FollowUpApprovalPolicy,
   FollowUpProposeRequest,
   FollowUpScheduleRequest,
   FollowUpSuggestTimesRequest,
@@ -71,6 +80,8 @@ function queryString(params: object): string {
 }
 
 const appointmentPath = (id: string, suffix = '') => `/api/appointments/${encodeURIComponent(id)}${suffix}`;
+const approvalPath = (id: string, suffix: string) => `/api/appointment-approvals/${encodeURIComponent(id)}${suffix}`;
+const policyPath = (orgId: string) => `/api/orgs/${encodeURIComponent(orgId)}/settings/follow-up-approval`;
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -211,6 +222,42 @@ export function createCallsApi(client: ApiClient) {
       client.request(appointmentPath(appointmentId, '/decline'), {
         ...jsonPost({}),
         schema: AppointmentResponseSchema,
+      }),
+
+    // ── Follow-up approvals (T-CW-1.10, D-CW-37) ──────────────────────────
+
+    /** GET /orgs/:orgId/appointment-approvals: the items the caller approves or is the alternate for. */
+    listApprovals: (orgId: string) =>
+      client.request(`/api/orgs/${encodeURIComponent(orgId)}/appointment-approvals`, {
+        method: 'GET',
+        schema: AppointmentApprovalListResponseSchema,
+      }),
+
+    /** POST /appointment-approvals/:id/approve */
+    approveApproval: (approvalId: string) =>
+      client.request(approvalPath(approvalId, '/approve'), {
+        ...jsonPost({}),
+        schema: AppointmentApprovalItemSchema,
+      }),
+
+    /** POST /appointment-approvals/:id/reject: the safe reason goes to the employee only. */
+    rejectApproval: (approvalId: string, body: AppointmentApprovalDecisionRequest) =>
+      client.request(approvalPath(approvalId, '/reject'), {
+        ...jsonPost(body),
+        schema: AppointmentApprovalItemSchema,
+      }),
+
+    /** GET /orgs/:orgId/settings/follow-up-approval (HR). */
+    getFollowUpPolicy: (orgId: string) =>
+      client.request(policyPath(orgId), { method: 'GET', schema: FollowUpApprovalPolicyResponseSchema }),
+
+    /** PATCH /orgs/:orgId/settings/follow-up-approval (HR). */
+    setFollowUpPolicy: (orgId: string, policy: FollowUpApprovalPolicy) =>
+      client.request(policyPath(orgId), {
+        method: 'PATCH',
+        body: JSON.stringify({ policy }),
+        headers: { 'Content-Type': 'application/json' },
+        schema: FollowUpApprovalPolicyResponseSchema,
       }),
 
     /**
