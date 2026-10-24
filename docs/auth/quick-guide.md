@@ -73,7 +73,7 @@ pnpm install && pnpm db:up
 cp apps/api/.env.example apps/api/.env
 pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/api db:seed
 pnpm --filter @nestself/api dev
-pnpm --filter @nestself/api build && pnpm --filter @nestself/api worker   # optional: jobs, needs REDIS_URL (worker:dev does not boot under tsx yet)
+pnpm --filter @nestself/api worker:dev   # optional: jobs, needs REDIS_URL (runs through the Nest compiler)
 ```
 
 Stub mode uses a fake identity provider pre-loaded with the sample people. Employees (`user_jovan@example.com`, `user_ivana@example.com`, `user_stefan@example.com`, `user_dragan@example.com`) sign in with the code printed in the API log, and Ivana reaches `/hr/access`; staff and experts (`user_nikola@example.com`, `user_milica@example.com`) use the password `Nestself-dev-1234!` and enrol an authenticator on first sign-in. Set `VITE_DATA_SOURCE=api` in a web app's `.env.local` to use the real screens. Skip `pnpm db:up` when PostgreSQL and Redis already run outside Docker; the Compose file claims port 6379 and fails against a local Redis or Valkey.

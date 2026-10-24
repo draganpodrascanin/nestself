@@ -23,7 +23,7 @@ pnpm --filter @nestself/api worker:dev
 # Run one maintenance job immediately and print its report
 pnpm --filter @nestself/api job:run grants.reconcile
 
-# Convert legacy role columns into grants (only on a database at migration 0004)
+# Convert legacy role columns into grants (before db:migrate applies 0005)
 pnpm --filter @nestself/api db:backfill-grants
 
 # Build for production
@@ -49,7 +49,7 @@ The server listens on port 4000 by default. Copy `.env.example` to `.env` and ad
 
 The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it needs the API's configuration (identity provider, session encryption key, database) plus `REDIS_URL`; without Redis it exits with an error.
 
-`worker:dev` and `job:run` currently fail at boot: they run the sources through `tsx`, which emits no decorator metadata, so Nest cannot resolve constructor dependencies. The compiled worker works (`pnpm --filter @nestself/api build && pnpm --filter @nestself/api worker`). See `docs/auth/implementation.md` section 14.
+`worker:dev` (`nest start --entryFile worker/main --watch`) and `job:run` (`nest build`, then `node dist/worker/run-job.js <name>`) both go through the Nest compiler, because Nest resolves constructor dependencies from decorator metadata and `tsx` emits none. The one-off runner is `src/worker/run-job.ts` so that `nest build` compiles it. Both write `dist/`, which `dev` also uses; that is harmless, but expect `dev` to recompile once afterwards. `job:run` uses the database in `.env`.
 
 ### Tests
 
