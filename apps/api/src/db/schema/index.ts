@@ -11,4 +11,5 @@ export * from './invitations.js';
 export * from './audit.js';
 export * from './content.js';
 export * from './professional.js';
+export * from './appointments.js';
 export * from './relations.js';

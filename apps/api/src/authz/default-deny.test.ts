@@ -8,7 +8,7 @@
  *
  * @see T-1.6, AUTHZ-R-49
  */
-import { describe, it, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
   DiscoveryModule,
@@ -99,6 +99,50 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
         violations.map((v) => `  - ${v}`).join('\n'),
       );
     }
+  });
+
+  it('covers the appointments controller: every route is @Authorize() except the @Authenticated() list (CW-R-87)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const wrapper = discovery
+      .getControllers()
+      .find((w) => w.instance?.constructor.name === 'AppointmentsController');
+    expect(wrapper, 'AppointmentsController is registered').toBeDefined();
+
+    const instance = wrapper!.instance as object;
+    const prototype = Object.getPrototypeOf(instance) as object;
+    const policies: Record<string, string> = {};
+    for (const methodName of scanner.getAllMethodNames(prototype)) {
+      const handler = (prototype as Record<string, unknown>)[methodName];
+      if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+      const targets = [handler, instance.constructor];
+      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+      const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+      policies[methodName] = isPublic
+        ? 'public'
+        : authenticated
+          ? 'authenticated'
+          : (authorize?.action ?? 'none');
+    }
+
+    expect(policies).toEqual({
+      list: 'authenticated',
+      get: 'consultation.join',
+      create: 'appointment.propose',
+      cancel: 'appointment.cancel',
+    });
   });
 
   it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {

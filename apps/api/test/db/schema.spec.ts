@@ -11,6 +11,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
 import {
+  appointments,
   channels,
   conversationMessages,
   conversations,
@@ -44,7 +45,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(6);
+    expect(Number(rows[0]!.n)).toBe(7);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -177,9 +178,9 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
          WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
-                           'conversations','conversation_messages','intake_records')`,
+                           'conversations','conversation_messages','intake_records','appointments')`,
       );
-      expect(rows).toHaveLength(16);
+      expect(rows).toHaveLength(17);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -324,6 +325,44 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(conversations)
         .where(eq(conversations.id, 'rls_conv_leak'));
       expect(leaked).toEqual([]);
+    });
+
+    it('appointments are isolated by tenant (CW-R-19)', async () => {
+      const appointment = {
+        expertUserId: 'rls_user',
+        employeeUserId: 'rls_user',
+        startsAt: new Date('2026-11-10T15:00:00Z'),
+        endsAt: new Date('2026-11-10T15:50:00Z'),
+        serviceCategory: 'psychological',
+      };
+      await owner.db.insert(appointments).values([
+        { ...appointment, id: 'rls_appt_a', orgId: 'rls_org_a' },
+        { ...appointment, id: 'rls_appt_b', orgId: 'rls_org_b' },
+      ]);
+
+      const fromB = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx
+          .select({ id: appointments.id })
+          .from(appointments)
+          .where(inArray(appointments.id, ['rls_appt_a', 'rls_appt_b'])),
+      );
+      expect(fromB.map((a) => a.id)).toEqual(['rls_appt_b']);
+
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(appointments).values({ ...appointment, id: 'rls_appt_leak', orgId: 'rls_org_b' }),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // Status defaults to CONFIRMED; an appointment must end after it starts.
+      const [stored] = await owner.db.select().from(appointments).where(eq(appointments.id, 'rls_appt_a'));
+      expect(stored).toMatchObject({ status: 'CONFIRMED', timeZone: 'Europe/Belgrade', followUpOf: null });
+      await expect(
+        owner.db
+          .insert(appointments)
+          .values({ ...appointment, id: 'rls_appt_reversed', orgId: 'rls_org_a', endsAt: appointment.startsAt }),
+      ).rejects.toThrow();
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

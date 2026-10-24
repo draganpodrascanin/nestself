@@ -29,6 +29,7 @@ import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
 import { VideoModule } from './video/video.module.js';
+import { AppointmentsModule } from './appointments/appointments.module.js';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { VideoModule } from './video/video.module.js';
     ProfessionalModule,
     EmergencyModule,
     VideoModule,
+    AppointmentsModule,
     WsModule,
   ],
   providers: [

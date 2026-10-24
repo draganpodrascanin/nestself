@@ -73,3 +73,28 @@ export const eventRequestStatus = pgEnum('event_request_status', [
   'SELECTED',
   'CLOSED',
 ]);
+
+// ─── Consultations and webinars (NS-CALLS-01) ────────────────────────────
+
+/**
+ * Appointment lifecycle [D-CW-02, D-CW-37]. The contract spellings are lower
+ * case (`proposed`, `confirmed`); the appointments repository maps them
+ * (CW-R-19a).
+ */
+export const appointmentStatus = pgEnum('appointment_status', [
+  'PROPOSED',
+  'AWAITING_APPROVAL',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELED',
+  'DECLINED',
+  'NO_SHOW',
+]);
+
+/** Follow-up approval item lifecycle [D-CW-37]; the table arrives with the approval flow. */
+export const appointmentApprovalStatus = pgEnum('appointment_approval_status', [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'EXPIRED',
+]);
