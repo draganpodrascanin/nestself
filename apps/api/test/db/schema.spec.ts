@@ -25,6 +25,10 @@ import {
   orgUnitClosure,
   orgUnits,
   posts,
+  webinarMessages,
+  webinarPollResults,
+  webinarRegistrations,
+  webinars,
 } from '../../src/db/schema/index.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
@@ -49,7 +53,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(11);
+    expect(Number(rows[0]!.n)).toBe(12);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -184,9 +188,11 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
                            'conversations','conversation_messages','intake_records','appointments',
                            'call_sessions','call_participants','call_events','call_client_events',
-                           'call_outcomes','call_feedback','call_consents','appointment_approvals')`,
+                           'call_outcomes','call_feedback','call_consents','appointment_approvals',
+                           'webinars','webinar_hosts','webinar_registrations','webinar_messages',
+                           'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings')`,
       );
-      expect(rows).toHaveLength(25);
+      expect(rows).toHaveLength(33);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -434,6 +440,72 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       for (const { column_name } of rows) {
         expect(column_name, column_name).not.toMatch(/token|credential|secret/);
       }
+    });
+
+    it('webinar tables keep platform-wide occurrences visible and organisation rows isolated (T-CW-2.1, D-CW-25)', async () => {
+      const base = {
+        title: { en: 'Webinar' },
+        audiencePolicy: { type: 'all_eligible' as const },
+        startsAt: new Date('2026-11-20T15:00:00Z'),
+        endsAt: new Date('2026-11-20T16:00:00Z'),
+        timeZone: 'Europe/Belgrade',
+        createdByUserId: 'rls_user',
+      };
+      await owner.db.insert(webinars).values([
+        { ...base, id: 'rls_webinar_all', orgId: null },
+        { ...base, id: 'rls_webinar_a', orgId: 'rls_org_a', audiencePolicy: { type: 'organization', orgIds: ['rls_org_a'] } },
+        { ...base, id: 'rls_webinar_b', orgId: 'rls_org_b', audiencePolicy: { type: 'organization', orgIds: ['rls_org_b'] } },
+      ]);
+      await owner.db.insert(webinarRegistrations).values([
+        { id: 'rls_reg_all_a', webinarId: 'rls_webinar_all', orgId: 'rls_org_a', userId: 'rls_user', registeredAt: base.startsAt },
+        { id: 'rls_reg_b', webinarId: 'rls_webinar_b', orgId: 'rls_org_b', userId: 'rls_user', registeredAt: base.startsAt },
+      ]);
+
+      // Every webinar is recorded (D-CW-34): the column starts SCHEDULED and there is no recording switch.
+      const [created] = await owner.db.select().from(webinars).where(eq(webinars.id, 'rls_webinar_all'));
+      expect(created).toMatchObject({ status: 'DRAFT', recordingStatus: 'SCHEDULED', capacity: 250, chatPolicy: 'moderated' });
+      expect(Object.keys(created!)).not.toContain('recordingPolicy');
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', async (tx) => ({
+        webinars: await tx.select({ id: webinars.id }).from(webinars),
+        registrations: await tx.select({ id: webinarRegistrations.id }).from(webinarRegistrations),
+      }));
+      expect(fromA.webinars.map((r) => r.id).sort()).toEqual(['rls_webinar_a', 'rls_webinar_all']);
+      // A registration carries the registrant's organisation, even for an occurrence open to all.
+      expect(fromA.registrations.map((r) => r.id)).toEqual(['rls_reg_all_a']);
+
+      const leak = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(webinarMessages).values({
+          webinarId: 'rls_webinar_b',
+          orgId: 'rls_org_b',
+          authorUserId: 'rls_user',
+          kind: 'ATTENDEE',
+          text: 'leak',
+        }),
+      ).catch((e: unknown) => e);
+      expect(leak).toBeInstanceOf(Error);
+      const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // One registration per person and occurrence (CW-R-24a); capacity within 1 to 1,000; host posts are published.
+      await expect(
+        owner.db
+          .insert(webinarRegistrations)
+          .values({ webinarId: 'rls_webinar_b', orgId: 'rls_org_b', userId: 'rls_user', registeredAt: base.startsAt }),
+      ).rejects.toThrow();
+      await expect(owner.db.insert(webinars).values({ ...base, id: 'rls_webinar_huge', capacity: 1001 })).rejects.toThrow();
+      await expect(
+        owner.db
+          .insert(webinarMessages)
+          .values({ webinarId: 'rls_webinar_all', authorUserId: 'rls_user', kind: 'HOST', status: 'PENDING', text: 'x' }),
+      ).rejects.toThrow();
+
+      // CW-R-24: a vote row names the poll and the option, never the voter or a time.
+      const { rows: voteColumns } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'webinar_poll_results' ORDER BY column_name`,
+      );
+      expect(voteColumns.map((r) => r.column_name)).toEqual(['id', 'option_id', 'org_id', 'poll_id']);
+      expect(Object.keys(webinarPollResults)).not.toContain('userId');
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

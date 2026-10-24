@@ -140,7 +140,20 @@ export const callOutcomeStatus = pgEnum('call_outcome_status', [
   'CANCELED',
 ]);
 
-/** Webinar recording pipeline [D-CW-18]; the `webinar_recordings` table arrives with T-CW-2.5. */
+/** Webinar occurrence lifecycle [D-CW-17, decision record section 7]: DRAFT -> PUBLISHED -> LIVE -> ENDED, or CANCELED. */
+export const webinarStatus = pgEnum('webinar_status', ['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELED']);
+
+/** Who wrote a webinar chat message [D-CW-35]: a host to everyone, or an attendee (message or question) to the hosts. */
+export const webinarMessageKind = pgEnum('webinar_message_kind', ['HOST', 'ATTENDEE', 'QUESTION']);
+
+/** Webinar chat moderation state [D-CW-35, CW-R-103]: attendee messages start PENDING; host messages are PUBLISHED. */
+export const webinarMessageStatus = pgEnum('webinar_message_status', ['PENDING', 'PUBLISHED', 'ANSWERED', 'DISMISSED']);
+
+/**
+ * Webinar recording pipeline [D-CW-18, D-CW-34]: `webinars.recording_status`
+ * and `webinar_recordings.status` (T-CW-2.1); the pipeline that moves them
+ * arrives with T-CW-2.5.
+ */
 export const recordingStatus = pgEnum('recording_status', [
   'SCHEDULED',
   'RECORDING',
