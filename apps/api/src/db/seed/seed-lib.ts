@@ -46,6 +46,23 @@ async function upsertById<TTable extends TableWithId>(
     .onConflictDoUpdate({ target: table.id, set: update as never });
 }
 
+/**
+ * Templates granted explicitly on top of the legacy-role mapping, keyed by
+ * person id. The sample HR admin doubles as the employer administrator, so
+ * she also holds the employer owner template (mirrors
+ * `SAMPLE_PRINCIPALS.hr_admin` and `grant_user_ivana_employer_owner` in
+ * `@nestself/sample-data`). The backfill never derives these.
+ */
+export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>> = {
+  user_ivana: ['employer_owner'],
+};
+
+/** Ids of the grants created from `EXTRA_SAMPLE_TEMPLATES`. */
+export const extraSampleGrantIds = (): string[] =>
+  Object.entries(EXTRA_SAMPLE_TEMPLATES).flatMap(([personId, keys]) =>
+    keys.map((key) => `grant_${personId}_${key}`),
+  );
+
 const upperRole = <T extends string>(role: string | null | undefined): T | null =>
   role ? (role.toUpperCase() as T) : null;
 
@@ -295,10 +312,13 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   const unmappedTemplateKeys = PERMISSION_TEMPLATES.filter((tmpl) => tmpl.legacyRole == null).map(
     (tmpl) => tmpl.key,
   );
+  const extraGrantIds = new Set(extraSampleGrantIds());
   await db.delete(t.grants).where(
     inArray(
       t.grants.id,
-      SAMPLE_PEOPLE.flatMap((p) => unmappedTemplateKeys.map((key) => `grant_${p.id}_${key}`)),
+      SAMPLE_PEOPLE.flatMap((p) => unmappedTemplateKeys.map((key) => `grant_${p.id}_${key}`)).filter(
+        (id) => !extraGrantIds.has(id),
+      ),
     ),
   );
 
@@ -310,7 +330,13 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     // grants from their staff or expert template.
     if (!person.orgId && !platformRole) continue;
 
-    for (const tmpl of templatesForLegacyRoles(legacyRole, platformRole)) {
+    const extraTemplates = (EXTRA_SAMPLE_TEMPLATES[person.id] ?? []).map((key) => {
+      const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === key);
+      if (!tmpl) throw new Error(`EXTRA_SAMPLE_TEMPLATES names an unknown template: ${key}`);
+      return tmpl;
+    });
+
+    for (const tmpl of [...templatesForLegacyRoles(legacyRole, platformRole), ...extraTemplates]) {
       const scope = resolveSampleScope(tmpl.scopeType, person.orgId ?? null, defaultTeamId);
       const update = {
         actions: [...tmpl.actions],

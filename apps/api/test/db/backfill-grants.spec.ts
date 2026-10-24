@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
 import { SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { seed } from '../../src/db/seed/seed-lib.js';
+import { extraSampleGrantIds, seed } from '../../src/db/seed/seed-lib.js';
 import { backfillGrants } from '../../src/db/seed/backfill-grants.js';
 import { grants, memberships, organizations } from '../../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './test-database.js';
@@ -80,7 +80,12 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'backfill');
     await seed(testDb.db);
     await restoreLegacyRoleColumns(testDb);
-    seeded = await testDb.db.select().from(grants).orderBy(asc(grants.id));
+    // The backfill recreates the legacy-mapped grants only; the explicit
+    // extra templates (the sample HR admin's employer_owner) are not derived.
+    const extraIds = new Set(extraSampleGrantIds());
+    seeded = (await testDb.db.select().from(grants).orderBy(asc(grants.id))).filter(
+      (g) => !extraIds.has(g.id),
+    );
     await testDb.db.delete(grants);
   }, 180_000);
 
