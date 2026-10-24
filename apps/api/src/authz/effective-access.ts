@@ -35,6 +35,8 @@ export function effectiveAccess(
   const entries: EffectiveAccessEntry[] = [];
 
   for (const grant of ctx.grants) {
+    // Delegation ancestors in ctx.grants belong to other users (see authorize()).
+    if (grant.subjectUserId !== principal.userId) continue;
     if (grant.revokedAt != null) continue;
     if (grant.validFrom != null && grant.validFrom > ctx.now) continue;
     if (grant.validUntil != null && grant.validUntil <= ctx.now) continue;
@@ -80,6 +82,7 @@ export function effectiveActions(
     // a resource inside that grant's own scope.
     const candidates = ctx.grants.filter(
       (g) =>
+        g.subjectUserId === principal.userId &&
         g.revokedAt == null &&
         g.actions.includes(action) &&
         (g.validFrom == null || g.validFrom <= ctx.now) &&

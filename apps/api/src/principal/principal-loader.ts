@@ -2,7 +2,11 @@
  * PrincipalLoader — resolves a userId to a LoadedPrincipal.
  *
  * Caches at `principal:{userId}` for 30 s +/- 5 s jitter.
- * Grants at `grants:{userId}:{orgId}` for 60 s +/- 10 s jitter.
+ * Grants at `grants:{userId}:{orgId}` for 60 s +/- 10 s jitter. The entry
+ * holds the subject's grants plus the delegation ancestors of its delegated
+ * grants, so a change to an ancestor (held by another user) reaches it only
+ * through the delegatee's own `invalidateUser` call: `GrantsService.revoke`
+ * and `update` invalidate every subject in the affected delegation tree.
  * Assignments at `assignments:{userId}` for 60 s +/- 10 s jitter.
  * Org tree at `org_tree:{orgId}` for 5 min +/- 30 s jitter.
  *
@@ -202,7 +206,18 @@ export class PrincipalLoader {
     // Platform/own-scoped grants (scopeOrgId null) plus org-specific grants.
     const grants = await this.authzRepo.findGrantsForOrg(userId, orgId);
 
-    const result: GrantInput[] = grants.map((g) => ({
+    // The engine validates a delegated grant against its parent chain in
+    // ctx.grants, so the chain's grants (held by other users, possibly
+    // revoked) travel in the same cached entry. authorize() matches only the
+    // subject's own grants; the ancestors serve delegation validation alone.
+    const delegatedIds = grants.filter((g) => g.parentGrantId != null).map((g) => g.id);
+    const ownIds = new Set(grants.map((g) => g.id));
+    const ancestors =
+      delegatedIds.length > 0
+        ? (await this.authzRepo.findDelegationAncestors(delegatedIds)).filter((g) => !ownIds.has(g.id))
+        : [];
+
+    const result: GrantInput[] = [...grants, ...ancestors].map((g) => ({
       id: g.id,
       subjectUserId: g.subjectUserId,
       templateKey: g.templateKey ?? '',

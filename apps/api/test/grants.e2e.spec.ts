@@ -55,7 +55,7 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     await app.init();
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
-    const people = ['user_ivana', 'user_jovan'];
+    const people = ['user_ivana', 'user_jovan', 'user_stefan'];
     idp.seedUsers(people.map((id) => ({ email: `${id}@example.com` })));
     for (const id of people) {
       const email = `${id}@example.com`;
@@ -212,6 +212,35 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       templateKey: null,
     });
     delegatedId = res.body.id as string;
+  });
+
+  let stefan: Awaited<ReturnType<typeof signIn>>;
+
+  function stefanInvites(email: string) {
+    return stefan.agent
+      .post(`/api/orgs/${ORG}/invitations`)
+      .set('X-CSRF-Token', stefan.csrf)
+      .send({ email, templateKey: 'employee' });
+  }
+
+  it('the delegated people.invite applies to stefan: invitation 201 and listed in /auth/me', async () => {
+    stefan = await signIn('user_stefan');
+    const invited = await stefanInvites('delegated.invite@example.com');
+    expect(invited.status).toBe(201);
+
+    const me = await stefan.agent.get('/api/auth/me');
+    expect(me.status).toBe(200);
+    expect(me.body.effectiveActions).toContain('people.invite');
+    expect(me.body.effectiveActions).not.toContain('people.move');
+  });
+
+  it('an hr_admin action ivana did not delegate stays denied for stefan: people.move 403', async () => {
+    const res = await stefan.agent
+      .patch(`/api/orgs/${ORG}/members/mem_stefan`)
+      .set('X-CSRF-Token', stefan.csrf)
+      .send({ orgUnitId: 'team_product' });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('forbidden');
   });
 
   it('rejects delegating an action the employer_owner grant does not contain: 403', async () => {
@@ -380,6 +409,18 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('subject_not_member');
     });
+  });
+
+  it("revoking ivana's root hr_admin grant ends stefan's delegated people.invite: 403", async () => {
+    const revoked = await ivana.agent
+      .post(`${BASE}/${IVANA_HR_ADMIN}/revoke`)
+      .set('X-CSRF-Token', ivana.csrf)
+      .send({ reason: 'delegation test teardown' });
+    expect(revoked.status).toBe(200);
+
+    const res = await stefanInvites('after.revoke@example.com');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('forbidden');
   });
 
   it('the 11th write within a minute returns 429 rate_limited', async () => {

@@ -250,6 +250,33 @@ export class AuthorizationRepository {
     return Number(result.rows[0]?.depth ?? 0);
   }
 
+  /**
+   * Every ancestor grant reachable through `parent_grant_id` from the given
+   * (delegated) grants, revoked or not: the engine decides what a revoked or
+   * expired ancestor means. The given grants themselves are returned only
+   * when one is an ancestor of another. Same walk as `delegationDepth`: a
+   * parent hidden by the tenant scope or deleted ends its chain.
+   */
+  async findDelegationAncestors(grantIds: string[], tx?: DbExecutor): Promise<GrantRow[]> {
+    if (grantIds.length === 0) return [];
+    const seeds = sql.join(grantIds.map((id) => sql`${id}`), sql`, `);
+    const result = await this.exec(tx).execute<{ id: string }>(sql`
+      with recursive chain(id, parent_grant_id, hops) as (
+        select parent.id, parent.parent_grant_id, 1
+        from ${grants} as child join ${grants} as parent on parent.id = child.parent_grant_id
+        where child.id in (${seeds})
+        union all
+        select g.id, g.parent_grant_id, chain.hops + 1
+        from ${grants} as g join chain on g.id = chain.parent_grant_id
+        where chain.hops < 64
+      )
+      select distinct id from chain
+    `);
+    const ids = result.rows.map((r) => r.id);
+    if (ids.length === 0) return [];
+    return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
+  }
+
   /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
   async findActiveMembership(
     userId: string,

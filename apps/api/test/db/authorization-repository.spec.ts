@@ -135,6 +135,22 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     expect(again).toEqual({ roots: [], children: [] });
   });
 
+  it('findDelegationAncestors returns every ancestor of delegated grants, revoked ones included', async () => {
+    // Runs after revokeGrantTree: the whole tree is revoked, and the walk
+    // still returns it (the engine decides what a revoked ancestor means).
+    const scoped = await dbs.withOrgScope(ORG, (tx) => repo.findDelegationAncestors(['tree_grandchild'], tx));
+    expect(scoped.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_root']);
+    expect(scoped.every((r) => r.revokedAt != null)).toBe(true);
+
+    // The system context (no tenant setting) sees the same chain.
+    const system = await repo.findDelegationAncestors(['tree_grandchild', 'tree_child']);
+    expect(system.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_root']);
+
+    expect(await repo.findDelegationAncestors(['tree_root'])).toEqual([]);
+    expect(await repo.findDelegationAncestors([])).toEqual([]);
+    expect(await dbs.withOrgScope('org_other', (tx) => repo.findDelegationAncestors(['tree_grandchild'], tx))).toEqual([]);
+  });
+
   it('listGrantsForOrg excludes revoked rows unless includeRevoked, newest first', async () => {
     const active = await dbs.withOrgScope(ORG, (tx) => repo.listGrantsForOrg(ORG, {}, tx));
     expect(active.length).toBeGreaterThan(0);

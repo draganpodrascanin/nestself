@@ -83,6 +83,7 @@ function createMocks() {
     updateGrant: vi.fn(async (id: string, patch: Record<string, unknown>) => ({ ...grants.get(id)!, ...patch })),
     revokeGrantTree: vi.fn(async (ids: string[]) => ({ roots: ids, children: [] as string[] })),
     delegationDepth: vi.fn(async () => 0),
+    findActiveChildGrants: vi.fn(async (_parentIds: string[], _tx?: unknown): Promise<GrantRow[]> => []),
     listGrantsForOrg: vi.fn(async () => [row()]),
     findAncestorIds: vi.fn(async (id: string) => [id, 'ou_engineering']),
     listPlatformGrants: vi.fn(async () => [row({ id: 'grant_platform', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null })]),
@@ -319,6 +320,20 @@ describe('GrantsService', () => {
         }),
       );
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
+    });
+
+    it('invalidates every delegatee below the adjusted grant (their cached ancestor copy)', async () => {
+      m.authzRepo.findActiveChildGrants.mockImplementation(async (parentIds: string[]) => {
+        if (parentIds.includes('grant_1')) return [row({ id: 'grant_child', subjectUserId: 'user_stefan', parentGrantId: 'grant_1' })];
+        if (parentIds.includes('grant_child')) {
+          return [row({ id: 'grant_grandchild', subjectUserId: 'user_jovan', parentGrantId: 'grant_child' })];
+        }
+        return [];
+      });
+      await svc.update(ORG, 'grant_1', { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_jovan', [ORG]);
     });
 
     it('rejects conditions missing a required type of the template', async () => {

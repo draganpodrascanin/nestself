@@ -15,6 +15,7 @@ function createMockAuthz() {
   return {
     findActiveGrantTemplateKeys: vi.fn().mockResolvedValue([]),
     findGrantsForOrg: vi.fn().mockResolvedValue([]),
+    findDelegationAncestors: vi.fn().mockResolvedValue([]),
     findActiveAssignments: vi.fn().mockResolvedValue([]),
     findOrgSettings: vi.fn(),
     findClosureForOrg: vi.fn().mockResolvedValue([]),
@@ -185,6 +186,63 @@ describe('PrincipalLoader', () => {
       const result = await loader.loadGrants('user-1', 'org-1');
       expect(result).toEqual(cached);
       expect(authz.findGrantsForOrg).not.toHaveBeenCalled();
+    });
+
+    it('appends the delegation ancestors of delegated grants to the same cached entry', async () => {
+      const row = (id: string, subjectUserId: string, parentGrantId: string | null) => ({
+        id,
+        subjectUserId,
+        templateKey: null,
+        actions: ['people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org-1',
+        scopeOrgUnitId: null,
+        includeDescendants: false,
+        scopeRefKind: null,
+        scopeRefId: null,
+        conditions: [],
+        validFrom: new Date('2026-01-01'),
+        validUntil: null,
+        delegationEnvelope: null,
+        parentGrantId,
+        revokedAt: null,
+      });
+      authz.findGrantsForOrg.mockResolvedValue([row('g-own', 'user-1', null), row('g-child', 'user-1', 'g-mid')]);
+      authz.findDelegationAncestors.mockResolvedValue([row('g-mid', 'user-2', 'g-root'), row('g-root', 'user-3', null)]);
+
+      const result = await loader.loadGrants('user-1', 'org-1');
+
+      expect(authz.findDelegationAncestors).toHaveBeenCalledWith(['g-child']);
+      expect(result.map((g) => [g.id, g.subjectUserId])).toEqual([
+        ['g-own', 'user-1'],
+        ['g-child', 'user-1'],
+        ['g-mid', 'user-2'],
+        ['g-root', 'user-3'],
+      ]);
+      expect(cache.set).toHaveBeenCalledOnce();
+      const [key, json] = cache.set.mock.calls[0]!;
+      expect(key).toBe('grants:user-1:org-1');
+      expect((JSON.parse(json as string) as Array<{ id: string }>).map((g) => g.id)).toEqual([
+        'g-own',
+        'g-child',
+        'g-mid',
+        'g-root',
+      ]);
+    });
+
+    it('does not duplicate an ancestor that is also one of the subject\'s own grants', async () => {
+      const own = { id: 'g-root', subjectUserId: 'user-1', templateKey: null, actions: [], scopeType: 'organization', scopeOrgId: 'org-1', scopeOrgUnitId: null, includeDescendants: false, scopeRefKind: null, scopeRefId: null, conditions: [], validFrom: new Date(), validUntil: null, delegationEnvelope: null, parentGrantId: null, revokedAt: null };
+      const child = { ...own, id: 'g-child', parentGrantId: 'g-root' };
+      authz.findGrantsForOrg.mockResolvedValue([own, child]);
+      authz.findDelegationAncestors.mockResolvedValue([own]);
+
+      const result = await loader.loadGrants('user-1', 'org-1');
+      expect(result.map((g) => g.id)).toEqual(['g-root', 'g-child']);
+    });
+
+    it('skips the ancestor query when no grant is delegated', async () => {
+      await loader.loadGrants('user-1', 'org-1');
+      expect(authz.findDelegationAncestors).not.toHaveBeenCalled();
     });
   });
 

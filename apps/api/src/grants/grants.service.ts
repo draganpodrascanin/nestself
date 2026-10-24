@@ -285,11 +285,15 @@ export class GrantsService {
           conditionTypes: conditionTypes(parseConditions(row.conditions)),
         }),
       );
-      return row;
+      // Delegatees cache this grant as an ancestor of theirs (PrincipalLoader).
+      const delegatees = await this.delegateeSubjects(row.id, tx);
+      return { row, delegatees };
     });
 
-    await this.principalLoader.invalidateUser(updated.subjectUserId, [orgId]);
-    return toGrantResponse(updated);
+    for (const userId of new Set([updated.row.subjectUserId, ...updated.delegatees])) {
+      await this.principalLoader.invalidateUser(userId, [orgId]);
+    }
+    return toGrantResponse(updated.row);
   }
 
   // ── Revoke ────────────────────────────────────────────────────────────
@@ -551,6 +555,22 @@ export class GrantsService {
   }
 
   /** The parent grant and its ancestors as stored, nearest first. */
+  /** Subjects of every unrevoked grant delegated, directly or not, from `rootId`. */
+  private async delegateeSubjects(rootId: string, tx: DbExecutor): Promise<string[]> {
+    const subjects = new Set<string>();
+    const seen = new Set<string>([rootId]);
+    let parents = [rootId];
+    while (parents.length > 0) {
+      const children = (await this.authzRepo.findActiveChildGrants(parents, tx)).filter((g) => !seen.has(g.id));
+      for (const child of children) {
+        seen.add(child.id);
+        subjects.add(child.subjectUserId);
+      }
+      parents = children.map((g) => g.id);
+    }
+    return [...subjects];
+  }
+
   private async loadParentChain(parent: GrantRow, tx: DbExecutor): Promise<GrantInput[]> {
     const chain: GrantInput[] = [toGrantInput(parent)];
     let nextId = parent.parentGrantId;

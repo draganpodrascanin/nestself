@@ -86,7 +86,11 @@ export function principalKey(userId: string): string {
   return `principal:${userId}`;
 }
 
-/** `grants:{userId}:{orgId}` */
+/**
+ * `grants:{userId}:{orgId}`: the subject's grants plus the delegation
+ * ancestors of its delegated grants (other users' rows). An ancestor change
+ * invalidates this entry through the delegatee's own `invalidateUser` call.
+ */
 export function grantsKey(userId: string, orgId: string): string {
   return `grants:${userId}:${orgId}`;
 }

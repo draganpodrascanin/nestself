@@ -3408,7 +3408,7 @@
   {
     "label": "SYS-11: delegation depth exceeded (depth 4)",
     "principal": {
-      "userId": "u20",
+      "userId": "u1",
       "displayName": "Deep Delegate",
       "initials": "DD",
       "locale": "en",
@@ -13026,6 +13026,466 @@
     "expected": {
       "allowed": false,
       "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "DELEG-ALLOW-01: delegatee child grant with an active ancestor chain allows people.invite",
+    "principal": {
+      "userId": "u50",
+      "displayName": "Delegatee",
+      "initials": "DL",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m50",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "people.invite",
+    "resource": {
+      "type": "Invitation",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-dl-child",
+          "subjectUserId": "u50",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl-root",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl-root",
+          "subjectUserId": "u51",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "DELEG-DENY-01: delegatee child grant denied once the ancestor is revoked",
+    "principal": {
+      "userId": "u50",
+      "displayName": "Delegatee",
+      "initials": "DL",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m50",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "people.invite",
+    "resource": {
+      "type": "Invitation",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-dl-child",
+          "subjectUserId": "u50",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl-root",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl-root",
+          "subjectUserId": "u51",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": "2026-10-22T09:00:00.000Z"
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "delegation_parent_revoked"
+    }
+  },
+  {
+    "label": "DELEG-DENY-02: an ancestor's action the child does not list is not granted to the delegatee",
+    "principal": {
+      "userId": "u50",
+      "displayName": "Delegatee",
+      "initials": "DL",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m50",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "people.move",
+    "resource": {
+      "type": "Membership",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-dl-child",
+          "subjectUserId": "u50",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl-root",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl-root",
+          "subjectUserId": "u51",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "DELEG-DENY-03: delegatee child grant at chain depth 4 denied",
+    "principal": {
+      "userId": "u50",
+      "displayName": "Delegatee",
+      "initials": "DL",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m50",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "people.invite",
+    "resource": {
+      "type": "Invitation",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-dl4",
+          "subjectUserId": "u50",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl3",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl3",
+          "subjectUserId": "u54",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl2",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl2",
+          "subjectUserId": "u53",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl1",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl1",
+          "subjectUserId": "u52",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": "g-dl-root",
+          "revokedAt": null
+        },
+        {
+          "id": "g-dl-root",
+          "subjectUserId": "u51",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "delegation_depth_exceeded"
     }
   }
 ]
