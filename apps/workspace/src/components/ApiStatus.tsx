@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { healthQueryOptions } from '@nestself/api-client';
 import { Badge } from '@nestself/ui';
 import { api } from '../api';
+import { isSampleDataMode } from '../data-source';
 
 export function ApiStatus() {
   const { t } = useTranslation('workspace');
   const { data } = useQuery({
     ...healthQueryOptions(api),
-    // Only probe when an API URL is configured; sample mode must not depend on a backend.
-    enabled: Boolean(import.meta.env.VITE_API_URL),
+    // Probe in API mode (the dev server proxies /api without VITE_API_URL) or
+    // when an API URL is configured; sample mode must not depend on a backend.
+    enabled: !isSampleDataMode || Boolean(import.meta.env.VITE_API_URL),
   });
 
   if (data?.status === 'ok') {

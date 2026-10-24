@@ -32,8 +32,9 @@ function ApiStatus() {
   const { data } = useQuery({
     ...healthQueryOptions(api),
     retry: false,
-    // Only probe when an API URL is configured; sample mode must not depend on a backend.
-    enabled: Boolean(import.meta.env.VITE_API_URL),
+    // Probe in API mode (the dev server proxies /api without VITE_API_URL) or
+    // when an API URL is configured; sample mode must not depend on a backend.
+    enabled: !isSampleDataMode || Boolean(import.meta.env.VITE_API_URL),
   });
 
   const connected = data?.status === 'ok';
