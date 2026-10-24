@@ -12,6 +12,7 @@ import {
   BadRequestException,
   ChimeSDKMeetingsClient,
   CreateAttendeeCommand,
+  CreateMeetingCommand,
   CreateMeetingWithAttendeesCommand,
   DeleteAttendeeCommand,
   DeleteMeetingCommand,
@@ -33,6 +34,8 @@ import {
 import {
   CALL_FORMATS,
   CALL_PARTICIPANT_ROLES,
+  WEBINAR_MAX_REPLICAS,
+  WEBINAR_REPLICATED_CAPACITY,
   WEBINAR_SINGLE_MEETING_CAPACITY,
   WORKSHOP_CAPACITY,
 } from '@nestself/contracts';
@@ -42,9 +45,14 @@ import {
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoCapabilityError,
+  VideoRoutingError,
   assertCapabilitiesAllowed,
   capabilitiesForRole,
   encodeTenantId,
+  parseReplicaExternalMeetingId,
+  pickReplica,
+  replicaCapacities,
+  replicaExternalMeetingId,
   type CreateSessionInput,
   type VideoProviderEvent,
 } from './video-provider.js';
@@ -233,6 +241,75 @@ describe('encodeTenantId (Chime TenantIds pattern)', () => {
   });
 });
 
+describe('media replication rules (D-CW-14, T-CW-3.2)', () => {
+  it('reaches 1,000 attendees with the default quota of four replicas', () => {
+    expect(WEBINAR_MAX_REPLICAS).toBe(4);
+    expect(WEBINAR_REPLICATED_CAPACITY).toBe(WEBINAR_SINGLE_MEETING_CAPACITY * WEBINAR_MAX_REPLICAS);
+  });
+
+  it.each([
+    ['webinar', WEBINAR_SINGLE_MEETING_CAPACITY, []],
+    ['webinar', WEBINAR_SINGLE_MEETING_CAPACITY + 1, [126, 125]],
+    ['webinar', 500, [250, 250]],
+    ['webinar', 501, [167, 167, 167]],
+    ['webinar', WEBINAR_REPLICATED_CAPACITY, [250, 250, 250, 250]],
+    ['consultation', 2, []],
+    ['workshop', WORKSHOP_CAPACITY, []],
+  ] as const)('plans %s capacity %i as replicas %j', (format, capacity, expected) => {
+    expect(replicaCapacities(format, capacity)).toEqual(expected);
+  });
+
+  it('never plans more replicas than the quota or seats above the single-meeting limit', () => {
+    for (let capacity = 1; capacity <= WEBINAR_REPLICATED_CAPACITY; capacity += 1) {
+      const plan = replicaCapacities('webinar', capacity);
+      expect(plan.length).toBeLessThanOrEqual(WEBINAR_MAX_REPLICAS);
+      if (plan.length > 0) {
+        expect(plan.reduce((sum, seats) => sum + seats, 0)).toBe(capacity);
+        expect(Math.max(...plan)).toBeLessThanOrEqual(WEBINAR_SINGLE_MEETING_CAPACITY);
+      }
+    }
+  });
+
+  it('suffixes and parses the replica ExternalMeetingId', () => {
+    expect(replicaExternalMeetingId(SESSION_ID, 3)).toBe(`${SESSION_ID}-r3`);
+    expect(parseReplicaExternalMeetingId(`${SESSION_ID}-r3`)).toEqual({ sessionId: SESSION_ID, replicaIndex: 3 });
+    expect(parseReplicaExternalMeetingId(SESSION_ID)).toBeNull();
+  });
+
+  describe('pickReplica', () => {
+    const replicas = [
+      { replicaIndex: 1, capacity: 250 },
+      { replicaIndex: 2, capacity: 250 },
+      { replicaIndex: 3, capacity: 250 },
+    ];
+
+    it('picks the least-loaded replica', () => {
+      expect(pickReplica(replicas, { 1: 10, 2: 4, 3: 7 })?.replicaIndex).toBe(2);
+    });
+
+    it('breaks ties by the lowest index and counts a missing replica as empty', () => {
+      expect(pickReplica(replicas, { 1: 5, 2: 3, 3: 3 })?.replicaIndex).toBe(2);
+      expect(pickReplica(replicas, { 1: 5 })?.replicaIndex).toBe(2);
+      expect(pickReplica(replicas, {})?.replicaIndex).toBe(1);
+    });
+
+    it('balances attendees across replicas as they join', () => {
+      const counts: Record<number, number> = {};
+      for (let i = 0; i < 300; i += 1) {
+        const picked = pickReplica(replicas, counts)!;
+        counts[picked.replicaIndex] = (counts[picked.replicaIndex] ?? 0) + 1;
+      }
+      expect(counts).toEqual({ 1: 100, 2: 100, 3: 100 });
+    });
+
+    it('skips a full replica and returns null when every replica is full', () => {
+      expect(pickReplica(replicas, { 1: 250, 2: 250, 3: 249 })?.replicaIndex).toBe(3);
+      expect(pickReplica(replicas, { 1: 250, 2: 250, 3: 250 })).toBeNull();
+      expect(pickReplica([{ replicaIndex: 1 }], { 1: WEBINAR_SINGLE_MEETING_CAPACITY })).toBeNull();
+    });
+  });
+});
+
 describe('MEETING_FEATURES', () => {
   it('never requests FHD video, so no meeting is capped at 25 attendees (CW-R-08)', () => {
     for (const format of CALL_FORMATS) {
@@ -384,9 +461,9 @@ describe('ChimeVideoProvider', () => {
       expect(meetings.commandCalls(CreateMeetingWithAttendeesCommand)).toHaveLength(0);
     });
 
-    it('rejects a capacity above the single-meeting limit with capacity_above_limit', async () => {
+    it('rejects a webinar above the replicated limit with capacity_above_limit', async () => {
       await expectApiError(
-        provider.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY + 1 }),
+        provider.createSession({ ...webinarInput, capacity: WEBINAR_REPLICATED_CAPACITY + 1 }),
         400,
         'capacity_above_limit',
       );
@@ -756,6 +833,324 @@ describe('ChimeVideoProvider', () => {
       await expectApiError(provider.stopRecording({ pipelineId: 'pipeline-1' }), 503, 'video_provider_unavailable');
     });
   });
+  describe('media replication (T-CW-3.2)', () => {
+    const HOST_ID = PARTICIPANT_ID;
+    const replicatedInput: CreateSessionInput = { ...webinarInput, capacity: 500 };
+    const PRIMARY: Meeting = { ...MEETING, TenantIds: [encodeTenantId(WEBINAR_ID)] };
+
+    function replicaMeeting(externalMeetingId: string | undefined): Meeting {
+      const index = parseReplicaExternalMeetingId(externalMeetingId ?? '')?.replicaIndex ?? 0;
+      return {
+        MeetingId: `replica-${index}`,
+        MeetingArn: `arn:aws:chime:eu-central-1:111122223333:meeting/replica-${index}`,
+        ExternalMeetingId: externalMeetingId,
+        MediaRegion: 'eu-central-1',
+        // Chime reports the primary on a replica; attendees must never receive it.
+        PrimaryMeetingId: 'meeting-1',
+        MediaPlacement: {
+          AudioHostUrl: 'audio.example.test:3478',
+          AudioFallbackUrl: `wss://audio.example.test:443/calls/replica-${index}`,
+          SignalingUrl: `wss://signal.example.test/control/replica-${index}`,
+        },
+      };
+    }
+
+    beforeEach(() => {
+      meetings.on(CreateMeetingWithAttendeesCommand).resolves({ Meeting: PRIMARY, Attendees: [attendee(HOST_ID)] });
+      meetings.on(CreateMeetingCommand).callsFake((input: { ExternalMeetingId?: string; PrimaryMeetingId?: string }) => ({
+        Meeting: input.PrimaryMeetingId ? replicaMeeting(input.ExternalMeetingId) : PRIMARY,
+      }));
+    });
+
+    it('creates one primary and two replicas with PrimaryMeetingId for capacity 500', async () => {
+      const session = await provider.createSession(replicatedInput);
+
+      expect(meetings.commandCalls(CreateMeetingWithAttendeesCommand)).toHaveLength(1);
+      const replicaRequests = meetings.commandCalls(CreateMeetingCommand).map((call) => call.args[0].input);
+      expect(replicaRequests).toHaveLength(2);
+      replicaRequests.forEach((request, i) => {
+        const suffix = `${SESSION_ID}-r${i + 1}`;
+        expect(request).toEqual({
+          PrimaryMeetingId: 'meeting-1',
+          ClientRequestToken: suffix,
+          ExternalMeetingId: suffix,
+          MediaRegion: 'eu-central-1',
+          MeetingFeatures: MEETING_FEATURES.webinar,
+          NotificationsConfiguration: { SqsQueueArn: QUEUE_ARN },
+          TenantIds: [encodeTenantId(WEBINAR_ID)],
+          Tags: [
+            { Key: 'stage', Value: 'dev' },
+            { Key: 'format', Value: 'webinar' },
+          ],
+        });
+      });
+
+      expect(session.providerMeetingId).toBe('meeting-1');
+      expect(session.participant.providerMeetingId).toBe('meeting-1');
+      expect(session.replicas.map(({ replicaIndex, providerMeetingId, capacity }) => ({ replicaIndex, providerMeetingId, capacity }))).toEqual([
+        { replicaIndex: 1, providerMeetingId: 'replica-1', capacity: 250 },
+        { replicaIndex: 2, providerMeetingId: 'replica-2', capacity: 250 },
+      ]);
+    });
+
+    it('never hands a replica meeting out with the primary id', async () => {
+      const session = await provider.createSession(replicatedInput);
+
+      for (const replica of session.replicas) {
+        expect(replica.meeting).not.toHaveProperty('PrimaryMeetingId');
+        expect(JSON.stringify(replica.meeting)).not.toContain('meeting-1');
+      }
+    });
+
+    it('creates no replica for capacity 250', async () => {
+      const session = await provider.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY });
+
+      expect(meetings.commandCalls(CreateMeetingCommand)).toHaveLength(0);
+      expect(session.replicas).toEqual([]);
+    });
+
+    it('creates four replicas for 1,000 and refuses 1,001, naming the documented IVS path', async () => {
+      const full = await provider.createSession({ ...webinarInput, capacity: WEBINAR_REPLICATED_CAPACITY });
+      expect(full.replicas).toHaveLength(WEBINAR_MAX_REPLICAS);
+
+      meetings.resetHistory();
+      const error = await expectApiError(
+        provider.createSession({ ...webinarInput, capacity: WEBINAR_REPLICATED_CAPACITY + 1 }),
+        400,
+        'capacity_above_limit',
+      );
+      expect(error.message).toMatch(/IVS/);
+      expect(error.details).toEqual({ limit: WEBINAR_REPLICATED_CAPACITY });
+      expect(meetings.calls()).toHaveLength(0);
+    });
+
+    it('puts an attendee who arrives first into the first replica, never the primary', async () => {
+      meetings.on(CreateAttendeeCommand).resolves({ Attendee: attendee(SECOND_PARTICIPANT_ID, 'attendee-2') });
+
+      const session = await provider.createSession({
+        ...replicatedInput,
+        participant: { participantId: SECOND_PARTICIPANT_ID, role: 'attendee' },
+      });
+
+      expect(meetings.commandCalls(CreateMeetingWithAttendeesCommand)).toHaveLength(0);
+      const created = meetings.commandCalls(CreateMeetingCommand).map((call) => call.args[0].input);
+      expect(created[0]).not.toHaveProperty('PrimaryMeetingId');
+      expect(created.slice(1).map((request) => request.PrimaryMeetingId)).toEqual(['meeting-1', 'meeting-1']);
+      expect(meetings.commandCalls(CreateAttendeeCommand)[0]!.args[0].input).toEqual({
+        MeetingId: 'replica-1',
+        ExternalUserId: SECOND_PARTICIPANT_ID,
+        Capabilities: { Audio: 'Receive', Video: 'Receive', Content: 'Receive' },
+      });
+      expect(session.participant.providerMeetingId).toBe('replica-1');
+    });
+
+    it('deletes the primary, and with it the replicas, when a replica cannot be created', async () => {
+      meetings
+        .on(CreateMeetingCommand)
+        .rejects(new ServiceUnavailableException({ message: 'down', $metadata: {} }));
+      meetings.on(DeleteMeetingCommand).resolves({});
+
+      await expectApiError(provider.createSession(replicatedInput), 503, 'video_provider_unavailable');
+
+      expect(meetings.commandCalls(DeleteMeetingCommand).map((call) => call.args[0].input)).toEqual([
+        { MeetingId: 'meeting-1' },
+      ]);
+    });
+
+    it('routes a participant to the replica named by target', async () => {
+      meetings.on(CreateAttendeeCommand).resolves({ Attendee: attendee(SECOND_PARTICIPANT_ID, 'attendee-2') });
+
+      const participant = await provider.createParticipant({
+        providerMeetingId: 'meeting-1',
+        replicaMeetingIds: ['replica-1', 'replica-2'],
+        target: { replicaIndex: 2 },
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+      });
+
+      expect(meetings.commandCalls(CreateAttendeeCommand)[0]!.args[0].input.MeetingId).toBe('replica-2');
+      expect(participant.providerMeetingId).toBe('replica-2');
+    });
+
+    it('keeps hosts on the primary and refuses an unknown replica', async () => {
+      for (const role of ['presenter', 'moderator'] as const) {
+        await expect(
+          provider.createParticipant({
+            providerMeetingId: 'meeting-1',
+            replicaMeetingIds: ['replica-1'],
+            target: { replicaIndex: 1 },
+            participantId: SECOND_PARTICIPANT_ID,
+            role,
+          }),
+        ).rejects.toThrow(VideoRoutingError);
+      }
+      await expect(
+        provider.createParticipant({
+          providerMeetingId: 'meeting-1',
+          replicaMeetingIds: ['replica-1'],
+          target: { replicaIndex: 2 },
+          participantId: SECOND_PARTICIPANT_ID,
+          role: 'attendee',
+        }),
+      ).rejects.toThrow(VideoRoutingError);
+      expect(meetings.commandCalls(CreateAttendeeCommand)).toHaveLength(0);
+    });
+
+    it('never lets a replica attendee or a promoted attendee send video (D-CW-35)', async () => {
+      meetings.on(CreateAttendeeCommand).resolves({ Attendee: attendee(SECOND_PARTICIPANT_ID, 'attendee-2') });
+      meetings.on(UpdateAttendeeCapabilitiesCommand).resolves({});
+      const replicaVideo = { Audio: 'Receive', Video: 'SendReceive', Content: 'Receive' } as const;
+      const promotedVideo = { Audio: 'SendReceive', Video: 'SendReceive', Content: 'Receive' } as const;
+
+      await expect(
+        provider.createParticipant({
+          providerMeetingId: 'meeting-1',
+          replicaMeetingIds: ['replica-1'],
+          target: { replicaIndex: 1 },
+          participantId: SECOND_PARTICIPANT_ID,
+          role: 'attendee',
+          capabilities: replicaVideo,
+        }),
+      ).rejects.toThrow(VideoCapabilityError);
+      await expect(
+        provider.createParticipant({
+          providerMeetingId: 'meeting-1',
+          target: 'primary',
+          participantId: SECOND_PARTICIPANT_ID,
+          role: 'attendee',
+          capabilities: promotedVideo,
+        }),
+      ).rejects.toThrow(VideoCapabilityError);
+      await expect(
+        provider.updateParticipantCapabilities({
+          providerMeetingId: 'replica-1',
+          providerAttendeeId: 'attendee-2',
+          role: 'attendee',
+          capabilities: promotedVideo,
+        }),
+      ).rejects.toThrow(VideoCapabilityError);
+      expect(meetings.commandCalls(CreateAttendeeCommand)).toHaveLength(0);
+      expect(meetings.commandCalls(UpdateAttendeeCapabilitiesCommand)).toHaveLength(0);
+
+      // The floor from a replica: primary credentials, audio only (WEB-09).
+      await provider.createParticipant({
+        providerMeetingId: 'meeting-1',
+        target: 'primary',
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+        capabilities: capabilitiesForRole('attendee', { floor: true }),
+      });
+      expect(meetings.commandCalls(CreateAttendeeCommand)[0]!.args[0].input).toEqual({
+        MeetingId: 'meeting-1',
+        ExternalUserId: SECOND_PARTICIPANT_ID,
+        Capabilities: { Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' },
+      });
+
+    });
+
+    describe('the floor from a replica (WEB-09, SPIKE-CW-06)', () => {
+      const promotion = { sessionId: SESSION_ID, providerMeetingId: 'meeting-1', participantId: SECOND_PARTICIPANT_ID };
+
+      it('promoteToPrimary creates an audio-only attendee on the primary and returns its credentials', async () => {
+        meetings.on(CreateAttendeeCommand).resolves({
+          Attendee: { ...attendee(SECOND_PARTICIPANT_ID, 'primary-attendee-2'), Capabilities: undefined },
+        });
+
+        const promoted = await provider.promoteToPrimary(promotion);
+
+        expect(meetings.commandCalls(CreateAttendeeCommand)[0]!.args[0].input).toEqual({
+          MeetingId: 'meeting-1',
+          ExternalUserId: SECOND_PARTICIPANT_ID,
+          Capabilities: { Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' },
+        });
+        expect(promoted.providerMeetingId).toBe('meeting-1');
+        expect(promoted.providerAttendeeId).toBe('primary-attendee-2');
+        expect(promoted.attendee.JoinToken).toBe(JOIN_TOKEN);
+        // D-CW-35: the floor is audio only, never video, whatever the caller does.
+        expect(promoted.attendee.Capabilities.Video).toBe('Receive');
+        expect(promoted.attendee.Capabilities.Content).toBe('Receive');
+        expect(logged.join('\n')).not.toContain(JOIN_TOKEN);
+      });
+
+      it('never lets a promotion carry video, even if the provider reports it', async () => {
+        meetings.on(CreateAttendeeCommand).resolves({ Attendee: attendee(SECOND_PARTICIPANT_ID, 'primary-attendee-2') });
+
+        const promoted = await provider.promoteToPrimary(promotion);
+
+        expect(promoted.attendee.Capabilities).toEqual({ Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' });
+      });
+
+      it('maps a primary that is gone to appointment_not_joinable', async () => {
+        meetings.on(CreateAttendeeCommand).rejects(new NotFoundException({ message: 'gone', $metadata: {} }));
+
+        await expectApiError(provider.promoteToPrimary(promotion), 409, 'appointment_not_joinable');
+      });
+
+      it('demoteFromPrimary deletes the primary attendee and tolerates one already gone', async () => {
+        meetings
+          .on(DeleteAttendeeCommand)
+          .resolvesOnce({})
+          .rejectsOnce(new NotFoundException({ message: 'gone', $metadata: {} }));
+        const demotion = { ...promotion, providerAttendeeId: 'primary-attendee-2' };
+
+        await provider.demoteFromPrimary(demotion);
+        await expect(provider.demoteFromPrimary(demotion)).resolves.toBeUndefined();
+
+        expect(meetings.commandCalls(DeleteAttendeeCommand).map((call) => call.args[0].input)).toEqual([
+          { MeetingId: 'meeting-1', AttendeeId: 'primary-attendee-2' },
+          { MeetingId: 'meeting-1', AttendeeId: 'primary-attendee-2' },
+        ]);
+      });
+    });
+
+    it('ends the replicas first, then the primary', async () => {
+      meetings.on(DeleteMeetingCommand).resolves({});
+
+      await provider.endSession({ providerMeetingId: 'meeting-1', replicaMeetingIds: ['replica-1', 'replica-2'] });
+
+      expect(meetings.commandCalls(DeleteMeetingCommand).map((call) => call.args[0].input.MeetingId)).toEqual([
+        'replica-1',
+        'replica-2',
+        'meeting-1',
+      ]);
+    });
+
+    it('still deletes the primary, which takes its replicas along, when a replica delete fails', async () => {
+      meetings
+        .on(DeleteMeetingCommand, { MeetingId: 'replica-1' })
+        .rejects(new ServiceUnavailableException({ message: 'down', $metadata: {} }))
+        .on(DeleteMeetingCommand, { MeetingId: 'replica-2' })
+        .rejects(new NotFoundException({ message: 'gone', $metadata: {} }))
+        .on(DeleteMeetingCommand, { MeetingId: 'meeting-1' })
+        .resolves({});
+
+      await expect(
+        provider.endSession({ providerMeetingId: 'meeting-1', replicaMeetingIds: ['replica-1', 'replica-2'] }),
+      ).resolves.toBeUndefined();
+      expect(meetings.commandCalls(DeleteMeetingCommand).at(-1)!.args[0].input.MeetingId).toBe('meeting-1');
+    });
+
+    it('describes the primary and the replicas that still exist', async () => {
+      meetings
+        .on(GetMeetingCommand, { MeetingId: 'meeting-1' })
+        .resolves({ Meeting: PRIMARY })
+        .on(GetMeetingCommand, { MeetingId: 'replica-1' })
+        .resolves({ Meeting: replicaMeeting(`${SESSION_ID}-r1`) })
+        .on(GetMeetingCommand, { MeetingId: 'replica-2' })
+        .rejects(new NotFoundException({ message: 'gone', $metadata: {} }));
+
+      const info = await provider.describeSession({
+        providerMeetingId: 'meeting-1',
+        replicaMeetingIds: ['replica-1', 'replica-2'],
+      });
+
+      expect(info?.providerMeetingId).toBe('meeting-1');
+      expect(info?.replicas.map(({ replicaIndex, providerMeetingId }) => ({ replicaIndex, providerMeetingId }))).toEqual([
+        { replicaIndex: 1, providerMeetingId: 'replica-1' },
+      ]);
+      expect(info?.replicas[0]?.meeting).not.toHaveProperty('PrimaryMeetingId');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -817,6 +1212,7 @@ describe('FakeVideoProvider', () => {
     await expect(fake.describeSession({ providerMeetingId: session.providerMeetingId })).resolves.toEqual({
       providerMeetingId: session.providerMeetingId,
       meeting: session.meeting,
+      replicas: [],
     });
 
     await fake.endSession({ providerMeetingId: session.providerMeetingId });
@@ -924,7 +1320,7 @@ describe('FakeVideoProvider', () => {
   });
 
   it('applies the same capacity limit as the Chime adapter', async () => {
-    await expectApiError(fake.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY + 1 }), 400, 'capacity_above_limit');
+    await expectApiError(fake.createSession({ ...webinarInput, capacity: WEBINAR_REPLICATED_CAPACITY + 1 }), 400, 'capacity_above_limit');
     await expectApiError(fake.createSession({ ...workshopInput, capacity: WORKSHOP_CAPACITY + 1 }), 400, 'capacity_above_limit');
   });
 
@@ -940,6 +1336,207 @@ describe('FakeVideoProvider', () => {
     expect(recording).toEqual({ pipelineId: `fake-pipeline-${SESSION_ID}`, rawSegmentsPrefix: `raw/${SESSION_ID}/` });
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
+  });
+
+  describe('media replication (T-CW-3.2)', () => {
+    const replicatedInput: CreateSessionInput = { ...webinarInput, capacity: 500 };
+    const primaryId = `fake-meeting-${SESSION_ID}`;
+    const replicaIds = [`${primaryId}-r1`, `${primaryId}-r2`];
+
+    it('stubs one primary and two replicas for capacity 500', async () => {
+      const session = await fake.createSession(replicatedInput);
+      await flushEvents();
+
+      expect(session.providerMeetingId).toBe(primaryId);
+      expect(session.participant.providerMeetingId).toBe(primaryId);
+      expect(session.replicas.map(({ replicaIndex, providerMeetingId, capacity }) => ({ replicaIndex, providerMeetingId, capacity }))).toEqual([
+        { replicaIndex: 1, providerMeetingId: replicaIds[0], capacity: 250 },
+        { replicaIndex: 2, providerMeetingId: replicaIds[1], capacity: 250 },
+      ]);
+      expect(session.replicas.map((replica) => replica.meeting.ExternalMeetingId)).toEqual([
+        `${SESSION_ID}-r1`,
+        `${SESSION_ID}-r2`,
+      ]);
+      expect(session.replicas[0]?.meeting).not.toHaveProperty('PrimaryMeetingId');
+      expect(events.filter((event) => event.eventType === 'MeetingStarted').map((event) => event.providerMeetingId)).toEqual([
+        primaryId,
+        ...replicaIds,
+      ]);
+    });
+
+    it('creates no replica for capacity 250 and refuses 1,001', async () => {
+      const single = await fake.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY });
+      expect(single.replicas).toEqual([]);
+      fake.reset();
+      await expectApiError(
+        fake.createSession({ ...webinarInput, capacity: WEBINAR_REPLICATED_CAPACITY + 1 }),
+        400,
+        'capacity_above_limit',
+      );
+    });
+
+    it('routes attendees by target and reports their events from the replica', async () => {
+      await fake.createSession(replicatedInput);
+      await flushEvents();
+      events.length = 0;
+
+      const participant = await fake.createParticipant({
+        providerMeetingId: primaryId,
+        replicaMeetingIds: replicaIds,
+        target: { replicaIndex: 2 },
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+      });
+      await flushEvents();
+
+      expect(participant.providerMeetingId).toBe(replicaIds[1]);
+      expect(participant.attendee.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+      expect(events).toEqual([
+        {
+          eventType: 'AttendeeJoined',
+          providerMeetingId: replicaIds[1],
+          providerAttendeeId: participant.providerAttendeeId,
+          externalMeetingId: `${SESSION_ID}-r2`,
+          externalUserId: SECOND_PARTICIPANT_ID,
+          occurredAt: NOW,
+        },
+      ]);
+    });
+
+    it('puts a first-arriving attendee into the first replica', async () => {
+      const session = await fake.createSession({
+        ...replicatedInput,
+        participant: { participantId: SECOND_PARTICIPANT_ID, role: 'attendee' },
+      });
+      expect(session.participant.providerMeetingId).toBe(replicaIds[0]);
+    });
+
+    it('applies the host and D-CW-35 rules to replicas', async () => {
+      await fake.createSession(replicatedInput);
+      await expect(
+        fake.createParticipant({
+          providerMeetingId: primaryId,
+          replicaMeetingIds: replicaIds,
+          target: { replicaIndex: 1 },
+          participantId: SECOND_PARTICIPANT_ID,
+          role: 'moderator',
+        }),
+      ).rejects.toThrow(VideoRoutingError);
+      await expect(
+        fake.createParticipant({
+          providerMeetingId: primaryId,
+          replicaMeetingIds: replicaIds,
+          target: { replicaIndex: 1 },
+          participantId: SECOND_PARTICIPANT_ID,
+          role: 'attendee',
+          capabilities: { Audio: 'Receive', Video: 'SendReceive', Content: 'Receive' },
+        }),
+      ).rejects.toThrow(VideoCapabilityError);
+    });
+
+    it('ends the replicas first, then the primary, and forgets them all', async () => {
+      await fake.createSession(replicatedInput);
+      await flushEvents();
+      events.length = 0;
+
+      await fake.endSession({ providerMeetingId: primaryId });
+      await flushEvents();
+
+      expect(events.filter((event) => event.eventType === 'MeetingEnded').map((event) => event.providerMeetingId)).toEqual([
+        ...replicaIds,
+        primaryId,
+      ]);
+      await expect(fake.describeSession({ providerMeetingId: primaryId, replicaMeetingIds: replicaIds })).resolves.toBeNull();
+      await expect(fake.describeSession({ providerMeetingId: replicaIds[0]! })).resolves.toBeNull();
+    });
+
+    it('describes the replicas it is asked about', async () => {
+      const session = await fake.createSession(replicatedInput);
+
+      const info = await fake.describeSession({ providerMeetingId: primaryId, replicaMeetingIds: replicaIds });
+
+      expect(info?.replicas).toEqual(
+        session.replicas.map(({ replicaIndex, providerMeetingId, meeting }) => ({ replicaIndex, providerMeetingId, meeting })),
+      );
+      expect((await fake.describeSession({ providerMeetingId: primaryId }))?.replicas).toEqual([]);
+    });
+
+    it('promotes a replica attendee onto the primary with audio only and demotes them again', async () => {
+      await fake.createSession(replicatedInput);
+      const inReplica = await fake.createParticipant({
+        providerMeetingId: primaryId,
+        replicaMeetingIds: replicaIds,
+        target: { replicaIndex: 1 },
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+      });
+      await flushEvents();
+      events.length = 0;
+
+      const promoted = await fake.promoteToPrimary({
+        sessionId: SESSION_ID,
+        providerMeetingId: primaryId,
+        participantId: SECOND_PARTICIPANT_ID,
+      });
+      expect(promoted.providerMeetingId).toBe(primaryId);
+      expect(promoted.providerAttendeeId).not.toBe(inReplica.providerAttendeeId);
+      expect(promoted.attendee.JoinToken).toBe(`fake-token-${SECOND_PARTICIPANT_ID}`);
+      expect(promoted.attendee.Capabilities).toEqual({ Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' });
+
+      await fake.demoteFromPrimary({
+        sessionId: SESSION_ID,
+        providerMeetingId: primaryId,
+        participantId: SECOND_PARTICIPANT_ID,
+        providerAttendeeId: promoted.providerAttendeeId,
+      });
+      await flushEvents();
+
+      expect(events.map((event) => [event.eventType, event.providerMeetingId, event.externalUserId])).toEqual([
+        ['AttendeeJoined', primaryId, SECOND_PARTICIPANT_ID],
+        ['AttendeeLeft', primaryId, SECOND_PARTICIPANT_ID],
+      ]);
+      // The replica seat stays: the client demotes back into it.
+      const again = await fake.createParticipant({
+        providerMeetingId: primaryId,
+        replicaMeetingIds: replicaIds,
+        target: { replicaIndex: 1 },
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+      });
+      expect(again).toEqual(inReplica);
+    });
+
+    it('refuses a promotion into a meeting it does not know', async () => {
+      await expectApiError(
+        fake.promoteToPrimary({ sessionId: SESSION_ID, providerMeetingId: 'fake-meeting-unknown', participantId: PARTICIPANT_ID }),
+        409,
+        'appointment_not_joinable',
+      );
+    });
+
+    it('simulates events per meeting id, replicas included', async () => {
+      await fake.createSession(replicatedInput);
+      const participant = await fake.createParticipant({
+        providerMeetingId: primaryId,
+        replicaMeetingIds: replicaIds,
+        target: { replicaIndex: 1 },
+        participantId: SECOND_PARTICIPANT_ID,
+        role: 'attendee',
+      });
+      await flushEvents();
+      events.length = 0;
+
+      fake.simulateEvent('AttendeeDropped', replicaIds[0]!, participant.providerAttendeeId);
+      fake.simulateEvent('MeetingEnded', replicaIds[1]!);
+      await flushEvents();
+
+      expect(events.map((event) => [event.eventType, event.providerMeetingId, event.externalMeetingId])).toEqual([
+        ['AttendeeDropped', replicaIds[0], `${SESSION_ID}-r1`],
+        ['MeetingEnded', replicaIds[1], `${SESSION_ID}-r2`],
+      ]);
+      await expect(fake.describeSession({ providerMeetingId: replicaIds[1]! })).resolves.toBeNull();
+      await expect(fake.describeSession({ providerMeetingId: primaryId })).resolves.not.toBeNull();
+    });
   });
 
   describe('simulateEvent', () => {

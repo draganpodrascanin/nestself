@@ -4,8 +4,9 @@
  *
  * Deterministic stubs: the meeting id is `fake-meeting-{sessionId}`, the
  * attendee id `fake-attendee-{participantId}` and the join token
- * `fake-token-{participantId}`. Meetings live in memory, so `describeSession`
- * returns what `createSession` created until `endSession` removes it.
+ * `fake-token-{participantId}`, with `-r{n}` appended in replica `n`.
+ * Meetings live in memory, so `describeSession` returns what `createSession`
+ * created until `endSession` removes it.
  *
  * Lifecycle events go out through an in-process `EventEmitter` with the same
  * names and fields the Chime SQS consumer hands to the event handler
@@ -15,20 +16,32 @@
  * No method touches the network (CW-R-05). The same capability, capacity and
  * not-found rules as `ChimeVideoProvider` apply, so a test against the fake
  * sees the errors the real adapter raises.
+ *
+ * Media replication (D-CW-14) is mirrored too: a webinar above one meeting
+ * gets replicas `fake-meeting-{sessionId}-r{n}` with `ExternalMeetingId`
+ * `{sessionId}-r{n}`, attendees are routed by `target`, and ending the
+ * primary ends its replicas first, as Chime's `DeleteMeeting` does.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import {
+  HOST_ROLES,
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoProvider,
   assertCapabilitiesAllowed,
   assertCapacityWithinLimit,
+  floorCapabilities,
+  pickReplica,
+  replicaCapacities,
+  replicaExternalMeetingId,
   resolveCapabilities,
+  resolveTargetMeeting,
   sessionNotJoinable,
   tenantIdsFor,
   type CreateParticipantInput,
   type CreateSessionInput,
+  type DemoteFromPrimaryInput,
   type DescribeSessionInput,
   type EndSessionInput,
   type ParticipantCapabilities,
@@ -36,8 +49,12 @@ import {
   type ProviderMeeting,
   type ProviderParticipant,
   type ProviderRecording,
+  type ProviderReplica,
+  type ProviderReplicaInfo,
   type ProviderSession,
   type ProviderSessionInfo,
+  type PromoteToPrimaryInput,
+  type SessionParticipantInput,
   type RemoveParticipantInput,
   type StartRecordingInput,
   type StopRecordingInput,
@@ -53,17 +70,26 @@ export interface FakeVideoProviderOptions {
 }
 
 interface FakeMeeting {
+  /** The `call_sessions.id`, shared by the primary and its replicas. */
   sessionId: string;
   meeting: ProviderMeeting;
   /** Keyed by participant id (the `ExternalUserId`). */
   attendees: Map<string, ProviderAttendee>;
+  /** Set on a replica: the primary it replicates. */
+  primaryMeetingId: string | null;
+  /** On a primary: its replicas in index order. */
+  replicas: Array<{ replicaIndex: number; providerMeetingId: string; capacity: number }>;
 }
 
 const EVENT = 'video-provider-event';
 const FAKE_HOST = 'fake-chime.invalid';
 
-function toParticipant(attendee: ProviderAttendee): ProviderParticipant {
-  return { providerAttendeeId: attendee.AttendeeId, attendee: structuredClone(attendee) };
+function toParticipant(state: FakeMeeting, attendee: ProviderAttendee): ProviderParticipant {
+  return {
+    providerMeetingId: state.meeting.MeetingId,
+    providerAttendeeId: attendee.AttendeeId,
+    attendee: structuredClone(attendee),
+  };
 }
 
 @Injectable()
@@ -102,8 +128,9 @@ export class FakeVideoProvider extends VideoProvider {
    * `AttendeeDropped`, `AttendeeLeft` or `MeetingEnded` (for example Chime's
    * own end of an empty meeting, CORE-16). Attendee events leave the attendee
    * in the meeting, as Chime does until `DeleteAttendee`; `MeetingEnded`
-   * forgets the meeting, so `describeSession` then returns null. Delivery is
-   * deferred like every other event. Returns the event.
+   * forgets the meeting (a primary takes its replicas along, silently), so
+   * `describeSession` then returns null. Works for any meeting id, replicas
+   * included. Delivery is deferred like every other event. Returns the event.
    */
   simulateEvent(
     eventType: VideoProviderEventType,
@@ -118,8 +145,9 @@ export class FakeVideoProvider extends VideoProvider {
         throw new Error(`simulateEvent: ${eventType} is a meeting event and takes no attendee`);
       }
       if (eventType === 'MeetingEnded') {
+        for (const replica of state.replicas) this.meetings.delete(replica.providerMeetingId);
         this.meetings.delete(providerMeetingId);
-        this.pipelines.delete(this.pipelineId(state.sessionId));
+        if (!state.primaryMeetingId) this.pipelines.delete(this.pipelineId(state.sessionId));
       }
       return this.emit(eventType, state, null);
     }
@@ -140,41 +168,33 @@ export class FakeVideoProvider extends VideoProvider {
     assertCapacityWithinLimit(input.format, input.capacity);
     const capabilities = resolveCapabilities(input.participant);
     const tenantIds = tenantIdsFor(input);
-    const meetingId = `fake-meeting-${input.sessionId}`;
+    const primaryId = `fake-meeting-${input.sessionId}`;
 
-    // A repeated ClientRequestToken returns the existing meeting (D-CW-07).
-    let state = this.meetings.get(meetingId);
-    if (!state) {
-      state = {
-        sessionId: input.sessionId,
-        meeting: {
-          MeetingId: meetingId,
-          MeetingArn: `arn:aws:chime:${VIDEO_MEDIA_REGION}:000000000000:meeting/${meetingId}`,
-          ExternalMeetingId: input.sessionId,
-          MediaRegion: VIDEO_MEDIA_REGION,
-          MediaPlacement: {
-            AudioHostUrl: `audio.${FAKE_HOST}:3478`,
-            AudioFallbackUrl: `wss://audio.${FAKE_HOST}:443/calls/${meetingId}`,
-            SignalingUrl: `wss://signal.${FAKE_HOST}/control/${meetingId}`,
-            TurnControlUrl: `https://turn.${FAKE_HOST}/v2/turn_sessions`,
-            EventIngestionUrl: `https://data.${FAKE_HOST}/v1/client-events`,
-          },
-          MeetingFeatures: structuredClone(MEETING_FEATURES[input.format]),
-          TenantIds: tenantIds,
-        },
-        attendees: new Map(),
-      };
-      this.meetings.set(meetingId, state);
-      this.emit('MeetingStarted', state, null);
+    // A repeated ClientRequestToken returns the existing meetings (D-CW-07).
+    let primary = this.meetings.get(primaryId);
+    if (!primary) {
+      primary = this.startMeeting(input, primaryId, input.sessionId, tenantIds, null);
+      for (const [i, capacity] of replicaCapacities(input.format, input.capacity).entries()) {
+        const replicaIndex = i + 1;
+        const replicaId = `${primaryId}-r${replicaIndex}`;
+        this.startMeeting(input, replicaId, replicaExternalMeetingId(input.sessionId, replicaIndex), tenantIds, primaryId);
+        primary.replicas.push({ replicaIndex, providerMeetingId: replicaId, capacity });
+      }
     }
 
-    const participant = this.addAttendee(state, input.participant.participantId, capabilities);
-    return { providerMeetingId: meetingId, meeting: structuredClone(state.meeting), participant };
+    const home = this.homeFor(primary, input.participant);
+    const participant = this.addAttendee(home, input.participant.participantId, capabilities);
+    return {
+      providerMeetingId: primaryId,
+      meeting: structuredClone(primary.meeting),
+      participant,
+      replicas: this.replicasOf(primary),
+    };
   }
 
   async createParticipant(input: CreateParticipantInput): Promise<ProviderParticipant> {
     const capabilities = resolveCapabilities(input);
-    const state = this.meetings.get(input.providerMeetingId);
+    const state = this.meetings.get(resolveTargetMeeting(input));
     if (!state) throw sessionNotJoinable();
     return this.addAttendee(state, input.participantId, capabilities);
   }
@@ -194,20 +214,38 @@ export class FakeVideoProvider extends VideoProvider {
     this.emit('AttendeeLeft', state, attendee);
   }
 
+  async promoteToPrimary(input: PromoteToPrimaryInput): Promise<ProviderParticipant> {
+    const primary = this.meetings.get(input.providerMeetingId);
+    if (!primary) throw sessionNotJoinable();
+    return this.addAttendee(primary, input.participantId, floorCapabilities());
+  }
+
+  async demoteFromPrimary(input: DemoteFromPrimaryInput): Promise<void> {
+    await this.removeParticipant({
+      providerMeetingId: input.providerMeetingId,
+      providerAttendeeId: input.providerAttendeeId,
+    });
+  }
+
+  /** Replicas first (those named and those the primary has), then the primary. */
   async endSession(input: EndSessionInput): Promise<void> {
-    const state = this.meetings.get(input.providerMeetingId);
-    if (!state) return;
-    this.meetings.delete(input.providerMeetingId);
-    this.pipelines.delete(this.pipelineId(state.sessionId));
-    for (const attendee of state.attendees.values()) {
-      this.emit('AttendeeLeft', state, attendee);
+    const known = this.meetings.get(input.providerMeetingId)?.replicas.map((r) => r.providerMeetingId) ?? [];
+    for (const replicaId of new Set([...(input.replicaMeetingIds ?? []), ...known])) {
+      this.endMeeting(replicaId);
     }
-    this.emit('MeetingEnded', state, null);
+    this.endMeeting(input.providerMeetingId);
   }
 
   async describeSession(input: DescribeSessionInput): Promise<ProviderSessionInfo | null> {
     const state = this.meetings.get(input.providerMeetingId);
-    return state ? { providerMeetingId: input.providerMeetingId, meeting: structuredClone(state.meeting) } : null;
+    if (!state) return null;
+    const replicas = (input.replicaMeetingIds ?? []).flatMap((replicaId, i): ProviderReplicaInfo[] => {
+      const replica = this.meetings.get(replicaId);
+      return replica
+        ? [{ replicaIndex: i + 1, providerMeetingId: replicaId, meeting: structuredClone(replica.meeting) }]
+        : [];
+    });
+    return { providerMeetingId: input.providerMeetingId, meeting: structuredClone(state.meeting), replicas };
   }
 
   async startRecording(input: StartRecordingInput): Promise<ProviderRecording> {
@@ -227,23 +265,96 @@ export class FakeVideoProvider extends VideoProvider {
     return `fake-pipeline-${sessionId}`;
   }
 
+  private startMeeting(
+    input: CreateSessionInput,
+    meetingId: string,
+    externalMeetingId: string,
+    tenantIds: string[],
+    primaryMeetingId: string | null,
+  ): FakeMeeting {
+    const state: FakeMeeting = {
+      sessionId: input.sessionId,
+      meeting: {
+        MeetingId: meetingId,
+        MeetingArn: `arn:aws:chime:${VIDEO_MEDIA_REGION}:000000000000:meeting/${meetingId}`,
+        ExternalMeetingId: externalMeetingId,
+        MediaRegion: VIDEO_MEDIA_REGION,
+        MediaPlacement: {
+          AudioHostUrl: `audio.${FAKE_HOST}:3478`,
+          AudioFallbackUrl: `wss://audio.${FAKE_HOST}:443/calls/${meetingId}`,
+          SignalingUrl: `wss://signal.${FAKE_HOST}/control/${meetingId}`,
+          TurnControlUrl: `https://turn.${FAKE_HOST}/v2/turn_sessions`,
+          EventIngestionUrl: `https://data.${FAKE_HOST}/v1/client-events`,
+        },
+        MeetingFeatures: structuredClone(MEETING_FEATURES[input.format]),
+        TenantIds: tenantIds,
+      },
+      attendees: new Map(),
+      primaryMeetingId,
+      replicas: [],
+    };
+    this.meetings.set(meetingId, state);
+    this.emit('MeetingStarted', state, null);
+    return state;
+  }
+
+  private replicasOf(primary: FakeMeeting): ProviderReplica[] {
+    return primary.replicas.flatMap(({ replicaIndex, providerMeetingId, capacity }) => {
+      const replica = this.meetings.get(providerMeetingId);
+      return replica ? [{ replicaIndex, providerMeetingId, meeting: structuredClone(replica.meeting), capacity }] : [];
+    });
+  }
+
+  /**
+   * The meeting a first joiner lands in: where the participant already is, the
+   * primary for hosts and single meetings, otherwise the least-loaded replica.
+   */
+  private homeFor(primary: FakeMeeting, participant: SessionParticipantInput): FakeMeeting {
+    const meetings = [primary, ...primary.replicas.map((r) => this.meetings.get(r.providerMeetingId))];
+    const existing = meetings.find((state) => state?.attendees.has(participant.participantId));
+    if (existing) return existing;
+    if (primary.replicas.length === 0 || HOST_ROLES.has(participant.role)) return primary;
+
+    const counts = Object.fromEntries(
+      primary.replicas.map((r) => [r.replicaIndex, this.meetings.get(r.providerMeetingId)?.attendees.size ?? 0]),
+    );
+    const picked = pickReplica(primary.replicas, counts);
+    const replica = picked && this.meetings.get(picked.providerMeetingId);
+    if (!replica) throw sessionNotJoinable();
+    return replica;
+  }
+
+  private endMeeting(providerMeetingId: string): void {
+    const state = this.meetings.get(providerMeetingId);
+    if (!state) return;
+    this.meetings.delete(providerMeetingId);
+    if (!state.primaryMeetingId) this.pipelines.delete(this.pipelineId(state.sessionId));
+    for (const attendee of state.attendees.values()) {
+      this.emit('AttendeeLeft', state, attendee);
+    }
+    this.emit('MeetingEnded', state, null);
+  }
+
   private addAttendee(
     state: FakeMeeting,
     participantId: string,
     capabilities: ParticipantCapabilities,
   ): ProviderParticipant {
     const existing = state.attendees.get(participantId);
-    if (existing) return toParticipant(existing);
+    if (existing) return toParticipant(state, existing);
 
+    // A replica seat carries the replica's `-r{n}`, so it never shares an id
+    // with the same participant's promotion on the primary.
+    const suffix = state.primaryMeetingId ? state.meeting.MeetingId.slice(state.primaryMeetingId.length) : '';
     const attendee: ProviderAttendee = {
-      AttendeeId: `fake-attendee-${participantId}`,
+      AttendeeId: `fake-attendee-${participantId}${suffix}`,
       ExternalUserId: participantId,
-      JoinToken: `fake-token-${participantId}`,
+      JoinToken: `fake-token-${participantId}${suffix}`,
       Capabilities: { ...capabilities },
     };
     state.attendees.set(participantId, attendee);
     this.emit('AttendeeJoined', state, attendee);
-    return toParticipant(attendee);
+    return toParticipant(state, attendee);
   }
 
   private findAttendee(providerMeetingId: string, providerAttendeeId: string): ProviderAttendee | undefined {
@@ -265,7 +376,8 @@ export class FakeVideoProvider extends VideoProvider {
       providerMeetingId: state.meeting.MeetingId,
       providerAttendeeId: attendee?.AttendeeId ?? null,
       occurredAt: this.now(),
-      externalMeetingId: state.sessionId,
+      // A replica reports its own `{sessionId}-r{n}`, as Chime does.
+      externalMeetingId: state.meeting.ExternalMeetingId ?? state.sessionId,
       externalUserId: attendee?.ExternalUserId ?? null,
     };
     setImmediate(() => this.emitter.emit(EVENT, event));

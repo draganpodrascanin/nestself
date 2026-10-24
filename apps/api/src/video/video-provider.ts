@@ -17,6 +17,8 @@ import type {
   MeetingFeaturesConfiguration,
 } from '@aws-sdk/client-chime-sdk-meetings';
 import {
+  WEBINAR_MAX_REPLICAS,
+  WEBINAR_REPLICATED_CAPACITY,
   WEBINAR_SINGLE_MEETING_CAPACITY,
   WORKSHOP_CAPACITY,
   type CallErrorCode,
@@ -182,18 +184,42 @@ export interface ProviderAttendee {
   Capabilities: ParticipantCapabilities;
 }
 
-/** What `describeSession` reports: the meeting a rejoining client connects to. */
-export interface ProviderSessionInfo {
+/**
+ * A replica meeting of a webinar with media replication (D-CW-14, WEB-07):
+ * its attendees receive only the primary's presenters and never see each
+ * other. `meeting` never carries the primary's id.
+ */
+export interface ProviderReplicaInfo {
+  /** 1-based; the `-r{n}` suffix of the replica's `ExternalMeetingId`. */
+  replicaIndex: number;
   providerMeetingId: string;
   meeting: ProviderMeeting;
 }
 
-/** What `createSession` returns: the meeting and the first participant's attendee (D-CW-07). */
+export interface ProviderReplica extends ProviderReplicaInfo {
+  /** Attendee seats planned for this replica. */
+  capacity: number;
+}
+
+/** What `describeSession` reports: the meeting a rejoining client connects to. */
+export interface ProviderSessionInfo {
+  /** The primary meeting: hosts, and attendees given the floor from a replica. */
+  providerMeetingId: string;
+  meeting: ProviderMeeting;
+  /** Replicas still known to the provider, of those asked about; empty for a single meeting. */
+  replicas: ProviderReplicaInfo[];
+}
+
+/** What `createSession` returns: the meetings and the first participant's attendee (D-CW-07). */
 export interface ProviderSession extends ProviderSessionInfo {
   participant: ProviderParticipant;
+  /** Replicas in index order; empty unless a webinar exceeds a single meeting. */
+  replicas: ProviderReplica[];
 }
 
 export interface ProviderParticipant {
+  /** The meeting this attendee belongs to: the primary or one replica. */
+  providerMeetingId: string;
   providerAttendeeId: string;
   attendee: ProviderAttendee;
 }
@@ -232,11 +258,45 @@ export interface CreateSessionInput {
   participant: SessionParticipantInput;
 }
 
-export interface CreateParticipantInput extends SessionParticipantInput {
-  providerMeetingId: string;
+/** Where a participant joins: the primary meeting or one replica (by 1-based index). */
+export type ParticipantTarget = 'primary' | { replicaIndex: number };
+
+/** Replica meeting ids in index order (`ProviderSession.replicas`), kept by the caller. */
+interface ReplicaMeetingIds {
+  /** Omitted for a single meeting. Chime cannot list a primary's replicas, so the caller keeps them. */
+  replicaMeetingIds?: string[];
 }
 
+export interface CreateParticipantInput extends SessionParticipantInput, ReplicaMeetingIds {
+  /** The session's primary meeting. */
+  providerMeetingId: string;
+  /**
+   * Defaults to the primary. Hosts always join the primary. The floor for a
+   * replica attendee goes through {@link VideoProvider.promoteToPrimary}.
+   */
+  target?: ParticipantTarget;
+}
+
+/** The floor for a replica attendee (WEB-09, SPIKE-CW-06): primary credentials to promote into. */
+export interface PromoteToPrimaryInput {
+  sessionId: string;
+  /** The primary meeting: Chime cannot find a meeting by session id. */
+  providerMeetingId: string;
+  /** The `call_participants.id`, the primary attendee's `ExternalUserId` (D-CW-11). */
+  participantId: string;
+}
+
+export interface DemoteFromPrimaryInput extends PromoteToPrimaryInput {
+  /** The primary attendee `promoteToPrimary` returned: Chime cannot find it by `ExternalUserId`. */
+  providerAttendeeId: string;
+}
+
+/**
+ * For a single-meeting webinar's floor and other in-meeting changes. A replica
+ * attendee cannot be given audio this way; see `promoteToPrimary`.
+ */
 export interface UpdateCapabilitiesInput {
+  /** The meeting the attendee belongs to (`ProviderParticipant.providerMeetingId`), replica included. */
   providerMeetingId: string;
   providerAttendeeId: string;
   role: CallParticipantRole;
@@ -244,15 +304,16 @@ export interface UpdateCapabilitiesInput {
 }
 
 export interface RemoveParticipantInput {
+  /** The meeting the attendee belongs to (`ProviderParticipant.providerMeetingId`), replica included. */
   providerMeetingId: string;
   providerAttendeeId: string;
 }
 
-export interface EndSessionInput {
+export interface EndSessionInput extends ReplicaMeetingIds {
   providerMeetingId: string;
 }
 
-export interface DescribeSessionInput {
+export interface DescribeSessionInput extends ReplicaMeetingIds {
   providerMeetingId: string;
 }
 
@@ -359,26 +420,116 @@ export function sessionNotJoinable(): ApiHttpException {
 }
 
 /**
- * Largest audience per format: the contract constants for webinars (until the
- * M3 replication, D-CW-36) and workshops (CW-R-26). Consultations have no
+ * Largest audience per format: the contract constants for webinars (with
+ * media replication, D-CW-14) and workshops (CW-R-26). Consultations have no
  * contract constant and are bounded by the meeting itself (D-CW-10).
  */
 const CAPACITY_LIMITS: Readonly<Record<CallFormat, number>> = {
   consultation: MEETING_FEATURES.consultation.Attendee.MaxCount,
-  webinar: WEBINAR_SINGLE_MEETING_CAPACITY,
+  webinar: WEBINAR_REPLICATED_CAPACITY,
   workshop: WORKSHOP_CAPACITY,
 };
 
 export function assertCapacityWithinLimit(format: CallFormat, capacity: number): void {
   const limit = CAPACITY_LIMITS[format];
-  if (capacity > limit) {
-    throw callError(
-      HttpStatus.BAD_REQUEST,
-      'capacity_above_limit',
-      `A ${format} session holds at most ${limit} participants`,
-      { limit },
-    );
+  if (capacity <= limit) return;
+  throw callError(
+    HttpStatus.BAD_REQUEST,
+    'capacity_above_limit',
+    format === 'webinar'
+      ? `A webinar holds at most ${limit} attendees; a larger audience needs the Amazon IVS live connector, documented but not built (D-CW-14)`
+      : `A ${format} session holds at most ${limit} participants`,
+    { limit },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Media replication (D-CW-14, D-CW-36, WEB-07 to WEB-09)
+// ---------------------------------------------------------------------------
+
+/** Webinar hosts: they always join the primary meeting (WBN-35). */
+export const HOST_ROLES: ReadonlySet<CallParticipantRole> = new Set(['presenter', 'moderator']);
+
+/** Thrown when code routes a participant to a meeting it may not join. */
+export class VideoRoutingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VideoRoutingError';
   }
+}
+
+/**
+ * Attendee seats per replica: none up to a single meeting, then
+ * `ceil(capacity / 250)` replicas sharing the audience evenly. `capacity`
+ * counts registrations only; hosts sit in the primary outside it, so no seats
+ * are reserved for them. At most `WEBINAR_MAX_REPLICAS` once
+ * {@link assertCapacityWithinLimit} has passed.
+ */
+export function replicaCapacities(format: CallFormat, capacity: number): number[] {
+  if (format !== 'webinar' || capacity <= WEBINAR_SINGLE_MEETING_CAPACITY) return [];
+  const count = Math.min(Math.ceil(capacity / WEBINAR_SINGLE_MEETING_CAPACITY), WEBINAR_MAX_REPLICAS);
+  const base = Math.floor(capacity / count);
+  return Array.from({ length: count }, (_, i) => base + (i < capacity % count ? 1 : 0));
+}
+
+/** A replica's `ExternalMeetingId` (and `ClientRequestToken`): the session id plus `-r{n}`. */
+export function replicaExternalMeetingId(sessionId: string, replicaIndex: number): string {
+  return `${sessionId}-r${replicaIndex}`;
+}
+
+/** Maps a replica's `ExternalMeetingId` back to its session, for the event handler. */
+export function parseReplicaExternalMeetingId(
+  externalMeetingId: string,
+): { sessionId: string; replicaIndex: number } | null {
+  const match = /^(.+)-r([1-9]\d*)$/.exec(externalMeetingId);
+  return match ? { sessionId: match[1]!, replicaIndex: Number(match[2]) } : null;
+}
+
+/**
+ * The replica a joining attendee goes to: the least-loaded one with a free
+ * seat, ties broken by the lowest index. `counts` maps a replica index to its
+ * current attendees (absent means none). Null when every replica is full.
+ */
+export function pickReplica<T extends { replicaIndex: number; capacity?: number }>(
+  replicas: readonly T[],
+  counts: Readonly<Record<number, number>>,
+): T | null {
+  let best: T | null = null;
+  let bestCount = Number.POSITIVE_INFINITY;
+  for (const replica of [...replicas].sort((a, b) => a.replicaIndex - b.replicaIndex)) {
+    const count = counts[replica.replicaIndex] ?? 0;
+    if (count >= (replica.capacity ?? WEBINAR_SINGLE_MEETING_CAPACITY)) continue;
+    if (count < bestCount) {
+      best = replica;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * The meeting a participant joins. Hosts never join a replica, and a replica
+ * must be one of the caller's `replicaMeetingIds`.
+ */
+export function resolveTargetMeeting(input: CreateParticipantInput): string {
+  const target = input.target ?? 'primary';
+  if (target === 'primary') return input.providerMeetingId;
+  if (HOST_ROLES.has(input.role)) {
+    throw new VideoRoutingError('Webinar hosts always join the primary meeting (WBN-35)');
+  }
+  const replicaMeetingId = input.replicaMeetingIds?.[target.replicaIndex - 1];
+  if (!replicaMeetingId) throw new VideoRoutingError(`No replica ${target.replicaIndex} for this session`);
+  return replicaMeetingId;
+}
+
+/**
+ * What an attendee given the floor may do: audio only, video and content stay
+ * `Receive` (D-CW-35). Re-checked by the attendee guard on every use.
+ */
+export function floorCapabilities(): ParticipantCapabilities {
+  const capabilities = capabilitiesForRole('attendee', { floor: true });
+  assertCapabilitiesAllowed('attendee', capabilities);
+  return capabilities;
 }
 
 /** Capabilities to request for a participant, after the attendee guard. */
@@ -393,14 +544,30 @@ export function resolveCapabilities(input: SessionParticipantInput): Participant
 // ---------------------------------------------------------------------------
 
 export abstract class VideoProvider {
-  /** Creates the meeting with its first attendee (`CreateMeetingWithAttendees`). */
+  /**
+   * Creates the meeting with its first attendee (`CreateMeetingWithAttendees`).
+   * A webinar above a single meeting also gets replicas (`PrimaryMeetingId`);
+   * a first-arriving attendee then joins replica 1, never the primary.
+   */
   abstract createSession(input: CreateSessionInput): Promise<ProviderSession>;
-  /** Adds an attendee to an existing meeting (`CreateAttendee`). */
+  /** Adds an attendee to the primary or a replica (`CreateAttendee`). */
   abstract createParticipant(input: CreateParticipantInput): Promise<ProviderParticipant>;
   abstract updateParticipantCapabilities(input: UpdateCapabilitiesInput): Promise<void>;
   /** Idempotent: an attendee that is already gone counts as removed. */
   abstract removeParticipant(input: RemoveParticipantInput): Promise<void>;
-  /** Idempotent: ending an ended meeting is a no-op (CW-R-16). */
+  /**
+   * Gives a replica attendee the floor: an attendee for the same participant on
+   * the primary, with {@link floorCapabilities} only (never video, D-CW-35).
+   * The client promotes into it with `promoteToPrimaryMeeting`; Chime has no
+   * server-side promote and no audio for a replica attendee (SPIKE-CW-06).
+   */
+  abstract promoteToPrimary(input: PromoteToPrimaryInput): Promise<ProviderParticipant>;
+  /** Takes the floor back by deleting the primary attendee; the client demotes. Idempotent. */
+  abstract demoteFromPrimary(input: DemoteFromPrimaryInput): Promise<void>;
+  /**
+   * Idempotent: ending an ended meeting is a no-op (CW-R-16). Replicas end
+   * first, then the primary; deleting the primary also deletes its replicas.
+   */
   abstract endSession(input: EndSessionInput): Promise<void>;
   abstract startRecording(input: StartRecordingInput): Promise<ProviderRecording>;
   /** Idempotent: a pipeline that is already gone counts as stopped. */

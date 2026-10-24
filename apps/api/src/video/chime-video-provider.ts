@@ -22,12 +22,14 @@ import { performance } from 'node:perf_hooks';
 import {
   ChimeSDKMeetingsClient,
   CreateAttendeeCommand,
+  CreateMeetingCommand,
   CreateMeetingWithAttendeesCommand,
   DeleteAttendeeCommand,
   DeleteMeetingCommand,
   GetMeetingCommand,
   UpdateAttendeeCapabilitiesCommand,
   type Attendee,
+  type CreateMeetingRequest,
   type Meeting,
   type Tag,
 } from '@aws-sdk/client-chime-sdk-meetings';
@@ -37,25 +39,35 @@ import {
   DeleteMediaCapturePipelineCommand,
 } from '@aws-sdk/client-chime-sdk-media-pipelines';
 import {
+  HOST_ROLES,
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoProvider,
   assertCapabilitiesAllowed,
   assertCapacityWithinLimit,
+  floorCapabilities,
+  pickReplica,
+  replicaCapacities,
+  replicaExternalMeetingId,
   resolveCapabilities,
+  resolveTargetMeeting,
   sessionNotJoinable,
   tenantIdsFor,
   videoProviderUnavailable,
   type CreateParticipantInput,
   type CreateSessionInput,
+  type DemoteFromPrimaryInput,
   type DescribeSessionInput,
   type EndSessionInput,
   type ParticipantCapabilities,
   type ProviderMeeting,
   type ProviderParticipant,
   type ProviderRecording,
+  type ProviderReplica,
+  type ProviderReplicaInfo,
   type ProviderSession,
   type ProviderSessionInfo,
+  type PromoteToPrimaryInput,
   type RemoveParticipantInput,
   type StartRecordingInput,
   type StopRecordingInput,
@@ -98,6 +110,10 @@ function describeContext(context: CallContext): string {
   return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 }
 
+/**
+ * Copies the fields a client needs. `PrimaryMeetingId` is left out on purpose:
+ * replica attendees never learn the primary's id (D-CW-15, WEB-07).
+ */
 function toProviderMeeting(meeting: Meeting | undefined): ProviderMeeting | null {
   const placement = meeting?.MediaPlacement;
   if (
@@ -126,12 +142,14 @@ function toProviderMeeting(meeting: Meeting | undefined): ProviderMeeting | null
 }
 
 function toProviderParticipant(
+  providerMeetingId: string,
   attendee: Attendee | undefined,
   requested: ParticipantCapabilities,
 ): ProviderParticipant | null {
   if (!attendee?.AttendeeId || !attendee.ExternalUserId || !attendee.JoinToken) return null;
   const capabilities = attendee.Capabilities;
   return {
+    providerMeetingId,
     providerAttendeeId: attendee.AttendeeId,
     attendee: {
       AttendeeId: attendee.AttendeeId,
@@ -175,60 +193,47 @@ export class ChimeVideoProvider extends VideoProvider {
     this.pipelinesClient = new ChimeSDKMediaPipelinesClient({ region: VIDEO_MEDIA_REGION });
   }
 
+  /**
+   * A webinar above one meeting (D-CW-14): the primary first, then its
+   * replicas with `PrimaryMeetingId`. Hosts and every single-meeting first
+   * joiner are created with the primary; a first-arriving attendee of a
+   * replicated webinar joins replica 1 instead. If a replica fails, the primary
+   * is deleted, which deletes the replicas already created.
+   */
   async createSession(input: CreateSessionInput): Promise<ProviderSession> {
     assertCapacityWithinLimit(input.format, input.capacity);
     const capabilities = resolveCapabilities(input.participant);
     const tenantIds = tenantIdsFor(input);
+    const plan = replicaCapacities(input.format, input.capacity);
     const context = { sessionId: input.sessionId, participantId: input.participant.participantId };
 
-    const response = await this.send('CreateMeetingWithAttendees', context, () =>
-      this.meetingsClient.send(
-        new CreateMeetingWithAttendeesCommand({
-          ClientRequestToken: input.sessionId,
-          ExternalMeetingId: input.sessionId,
-          MediaRegion: VIDEO_MEDIA_REGION,
-          MeetingFeatures: MEETING_FEATURES[input.format],
-          NotificationsConfiguration: { SqsQueueArn: this.options.eventsQueueArn },
-          TenantIds: tenantIds,
-          Tags: this.tags(input),
-          Attendees: [{ ExternalUserId: input.participant.participantId, Capabilities: capabilities }],
-        }),
-      ),
-    );
-    if (response === NOT_FOUND) throw sessionNotJoinable();
+    if (plan.length === 0 || HOST_ROLES.has(input.participant.role)) {
+      const primary = await this.createPrimaryWithAttendee(input, tenantIds, capabilities, context);
+      if (plan.length === 0) return { ...primary, replicas: [] };
+      const replicas = await this.createReplicasOrDiscard(input, tenantIds, primary.providerMeetingId, plan, context);
+      return { ...primary, replicas };
+    }
 
-    const meeting = toProviderMeeting(response.Meeting);
-    const participant = toProviderParticipant(
-      response.Attendees?.find((a) => a.ExternalUserId === input.participant.participantId),
-      capabilities,
+    const meeting = await this.createMeeting(
+      this.meetingRequest(input, tenantIds, input.sessionId),
+      'CreateMeeting',
+      context,
     );
-    if (!meeting || !participant) {
-      const codes = (response.Errors ?? []).map((e) => e.ErrorCode ?? 'unknown').join(', ');
-      const error = this.incomplete('CreateMeetingWithAttendees', context, codes);
-      await this.discardMeeting(response.Meeting?.MeetingId, context);
+    try {
+      const replicas = await this.createReplicas(input, tenantIds, meeting.MeetingId, plan, context);
+      const first = pickReplica(replicas, {});
+      if (!first) throw this.incomplete('CreateMeeting', context, 'no replica');
+      const participant = await this.addAttendee(first.providerMeetingId, input.participant, capabilities);
+      return { providerMeetingId: meeting.MeetingId, meeting, participant, replicas };
+    } catch (error) {
+      await this.discardMeeting(meeting.MeetingId, context);
       throw error;
     }
-    return { providerMeetingId: meeting.MeetingId, meeting, participant };
   }
 
   async createParticipant(input: CreateParticipantInput): Promise<ProviderParticipant> {
     const capabilities = resolveCapabilities(input);
-    const context = { participantId: input.participantId, providerMeetingId: input.providerMeetingId };
-
-    const response = await this.send('CreateAttendee', context, () =>
-      this.meetingsClient.send(
-        new CreateAttendeeCommand({
-          MeetingId: input.providerMeetingId,
-          ExternalUserId: input.participantId,
-          Capabilities: capabilities,
-        }),
-      ),
-    );
-    if (response === NOT_FOUND) throw sessionNotJoinable();
-
-    const participant = toProviderParticipant(response.Attendee, capabilities);
-    if (!participant) throw this.incomplete('CreateAttendee', context);
-    return participant;
+    return this.addAttendee(resolveTargetMeeting(input), input, capabilities);
   }
 
   async updateParticipantCapabilities(input: UpdateCapabilitiesInput): Promise<void> {
@@ -256,15 +261,51 @@ export class ChimeVideoProvider extends VideoProvider {
     );
   }
 
-  async endSession(input: EndSessionInput): Promise<void> {
-    await this.send('DeleteMeeting', { providerMeetingId: input.providerMeetingId }, () =>
-      this.meetingsClient.send(new DeleteMeetingCommand({ MeetingId: input.providerMeetingId })),
+  async promoteToPrimary(input: PromoteToPrimaryInput): Promise<ProviderParticipant> {
+    const capabilities = floorCapabilities();
+    const promoted = await this.addAttendee(input.providerMeetingId, input, capabilities);
+    // Whatever Chime echoes back, the client is told audio only (D-CW-35).
+    return { ...promoted, attendee: { ...promoted.attendee, Capabilities: capabilities } };
+  }
+
+  async demoteFromPrimary(input: DemoteFromPrimaryInput): Promise<void> {
+    await this.send('DeleteAttendee', { sessionId: input.sessionId, participantId: input.participantId, providerMeetingId: input.providerMeetingId }, () =>
+      this.meetingsClient.send(
+        new DeleteAttendeeCommand({ MeetingId: input.providerMeetingId, AttendeeId: input.providerAttendeeId }),
+      ),
     );
+  }
+
+  /**
+   * Replicas first, then the primary. A replica that cannot be deleted is
+   * left to the primary's `DeleteMeeting`, which deletes every attached
+   * replica; only the primary's failure reaches the caller.
+   */
+  async endSession(input: EndSessionInput): Promise<void> {
+    for (const replicaMeetingId of input.replicaMeetingIds ?? []) {
+      try {
+        await this.deleteMeeting(replicaMeetingId);
+      } catch {
+        // Logged by send(); the primary's delete below takes the replica along.
+      }
+    }
+    await this.deleteMeeting(input.providerMeetingId);
   }
 
   async describeSession(input: DescribeSessionInput): Promise<ProviderSessionInfo | null> {
     const meeting = await this.getMeeting(input.providerMeetingId, {});
-    return meeting ? { providerMeetingId: meeting.MeetingId, meeting } : null;
+    if (!meeting) return null;
+    const replicas = await Promise.all(
+      (input.replicaMeetingIds ?? []).map(async (replicaMeetingId, i): Promise<ProviderReplicaInfo | null> => {
+        const replica = await this.getMeeting(replicaMeetingId, {});
+        return replica ? { replicaIndex: i + 1, providerMeetingId: replica.MeetingId, meeting: replica } : null;
+      }),
+    );
+    return {
+      providerMeetingId: meeting.MeetingId,
+      meeting,
+      replicas: replicas.filter((replica): replica is ProviderReplicaInfo => replica !== null),
+    };
   }
 
   async startRecording(input: StartRecordingInput): Promise<ProviderRecording> {
@@ -315,6 +356,148 @@ export class ChimeVideoProvider extends VideoProvider {
   }
 
   // -- Helpers --------------------------------------------------------------
+
+  /** What every meeting of a session shares; replicas differ only in id and `PrimaryMeetingId`. */
+  private meetingRequest(
+    input: CreateSessionInput,
+    tenantIds: string[],
+    externalMeetingId: string,
+  ): CreateMeetingRequest {
+    return {
+      ClientRequestToken: externalMeetingId,
+      ExternalMeetingId: externalMeetingId,
+      MediaRegion: VIDEO_MEDIA_REGION,
+      MeetingFeatures: MEETING_FEATURES[input.format],
+      NotificationsConfiguration: { SqsQueueArn: this.options.eventsQueueArn },
+      TenantIds: tenantIds,
+      Tags: this.tags(input),
+    };
+  }
+
+  /** The primary with its first attendee in one call (D-CW-07). */
+  private async createPrimaryWithAttendee(
+    input: CreateSessionInput,
+    tenantIds: string[],
+    capabilities: ParticipantCapabilities,
+    context: CallContext,
+  ): Promise<Omit<ProviderSession, 'replicas'>> {
+    const response = await this.send('CreateMeetingWithAttendees', context, () =>
+      this.meetingsClient.send(
+        new CreateMeetingWithAttendeesCommand({
+          ...this.meetingRequest(input, tenantIds, input.sessionId),
+          Attendees: [{ ExternalUserId: input.participant.participantId, Capabilities: capabilities }],
+        }),
+      ),
+    );
+    if (response === NOT_FOUND) throw sessionNotJoinable();
+
+    const meeting = toProviderMeeting(response.Meeting);
+    const participant =
+      meeting &&
+      toProviderParticipant(
+        meeting.MeetingId,
+        response.Attendees?.find((a) => a.ExternalUserId === input.participant.participantId),
+        capabilities,
+      );
+    if (!meeting || !participant) {
+      const codes = (response.Errors ?? []).map((e) => e.ErrorCode ?? 'unknown').join(', ');
+      const error = this.incomplete('CreateMeetingWithAttendees', context, codes);
+      await this.discardMeeting(response.Meeting?.MeetingId, context);
+      throw error;
+    }
+    return { providerMeetingId: meeting.MeetingId, meeting, participant };
+  }
+
+  /** A meeting without attendees: the primary of a replicated webinar, or one replica. */
+  private async createMeeting(
+    request: CreateMeetingRequest,
+    operation: string,
+    context: CallContext,
+  ): Promise<ProviderMeeting> {
+    const response = await this.send(operation, context, () =>
+      this.meetingsClient.send(new CreateMeetingCommand(request)),
+    );
+    if (response === NOT_FOUND) throw sessionNotJoinable();
+    const meeting = toProviderMeeting(response.Meeting);
+    if (!meeting) {
+      const error = this.incomplete(operation, context);
+      await this.discardMeeting(response.Meeting?.MeetingId, context);
+      throw error;
+    }
+    return meeting;
+  }
+
+  /** Replicas in index order, created together; the first failure is rethrown once all settle. */
+  private async createReplicas(
+    input: CreateSessionInput,
+    tenantIds: string[],
+    primaryMeetingId: string,
+    plan: number[],
+    context: CallContext,
+  ): Promise<ProviderReplica[]> {
+    const settled = await Promise.allSettled(
+      plan.map(async (capacity, i): Promise<ProviderReplica> => {
+        const replicaIndex = i + 1;
+        const meeting = await this.createMeeting(
+          {
+            ...this.meetingRequest(input, tenantIds, replicaExternalMeetingId(input.sessionId, replicaIndex)),
+            PrimaryMeetingId: primaryMeetingId,
+          },
+          'CreateMeeting (replica)',
+          context,
+        );
+        return { replicaIndex, providerMeetingId: meeting.MeetingId, meeting, capacity };
+      }),
+    );
+    const failed = settled.find((result) => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    return settled.map((result) => (result as PromiseFulfilledResult<ProviderReplica>).value);
+  }
+
+  private async createReplicasOrDiscard(
+    input: CreateSessionInput,
+    tenantIds: string[],
+    primaryMeetingId: string,
+    plan: number[],
+    context: CallContext,
+  ): Promise<ProviderReplica[]> {
+    try {
+      return await this.createReplicas(input, tenantIds, primaryMeetingId, plan, context);
+    } catch (error) {
+      await this.discardMeeting(primaryMeetingId, context);
+      throw error;
+    }
+  }
+
+  /** `CreateAttendee` in one meeting, primary or replica. */
+  private async addAttendee(
+    providerMeetingId: string,
+    participant: { participantId: string },
+    capabilities: ParticipantCapabilities,
+  ): Promise<ProviderParticipant> {
+    const context = { participantId: participant.participantId, providerMeetingId };
+    const response = await this.send('CreateAttendee', context, () =>
+      this.meetingsClient.send(
+        new CreateAttendeeCommand({
+          MeetingId: providerMeetingId,
+          ExternalUserId: participant.participantId,
+          Capabilities: capabilities,
+        }),
+      ),
+    );
+    if (response === NOT_FOUND) throw sessionNotJoinable();
+
+    const created = toProviderParticipant(providerMeetingId, response.Attendee, capabilities);
+    if (!created) throw this.incomplete('CreateAttendee', context);
+    return created;
+  }
+
+  /** `DeleteMeeting`; a meeting that is already gone counts as deleted (CW-R-16). */
+  private async deleteMeeting(providerMeetingId: string): Promise<void> {
+    await this.send('DeleteMeeting', { providerMeetingId }, () =>
+      this.meetingsClient.send(new DeleteMeetingCommand({ MeetingId: providerMeetingId })),
+    );
+  }
 
   /** Tags: `stage`, `format` and `orgId` only, never personal data (CW-R-04). */
   private tags(input: CreateSessionInput): Tag[] {

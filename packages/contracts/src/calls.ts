@@ -31,6 +31,13 @@ export const CALL_ROOM_CLOSE_AFTER_MINUTES = 15;
 export const WEBINAR_HOST_JOIN_BEFORE_MINUTES = 30;
 /** Attendee limit of a single-meeting webinar. */
 export const WEBINAR_SINGLE_MEETING_CAPACITY = 250;
+/** Replica meetings per primary: the default Chime service quota (WEB-08). */
+export const WEBINAR_MAX_REPLICAS = 4;
+/**
+ * Attendee limit of a webinar with media replication, four replicas of 250
+ * (D-CW-14). Above it the IVS live connector path is documented, not built.
+ */
+export const WEBINAR_REPLICATED_CAPACITY = WEBINAR_SINGLE_MEETING_CAPACITY * WEBINAR_MAX_REPLICAS;
 /** Participant limit of a workshop. */
 export const WORKSHOP_CAPACITY = 25;
 /** Reminder offsets before `startsAt`: 24 hours and 1 hour. */
