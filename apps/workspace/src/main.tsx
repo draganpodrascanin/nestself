@@ -6,6 +6,7 @@ import { routeTree } from './routeTree.gen';
 import { api } from './api';
 import { initialSnapshot } from './auth';
 import { isSampleDataMode } from './data-source';
+import { shouldRetryQuery } from './query-retry';
 import './i18n';
 import './app.css';
 
@@ -20,7 +21,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      retry: shouldRetryQuery,
     },
   },
 });
