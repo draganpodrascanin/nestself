@@ -1045,7 +1045,7 @@ export const contentVariants = pgTable(
 | `created_at` | timestamptz(3) | no | `now()` | |
 | `updated_at` | timestamptz(3) | no | `now()` | |
 
-**PK:** `id`. **FKs:** `content_variant_id -> content_variants(id) ON DELETE CASCADE`; user FKs `ON DELETE RESTRICT`. **Unique:** `(content_variant_id, revision_number)`. **Partial unique index:** at most one working revision per variant: `CREATE UNIQUE INDEX content_revisions_working_key ON content_revisions (content_variant_id) WHERE state IN ('draft', 'changes_requested')` (Drizzle cannot express this; hand-written in migration 0006). **Check:** `array_length(related_resource_ids, 1) IS NULL OR array_length(related_resource_ids, 1) <= 3`. **RLS:** None.
+**PK:** `id`. **FKs:** `content_variant_id -> content_variants(id) ON DELETE CASCADE`; user FKs `ON DELETE RESTRICT`. **Unique:** `(content_variant_id, revision_number)`. **Partial unique index:** at most one working revision per variant: `CREATE UNIQUE INDEX content_revisions_working_key ON content_revisions (content_variant_id) WHERE state IN ('draft', 'changes_requested')` (expressed with Drizzle's `.where()`). **Check:** `array_length(related_resource_ids, 1) IS NULL OR array_length(related_resource_ids, 1) <= 3`. **RLS:** None.
 
 ```ts
 export const contentRevisions = pgTable(
@@ -2104,6 +2104,8 @@ Every table in Part B not covered by 4.2 is defined below with its full column s
 
 **DAT-R-05** `content_variants.locale` carries the check constraint `content_variants_authored_locale_check CHECK (locale <> 'sr-Cyrl')`: Serbian Cyrillic is derived at read time and never stored as a variant (C-28). `content_preferences` has no content-locale column; content follows the interface locale. `content_search_documents` rows exist only for `sr-Latn`, `hu` and `en`.
 
+**DAT-R-06** Migration `0006` also carries the integrity and hot-path additions found in review: `content_publication_audiences_kind_check` (an `all_eligible` row has no `org_id` or `org_unit_id`; an `organization` row has `org_id` only; an `org_unit` row has both), `content_publications_window_check` (`ends_at IS NULL OR ends_at > starts_at`), `outbox_events_payload_object_check` (`jsonb_typeof(payload) = 'object'`); a unique index `memberships_id_org_id_key (id, org_id)` and composite foreign keys `(membership_id, org_id) → memberships(id, org_id)` from `saved_items`, `playback_states` and `content_preferences`, so a personal row can never pair one organization with another organization's membership; indexes `content_publications (content_variant_id, starts_at DESC) WHERE withdrawn_at IS NULL`, `content_publications (content_revision_id)`, `content_revision_media (media_asset_id)`, `content_publication_audiences (org_id)` and `(org_unit_id)`, `media_assets (rights_expires_at) WHERE rights_expires_at IS NOT NULL`, `outbox_events (created_at, id) WHERE published_at IS NULL`, `outbox_deliveries (state, next_attempt_at) WHERE state IN ('pending', 'failed')`, `saved_items (membership_id, created_at DESC, id)` and `notifications (user_id, org_id, created_at DESC)`. The six launch categories are product taxonomy, not sample data: their fixture is `packages/sample-data/src/fixtures/categories.ts` for development, and staging and production receive them through an idempotent taxonomy bootstrap command delivered with T-C2.04, because the seed refuses to run in production.
+
 ### 4.4 Invariant enforcement
 
 Epic 18.2 defines ten invariants. Each maps to a constraint or service check.
@@ -2130,15 +2132,15 @@ Four migrations span milestones M1 through M4 [Part B].
 ```sql
 -- 0006_cms_ee_foundation.sql (custom part)
 
--- Extensions
-CREATE EXTENSION IF NOT EXISTS unaccent;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Extensions (schema-qualified so indexes build under the restricted
+-- search_path PostgreSQL 17 uses for CREATE INDEX, REINDEX and VACUUM)
+CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
 -- Immutable wrapper for expression indexes and tsvector generation [X-09]
-CREATE OR REPLACE FUNCTION nestself_unaccent(text)
-RETURNS text AS $$
-  SELECT unaccent('unaccent', $1);
-$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+CREATE OR REPLACE FUNCTION public.nestself_unaccent(text) RETURNS text
+  LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+  AS $$ SELECT public.unaccent('public.unaccent'::regdictionary, $1) $$;
 
 -- FORCE ROW LEVEL SECURITY on new tenant tables
 ALTER TABLE saved_items FORCE ROW LEVEL SECURITY;
@@ -2184,7 +2186,7 @@ Each migration is generated with `pnpm --filter @nestself/api db:generate`, then
 
 **DAT-R-01** The seed (`apps/api/src/db/seed/seed-lib.ts`) gains the following additions, all using fixtures from `@nestself/sample-data` with the `SAMPLE_` prefix [C-29]:
 
-- **Categories:** `SAMPLE_CATEGORIES` (6 categories with labels in all four locales: Stress and emotional balance, Sleep and rest, Relationships and family, Money and financial security, Work and development, Body and everyday habits) in `packages/sample-data/src/fixtures/content.ts`.
+- **Categories:** `SAMPLE_CATEGORIES` (6 categories with labels in `sr-Latn`, `hu` and `en` (Cyrillic labels are derived, C-28): Stress and emotional balance, Sleep and rest, Relationships and family, Money and financial security, Work and development, Body and everyday habits) in `packages/sample-data/src/fixtures/content.ts`.
 - **Topics:** `SAMPLE_TOPICS` (3 to 5 per category) with labels, slugs and synonyms.
 - **Needs:** `SAMPLE_NEEDS` (4 quick-need entries: "A calmer end to the day", "Better sleep", "Easier conversations", "More control over money") with labels.
 - **Content resources, variants and revisions:** `SAMPLE_CONTENT_RESOURCES` replaces the existing `SAMPLE_CONTENT`. At least one resource of each type (article, video, audio, practical, qa, collection) with a `ContentDocument` body, metadata and a published revision for organization A.
@@ -6590,7 +6592,7 @@ Exit evidence: a published revision stays live while a new revision is reviewed;
 | T-C2.01 | Review workflow | `apps/api/src/cms/review/*`, `content_revision_reviews`, admin review queue | Return with comments visible to the author; self-review denied; discipline condition enforced; changes after approval require review | T-C1.10 | M | EDT-02 |
 | T-C2.02 | Publications: schedule, audiences, supersession, withdrawal, rollback | `apps/api/src/cms/publications/*`, `content.publications.reconcile` job | Old revision live until the new one starts; identical-second start and end handled; revoked publisher grant stops a scheduled start; withdrawal removes from every read path at once | T-C2.01 | L | EDT-03 |
 | T-C2.03 | Outbox and dispatcher | `apps/api/src/notifications/outbox/*`, queue `nestself-outbox` | Event written in the state-change transaction; consumer dedupe; retry and failure state | T-C1.04 | M | OPS-C02 (foundation) |
-| T-C2.04 | Taxonomy | `apps/api/src/cms/taxonomy/*`, admin taxonomy screen | Topic merge redirects old slugs; empty categories are not promoted; labels per locale | T-C1.10 | M | EDT-04 |
+| T-C2.04 | Taxonomy | `apps/api/src/cms/taxonomy/*`, admin taxonomy screen | Topic merge redirects old slugs; empty categories are not promoted; labels per authored locale; an idempotent taxonomy bootstrap command creates the six launch categories in staging and production (DAT-R-06) | T-C1.10 | M | EDT-04 |
 | T-C2.05 | Collections and Home slots | `apps/api/src/cms/collections/*`, `home_slots`, admin screens | Cycle rejected; child availability checked; a slot cannot bypass availability or repeat a resource | T-C2.02 | M | EDT-05 |
 | T-C2.06 | Search | migration `0007`, `packages/content/src/search/fold.ts`, `apps/api/src/library/search/*`, queue `nestself-search` | SPIKE-C01 table passes; counts, facets and snippets only over available rows; raw query never logged | T-C2.03 | L | EMP-C03 |
 | T-C2.07 | Home composer | `apps/api/src/library/home/*` | Module order and omission rules; fallback order; no repeats; cache invalidated by `availability_version` | T-C2.05 | M | EMP-C01 |
