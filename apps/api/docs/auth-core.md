@@ -2,7 +2,9 @@
 
 Covers the Redis access layer, identity provider, session service, audit
 writer, environment schema and error handling. Implemented on
-`feat/auth-foundation` as tasks T-1.3, T-1.10, T-1.15, T-0.4.
+`feat/auth-foundation` as tasks T-1.3, T-1.10, T-1.15, T-0.4; the route
+table, resolvers and phase 2 modules (grants, professional, emergency,
+step-up) were updated on 2026-10-24.
 
 ## Module map
 
@@ -12,7 +14,10 @@ writer, environment schema and error handling. Implemented on
 | `IdentityModule` | no | `IdentityProviderService` (abstract class) |
 | `SessionModule` | no | `SessionService`, `SessionCookies`, `CsrfGuard` |
 | `AuditModule` | yes | `AuditWriter` |
-| `DbModule` | yes | `DbService`, repositories (identity, authorization, audit, leads, invitations, memberships) |
+| `DbModule` | yes | `DbService`, repositories (identity, authorization, approval-authorities, professional, audit, leads, invitations, memberships, org-units) |
+| `GrantsModule` | no | `GrantsService`, `ApprovalAuthoritiesService`; controllers for `/orgs/:orgId/grants`, `/orgs/:orgId/approval-authorities`, `/ops/...grants`, `/ops/users/:userId/access` |
+| `ProfessionalModule` | no | `ProfessionalService` (`/professional/*`) |
+| `EmergencyModule` | no | `EmergencyService` (`/ops/emergency-access/*`) |
 
 ## Redis (`src/redis/`)
 
@@ -123,8 +128,20 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 |-----------|-------------|--------|
 | `@Public()` | `isPublic` | Bypasses authentication and authorization |
 | `@Authenticated()` | `isAuthenticatedOnly` | Requires valid session/bearer, no authorization check |
-| `@Authorize(action, resolver)` | `authorize` | Requires authentication + passes authorize(principal, action, resource, ctx) |
+| `@Authorize(action, resolver)` | `authorize` | Requires authentication + passes authorize(principal, action, resource, ctx), then the step-up freshness check when the action has a class |
 | `@CurrentPrincipal()` | param decorator | Extracts `request.principal` |
+
+### Resource resolvers (`src/authz/resolvers.ts`)
+
+| Resolver | Used on | Behaviour |
+|----------|---------|-----------|
+| `orgResourceFromContext(type)` | `/orgs/:orgId/*` | The active context must be the organization in the route (403 `context_mismatch` otherwise, API-R-21); returns `{ type, orgId }` |
+| `operationsResource(type, idFn?)` | `/ops/*` without an organization | Requires a web session (403 `session_required` for bearer callers, API-R-28) and the operations context (403 `context_mismatch`); returns `{ type, id? }` |
+| `operationsOrgResource(type)` | `/ops/orgs/:orgId/*` | The same session and context checks (shared `assertOperationsSession`), then the route `:orgId` (404 `not_found` without it); returns `{ type, orgId }`, so the engine applies the `assigned_clients` scope through the CLIENT assignment |
+
+Routes whose resource needs row data (confidential conversations and intakes, emergency record reads) are `@Authenticated()` and call `AuthorizationService.require(principal, action, resource)` after loading the row; `require()` audits denials, maps them to 403 or 404 like the guard and runs the same step-up check (`assertStepUpFresh` in `step-up-freshness.ts`).
+
+Staff (any principal with a staff template) always count as having organization visibility, so a denied operations caller gets 403, not 404.
 
 ### Route table
 
@@ -142,6 +159,8 @@ All routes under the global `/api` prefix.
 | POST | /auth/password-reset/start | @Public | 10/min |
 | POST | /auth/password-reset/confirm | @Public | 5/min |
 | POST | /auth/context | @Authenticated | default |
+| POST | /auth/step-up/start | @Authenticated | 5/min |
+| POST | /auth/step-up/verify | @Authenticated (204) | 5/min |
 | POST | /auth/sign-out | @Authenticated | default |
 | POST | /auth/sign-out-all | @Authenticated | default |
 | POST | /auth/ws-ticket | @Authenticated | 30/min |
@@ -150,7 +169,7 @@ All routes under the global `/api` prefix.
 | PATCH | /auth/me/display-name | @Authenticated | default |
 | GET | /auth/sessions | @Authenticated | default |
 | DELETE | /auth/sessions/:sessionId | @Authenticated | default |
-| GET | /health | @Public | default |
+| GET | /health | @Public (reports `database` and `redis`) | default |
 | GET | /orgs/:orgId/programme | @Authorize(program.overview) | default |
 | GET | /orgs/:orgId/org-units | @Authorize(program.overview) | default |
 | POST | /orgs/:orgId/org-units | @Authorize(org_units.manage) | default |
@@ -164,6 +183,36 @@ All routes under the global `/api` prefix.
 | POST | /orgs/:orgId/invitations | @Authorize(people.invite) | default |
 | POST | /orgs/:orgId/invitations/import | @Authorize(people.import) | default |
 | DELETE | /orgs/:orgId/invitations/:invitationId | @Authorize(people.invite) | default |
+| GET | /orgs/:orgId/grants | @Authorize(access.preview) | default |
+| GET | /orgs/:orgId/grants/preview | @Authorize(access.preview) | default |
+| POST | /orgs/:orgId/grants | @Authorize(access.grant) | 10/min |
+| PATCH | /orgs/:orgId/grants/:grantId | @Authorize(access.grant) | 10/min |
+| POST | /orgs/:orgId/grants/:grantId/revoke | @Authorize(access.revoke) | 10/min |
+| POST | /orgs/:orgId/grants/delegate | @Authorize(access.delegate) | 10/min |
+| GET | /orgs/:orgId/approval-authorities | @Authorize(access.preview) | default |
+| POST | /orgs/:orgId/approval-authorities | @Authorize(access.grant) | 10/min |
+| PATCH | /orgs/:orgId/approval-authorities/:id | @Authorize(access.grant) | 10/min |
+| GET | /ops/orgs/:orgId/members | @Authorize(client.configure), operationsOrgResource | default |
+| POST | /ops/orgs/:orgId/members/:membershipId/end | @Authorize(people.deactivate), operationsOrgResource | default |
+| POST | /ops/orgs/:orgId/invitations | @Authorize(people.onboard), operationsOrgResource | default |
+| POST | /ops/orgs/:orgId/invitations/import | @Authorize(people.import), operationsOrgResource | default |
+| DELETE | /ops/orgs/:orgId/invitations/:invitationId | @Authorize(people.onboard), operationsOrgResource | default |
+| GET | /ops/grants | @Authorize(access.preview), operationsResource | default |
+| POST | /ops/grants | @Authorize(access.grant), operationsResource | 10/min |
+| GET | /ops/orgs/:orgId/grants | @Authorize(access.preview), operationsOrgResource | default |
+| GET | /ops/orgs/:orgId/grants/preview | @Authorize(access.preview), operationsOrgResource | default |
+| POST | /ops/orgs/:orgId/grants | @Authorize(access.grant), operationsOrgResource | 10/min |
+| POST | /ops/orgs/:orgId/grants/:grantId/revoke | @Authorize(access.revoke), operationsOrgResource | 10/min |
+| GET | /ops/users/:userId/access | @Authorize(access.preview), operationsResource | default |
+| GET | /ops/emergency-access | @Authorize(audit.read), operationsResource | default |
+| POST | /ops/emergency-access | @Authorize(access.emergency.request), operationsResource | 10/min |
+| POST | /ops/emergency-access/:id/approve | @Authorize(access.emergency.approve), operationsResource | 10/min |
+| POST | /ops/emergency-access/:id/deny | @Authorize(access.emergency.approve), operationsResource (204) | 10/min |
+| POST | /ops/emergency-access/:id/revoke | @Authorize(access.emergency.approve), operationsResource | 10/min |
+| GET | /ops/emergency-access/:id/records/:recordType/:recordId | @Authenticated; `require(records.read.emergency)` in the service | default |
+| GET | /professional/conversations/:id | @Authenticated; `require(conversation.read.assigned)` | default |
+| GET | /professional/me/conversations/:id | @Authenticated; `require(conversation.participate)` | default |
+| GET | /professional/intake/:id | @Authenticated; `require(conversation.read.assigned)` | default |
 | GET | /invitations/:token/preview | @Public | 10/min |
 | POST | /invitations/accept | @Public | 10/min |
 | POST | /leads/* (3 routes) | @Public | default |
@@ -332,8 +381,5 @@ On each message with a `userId`:
 ### Not yet implemented
 
 - SSO / SAML (routes stubbed as `ssoStartUrl: null`)
-- Step-up authentication (annotation wired, enforcement phase 2)
-
 - Push notifications
-- `/auth/me/locale`, `/auth/me/display-name` profile update endpoints
-- Mobile bearer token refresh and family management
+- A step-up screen in the mobile app (the API accepts bearer step-up)

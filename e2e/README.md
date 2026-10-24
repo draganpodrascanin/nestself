@@ -131,7 +131,9 @@ Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5
 
 ### HR grant administration journey
 
-`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link, checks the grant table, previews Ana Nikolić's effective access (`content.read`), and delegates `people.invite` from her HR administrator grant to Stefan Marković. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet.
+`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row to the database the API uses; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
+
+`pnpm e2e:auth` runs six tests in total: four in `workspace-sign-in.spec.ts`, one in `admin-sign-in.spec.ts` and one in `hr-access.spec.ts`.
 
 ### File structure
 

@@ -17,20 +17,43 @@ pnpm --filter @nestself/api db:seed
 # Start in development mode
 pnpm --filter @nestself/api dev
 
-# Start the worker (nightly maintenance jobs; needs REDIS_URL)
+# Start the worker (maintenance jobs; needs REDIS_URL and the same configuration as the API)
 pnpm --filter @nestself/api worker:dev
 
 # Run one maintenance job immediately and print its report
 pnpm --filter @nestself/api job:run grants.reconcile
 
+# Convert legacy role columns into grants (only on a database at migration 0004)
+pnpm --filter @nestself/api db:backfill-grants
+
 # Build for production
 pnpm --filter @nestself/api build
 
-# Run tests
-pnpm --filter @nestself/api test
+# Run tests (the database suites need TEST_DATABASE_URL, otherwise they skip)
+TEST_DATABASE_URL=postgresql://nestself@localhost:54329/nestself_test pnpm --filter @nestself/api test
 ```
 
 The server listens on port 4000 by default. Copy `.env.example` to `.env` and adjust values.
+
+### Maintenance jobs
+
+`job:run <name>` and the worker share these jobs (`src/jobs/maintenance-jobs.service.ts`, schedules in `job-scheduler.service.ts`, timezone `JOBS_TIMEZONE`):
+
+| Job | Schedule | Purpose |
+|---|---|---|
+| `audit.ensure-partitions` | 01:00 | Keeps three months of audit partitions ahead |
+| `grants.reconcile` | 02:15 | Closes expired grants, orphaned delegations and grants of ended memberships; invalidates subjects and delegatees |
+| `mobile.prune-stale-families` | 02:30 | Denylists mobile token families unseen for 30 days |
+| `sessions.reconcile-ttl` | 02:45 | Destroys session records past their absolute expiry and revokes their refresh tokens |
+| `emergency.sweep-expired` | every 15 minutes | Closes approved emergency access whose window has passed |
+
+The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it needs the API's configuration (identity provider, session encryption key, database) plus `REDIS_URL`; without Redis it exits with an error.
+
+`worker:dev` and `job:run` currently fail at boot: they run the sources through `tsx`, which emits no decorator metadata, so Nest cannot resolve constructor dependencies. The compiled worker works (`pnpm --filter @nestself/api build && pnpm --filter @nestself/api worker`). See `docs/auth/implementation.md` section 14.
+
+### Tests
+
+Unit tests sit next to the code. The integration suites in `test/` boot the application against a disposable database per suite (`TEST_DATABASE_URL`): `auth`, `ops-clients`, `grants`, `ops-grants`, `professional`, `emergency`, `members`, `invitations`, `org-admin`, `ws`, `health`, `jobs` (`*.e2e.spec.ts`), and `db/schema.spec.ts`, `db/authorization-repository.spec.ts`, `db/backfill-grants.spec.ts`. `src/authz/default-deny.test.ts` fails on any undecorated route; `src/authz/golden-table.test.ts` pins the decision engine. `docs/auth/implementation.md` section 19 says what each suite covers.
 
 ### Schema changes
 
@@ -60,13 +83,14 @@ Table definitions live in `src/db/schema/` as `pgTable` calls with snake_case co
 
 - `db`: the Drizzle database instance for queries.
 - `withOrgScope(orgId, fn)`: runs a transaction with `set_config('app.current_org_id', orgId, true)` so that row-level security policies scope reads and writes to one organization.
+- `withTransaction(fn)`: a plain transaction without the setting (system context), for platform rows such as platform grants and emergency access.
 - `ping()`: connectivity probe for the health check.
 
-Repositories under `src/db/repositories/` (identity, authorization, audit, leads, invitations, memberships) encapsulate table queries. Services depend on repositories; tests mock repository methods or override `DbService`.
+Repositories under `src/db/repositories/` (identity, authorization, approval-authorities, professional, audit, leads, invitations, memberships, org-units) encapsulate table queries. Services depend on repositories; tests mock repository methods or override `DbService`.
 
 ### Row-level security
 
-Tenant tables (`org_units`, `memberships`, `grants`, `approval_authorities`, `invitations`, `sso_connections`, `channels`, `event_requests`) carry RLS policies declared in the schema with `pgPolicy`. Tables that reach their organization through a join (`posts`, `polls`, `poll_options`, `poll_votes`, `org_unit_closure`) use `tenantPredicateVia()` with a correlated `EXISTS` on the joined organization column. The policy predicate for an `org_id` column is:
+Tenant tables (`org_units`, `memberships`, `grants`, `approval_authorities`, `invitations`, `sso_connections`, `channels`, `event_requests`, `conversations`, `intake_records`) carry RLS policies declared in the schema with `pgPolicy`. Tables that reach their organization through a join (`posts`, `polls`, `poll_options`, `poll_votes`, `org_unit_closure`, `conversation_messages`) use `tenantPredicateVia()` with a correlated `EXISTS` on the joined organization column. The policy predicate for an `org_id` column is:
 
 ```
 coalesce(current_setting('app.current_org_id', true), '') = '' OR org_id = current_setting('app.current_org_id', true)
@@ -90,7 +114,7 @@ Migrations live in `drizzle/` and are tracked in the `drizzle.__drizzle_migratio
 - `0000_init.sql`: generated by `drizzle-kit generate` from the schema.
 - `0001_audit_partitions_rls_roles.sql`: hand-written custom migration containing audit_events monthly range partitions, the `audit_events_ensure_partitions()` function, append-only triggers, `nestself_app` role grants and `FORCE ROW LEVEL SECURITY` on tenant tables.
 - `0002_rls_legacy_content_closure.sql`: generated policies for the join-based tenant tables plus hand-written `FORCE ROW LEVEL SECURITY` and the `SECURITY DEFINER` grant that lets the application role call `audit_events_ensure_partitions()`.
-- `0003_professional_domain.sql`: the confidential professional domain (cases, conversations, intake records).
+- `0003_professional_domain.sql`: the confidential professional domain (`conversations`, `conversation_messages`, `intake_records`) with tenant policies and forced RLS. There is no `cases` table yet; `case_id` is free text until one exists.
 - `0004_emergency_access_request.sql`: the emergency access request lifecycle (nullable approver, approval time, requested duration).
 - `0005_drop_legacy_roles.sql`: drops `users.platform_role`, `memberships.role` and the `org_role` / `platform_role` enum types (D-36). **Run `db:backfill-grants` before applying it** on a database that still holds legacy roles; see below. A guard at the top of the migration raises, naming the first user, when a non-employee legacy role has no matching grant.
 
@@ -115,15 +139,15 @@ Four global guards are registered via `APP_GUARD` in `app.module.ts`:
 
 Routes use `@Public()`, `@Authenticated()` or `@Authorize(action, resolver)` decorators. A CI test fails on any undecorated route.
 
+Step-up is enforced by `AuthorizationGuard` and by `AuthorizationService.require()` for every action with a step-up class; clients complete it through `POST /auth/step-up/start` and `/verify`.
+
 ## What is still missing
 
 - SSO/SAML integration (routes stubbed as `ssoStartUrl: null`; phase 3)
-- Step-up authentication enforcement (annotation wired, `/auth/step-up/*` and enforcement are phase 2)
-- Grant administration endpoints, approval authorities, emergency access (phase 2)
-- Operations routes for assigned clients (`/ops/orgs/:orgId/...`, phase 2)
-- Remaining nightly jobs: session TTL drift, weekly Cognito user export, retention sweeper, audit export to S3
+- Remaining nightly jobs: weekly Cognito user export, retention sweeper, audit export to S3
+- File delivery and export authorization (T-2.9, T-2.11)
+- Write routes for the confidential domain (they need a `cases` table first) and professional notes
 - Push notifications
-- Professional-domain module (conversations, intake, professional notes)
 - Payment and booking endpoints
 
-The ordered plan with preconditions is `docs/tasks/auth/phase-2-readiness.md`.
+`docs/tasks/auth/phase-2-readiness.md` has the status of every phase 2 task; `docs/auth/implementation.md` section 21 lists the open gaps and owner decisions.

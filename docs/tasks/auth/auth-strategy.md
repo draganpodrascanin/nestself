@@ -1473,9 +1473,11 @@ These actions target the confidential domain. The hard deny in AUTHZ-R-08 ensure
 | Action | Meaning | Resource | Constraint |
 |---|---|---|---|
 | `conversation.participate` | Send and receive messages in a private conversation | Conversation | `employee` template (scope `own`) or `expert` template (scope `assigned_cases`); no organization, platform or staff template scope |
-| `conversation.read.assigned` | Read conversations for supervised experts' cases | Conversation | `Assignment` kind `SUPERVISION` only |
+| `conversation.read.assigned` | Read conversations for supervised experts' cases | Conversation | `Assignment` kind `SUPERVISION` only (see note 1) |
 | `notes.read.supervision` | Read professional notes under clinical supervision | Professional notes | `Assignment` kind `SUPERVISION` only |
 | `records.read.emergency` | Read restricted records under emergency access | Professional records | `EmergencyAccess` only |
+
+Note 1 (amended 2026-10-24): `conversation.read.assigned` is also the assigned-expert path of 4.7.3. It accepts an `Assignment` of kind `CASE` or `SUPERVISION`, as AUTHZ-R-33 and the engine already do, and the `expert` template now lists it among its actions (4.4).
 
 #### Experts
 
@@ -1551,6 +1553,13 @@ These actions are data-subject rights and personal convenience actions. Like all
 | `data.erasure.request` | Request erasure of personal data (GDPR/ZZPL right to erasure) | Data erasure | `employee`, `expert`, `expert_lead`, and all staff templates |
 
 ### 4.4 Templates to grants
+
+**Amendments 2026-10-24** (auth phase 2, `docs/superpowers/plans/2026-10-24-auth-phase-2.md`):
+
+- The `expert` row gains `conversation.read.assigned` in its actions (it was listed only as a step-up action), so an expert assigned to a case through a `CASE` assignment can read that case's conversation (4.7.3).
+- No organization template holds `access.grant` or `access.revoke`; `employer_owner` holds `access.delegate` and `access.preview`. Until the owner decides otherwise, staff with `platform_owner` create and revoke organization grants through `/ops/orgs/:orgId/grants`, and owners delegate from their own grants.
+- AUTHZ-R-13: when a parent grant has no `delegationEnvelope`, the implementation treats the parent grant itself as the bound (actions, scope and conditions within the parent's) instead of refusing delegation; an envelope, when present, is an extra restriction.
+- The sample seed gives the sample HR admin the `employer_owner` template as well, so the access screen is reachable in development.
 
 The 17 permission templates are the bridge between the product's persona model and the grant-based authorization engine. Each template is a seed: it defines a named set of actions, a default scope type, default conditions and boundaries. Assigning a template to a user creates one or more `Grant` rows. An administrator can then adjust the scope, tighten conditions or limit the delegation envelope. Templates do not replace grants at runtime; they are a creation-time convenience [D-17, S-01 section 2].
 

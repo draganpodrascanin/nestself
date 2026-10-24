@@ -153,7 +153,7 @@ Creates CloudWatch metric filters and alarms on the API log group:
 |---|---|---|
 | Failed sign-ins | `FailedSignIns` (metric filter) | > 50/min |
 | Principal cache hit rate | `PrincipalCacheHits / (Hits + Misses)` | < 90% |
-| Emergency access activated | `EmergencyAccessActivations` | > 0 (fires on every activation) |
+| Emergency access activated | `EmergencyAccessActivations` (metric filter `{ $.action = "emergency_access.approved" }` on the one log line the API writes per approval) | > 0 (fires on every activation) |
 | ALB 5xx rate | `HTTPCode_Target_5XX_Count / RequestCount` | > 1% |
 | RDS CPU | `CPUUtilization` | > 80% |
 | API task count | `RunningTaskCount` | < min tasks |

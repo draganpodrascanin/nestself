@@ -69,7 +69,7 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `JOBS_TIMEZONE` | IANA timezone for the nightly maintenance schedules (`pnpm --filter @nestself/api worker:dev`, ECS `worker` service). The worker shares every other variable with the API and exits without `REDIS_URL` | `Europe/Belgrade` |
+| `JOBS_TIMEZONE` | IANA timezone for the maintenance schedules (`pnpm --filter @nestself/api worker:dev`, ECS `worker` service). The worker boots the same application module as the API, so it needs every API variable too (`DATABASE_URL`, `AUTH_MODE` and the `COGNITO_*` values, `SESSION_ENCRYPTION_KEY`: the `sessions.reconcile-ttl` job revokes refresh tokens through the session service) and exits without `REDIS_URL` | `Europe/Belgrade` |
 
 ## Workspace and Admin (`apps/workspace/.env.local`, `apps/admin/.env.local`)
 
@@ -113,5 +113,6 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - `VITE_DATA_SOURCE` and `EXPO_PUBLIC_DATA_SOURCE` default to `sample` in development. In sample mode, apps import fixtures from `@nestself/sample-data` and display a banner on every screen.
 - The `DATABASE_URL` default matches the Docker Compose service in `docker/docker-compose.yml` (user `nestself`, password `nestself_dev`, database `nestself` on port 5432). For Docker deployments, `DATABASE_URL` should use the `nestself_api` login role (created by `docker/initdb/01-app-role.sql`). Migrations run as the database owner, not as `nestself_api`.
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
-- The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`.
+- The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
+- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables.
 - Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
