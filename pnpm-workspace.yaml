@@ -125,6 +125,13 @@ catalog:
   aws-jwt-verify: 5.2.1
   "@aws-sdk/client-cognito-identity-provider": 3.1155.0
   "@aws-sdk/client-ses": 3.1155.0
+  # Consultations and webinars (NS-CALLS-01); pinned to the same AWS SDK release line as the clients above
+  "@aws-sdk/client-chime-sdk-meetings": 3.1155.0 # meetings, attendees, capabilities (D-CW-04, D-CW-32)
+  "@aws-sdk/client-chime-sdk-media-pipelines": 3.1155.0 # webinar recording pipelines (D-CW-19, D-CW-34)
+  "@aws-sdk/client-sqs": 3.1155.0 # Chime meeting event consumer (D-CW-12)
+  amazon-chime-sdk-js: 3.32.0 # browser client in packages/video (D-CW-21)
+  aws-sdk-client-mock: 4.1.0 # dev only: unit tests for the Chime adapter and the SQS consumer (OPS-31)
+  react-native-webview: 14.0.1 # M4 mobile ticket route; Expo SDK 58 bundled version (D-CW-23)
   redis: 6.3.0
   ioredis: 6.0.0
   bullmq: 6.4.0

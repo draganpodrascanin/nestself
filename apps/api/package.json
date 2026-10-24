@@ -21,8 +21,11 @@
     "openapi": "EMIT_OPENAPI=true node dist/main.js"
   },
   "dependencies": {
+    "@aws-sdk/client-chime-sdk-media-pipelines": "catalog:",
+    "@aws-sdk/client-chime-sdk-meetings": "catalog:",
     "@aws-sdk/client-cognito-identity-provider": "catalog:",
     "@aws-sdk/client-ses": "catalog:",
+    "@aws-sdk/client-sqs": "catalog:",
     "@nestjs/common": "catalog:",
     "@nestjs/config": "catalog:",
     "@nestjs/core": "catalog:",
@@ -64,9 +67,10 @@
     "@types/pg": "catalog:",
     "@types/supertest": "catalog:",
     "@types/ua-parser-js": "catalog:",
+    "aws-sdk-client-mock": "catalog:",
+    "drizzle-kit": "catalog:",
     "eslint": "catalog:",
     "fast-check": "catalog:",
-    "drizzle-kit": "catalog:",
     "pino-pretty": "catalog:",
     "supertest": "catalog:",
     "tsx": "catalog:",
