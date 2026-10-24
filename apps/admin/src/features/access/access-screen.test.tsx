@@ -122,6 +122,7 @@ function makeOpsApi(overrides: Partial<Record<keyof OpsAdminApi, unknown>> = {})
     previewAccess: vi.fn(),
     listPlatformGrants: vi.fn().mockResolvedValue({ items: PLATFORM_GRANTS }),
     createPlatformGrant: vi.fn().mockResolvedValue(NEW_PLATFORM_GRANT),
+    revokePlatformGrant: vi.fn().mockResolvedValue(PLATFORM_GRANTS[0]),
     userAccess: vi.fn().mockResolvedValue({
       userId: 'user_stefan',
       contexts: [
@@ -584,16 +585,48 @@ describe('UserAccessLookup', () => {
 // ---------------------------------------------------------------------------
 
 describe('PlatformAccessScreen', () => {
-  it('lists platform grants read-only and explains why revoke is missing', async () => {
+  it('lists platform grants with a revoke action per active grant', async () => {
     const { opsApi } = renderPlatform();
 
     const row = (await screen.findByText('user_nikola')).closest('tr')!;
     expect(within(row).getByText(t('admin:access.templates.client_operations'))).toBeInTheDocument();
     expect(within(row).getByText(t('admin:access.scope.assigned_clients'))).toBeInTheDocument();
     expect(within(row).getByText(t('admin:access.status.active'))).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Revoke/ })).not.toBeInTheDocument();
-    expect(screen.getByText(t('admin:access.platform.readOnlyNote'))).toBeInTheDocument();
+    expect(
+      within(row).getByRole('button', {
+        name: t('admin:access.revoke.openFor', { template: t('admin:access.templates.client_operations'), subject: 'user_nikola' }),
+      }),
+    ).toBeInTheDocument();
     expect(opsApi.listPlatformGrants).toHaveBeenCalledWith({ includeRevoked: true });
+  });
+
+  it('revokes a platform grant through the operations route and closes', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderPlatform({
+      opsApi: makeOpsApi({ revokePlatformGrant: vi.fn().mockResolvedValue({ ...PLATFORM_GRANTS[0], revokedAt: '2026-10-24T00:00:00.000Z' }) }),
+    });
+    const dialog = await openRevoke(user, t('admin:access.templates.client_operations'), 'user_nikola');
+
+    await user.type(within(dialog).getByLabelText(new RegExp(`^${t('admin:access.reason.label')}`)), 'Left NestSelf');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.revoke.confirm') }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(opsApi.revokePlatformGrant).toHaveBeenCalledWith('pg_ops', { reason: 'Left NestSelf' });
+    expect(opsApi.revokeGrant).not.toHaveBeenCalled();
+  });
+
+  it('shows the conflict message when the platform grant is already revoked (409)', async () => {
+    const user = userEvent.setup();
+    renderPlatform({
+      opsApi: makeOpsApi({ revokePlatformGrant: vi.fn().mockRejectedValue(apiError(409, 'conflict')) }),
+    });
+    const dialog = await openRevoke(user, t('admin:access.templates.client_operations'), 'user_nikola');
+
+    await user.type(within(dialog).getByLabelText(new RegExp(`^${t('admin:access.reason.label')}`)), 'Left NestSelf');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.revoke.confirm') }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(t('admin:access.errors.conflict'));
+    expect(screen.queryByText('English conflict')).not.toBeInTheDocument();
   });
 
   it('shows the mapped message when the platform grants cannot be loaded', async () => {

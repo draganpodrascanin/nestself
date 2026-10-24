@@ -19,7 +19,7 @@ export interface GrantTableProps {
   grants: readonly GrantResponse[];
   /** Names for subjects; an unnamed subject is shown by user id. */
   members: readonly AccessMember[];
-  /** Absent: the table is read-only (platform grants have no revoke route). */
+  /** Absent: the table is read-only (no revoke action for the caller). */
   onRevoke?: (grant: GrantResponse) => void;
   /** Sample mode: actions stay visible but cannot be used. */
   actionsDisabled?: boolean;

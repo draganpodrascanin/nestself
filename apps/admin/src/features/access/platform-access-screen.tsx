@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { GrantResponse } from '@nestself/contracts';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Heading, Text } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -7,6 +8,8 @@ import { useAuth } from '../../auth';
 import { accessErrorKey } from './access-errors';
 import { AssignPlatformGrantDialog } from './assign-platform-grant-dialog';
 import { GrantTable } from './grant-table';
+import { templateLabel } from './access-labels';
+import { RevokeGrantDialog } from './revoke-grant-dialog';
 import { samplePeople, samplePlatformGrants } from './sample-access';
 import { UserAccessLookup } from './user-access-lookup';
 import { useOperationsContext, usePlatformGrants } from './use-ops-admin';
@@ -19,8 +22,8 @@ export interface PlatformAccessScreenProps {
 
 /**
  * Platform-level grants (no organization): staff templates assigned at their
- * own scope. The operations API has no revoke route for these, so the table
- * is read-only and a note says so.
+ * own scope, assigned and revoked through `/ops/grants` (revoking also
+ * revokes the grants delegated from it).
  */
 export function PlatformAccessScreen({ opsApi, sampleMode }: PlatformAccessScreenProps) {
   const { t } = useTranslation(['admin', 'common']);
@@ -31,11 +34,16 @@ export function PlatformAccessScreen({ opsApi, sampleMode }: PlatformAccessScree
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignKey, setAssignKey] = useState(0);
 
-  const canGrant = principal ? can(principal, 'access.grant', undefined, effectiveActions) : false;
+  const [revokeTarget, setRevokeTarget] = useState<GrantResponse | null>(null);
+
+  const allowed = (action: string) => (principal ? can(principal, action, undefined, effectiveActions) : false);
+  const canGrant = allowed('access.grant');
+  const canRevoke = allowed('access.revoke');
 
   const grants = sampleMode ? samplePlatformGrants() : grantsQuery.data;
   // The API has no staff directory, so outside sample mode subjects show as user ids.
   const people = sampleMode ? samplePeople() : [];
+  const nameOf = (userId: string) => people.find((p) => p.userId === userId)?.displayName ?? userId;
   const loadError = sampleMode ? null : (switchError ?? (grantsQuery.isError ? accessErrorKey(grantsQuery.error) : null));
 
   return (
@@ -61,7 +69,7 @@ export function PlatformAccessScreen({ opsApi, sampleMode }: PlatformAccessScree
         </div>
       ) : null}
 
-      <Text tone="secondary">{t('admin:access.platform.readOnlyNote')}</Text>
+      {canRevoke ? <Text tone="secondary">{t('admin:access.platform.revokeNote')}</Text> : null}
 
       {loadError ? (
         <Alert tone="danger" title={t('admin:access.errors.loadTitle')}>
@@ -72,13 +80,30 @@ export function PlatformAccessScreen({ opsApi, sampleMode }: PlatformAccessScree
       ) : grants.length === 0 ? (
         <Text tone="secondary">{t('admin:access.platform.empty')}</Text>
       ) : (
-        <GrantTable caption={t('admin:access.platform.tableCaption')} grants={grants} members={people} />
+        <GrantTable
+          caption={t('admin:access.platform.tableCaption')}
+          grants={grants}
+          members={people}
+          onRevoke={canRevoke ? setRevokeTarget : undefined}
+          actionsDisabled={sampleMode}
+        />
       )}
 
       <UserAccessLookup opsApi={opsApi} enabled={ready} sampleMode={sampleMode} headingLevel={2} />
 
       {canGrant && !sampleMode ? (
         <AssignPlatformGrantDialog key={assignKey} open={assignOpen} onOpenChange={setAssignOpen} opsApi={opsApi} />
+      ) : null}
+
+      {canRevoke && !sampleMode ? (
+        <RevokeGrantDialog
+          grant={revokeTarget}
+          templateName={revokeTarget ? templateLabel(t, revokeTarget.templateKey) : ''}
+          subjectName={revokeTarget ? nameOf(revokeTarget.subjectUserId) : ''}
+          onClose={() => setRevokeTarget(null)}
+          opsApi={opsApi}
+          orgId={null}
+        />
       ) : null}
     </div>
   );

@@ -4,6 +4,7 @@
  *
  * GET  /ops/grants                                 — platform grants (access.preview)
  * POST /ops/grants                                 — platform grant from an operations template (access.grant)
+ * POST /ops/grants/:grantId/revoke                 — revoke a platform grant with descendants (access.revoke)
  * GET  /ops/orgs/:orgId/grants                     — organization grants (access.preview)
  * POST /ops/orgs/:orgId/grants                     — organization grant from a template (access.grant)
  * POST /ops/orgs/:orgId/grants/:grantId/revoke     — revoke with descendants (access.revoke)
@@ -42,8 +43,12 @@ import { GrantsService } from './grants.service.js';
 import { WRITE_THROTTLE } from '../authz/throttles.js';
 import { GrantListQuerySchema, type GrantListQuery } from './grants.controller.js';
 
-const routeUserId = (req: Record<string, unknown>): string | undefined =>
-  (req['params'] as Record<string, string | undefined> | undefined)?.['userId'];
+const routeParam =
+  (name: string) =>
+  (req: Record<string, unknown>): string | undefined =>
+    (req['params'] as Record<string, string | undefined> | undefined)?.[name];
+const routeUserId = routeParam('userId');
+const routeGrantId = routeParam('grantId');
 
 @Controller('ops')
 export class OpsGrantsController {
@@ -67,6 +72,18 @@ export class OpsGrantsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<GrantResponse> {
     return this.grants.createPlatform(body, principal);
+  }
+
+  @Post('grants/:grantId/revoke')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['access.revoke'], operationsResource('grant', routeGrantId))
+  async revokePlatform(
+    @Param('grantId') grantId: string,
+    @Body(new ZodValidationPipe(GrantRevokeRequestSchema)) body: GrantRevokeRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<GrantResponse> {
+    return this.grants.revokePlatform(grantId, body, principal);
   }
 
   // ── Organization grants ───────────────────────────────────────────────

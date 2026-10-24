@@ -109,7 +109,7 @@
       "lead": "Szervezeten kívüli munkatársi sablonok, az egyes sablonok által meghatározott hatókörben.",
       "tableCaption": "Platformjogosultságok",
       "empty": "Még nincs platformjogosultság.",
-      "readOnlyNote": "A platformjogosultságok egyelőre nem vonhatók vissza erről a képernyőről: az üzemeltetési API-ban nincs ehhez útvonal.",
+      "revokeNote": "Egy platformjogosultság visszavonása a belőle delegált összes jogosultságot is visszavonja.",
       "scopeOf": "Hatókör: {{scope}}"
     },
     "columns": {

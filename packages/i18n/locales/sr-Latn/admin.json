@@ -109,7 +109,7 @@
       "lead": "Šabloni osoblja van bilo koje organizacije, u obuhvatu koji svaki šablon određuje.",
       "tableCaption": "Dozvole na platformi",
       "empty": "Još nema dozvola na platformi.",
-      "readOnlyNote": "Dozvole na platformi za sada nije moguće opozvati sa ovog ekrana: operativni API nema rutu za njihov opoziv.",
+      "revokeNote": "Opoziv dozvole na platformi opoziva i sve dozvole delegirane iz nje.",
       "scopeOf": "Obuhvat: {{scope}}"
     },
     "columns": {

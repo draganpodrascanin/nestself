@@ -725,6 +725,78 @@ describe('GrantsService', () => {
     });
   });
 
+  describe('revokePlatform', () => {
+    const OPS_ACTOR = { userId: 'user_nikola', context: { kind: 'operations' } } as Principal;
+    const PLATFORM_GRANT = row({
+      id: 'grant_platform',
+      subjectUserId: 'user_ana',
+      templateKey: 'support_operator',
+      actions: ['support.case.read'],
+      scopeType: 'assigned_cases',
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      conditions: null,
+    });
+
+    beforeEach(() => {
+      m.grants.set(PLATFORM_GRANT.id, PLATFORM_GRANT);
+      m.grants.set('grant_1', row());
+      m.authzRepo.revokeGrantTree.mockImplementation(async (ids: string[]) => {
+        m.grants.set(PLATFORM_GRANT.id, { ...PLATFORM_GRANT, revokedAt: NOW, revokedReason: 'left the team' });
+        return { roots: ids, children: ['grant_child'] };
+      });
+    });
+
+    it('revokes the tree in one system transaction and audits the root and each descendant', async () => {
+      const res = await svc.revokePlatform('grant_platform', { reason: 'left the team' }, OPS_ACTOR);
+
+      expect(m.db.withTransaction).toHaveBeenCalledTimes(1);
+      expect(m.db.withOrgScope).not.toHaveBeenCalled();
+      expect(m.authzRepo.revokeGrantTree).toHaveBeenCalledWith(
+        ['grant_platform'],
+        { at: NOW, byUserId: 'user_nikola', reason: 'left the team' },
+        SYSTEM_TX,
+      );
+      const events = m.audit.record.mock.calls.map((c) => (c as unknown as [Record<string, unknown>])[0]);
+      expect(events).toEqual([
+        expect.objectContaining({
+          action: 'grant.revoked',
+          orgId: null,
+          recordId: 'grant_platform',
+          details: expect.objectContaining({ reason: 'left the team', templateKey: 'support_operator', revokedDescendants: 1 }),
+        }),
+        expect.objectContaining({
+          action: 'grant.delegation_revoked',
+          orgId: null,
+          recordId: 'grant_child',
+          details: { reason: 'parent_revoked', rootGrantId: 'grant_platform' },
+        }),
+      ]);
+      expect(res.revokedAt).not.toBeNull();
+    });
+
+    it("invalidates the subject for the platform, member and client organizations, then the delegatees", async () => {
+      await svc.revokePlatform('grant_platform', { reason: 'left the team' }, OPS_ACTOR);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', ['platform', ORG, 'org_client']);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_platform']);
+    });
+
+    it('returns 404 for an organization-scoped or unknown grant without writing', async () => {
+      expect((await apiError(svc.revokePlatform('grant_1', { reason: 'x' }, OPS_ACTOR))).getStatus()).toBe(404);
+      expect((await apiError(svc.revokePlatform('nope', { reason: 'x' }, OPS_ACTOR))).getStatus()).toBe(404);
+      expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
+      expect(m.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 conflict for an already revoked platform grant', async () => {
+      m.grants.set(PLATFORM_GRANT.id, { ...PLATFORM_GRANT, revokedAt: NOW });
+      const err = await apiError(svc.revokePlatform('grant_platform', { reason: 'again' }, OPS_ACTOR));
+      expect(err.getStatus()).toBe(409);
+      expect(err.code).toBe('conflict');
+      expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listPlatform', () => {
     it('passes the subject and revoked filters to the repository', async () => {
       m.authzRepo.listPlatformGrants.mockResolvedValueOnce([

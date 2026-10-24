@@ -215,16 +215,80 @@ export class GrantsService {
       return created;
     });
 
-    // A platform grant applies in every context: drop the cached grants for
-    // the platform, the subject's organizations and assigned clients.
-    const assignments = await this.principalLoader.loadAssignments(subject.userId);
+    await this.invalidatePlatformSubject(subject.userId);
+    return toGrantResponse(row);
+  }
+
+  /**
+   * Revoke a platform-scoped grant (`scope_org_id IS NULL`) and every grant
+   * delegated from it. Organization grants are not visible here (404); they
+   * are revoked through `/ops/orgs/:orgId/grants/:grantId/revoke`.
+   */
+  async revokePlatform(grantId: string, body: GrantRevokeRequest, actor: Principal): Promise<GrantResponse> {
+    // Tree revocation and audit share one system transaction, as in
+    // createPlatform: in strict mode a rejected audit write rolls it back.
+    const root = await this.db.withTransaction(async (tx) => {
+      const grant = await this.authzRepo.findGrantById(grantId, tx);
+      if (!grant || grant.scopeOrgId !== null) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Grant not found' });
+      }
+      if (grant.revokedAt) {
+        throw new ApiHttpException({ status: 409, code: 'conflict', message: 'Grant is already revoked' });
+      }
+      const { children } = await this.authzRepo.revokeGrantTree(
+        [grant.id],
+        { at: new Date(), byUserId: actor.userId, reason: body.reason },
+        tx,
+      );
+
+      const revoked = (await this.authzRepo.findGrantById(grant.id, tx)) ?? grant;
+      await this.audit.record(
+        grantEvent('grant.revoked', revoked, actor, null, {
+          subjectUserId: revoked.subjectUserId,
+          templateKey: revoked.templateKey,
+          scopeType: revoked.scopeType,
+          actionsCount: revoked.actions.length,
+          reason: body.reason,
+          revokedDescendants: children.length,
+        }),
+      );
+      for (const childId of children) {
+        await this.audit.record({
+          action: 'grant.delegation_revoked',
+          actorUserId: actor.userId,
+          actorKind: 'USER',
+          orgId: null,
+          recordType: 'grant',
+          recordId: childId,
+          result: 'ALLOWED',
+          details: { reason: 'parent_revoked', rootGrantId: grant.id },
+        });
+      }
+      return revoked;
+    });
+
+    await this.invalidatePlatformSubject(root.subjectUserId);
+    // The delegatees of the revoked tree (their entries cache it as ancestors).
+    await this.principalLoader.invalidateDelegatees([root.id]);
+    return toGrantResponse(root);
+  }
+
+  /**
+   * A platform grant applies in every context: drop the subject's cached
+   * grants for the platform, their membership organizations and their
+   * assigned CLIENT organizations.
+   */
+  private async invalidatePlatformSubject(userId: string): Promise<void> {
+    const [subject, assignments] = await Promise.all([
+      this.principalLoader.load(userId),
+      this.principalLoader.loadAssignments(userId),
+    ]);
     const orgIds = new Set<string>([
       'platform',
-      ...subject.memberships.map((ms) => ms.orgId),
+      ...(subject?.memberships ?? []).map((ms) => ms.orgId),
       ...assignments.filter((a) => a.kind === 'CLIENT').map((a) => a.targetId),
     ]);
-    await this.principalLoader.invalidateUser(subject.userId, [...orgIds]);
-    return toGrantResponse(row);
+    await this.principalLoader.invalidateUser(userId, [...orgIds]);
   }
 
   /**

@@ -109,7 +109,7 @@
       "lead": "Staff templates held outside any organisation, at the scope each template defines.",
       "tableCaption": "Platform grants",
       "empty": "No platform grants yet.",
-      "readOnlyNote": "Platform grants cannot be revoked from this screen yet: the operations API has no revoke route for them.",
+      "revokeNote": "Revoking a platform grant also revokes every grant delegated from it.",
       "scopeOf": "Scope: {{scope}}"
     },
     "columns": {

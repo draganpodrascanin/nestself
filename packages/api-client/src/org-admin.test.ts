@@ -219,6 +219,15 @@ describe('createOrgAdminApi', () => {
       expect(create.last().csrf).toBe('tok');
     });
 
+    it('revokes a platform grant with a reason', async () => {
+      const { api, last } = setupOps(GRANT);
+      await api.revokePlatformGrant('grant/9', { reason: 'off-boarded' });
+      expect(last().method).toBe('POST');
+      expect(last().url).toBe('http://x/api/ops/grants/grant%2F9/revoke');
+      expect(last().csrf).toBe('tok');
+      expect(last().body).toEqual({ reason: 'off-boarded' });
+    });
+
     it('reads user access', async () => {
       const { api, last } = setupOps({ userId: 'user_1', contexts: [] });
       await expect(api.userAccess('user_1')).resolves.toEqual({ userId: 'user_1', contexts: [] });

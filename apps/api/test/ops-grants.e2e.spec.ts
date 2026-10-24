@@ -226,4 +226,47 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
     const list = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants`).query({ subjectUserId: 'user_ana' });
     expect(list.body.items.map((g: { id: string }) => g.id)).not.toContain(orgGrantId);
   });
+
+  it('revokes a support_operator platform grant through /ops/grants/:grantId/revoke: 200, audited, 409 on repeat', async () => {
+    const created = await nikola.agent
+      .post('/api/ops/grants')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ templateKey: 'support_operator', subjectUserId: 'user_nikola', scopeType: 'assigned_cases' });
+    expect(created.status).toBe(201);
+    const grantId = created.body.id as string;
+
+    const res = await nikola.agent
+      .post(`/api/ops/grants/${grantId}/revoke`)
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ reason: 'support rota ended' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: grantId, scopeOrgId: null });
+    expect(res.body.revokedAt).not.toBeNull();
+
+    const list = await nikola.agent.get('/api/ops/grants').query({ subjectUserId: 'user_nikola' });
+    expect(list.body.items.map((g: { id: string }) => g.id)).not.toContain(grantId);
+
+    const events = await testDb.db.select().from(auditEvents).where(eq(auditEvents.recordId, grantId));
+    expect(events.map((e) => e.action)).toContain('grant.revoked');
+    expect(events.find((e) => e.action === 'grant.revoked')).toMatchObject({ orgId: null, actorUserId: 'user_nikola' });
+
+    const again = await nikola.agent
+      .post(`/api/ops/grants/${grantId}/revoke`)
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ reason: 'again' });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('conflict');
+  });
+
+  it('answers 404 when /ops/grants/:grantId/revoke names an organization-scoped grant', async () => {
+    const res = await nikola.agent
+      .post('/api/ops/grants/grant_user_ivana_employer_owner/revoke')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ reason: 'wrong route' });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('not_found');
+    const [orgGrant] = await testDb.db.select().from(grants).where(eq(grants.id, 'grant_user_ivana_employer_owner'));
+    expect(orgGrant).toBeDefined();
+    expect(orgGrant!.revokedAt).toBeNull();
+  });
 });

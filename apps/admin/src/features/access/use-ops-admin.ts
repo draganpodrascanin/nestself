@@ -106,9 +106,10 @@ export function useCreateOrgGrant(opsApi: OpsAdminApi, orgId: string) {
   return useGrantMutation((body: GrantCreateRequest) => opsApi.createGrant(orgId, body));
 }
 
-export function useRevokeOrgGrant(opsApi: OpsAdminApi, orgId: string) {
+/** Revokes an organization grant, or a platform grant when `orgId` is null. */
+export function useRevokeGrant(opsApi: OpsAdminApi, orgId: string | null) {
   return useGrantMutation(({ grantId, ...body }: GrantRevokeRequest & { grantId: string }) =>
-    opsApi.revokeGrant(orgId, grantId, body),
+    orgId === null ? opsApi.revokePlatformGrant(grantId, body) : opsApi.revokeGrant(orgId, grantId, body),
   );
 }
 

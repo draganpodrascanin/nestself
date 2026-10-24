@@ -164,6 +164,13 @@ function buildOpsOnly(client: ApiClient) {
         schema: GrantResponseSchema,
       }),
 
+    /** POST /ops/grants/:grantId/revoke — revoke a platform-level grant with a reason. */
+    revokePlatformGrant: (grantId: string, body: GrantRevokeRequest) =>
+      client.request(`/api/ops/grants/${encodeURIComponent(grantId)}/revoke`, {
+        ...send('POST', body),
+        schema: GrantResponseSchema,
+      }),
+
     /** GET /ops/users/:userId/access — evaluated access of a user in every context. */
     userAccess: (userId: string) =>
       client.request(`/api/ops/users/${encodeURIComponent(userId)}/access`, {
