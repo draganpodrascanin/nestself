@@ -2,12 +2,17 @@
  * Two-layer content document validation (FMT-R-07).
  *
  * Layer 1: Zod schema validation — types, attributes, ranges, marks,
- *          counts, link rules, size limit.
+ *          counts, link rules, size limit. Unknown keys are rejected
+ *          by z.strictObject (never stripped).
  * Layer 2: ProseMirror structural validation — content expressions,
  *          nesting rules that Zod's flat array validation cannot express.
  *
  * Both layers run in Node.js without a DOM (confirmed: prosemirror-model
  * runs server-side).
+ *
+ * **Important**: The ProseMirror layer runs on `parsed.data` (the Zod
+ * output), not the raw input. Callers must persist `result.document`
+ * — never the original input — to guarantee all invariants hold.
  */
 import { getSchema } from '@tiptap/core';
 import { Node as PmNode } from '@tiptap/pm/model';
@@ -15,9 +20,15 @@ import { Node as PmNode } from '@tiptap/pm/model';
 import {
   type ContentDocument,
   ContentDocumentSchema,
+  CURRENT_SCHEMA_VERSION,
   MAX_CTAS,
   MAX_DOCUMENT_SIZE,
+  MAX_HEADING_TEXT,
+  MAX_PARAGRAPH_TEXT,
+  MAX_PRACTICAL_STEPS,
+  MAX_PROFESSIONAL_NOTES,
   MAX_RELATED_RESOURCES,
+  MAX_TRANSCRIPT_TEXT,
 } from './document.ts';
 import { extensions } from './extensions.ts';
 
@@ -29,7 +40,8 @@ export type ContentErrorCode =
   | 'content_invalid_block'
   | 'content_invalid_link'
   | 'content_too_large'
-  | 'content_missing_required';
+  | 'content_missing_required'
+  | 'content_schema_version';
 
 export interface ValidationError {
   code: ContentErrorCode;
@@ -49,62 +61,16 @@ export type ValidationResult =
 export interface ValidationOptions {
   /**
    * Allowed hosts for `https:` links (FMT-R-06).
+   * Entries are normalized to lowercase punycode via `new URL()`.
    * An empty list means no external links are permitted.
    */
   linkHostAllowlist?: string[];
-
-  /**
-   * Hook for CTA target availability checks (FMT-R-04).
-   * The schema layer performs structural validation only;
-   * target existence and capability checks happen in the API.
-   */
-  validateCtaTarget?: (ctaKind: string, targetId?: string) => Promise<ValidationError | null>;
 }
 
 // ---------------------------------------------------------------------------
-// Internal link href pattern (FMT-R-06)
+// Typed node accessor
 // ---------------------------------------------------------------------------
 
-const INTERNAL_LINK_RE = /^nestself:content\/[a-zA-Z0-9_-]+$/;
-
-// Scheme patterns to reject (case-insensitive, whitespace-trimmed).
-const REJECTED_SCHEME_RE = /^\s*(javascript|data|http|vbscript|file)\s*:/i;
-const PROTOCOL_RELATIVE_RE = /^\s*\/\//;
-
-function validateHref(
-  href: string,
-  allowlist: string[],
-): ContentErrorCode | null {
-  const trimmed = href.trim();
-
-  // Reject protocol-relative URLs
-  if (PROTOCOL_RELATIVE_RE.test(trimmed)) return 'content_invalid_link';
-
-  // Reject dangerous schemes (including mixed-case and whitespace-padded)
-  if (REJECTED_SCHEME_RE.test(trimmed)) return 'content_invalid_link';
-
-  // Internal reference
-  if (INTERNAL_LINK_RE.test(trimmed)) return null;
-
-  // https: with host on allowlist
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== 'https:') return 'content_invalid_link';
-    if (!allowlist.includes(url.hostname)) return 'content_invalid_link';
-    return null;
-  } catch {
-    return 'content_invalid_link';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Content-level validation rules that Zod schemas alone cannot express
-// ---------------------------------------------------------------------------
-
-/**
- * A typed accessor for doc content nodes. Since BlockNodeSchema uses
- * z.lazy() (losing inference), we work with the raw JSON shape here.
- */
 interface RawNode {
   type: string;
   attrs?: Record<string, unknown>;
@@ -113,20 +79,32 @@ interface RawNode {
   text?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Content-level validation rules that Zod schemas alone cannot express
+// ---------------------------------------------------------------------------
+
 function validateDocumentRules(
   doc: ContentDocument,
   options: ValidationOptions,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const allowlist = options.linkHostAllowlist ?? [];
   const content = doc.content as unknown as RawNode[];
 
-  // --- Size check (FMT-R-02) ---
-  const jsonSize = JSON.stringify(doc).length;
-  if (jsonSize > MAX_DOCUMENT_SIZE) {
+  // --- Schema version check (I7, I8) ---
+  if (doc.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+    errors.push({
+      code: 'content_schema_version',
+      message: `Writes require schemaVersion ${CURRENT_SCHEMA_VERSION}; got ${doc.schemaVersion}. Use migrateDocument() for reads of older versions.`,
+    });
+    return errors; // bail early
+  }
+
+  // --- Size check (FMT-R-02, R3) — UTF-8 bytes ---
+  const jsonUtf8Size = new TextEncoder().encode(JSON.stringify(doc)).length;
+  if (jsonUtf8Size > MAX_DOCUMENT_SIZE) {
     errors.push({
       code: 'content_too_large',
-      message: `Document size ${jsonSize} bytes exceeds ${MAX_DOCUMENT_SIZE} byte limit.`,
+      message: `Document size ${jsonUtf8Size} UTF-8 bytes exceeds ${MAX_DOCUMENT_SIZE} byte limit.`,
     });
   }
 
@@ -158,30 +136,96 @@ function validateDocumentRules(
     });
   }
 
-  if (professionalNoteCount > 3) {
+  if (professionalNoteCount > MAX_PROFESSIONAL_NOTES) {
     errors.push({
       code: 'content_invalid_block',
-      message: `At most 3 professionalNote nodes permitted; found ${professionalNoteCount}.`,
+      message: `At most ${MAX_PROFESSIONAL_NOTES} professionalNote nodes permitted; found ${professionalNoteCount}.`,
     });
   }
 
-  if (practicalStepCount > 20) {
+  if (practicalStepCount > MAX_PRACTICAL_STEPS) {
     errors.push({
       code: 'content_invalid_block',
-      message: `At most 20 practicalStep nodes permitted; found ${practicalStepCount}.`,
+      message: `At most ${MAX_PRACTICAL_STEPS} practicalStep nodes permitted; found ${practicalStepCount}.`,
     });
   }
 
-  // --- Transcript-after-audio/video rule (FMT-R-23, C-05) ---
-  //
-  // Design choice: the media kind (audio/video/pdf) is NOT known from
-  // the media_assets table at JSON validation time. Instead, the
-  // approvedMedia node carries a `kind` attribute (per the spec table
-  // in 6.2). Validation checks this attribute structurally: every
-  // approvedMedia node with kind "audio" or "video" must be immediately
-  // followed by a transcript node whose mediaAssetId matches.
+  // --- Text length constraints (I2) ---
   for (let i = 0; i < content.length; i++) {
     const node = content[i]!;
+
+    if (node.type === 'sectionHeading' && node.content) {
+      const totalText = sumTextLength(node.content);
+      if (totalText > MAX_HEADING_TEXT) {
+        errors.push({
+          code: 'content_invalid_block',
+          message: `sectionHeading text at content.${i} is ${totalText} characters; max ${MAX_HEADING_TEXT}.`,
+          path: `content.${i}`,
+        });
+      }
+    }
+
+    if (node.type === 'paragraph' && node.content) {
+      const totalText = sumTextLength(node.content);
+      if (totalText > MAX_PARAGRAPH_TEXT) {
+        errors.push({
+          code: 'content_invalid_block',
+          message: `paragraph text at content.${i} is ${totalText} characters; max ${MAX_PARAGRAPH_TEXT}.`,
+          path: `content.${i}`,
+        });
+      }
+    }
+
+    if (node.type === 'transcript' && node.content) {
+      let transcriptText = 0;
+      for (const para of node.content) {
+        if (para.content) transcriptText += sumTextLength(para.content);
+      }
+      if (transcriptText > MAX_TRANSCRIPT_TEXT) {
+        errors.push({
+          code: 'content_invalid_block',
+          message: `transcript text at content.${i} is ${transcriptText} characters; max ${MAX_TRANSCRIPT_TEXT}.`,
+          path: `content.${i}`,
+        });
+      }
+    }
+  }
+
+  // --- Transcript rules (FMT-R-23, C-05, 17) ---
+  const seenTranscriptMedia = new Set<string>();
+  for (let i = 0; i < content.length; i++) {
+    const node = content[i]!;
+
+    // Orphan transcript: not preceded by matching approvedMedia
+    if (node.type === 'transcript') {
+      const mediaId = node.attrs?.mediaAssetId as string | undefined;
+      const prev = content[i - 1];
+      if (
+        !prev ||
+        prev.type !== 'approvedMedia' ||
+        prev.attrs?.mediaAssetId !== mediaId
+      ) {
+        errors.push({
+          code: 'content_missing_required',
+          message: `Orphan transcript at content.${i}: must immediately follow an approvedMedia node with matching mediaAssetId.`,
+          path: `content.${i}`,
+        });
+      }
+
+      // Duplicate transcript for same media
+      if (mediaId) {
+        if (seenTranscriptMedia.has(mediaId)) {
+          errors.push({
+            code: 'content_invalid_block',
+            message: `Duplicate transcript for mediaAssetId "${mediaId}" at content.${i}.`,
+            path: `content.${i}`,
+          });
+        }
+        seenTranscriptMedia.add(mediaId);
+      }
+    }
+
+    // Audio/video must be followed by transcript
     if (node.type === 'approvedMedia') {
       const kind = node.attrs?.kind;
       if (kind === 'audio' || kind === 'video') {
@@ -201,19 +245,46 @@ function validateDocumentRules(
     }
   }
 
-  // --- Link validation (FMT-R-06) ---
+  // --- Link host allowlist validation (FMT-R-06, R4) ---
+  const rawAllowlist = options.linkHostAllowlist ?? [];
+  // Normalize allowlist entries to lowercase punycode via URL
+  const allowlist = rawAllowlist.map((host) => {
+    try {
+      return new URL(`https://${host}`).hostname;
+    } catch {
+      return host.toLowerCase();
+    }
+  });
+
   walkRawNodes(doc as unknown as RawNode, (node, path) => {
     if (node.marks) {
       for (const mark of node.marks) {
         if (mark.type === 'link' && mark.attrs?.href) {
-          const code = validateHref(
-            mark.attrs.href as string,
-            allowlist,
-          );
-          if (code) {
+          const href = mark.attrs.href as string;
+          // Internal links pass without allowlist check
+          if (/^nestself:content\/[A-Za-z0-9_-]{1,64}$/.test(href)) return;
+
+          try {
+            const url = new URL(href);
+            if (url.protocol !== 'https:') {
+              errors.push({
+                code: 'content_invalid_link',
+                message: `Invalid link href "${href}" at ${path}.`,
+                path,
+              });
+              return;
+            }
+            if (!allowlist.includes(url.hostname)) {
+              errors.push({
+                code: 'content_invalid_link',
+                message: `Link host "${url.hostname}" not on allowlist at ${path}.`,
+                path,
+              });
+            }
+          } catch {
             errors.push({
-              code,
-              message: `Invalid link href "${mark.attrs.href as string}" at ${path}.`,
+              code: 'content_invalid_link',
+              message: `Invalid link href "${href}" at ${path}.`,
               path,
             });
           }
@@ -222,11 +293,15 @@ function validateDocumentRules(
     }
   });
 
-  // --- Extra/unknown attribute rejection ---
-  // The closed Zod schema already strips unknown keys via strict objects.
-  // ProseMirror layer 2 catches structural nesting violations.
-
   return errors;
+}
+
+function sumTextLength(nodes: RawNode[]): number {
+  let total = 0;
+  for (const n of nodes) {
+    if (n.type === 'text' && n.text) total += n.text.length;
+  }
+  return total;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +339,30 @@ function getPmSchema() {
 }
 
 // ---------------------------------------------------------------------------
+// Error code mapping (I13)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map Zod issue codes and paths to ContentErrorCode.
+ * Uses Zod issue code and path, never English message text.
+ */
+function inferErrorCode(issue: { code: string; path: PropertyKey[] }): ContentErrorCode {
+  const pathStr = issue.path.map(String).join('.');
+
+  // Link-related paths
+  if (pathStr.includes('href') || pathStr.includes('marks')) {
+    return 'content_invalid_link';
+  }
+
+  // Size issues
+  if (issue.code === 'too_big') {
+    return 'content_too_large';
+  }
+
+  return 'content_invalid_block';
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -271,11 +370,14 @@ function getPmSchema() {
  * Validate a content document through both layers (FMT-R-07).
  *
  * Layer 1 (Zod): structural types, attribute types/ranges, mark types,
- * text lengths, node counts.
+ * text lengths, node counts, link href form, unknown key rejection.
  *
  * Layer 2 (ProseMirror): content expression validation — catches nesting
  * violations that Zod's flat array validation cannot express (e.g. a
  * listItem directly inside a quote).
+ *
+ * **Callers must persist `result.document`, not the raw input.**
+ * The document is the Zod-parsed output with all invariants enforced.
  */
 export function validateContentDocument(
   doc: unknown,
@@ -287,12 +389,13 @@ export function validateContentDocument(
     const errors: ValidationError[] = parsed.error.issues.map((issue) => ({
       code: inferErrorCode(issue),
       message: issue.message,
-      path: issue.path.join('.'),
+      path: issue.path.map(String).join('.'),
     }));
     return { ok: false, errors };
   }
 
-  const document = parsed.data;
+  // Cast to our typed interface (I14)
+  const document = parsed.data as unknown as ContentDocument;
 
   // --- Content-level rules ---
   const ruleErrors = validateDocumentRules(document, options);
@@ -301,9 +404,10 @@ export function validateContentDocument(
   }
 
   // --- Layer 2: ProseMirror structural validation ---
+  // Runs on parsed.data (Zod output), never the raw input (C2).
   try {
     const schema = getPmSchema();
-    const pmNode = PmNode.fromJSON(schema, doc as Record<string, unknown>);
+    const pmNode = PmNode.fromJSON(schema, parsed.data as Record<string, unknown>);
     pmNode.check();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -319,24 +423,4 @@ export function validateContentDocument(
   }
 
   return { ok: true, document };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function inferErrorCode(issue: { path: PropertyKey[]; message: string }): ContentErrorCode {
-  const pathStr = issue.path.map(String).join('.');
-  const msg = issue.message.toLowerCase();
-
-  if (msg.includes('type') || msg.includes('invalid_union') || msg.includes('unrecognized')) {
-    return 'content_invalid_block';
-  }
-  if (pathStr.includes('href') || msg.includes('link') || msg.includes('href')) {
-    return 'content_invalid_link';
-  }
-  if (msg.includes('too_big') || msg.includes('size')) {
-    return 'content_too_large';
-  }
-  return 'content_invalid_block';
 }

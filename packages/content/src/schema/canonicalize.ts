@@ -1,75 +1,66 @@
 /**
  * Canonicalization and approval hashing (FMT-R-08, FMT-R-09, C-06).
  *
- * `canonicalize(input)` produces a deterministic JSON string from the
- * fields of a content revision that bind the approval hash. Keys are
- * sorted recursively, arrays preserve order, `undefined` values are
- * dropped, and there is no insignificant whitespace.
+ * The approval hash covers a fixed set of fields from the content
+ * resource, serialized as deterministic JSON (sorted keys, no
+ * whitespace, undefined normalized to null) and hashed with SHA-256.
  *
- * `approvalHash(input)` computes SHA-256 hex over the canonical form
- * using the Web Crypto API (`globalThis.crypto.subtle`), which works
- * in both Node.js (20+) and browsers. For synchronous hashing on the
- * server, import `approvalHashSync` from `@nestself/content/schema/node`
- * (a separate subpath that uses `node:crypto` and is excluded from
- * browser bundles).
+ * R2: A version tag ('v1') is prepended to the hashed structure so
+ * any future field change is explicit and detectable.
+ *
+ * The hash is always computed via the async Web Crypto API (I9).
  */
 
 // ---------------------------------------------------------------------------
-// Types
+// Hash-format version (R2)
 // ---------------------------------------------------------------------------
 
 /**
- * Input for the approval hash. The field list matches C-06 / FMT-R-08
- * exactly, in canonical order:
- *
- * 1. body        — the ContentDocument JSON
- * 2. title       — revision metadata
- * 3. summary     — revision metadata
- * 4. outcome     — revision metadata
- * 5. duration    — revision metadata (minutes, optional)
- * 6. difficulty  — revision metadata (optional)
- * 7. sources     — revision metadata (optional)
- * 8. locale      — the variant's locale
- * 9. mediaAssetIds     — sorted array from content_revision_media
- * 10. relatedResourceIds — sorted array
- * 11. cta               — the CTA node's JSON, or null
- * 12. reviewDiscipline  — the review discipline
- * 13. proposedAudience  — sorted JSON of the proposed_audience column
+ * The version tag prepended to the canonical structure before hashing.
+ * Increment when the set of hashed fields changes.
+ */
+export const HASH_FORMAT_VERSION = 'v1';
+
+// ---------------------------------------------------------------------------
+// Input type
+// ---------------------------------------------------------------------------
+
+/**
+ * The fields included in the approval hash.
+ * `outcome` is `string | null`; canonicalized with `?? null` (R2).
  */
 export interface ApprovalHashInput {
   body: unknown;
   title: string;
   summary: string;
-  outcome: string;
-  duration?: number | null;
-  difficulty?: string | null;
-  sources?: string[] | null;
+  outcome: string | null;
+  durationSeconds: number;
+  difficulty: string;
+  sources: string[];
   locale: string;
   mediaAssetIds: string[];
   relatedResourceIds: string[];
-  cta: unknown | null;
+  cta: unknown;
   reviewDiscipline: string;
-  proposedAudience: unknown;
+  proposedAudience: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Canonicalize
+// Canonical JSON
 // ---------------------------------------------------------------------------
 
 /**
- * Produce a deterministic JSON string by sorting object keys recursively,
- * preserving array order, and dropping `undefined` values.
+ * Recursively sort object keys. Arrays are preserved in order.
+ * Returns a new object tree built with `Object.create(null)` (17).
  */
 function sortKeys(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
+  if (value === null || value === undefined) return null;
   if (Array.isArray(value)) return value.map(sortKeys);
   if (typeof value === 'object') {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      const v = (value as Record<string, unknown>)[key];
-      if (v !== undefined) {
-        sorted[key] = sortKeys(v);
-      }
+    const sorted = Object.create(null) as Record<string, unknown>;
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    for (const key of keys) {
+      sorted[key] = sortKeys((value as Record<string, unknown>)[key]);
     }
     return sorted;
   }
@@ -77,52 +68,52 @@ function sortKeys(value: unknown): unknown {
 }
 
 /**
- * Produce a deterministic canonical JSON string from an `ApprovalHashInput`.
+ * Produce a deterministic JSON string for the given approval-hash input.
  *
- * The output is a JSON array of the fields in the order defined by
- * FMT-R-08, with every nested object key-sorted and no insignificant
- * whitespace.
+ * Rules:
+ * - Keys sorted lexicographically at every level
+ * - No whitespace
+ * - `undefined` normalized to `null`
+ * - The version tag is prepended as the first element of a wrapping array
  */
 export function canonicalize(input: ApprovalHashInput): string {
-  const canonical = [
-    sortKeys(input.body),
-    input.title,
-    input.summary,
-    input.outcome,
-    input.duration ?? null,
-    input.difficulty ?? null,
-    sortKeys(input.sources ?? null),
-    input.locale,
-    [...input.mediaAssetIds].sort(),
-    [...input.relatedResourceIds].sort(),
-    input.cta !== null && input.cta !== undefined ? sortKeys(input.cta) : null,
-    input.reviewDiscipline,
-    sortKeys(input.proposedAudience),
-  ];
+  const normalized: Record<string, unknown> = {
+    body: input.body,
+    title: input.title,
+    summary: input.summary,
+    outcome: input.outcome ?? null,
+    durationSeconds: input.durationSeconds,
+    difficulty: input.difficulty,
+    sources: input.sources,
+    locale: input.locale,
+    mediaAssetIds: input.mediaAssetIds,
+    relatedResourceIds: input.relatedResourceIds,
+    cta: input.cta,
+    reviewDiscipline: input.reviewDiscipline,
+    proposedAudience: input.proposedAudience,
+  };
 
-  return JSON.stringify(canonical);
+  const sorted = sortKeys(normalized);
+  // R2: version tag as first element of wrapping array
+  return JSON.stringify([HASH_FORMAT_VERSION, sorted]);
 }
 
 // ---------------------------------------------------------------------------
-// Approval hash (async — Web Crypto API, browser-safe)
+// Async SHA-256 hash (Web Crypto API)
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the SHA-256 hex digest of the canonical form of a revision's
- * approval-hash fields.
+ * Compute the SHA-256 approval hash of a content resource.
  *
- * Uses `globalThis.crypto.subtle`, which is available in both Node.js 20+
- * and browsers. For a synchronous API on the server, see `approvalHashSync`
- * in `@nestself/content/schema/node`.
+ * Uses the Web Crypto API (available in browsers and Node.js 18+).
+ * Returns a lowercase hex string.
  */
 export async function approvalHash(input: ApprovalHashInput): Promise<string> {
   const canonical = canonicalize(input);
-  const data = new TextEncoder().encode(canonical);
-  const buffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+  const encoded = new TextEncoder().encode(canonical);
+  const buffer = await globalThis.crypto.subtle.digest('SHA-256', encoded);
   const bytes = new Uint8Array(buffer);
-  let hex = '';
-  for (const b of bytes) {
-    hex += b.toString(16).padStart(2, '0');
-  }
-  return hex;
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }

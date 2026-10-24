@@ -1,171 +1,107 @@
 /**
  * Content document transliteration (FMT-R-26, C-28).
  *
- * `transliterateText(text)` converts Serbian Latin text to Cyrillic.
+ * Walks the document tree and transliterates all text-bearing
+ * attributes to Serbian Cyrillic, preserving ids, hrefs, marks,
+ * enums, numbers.
  *
- * `transliterateDocument(doc, 'sr-Cyrl')` produces a Cyrillic copy of
- * a ContentDocument by transliterating reader-visible text: text nodes,
- * alt text, captions, CTA labels, transcript text and link text inside
- * marks. It leaves ids, hrefs, mediaAssetId, contentResourceId, marks
- * structure and schemaVersion untouched.
+ * The core transliteration function lives in `@nestself/i18n/transliterate`
+ * (I11) — the single shared implementation.
  *
- * The transliteration core is shared with the i18n build script
- * (packages/i18n/scripts/transliterate.mjs) through a single .mjs
- * implementation in this directory.
+ * Mark arrays are cloned so the output does not share references
+ * with the input (17).
  */
-import { transliterate } from './transliterate-core.mjs';
+import { transliterate } from '@nestself/i18n/transliterate';
 
 import type { ContentDocument } from './document.ts';
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 /**
  * Transliterate a single string from Serbian Latin to Cyrillic.
- *
- * Preserves {{placeholders}}, <html-tags>, URLs, and protected terms
- * (NestSelf, Pexels, etc.).
+ * Re-exports the canonical implementation from `@nestself/i18n`.
  */
 export function transliterateText(text: string): string {
   return transliterate(text);
 }
 
+// ---------------------------------------------------------------------------
+// Typed node walker
+// ---------------------------------------------------------------------------
+
+interface RawNode {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: RawNode[];
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+  text?: string;
+}
+
 /**
- * Produce a Cyrillic copy of a ContentDocument.
+ * Deep-clone and transliterate a single node.
+ */
+function transliterateNode(node: RawNode): RawNode {
+  const result: RawNode = { type: node.type };
+
+  // Transliterate text
+  if (node.text !== undefined) {
+    result.text = transliterate(node.text);
+  }
+
+  // Deep-clone marks (17: do not share mark arrays with input)
+  if (node.marks) {
+    result.marks = node.marks.map((mark) => {
+      const cloned: { type: string; attrs?: Record<string, unknown> } = { type: mark.type };
+      if (mark.attrs) {
+        cloned.attrs = { ...mark.attrs };
+      }
+      return cloned;
+    });
+  }
+
+  // Handle attributes — transliterate text-bearing ones, preserve ids/enums/numbers
+  if (node.attrs) {
+    const attrs: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node.attrs)) {
+      switch (key) {
+        // Text-bearing attributes that should be transliterated
+        case 'alt':
+        case 'caption':
+        case 'label':
+        case 'title':
+        case 'attribution':
+          attrs[key] = typeof value === 'string' ? transliterate(value) : value;
+          break;
+        // Everything else preserved as-is (ids, enums, numbers, hrefs)
+        default:
+          attrs[key] = value;
+          break;
+      }
+    }
+    result.attrs = attrs;
+  }
+
+  // Recurse into content
+  if (node.content) {
+    result.content = node.content.map(transliterateNode);
+  }
+
+  return result;
+}
+
+/**
+ * Transliterate an entire content document to Serbian Cyrillic.
  *
- * Only `'sr-Cyrl'` is supported as the target locale. The function
- * is pure and deterministic.
- *
- * **What is transliterated (reader-visible text):**
- * - Text node `.text` values
- * - `sectionHeading` text content
- * - `image.attrs.alt` and `image.attrs.caption`
- * - `approvedMedia.attrs.caption`
- * - `quote.attrs.attribution`
- * - `practicalStep.attrs.title`
- * - `checklistItem.attrs.label`
- * - `cta.attrs.label`
- * - Transcript paragraph text
- *
- * **What is NOT transliterated (structural/reference data):**
- * - `schemaVersion`, `type` fields
- * - All `id` fields (`mediaAssetId`, `contentResourceId`)
- * - `href` values in link marks
- * - Mark `type` fields (`bold`, `italic`, `link`)
- * - `ctaKind`, `noteKind`, `kind` enums
- * - `stepNumber`, `start` numbers
+ * Returns a new document; the original is not mutated.
+ * Text nodes, alt, caption, label, title, attribution and CTA labels
+ * are transliterated. Ids, hrefs, marks, enums and numbers are preserved.
  */
 export function transliterateDocument(
   doc: ContentDocument,
-  _locale: 'sr-Cyrl',
+  _target: 'sr-Cyrl',
 ): ContentDocument {
-  return transliterateNode(doc) as ContentDocument;
-}
-
-// ---------------------------------------------------------------------------
-// Internal tree walker
-// ---------------------------------------------------------------------------
-
-type AnyNode = Record<string, unknown>;
-
-function transliterateNode(node: AnyNode): AnyNode {
-  const result: AnyNode = {};
-
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'type' || key === 'schemaVersion') {
-      // Structural: pass through unchanged
-      result[key] = value;
-    } else if (key === 'text' && typeof value === 'string') {
-      // Text node content: transliterate
-      result[key] = transliterate(value);
-    } else if (key === 'marks' && Array.isArray(value)) {
-      // Marks: pass through unchanged (preserve structure, type, href)
-      result[key] = value;
-    } else if (key === 'attrs' && typeof value === 'object' && value !== null) {
-      result[key] = transliterateAttrs(
-        node.type as string,
-        value as Record<string, unknown>,
-      );
-    } else if (key === 'content' && Array.isArray(value)) {
-      result[key] = value.map((child: AnyNode) => transliterateNode(child));
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-}
-
-/**
- * Transliterate selected attributes based on the node type.
- * Ids, hrefs, enums and numbers pass through unchanged.
- */
-function transliterateAttrs(
-  nodeType: string,
-  attrs: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...attrs };
-
-  switch (nodeType) {
-    case 'sectionHeading':
-      // level is a number: unchanged
-      break;
-
-    case 'image':
-      // mediaAssetId: unchanged; alt and caption: transliterate
-      if (typeof result.alt === 'string') result.alt = transliterate(result.alt);
-      if (typeof result.caption === 'string') result.caption = transliterate(result.caption);
-      break;
-
-    case 'approvedMedia':
-      // mediaAssetId, kind: unchanged; caption: transliterate
-      if (typeof result.caption === 'string') result.caption = transliterate(result.caption);
-      break;
-
-    case 'quote':
-      // attribution: transliterate
-      if (typeof result.attribution === 'string') {
-        result.attribution = transliterate(result.attribution);
-      }
-      break;
-
-    case 'professionalNote':
-      // noteKind: unchanged (enum)
-      break;
-
-    case 'practicalStep':
-      // stepNumber: unchanged; title: transliterate
-      if (typeof result.title === 'string') result.title = transliterate(result.title);
-      break;
-
-    case 'checklistItem':
-      // label: transliterate
-      if (typeof result.label === 'string') result.label = transliterate(result.label);
-      break;
-
-    case 'cta':
-      // ctaKind, targetId: unchanged; label: transliterate
-      if (typeof result.label === 'string') result.label = transliterate(result.label);
-      break;
-
-    case 'transcript':
-      // mediaAssetId: unchanged (transcript text is in content paragraphs)
-      break;
-
-    case 'relatedResource':
-      // contentResourceId: unchanged
-      break;
-
-    case 'orderedList':
-      // start: unchanged (number)
-      break;
-
-    default:
-      // paragraph, bulletList, checklist, listItem, hardBreak:
-      // no attrs to transliterate
-      break;
-  }
-
-  return result;
+  const content = (doc.content as unknown as RawNode[]).map(transliterateNode);
+  return {
+    type: 'doc',
+    schemaVersion: doc.schemaVersion,
+    content: content as unknown as ContentDocument['content'],
+  };
 }

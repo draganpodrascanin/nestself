@@ -3,24 +3,18 @@
 // Exported from @nestself/content/schema
 // ---------------------------------------------------------------------------
 
-// --- Block catalogue and types (C-05) ---
+// --- Block catalogue, schemas and types (C-05, I14) ---
 export {
+  // Schemas
+  ContentIdSchema,
+  LinkHrefSchema,
   BoldMarkSchema,
   ItalicMarkSchema,
   LinkMarkSchema,
   MarkSchema,
-  type Mark,
-  CTA_KINDS,
-  CtaKindSchema,
-  type CtaKind,
-  MEDIA_KINDS,
-  MediaKindSchema,
-  type MediaKind,
   TextNodeSchema,
-  type TextNode,
   HardBreakNodeSchema,
   InlineNodeSchema,
-  type InlineNode,
   SectionHeadingSchema,
   ParagraphSchema,
   ListItemSchema,
@@ -37,6 +31,35 @@ export {
   RelatedResourceSchema,
   CtaSchema,
   BlockNodeSchema,
+  // Constants
+  CTA_KINDS,
+  MEDIA_KINDS,
+  CONTENT_CAPABILITIES,
+  ContentCapabilitySchema,
+  MediaKindSchema,
+  // Types (I14: typed unions for the renderer)
+  type Mark,
+  type CtaKind,
+  type MediaKind,
+  type TextNode,
+  type HardBreak,
+  type InlineNode,
+  type SectionHeading,
+  type Paragraph,
+  type ListItem,
+  type BulletList,
+  type OrderedList,
+  type Quote,
+  type Image,
+  type ProfessionalNote,
+  type PracticalStep,
+  type ChecklistItem,
+  type Checklist,
+  type ApprovedMedia,
+  type Transcript,
+  type RelatedResource,
+  type Cta,
+  type BlockNode,
 } from './blocks.ts';
 
 // --- ContentDocument schema (FMT-R-01) ---
@@ -48,6 +71,11 @@ export {
   MAX_NODES,
   MAX_RELATED_RESOURCES,
   MAX_CTAS,
+  MAX_PROFESSIONAL_NOTES,
+  MAX_PRACTICAL_STEPS,
+  MAX_HEADING_TEXT,
+  MAX_PARAGRAPH_TEXT,
+  MAX_TRANSCRIPT_TEXT,
 } from './document.ts';
 
 // --- Two-layer validation (FMT-R-07) ---
@@ -66,6 +94,7 @@ export { extensions } from './extensions.ts';
 export {
   canonicalize,
   approvalHash,
+  HASH_FORMAT_VERSION,
   type ApprovalHashInput,
 } from './canonicalize.ts';
 

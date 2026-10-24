@@ -1,43 +1,31 @@
 /**
  * Deterministic Serbian Latin-to-Cyrillic transliteration.
  *
- * This is the canonical, shared implementation used by both
- * `@nestself/content/schema` (via transliterate.ts) and
- * `packages/i18n/scripts/transliterate.mjs` (via re-export).
+ * This is the canonical, shared implementation used by:
+ * - `@nestself/content/schema` (document transliteration)
+ * - `packages/i18n/scripts/transliterate.mjs` (Cyrillic locale build)
  *
- * Pure ESM — no Node.js built-ins, no filesystem access.
- * Handles digraphs (longest first), preserves {{placeholders}},
- * <tags>, URLs, and protected terms from the inlined exceptions list.
+ * Pure module — no Node.js built-ins, no filesystem access beyond the
+ * JSON import. Handles digraphs (longest first), preserves
+ * {{placeholders}}, <tags>, URLs and protected terms from the
+ * exceptions list (`scripts/transliteration-exceptions.json`).
+ *
+ * @module @nestself/i18n/transliterate
  */
 
-// Inlined from packages/i18n/scripts/transliteration-exceptions.json
-// (the single source of truth for both packages).
-const protectedTerms = [
-  'NestSelf',
-  'Pexels',
-  'Phosphor',
-  'Onest',
-  'Europe/Belgrade',
-  'English',
-  'Enterprise',
-  'Lelki Elsősegély Telefonszolgálat',
-  'Lelki Elsősegély',
-];
+import exceptions from '../scripts/transliteration-exceptions.json' with { type: 'json' };
 
-const wordOverrides = {
-  'injekcija': 'инјекција',
-  'konjunktura': 'конјунктура',
-  'nadživeti': 'надживети',
-};
+const protectedTerms: string[] = exceptions.protected;
+const wordOverrides: Record<string, string> = exceptions.wordOverrides;
 
 // Digraphs first (longest), then single letters
-const digraphMap = [
+const digraphMap: ReadonlyArray<readonly [string, string]> = [
   ['Dž', 'Џ'], ['dž', 'џ'], ['DŽ', 'Џ'],
   ['Lj', 'Љ'], ['lj', 'љ'], ['LJ', 'Љ'],
   ['Nj', 'Њ'], ['nj', 'њ'], ['NJ', 'Њ'],
 ];
 
-const singleMap = [
+const singleMap: ReadonlyArray<readonly [string, string]> = [
   ['A', 'А'], ['a', 'а'],
   ['B', 'Б'], ['b', 'б'],
   ['V', 'В'], ['v', 'в'],
@@ -67,19 +55,20 @@ const singleMap = [
   ['Š', 'Ш'], ['š', 'ш'],
 ];
 
-function escapeRegex(str) {
+function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
  * Transliterate a single string from Serbian Latin to Cyrillic.
- * Preserves: {{placeholders}}, <html-tags>, URLs (http/https), protected terms.
+ * Preserves: {{placeholders}}, `<html-tags>`, URLs (http/https),
+ * protected terms from the exception list.
  */
-export function transliterate(input) {
+export function transliterate(input: string): string {
   if (typeof input !== 'string') return input;
 
   // Build patterns to preserve
-  const preservePatterns = [];
+  const preservePatterns: string[] = [];
 
   // Protected terms (exact match)
   for (const term of protectedTerms) {
@@ -115,14 +104,14 @@ export function transliterate(input) {
 /**
  * Transliterate a segment of text, applying word overrides first.
  */
-function transliterateSegment(text) {
+function transliterateSegment(text: string): string {
   // Apply word overrides on whole words (case-insensitively, preserving initial capital)
   let result = text;
   for (const [latin, cyrillic] of Object.entries(wordOverrides)) {
     const regex = new RegExp(`\\b${escapeRegex(latin)}\\b`, 'gi');
     result = result.replace(regex, (match) => {
       // Preserve case of first letter
-      if (match[0] === match[0].toUpperCase() && match[0] !== match[0].toLowerCase()) {
+      if (match[0] === match[0]!.toUpperCase() && match[0] !== match[0]!.toLowerCase()) {
         return cyrillic.charAt(0).toUpperCase() + cyrillic.slice(1);
       }
       return cyrillic;
@@ -169,17 +158,18 @@ function transliterateSegment(text) {
 }
 
 /**
- * Deep-transliterate a JSON object (all string values).
+ * Deep-transliterate all string values in a JSON-like object.
+ * Keys are preserved as-is; only leaf string values are transliterated.
  */
-export function transliterateObject(obj) {
-  if (typeof obj === 'string') return transliterate(obj);
-  if (Array.isArray(obj)) return obj.map(transliterateObject);
+export function transliterateObject<T>(obj: T): T {
+  if (typeof obj === 'string') return transliterate(obj) as T;
+  if (Array.isArray(obj)) return obj.map(transliterateObject) as T;
   if (obj !== null && typeof obj === 'object') {
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       result[key] = transliterateObject(value);
     }
-    return result;
+    return result as T;
   }
   return obj;
 }

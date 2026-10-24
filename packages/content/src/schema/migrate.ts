@@ -1,26 +1,26 @@
 /**
  * Content document migration (FMT-R-20, FMT-R-21).
  *
- * Every ContentDocument carries a `schemaVersion` integer. When the
- * block catalogue changes, the version increments and a migration
- * function is added to the `MIGRATIONS` table below.
+ * Reads older document versions and migrates them to the current
+ * schema version. Each migration step is a pure function that takes
+ * a document at version N and returns a document at version N+1.
  *
- * `migrateDocument(doc)` applies every migration from the stored
- * version to the current version sequentially. The original JSON is
- * never mutated; a new object is returned at the current version.
+ * Returns a `ContentDocument` via `structuredClone` (17).
  */
-import { CURRENT_SCHEMA_VERSION } from './document.ts';
+import { type ContentDocument, CURRENT_SCHEMA_VERSION } from './document.ts';
 
 // ---------------------------------------------------------------------------
 // Migration table
 // ---------------------------------------------------------------------------
 
 /**
- * Each entry migrates from (key) to (key + 1).
- * Add a new entry when CURRENT_SCHEMA_VERSION increments.
+ * Each entry is a function from version N to version N+1.
+ * The key is the source version.
  */
-const MIGRATIONS: Record<number, (doc: Record<string, unknown>) => Record<string, unknown>> = {
-  // Version 1 is the initial version — identity migration (FMT-R-21).
+type MigrationFn = (doc: Record<string, unknown>) => Record<string, unknown>;
+
+const MIGRATIONS: Record<number, MigrationFn> = {
+  // Version 1 is the current version — identity migration.
   // When version 2 is introduced, add:
   //   1: (doc) => { /* transform v1 → v2 */ return { ...doc, schemaVersion: 2 }; },
 };
@@ -30,43 +30,49 @@ const MIGRATIONS: Record<number, (doc: Record<string, unknown>) => Record<string
 // ---------------------------------------------------------------------------
 
 /**
- * Migrate a stored document to the current schema version.
+ * Migrate a content document to the current schema version.
  *
- * - If the document is already at the current version, it is returned as-is.
- * - If the document is at a lower version, migrations are applied sequentially.
- * - If the document has no `schemaVersion`, it is treated as version 1.
- * - If the version is higher than the current version, an error is thrown
- *   (forward migrations are not supported).
+ * - Documents without `schemaVersion` are treated as version 1.
+ * - Future versions (> CURRENT_SCHEMA_VERSION) throw.
+ * - The input is never mutated; returns a deep clone.
  *
- * The returned document always has `schemaVersion === CURRENT_SCHEMA_VERSION`.
+ * Use for **reads** of stored documents. Writes require
+ * `schemaVersion === CURRENT_SCHEMA_VERSION` (enforced by
+ * `validateContentDocument`).
  */
-export function migrateDocument(doc: unknown): Record<string, unknown> {
-  if (doc === null || typeof doc !== 'object') {
-    throw new Error('migrateDocument: input must be a non-null object');
+export function migrateDocument(input: unknown): ContentDocument {
+  if (input === null || typeof input !== 'object') {
+    throw new Error('migrateDocument expects a non-null object.');
   }
 
-  let current = { ...(doc as Record<string, unknown>) };
-  let version = typeof current.schemaVersion === 'number' ? current.schemaVersion : 1;
+  // Deep clone to avoid mutating the input (17)
+  const doc = structuredClone(input) as Record<string, unknown>;
+
+  // Default missing schemaVersion to 1
+  if (!('schemaVersion' in doc) || doc.schemaVersion == null) {
+    doc.schemaVersion = 1;
+  }
+
+  let version = doc.schemaVersion as number;
 
   if (version > CURRENT_SCHEMA_VERSION) {
     throw new Error(
-      `migrateDocument: document schemaVersion ${version} is newer than ` +
-        `current version ${CURRENT_SCHEMA_VERSION}. Forward migration is not supported.`,
+      `Document schemaVersion ${version} is newer than current version ${CURRENT_SCHEMA_VERSION}. ` +
+      'Upgrade the application to read this document.',
     );
   }
 
+  // Apply migrations sequentially
   while (version < CURRENT_SCHEMA_VERSION) {
     const migrate = MIGRATIONS[version];
     if (!migrate) {
       throw new Error(
-        `migrateDocument: no migration defined for version ${version} → ${version + 1}.`,
+        `No migration registered for version ${version} → ${version + 1}.`,
       );
     }
-    current = migrate(current);
-    version++;
+    Object.assign(doc, migrate(doc));
+    version = doc.schemaVersion as number;
   }
 
-  // Ensure the version is stamped even for the identity case.
-  current.schemaVersion = CURRENT_SCHEMA_VERSION;
-  return current;
+  return doc as unknown as ContentDocument;
 }

@@ -1,13 +1,8 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+import { transliterate, transliterateObject } from './transliterate.ts';
 
 describe('transliterate', () => {
-  let transliterate: (input: string) => string;
-
-  beforeAll(async () => {
-    const mod = await import('../scripts/transliterate-core.mjs');
-    transliterate = mod.transliterate;
-  });
-
   it('transliterates "Ljubljana i Njegoš" correctly', () => {
     expect(transliterate('Ljubljana i Njegoš')).toBe('Љубљана и Његош');
   });
@@ -41,5 +36,22 @@ describe('transliterate', () => {
     const result = transliterate(input);
     expect(result).toContain('<strong>');
     expect(result).toContain('</strong>');
+  });
+});
+
+describe('transliterateObject', () => {
+  it('deep-transliterates all string values', () => {
+    const input = { greeting: 'Zdravo', nested: { name: 'Beograd' } };
+    const result = transliterateObject(input);
+    expect(result.greeting).toBe('Здраво');
+    expect(result.nested.name).toBe('Београд');
+  });
+
+  it('preserves non-string values', () => {
+    const input = { count: 42, active: true, items: ['abc'] };
+    const result = transliterateObject(input);
+    expect(result.count).toBe(42);
+    expect(result.active).toBe(true);
+    expect(result.items[0]).toBe('абц');
   });
 });

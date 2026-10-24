@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./transliterate": "./src/transliterate.ts",
     "./locales/*": "./locales/*"
   },
   "scripts": {
@@ -12,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "node scripts/check-locales.mjs",
-    "build:cyrillic": "node scripts/transliterate.mjs --write"
+    "build:cyrillic": "node --experimental-strip-types scripts/transliterate.mjs --write"
   },
   "dependencies": { "i18next": "catalog:" },
   "devDependencies": {

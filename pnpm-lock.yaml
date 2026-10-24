@@ -1191,6 +1191,9 @@ importers:
       '@nestself/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@nestself/i18n':
+        specifier: workspace:*
+        version: link:../i18n
       '@nestself/ui':
         specifier: workspace:*
         version: link:../ui

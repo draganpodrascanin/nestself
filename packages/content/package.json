@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./schema": "./src/schema/index.ts",
-    "./schema/node": "./src/schema/approval-hash-node.ts",
     "./editor": "./src/editor/index.ts",
     "./render": "./src/render/index.ts",
     "./search": "./src/search/index.ts"
@@ -13,6 +12,7 @@
   "scripts": { "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
   "dependencies": {
     "@nestself/contracts": "workspace:*",
+    "@nestself/i18n": "workspace:*",
     "@nestself/ui": "workspace:*",
     "@tiptap/core": "catalog:",
     "@tiptap/extension-placeholder": "catalog:",

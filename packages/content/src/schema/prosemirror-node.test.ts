@@ -30,10 +30,7 @@ describe('ProseMirror validation in Node (no DOM)', () => {
     ).toThrow();
   });
 
-  it('rejects a doc that violates content rules (listItem directly under doc)', () => {
-    // listItem is not in doc's content expression.
-    // Node.fromJSON may create the node without throwing, but
-    // node.check() enforces the content expression and throws.
+  it('rejects listItem directly under doc (node.check)', () => {
     const node = Node.fromJSON(schema, {
       type: 'doc',
       content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }],
@@ -44,17 +41,13 @@ describe('ProseMirror validation in Node (no DOM)', () => {
   it('accepts a bulletList with nested listItems', () => {
     const node = Node.fromJSON(schema, {
       type: 'doc',
-      content: [
-        {
-          type: 'bulletList',
-          content: [
-            {
-              type: 'listItem',
-              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item' }] }],
-            },
-          ],
-        },
-      ],
+      content: [{
+        type: 'bulletList',
+        content: [{
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item' }] }],
+        }],
+      }],
     });
     expect(() => node.check()).not.toThrow();
   });
@@ -79,17 +72,33 @@ describe('ProseMirror validation in Node (no DOM)', () => {
     expect(() => node.check()).not.toThrow();
   });
 
-  it('rejects a paragraph directly inside bulletList (nesting violation)', () => {
-    // bulletList content expression is "listItem+", not "paragraph"
+  it('rejects paragraph directly inside bulletList (nesting violation)', () => {
     const node = Node.fromJSON(schema, {
       type: 'doc',
-      content: [
-        {
-          type: 'bulletList',
-          content: [{ type: 'paragraph' }],
-        },
-      ],
+      content: [{ type: 'bulletList', content: [{ type: 'paragraph' }] }],
     });
     expect(() => node.check()).toThrow();
+  });
+
+  it('rejects hardBreak in sectionHeading (R1)', () => {
+    const node = Node.fromJSON(schema, {
+      type: 'doc',
+      content: [{
+        type: 'sectionHeading', attrs: { level: 2 },
+        content: [{ type: 'text', text: 'Hi' }, { type: 'hardBreak' }],
+      }],
+    });
+    expect(() => node.check()).toThrow();
+  });
+
+  it('accepts hardBreak in paragraph (R1)', () => {
+    const node = Node.fromJSON(schema, {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'a' }, { type: 'hardBreak' }, { type: 'text', text: 'b' }],
+      }],
+    });
+    expect(() => node.check()).not.toThrow();
   });
 });

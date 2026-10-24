@@ -8,6 +8,11 @@
  *
  * The schema subpath must NOT import React, @tiptap/react or @nestself/ui
  * (ESLint guard in eslint.config.js).
+ *
+ * R1: hardBreak is inline and allowed only in paragraph and checklistItem
+ *     content. sectionHeading content is text* (no hardBreak).
+ * I3: Lists support exactly two nesting levels; inner listItem contains
+ *     only paragraphs.
  */
 import { type Extensions, Mark, Node } from '@tiptap/core';
 
@@ -18,9 +23,6 @@ import { type Extensions, Mark, Node } from '@tiptap/core';
 const Doc = Node.create({
   name: 'doc',
   topNode: true,
-  // Note: the spec's content expression for doc listed hardBreak, but
-  // ProseMirror forbids mixing inline and block content. hardBreak is
-  // inline and lives inside paragraphs/text contexts, not at the doc level.
   content:
     '(sectionHeading | paragraph | bulletList | orderedList | quote | image | professionalNote | practicalStep | checklist | approvedMedia | transcript | relatedResource | cta)+',
 });
@@ -68,7 +70,8 @@ const Link = Mark.create({
 const SectionHeading = Node.create({
   name: 'sectionHeading',
   group: 'block',
-  content: 'inline*',
+  // R1: sectionHeading content is text* only — no hardBreak
+  content: 'text*',
   defining: true,
   addAttributes() {
     return {
@@ -80,6 +83,7 @@ const SectionHeading = Node.create({
 const Paragraph = Node.create({
   name: 'paragraph',
   group: 'block',
+  // R1: paragraph allows text and hardBreak
   content: 'inline*',
 });
 

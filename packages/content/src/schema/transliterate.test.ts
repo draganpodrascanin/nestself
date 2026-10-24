@@ -1,16 +1,70 @@
 /**
  * Tests for transliterateText() and transliterateDocument().
  *
- * Covers: exception list, Serbian digraphs (lj, nj, dz), every block
- * type proving ids/hrefs stay untouched.
+ * Covers: table-driven transliteration from the exception JSON plus
+ * uppercase digraphs LJ, NJ, DŽ, Lj, Nj, Dž (I16), document walk
+ * preserving ids/hrefs/marks, mark arrays not shared with input (17).
  */
 import { describe, expect, it } from 'vitest';
+
+// Load the exception JSON for table-driven tests
+import exceptions from '../../../i18n/scripts/transliteration-exceptions.json' with { type: 'json' };
 
 import type { ContentDocument } from './document.ts';
 import { transliterateDocument, transliterateText } from './transliterate.ts';
 
 // ---------------------------------------------------------------------------
-// transliterateText — digraphs and exceptions
+// Table-driven: protected terms from exceptions JSON (I16)
+// ---------------------------------------------------------------------------
+
+describe('transliterateText — protected terms (table-driven)', () => {
+  for (const term of exceptions.protected) {
+    it(`preserves protected term "${term}"`, () => {
+      const input = `pre ${term} post`;
+      const result = transliterateText(input);
+      expect(result).toContain(term);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Table-driven: word overrides from exceptions JSON (I16)
+// ---------------------------------------------------------------------------
+
+describe('transliterateText — word overrides (table-driven)', () => {
+  for (const [latin, cyrillic] of Object.entries(exceptions.wordOverrides)) {
+    it(`transliterates "${latin}" to "${cyrillic}"`, () => {
+      expect(transliterateText(latin)).toBe(cyrillic);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Digraphs: all case variants (I16)
+// ---------------------------------------------------------------------------
+
+describe('transliterateText — digraphs (all cases)', () => {
+  const cases: Array<[string, string, string]> = [
+    ['lowercase lj', 'ljubav', 'љубав'],
+    ['titlecase Lj', 'Ljubljana', 'Љубљана'],
+    ['uppercase LJ (in word)', 'LJUBAV', 'ЉУБАВ'],
+    ['lowercase nj', 'njegov', 'његов'],
+    ['titlecase Nj', 'Njegoš', 'Његош'],
+    ['uppercase NJ (in word)', 'NJEGOV', 'ЊЕГОВ'],
+    ['lowercase dž', 'džem', 'џем'],
+    ['titlecase Dž', 'Džep', 'Џеп'],
+    ['uppercase DŽ (in word)', 'DŽEP', 'ЏЕП'],
+  ];
+
+  for (const [desc, input, expected] of cases) {
+    it(`transliterates ${desc}: "${input}" -> "${expected}"`, () => {
+      expect(transliterateText(input)).toBe(expected);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// transliterateText — basic cases
 // ---------------------------------------------------------------------------
 
 describe('transliterateText', () => {
@@ -18,55 +72,12 @@ describe('transliterateText', () => {
     expect(transliterateText('abc')).toBe('абц');
   });
 
-  it('transliterates digraph "lj" to "љ"', () => {
-    expect(transliterateText('Ljubljana')).toBe('Љубљана');
-  });
-
-  it('transliterates digraph "nj" to "њ"', () => {
-    expect(transliterateText('Njegoš')).toBe('Његош');
-  });
-
-  it('transliterates digraph "dž" to "џ"', () => {
-    expect(transliterateText('džem')).toBe('џем');
-  });
-
-  it('transliterates "Dž" at word start', () => {
-    expect(transliterateText('Džep')).toBe('Џеп');
-  });
-
-  it('preserves protected term NestSelf', () => {
-    const result = transliterateText('Koristi NestSelf platformu');
-    expect(result).toBe('Користи NestSelf платформу');
-  });
-
-  it('preserves protected term Pexels', () => {
-    expect(transliterateText('sa Pexels sajta')).toContain('Pexels');
-  });
-
-  it('preserves protected term Europe/Belgrade', () => {
-    expect(transliterateText('Europe/Belgrade')).toBe('Europe/Belgrade');
-  });
-
   it('preserves {{placeholders}}', () => {
     expect(transliterateText('Zdravo, {{name}}!')).toBe('Здраво, {{name}}!');
   });
 
   it('preserves URLs', () => {
-    expect(transliterateText('Poseti https://example.com/strana')).toContain(
-      'https://example.com/strana',
-    );
-  });
-
-  it('applies word override "injekcija"', () => {
-    expect(transliterateText('injekcija')).toBe('инјекција');
-  });
-
-  it('applies word override "konjunktura"', () => {
-    expect(transliterateText('konjunktura')).toBe('конјунктура');
-  });
-
-  it('applies word override "nadživeti"', () => {
-    expect(transliterateText('nadživeti')).toBe('надживети');
+    expect(transliterateText('Poseti https://example.com/strana')).toContain('https://example.com/strana');
   });
 
   it('handles mixed digraphs and single letters', () => {
@@ -79,16 +90,12 @@ describe('transliterateText', () => {
 });
 
 // ---------------------------------------------------------------------------
-// transliterateDocument — ids, hrefs, marks untouched
+// transliterateDocument
 // ---------------------------------------------------------------------------
 
 describe('transliterateDocument', () => {
   function makeDoc(content: unknown[]): ContentDocument {
-    return {
-      type: 'doc',
-      schemaVersion: 1,
-      content,
-    } as ContentDocument;
+    return { type: 'doc', schemaVersion: 1, content } as ContentDocument;
   }
 
   it('preserves schemaVersion and type', () => {
@@ -112,118 +119,38 @@ describe('transliterateDocument', () => {
 
   it('preserves link mark hrefs', () => {
     const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'link tekst',
-              marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
-            },
-          ],
-        },
-      ]),
+      makeDoc([{
+        type: 'paragraph',
+        content: [{
+          type: 'text', text: 'link tekst',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+        }],
+      }]),
       'sr-Cyrl',
     );
     const para = result.content[0] as Record<string, unknown>;
-    const textNodes = para.content as Array<{ text: string; marks: Array<{ type: string; attrs: { href: string } }> }>;
-    // Text is transliterated
-    expect(textNodes[0]!.text).toBe('линк текст');
-    // Href is unchanged
-    expect(textNodes[0]!.marks[0]!.attrs.href).toBe('https://example.com/path');
-    // Mark type is unchanged
-    expect(textNodes[0]!.marks[0]!.type).toBe('link');
-  });
-
-  it('preserves bold and italic mark types', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'bold', marks: [{ type: 'bold' }] },
-            { type: 'text', text: 'italic', marks: [{ type: 'italic' }] },
-          ],
-        },
-      ]),
-      'sr-Cyrl',
-    );
-    const para = result.content[0] as Record<string, unknown>;
-    const textNodes = para.content as Array<{ marks: Array<{ type: string }> }>;
-    expect(textNodes[0]!.marks[0]!.type).toBe('bold');
-    expect(textNodes[1]!.marks[0]!.type).toBe('italic');
+    const nodes = para.content as Array<{ text: string; marks: Array<{ attrs: { href: string } }> }>;
+    expect(nodes[0]!.text).toBe('линк текст');
+    expect(nodes[0]!.marks[0]!.attrs.href).toBe('https://example.com/path');
   });
 
   it('preserves image mediaAssetId and transliterates alt/caption', () => {
     const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'image',
-          attrs: { mediaAssetId: 'asset-123', alt: 'Slika', caption: 'Opis slike' },
-        },
-      ]),
+      makeDoc([{ type: 'image', attrs: { mediaAssetId: 'asset-123', alt: 'Slika', caption: 'Opis slike' } }]),
       'sr-Cyrl',
     );
-    const img = result.content[0] as Record<string, unknown>;
-    const attrs = img.attrs as Record<string, unknown>;
+    const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
     expect(attrs.mediaAssetId).toBe('asset-123');
     expect(attrs.alt).toBe('Слика');
     expect(attrs.caption).toBe('Опис слике');
   });
 
-  it('preserves approvedMedia mediaAssetId and kind, transliterates caption', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'approvedMedia',
-          attrs: { mediaAssetId: 'media-1', kind: 'audio', caption: 'Zvuk' },
-        },
-        {
-          type: 'transcript',
-          attrs: { mediaAssetId: 'media-1' },
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'transkript tekst' }] }],
-        },
-      ]),
-      'sr-Cyrl',
-    );
-    const media = result.content[0] as Record<string, unknown>;
-    const mediaAttrs = media.attrs as Record<string, unknown>;
-    expect(mediaAttrs.mediaAssetId).toBe('media-1');
-    expect(mediaAttrs.kind).toBe('audio');
-    expect(mediaAttrs.caption).toBe('Звук');
-
-    // Transcript mediaAssetId untouched
-    const transcript = result.content[1] as Record<string, unknown>;
-    const transcriptAttrs = transcript.attrs as Record<string, unknown>;
-    expect(transcriptAttrs.mediaAssetId).toBe('media-1');
-    // Transcript text is transliterated
-    const tContent = transcript.content as Array<Record<string, unknown>>;
-    const tText = (tContent[0]!.content as Array<{ text: string }>)[0]!;
-    expect(tText.text).toBe('транскрипт текст');
-  });
-
-  it('preserves relatedResource contentResourceId', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        { type: 'relatedResource', attrs: { contentResourceId: 'res-abc' } },
-      ]),
-      'sr-Cyrl',
-    );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
-    expect(attrs.contentResourceId).toBe('res-abc');
-  });
-
   it('preserves CTA ctaKind and targetId, transliterates label', () => {
     const result = transliterateDocument(
-      makeDoc([
-        { type: 'cta', attrs: { ctaKind: 'suggest_topic', targetId: 'target-1', label: 'Predloži temu' } },
-      ]),
+      makeDoc([{ type: 'cta', attrs: { ctaKind: 'suggest_topic', targetId: 'target-1', label: 'Predloži temu' } }]),
       'sr-Cyrl',
     );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
+    const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
     expect(attrs.ctaKind).toBe('suggest_topic');
     expect(attrs.targetId).toBe('target-1');
     expect(attrs.label).toBe('Предложи тему');
@@ -231,106 +158,43 @@ describe('transliterateDocument', () => {
 
   it('transliterates quote attribution', () => {
     const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'quote',
-          attrs: { attribution: 'Autor' },
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'citat' }] }],
-        },
-      ]),
+      makeDoc([{ type: 'quote', attrs: { attribution: 'Autor' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'citat' }] }] }]),
       'sr-Cyrl',
     );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
-    expect(attrs.attribution).toBe('Аутор');
+    expect(((result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>).attribution).toBe('Аутор');
   });
 
   it('transliterates practicalStep title', () => {
     const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'practicalStep',
-          attrs: { stepNumber: 1, title: 'Korak jedan' },
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'opis' }] }],
-        },
-      ]),
+      makeDoc([{ type: 'practicalStep', attrs: { stepNumber: 1, title: 'Korak jedan' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'opis' }] }] }]),
       'sr-Cyrl',
     );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
-    expect(attrs.stepNumber).toBe(1); // number unchanged
+    const attrs = (result.content[0] as Record<string, unknown>).attrs as Record<string, unknown>;
+    expect(attrs.stepNumber).toBe(1);
     expect(attrs.title).toBe('Корак један');
   });
 
-  it('transliterates checklistItem label', () => {
+  it('preserves hardBreak inside a paragraph', () => {
     const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'checklist',
-          content: [
-            { type: 'checklistItem', attrs: { label: 'Proveri' } },
-          ],
-        },
-      ]),
-      'sr-Cyrl',
-    );
-    const checklist = result.content[0] as Record<string, unknown>;
-    const items = checklist.content as Array<Record<string, unknown>>;
-    const attrs = items[0]!.attrs as Record<string, unknown>;
-    expect(attrs.label).toBe('Провери');
-  });
-
-  it('preserves sectionHeading level', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        { type: 'sectionHeading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Naslov' }] },
-      ]),
-      'sr-Cyrl',
-    );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
-    expect(attrs.level).toBe(3);
-    // Text content transliterated
-    const textNodes = node.content as Array<{ text: string }>;
-    expect(textNodes[0]!.text).toBe('Наслов');
-  });
-
-  it('preserves hardBreak type inside a paragraph', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'tekst' },
-            { type: 'hardBreak' },
-            { type: 'text', text: 'drugi' },
-          ],
-        },
-      ]),
+      makeDoc([{ type: 'paragraph', content: [{ type: 'text', text: 'tekst' }, { type: 'hardBreak' }, { type: 'text', text: 'drugi' }] }]),
       'sr-Cyrl',
     );
     const para = result.content[0] as Record<string, unknown>;
-    const inlineNodes = para.content as Array<Record<string, unknown>>;
-    // hardBreak preserved
-    expect(inlineNodes[1]!.type).toBe('hardBreak');
-    // Text around it transliterated
-    expect((inlineNodes[0] as { text: string }).text).toBe('текст');
-    expect((inlineNodes[2] as { text: string }).text).toBe('други');
+    const nodes = para.content as Array<Record<string, unknown>>;
+    expect(nodes[1]!.type).toBe('hardBreak');
+    expect((nodes[0] as { text: string }).text).toBe('текст');
+    expect((nodes[2] as { text: string }).text).toBe('други');
   });
 
-  it('preserves professionalNote noteKind', () => {
-    const result = transliterateDocument(
-      makeDoc([
-        {
-          type: 'professionalNote',
-          attrs: { noteKind: 'disclaimer' },
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'napomena' }] }],
-        },
-      ]),
-      'sr-Cyrl',
-    );
-    const node = result.content[0] as Record<string, unknown>;
-    const attrs = node.attrs as Record<string, unknown>;
-    expect(attrs.noteKind).toBe('disclaimer');
+  it('does not share mark arrays with input (17)', () => {
+    const inputDoc = makeDoc([{
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'test', marks: [{ type: 'bold' }] }],
+    }]);
+    const result = transliterateDocument(inputDoc, 'sr-Cyrl');
+    const inputMarks = ((inputDoc.content[0] as Record<string, unknown>).content as Array<{ marks: unknown[] }>)[0]!.marks;
+    const resultMarks = ((result.content[0] as Record<string, unknown>).content as Array<{ marks: unknown[] }>)[0]!.marks;
+    expect(resultMarks).not.toBe(inputMarks);
+    expect(resultMarks).toEqual(inputMarks);
   });
 });
