@@ -31,7 +31,14 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { appointments } from './appointments.js';
-import { callConsentType, callFormat, callOutcomeStatus, callParticipantRole, callSessionStatus } from './enums.js';
+import {
+  callConsentType,
+  callFormat,
+  callOutcomeStatus,
+  callParticipantRole,
+  callSessionEndReason,
+  callSessionStatus,
+} from './enums.js';
 import { users } from './identity.js';
 import { organizations } from './organization.js';
 import { createdAt, idColumn, tenantPredicate, ts, updatedAt } from './_shared.js';
@@ -65,6 +72,13 @@ export const callSessions = pgTable(
     /** Set on the move to ENDED. */
     endedAt: ts(),
     /**
+     * What closed the session (T-CW-1.2): stamped before the provider call by
+     * whoever ends it (`EXPERT`, `CLEANUP`, `RECONCILE`), so a `MeetingEnded`
+     * event that wins the race keeps it; `PROVIDER` when Chime ended the
+     * meeting on its own. Null while the session is open.
+     */
+    endReason: callSessionEndReason(),
+    /**
      * Optional crisis-readiness location the employee shares before a
      * psychological consultation; cleared when the session ends (CALL-34,
      * CW-R-80a). Never audited, logged or shown in diagnostics.
@@ -74,10 +88,12 @@ export const callSessions = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // One live session per appointment; a FAILED one stays for diagnostics and the next join starts another.
+    // One live session per appointment. A FAILED one stays for diagnostics and the next join starts
+    // another; so does one the provider ended on its own, so a join inside the window can reopen the
+    // room (T-CW-1.2). An expert, cleanup or reconcile end still blocks a second session.
     uniqueIndex('call_sessions_appointment_id_live_idx')
       .on(t.appointmentId)
-      .where(sql`status <> 'FAILED'`),
+      .where(sql`status <> 'FAILED' AND end_reason IS DISTINCT FROM 'PROVIDER'`),
     uniqueIndex('call_sessions_provider_meeting_id_idx').on(t.providerMeetingId),
     index('call_sessions_webinar_id_idx').on(t.webinarId),
     // calls.reconcile: ACTIVE sessions whose room should have closed (T-CW-1.2).

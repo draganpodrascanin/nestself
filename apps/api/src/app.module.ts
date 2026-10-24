@@ -31,6 +31,7 @@ import { EmergencyModule } from './emergency/emergency.module.js';
 import { VideoModule } from './video/video.module.js';
 import { AppointmentsModule } from './appointments/appointments.module.js';
 import { CallsModule } from './calls/calls.module.js';
+import { CallsJobsModule } from './jobs/calls-jobs.module.js';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { CallsModule } from './calls/calls.module.js';
     VideoModule,
     AppointmentsModule,
     CallsModule,
+    CallsJobsModule,
     WsModule,
   ],
   providers: [

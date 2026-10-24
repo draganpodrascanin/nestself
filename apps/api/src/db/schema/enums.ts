@@ -108,6 +108,15 @@ export const callSessionStatus = pgEnum('call_session_status', [
   'FAILED',
 ]);
 
+/**
+ * What closed an ENDED call session [D-CW-09, T-CW-1.2]: the expert's "end for
+ * everyone", the provider's own `MeetingEnded` (Chime ends an empty meeting,
+ * OPS-03), or the `calls.cleanup` and `calls.reconcile` jobs. Only a
+ * `PROVIDER` end leaves the appointment free for a new session inside the
+ * join window (`call_sessions_appointment_id_live_idx`).
+ */
+export const callSessionEndReason = pgEnum('call_session_end_reason', ['EXPERT', 'PROVIDER', 'CLEANUP', 'RECONCILE']);
+
 /** Role of a participant in a call session [D-CW-10]. */
 export const callParticipantRole = pgEnum('call_participant_role', [
   'EXPERT',

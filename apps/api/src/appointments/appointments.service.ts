@@ -34,12 +34,14 @@
  *   after a cancellation, so the expert can still read the record; every
  *   join path must therefore check the appointment's status, not only the
  *   authorization decision.
+ * - Reminders (D-CW-26, T-CW-1.2): creation schedules the `appointment.remind`
+ *   jobs and cancellation removes them, through `CallsJobSchedulerService`.
  *
  * Writes run inside `DbService.withOrgScope` (RLS). Audit details carry
  * identifiers only (CW-R-33a).
  */
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   ACTIONS,
   canTransitionAppointment,
@@ -67,6 +69,8 @@ import { ContextLoader } from '../authz/context-loader.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditWriter } from '../audit/audit-writer.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 import { authorize } from '../authz/authorize.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 import { assemblePrincipal } from '../principal/assemble-principal.js';
@@ -131,8 +135,14 @@ function paginate(rows: AppointmentRecord[], limit: number): { window: Appointme
   return { window, nextCursor: rows.length > limit && last ? encodeAppointmentCursor(last) : null };
 }
 
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : 'UnknownError';
+}
+
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(
     private readonly repo: AppointmentsRepository,
     private readonly dbs: DbService,
@@ -141,6 +151,7 @@ export class AppointmentsService {
     private readonly contextLoader: ContextLoader,
     private readonly authz: AuthorizationService,
     private readonly audit: AuditWriter,
+    private readonly callsJobs: CallsJobSchedulerService,
   ) {}
 
   // ── Create ──────────────────────────────────────────────────────────────
@@ -210,13 +221,34 @@ export class AppointmentsService {
   }
 
   /**
-   * Post-commit hook for a new appointment. T-CW-1.2 extends it to schedule
-   * the `appointment.remind` jobs at `REMINDER_OFFSETS_MINUTES` before
-   * `startsAt` (CALL-26 criterion 5). Until then a new appointment has no
-   * effect beyond its row, the expert's assignment and the audit event.
+   * Post-commit hook for a new appointment: one `appointment.remind` job per
+   * `REMINDER_OFFSETS_MINUTES` offset still in the future (CALL-26 criterion
+   * 5, D-CW-26, T-CW-1.2). The appointment is already committed, so a queue
+   * failure is logged and the request still succeeds; nothing is scheduled
+   * without Redis.
    */
-  protected onAppointmentCreated(_appointment: AppointmentResponse): Promise<void> {
-    return Promise.resolve();
+  protected async onAppointmentCreated(appointment: AppointmentResponse): Promise<void> {
+    try {
+      await this.callsJobs.scheduleReminders({ id: appointment.id, startsAt: new Date(appointment.startsAt) });
+    } catch (error) {
+      this.logger.error(
+        { appointmentId: appointment.id, operation: 'scheduleReminders', error: errorName(error) },
+        'Appointment reminders not scheduled',
+      );
+    }
+  }
+
+  /** Post-commit hook for a cancellation: removes the pending reminder and follow-up jobs (CW-R-37a). */
+  protected async onAppointmentCanceled(appointment: AppointmentResponse): Promise<void> {
+    try {
+      await this.callsJobs.cancelAppointmentJobs(appointment.id);
+    } catch (error) {
+      // A reminder that still fires re-reads the status and skips a canceled appointment (CW-R-37).
+      this.logger.warn(
+        { appointmentId: appointment.id, operation: 'cancelJobs', error: errorName(error) },
+        'Appointment jobs not removed',
+      );
+    }
   }
 
   /**
@@ -407,6 +439,8 @@ export class AppointmentsService {
       result: 'ALLOWED',
       details: { appointmentId: canceled.id, canceledByUserId: actor.userId },
     });
-    return toAppointmentResponse(canceled);
+    const response = toAppointmentResponse(canceled);
+    await this.onAppointmentCanceled(response);
+    return response;
   }
 }

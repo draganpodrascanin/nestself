@@ -57,6 +57,13 @@
       "when": 1792876959498,
       "tag": "0007_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792879545255,
+      "tag": "0008_call_session_end_reason",
+      "breakpoints": true
     }
   ]
 }
