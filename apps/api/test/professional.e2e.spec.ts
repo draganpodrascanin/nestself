@@ -18,6 +18,7 @@ import { SAMPLE_CASE, SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@n
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
+import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, grants } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
@@ -33,6 +34,7 @@ const INTAKE = `/api/professional/intake/${SAMPLE_CASE.intake.id}`;
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 const STAFF = ['user_milica', 'user_nikola'];
 const PEOPLE = ['user_milica', 'user_nikola', 'user_jovan', 'user_ivana'];
+const MILICA_EXPERT_GRANT = 'grant_user_milica_expert';
 
 describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   let app: INestApplication;
@@ -81,32 +83,20 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
       grantedAt: new Date('2026-01-01'),
       validFrom: new Date('2026-01-01'),
     };
-    // Strategy 4.4 lists conversation.read.assigned in no template's actions
-    // (the expert template only names it as a step-up action), so the
-    // assigned-expert path needs an explicit grant on assigned_cases.
-    // Nikola gets a platform_owner grant to prove a platform grant never
-    // reaches confidential content.
+    // Milica reaches the case through her seeded expert grant
+    // (assigned_cases) and the seeded CASE assignment. Nikola gets a
+    // platform_owner grant to prove a platform grant never reaches
+    // confidential content.
     const platformOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'platform_owner')!;
-    await testDb.db.insert(grants).values([
-      {
-        ...base,
-        id: 'grant_test_milica_conversation_read_assigned',
-        subjectUserId: 'user_milica',
-        templateKey: null,
-        actions: ['conversation.read.assigned'],
-        scopeType: 'assigned_cases',
-        grantedByUserId: 'user_milica',
-      },
-      {
-        ...base,
-        id: 'grant_test_nikola_platform_owner',
-        subjectUserId: 'user_nikola',
-        templateKey: platformOwner.key,
-        actions: [...platformOwner.actions, 'conversation.read.assigned'],
-        scopeType: platformOwner.scopeType,
-        grantedByUserId: 'user_nikola',
-      },
-    ]);
+    await testDb.db.insert(grants).values({
+      ...base,
+      id: 'grant_test_nikola_platform_owner',
+      subjectUserId: 'user_nikola',
+      templateKey: platformOwner.key,
+      actions: [...platformOwner.actions, 'conversation.read.assigned'],
+      scopeType: platformOwner.scopeType,
+      grantedByUserId: 'user_nikola',
+    });
   }, 180_000);
 
   afterAll(async () => {
@@ -166,6 +156,10 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   }));
 
   it('the assigned expert reads the conversation and the intake record', async () => {
+    const [seeded] = await testDb.db.select().from(grants).where(eq(grants.id, MILICA_EXPERT_GRANT));
+    expect(seeded).toMatchObject({ templateKey: 'expert', scopeType: 'assigned_cases', revokedAt: null });
+    expect(seeded!.actions).toContain('conversation.read.assigned');
+
     const milica = await signInStaff('user_milica', { kind: 'expert' });
 
     const conv = await milica.get(CONV);
@@ -243,5 +237,19 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     for (const body of [...SAMPLE_CASE.conversation.messages.map((m) => m.body), SAMPLE_CASE.intake.body]) {
       expect(serialized).not.toContain(body);
     }
+  });
+
+  it('the expert loses the conversation once her expert grant is revoked', async () => {
+    await testDb.db
+      .update(grants)
+      .set({ revokedAt: new Date(), revokedReason: 'test_fixture' })
+      .where(eq(grants.id, MILICA_EXPERT_GRANT));
+    await app.get(PrincipalLoader).invalidateUser('user_milica', [ORG]);
+
+    const milica = await signInStaff('user_milica', { kind: 'expert' });
+    // An expert has no membership or staff template, so the denial is a 404.
+    const res = await milica.get(CONV);
+    expect(res.status).toBe(404);
+    expect(res.body).not.toHaveProperty('messages');
   });
 });

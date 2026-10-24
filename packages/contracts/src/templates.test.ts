@@ -87,6 +87,13 @@ describe('templates', () => {
     }
   });
 
+  it('expert template reaches assigned conversations (strategy 4.7.3 assigned-expert path)', () => {
+    const expert = PERMISSION_TEMPLATES.find((t) => t.key === 'expert')!;
+    expect(expert.scopeType).toBe('assigned_cases');
+    expect(expert.actions).toContain('conversation.read.assigned');
+    expect(expert.stepUpActions).toContain('conversation.read.assigned');
+  });
+
   it('specific templates have the expected requiredConditionTypes', () => {
     const byKey = (k: string) => PERMISSION_TEMPLATES.find((t) => t.key === k)!;
     expect([...byKey('expert').requiredConditionTypes]).toEqual(['categories']);
