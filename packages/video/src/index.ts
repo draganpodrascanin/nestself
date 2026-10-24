@@ -54,6 +54,7 @@ export type { BrowserFamily, OsFamily } from './environment';
 
 // Hooks
 export { useCallSession } from './hooks/useCallSession';
+export { useCallSessionController } from './hooks/useCallSessionController';
 export type { UseCallSessionOptions, UseCallSessionResult } from './hooks/useCallSession';
 export { useDevices } from './hooks/useDevices';
 export type { UseDevicesResult } from './hooks/useDevices';
