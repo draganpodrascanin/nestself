@@ -83,17 +83,20 @@ const idField = z.string().min(1);
 const isoDateTime = z.string().datetime();
 
 /**
- * True for an IANA time zone name the runtime knows, spelled exactly as the
- * runtime resolves it (`Europe/Belgrade`, `UTC`). Intl matches names case
- * insensitively, so `europe/belgrade` is refused here rather than stored in a
- * second spelling. Fixed offsets such as `+01:00` are refused even though
- * recent runtimes accept them, because an offset cannot follow daylight
- * saving time (CALL-29).
+ * True for an IANA time zone name the runtime knows (`Europe/Belgrade`,
+ * `Europe/Kyiv`, `Etc/UTC`). Intl matches names case insensitively, so every
+ * slash-separated segment must also start with an upper-case letter or a
+ * digit: `europe/belgrade` is refused rather than stored in a second
+ * spelling. Comparing against the resolved name is avoided on purpose: some
+ * runtimes resolve newer names to older aliases (`Europe/Kyiv` to
+ * `Europe/Kiev`). Fixed offsets such as `+01:00` are refused because an
+ * offset cannot follow daylight saving time (CALL-29).
  */
 export function isIanaTimeZone(value: string): boolean {
-  if (!/^[A-Za-z][A-Za-z0-9_+\-/]*$/.test(value)) return false;
+  if (!value.split('/').every((segment) => /^[A-Z0-9][A-Za-z0-9_+-]*$/.test(segment))) return false;
   try {
-    return new Intl.DateTimeFormat(undefined, { timeZone: value }).resolvedOptions().timeZone === value;
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
   } catch {
     return false;
   }

@@ -127,8 +127,19 @@ describe('appointment status transitions (CALL-30)', () => {
 });
 
 describe('time zone validation (CALL-29)', () => {
-  it('accepts IANA zone names', () => {
-    for (const tz of ['Europe/Belgrade', 'Europe/Budapest', 'UTC', 'America/New_York', 'Etc/GMT+1']) {
+  it('accepts IANA zone names, including newer names and aliases', () => {
+    for (const tz of [
+      'Europe/Belgrade',
+      'Europe/Budapest',
+      'Europe/Kyiv',
+      'Asia/Kolkata',
+      'Etc/UTC',
+      'UTC',
+      'Etc/GMT+1',
+      'America/New_York',
+      'America/Port-au-Prince',
+      'America/Argentina/Buenos_Aires',
+    ]) {
       expect(isIanaTimeZone(tz), tz).toBe(true);
       expect(TimeZoneSchema.safeParse(tz).success, tz).toBe(true);
     }
@@ -141,8 +152,8 @@ describe('time zone validation (CALL-29)', () => {
     }
   });
 
-  it('rejects case variants that Intl would otherwise match', () => {
-    for (const tz of ['europe/belgrade', 'EUROPE/BELGRADE', 'Europe/belgrade', 'utc', 'america/new_york']) {
+  it('rejects lower-case segments that Intl would otherwise match', () => {
+    for (const tz of ['europe/belgrade', 'Europe/belgrade', 'utc', 'america/new_york', 'Europe/kyiv']) {
       expect(isIanaTimeZone(tz), tz).toBe(false);
       expect(TimeZoneSchema.safeParse(tz).success, tz).toBe(false);
     }
