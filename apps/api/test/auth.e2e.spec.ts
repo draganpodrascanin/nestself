@@ -538,32 +538,55 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(right.body).toHaveProperty('code', 'invalid_challenge');
     });
 
-    it('an unknown address answers a second wrong code on the same token exactly like a known one', async () => {
+    it('an unknown address answers three wrong codes and then the dead token exactly like a known one', async () => {
       const challengeToken = await start('nobody_here@example.com');
 
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         const wrong = await verify(challengeToken, '000000');
         expect(wrong.status).toBe(401);
         expect(wrong.body).toHaveProperty('code', 'invalid_code');
       }
+
+      const afterBudget = await verify(challengeToken, '000000');
+      expect(afterBudget.status).toBe(401);
+      expect(afterBudget.body).toHaveProperty('code', 'invalid_challenge');
     });
 
-    it('the sign-in throttle still locks after five wrong codes spread over two challenges', async () => {
+    it('the sign-in throttle still locks after five wrong codes spread over three challenges', async () => {
       const email = 'retry_lock@example.com';
-      const first = await start(email);
+      const wrong = () => wrongCode(lastSentCode(email));
+
+      // A: one wrong code, so A is handed back with tries left.
+      const a = await start(email);
+      const codeA = lastSentCode(email);
+      expect((await verify(a, wrong())).status).toBe(401);
+      // B: three wrong codes spend its budget (four failures so far).
+      const b = await start(email);
       for (let i = 0; i < 3; i++) {
-        expect((await verify(first, wrongCode(lastSentCode(email)))).status).toBe(401);
+        expect((await verify(b, wrong())).status).toBe(401);
       }
-      const second = await start(email);
-      for (let i = 0; i < 2; i++) {
-        expect((await verify(second, wrongCode(lastSentCode(email)))).status).toBe(401);
-      }
+      // C: the fifth failure fires the lock, so C is not handed back.
+      const c = await start(email);
+      const codeC = lastSentCode(email);
+      const fifth = await verify(c, wrongCode(codeC));
+      expect(fifth.status).toBe(401);
+      expect(fifth.body).toHaveProperty('code', 'invalid_code');
 
       const blocked = await request(app.getHttpServer())
         .post('/api/auth/email-otp/start')
         .send({ email });
       expect(blocked.status).toBe(429);
       expect(blocked.body).toHaveProperty('code', 'too_many_attempts');
+
+      // A still had tries left, but the lock outranks it: its code is refused with 429.
+      const lockedA = await verify(a, codeA);
+      expect(lockedA.status).toBe(429);
+      expect(lockedA.body).toHaveProperty('code', 'too_many_attempts');
+
+      // C was not handed back after the locking failure: its right code finds no challenge.
+      const lockedC = await verify(c, codeC);
+      expect(lockedC.status).toBe(401);
+      expect(lockedC.body).toHaveProperty('code', 'invalid_challenge');
     });
   });
 

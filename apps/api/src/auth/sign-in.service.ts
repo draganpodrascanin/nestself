@@ -36,7 +36,8 @@ function challengeStep(
 /**
  * Codes a user may get wrong on one email challenge (sign-in or step-up).
  * The third wrong code ends the challenge; `SignInThrottle` counts every
- * failure independently and locks the address after five.
+ * failure independently and locks the address after five, and a locked
+ * address cannot finish a challenge it still holds.
  */
 export const MAX_EMAIL_OTP_ATTEMPTS = 3;
 
@@ -120,10 +121,20 @@ export class SignInService {
       });
     }
 
+    // Checked for dummy and real challenges alike, keyed by the challenge's
+    // address, so a lock reads the same whether or not the address exists.
+    // The record was consumed above and is not put back.
+    if (await this.throttle.isLocked(challenge.email)) {
+      throw new ApiHttpException({
+        status: 429,
+        code: 'too_many_attempts',
+        message: 'Too many failed attempts. Try again later.',
+      });
+    }
+
     if (challenge.dummy) {
       // Same retry budget as a real challenge, so the answers stay identical.
-      await retainAfterWrongCode(this.challengeStore, challengeToken, challenge);
-      await this.throttle.recordFailure(challenge.email);
+      await this.countWrongCode(challengeToken, challenge);
       throw new ApiHttpException({
         status: 401,
         code: 'invalid_code',
@@ -141,14 +152,25 @@ export class SignInService {
     } catch (err) {
       if (err instanceof IdentityProviderError) {
         if (err.code === 'invalid_code') {
-          await retainAfterWrongCode(this.challengeStore, challengeToken, challenge);
+          await this.countWrongCode(challengeToken, challenge);
+        } else {
+          await this.throttle.recordFailure(challenge.email);
         }
-        await this.throttle.recordFailure(challenge.email);
         this.identity.auditSignInFailed(challenge.email, meta);
         throw this.identity.mapIdpError(err);
       }
       throw err;
     }
+  }
+
+  /**
+   * Count a wrong email code first, then hand the challenge back only when
+   * that count did not lock the address.
+   */
+  private async countWrongCode(token: string, challenge: ChallengeRecord): Promise<void> {
+    await this.throttle.recordFailure(challenge.email);
+    if (await this.throttle.isLocked(challenge.email)) return;
+    await retainAfterWrongCode(this.challengeStore, token, challenge);
   }
 
   async passwordSignIn(

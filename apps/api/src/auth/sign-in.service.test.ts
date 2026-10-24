@@ -89,6 +89,56 @@ describe('SignInService', () => {
       expect(mocks.throttle.recordFailure).toHaveBeenCalledWith('a@b.co');
     });
 
+    it('a locked address answers 429 too_many_attempts and the record is not handed back', async () => {
+      mocks.throttle.isLocked.mockResolvedValue(true);
+      await expect(service.emailOtpVerify('challenge-token', '12345678', 'workspace', META)).rejects.toMatchObject({
+        status: 429,
+        code: 'too_many_attempts',
+      });
+      expect(mocks.throttle.isLocked).toHaveBeenCalledWith('a@b.co');
+      expect(mocks.idp.respondEmailOtp).not.toHaveBeenCalled();
+      expect(mocks.challenges.put).not.toHaveBeenCalled();
+    });
+
+    it('a locked dummy challenge answers exactly like a locked real one', async () => {
+      mocks.challenges.consume.mockResolvedValue({ ...CHALLENGE, username: '', session: '', dummy: true });
+      mocks.throttle.isLocked.mockResolvedValue(true);
+      await expect(service.emailOtpVerify('challenge-token', '12345678', 'workspace', META)).rejects.toMatchObject({
+        status: 429,
+        code: 'too_many_attempts',
+      });
+      expect(mocks.challenges.put).not.toHaveBeenCalled();
+    });
+
+    it('the wrong code that triggers the lock is counted first and not handed back', async () => {
+      const order: string[] = [];
+      mocks.throttle.isLocked.mockResolvedValueOnce(false).mockResolvedValue(true);
+      mocks.throttle.recordFailure.mockImplementation(async () => {
+        order.push('recordFailure');
+      });
+      wrongCode();
+      await expect(service.emailOtpVerify('challenge-token', '00000000', 'workspace', META)).rejects.toMatchObject({
+        code: 'invalid_code',
+      });
+      expect(order).toEqual(['recordFailure']);
+      expect(mocks.challenges.put).not.toHaveBeenCalled();
+    });
+
+    it('the failure is counted before the record is handed back', async () => {
+      const order: string[] = [];
+      mocks.throttle.recordFailure.mockImplementation(async () => {
+        order.push('recordFailure');
+      });
+      mocks.challenges.put.mockImplementation(async () => {
+        order.push('put');
+      });
+      wrongCode();
+      await expect(service.emailOtpVerify('challenge-token', '00000000', 'workspace', META)).rejects.toMatchObject({
+        code: 'invalid_code',
+      });
+      expect(order).toEqual(['recordFailure', 'put']);
+    });
+
     it('a provider error other than a wrong code is not handed back', async () => {
       mocks.idp.respondEmailOtp.mockRejectedValue(new IdentityProviderError('expired', 'expired_session'));
       await expect(service.emailOtpVerify('challenge-token', '00000000', 'workspace', META)).rejects.toMatchObject({
