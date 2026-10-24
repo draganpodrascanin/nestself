@@ -4211,21 +4211,21 @@ Every state from epic 8.5 with its API behavior, error code and UI copy key:
 
 ### 9.11 Client context switching
 
-**LIB-R-34** The `contextKey` function in `packages/api-client/src/query-keys.ts` computes a stable string from the active context: for personal context, `personal:{orgId}`; for other contexts, `{kind}:{orgId}`. Every TanStack Query key in the library and personal-state endpoints starts with this prefix. On `switchContext`, the workspace `AuthProvider` calls `queryClient.cancelQueries()` then `queryClient.clear()` before applying the new principal (C-22) [EMP-C01, EMP-C05].
+**LIB-R-34** `contextKey(context)` in `packages/api-client/src/query-keys.ts` returns a readonly tuple prefix (`['ctx', 'personal', orgId]`, `['ctx', 'organization', orgId]`, `['ctx', 'expert']`, `['ctx', 'operations']`, CLI-R-07), and every library key spreads it first and includes the interface locale where the response is localized, for example `libraryKeys.home(ctx, locale)` [EMP-C01, C-22].
 
 **LIB-R-35** Query key structure for library endpoints:
 
 | Endpoint | Query key pattern |
 |----------|------------------|
-| Home | `[contextKey, 'library', 'home']` |
-| Explore | `[contextKey, 'library', 'explore']` |
-| Category | `[contextKey, 'library', 'category', slug, filters]` |
-| Collection | `[contextKey, 'library', 'collection', id]` |
-| Search | `[contextKey, 'library', 'search', q, filters]` |
-| Content detail | `[contextKey, 'library', 'content', id]` |
-| Saved items | `[contextKey, 'me', 'saved']` |
-| Content preferences | `[contextKey, 'me', 'content-preferences']` |
-| Active polls | `[contextKey, 'library', 'polls']` |
+| Home | `[...contextKey(ctx), 'library', 'home', locale]` |
+| Explore | `[...contextKey(ctx), 'library', 'explore', locale]` |
+| Category | `[...contextKey(ctx), 'library', 'category', slug, filters]` |
+| Collection | `[...contextKey(ctx), 'library', 'collection', id]` |
+| Search | `[...contextKey(ctx), 'library', 'search', q, filters]` |
+| Content detail | `[...contextKey(ctx), 'library', 'content', id]` |
+| Saved items | `[...contextKey(ctx), 'me', 'saved']` |
+| Content preferences | `[...contextKey(ctx), 'me', 'content-preferences']` |
+| Active polls | `[...contextKey(ctx), 'library', 'polls']` |
 
 [EMP-C01].
 
@@ -6398,7 +6398,7 @@ This section fixes the cross-cutting rules every screen of the epic follows in `
 
 ### 16.2 Navigation
 
-**CLI-R-04** In `api` data mode the workspace main navigation is Home, Explore, Saved, My requests, in that order (epic 8.1). Settings holds language, content preferences, notifications and the benefit explanation. The shell's account menu holds the context switcher built from `availableContexts` (C-22): it always shows the current context ("My space · Organization A"), lists the other personal, management, expert and operations contexts the user may enter, and is hidden when only one exists (epic 7.1).
+**CLI-R-04** In `api` data mode the workspace main navigation is Home, Explore, Saved, My requests, in that order (epic 8.1). Settings holds language, content preferences, notifications and the benefit explanation. The shell's top bar holds the context switcher built from `availableContexts` (C-22; `AppShell` has no account-menu slot): it always shows the current context ("My space · Organization A"), lists the other personal, management, expert and operations contexts the user may enter, and is hidden when only one exists (epic 7.1).
 
 **CLI-R-05** The existing prototype entries (Support, Appointments, Messages, Channels, Polls) are shown only when `isSampleDataMode` is true, grouped under a "Prototype screens" heading below the main items, so demonstrations keep working with the `SampleDataBanner` and nothing implies a working service in `api` mode. The `/polls` placeholder route is removed from navigation in both modes; interest polls appear on Home and in collections (10 Feedback and polls). The manager route `manage/polls.new` (team polls, a different product) is untouched.
 
@@ -6691,6 +6691,7 @@ All five were answered on 2026-10-24 (Appendix B revision 2).
 | X-D03 | T-2.6 step-up enforcement for the `restricted` class | M4 exit | This epic implements the restricted-class branch of T-2.6 to the auth strategy's specification |
 | X-D04 | T-2.4 confidential-domain module | M3 | This epic delivers the intake part (`apps/api/src/professional/`); consultations and conversations stay with the support track |
 | X-D05 | Personal context `orgId` (C-22) | M1 | None; it is part of M1 and tested in the auth suite |
+| X-D06 | Second-factor check when entering the organization context (D-05) | Pilot | The switcher is the only way in; until the auth track adds the check, organization access relies on the grant checks of every route |
 
 
 ## Appendix A Configuration and environment variables
@@ -6842,8 +6843,9 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 #### C-22 The personal context names its organization [settled; M1]
 - Decision: `ActiveContextSchema` personal variant becomes `{ kind: 'personal', orgId?: string }` in `packages/contracts/src/auth.ts`. The session always stores a resolved `orgId` for personal context: the requested one when valid, otherwise the last used, otherwise the ACTIVE, date-current membership with the earliest `startDate`. `POST /api/auth/context` accepts `{ kind: 'personal', orgId }`. All `/api/library/*` and `/api/me/*` content routes use the new resolver `personalOrgResource(type, id?)`, which requires `context.kind === 'personal'` with an `orgId` matching an ACTIVE membership and returns `{ type, id, orgId, ownerId: principal.userId }`; otherwise 403 `invalid_context`.
 - This amends auth-strategy 2.1 "Context switch" (personal context is per employer for content state) without changing grants: the `employee` grant is already per organization.
-- Default context at sign-in (revision 2, found during T-C1.02): staff start in `operations`, experts in `expert`, everyone else in `{ kind: 'personal', orgId }` by the default rule. The organization context is entered explicitly, as auth-strategy 2.1 and D-05 require (the earlier implementation defaulted any user with an ACTIVE membership to the organization context). `GET /api/auth/me` and every `MeResponse` carry `availableContexts` (`{ context, orgName? }[]`: one personal entry per ACTIVE date-current membership, one organization entry per membership with at least one active grant from an organization-workspace template, expert, operations), and the workspace shell's account menu lists them as a context switcher that always shows the current context (epic 7.1). The session keeps `lastPersonalOrgId` for the "last used" rule.
-- A request whose context names an organization (personal or organization) without an ACTIVE, date-current membership is refused with 403 `org_context_expired`; the client then switches to `{ kind: 'personal' }`, which resolves the default and clears the cache. The server never switches tenants silently.
+- Open for the auth track: the auth strategy requires a second factor when entering the organization context (D-05, auth-strategy 3.2.7); `switchContext` does not check it yet (dependency X-D06).
+- Default context at sign-in (revision 2, found during T-C1.02): staff start in `operations`, experts in `expert`, everyone else in `{ kind: 'personal', orgId }` by the default rule. The organization context is entered explicitly, as auth-strategy 2.1 and D-05 require (the earlier implementation defaulted any user with an ACTIVE membership to the organization context). `GET /api/auth/me` and every `MeResponse` carry `availableContexts` (`AvailableContextEntry[]`, the `ActiveContext` shape plus `orgName` on personal and organization entries: one personal entry per ACTIVE date-current membership, one organization entry per membership with at least one active grant from an organization-workspace template, expert, operations), and the workspace shell's top bar shows them as a context switcher (`ContextSwitcher`, a `Menu` from `@nestself/ui`; `AppShell` has no account-menu slot) that always shows the current context (epic 7.1). A switch to an organization context is accepted only when it is offered (`canEnterContext`, the same function that builds the list). The session keeps `lastPersonalOrgId` for the "last used" rule.
+- A request whose stored session context names an organization (personal or organization) without an ACTIVE, date-current membership is refused with 403 `org_context_expired`: the pure engine still denies with `invalid_context` and the authorization guard maps it, because a stored context was valid when it was set; a requested switch to an invalid context is refused with `invalid_context`; the client then switches to `{ kind: 'personal' }`, which resolves the default and clears the cache. The server never switches tenants silently.
 - Client: `switchContext` in both web apps calls `queryClient.cancelQueries()` and `queryClient.clear()` before applying the new principal, and every query key starts with `contextKey(principal.context)` from `packages/api-client/src/query-keys.ts` (epic 10.4; fixes the cache gap found in `apps/workspace/src/auth/auth-provider.tsx`).
 
 #### C-23 Notifications: transactional outbox, in-app first, neutral email [settled; M3]
@@ -6988,6 +6990,7 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 - X-D02 T-2.1 grant administration endpoints before the pilot assigns real editorial staff (M4). Fallback in development: seed grants.
 - X-D03 T-2.6 step-up enforcement for the `restricted` class before M4 exit (C-17). If the auth track has not delivered it by M4, this epic implements the restricted-class branch of T-2.6 to the auth strategy's specification.
 - X-D04 T-2.4 is partially delivered by this epic (`apps/api/src/professional/`, intake tables, `PROFESSIONAL_CONTENT_BUCKET` not needed in V1 because there are no attachments). Consultations and conversations remain auth/support work.
+- X-D06 Second-factor check when entering the organization context (D-05). The switcher of C-22 is now the only way into that context; the auth track adds the check to `SessionEndpointsService.switchContext`.
 - X-D05 The `ActiveContext` personal `orgId` extension (C-22) is a contract change in `packages/contracts/src/auth.ts` and the session service; it ships in M1 with tests in the auth suite.
 
 
@@ -7011,7 +7014,7 @@ Every backlog item of the epic (epic 21.1 to 21.7) with the requirements that sa
 | EMP-C02 | M2 | As an employee, I explore needs and categories. | ACC-R-18, LIB-R-09, LIB-R-10, LIB-R-11, LIB-R-12, LIB-R-13, LIB-R-14 | T-C2.08 |
 | EMP-C03 | M2 | As an employee, I find content using everyday language. | ACC-R-18, LIB-R-15, LIB-R-16, LIB-R-17, LIB-R-19, LIB-R-21, LIB-R-38, LIB-R-40 | T-C2.06 |
 | EMP-C04 | M1 | As an employee, I use content detail on my phone. | ACC-R-18, FMT-R-14, FMT-R-15, FMT-R-16, FMT-R-17, FMT-R-18, FMT-R-25, LIB-R-23, LIB-R-24, MED-R-30, MED-R-32 | T-C1.06, T-C1.11, T-C1.13, T-C2.09 |
-| EMP-C05 | M1 | As an employee, I save and remove content. | LIB-R-25, LIB-R-26, LIB-R-27, LIB-R-34, RET-R-07 | T-C1.11, T-C1.13 |
+| EMP-C05 | M1 | As an employee, I save and remove content. | LIB-R-25, LIB-R-26, LIB-R-27, RET-R-07 | T-C1.11, T-C1.13 |
 | EMP-C06 | M2 | As an employee, I choose interests and language. | FMT-R-26, LIB-R-02, LIB-R-24, LIB-R-28, LIB-R-29, LIB-R-31, LIB-R-32 | T-C2.10 |
 | ENG-01 | M3 | As an employee, I rate usefulness without a public profile. | POL-R-01, POL-R-02, POL-R-03, POL-R-04, POL-R-05, POL-R-06 | T-C3.01 |
 | ENG-02 | M3 | As an editor, I create a brief poll with a clear purpose. | POL-R-07, POL-R-08, POL-R-09, POL-R-17, POL-R-32, POL-R-33 | T-C3.02 |
