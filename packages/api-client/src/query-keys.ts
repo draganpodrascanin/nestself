@@ -41,7 +41,7 @@ export function contextKey(
 
 export const libraryKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'library'] as const,
-  home: (ctx: ActiveContext) => [...contextKey(ctx), 'library', 'home'] as const,
+  home: (ctx: ActiveContext, locale: string) => [...contextKey(ctx), 'library', 'home', locale] as const,
   contentDetail: (ctx: ActiveContext, contentId: string) =>
     [...contextKey(ctx), 'library', 'content', contentId] as const,
 };

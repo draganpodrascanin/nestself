@@ -3,6 +3,7 @@ import {
   computeAvailableContexts,
   canEnterContext,
   defaultContext,
+  resolveDefaultPersonalOrgId,
   type AvailableContextSource,
   type AvailableContextExtras,
 } from './personal-context.js';
@@ -221,5 +222,31 @@ describe('defaultContext (ruling 9, T-C1.02)', () => {
   it('returns bare personal when user has no memberships', () => {
     const result = defaultContext({ memberships: [], staffTemplates: [], expert: null });
     expect(result).toEqual({ kind: 'personal' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveDefaultPersonalOrgId (item 5, T-C1.02)
+// ---------------------------------------------------------------------------
+
+describe('resolveDefaultPersonalOrgId tie-break (item 5, T-C1.02)', () => {
+  it('breaks equal startDate ties by orgId ascending', () => {
+    const sameDate = '2024-01-01T00:00:00Z';
+    const memberships: PrincipalMembership[] = [
+      { membershipId: 'mem-z', orgId: 'org_z', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+      { membershipId: 'mem-a', orgId: 'org_a', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+      { membershipId: 'mem-m', orgId: 'org_m', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+    ];
+    // All have the same startDate; should pick org_a (earliest orgId ascending)
+    expect(resolveDefaultPersonalOrgId(memberships)).toBe('org_a');
+  });
+
+  it('prefers earlier startDate over orgId order', () => {
+    const memberships: PrincipalMembership[] = [
+      { membershipId: 'mem-z', orgId: 'org_z', orgUnitId: null, status: 'ACTIVE', startDate: '2023-01-01T00:00:00Z', endDate: null },
+      { membershipId: 'mem-a', orgId: 'org_a', orgUnitId: null, status: 'ACTIVE', startDate: '2024-01-01T00:00:00Z', endDate: null },
+    ];
+    // org_z has earlier startDate, so it wins despite higher orgId
+    expect(resolveDefaultPersonalOrgId(memberships)).toBe('org_z');
   });
 });

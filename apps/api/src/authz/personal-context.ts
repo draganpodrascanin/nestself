@@ -57,9 +57,12 @@ export function resolveDefaultPersonalOrgId(
   }
 
   // Earliest startDate among ACTIVE, date-current memberships.
-  const sorted = [...active].sort(
-    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-  );
+  // Equal startDate ties are broken by orgId ascending (deterministic).
+  const sorted = [...active].sort((a, b) => {
+    const dateDiff = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    return a.orgId.localeCompare(b.orgId);
+  });
   return sorted[0]?.orgId;
 }
 

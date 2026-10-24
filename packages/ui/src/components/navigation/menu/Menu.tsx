@@ -27,6 +27,7 @@ export interface MenuTriggerProps {
   children: ReactNode;
   variant?: 'default' | 'quiet';
   className?: string;
+  'aria-label'?: string;
 }
 
 const triggerDefault =
@@ -34,9 +35,10 @@ const triggerDefault =
 const triggerQuiet =
   'inline-flex items-center justify-center min-h-11 px-2 py-2 gap-1.5 rounded-control border-0 bg-transparent text-text-secondary hover:text-primary hover:bg-tint cursor-pointer pointer-coarse:min-h-12';
 
-export function MenuTrigger({ children, variant = 'default', className }: MenuTriggerProps) {
+export function MenuTrigger({ children, variant = 'default', className, 'aria-label': ariaLabel }: MenuTriggerProps) {
   return (
     <BaseMenu.Trigger
+      aria-label={ariaLabel}
       className={cn(
         variant === 'quiet' ? triggerQuiet : triggerDefault,
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
-import { ApiError } from '@nestself/api-client';
+import { ApiError, libraryKeys } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import type { ActiveContext } from '@nestself/contracts';
 import { AuthProvider } from './auth-provider';
@@ -163,6 +163,133 @@ describe('AuthProvider', () => {
     expect(
       queryClient.getQueryData(['ctx', 'organization', 'org_a', 'library']),
     ).toBeUndefined();
+  });
+
+  // Item 9 (CLI-R-08): switch context -> old key data is gone, no refetch
+  it('clears context-A library key on switch to context-B (CLI-R-08)', async () => {
+    const contextA: ActiveContext = { kind: 'personal', orgId: 'org_a' };
+    const contextB: ActiveContext = { kind: 'personal', orgId: 'org_b' };
+    const keyA = libraryKeys.home(contextA, 'sr-Latn');
+
+    const meA = {
+      principal: { ...SAMPLE_PRINCIPALS.employee.principal, context: contextA },
+      effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+      availableContexts: [],
+    };
+    const meB = {
+      principal: { ...SAMPLE_PRINCIPALS.employee.principal, context: contextB },
+      effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+      availableContexts: [],
+    };
+
+    let callCount = 0;
+    const requestFn = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) return meA;
+      return meB;
+    });
+    const client = createMockClient(requestFn);
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    // Seed cache with data under context-A's library key.
+    queryClient.setQueryData(keyA, { items: ['context-A-data'] });
+
+    const onSwitch = vi.fn<(ctx: ActiveContext) => Promise<void>>();
+
+    function ShowLibraryData() {
+      const { switchContext } = useAuth();
+      onSwitch.mockImplementation(switchContext);
+      const data = queryClient.getQueryData(keyA);
+      return <span data-testid="lib-data">{data ? 'has-data' : 'no-data'}</span>;
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>
+          <ShowLibraryData />
+          <AuthStatus />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+
+    // context-A data exists.
+    expect(screen.getByTestId('lib-data').textContent).toBe('has-data');
+
+    // Switch to context-B.
+    await act(async () => {
+      await onSwitch(contextB);
+    });
+
+    // context-A data must be gone.
+    expect(queryClient.getQueryData(keyA)).toBeUndefined();
+    expect(screen.getByTestId('lib-data').textContent).toBe('no-data');
+  });
+
+  // Item 9: failed switch keeps cache and context unchanged, error surfaced
+  it('keeps old cache on failed switch and exposes error (CLI-R-08)', async () => {
+    const contextA: ActiveContext = { kind: 'personal', orgId: 'org_a' };
+    const keyA = libraryKeys.home(contextA, 'sr-Latn');
+
+    const meA = {
+      principal: { ...SAMPLE_PRINCIPALS.employee.principal, context: contextA },
+      effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+      availableContexts: [],
+    };
+
+    let callCount = 0;
+    const client = createMockClient(async () => {
+      callCount++;
+      if (callCount === 1) return meA;
+      throw new ApiError({ status: 500, code: 'internal', message: 'boom', requestId: null });
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(keyA, { items: ['ctx-a'] });
+
+    const onSwitch = vi.fn<(ctx: ActiveContext) => Promise<void>>();
+
+    function CaptureSwitch() {
+      const { switchContext } = useAuth();
+      onSwitch.mockImplementation(switchContext);
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>
+          <CaptureSwitch />
+          <AuthStatus />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+
+    // Attempt a switch that fails.
+    await expect(
+      act(async () => {
+        await onSwitch({ kind: 'organization', orgId: 'org_a' });
+      }),
+    ).rejects.toThrow();
+
+    // Old data still cached (ruling 5: failed switch does not clear cache).
+    // Note: cancelQueries is called before the server call but cache is
+    // only cleared on SUCCESS; the data persists when the switch rejects.
+    expect(queryClient.getQueryData(keyA)).toEqual({ items: ['ctx-a'] });
+
+    // Context unchanged.
+    expect(screen.getByTestId('name').textContent).toBe('Jovan Petrović');
   });
 
   it('refetches on window focus', async () => {

@@ -81,7 +81,7 @@ function createMocks() {
     config: { get: vi.fn().mockReturnValue(0) },
     bearer: { verify: vi.fn() },
     principalLoader: { load: vi.fn() },
-    sessions: { get: vi.fn(), ensureFreshAccessToken: vi.fn(async (r: unknown) => r) },
+    sessions: { get: vi.fn(), ensureFreshAccessToken: vi.fn(async (r: unknown) => r), updateContext: vi.fn() },
     cookies: { parse: vi.fn().mockReturnValue({ sessionId: null }) },
     identities: { findExternalIdentity: vi.fn() },
     store: { set: vi.fn(), get: vi.fn(), sAdd: vi.fn(), expire: vi.fn() },
@@ -197,6 +197,43 @@ describe('AuthenticationGuard', () => {
       socket: { remoteAddress: '127.0.0.1' },
     };
     await expect(guard.canActivate(mockContext(req))).rejects.toThrow(ApiHttpException);
+  });
+
+  // Item 4 (T-C1.02): old sessions with bare personal context get auto-upgraded
+  it('resolves bare personal context to include orgId when user has ACTIVE membership', async () => {
+    const bareSession = {
+      ...FAKE_SESSION_RECORD,
+      context: { kind: 'personal' as const },
+    };
+    mocks.cookies.parse.mockReturnValue({ sessionId: 'sess-123' });
+    mocks.sessions.get.mockResolvedValue(bareSession);
+    mocks.principalLoader.load.mockResolvedValue(FAKE_LOADED_PRINCIPAL);
+
+    const req: Record<string, unknown> = { headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    await guard.canActivate(mockContext(req));
+
+    const principal = req['principal'] as { context: { kind: string; orgId?: string } };
+    expect(principal.context).toEqual({ kind: 'personal', orgId: 'org-1' });
+    expect(mocks.sessions.updateContext).toHaveBeenCalledWith(
+      'sess-123',
+      { kind: 'personal', orgId: 'org-1' },
+      'employee',
+    );
+  });
+
+  it('does NOT upgrade when session already has orgId', async () => {
+    const sessionWithOrg = {
+      ...FAKE_SESSION_RECORD,
+      context: { kind: 'personal' as const, orgId: 'org-1' },
+    };
+    mocks.cookies.parse.mockReturnValue({ sessionId: 'sess-123' });
+    mocks.sessions.get.mockResolvedValue(sessionWithOrg);
+    mocks.principalLoader.load.mockResolvedValue(FAKE_LOADED_PRINCIPAL);
+
+    const req: Record<string, unknown> = { headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    await guard.canActivate(mockContext(req));
+
+    expect(mocks.sessions.updateContext).not.toHaveBeenCalled();
   });
 
   it('throws 401 when bearer resolves to suspended user', async () => {

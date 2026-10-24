@@ -23,12 +23,15 @@ import {
   grantsKey,
   assignmentsKey,
   orgTreeKey,
+  contextExtrasKey,
   PRINCIPAL_TTL_BASE,
   PRINCIPAL_TTL_JITTER,
   GRANTS_TTL_BASE,
   GRANTS_TTL_JITTER,
   ASSIGNMENTS_TTL,
   ORG_TREE_TTL,
+  CONTEXT_EXTRAS_TTL_BASE,
+  CONTEXT_EXTRAS_TTL_JITTER,
   INVALIDATE_CHANNEL,
 } from '../redis/redis-keys.js';
 import type {
@@ -203,6 +206,25 @@ export class PrincipalLoader {
       return { orgGrantTemplateKeys: new Map(), orgNames: new Map() };
     }
 
+    // Item 11 (T-C1.02): cache the extras with the same TTL as the principal
+    // so two consecutive /me calls do not query grants and names twice.
+    const cacheKey = contextExtrasKey(loaded.userId);
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as {
+          orgGrantTemplateKeys: [string, string[]][];
+          orgNames: [string, string][];
+        };
+        return {
+          orgGrantTemplateKeys: new Map(parsed.orgGrantTemplateKeys),
+          orgNames: new Map(parsed.orgNames),
+        };
+      } catch {
+        // Corrupted cache entry -- fall through
+      }
+    }
+
     const now = new Date();
     const [grantRows, orgNames] = await Promise.all([
       this.authzRepo.findActiveOrgGrantTemplateKeys(loaded.userId, orgIds, now),
@@ -216,7 +238,16 @@ export class PrincipalLoader {
       keyMap.set(orgId, arr);
     }
 
-    return { orgGrantTemplateKeys: keyMap, orgNames };
+    const result: AvailableContextExtras = { orgGrantTemplateKeys: keyMap, orgNames };
+
+    // Serialise Maps for cache storage.
+    const ttl = jitter(CONTEXT_EXTRAS_TTL_BASE, CONTEXT_EXTRAS_TTL_JITTER);
+    await this.cache.set(cacheKey, JSON.stringify({
+      orgGrantTemplateKeys: [...keyMap.entries()],
+      orgNames: [...orgNames.entries()],
+    }), ttl);
+
+    return result;
   }
 
   /** Load grants for a user in an org context. */
@@ -318,7 +349,7 @@ export class PrincipalLoader {
    * @see AUTH-R-11, AUTHZ-R-44
    */
   async invalidateUser(userId: string, orgIds?: string[]): Promise<void> {
-    const keys = [principalKey(userId), assignmentsKey(userId)];
+    const keys = [principalKey(userId), assignmentsKey(userId), contextExtrasKey(userId)];
     if (orgIds) {
       for (const orgId of orgIds) {
         keys.push(grantsKey(userId, orgId));
@@ -328,6 +359,7 @@ export class PrincipalLoader {
     this.cache.purgeLru(`principal:${userId}`);
     this.cache.purgeLru(`grants:${userId}`);
     this.cache.purgeLru(`assignments:${userId}`);
+    this.cache.purgeLru(`ctx_extras:${userId}`);
 
     await this.cache.del(...keys);
     const msg = JSON.stringify({ keys, reason: 'invalidation', userId });

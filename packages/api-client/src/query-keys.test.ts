@@ -55,9 +55,9 @@ describe('libraryKeys', () => {
     expect(key).toEqual(['ctx', 'personal', 'org_b', 'library']);
   });
 
-  it('.home extends .all', () => {
-    const key = libraryKeys.home(ctx);
-    expect(key).toEqual(['ctx', 'personal', 'org_b', 'library', 'home']);
+  it('.home includes the locale', () => {
+    const key = libraryKeys.home(ctx, 'sr-Latn');
+    expect(key).toEqual(['ctx', 'personal', 'org_b', 'library', 'home', 'sr-Latn']);
   });
 
   it('.contentDetail includes the content id', () => {

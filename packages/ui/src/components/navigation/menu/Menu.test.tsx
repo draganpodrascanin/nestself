@@ -108,6 +108,39 @@ describe('MenuLinkItem', () => {
   });
 });
 
+describe('MenuItem current and disabled props (item 7, T-C1.02)', () => {
+  function CurrentDisabledFixture() {
+    return (
+      <Menu>
+        <MenuTrigger>Pick</MenuTrigger>
+        <MenuPopup>
+          <MenuItem current>Active</MenuItem>
+          <MenuItem disabled>Locked</MenuItem>
+          <MenuItem>Normal</MenuItem>
+        </MenuPopup>
+      </Menu>
+    );
+  }
+
+  it('current prop sets aria-current="true"', async () => {
+    const user = userEvent.setup();
+    render(<CurrentDisabledFixture />);
+    await user.click(screen.getByRole('button', { name: 'Pick' }));
+    const active = await screen.findByRole('menuitem', { name: 'Active' });
+    expect(active).toHaveAttribute('aria-current', 'true');
+    const normal = screen.getByRole('menuitem', { name: 'Normal' });
+    expect(normal).not.toHaveAttribute('aria-current');
+  });
+
+  it('disabled prop disables the item', async () => {
+    const user = userEvent.setup();
+    render(<CurrentDisabledFixture />);
+    await user.click(screen.getByRole('button', { name: 'Pick' }));
+    const locked = await screen.findByRole('menuitem', { name: 'Locked' });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
 describe('Menu motion', () => {
   it('grows out of the trigger and stays mounted until its exit finishes', async () => {
     const user = userEvent.setup();

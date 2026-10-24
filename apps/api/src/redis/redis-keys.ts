@@ -154,6 +154,24 @@ export function sessionLockKey(sessionIdHash: string): string {
   return `lock:session:${sessionIdHash}`;
 }
 
+/** Available-context extras cache: same TTL as principal (30 s). */
+export const CONTEXT_EXTRAS_TTL_BASE = 30;
+export const CONTEXT_EXTRAS_TTL_JITTER = 5;
+
+/** `ctx_extras:{userId}` */
+export function contextExtrasKey(userId: string): string {
+  return `ctx_extras:${userId}`;
+}
+
+/** Org names cache: short TTL (60 s). */
+export const ORG_NAMES_TTL_BASE = 60;
+export const ORG_NAMES_TTL_JITTER = 10;
+
+/** `org_names:{orgId1},{orgId2},...` — sorted ids for stable cache key. */
+export function orgNamesKey(orgIds: string[]): string {
+  return `org_names:${[...orgIds].sort().join(',')}`;
+}
+
 // ---------------------------------------------------------------------------
 // Pub/sub channels
 // ---------------------------------------------------------------------------

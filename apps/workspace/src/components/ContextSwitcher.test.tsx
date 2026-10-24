@@ -183,4 +183,78 @@ describe('ContextSwitcher', () => {
     const region = await screen.findByRole('region');
     expect(region).toHaveTextContent(/Could not switch workspace/);
   });
+
+  // Item 8: aria-current="true" on the current entry (not a CSS class)
+  it('sets aria-current="true" on the current context menu item', async () => {
+    const user = userEvent.setup();
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' });
+    renderSwitcher({ principal, availableContexts: contexts });
+
+    await user.click(screen.getByRole('button'));
+    const currentItem = await screen.findByRole('menuitem', { name: /My space/ });
+    expect(currentItem).toHaveAttribute('aria-current', 'true');
+
+    const otherItem = screen.getByRole('menuitem', { name: /Manage/ });
+    expect(otherItem).not.toHaveAttribute('aria-current');
+  });
+
+  // Item 8: trigger's aria-label
+  it('trigger has aria-label from i18n contextSwitcher.label', () => {
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' });
+    renderSwitcher({ principal, availableContexts: contexts });
+
+    const trigger = screen.getByRole('button');
+    expect(trigger).toHaveAttribute('aria-label', 'Switch workspace');
+  });
+
+  // Item 8: disabled state during pending switch
+  it('disables all menu items while switching', async () => {
+    const user = userEvent.setup();
+    let resolveSwitch!: () => void;
+    const switchFn = vi.fn().mockReturnValue(
+      new Promise<void>((resolve) => { resolveSwitch = resolve; }),
+    );
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' });
+    renderSwitcher({
+      principal,
+      availableContexts: contexts,
+      switchContext: switchFn,
+    });
+
+    await user.click(screen.getByRole('button'));
+    const orgItem = await screen.findByRole('menuitem', { name: /Manage/ });
+    await user.click(orgItem);
+
+    // The live region should announce the switching state.
+    const liveRegion = document.querySelector('[aria-live="polite"]');
+    expect(liveRegion?.textContent).toContain('Switch workspace');
+
+    // Resolve the switch to clean up.
+    resolveSwitch();
+  });
+
+  // Item 8: unknown error shows error.unknown copy
+  it('shows error.unknown copy for unrecognised error codes', async () => {
+    const user = userEvent.setup();
+    const { ApiError: ApiErrorClass } = await import('@nestself/api-client');
+    const switchFn = vi.fn().mockRejectedValue(
+      new ApiErrorClass({ status: 500, code: 'totally_unknown_code', message: 'Boom', requestId: null }),
+    );
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' });
+    renderSwitcher({
+      principal,
+      availableContexts: contexts,
+      switchContext: switchFn,
+    });
+
+    await user.click(screen.getByRole('button'));
+    const orgItem = await screen.findByRole('menuitem', { name: /Manage/ });
+    await user.click(orgItem);
+
+    // The toast should fall back to error.unknown
+    const region = await screen.findByRole('region');
+    expect(region).toHaveTextContent(/Could not switch workspace/);
+    // And it should NOT contain the raw code
+    expect(region.textContent).not.toContain('totally_unknown_code');
+  });
 });

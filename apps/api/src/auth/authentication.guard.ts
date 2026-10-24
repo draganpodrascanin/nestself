@@ -34,7 +34,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { requestMeta, type RequestMeta } from '../common/request-meta.js';
 import type { SessionRecord } from '../session/session.types.js';
-import { defaultContext } from '../authz/personal-context.js';
+import { defaultContext, resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
   userMobileFamiliesKey,
@@ -144,8 +144,35 @@ export class AuthenticationGuard implements CanActivate {
       });
     }
 
+    // Item 4 (T-C1.02): old sessions that stored bare {kind:'personal'}
+    // without an orgId are auto-upgraded to include the default orgId when
+    // the user has an ACTIVE date-current membership.
+    let resolvedContext = record.context;
+    if (
+      record.context.kind === 'personal' &&
+      !('orgId' in record.context && record.context.orgId) &&
+      loaded.memberships.some((m) => m.status === 'ACTIVE')
+    ) {
+      const orgId = resolveDefaultPersonalOrgId(loaded.memberships, record.lastPersonalOrgId);
+      if (orgId) {
+        resolvedContext = { kind: 'personal', orgId };
+        // Persist once so future requests skip this resolution.
+        try {
+          await this.sessions.updateContext(
+            record.sessionId,
+            resolvedContext,
+            loaded.staffTemplates.length > 0 ? 'staff'
+              : loaded.expert ? 'expert'
+              : 'employee',
+          );
+        } catch {
+          // Non-critical: the session will be upgraded on the next request.
+        }
+      }
+    }
+
     const principal = this.assemblePrincipal(loaded, {
-      context: record.context,
+      context: resolvedContext,
       auth: {
         method: record.auth.method,
         time: record.auth.time,

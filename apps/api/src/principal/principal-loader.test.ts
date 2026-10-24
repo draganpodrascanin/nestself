@@ -19,6 +19,8 @@ function createMockAuthz() {
     findOrgSettings: vi.fn(),
     findClosureForOrg: vi.fn().mockResolvedValue([]),
     findApprovedCategories: vi.fn().mockResolvedValue([]),
+    findActiveOrgGrantTemplateKeys: vi.fn().mockResolvedValue([]),
+    findOrgNames: vi.fn().mockResolvedValue(new Map()),
   };
 }
 
@@ -235,6 +237,58 @@ describe('PrincipalLoader', () => {
       authz.findOrgSettings.mockResolvedValue(null);
       const result = await loader.loadOrgTree('no-org');
       expect(result).toBeNull();
+    });
+  });
+
+  // ── loadAvailableContextExtras() caching (item 11, T-C1.02) ────────────
+
+  describe('loadAvailableContextExtras() caching (item 11)', () => {
+    const loaded = {
+      userId: 'user-1',
+      displayName: 'Test',
+      initials: 'T',
+      locale: 'sr-Latn',
+      memberships: [
+        {
+          membershipId: 'm-1',
+          orgId: 'org-1',
+          orgUnitId: null,
+          status: 'ACTIVE' as const,
+          startDate: '2026-01-01T00:00:00Z',
+          endDate: null,
+        },
+      ],
+      staffTemplates: [],
+      expert: null,
+      isSuspended: false,
+      isDeactivated: false,
+      populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
+    };
+
+    it('two consecutive calls do not query grants and names twice', async () => {
+      authz.findActiveOrgGrantTemplateKeys.mockResolvedValue([
+        { orgId: 'org-1', templateKey: 'hr_admin' },
+      ]);
+      authz.findOrgNames.mockResolvedValue(new Map([['org-1', 'Org One']]));
+
+      // First call: hits DB, caches.
+      const first = await loader.loadAvailableContextExtras(loaded);
+      expect(first.orgNames.get('org-1')).toBe('Org One');
+      expect(authz.findActiveOrgGrantTemplateKeys).toHaveBeenCalledOnce();
+      expect(authz.findOrgNames).toHaveBeenCalledOnce();
+
+      // Mock cache.get to return what cache.set stored.
+      const storedValue = cache.set.mock.calls.find(
+        (c: unknown[]) => (c[0] as string).startsWith('ctx_extras:'),
+      )?.[1] as string;
+      expect(storedValue).toBeTruthy();
+      cache.get.mockResolvedValue(storedValue);
+
+      // Second call: served from cache, no new DB queries.
+      const second = await loader.loadAvailableContextExtras(loaded);
+      expect(second.orgNames.get('org-1')).toBe('Org One');
+      expect(authz.findActiveOrgGrantTemplateKeys).toHaveBeenCalledOnce(); // still once
+      expect(authz.findOrgNames).toHaveBeenCalledOnce(); // still once
     });
   });
 
