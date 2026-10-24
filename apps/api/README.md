@@ -55,6 +55,8 @@ The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it n
 
 Unit tests sit next to the code. The integration suites in `test/` boot the application against a disposable database per suite (`TEST_DATABASE_URL`): `auth`, `ops-clients`, `grants`, `ops-grants`, `professional`, `emergency`, `members`, `invitations`, `org-admin`, `ws`, `health`, `jobs` (`*.e2e.spec.ts`), and `db/schema.spec.ts`, `db/authorization-repository.spec.ts`, `db/backfill-grants.spec.ts`. `src/authz/default-deny.test.ts` fails on any undecorated route; `src/authz/golden-table.test.ts` pins the decision engine. `docs/auth/implementation.md` section 19 says what each suite covers.
 
+Each suite's database is `<base>_<prefix>_<suffix>`, where `<base>` is the database in `TEST_DATABASE_URL`, `<suffix>` names the suite and `<prefix>` is `TEST_DATABASE_PREFIX` or, when that is unset, the first eight hex characters of the SHA-1 of the repository root path (`test/db/test-database-name.ts`). Git worktrees of the repository therefore get separate databases on the same server and can run the same suite at the same time. Set `TEST_DATABASE_PREFIX` in CI or when you want a readable name; old databases are not removed automatically.
+
 ### Schema changes
 
 When the Drizzle schema files under `src/db/schema/` change:

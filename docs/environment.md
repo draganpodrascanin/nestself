@@ -12,7 +12,8 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `PORT` | HTTP port the API listens on | `4000` |
 | `DATABASE_URL` | PostgreSQL connection string. In Docker and AWS use the `nestself_api` login (a member of `nestself_app`) so row-level security applies; migrations run as the owner | `postgresql://nestself:nestself_dev@localhost:5432/nestself` |
 | `DATABASE_POOL_MAX` | Maximum connections in the pg Pool | `10` |
-| `TEST_DATABASE_URL` | Integration tests only: a database the suites may drop and recreate (`<name>_schema`, `<name>_auth`, `<name>_jobs` ...) | unset (suites skip) |
+| `TEST_DATABASE_URL` | Integration tests only: a server and base name the suites may drop and recreate databases under (`<name>_<prefix>_schema`, `<name>_<prefix>_auth` ...) | unset (suites skip) |
+| `TEST_DATABASE_PREFIX` | Integration tests only: the `<prefix>` in test database names (letters, digits, underscores) | first 8 hex characters of the SHA-1 of the repository root path |
 | `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction (set to 1 or more behind a load balancer) | `0` |
 
 ### Authentication mode
@@ -115,4 +116,4 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
 - The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
 - Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables.
-- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
+- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run. Each database is named `<base>_<prefix>_<suffix>` (`testDatabaseName` in `apps/api/test/db/test-database-name.ts`): the prefix is `TEST_DATABASE_PREFIX` or a hash of the repository root, so two git worktrees running the same suite against one server never drop each other's database. Names longer than PostgreSQL's 63-byte limit shorten the base.
