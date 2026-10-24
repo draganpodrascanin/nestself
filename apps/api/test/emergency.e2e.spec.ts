@@ -22,6 +22,9 @@ import { computeTotp } from '../src/identity/totp.js';
 import { MaintenanceJobsService } from '../src/jobs/maintenance-jobs.service.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, emergencyAccess, externalIdentities, grants, users } from '../src/db/schema/index.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
+import { sessionKey } from '../src/redis/redis-keys.js';
+import { hashSessionId } from '../src/session/session-helpers.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -122,7 +125,28 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     const csrf = extractCsrf(totp);
     const ctx = await agent.post('/api/auth/context').set('X-CSRF-Token', csrf).send({ context: { kind: 'operations' } });
     expect(ctx.status).toBe(200);
-    return { agent, csrf };
+    return { agent, csrf, sessionId: extractSessionId(totp, ctx) };
+  }
+
+  function extractSessionId(...responses: request.Response[]): string {
+    for (const res of [...responses].reverse()) {
+      const cookies = (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+      const match = cookies.map((c) => c.match(/nestself_session=([^;]+)/)).find(Boolean);
+      if (match) return match[1]!;
+    }
+    throw new Error('Session cookie not found');
+  }
+
+  /** Move the session's authentication time 20 minutes into the past (beyond the restricted class's 15). */
+  async function ageSession(sessionId: string) {
+    const store = app.get<KeyValueStore>(KEY_VALUE_STORE);
+    const key = sessionKey(hashSessionId(sessionId));
+    const raw = await store.get(key);
+    expect(raw).not.toBeNull();
+    const ttl = await store.ttl(key);
+    const record = JSON.parse(raw!) as { auth: { time: string } };
+    record.auth.time = new Date(Date.now() - 20 * 60_000).toISOString();
+    await store.set(key, JSON.stringify(record), { ttlSeconds: ttl });
   }
 
   let requester: Awaited<ReturnType<typeof signInStaff>>;
@@ -220,6 +244,16 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     // The approver holds no emergency access of their own.
     const other = await approver.agent.get(record());
     expect(other.status).toBe(404);
+  });
+
+  it('the read needs a restricted-class step-up: a 20-minute-old session gets 403 step_up_required', async () => {
+    const stale = await signInStaff('user_nikola@example.com');
+    await ageSession(stale.sessionId);
+    const res = await stale.agent.get(record());
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('step_up_required');
+    expect(res.body.details).toMatchObject({ stepUpClass: 'restricted', maxAge: 900 });
+    expect(res.body).not.toHaveProperty('content');
   });
 
   it('an expired record is refused before the sweeper runs, then the sweeper revokes it', async () => {

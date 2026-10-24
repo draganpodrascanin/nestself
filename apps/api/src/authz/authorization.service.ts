@@ -3,7 +3,7 @@
  *
  * @see 4.6.1, T-1.6
  */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ContextLoader } from './context-loader.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -11,6 +11,8 @@ import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from './authorize.js';
 import { effectiveActions } from './effective-access.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { assertStepUpFresh } from './step-up-freshness.js';
 import type {
   Principal,
   Action,
@@ -22,10 +24,12 @@ export class AuthorizationService {
   constructor(
     private readonly contextLoader: ContextLoader,
     private readonly audit: AuditWriter,
+    @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
   ) {}
 
   /**
-   * Check authorization and throw on denial.
+   * Check authorization and throw on denial; once allowed, enforce the
+   * action's step-up freshness (403 `step_up_required`).
    * Service-layer equivalent of the AuthorizationGuard.
    */
   async require(
@@ -69,6 +73,8 @@ export class AuthorizationService {
         message: 'Access denied',
       });
     }
+
+    await assertStepUpFresh(principal, action, this.store);
   }
 
   /**

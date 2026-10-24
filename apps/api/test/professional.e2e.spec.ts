@@ -21,6 +21,9 @@ import { computeTotp } from '../src/identity/totp.js';
 import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, grants } from '../src/db/schema/index.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
+import { sessionKey } from '../src/redis/redis-keys.js';
+import { hashSessionId } from '../src/session/session-helpers.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -133,6 +136,27 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     return agent;
   }
 
+  function extractSessionId(...responses: request.Response[]): string {
+    for (const res of [...responses].reverse()) {
+      const cookies = (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+      const match = cookies.map((c) => c.match(/nestself_session=([^;]+)/)).find(Boolean);
+      if (match) return match[1]!;
+    }
+    throw new Error('Session cookie not found');
+  }
+
+  /** Move the session's authentication time 20 minutes into the past (beyond the restricted class's 15). */
+  async function ageSession(sessionId: string) {
+    const store = app.get<KeyValueStore>(KEY_VALUE_STORE);
+    const key = sessionKey(hashSessionId(sessionId));
+    const raw = await store.get(key);
+    expect(raw).not.toBeNull();
+    const ttl = await store.ttl(key);
+    const record = JSON.parse(raw!) as { auth: { time: string } };
+    record.auth.time = new Date(Date.now() - 20 * 60_000).toISOString();
+    await store.set(key, JSON.stringify(record), { ttlSeconds: ttl });
+  }
+
   /** Email-OTP sign-in for employees and organization admins. */
   async function signInMember(userId: string) {
     const email = `${userId}@example.com`;
@@ -184,6 +208,29 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     const missing = await milica.get('/api/professional/conversations/conv_missing');
     expect(missing.status).toBe(404);
     expect(missing.body.code).toBe('not_found');
+  });
+
+  it('the assigned expert needs a restricted-class step-up: a 20-minute-old session gets 403 step_up_required', async () => {
+    const agent = request.agent(app.getHttpServer());
+    const pw = await agent
+      .post('/api/auth/password')
+      .send({ email: 'user_milica@example.com', password: SAMPLE_DEV_PASSWORD });
+    const totp = await agent
+      .post('/api/auth/challenge')
+      .send({ challengeToken: pw.body.challengeToken, response: computeTotp(TOTP_SECRET) });
+    expect(totp.status).toBe(200);
+    const ctx = await agent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', extractCsrf(totp))
+      .send({ context: { kind: 'expert' } });
+    expect(ctx.status).toBe(200);
+    await ageSession(extractSessionId(totp, ctx));
+
+    const res = await agent.get(CONV);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('step_up_required');
+    expect(res.body.details).toMatchObject({ stepUpClass: 'restricted', maxAge: 900 });
+    expect(res.body).not.toHaveProperty('messages');
   });
 
   it('the participant reads their own conversation but not through the expert route', async () => {

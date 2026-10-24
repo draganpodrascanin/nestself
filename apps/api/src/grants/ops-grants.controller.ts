@@ -39,7 +39,8 @@ import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { GrantsService } from './grants.service.js';
-import { GrantListQuerySchema, WRITE_THROTTLE, type GrantListQuery } from './grants.controller.js';
+import { WRITE_THROTTLE } from '../authz/throttles.js';
+import { GrantListQuerySchema, type GrantListQuery } from './grants.controller.js';
 
 const routeUserId = (req: Record<string, unknown>): string | undefined =>
   (req['params'] as Record<string, string | undefined> | undefined)?.['userId'];

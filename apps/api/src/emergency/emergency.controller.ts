@@ -34,7 +34,7 @@ import { Authenticated } from '../authz/authenticated.decorator.js';
 import { operationsResource } from '../authz/resolvers.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { WRITE_THROTTLE } from '../grants/grants.controller.js';
+import { WRITE_THROTTLE } from '../authz/throttles.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { EmergencyService } from './emergency.service.js';
 

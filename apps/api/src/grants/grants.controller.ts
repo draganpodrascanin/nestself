@@ -32,13 +32,11 @@ import {
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
 import { orgResourceFromContext } from '../authz/resolvers.js';
+import { WRITE_THROTTLE } from '../authz/throttles.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { GrantsService } from './grants.service.js';
-
-/** Writes are throttled to 10 per minute per route; shared by the grant controllers. */
-export const WRITE_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 export const GrantListQuerySchema = z.object({
   subjectUserId: z.string().min(1).optional(),
