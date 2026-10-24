@@ -255,6 +255,11 @@ export const ApprovalAuthorityResponseSchema = z.object({
 });
 export type ApprovalAuthorityResponse = z.infer<typeof ApprovalAuthorityResponseSchema>;
 
+export const ApprovalAuthorityListResponseSchema = z.object({
+  items: z.array(ApprovalAuthorityResponseSchema),
+});
+export type ApprovalAuthorityListResponse = z.infer<typeof ApprovalAuthorityListResponseSchema>;
+
 // --- Operations (5.4) ---
 export const UserSuspendRequestSchema = z.object({
   reason: z.string().min(3).max(500),

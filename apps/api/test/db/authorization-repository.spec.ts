@@ -101,6 +101,14 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     expect(rows.every((r) => r.scopeOrgId === null)).toBe(true);
   });
 
+  it('listPlatformGrants filters by subject', async () => {
+    const nikola = await repo.listPlatformGrants({ subjectUserId: 'user_nikola' });
+    expect(nikola.map((r) => r.id)).toContain('platform_grant');
+    expect(nikola.every((r) => r.subjectUserId === 'user_nikola' && r.scopeOrgId === null)).toBe(true);
+    const ana = await repo.listPlatformGrants({ subjectUserId: 'user_ana' });
+    expect(ana.map((r) => r.id)).not.toContain('platform_grant');
+  });
+
   it('revokeGrantTree revokes the root with the reason and descendants as parent_revoked', async () => {
     const at = new Date('2026-10-24T10:00:00.000Z');
     const result = await dbs.withOrgScope(ORG, (tx) =>

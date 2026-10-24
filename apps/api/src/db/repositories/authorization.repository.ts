@@ -174,11 +174,15 @@ export class AuthorizationRepository {
 
   /**
    * Platform-wide and own-scoped grants (`scope_org_id IS NULL`), newest
-   * first; unrevoked only unless `includeRevoked`. Visible in every scope;
-   * the system context is the natural caller.
+   * first; unrevoked only unless `includeRevoked`, optionally one subject's.
+   * Visible in every scope; the system context is the natural caller.
    */
-  async listPlatformGrants(filter: { includeRevoked?: boolean }, tx?: DbExecutor): Promise<GrantRow[]> {
+  async listPlatformGrants(
+    filter: { subjectUserId?: string; includeRevoked?: boolean },
+    tx?: DbExecutor,
+  ): Promise<GrantRow[]> {
     const where: SQL[] = [isNull(grants.scopeOrgId)];
+    if (filter.subjectUserId) where.push(eq(grants.subjectUserId, filter.subjectUserId));
     if (!filter.includeRevoked) where.push(isNull(grants.revokedAt));
     return this.exec(tx)
       .select()

@@ -151,9 +151,11 @@ export class GrantsService {
 
   /** Grants without an organization (`scope_org_id IS NULL`), newest first. */
   async listPlatform(filter: GrantListFilter): Promise<GrantListResponse> {
-    const rows = await this.authzRepo.listPlatformGrants({ includeRevoked: filter.includeRevoked });
-    const items = filter.subjectUserId ? rows.filter((r) => r.subjectUserId === filter.subjectUserId) : rows;
-    return { items: items.map(toGrantResponse) };
+    const rows = await this.authzRepo.listPlatformGrants({
+      subjectUserId: filter.subjectUserId,
+      includeRevoked: filter.includeRevoked,
+    });
+    return { items: rows.map(toGrantResponse) };
   }
 
   /**
@@ -179,29 +181,37 @@ export class GrantsService {
     const subject = await this.principalLoader.load(body.subjectUserId);
     if (!subject) throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found' });
 
-    const row = await this.authzRepo.createGrant({
-      subjectUserId: body.subjectUserId,
-      templateKey: template.key,
-      actions: [...template.actions],
-      scopeType: template.scopeType,
-      scopeOrgId: null,
-      scopeOrgUnitId: null,
-      includeDescendants: false,
-      conditions: body.conditions,
-      validFrom,
-      validUntil,
-      parentGrantId: null,
-      grantedByUserId: actor.userId,
+    // Insert and audit commit together (API-R-22): a failed audit event
+    // rolls the grant back. No tenant setting: the grant has no organization.
+    const row = await this.db.withTransaction(async (tx) => {
+      const created = await this.authzRepo.createGrant(
+        {
+          subjectUserId: body.subjectUserId,
+          templateKey: template.key,
+          actions: [...template.actions],
+          scopeType: template.scopeType,
+          scopeOrgId: null,
+          scopeOrgUnitId: null,
+          includeDescendants: false,
+          conditions: body.conditions,
+          validFrom,
+          validUntil,
+          parentGrantId: null,
+          grantedByUserId: actor.userId,
+        },
+        tx,
+      );
+      await this.audit.record(
+        grantEvent('grant.created', created, actor, null, {
+          subjectUserId: created.subjectUserId,
+          templateKey: template.key,
+          scopeType: template.scopeType,
+          actionsCount: created.actions.length,
+          conditionTypes: conditionTypes(body.conditions),
+        }),
+      );
+      return created;
     });
-    await this.audit.record(
-      grantEvent('grant.created', row, actor, null, {
-        subjectUserId: row.subjectUserId,
-        templateKey: template.key,
-        scopeType: template.scopeType,
-        actionsCount: row.actions.length,
-        conditionTypes: conditionTypes(body.conditions),
-      }),
-    );
 
     // A platform grant applies in every context: drop the cached grants for
     // the platform, the subject's organizations and assigned clients.

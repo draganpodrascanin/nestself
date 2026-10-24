@@ -10,6 +10,7 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import type {
   ApprovalAuthorityCreateRequest,
+  ApprovalAuthorityListResponse,
   ApprovalAuthorityResponse,
   ApprovalAuthorityUpdateRequest,
   Principal,
@@ -25,10 +26,6 @@ import { AuthorizationRepository } from '../db/repositories/authorization.reposi
 import { OrgUnitsRepository } from '../db/repositories/org-units.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { assertWindow, validation } from './grant-rules.js';
-
-export interface ApprovalAuthorityListResponse {
-  items: ApprovalAuthorityResponse[];
-}
 
 const DEFAULT_CURRENCY = 'EUR';
 

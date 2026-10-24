@@ -9,7 +9,11 @@ import { LocaleSchema, defaultLocale, locales } from './locale.ts';
 import { SupportAreaSchema, supportAreaIcon, supportAreas } from './support.ts';
 import { HealthResponseSchema } from './health.ts';
 import { accessModel } from './access-model.ts';
-import { GrantListResponseSchema, GrantRevokeRequestSchema } from './org-admin.ts';
+import {
+  ApprovalAuthorityListResponseSchema,
+  GrantListResponseSchema,
+  GrantRevokeRequestSchema,
+} from './org-admin.ts';
 import { AUTH_ERROR_CODES } from './auth.ts';
 
 describe('roles', () => {
@@ -183,5 +187,30 @@ describe('grant administration', () => {
     expect(AUTH_ERROR_CODES).toContain('subject_not_member');
     expect(AUTH_ERROR_CODES).toContain('template_inactive');
     expect(AUTH_ERROR_CODES).toContain('missing_conditions');
+  });
+});
+
+describe('approval authority schemas', () => {
+  const authority = {
+    id: 'aa_1',
+    userId: 'user_stefan',
+    orgId: 'org_sample',
+    orgUnitId: null,
+    includeDescendants: false,
+    categories: ['events'],
+    maxAmountMinor: 50_000,
+    currency: 'EUR',
+    validFrom: '2026-10-24T00:00:00.000Z',
+    validUntil: null,
+    delegatedFromId: null,
+    alternateUserId: null,
+    isConfidentialApprover: false,
+  };
+
+  it('ApprovalAuthorityListResponseSchema wraps authority responses in items', () => {
+    expect(ApprovalAuthorityListResponseSchema.parse({ items: [authority] }).items).toEqual([authority]);
+    expect(ApprovalAuthorityListResponseSchema.parse({ items: [] }).items).toEqual([]);
+    expect(ApprovalAuthorityListResponseSchema.safeParse({ items: [{ ...authority, userId: '' }] }).success).toBe(false);
+    expect(ApprovalAuthorityListResponseSchema.safeParse({}).success).toBe(false);
   });
 });

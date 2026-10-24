@@ -15,6 +15,7 @@ import {
   ApprovalAuthorityCreateRequestSchema,
   ApprovalAuthorityUpdateRequestSchema,
   type ApprovalAuthorityCreateRequest,
+  type ApprovalAuthorityListResponse,
   type ApprovalAuthorityResponse,
   type ApprovalAuthorityUpdateRequest,
   type Principal,
@@ -25,7 +26,6 @@ import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ApprovalAuthoritiesService } from './approval-authorities.service.js';
-import type { ApprovalAuthorityListResponse } from './approval-authorities.service.js';
 import { WRITE_THROTTLE } from './grants.controller.js';
 
 @Controller('orgs/:orgId/approval-authorities')

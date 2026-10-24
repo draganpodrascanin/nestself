@@ -69,13 +69,16 @@ function input(r: GrantRow): GrantInput {
   };
 }
 
+/** Executor handed out by the mocked `withTransaction` (system context). */
+const SYSTEM_TX = { kind: 'system-tx' };
+
 const ACTOR = { userId: 'user_ivana', context: { kind: 'organization', orgId: ORG } } as Principal;
 
 function createMocks() {
   const grants = new Map<string, GrantRow>([[PARENT.id, PARENT]]);
   const authzRepo = {
     findActiveMembership: vi.fn(async () => ({ membershipId: 'mem_1', orgUnitId: 'team_product' })),
-    createGrant: vi.fn(async (values: Partial<GrantRow>) => row({ ...values, id: 'grant_new' } as Partial<GrantRow>)),
+    createGrant: vi.fn(async (values: Partial<GrantRow>, _tx?: unknown) => row({ ...values, id: 'grant_new' } as Partial<GrantRow>)),
     findGrantById: vi.fn(async (id: string) => grants.get(id) ?? null),
     updateGrant: vi.fn(async (id: string, patch: Record<string, unknown>) => ({ ...grants.get(id)!, ...patch })),
     revokeGrantTree: vi.fn(async (ids: string[]) => ({ roots: ids, children: [] as string[] })),
@@ -87,7 +90,10 @@ function createMocks() {
   const orgUnits = {
     findByIdAndOrg: vi.fn(async (id: string) => ({ id, orgId: ORG })),
   };
-  const db = { withOrgScope: vi.fn(async (_org: string, fn: (tx: never) => Promise<unknown>) => fn(null as never)) };
+  const db = {
+    withOrgScope: vi.fn(async (_org: string, fn: (tx: never) => Promise<unknown>) => fn(null as never)),
+    withTransaction: vi.fn(async (fn: (tx: never) => Promise<unknown>) => fn(SYSTEM_TX as never)),
+  };
   const principalLoader = {
     loadGrants: vi.fn(async () => [input(PARENT)]),
     load: vi.fn(async (userId: string) => ({
@@ -638,6 +644,46 @@ describe('GrantsService', () => {
       expect(event['details']).toMatchObject({ subjectUserId: 'user_nikola', templateKey: 'support_operator', scopeType: 'assigned_cases' });
     });
 
+    it('inserts the grant and records its audit event inside one system transaction', async () => {
+      const order: string[] = [];
+      m.authzRepo.createGrant.mockImplementationOnce(async (values: Partial<GrantRow>) => {
+        order.push('insert');
+        return row({ ...values, id: 'grant_new' } as Partial<GrantRow>);
+      });
+      m.audit.record.mockImplementationOnce(async () => {
+        order.push('audit');
+      });
+      m.db.withTransaction.mockImplementationOnce(async (fn: (tx: never) => Promise<unknown>) => {
+        order.push('begin');
+        const result = await fn(SYSTEM_TX as never);
+        order.push('commit');
+        return result;
+      });
+
+      await svc.createPlatform(PLATFORM, OPS_ACTOR);
+
+      expect(m.db.withTransaction).toHaveBeenCalledTimes(1);
+      expect(m.authzRepo.createGrant.mock.calls[0]![1]).toBe(SYSTEM_TX);
+      expect(order).toEqual(['begin', 'insert', 'audit', 'commit']);
+    });
+
+    it('rejects and leaves no grant when the audit event cannot be recorded', async () => {
+      let committed = false;
+      m.db.withTransaction.mockImplementationOnce(async (fn: (tx: never) => Promise<unknown>) => {
+        const result = await fn(SYSTEM_TX as never); // a rejection here rolls the insert back
+        committed = true;
+        return result;
+      });
+      m.audit.record.mockRejectedValueOnce(new Error('audit insert failed'));
+
+      await expect(svc.createPlatform(PLATFORM, OPS_ACTOR)).rejects.toThrow('audit insert failed');
+      expect(m.db.withTransaction).toHaveBeenCalledTimes(1);
+      expect(m.authzRepo.createGrant).toHaveBeenCalledTimes(1);
+      expect(m.authzRepo.createGrant.mock.calls[0]![1]).toBe(SYSTEM_TX);
+      expect(committed).toBe(false);
+      expect(m.principalLoader.invalidateUser).not.toHaveBeenCalled();
+    });
+
     it("invalidates the subject's grants for the platform, member and client organizations", async () => {
       await svc.createPlatform(PLATFORM, OPS_ACTOR);
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_nikola', ['platform', ORG, 'org_client']);
@@ -645,14 +691,14 @@ describe('GrantsService', () => {
   });
 
   describe('listPlatform', () => {
-    it('lists grants without an organization and filters by subject', async () => {
+    it('passes the subject and revoked filters to the repository', async () => {
       m.authzRepo.listPlatformGrants.mockResolvedValueOnce([
         row({ id: 'g_a', subjectUserId: 'user_ana', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null }),
         row({ id: 'g_n', subjectUserId: 'user_nikola', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null }),
       ]);
       const res = await svc.listPlatform({ subjectUserId: 'user_nikola', includeRevoked: true });
-      expect(m.authzRepo.listPlatformGrants).toHaveBeenCalledWith({ includeRevoked: true });
-      expect(res.items.map((g) => g.id)).toEqual(['g_n']);
+      expect(m.authzRepo.listPlatformGrants).toHaveBeenCalledWith({ subjectUserId: 'user_nikola', includeRevoked: true });
+      expect(res.items.map((g) => g.id)).toEqual(['g_a', 'g_n']);
     });
   });
 
