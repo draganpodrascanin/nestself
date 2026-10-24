@@ -5,11 +5,21 @@
  * by running the same evaluator against synthetic resources for each scope
  * in the user's grants.
  *
+ * "Effective" means "may hold somewhere": a grant's action counts when the
+ * engine allows it at some resource inside the grant's scope. An
+ * assignment-scoped grant (`assigned_cases`, `assigned_practice`,
+ * `assigned_queues` and the others) without a fixed scope reference reaches
+ * a resource only through an assignment, so it is evaluated at the target of
+ * each of the principal's assignments, and the engine decides which
+ * assignment kind the scope accepts and whether the assignment is current
+ * (DEF-3). Per-resource decisions stay with `authorize()`.
+ *
  * @see Section 4.5.10 of auth-strategy.md
  * Satisfies AUTHZ-R-42.
  */
 import type {
   Action,
+  AssignmentInput,
   Principal,
   AuthorizationContext,
   EffectiveAccessEntry,
@@ -44,10 +54,13 @@ export function effectiveAccess(
     for (const action of actions) {
       if (!grant.actions.includes(action)) continue;
 
-      const resource = syntheticResource(grant);
-      const decision = authorize(principal, action as Action, resource, contextAt(grant, ctx));
+      const grantCtx = contextAt(grant, ctx);
+      const allowedHere = candidateResources(grant, ctx).some((resource) => {
+        const decision = authorize(principal, action as Action, resource, grantCtx);
+        return decision.allowed && decision.grantIds.includes(grant.id);
+      });
 
-      if (decision.allowed && decision.grantIds.includes(grant.id)) {
+      if (allowedHere) {
         entries.push({
           action: action as Action,
           scopeType: grant.scopeType,
@@ -88,9 +101,10 @@ export function effectiveActions(
         (g.validFrom == null || g.validFrom <= ctx.now) &&
         (g.validUntil == null || g.validUntil > ctx.now),
     );
-    const isAllowed = candidates.some(
-      (grant) => authorize(principal, action, syntheticResource(grant), contextAt(grant, ctx)).allowed,
-    );
+    const isAllowed = candidates.some((grant) => {
+      const grantCtx = contextAt(grant, ctx);
+      return candidateResources(grant, ctx).some((resource) => authorize(principal, action, resource, grantCtx).allowed);
+    });
     if (isAllowed) allowed.add(action);
   }
 
@@ -105,6 +119,49 @@ export function effectiveActions(
 function contextAt(grant: GrantInput, ctx: AuthorizationContext): AuthorizationContext {
   if (grant.scopeOrgUnitId == null || ctx.ancestorIds.includes(grant.scopeOrgUnitId)) return ctx;
   return { ...ctx, ancestorIds: [...ctx.ancestorIds, grant.scopeOrgUnitId] };
+}
+
+/**
+ * The synthetic resources a grant is evaluated at: its own scope, and, when
+ * the grant names no fixed scope reference, the target of each of the
+ * principal's assignments (DEF-3). Which assignment kind a scope accepts, and
+ * whether the assignment is current, is the engine's decision
+ * (`ASSIGNMENT_SCOPE_KINDS` and `matchesScope`); a target can only add the
+ * field an assignment scope matches on, so it never widens any other scope.
+ */
+function candidateResources(grant: GrantInput, ctx: AuthorizationContext): Resource[] {
+  const base = syntheticResource(grant);
+  if (grant.scopeRefId != null) return [base];
+  const resources = [base];
+  for (const assignment of ctx.assignments) {
+    const atTarget = withTarget(base, assignment.kind, assignment.targetId);
+    if (atTarget) resources.push(atTarget);
+  }
+  return resources;
+}
+
+/**
+ * The resource field through which the engine matches each assignment kind
+ * (`matchesScope`, `findMatchingAssignment`): the one place this module maps
+ * a kind to a field, for scope references and assignments alike. Null for a
+ * kind no resource field carries (supervision, activities).
+ */
+function withTarget(base: Resource, kind: AssignmentInput['kind'], targetId: string): Resource | null {
+  switch (kind) {
+    case 'CASE':
+    case 'SUPPORT_CASE':
+      return { ...base, id: targetId };
+    case 'QUEUE':
+      return { ...base, queueId: targetId };
+    case 'PRACTICE_GROUP':
+      return { ...base, practiceGroupId: targetId };
+    case 'COLLECTION':
+      return { ...base, collectionId: targetId };
+    case 'CLIENT':
+      return { ...base, orgId: targetId };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -124,21 +181,9 @@ function syntheticResource(grant: GrantInput): Resource {
   if (grant.scopeType === 'own') {
     resource.ownerId = grant.subjectUserId;
   }
-  if (grant.scopeRefId != null && grant.scopeRefKind != null) {
-    switch (grant.scopeRefKind) {
-      case 'CASE':
-        resource.id = grant.scopeRefId;
-        break;
-      case 'QUEUE':
-        resource.queueId = grant.scopeRefId;
-        break;
-      case 'PRACTICE_GROUP':
-        resource.practiceGroupId = grant.scopeRefId;
-        break;
-      case 'COLLECTION':
-        resource.collectionId = grant.scopeRefId;
-        break;
-    }
+  // A CLIENT reference never narrowed the synthetic resource; it still does not.
+  if (grant.scopeRefId != null && grant.scopeRefKind != null && grant.scopeRefKind !== 'CLIENT') {
+    return withTarget(resource, grant.scopeRefKind as AssignmentInput['kind'], grant.scopeRefId) ?? resource;
   }
 
   return resource;

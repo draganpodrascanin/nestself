@@ -391,6 +391,17 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     expect((await request(app.getHttpServer()).get(LIST)).status).toBe(401);
   });
 
+  it("the expert's /auth/me lists her assignment-scoped actions; HR's does not (DEF-3)", async () => {
+    // The expert template is assigned_cases: effective while she holds a current CASE assignment.
+    const me = await milica.agent.get('/api/auth/me');
+    expect(me.status).toBe(200);
+    expect(me.body.effectiveActions).toEqual(expect.arrayContaining(['consultation.join', 'delivery.record']));
+
+    const hr = await ivana.agent.get('/api/auth/me');
+    expect(hr.status).toBe(200);
+    expect(hr.body.effectiveActions).not.toContain('delivery.record');
+  });
+
   it('a proposed follow-up shows in the list for both participants (CALL-42)', async () => {
     await testDb.db.insert(appointments).values({
       id: PROPOSED_ID,
