@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import {
   INVALIDATE_CHANNEL,
@@ -282,7 +283,7 @@ describe('MaintenanceJobsService', () => {
 
       const report = await service.run('sessions.reconcile-ttl', NOW);
 
-      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: ['hash_expired'] });
+      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: ['hash_expired'], failed: 0 });
       expect(await store.get(sessionKey('hash_expired'))).toBeNull();
       expect(await store.get(sessionKey('hash_live'))).not.toBeNull();
       expect(await store.sMembers(userSessionsKey('user_s'))).toEqual(['hash_live']);
@@ -298,13 +299,37 @@ describe('MaintenanceJobsService', () => {
 
       const report = await service.reconcileSessionTtl(NOW);
 
-      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: [] });
+      expect(report).toEqual({ job: 'sessions.reconcile-ttl', scanned: 2, destroyed: [], failed: 0 });
       expect(await store.get(sessionKey('hash_garbage'))).toBe('not json');
       expect(idp.revokeRefreshToken).not.toHaveBeenCalled();
     });
 
+    it('continues past a record whose destroy throws and counts it as failed', async () => {
+      await storeSession('hash_a', 'user_s', '2026-10-23T01:00:00.000Z');
+      await storeSession('hash_b', 'user_t', '2026-10-23T01:30:00.000Z');
+      const destroy = vi
+        .spyOn(SessionService.prototype, 'destroyOwnedByHash')
+        .mockRejectedValueOnce(new Error('Redis connection lost'));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.reconcileSessionTtl(NOW);
+
+      expect(destroy).toHaveBeenCalledTimes(2);
+      expect(report.scanned).toBe(2);
+      expect(report.failed).toBe(1);
+      expect(report.destroyed).toHaveLength(1);
+      const [survivor] = report.destroyed;
+      expect(await store.get(sessionKey(survivor!))).toBeNull();
+      expect(idp.revokeRefreshToken).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toMatch(/^session hash_\w+ not reconciled \(Error\)/);
+      expect(warn.mock.calls[0]![0]).not.toContain('refresh');
+      destroy.mockRestore();
+      warn.mockRestore();
+    });
+
     it('reports zero work when no session exists', async () => {
-      expect(await service.reconcileSessionTtl(NOW)).toEqual({ job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [] });
+      expect(await service.reconcileSessionTtl(NOW)).toEqual({ job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [], failed: 0 });
     });
   });
 });

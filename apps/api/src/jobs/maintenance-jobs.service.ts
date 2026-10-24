@@ -23,6 +23,7 @@ import {
   sessionKey,
   userMobileFamiliesKey,
 } from '../redis/redis-keys.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SessionService } from '../session/session.service.js';
 
 /** Months of `audit_events` partitions kept ahead of today (D-21). */
@@ -62,6 +63,8 @@ export interface SessionTtlReport {
   scanned: number;
   /** Hashes of the destroyed sessions (the id the session list exposes). */
   destroyed: string[];
+  /** Records whose read or destroy threw; logged by hash and retried on the next run. */
+  failed: number;
 }
 
 export type MaintenanceReport =
@@ -81,7 +84,7 @@ export class MaintenanceJobsService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principals: PrincipalLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
-    @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
+    private readonly sessions: SessionService,
   ) {}
 
   /** Run one job by name. */
@@ -213,24 +216,34 @@ export class MaintenanceJobsService {
    * destroyed through `SessionService.destroyOwnedByHash`, which revokes the
    * encrypted refresh token, removes the hash from the user's session set and
    * publishes the invalidation. A record that does not parse, or lacks a
-   * user id or a valid expiry, is counted in `scanned` and left alone.
+   * user id or a valid expiry, is counted in `scanned` and left alone. A
+   * record whose read or destroy throws is logged by hash, counted in
+   * `failed`, and the run continues with the next key.
    */
   async reconcileSessionTtl(now = new Date()): Promise<SessionTtlReport> {
-    const report: SessionTtlReport = { job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [] };
+    const report: SessionTtlReport = { job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [], failed: 0 };
     const prefix = sessionKey('');
     const keys = await this.store.scan(sessionKey('*'));
     for (const key of keys) {
       report.scanned += 1;
-      const raw = await this.store.get(key);
-      if (!raw) continue;
-      const record = parseSessionExpiry(raw);
-      if (!record || record.absoluteExpiresAt >= now.getTime()) continue;
       const hash = key.slice(prefix.length);
-      if (await this.sessions.destroyOwnedByHash(record.userId, hash)) {
-        report.destroyed.push(hash);
+      try {
+        const raw = await this.store.get(key);
+        if (!raw) continue;
+        const record = parseSessionExpiry(raw);
+        if (!record || record.absoluteExpiresAt >= now.getTime()) continue;
+        if (await this.sessions.destroyOwnedByHash(record.userId, hash)) {
+          report.destroyed.push(hash);
+        }
+      } catch (err) {
+        report.failed += 1;
+        const reason = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`session ${hash} not reconciled (${reason}); retried on the next run`);
       }
     }
-    this.logger.log(`sessions reconciled: ${report.scanned} scanned, ${report.destroyed.length} destroyed`);
+    this.logger.log(
+      `sessions reconciled: ${report.scanned} scanned, ${report.destroyed.length} destroyed, ${report.failed} failed`,
+    );
     return report;
   }
 
