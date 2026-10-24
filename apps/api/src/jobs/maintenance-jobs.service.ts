@@ -1,5 +1,5 @@
 /**
- * MaintenanceJobsService — the nightly reconciliation work the auth strategy
+ * MaintenanceJobsService — the scheduled reconciliation work the auth strategy
  * asks for (D-07, D-17, D-21, AUTHZ-R-64, T-2.10). Every method is a plain,
  * idempotent unit of work that reports what it changed; `JobSchedulerService`
  * runs them on a schedule in the worker process and `scripts/run-job.ts` runs
@@ -30,6 +30,7 @@ export const MAINTENANCE_JOB_NAMES = [
   'audit.ensure-partitions',
   'grants.reconcile',
   'mobile.prune-stale-families',
+  'emergency.sweep-expired',
 ] as const;
 export type MaintenanceJobName = (typeof MAINTENANCE_JOB_NAMES)[number];
 
@@ -49,10 +50,15 @@ export interface StaleFamilyReport {
   revoked: Array<{ userId: string; originJti: string }>;
 }
 
+export interface EmergencySweepReport {
+  expired: string[];
+}
+
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
   | ({ job: 'grants.reconcile' } & GrantReconciliationReport)
-  | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport);
+  | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport)
+  | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport);
 
 @Injectable()
 export class MaintenanceJobsService {
@@ -75,6 +81,8 @@ export class MaintenanceJobsService {
         return { job: name, ...(await this.reconcileGrants(now)) };
       case 'mobile.prune-stale-families':
         return { job: name, ...(await this.pruneStaleMobileFamilies()) };
+      case 'emergency.sweep-expired':
+        return { job: name, ...(await this.sweepExpiredEmergencyAccess(now)) };
     }
   }
 
@@ -150,6 +158,37 @@ export class MaintenanceJobsService {
     for (const [userId, orgs] of bySubject) {
       await this.principals.invalidateUser(userId, [...orgs]);
     }
+  }
+
+  /**
+   * Emergency access sweeper (4.7 lifecycle rule 5, every 15 minutes):
+   * approved, unrevoked records whose `expiresAt` has passed get
+   * `revokedAt = now` with no revoking user, an `emergency_access.expired`
+   * audit event and a cache invalidation. Secondary enforcement only:
+   * `findActiveEmergencyAccess` already ignores expired rows on every request.
+   */
+  async sweepExpiredEmergencyAccess(now = new Date()): Promise<EmergencySweepReport> {
+    const rows = await this.authzRepo.findExpiredApprovedEmergencyAccess(now);
+    const expired: string[] = [];
+    for (const row of rows) {
+      // Null when a manual revoke won the race: that path already audited.
+      const revoked = await this.authzRepo.revokeEmergencyAccess(row.id, null, now);
+      if (!revoked) continue;
+      await this.audit.record({
+        action: 'emergency_access.expired',
+        actorUserId: null,
+        actorKind: 'JOB',
+        recordType: 'emergency_access',
+        recordId: row.id,
+        result: 'ALLOWED',
+        details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
+        occurredAt: now,
+      });
+      await this.principals.invalidateUser(row.userId);
+      expired.push(row.id);
+    }
+    this.logger.log(`emergency access swept: ${expired.length} expired`);
+    return { expired };
   }
 
   /**

@@ -198,4 +198,88 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     // Invisible from another tenant.
     expect(await dbs.withOrgScope('org_other', (tx) => authorities.findById(created.id, tx))).toBeNull();
   });
+
+  describe('emergency access', () => {
+    const now = new Date('2026-10-24T10:00:00.000Z');
+    const minutes = (n: number): Date => new Date(now.getTime() + n * 60_000);
+    const request = {
+      userId: 'user_nikola',
+      purpose: 'Safeguarding concern raised by the assigned expert',
+      scopeKind: 'CASE' as const,
+      scopeId: 'case_sample',
+      requestedDurationMinutes: 30,
+      grantedAt: now,
+      expiresAt: minutes(30),
+    };
+
+    it('findActiveEmergencyAccess ignores a pending request and returns it once approved', async () => {
+      const pending = await repo.createEmergencyRequest(request);
+      expect(pending.approvedByUserId).toBeNull();
+      expect(pending.approvedAt).toBeNull();
+      expect(pending.requestedDurationMinutes).toBe(30);
+
+      const before = await repo.findActiveEmergencyAccess('user_nikola', now);
+      expect(before.map((r) => r.id)).not.toContain(pending.id);
+
+      const approved = await repo.approveEmergencyAccess(pending.id, 'user_dragan', now, minutes(30));
+      expect(approved?.approvedByUserId).toBe('user_dragan');
+      expect(approved?.approvedAt?.toISOString()).toBe(now.toISOString());
+
+      const after = await repo.findActiveEmergencyAccess('user_nikola', now);
+      expect(after.map((r) => r.id)).toContain(pending.id);
+      expect(await repo.findActiveEmergencyAccess('user_nikola', minutes(31))).toEqual([]);
+
+      // A second approval of the same row changes nothing.
+      expect(await repo.approveEmergencyAccess(pending.id, 'user_ivana', now, minutes(30))).toBeNull();
+      await repo.revokeEmergencyAccess(pending.id, 'user_dragan', now);
+    });
+
+    it('deleteEmergencyRequest removes a pending request but never an approved one', async () => {
+      const pending = await repo.createEmergencyRequest(request);
+      expect(await repo.deleteEmergencyRequest(pending.id)).toBe(true);
+      expect(await repo.findEmergencyAccess(pending.id)).toBeNull();
+
+      const other = await repo.createEmergencyRequest(request);
+      await repo.approveEmergencyAccess(other.id, 'user_dragan', now, minutes(30));
+      expect(await repo.deleteEmergencyRequest(other.id)).toBe(false);
+      expect((await repo.findEmergencyAccess(other.id))?.id).toBe(other.id);
+      await repo.revokeEmergencyAccess(other.id, 'user_dragan', now);
+    });
+
+    it('revokeEmergencyAccess sets revokedAt once and drops the row from the active set', async () => {
+      const row = await repo.createEmergencyRequest(request);
+      await repo.approveEmergencyAccess(row.id, 'user_dragan', now, minutes(30));
+      const revoked = await repo.revokeEmergencyAccess(row.id, 'user_dragan', minutes(5));
+      expect(revoked?.revokedAt?.toISOString()).toBe(minutes(5).toISOString());
+      expect(revoked?.revokedByUserId).toBe('user_dragan');
+      expect(await repo.revokeEmergencyAccess(row.id, 'user_dragan', minutes(6))).toBeNull();
+      expect((await repo.findActiveEmergencyAccess('user_nikola', now)).map((r) => r.id)).not.toContain(row.id);
+    });
+
+    it('findExpiredApprovedEmergencyAccess returns approved, unrevoked, expired rows only', async () => {
+      const expired = await repo.createEmergencyRequest({ ...request, userId: 'user_ana' });
+      await repo.approveEmergencyAccess(expired.id, 'user_dragan', minutes(-60), minutes(-30));
+      const pendingExpired = await repo.createEmergencyRequest({ ...request, userId: 'user_ana', expiresAt: minutes(-30) });
+      const live = await repo.createEmergencyRequest({ ...request, userId: 'user_ana' });
+      await repo.approveEmergencyAccess(live.id, 'user_dragan', now, minutes(30));
+
+      const ids = (await repo.findExpiredApprovedEmergencyAccess(now)).map((r) => r.id);
+      expect(ids).toContain(expired.id);
+      expect(ids).not.toContain(pendingExpired.id);
+      expect(ids).not.toContain(live.id);
+
+      await repo.revokeEmergencyAccess(expired.id, null, now);
+      expect((await repo.findExpiredApprovedEmergencyAccess(now)).map((r) => r.id)).not.toContain(expired.id);
+    });
+
+    it('listEmergencyAccess returns every state, newest first, optionally per requester', async () => {
+      const all = await repo.listEmergencyAccess({});
+      expect(all.length).toBeGreaterThan(0);
+      const times = all.map((r) => r.grantedAt.getTime());
+      expect([...times].sort((a, b) => b - a)).toEqual(times);
+      const anas = await repo.listEmergencyAccess({ userId: 'user_ana' });
+      expect(anas.length).toBeGreaterThan(0);
+      expect(anas.every((r) => r.userId === 'user_ana')).toBe(true);
+    });
+  });
 });

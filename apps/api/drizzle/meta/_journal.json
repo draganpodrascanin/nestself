@@ -29,6 +29,13 @@
       "when": 1792851691798,
       "tag": "0003_professional_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792852546055,
+      "tag": "0004_emergency_access_request",
+      "breakpoints": true
     }
   ]
 }

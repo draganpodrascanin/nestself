@@ -5,7 +5,8 @@
  *   principal so the job re-authorizes against the principal's current state
  *   (T-1.17, AUTHZ-R-53).
  * - `MaintenanceJobsService` holds the nightly system jobs (audit partitions,
- *   grant reconciliation, stale mobile families).
+ *   grant reconciliation, stale mobile families) and the 15-minute emergency
+ *   access sweeper.
  * - `JobSchedulerService` registers the schedules and processes the queue; it
  *   is started only by the worker process (`src/worker/main.ts`).
  */

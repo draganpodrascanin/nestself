@@ -6,42 +6,25 @@
  * `access.denied` with identifiers only. Message bodies and intake text are
  * never logged or written to audit details.
  *
- * Emergency reads (`records.read.emergency`) belong to T-2.5.
+ * Emergency reads (`records.read.emergency`) live in the emergency module
+ * and share `professional-records.ts`.
  */
 import { Injectable } from '@nestjs/common';
-import type { Action, Principal, Resource } from '@nestself/contracts';
+import type { Action, Principal } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ProfessionalRepository } from '../db/repositories/professional.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import {
+  confidentialResource,
+  toConversationView,
+  toIntakeView,
+  type ConversationView,
+  type IntakeView,
+} from './professional-records.js';
 
-export interface ConversationView {
-  id: string;
-  caseId: string;
-  orgId: string;
-  messages: { id: string; authorUserId: string; body: string; createdAt: Date }[];
-}
-
-export interface IntakeView {
-  id: string;
-  caseId: string;
-  orgId: string;
-  body: string;
-  createdAt: Date;
-}
-
-/**
- * The confidential resource for a case-bound row. `id` is the case id
- * because CASE assignments target cases; `ownerId` is the employee, which
- * the participant (`own`) path matches.
- */
-function confidentialResource(
-  type: 'conversation' | 'intake',
-  row: { caseId: string; orgId: string; employeeUserId: string },
-): Resource {
-  return { type, id: row.caseId, orgId: row.orgId, ownerId: row.employeeUserId, isConfidential: true };
-}
+export type { ConversationView, IntakeView } from './professional-records.js';
 
 function notFound(): ApiHttpException {
   return new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
@@ -69,19 +52,13 @@ export class ProfessionalService {
     const row = await this.repo.findIntake(id);
     if (!row) throw notFound();
     await this.authz.require(principal, 'conversation.read.assigned', confidentialResource('intake', row));
-    return { id: row.id, caseId: row.caseId, orgId: row.orgId, body: row.body, createdAt: row.createdAt };
+    return toIntakeView(row);
   }
 
   private async readConversation(principal: Principal, id: string, action: Action): Promise<ConversationView> {
     const row = await this.repo.findConversation(id);
     if (!row) throw notFound();
     await this.authz.require(principal, action, confidentialResource('conversation', row));
-    const messages = await this.repo.listMessages(row.id);
-    return {
-      id: row.id,
-      caseId: row.caseId,
-      orgId: row.orgId,
-      messages: messages.map((m) => ({ id: m.id, authorUserId: m.authorUserId, body: m.body, createdAt: m.createdAt })),
-    };
+    return toConversationView(row, await this.repo.listMessages(row.id));
   }
 }

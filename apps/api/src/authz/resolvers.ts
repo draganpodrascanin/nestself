@@ -41,7 +41,7 @@ export function orgResourceFromContext(type: string): ResourceResolver {
  * API-R-28 checks shared by every `/ops/*` resolver: a web session (bearer
  * tokens are rejected with `session_required`) and the operations context.
  */
-function assertOperationsSession(principal: Principal): void {
+export function assertOperationsSession(principal: Principal): void {
   if (!principal.sessionId) {
     throw new ApiHttpException({
       status: 403,

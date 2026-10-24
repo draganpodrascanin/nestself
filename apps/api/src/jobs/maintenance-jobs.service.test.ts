@@ -41,6 +41,8 @@ describe('MaintenanceJobsService', () => {
     findOrphanedDelegations: ReturnType<typeof vi.fn>;
     findGrantsWithoutActiveMembership: ReturnType<typeof vi.fn>;
     revokeGrants: ReturnType<typeof vi.fn>;
+    findExpiredApprovedEmergencyAccess: ReturnType<typeof vi.fn>;
+    revokeEmergencyAccess: ReturnType<typeof vi.fn>;
   };
   let auditRepo: { ensurePartitions: ReturnType<typeof vi.fn> };
   let audit: { record: ReturnType<typeof vi.fn> };
@@ -54,6 +56,8 @@ describe('MaintenanceJobsService', () => {
       findOrphanedDelegations: vi.fn().mockResolvedValue([]),
       findGrantsWithoutActiveMembership: vi.fn().mockResolvedValue([]),
       revokeGrants: vi.fn().mockResolvedValue(undefined),
+      findExpiredApprovedEmergencyAccess: vi.fn().mockResolvedValue([]),
+      revokeEmergencyAccess: vi.fn().mockImplementation((id: string) => Promise.resolve({ id })),
     };
     auditRepo = { ensurePartitions: vi.fn().mockResolvedValue(['audit_events_y2026m10', 'audit_events_y2026m11']) };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
@@ -163,6 +167,67 @@ describe('MaintenanceJobsService', () => {
     it('reports zero work when no family sets exist', async () => {
       const report = await service.pruneStaleMobileFamilies();
       expect(report).toEqual({ usersScanned: 0, familiesChecked: 0, revoked: [] });
+    });
+  });
+
+  describe('emergency.sweep-expired', () => {
+    const emergency = (id: string, userId: string) =>
+      ({
+        id,
+        userId,
+        approvedByUserId: 'user_approver',
+        approvedAt: new Date('2026-10-23T01:00:00.000Z'),
+        purpose: 'Safeguarding concern raised by the assigned expert',
+        scopeKind: 'CASE',
+        scopeId: 'case_1',
+        requestedDurationMinutes: 60,
+        grantedAt: new Date('2026-10-23T01:00:00.000Z'),
+        expiresAt: new Date('2026-10-23T02:00:00.000Z'),
+        revokedAt: null,
+        revokedByUserId: null,
+      }) as never;
+
+    it('revokes each approved, expired record as the job and audits emergency_access.expired', async () => {
+      authzRepo.findExpiredApprovedEmergencyAccess.mockResolvedValue([
+        emergency('ema_1', 'user_a'),
+        emergency('ema_2', 'user_b'),
+      ]);
+
+      const report = await service.run('emergency.sweep-expired', NOW);
+
+      expect(report).toEqual({ job: 'emergency.sweep-expired', expired: ['ema_1', 'ema_2'] });
+      expect(authzRepo.findExpiredApprovedEmergencyAccess).toHaveBeenCalledWith(NOW);
+      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_1', null, NOW);
+      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_2', null, NOW);
+      expect(audit.record).toHaveBeenCalledTimes(2);
+      expect(audit.record).toHaveBeenCalledWith({
+        action: 'emergency_access.expired',
+        actorUserId: null,
+        actorKind: 'JOB',
+        recordType: 'emergency_access',
+        recordId: 'ema_1',
+        result: 'ALLOWED',
+        details: { userId: 'user_a', scopeKind: 'CASE', scopeId: 'case_1', job: 'emergency.sweep-expired' },
+        occurredAt: NOW,
+      });
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_a');
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_b');
+    });
+
+    it('skips a record revoked in the meantime without auditing it', async () => {
+      authzRepo.findExpiredApprovedEmergencyAccess.mockResolvedValue([emergency('ema_1', 'user_a')]);
+      authzRepo.revokeEmergencyAccess.mockResolvedValue(null);
+
+      const report = await service.sweepExpiredEmergencyAccess(NOW);
+
+      expect(report).toEqual({ expired: [] });
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(principals.invalidateUser).not.toHaveBeenCalled();
+    });
+
+    it('reports zero work when nothing has expired', async () => {
+      expect(await service.sweepExpiredEmergencyAccess(NOW)).toEqual({ expired: [] });
+      expect(authzRepo.revokeEmergencyAccess).not.toHaveBeenCalled();
     });
   });
 });

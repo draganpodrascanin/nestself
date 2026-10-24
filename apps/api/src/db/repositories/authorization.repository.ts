@@ -22,6 +22,21 @@ export type GrantRow = typeof grants.$inferSelect;
 export type AssignmentRow = typeof assignments.$inferSelect;
 export type EmergencyAccessRow = typeof emergencyAccess.$inferSelect;
 
+/** A pending emergency access request: provisional window, no approver yet. */
+export interface NewEmergencyRequest {
+  userId: string;
+  purpose: string;
+  scopeKind: EmergencyAccessRow['scopeKind'];
+  scopeId: string;
+  requestedDurationMinutes: number;
+  grantedAt: Date;
+  expiresAt: Date;
+}
+
+export interface EmergencyAccessFilter {
+  userId?: string;
+}
+
 /** Who revoked a grant, when, and why; written to every revoked row. */
 export interface RevocationInput {
   at: Date;
@@ -343,7 +358,10 @@ export class AuthorizationRepository {
     return rows.map((r) => r.ancestorId);
   }
 
-  /** Emergency access records that are unrevoked and unexpired at `now` (never cached, AUTHZ-R-46). */
+  /**
+   * Emergency access records that are approved, unrevoked and unexpired at
+   * `now` (never cached, AUTHZ-R-46). A pending request is never active.
+   */
   async findActiveEmergencyAccess(userId: string, now: Date, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
     return this.exec(tx)
       .select()
@@ -351,8 +369,95 @@ export class AuthorizationRepository {
       .where(
         and(
           eq(emergencyAccess.userId, userId),
+          isNotNull(emergencyAccess.approvedByUserId),
           isNull(emergencyAccess.revokedAt),
           gt(emergencyAccess.expiresAt, now),
+        ),
+      );
+  }
+
+  async createEmergencyRequest(values: NewEmergencyRequest, tx?: DbExecutor): Promise<EmergencyAccessRow> {
+    const [row] = await this.exec(tx)
+      .insert(emergencyAccess)
+      .values({ ...values, approvedByUserId: null, approvedAt: null })
+      .returning();
+    return row!;
+  }
+
+  async findEmergencyAccess(id: string, tx?: DbExecutor): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx).select().from(emergencyAccess).where(eq(emergencyAccess.id, id));
+    return row ?? null;
+  }
+
+  /** Every emergency access record in any state, newest first (pending, active, expired, revoked). */
+  async listEmergencyAccess(filter: EmergencyAccessFilter, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(emergencyAccess)
+      .where(filter.userId ? eq(emergencyAccess.userId, filter.userId) : undefined)
+      .orderBy(desc(emergencyAccess.grantedAt), desc(emergencyAccess.id));
+  }
+
+  /**
+   * Approve a pending request: restarts the window at `at`. Returns null when
+   * the row is missing, already approved or revoked, so two concurrent
+   * approvals cannot both succeed.
+   */
+  async approveEmergencyAccess(
+    id: string,
+    approverUserId: string,
+    at: Date,
+    expiresAt: Date,
+    tx?: DbExecutor,
+  ): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx)
+      .update(emergencyAccess)
+      .set({ approvedByUserId: approverUserId, approvedAt: at, grantedAt: at, expiresAt })
+      .where(
+        and(
+          eq(emergencyAccess.id, id),
+          isNull(emergencyAccess.approvedByUserId),
+          isNull(emergencyAccess.revokedAt),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  }
+
+  /** Delete a pending request (denial); an approved record is never deleted. */
+  async deleteEmergencyRequest(id: string, tx?: DbExecutor): Promise<boolean> {
+    const rows = await this.exec(tx)
+      .delete(emergencyAccess)
+      .where(and(eq(emergencyAccess.id, id), isNull(emergencyAccess.approvedByUserId)))
+      .returning({ id: emergencyAccess.id });
+    return rows.length > 0;
+  }
+
+  /** Set `revokedAt` once; `byUserId` null marks the expiry sweeper. Null when already revoked or missing. */
+  async revokeEmergencyAccess(
+    id: string,
+    byUserId: string | null,
+    at: Date,
+    tx?: DbExecutor,
+  ): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx)
+      .update(emergencyAccess)
+      .set({ revokedAt: at, revokedByUserId: byUserId })
+      .where(and(eq(emergencyAccess.id, id), isNull(emergencyAccess.revokedAt)))
+      .returning();
+    return row ?? null;
+  }
+
+  /** Approved, unrevoked records whose window has closed at `now` (sweeper input). */
+  async findExpiredApprovedEmergencyAccess(now: Date, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(emergencyAccess)
+      .where(
+        and(
+          isNotNull(emergencyAccess.approvedByUserId),
+          isNull(emergencyAccess.revokedAt),
+          lte(emergencyAccess.expiresAt, now),
         ),
       );
   }
