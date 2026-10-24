@@ -93,3 +93,15 @@ blockquote p:last-child { margin-bottom: 0; }
 /* Cover block: the first H1 and its lead paragraph start the document; the
    first H2 opens a new page so the table of contents stands alone. */
 h1 + p + h2, h1 + p + ul + h2 { break-before: page; }
+
+/* Screenshots: `![alt](screenshots/x.png)` followed by `*caption*` in the
+   same paragraph becomes a figure (build.mjs). */
+figure { margin: 1mm 0 4mm; break-inside: avoid; }
+figure img, p > img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1pt solid var(--color-border-subtle);
+  border-radius: 2mm;
+}
+figcaption { margin-top: 1.5mm; font-size: 8.5pt; color: var(--color-text-secondary); }

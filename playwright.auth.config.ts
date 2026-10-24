@@ -8,7 +8,8 @@
  * Completely separate from the visual/a11y suite in `playwright.config.ts`
  * (`pnpm e2e`). Run with:
  *
- *   pnpm e2e:auth
+ *   pnpm e2e:auth                 (project auth-desktop)
+ *   pnpm docs:auth:screenshots    (project screenshots, PNGs for docs/auth)
  *
  * Prerequisites:
  *   - TEST_DATABASE_URL (or E2E_DATABASE_URL) in the environment. The stub
@@ -56,6 +57,23 @@ export default defineConfig({
       use: {
         viewport: { width: 1440, height: 900 },
         deviceScaleFactor: 1,
+      },
+    },
+    /**
+     * Screenshots for the auth guides (`pnpm docs:auth:screenshots`). Not a
+     * test suite: each `*.shot.ts` drives the real screens against the same
+     * stub stack and writes a PNG into docs/auth/screenshots/. `pnpm e2e:auth`
+     * selects `auth-desktop` only, so this project runs only when asked for.
+     */
+    {
+      name: 'screenshots',
+      testDir: './e2e/screenshots',
+      testMatch: '**/*.shot.ts',
+      use: {
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 1,
+        colorScheme: 'light',
+        reducedMotion: 'reduce',
       },
     },
   ],
