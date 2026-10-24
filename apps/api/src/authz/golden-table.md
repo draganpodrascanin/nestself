@@ -28,4 +28,5 @@ paths, self-approval, emergency access lifecycle, confidential-domain
 isolation, membership edge cases, and user-state denials.
 
 Labels use prefixes: EMP, MGR, ORG, PLAT, EXP, FIN, CLFIN, COORD, CMS,
-LEAD, OPS, EVT, SYS.
+LEAD, OPS, EVT, SYS, CONF-DENY (professional-module resource shape:
+administrative grants denied, CASE assignment and participant paths allowed).

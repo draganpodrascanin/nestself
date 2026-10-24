@@ -26,6 +26,7 @@ import { JobsModule } from './jobs/jobs.module.js';
 import { OrgUnitsModule } from './org-units/org-units.module.js';
 import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
+import { ProfessionalModule } from './professional/professional.module.js';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { WsModule } from './ws/ws.module.js';
     JobsModule,
     OrgUnitsModule,
     GrantsModule,
+    ProfessionalModule,
     WsModule,
   ],
   providers: [

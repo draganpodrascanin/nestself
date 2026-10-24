@@ -19,6 +19,7 @@ import {
   SAMPLE_ORG_UNITS,
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_EXTERNAL_IDENTITIES,
+  SAMPLE_CASE,
 } from '@nestself/sample-data';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
@@ -355,6 +356,56 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     }
   }
 
+  // ── Confidential professional domain: one case (T-2.4) ──
+  // The expert reaches the case through a CASE assignment targeting its id.
+  await db
+    .insert(t.assignments)
+    .values({
+      id: `assignment_${SAMPLE_CASE.expertUserId}_case_${SAMPLE_CASE.id}`,
+      userId: SAMPLE_CASE.expertUserId,
+      kind: 'CASE',
+      targetId: SAMPLE_CASE.id,
+      assignedByUserId: hrAdmin?.id ?? SAMPLE_CASE.expertUserId,
+      startAt: SAMPLE_START_DATE,
+    })
+    .onConflictDoNothing({ target: t.assignments.id });
+  const caseRef = {
+    orgId: SAMPLE_CASE.orgId,
+    caseId: SAMPLE_CASE.id,
+    employeeUserId: SAMPLE_CASE.employeeUserId,
+  };
+  await upsertById(
+    db,
+    t.conversations,
+    { id: SAMPLE_CASE.conversation.id, ...caseRef, expertUserId: SAMPLE_CASE.expertUserId },
+    { ...caseRef, expertUserId: SAMPLE_CASE.expertUserId },
+  );
+  for (const m of SAMPLE_CASE.conversation.messages) {
+    await upsertById(
+      db,
+      t.conversationMessages,
+      {
+        id: m.id,
+        conversationId: SAMPLE_CASE.conversation.id,
+        authorUserId: m.authorUserId,
+        body: m.body,
+        createdAt: new Date(m.createdAt),
+      },
+      { body: m.body },
+    );
+  }
+  await upsertById(
+    db,
+    t.intakeRecords,
+    {
+      id: SAMPLE_CASE.intake.id,
+      ...caseRef,
+      body: SAMPLE_CASE.intake.body,
+      createdAt: new Date(SAMPLE_CASE.intake.createdAt),
+    },
+    { body: SAMPLE_CASE.intake.body },
+  );
+
   return countAll(db);
 }
 
@@ -389,6 +440,9 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     permissionTemplates: t.permissionTemplates,
     grants: t.grants,
     assignments: t.assignments,
+    conversations: t.conversations,
+    conversationMessages: t.conversationMessages,
+    intakeRecords: t.intakeRecords,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

@@ -1,0 +1,247 @@
+/**
+ * Confidential professional-domain e2e tests (T-2.4, T-2.3): the assigned
+ * expert and the participant read the sample conversation; employees,
+ * organization admins and platform staff are denied, and a denial is
+ * audited without any message or intake content.
+ *
+ * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
+ */
+import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { and, eq } from 'drizzle-orm';
+import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { SAMPLE_CASE, SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
+import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { computeTotp } from '../src/identity/totp.js';
+import { seed } from '../src/db/seed/seed-lib.js';
+import { auditEvents, grants } from '../src/db/schema/index.js';
+import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+
+const TEST_DB_URL = process.env.TEST_DATABASE_URL;
+const shouldRun = !!TEST_DB_URL;
+
+const ORG = 'org_sample';
+const CONV = `/api/professional/conversations/${SAMPLE_CASE.conversation.id}`;
+const MY_CONV = `/api/professional/me/conversations/${SAMPLE_CASE.conversation.id}`;
+const INTAKE = `/api/professional/intake/${SAMPLE_CASE.intake.id}`;
+/** Fixed TOTP secret for the staff users of this suite (base32). */
+const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
+const STAFF = ['user_milica', 'user_nikola'];
+const PEOPLE = ['user_milica', 'user_nikola', 'user_jovan', 'user_ivana'];
+
+describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
+  let app: INestApplication;
+  let idp: FakeIdentityProvider;
+  let testDb: TestDatabase;
+  const jwtSecret = randomBytes(32).toString('hex');
+
+  beforeAll(async () => {
+    testDb = await resetTestDatabase(TEST_DB_URL!, 'professional');
+    await seed(testDb.db);
+
+    process.env.DATABASE_URL = testDb.url;
+    process.env.AUTH_MODE = 'stub';
+    process.env.JWT_SECRET = jwtSecret;
+    process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
+    process.env.NODE_ENV = 'test';
+    delete process.env.REDIS_URL;
+
+    const { AppModule } = await import('../src/app.module.js');
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+
+    // The fake pool gets the sample subjects the seed already linked; staff
+    // sign in with the development password and an enrolled TOTP.
+    idp = app.get(IdentityProviderService) as FakeIdentityProvider;
+    idp.seedUsers(
+      SAMPLE_EXTERNAL_IDENTITIES.filter((i) => PEOPLE.includes(i.userId)).map((i) => ({
+        email: i.email,
+        sub: i.subject,
+        username: i.cognitoUsername,
+        ...(STAFF.includes(i.userId)
+          ? { password: SAMPLE_DEV_PASSWORD, totpSecret: TOTP_SECRET, totpEnrolled: true }
+          : {}),
+      })),
+    );
+
+    const base = {
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      includeDescendants: false,
+      grantedAt: new Date('2026-01-01'),
+      validFrom: new Date('2026-01-01'),
+    };
+    // Strategy 4.4 lists conversation.read.assigned in no template's actions
+    // (the expert template only names it as a step-up action), so the
+    // assigned-expert path needs an explicit grant on assigned_cases.
+    // Nikola gets a platform_owner grant to prove a platform grant never
+    // reaches confidential content.
+    const platformOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'platform_owner')!;
+    await testDb.db.insert(grants).values([
+      {
+        ...base,
+        id: 'grant_test_milica_conversation_read_assigned',
+        subjectUserId: 'user_milica',
+        templateKey: null,
+        actions: ['conversation.read.assigned'],
+        scopeType: 'assigned_cases',
+        grantedByUserId: 'user_milica',
+      },
+      {
+        ...base,
+        id: 'grant_test_nikola_platform_owner',
+        subjectUserId: 'user_nikola',
+        templateKey: platformOwner.key,
+        actions: [...platformOwner.actions, 'conversation.read.assigned'],
+        scopeType: platformOwner.scopeType,
+        grantedByUserId: 'user_nikola',
+      },
+    ]);
+  }, 180_000);
+
+  afterAll(async () => {
+    await app?.close();
+    await testDb?.close();
+  });
+
+  function extractCsrf(res: request.Response): string {
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const csrf = cookies?.find((c) => c.startsWith('nestself_csrf='))?.match(/nestself_csrf=([^;]+)/);
+    if (!csrf) throw new Error('CSRF cookie not found');
+    return csrf[1]!;
+  }
+
+  async function switchContext(agent: request.Agent, csrf: string, context: Record<string, string>) {
+    const res = await agent.post('/api/auth/context').set('X-CSRF-Token', csrf).send({ context });
+    expect(res.status).toBe(200);
+  }
+
+  /** Password + TOTP sign-in for staff and experts. */
+  async function signInStaff(userId: string, context: Record<string, string>) {
+    const agent = request.agent(app.getHttpServer());
+    const pw = await agent
+      .post('/api/auth/password')
+      .send({ email: `${userId}@example.com`, password: SAMPLE_DEV_PASSWORD });
+    expect(pw.status).toBe(200);
+    expect(pw.body).toHaveProperty('step', 'totp');
+    const totp = await agent
+      .post('/api/auth/challenge')
+      .send({ challengeToken: pw.body.challengeToken, response: computeTotp(TOTP_SECRET) });
+    expect(totp.status).toBe(200);
+    const csrf = extractCsrf(totp);
+    await switchContext(agent, csrf, context);
+    return agent;
+  }
+
+  /** Email-OTP sign-in for employees and organization admins. */
+  async function signInMember(userId: string) {
+    const email = `${userId}@example.com`;
+    const agent = request.agent(app.getHttpServer());
+    const start = await agent.post('/api/auth/email-otp/start').send({ email });
+    expect(start.status).toBe(200);
+    const code = idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+    const verify = await agent
+      .post('/api/auth/email-otp/verify')
+      .send({ challengeToken: start.body.challengeToken, code });
+    expect(verify.status).toBe(200);
+    await switchContext(agent, extractCsrf(verify), { kind: 'organization', orgId: ORG });
+    return agent;
+  }
+
+  const expectedMessages = SAMPLE_CASE.conversation.messages.map((m) => ({
+    id: m.id,
+    authorUserId: m.authorUserId,
+    body: m.body,
+    createdAt: m.createdAt,
+  }));
+
+  it('the assigned expert reads the conversation and the intake record', async () => {
+    const milica = await signInStaff('user_milica', { kind: 'expert' });
+
+    const conv = await milica.get(CONV);
+    expect(conv.status).toBe(200);
+    expect(conv.body).toEqual({
+      id: SAMPLE_CASE.conversation.id,
+      caseId: SAMPLE_CASE.id,
+      orgId: ORG,
+      messages: expectedMessages,
+    });
+
+    const intake = await milica.get(INTAKE);
+    expect(intake.status).toBe(200);
+    expect(intake.body).toEqual({
+      id: SAMPLE_CASE.intake.id,
+      caseId: SAMPLE_CASE.id,
+      orgId: ORG,
+      body: SAMPLE_CASE.intake.body,
+      createdAt: SAMPLE_CASE.intake.createdAt,
+    });
+
+    const missing = await milica.get('/api/professional/conversations/conv_missing');
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('not_found');
+  });
+
+  it('the participant reads their own conversation but not through the expert route', async () => {
+    const jovan = await signInMember('user_jovan');
+
+    const own = await jovan.get(MY_CONV);
+    expect(own.status).toBe(200);
+    expect(own.body.messages).toEqual(expectedMessages);
+
+    const expertRoute = await jovan.get(CONV);
+    expect(expertRoute.status).toBe(403);
+    expect(expertRoute.body.code).toBe('forbidden');
+  });
+
+  it('a platform_owner grant does not reach the conversation', async () => {
+    const nikola = await signInStaff('user_nikola', { kind: 'operations' });
+    const res = await nikola.get(CONV);
+    // AuthorizationService.require answers 404 only to callers without any
+    // visibility into the organization; staff templates count as visibility,
+    // so platform staff get 403. Either way no content is returned.
+    expect(res.status).toBe(403);
+    expect(res.body).not.toHaveProperty('messages');
+
+    const [denied] = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'access.denied'), eq(auditEvents.actorUserId, 'user_nikola')));
+    expect(denied!.details).toMatchObject({ actionAttempted: 'conversation.read.assigned', reason: 'no_matching_assignment' });
+  });
+
+  it('an hr_admin is denied and the denial is audited without content', async () => {
+    const ivana = await signInMember('user_ivana');
+    const res = await ivana.get(CONV);
+    expect(res.status).toBe(403);
+    expect(res.body).not.toHaveProperty('messages');
+
+    const rows = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'access.denied'), eq(auditEvents.actorUserId, 'user_ivana')));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.details).toMatchObject({
+      actionAttempted: 'conversation.read.assigned',
+      resourceType: 'conversation',
+      resourceId: SAMPLE_CASE.id,
+    });
+
+    // No audit row anywhere carries message or intake text.
+    const all = await testDb.db.select({ details: auditEvents.details }).from(auditEvents);
+    const serialized = JSON.stringify(all);
+    for (const body of [...SAMPLE_CASE.conversation.messages.map((m) => m.body), SAMPLE_CASE.intake.body]) {
+      expect(serialized).not.toContain(body);
+    }
+  });
+});

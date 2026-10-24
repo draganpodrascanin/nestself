@@ -10,4 +10,5 @@ export * from './authorization.js';
 export * from './invitations.js';
 export * from './audit.js';
 export * from './content.js';
+export * from './professional.js';
 export * from './relations.js';

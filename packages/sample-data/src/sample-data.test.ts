@@ -15,6 +15,7 @@ import {
   SAMPLE_TESTIMONIALS,
   SAMPLE_ORG_UNITS,
   SAMPLE_EXPERT_CREDENTIALS,
+  SAMPLE_CASE,
   isSampleMode,
   assertNotProduction,
 } from './index.ts';
@@ -35,6 +36,7 @@ describe('sample-data fixtures', () => {
     SAMPLE_EVENT_REQUEST,
     ...SAMPLE_ORG_UNITS,
     ...SAMPLE_EXPERT_CREDENTIALS,
+    SAMPLE_CASE,
   ];
 
   it('every fixture has sample === true', () => {
@@ -74,6 +76,13 @@ describe('sample-data fixtures', () => {
       for (const phrase of banned) {
         expect(post.content.toLowerCase()).not.toContain(phrase);
       }
+    }
+  });
+
+  it('the sample case carries only labelled placeholder text', () => {
+    const bodies = [...SAMPLE_CASE.conversation.messages.map((m) => m.body), SAMPLE_CASE.intake.body];
+    for (const body of bodies) {
+      expect(body).toMatch(/\(fixture\)$/);
     }
   });
 });
