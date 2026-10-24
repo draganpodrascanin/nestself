@@ -9,7 +9,7 @@ The two Vite apps carry a Content Security Policy because the consultation call 
 | `apps/<app>/src/security/content-security-policy.ts` | The policy itself, as a pure function. One file per app (`workspace`, `admin`); keep the two identical. |
 | `apps/<app>/vite.config.ts`, plugin `nestself-content-security-policy` | Injects the policy as `<meta http-equiv="Content-Security-Policy">` right after the charset in the built `index.html`, so any static host enforces it. Build only. |
 | `apps/<app>/vite.config.ts`, `preview.headers` | Sends the same policy as a response header from `vite preview`, plus `frame-ancestors 'none'`, which a `<meta>` policy cannot carry. |
-| `infra/cdk/lib/edge-stack.ts`, `securityHeadersBehavior` | Deployed stages: the CloudFront response-headers policy must send the header form. Not wired yet; copy the header string from `vite preview` (or `contentSecurityPolicy({ delivery: 'header', … })`). |
+| `infra/cdk/lib/edge-stack.ts`, one `ResponseHeadersPolicy` per distribution | Deployed stages: CloudFront sends the header form, built from the same policy source (`content-security-policy.ts`) with the stage's API origin and the script hash read from each app's `index.html` at synth time; a CDK test fails on drift between the header and the app policy. The header is the source of truth in deployed stages; the meta tag in the build is the fallback. |
 
 The dev server (`vite`, `pnpm dev`) sends no policy on purpose: React Refresh injects an inline module script and HMR opens a websocket, neither of which exists in a build. Check a policy change with `pnpm --filter @nestself/workspace build && pnpm --filter @nestself/workspace preview` and the browser console.
 
