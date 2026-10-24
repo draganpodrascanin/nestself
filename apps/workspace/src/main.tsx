@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { routeTree } from './routeTree.gen';
+import { api } from './api';
+import { initialSnapshot } from './auth';
+import { isSampleDataMode } from './data-source';
 import './i18n';
 import './app.css';
 
@@ -26,7 +29,13 @@ const router = createRouter({
   routeTree,
   context: {
     queryClient,
-    auth: { principal: null, effectiveActions: [] },
+    auth: {
+      principal: null,
+      effectiveActions: [],
+      settled: false,
+      // Sample mode has no session to wait for; SampleAuthProvider fills the context.
+      ensure: isSampleDataMode ? undefined : () => initialSnapshot(api),
+    },
   },
   defaultPreload: 'intent',
   scrollRestoration: true,

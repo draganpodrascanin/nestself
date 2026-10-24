@@ -10,10 +10,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Principal, ActiveContext } from '@nestself/contracts';
+import type { Principal, ActiveContext, MeResponse } from '@nestself/contracts';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { AuthContext } from './auth-context';
+import { initialMe, releaseInitialMe } from './route-auth';
 import { StepUpDialog } from './step-up-dialog';
 import type { AuthStatus } from './types';
 
@@ -47,9 +48,9 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     [],
   );
 
-  const refreshPrincipal = useCallback(async () => {
+  const loadPrincipal = useCallback(async (request?: Promise<MeResponse>) => {
     try {
-      const data = await authApi.me();
+      const data = await (request ?? authApi.me());
       applyMe(data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -64,11 +65,13 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     }
   }, [authApi, applyMe]);
 
-  // Initial fetch
+  const refreshPrincipal = useCallback(() => loadPrincipal(), [loadPrincipal]);
+
+  // Initial fetch: the same request the route guards wait for (route-auth.ts).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async: setState runs after await, not synchronously
-    void refreshPrincipal();
-  }, [refreshPrincipal]);
+    void loadPrincipal(initialMe(client)).finally(() => releaseInitialMe(client));
+  }, [loadPrincipal, client]);
 
   // Refetch on window focus
   useEffect(() => {

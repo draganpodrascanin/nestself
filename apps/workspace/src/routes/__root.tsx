@@ -15,13 +15,13 @@ import {
 import i18n from '../i18n';
 import { isSampleDataMode } from '../data-source';
 import { useAuth, SampleAuthProvider, AuthProvider } from '../auth';
-import type { AuthSnapshot } from '../auth';
+import type { RouterAuth } from '../auth';
 import { RoleSwitcher } from '../components/RoleSwitcher';
 import { api } from '../api';
 
 interface RouterContext {
   queryClient: QueryClient;
-  auth: AuthSnapshot;
+  auth: RouterAuth;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -55,21 +55,27 @@ function AuthWrapper({ children }: { children: ReactNode }) {
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions } = useAuth();
+  const { principal, effectiveActions, status } = useAuth();
   const router = useRouter();
+  const settled = status !== 'loading';
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
-    if (currentAuth.principal !== principal || currentAuth.effectiveActions !== effectiveActions) {
+    if (
+      currentAuth.principal !== principal ||
+      currentAuth.effectiveActions !== effectiveActions ||
+      currentAuth.settled !== settled
+    ) {
       router.update({
         context: {
           ...router.options.context,
-          auth: { principal, effectiveActions },
+          // Keep `ensure`: guards still use it while the provider is loading.
+          auth: { ...currentAuth, principal, effectiveActions, settled },
         },
       });
       void router.invalidate();
     }
-  }, [principal, effectiveActions, router]);
+  }, [principal, effectiveActions, settled, router]);
 
   return <>{children}</>;
 }

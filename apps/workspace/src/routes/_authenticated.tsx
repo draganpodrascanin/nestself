@@ -14,14 +14,17 @@ import {
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth } from '../auth';
+import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { isSampleDataMode } from '../data-source';
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context, location }) => {
-    // In sample mode a principal always exists; in real mode redirect to sign-in.
-    if (!isSampleDataMode && !context.auth.principal) {
+  beforeLoad: async ({ context, location }) => {
+    // In sample mode a principal always exists; in real mode redirect to
+    // sign-in, after waiting for the session on a full page load.
+    if (isSampleDataMode) return;
+    const { principal } = await resolveRouteAuth(context.auth);
+    if (!principal) {
       throw redirect({ to: '/sign-in', search: { return: location.pathname } });
     }
   },
