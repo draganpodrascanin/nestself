@@ -67,4 +67,28 @@ describe('AvailabilityVersionService', () => {
     const rawGlobal = await kv.get(availabilityVersionGlobalKey());
     expect(rawGlobal).toBe('1');
   });
+
+  it('global key does not collide with an org id "global"', async () => {
+    // Bump both the org named "global" and the global counter
+    await svc.bump(['global']);
+    await svc.bump('global');
+    await svc.bump('global');
+
+    // The org named "global" was bumped once; the actual global counter twice
+    expect(await svc.current('global')).toBe(1);
+    expect(await svc.currentGlobal()).toBe(2);
+  });
+
+  it('versionToken returns "orgVersion.globalVersion"', async () => {
+    expect(await svc.versionToken('org_1')).toBe('0.0');
+
+    await svc.bump(['org_1']);
+    expect(await svc.versionToken('org_1')).toBe('1.0');
+
+    await svc.bump('global');
+    expect(await svc.versionToken('org_1')).toBe('1.1');
+
+    // Another org is unaffected by org_1's bump
+    expect(await svc.versionToken('org_2')).toBe('0.1');
+  });
 });

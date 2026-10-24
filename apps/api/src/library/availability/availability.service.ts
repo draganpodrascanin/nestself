@@ -13,6 +13,7 @@ import {
   eq,
   lte,
   gt,
+  ne,
   isNull,
   or,
   inArray,
@@ -27,64 +28,252 @@ import {
   contentResources,
   contentRevisionMedia,
 } from '../../db/schema/cms.js';
+import { memberships } from '../../db/schema/organization.js';
 import { mediaAssets } from '../../db/schema/media.js';
 import type { AvailabilityContext } from './availability-context.js';
 import { authoredLocale } from './availability-context.js';
+
+/** Filter arguments to push predicates into the SQL (C2). */
+export interface AvailabilityFilter {
+  resourceIds?: string[];
+  variantIds?: string[];
+  publicationIds?: string[];
+  mediaAssetId?: string;
+}
 
 @Injectable()
 export class AvailabilityService {
   /**
    * Returns a Drizzle query whose rows are the publications available to the
-   * reader described by `ctx`. Columns: `publicationId`, `variantId`,
-   * `contentResourceId`, `locale`.
+   * reader described by `ctx`. Columns are aliased so that `.as('avail')`
+   * exposes `publication_id`, `variant_id`, `content_resource_id`, `locale`
+   * for subquery joins (C1).
    *
-   * The result is a full query, not a subquery — callers wrap or join it as
-   * they see fit. It implements every clause of the formula (5.9.1 items 3–10);
+   * The result implements every clause of the formula (5.9.1 items 3–10);
    * items 1–2 (active principal, active membership) are guard-level checks
-   * that happen before reaching the service.
+   * that happen before reaching the service. For reader contexts, an
+   * uncorrelated EXISTS on the membership provides defense in depth (C3).
    *
    * @see ACC-R-17, C-10
    */
-  availablePublications(ctx: AvailabilityContext, db: DbExecutor) {
-    // CTE: latest started non-withdrawn publication per variant (5.9.1 item 7)
-    // Uses DISTINCT ON to pick the row with the highest starts_at per variant.
-    // The partial index `content_publications_variant_active_idx` covers this.
-    const latestStarted = db
-      .$with('latest_started')
-      .as(
+  availablePublications(
+    ctx: AvailabilityContext,
+    db: DbExecutor,
+    filter: AvailabilityFilter = {},
+  ) {
+    const conditions = [
+      // Item 4: not withdrawn
+      isNull(contentPublications.withdrawnAt),
+
+      // Item 5: started
+      lte(contentPublications.startsAt, ctx.now),
+
+      // Item 3: resource active
+      eq(contentResources.state, 'active'),
+
+      // Item 6: not expired
+      or(
+        isNull(contentPublications.endsAt),
+        gt(contentPublications.endsAt, ctx.now),
+      ),
+
+      // Item 7: supersession — NOT EXISTS newer non-withdrawn started publication.
+      // Deterministic tie-break on (starts_at, id) DESC per variant (I4).
+      notExists(
         db
-          .select({
-            publicationId:
-              sql<string>`DISTINCT ON (${contentPublications.contentVariantId}) ${contentPublications.id}`.as(
-                'publication_id',
-              ),
-            variantId: contentPublications.contentVariantId,
-          })
-          .from(contentPublications)
+          .select({ _: sql`1` })
+          .from(sql`content_publications "newer"`)
+          .where(
+            sql`"newer".content_variant_id = ${contentPublications.contentVariantId}
+                AND "newer".withdrawn_at IS NULL
+                AND "newer".starts_at <= ${ctx.now}
+                AND ("newer".starts_at, "newer".id) > (${contentPublications.startsAt}, ${contentPublications.id})`,
+          ),
+      ),
+
+      // Item 8: audience match (OR across rows) — C-12
+      exists(
+        db
+          .select({ _: sql`1` })
+          .from(contentPublicationAudiences)
           .where(
             and(
-              isNull(contentPublications.withdrawnAt), // item 4
-              lte(contentPublications.startsAt, ctx.now), // item 5
+              eq(
+                contentPublicationAudiences.publicationId,
+                contentPublications.id,
+              ),
+              audiencePredicate(ctx),
             ),
-          )
-          .orderBy(
-            contentPublications.contentVariantId,
-            sql`${contentPublications.startsAt} DESC`,
           ),
+      ),
+
+      // Item 9: capability enabled — C-11
+      // Fail-closed: if ctx.capabilities is empty, nothing matches.
+      ctx.capabilities.length > 0
+        ? sql`${contentPublications.requiredCapability} IN (${sql.join(
+            ctx.capabilities.map((c) => sql`${c}`),
+            sql`, `,
+          )})`
+        : sql`false`,
+
+      // Item 10: media readiness and rights — C-14
+      notExists(
+        db
+          .select({ _: sql`1` })
+          .from(contentRevisionMedia)
+          .innerJoin(
+            mediaAssets,
+            eq(mediaAssets.id, contentRevisionMedia.mediaAssetId),
+          )
+          .where(
+            and(
+              eq(
+                contentRevisionMedia.contentRevisionId,
+                contentPublications.contentRevisionId,
+              ),
+              or(
+                ne(mediaAssets.state, 'ready'),
+                and(
+                  sql`${mediaAssets.rightsExpiresAt} IS NOT NULL`,
+                  lte(mediaAssets.rightsExpiresAt, ctx.now),
+                ),
+              ),
+            ),
+          ),
+      ),
+
+      // ACC-R-25: locale filter — C-28
+      eq(contentVariants.locale, authoredLocale(ctx.readerLocale)),
+    ];
+
+    // Defense in depth for reader contexts (C3): uncorrelated EXISTS on membership
+    if (ctx.kind === 'reader') {
+      conditions.push(
+        exists(
+          db
+            .select({ _: sql`1` })
+            .from(memberships)
+            .where(
+              and(
+                eq(memberships.id, ctx.membershipId),
+                eq(memberships.userId, ctx.userId),
+                eq(memberships.orgId, ctx.orgId),
+                eq(memberships.status, 'ACTIVE'),
+                lte(memberships.startDate, ctx.now),
+                or(
+                  isNull(memberships.endDate),
+                  gt(memberships.endDate, ctx.now),
+                ),
+              ),
+            ),
+        ),
       );
+    }
+
+    // Pushdown filters (C2)
+    if (filter.resourceIds && filter.resourceIds.length > 0) {
+      conditions.push(
+        inArray(contentVariants.contentResourceId, filter.resourceIds),
+      );
+    }
+    if (filter.variantIds && filter.variantIds.length > 0) {
+      conditions.push(inArray(contentVariants.id, filter.variantIds));
+    }
+    if (filter.publicationIds && filter.publicationIds.length > 0) {
+      conditions.push(inArray(contentPublications.id, filter.publicationIds));
+    }
+    if (filter.mediaAssetId) {
+      conditions.push(
+        exists(
+          db
+            .select({ _: sql`1` })
+            .from(contentRevisionMedia)
+            .where(
+              and(
+                eq(
+                  contentRevisionMedia.contentRevisionId,
+                  contentPublications.contentRevisionId,
+                ),
+                eq(contentRevisionMedia.mediaAssetId, filter.mediaAssetId),
+              ),
+            ),
+        ),
+      );
+    }
 
     return db
-      .with(latestStarted)
       .select({
-        publicationId: contentPublications.id,
-        variantId: contentVariants.id,
-        contentResourceId: contentVariants.contentResourceId,
-        locale: contentVariants.locale,
+        publicationId:
+          sql<string>`${contentPublications.id}`.as('publication_id'),
+        variantId: sql<string>`${contentVariants.id}`.as('variant_id'),
+        contentResourceId:
+          sql<string>`${contentVariants.contentResourceId}`.as(
+            'content_resource_id',
+          ),
+        locale: sql<string>`${contentVariants.locale}`.as('locale'),
       })
       .from(contentPublications)
       .innerJoin(
-        latestStarted,
-        eq(latestStarted.publicationId, contentPublications.id),
+        contentVariants,
+        eq(contentVariants.id, contentPublications.contentVariantId),
+      )
+      .innerJoin(
+        contentResources,
+        eq(contentResources.id, contentVariants.contentResourceId),
+      )
+      .where(and(...conditions));
+  }
+
+  /**
+   * Check whether a single content resource is available. Returns the
+   * publication row or `null`. Single SQL query via resourceIds filter pushdown.
+   */
+  async isAvailable(
+    ctx: AvailabilityContext,
+    db: DbExecutor,
+    contentResourceId: string,
+  ) {
+    const rows = await this.availablePublications(ctx, db, {
+      resourceIds: [contentResourceId],
+    });
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Filter a list of resource ids down to the available ones.
+   * Single SQL query via resourceIds filter pushdown.
+   */
+  async availableResourceIds(
+    ctx: AvailabilityContext,
+    db: DbExecutor,
+    ids: string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.availablePublications(ctx, db, {
+      resourceIds: ids,
+    });
+    return rows.map((r) => r.contentResourceId);
+  }
+
+  /**
+   * Check whether a media asset is referenced by some available publication's
+   * revision. Single SQL query: joins from content_revision_media through the
+   * full availability formula with LIMIT 1 (I3).
+   */
+  async isMediaAssetAvailable(
+    ctx: AvailabilityContext,
+    db: DbExecutor,
+    assetId: string,
+  ): Promise<boolean> {
+    const rows = await db
+      .select({ _: sql<number>`1` })
+      .from(contentRevisionMedia)
+      .innerJoin(
+        contentPublications,
+        eq(
+          contentPublications.contentRevisionId,
+          contentRevisionMedia.contentRevisionId,
+        ),
       )
       .innerJoin(
         contentVariants,
@@ -96,16 +285,27 @@ export class AvailabilityService {
       )
       .where(
         and(
-          // Item 3: resource active
-          eq(contentResources.state, 'active'),
+          eq(contentRevisionMedia.mediaAssetId, assetId),
 
-          // Item 6: not expired
+          // Full availability formula inline (same as availablePublications)
+          isNull(contentPublications.withdrawnAt),
+          lte(contentPublications.startsAt, ctx.now),
+          eq(contentResources.state, 'active'),
           or(
             isNull(contentPublications.endsAt),
             gt(contentPublications.endsAt, ctx.now),
           ),
-
-          // Item 8: audience match (OR across rows) — C-12
+          notExists(
+            db
+              .select({ _: sql`1` })
+              .from(sql`content_publications "newer"`)
+              .where(
+                sql`"newer".content_variant_id = ${contentPublications.contentVariantId}
+                    AND "newer".withdrawn_at IS NULL
+                    AND "newer".starts_at <= ${ctx.now}
+                    AND ("newer".starts_at, "newer".id) > (${contentPublications.startsAt}, ${contentPublications.id})`,
+              ),
+          ),
           exists(
             db
               .select({ _: sql`1` })
@@ -120,100 +320,68 @@ export class AvailabilityService {
                 ),
               ),
           ),
-
-          // Item 9: capability enabled — C-11
-          // Fail-closed: if ctx.capabilities is empty, nothing matches.
           ctx.capabilities.length > 0
             ? sql`${contentPublications.requiredCapability} IN (${sql.join(
                 ctx.capabilities.map((c) => sql`${c}`),
                 sql`, `,
               )})`
             : sql`false`,
-
-          // Item 10: media readiness and rights — C-14
-          mediaReady(db, ctx.now),
-
-          // ACC-R-25: locale filter — C-28
+          notExists(
+            db
+              .select({ _: sql`1` })
+              .from(
+                sql`content_revision_media "crm2"`,
+              )
+              .innerJoin(
+                mediaAssets,
+                sql`${mediaAssets.id} = "crm2".media_asset_id`,
+              )
+              .where(
+                and(
+                  sql`"crm2".content_revision_id = ${contentPublications.contentRevisionId}`,
+                  or(
+                    ne(mediaAssets.state, 'ready'),
+                    and(
+                      sql`${mediaAssets.rightsExpiresAt} IS NOT NULL`,
+                      lte(mediaAssets.rightsExpiresAt, ctx.now),
+                    ),
+                  ),
+                ),
+              ),
+          ),
           eq(contentVariants.locale, authoredLocale(ctx.readerLocale)),
+          ...(ctx.kind === 'reader'
+            ? [
+                exists(
+                  db
+                    .select({ _: sql`1` })
+                    .from(memberships)
+                    .where(
+                      and(
+                        eq(memberships.id, ctx.membershipId),
+                        eq(memberships.userId, ctx.userId),
+                        eq(memberships.orgId, ctx.orgId),
+                        eq(memberships.status, 'ACTIVE'),
+                        lte(memberships.startDate, ctx.now),
+                        or(
+                          isNull(memberships.endDate),
+                          gt(memberships.endDate, ctx.now),
+                        ),
+                      ),
+                    ),
+                ),
+              ]
+            : []),
         ),
-      );
-  }
-
-  /**
-   * Check whether a single content resource is available. Returns the
-   * publication row or `null`.
-   */
-  async isAvailable(
-    ctx: AvailabilityContext,
-    db: DbExecutor,
-    contentResourceId: string,
-  ) {
-    const rows = await this.availablePublications(ctx, db);
-    const match = rows.find((r) => r.contentResourceId === contentResourceId);
-    return match ?? null;
-  }
-
-  /**
-   * Filter a list of resource ids down to the available ones.
-   */
-  async availableResourceIds(
-    ctx: AvailabilityContext,
-    db: DbExecutor,
-    ids: string[],
-  ): Promise<string[]> {
-    if (ids.length === 0) return [];
-    const rows = await this.availablePublications(ctx, db);
-    const availableSet = new Set(rows.map((r) => r.contentResourceId));
-    return ids.filter((id) => availableSet.has(id));
-  }
-
-  /**
-   * Check whether a media asset is referenced by some available publication's
-   * revision and is itself `ready` with valid rights. Built on the same
-   * availability subquery — no second formula.
-   */
-  async isMediaAssetAvailable(
-    ctx: AvailabilityContext,
-    db: DbExecutor,
-    assetId: string,
-  ): Promise<boolean> {
-    const pubs = await this.availablePublications(ctx, db);
-    // For each available publication, check if its revision references this asset
-    for (const pub of pubs) {
-      const refs = await db
-        .select({ _: sql<number>`1` })
-        .from(contentRevisionMedia)
-        .innerJoin(
-          contentPublications,
-          eq(
-            contentPublications.contentRevisionId,
-            contentRevisionMedia.contentRevisionId,
-          ),
-        )
-        .innerJoin(
-          mediaAssets,
-          eq(mediaAssets.id, contentRevisionMedia.mediaAssetId),
-        )
-        .where(
-          and(
-            eq(contentPublications.id, pub.publicationId),
-            eq(contentRevisionMedia.mediaAssetId, assetId),
-            eq(mediaAssets.state, 'ready'),
-            or(
-              isNull(mediaAssets.rightsExpiresAt),
-              gt(mediaAssets.rightsExpiresAt, ctx.now),
-            ),
-          ),
-        );
-      if (refs.length > 0) return true;
-    }
-    return false;
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   /**
    * Preview simulation (ACC-R-19, 5.9.4): evaluate the formula using a
    * simulated context. Never loads a real person's state (saved items,
-   * playback, feedback).
+   * playback, feedback). The context must have `kind: 'preview'`.
    */
   preview(simulatedCtx: AvailabilityContext, db: DbExecutor) {
     return this.availablePublications(simulatedCtx, db);
@@ -228,8 +396,9 @@ export class AvailabilityService {
  * OR of three audience-match clauses (C-12, 5.9.2):
  * 1. `all_eligible` matches every organization.
  * 2. `organization` matches when `org_id = ctx.orgId`.
- * 3. `org_unit` matches when `include_descendants` and `org_unit_id` is in
- *    `ctx.orgUnitIds`, or exactly equals the primary unit otherwise.
+ * 3. `org_unit` matches when `org_id = ctx.orgId` AND either
+ *    `include_descendants` and `org_unit_id` is in `ctx.orgUnitIds`,
+ *    or exactly equals the primary unit otherwise.
  */
 function audiencePredicate(ctx: AvailabilityContext) {
   const clauses = [
@@ -248,6 +417,7 @@ function audiencePredicate(ctx: AvailabilityContext) {
     clauses.push(
       and(
         eq(contentPublicationAudiences.kind, 'org_unit'),
+        eq(contentPublicationAudiences.orgId, ctx.orgId),
         or(
           // include_descendants: unit or any ancestor matches
           and(
@@ -265,36 +435,4 @@ function audiencePredicate(ctx: AvailabilityContext) {
   }
 
   return or(...clauses);
-}
-
-/**
- * NOT EXISTS check for media assets that would disqualify a publication
- * (5.9.1 item 10, C-14). A publication is available only when every
- * referenced media asset is `ready` with valid rights.
- */
-function mediaReady(db: DbExecutor, now: Date) {
-  return notExists(
-    db
-      .select({ _: sql`1` })
-      .from(contentRevisionMedia)
-      .innerJoin(
-        mediaAssets,
-        eq(mediaAssets.id, contentRevisionMedia.mediaAssetId),
-      )
-      .where(
-        and(
-          eq(
-            contentRevisionMedia.contentRevisionId,
-            contentPublications.contentRevisionId,
-          ),
-          or(
-            sql`${mediaAssets.state} != 'ready'`,
-            and(
-              sql`${mediaAssets.rightsExpiresAt} IS NOT NULL`,
-              lte(mediaAssets.rightsExpiresAt, now),
-            ),
-          ),
-        ),
-      ),
-  );
 }

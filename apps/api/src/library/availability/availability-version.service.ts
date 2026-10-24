@@ -4,7 +4,7 @@
  *
  * Callers (publication, capability, membership, media-rights services) call
  * `bump()` when availability may have changed; read paths include the version
- * in cache keys so that stale data is never served.
+ * token in cache keys so that stale data is never served.
  */
 import { Inject, Injectable } from '@nestjs/common';
 import {
@@ -54,5 +54,18 @@ export class AvailabilityVersionService {
   async currentGlobal(): Promise<number> {
     const raw = await this.kv.get(availabilityVersionGlobalKey());
     return raw ? parseInt(raw, 10) : 0;
+  }
+
+  /**
+   * Composite version token for cache keys (I7):
+   * `${orgVersion}.${globalVersion}`. Both counters are read in parallel.
+   * Any bump invalidates the cache key.
+   */
+  async versionToken(orgId: string): Promise<string> {
+    const [orgVersion, globalVersion] = await Promise.all([
+      this.current(orgId),
+      this.currentGlobal(),
+    ]);
+    return `${orgVersion}.${globalVersion}`;
   }
 }

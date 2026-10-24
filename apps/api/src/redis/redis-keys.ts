@@ -194,9 +194,9 @@ export function availabilityVersionKey(orgId: string): string {
   return `availability_version:${orgId}`;
 }
 
-/** `availability_version:global` — global availability version counter. */
+/** `availability_version_global` — global availability version counter (separate prefix to avoid collision with org id "global"). */
 export function availabilityVersionGlobalKey(): string {
-  return 'availability_version:global';
+  return 'availability_version_global';
 }
 
 // ---------------------------------------------------------------------------
