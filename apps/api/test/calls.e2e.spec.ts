@@ -15,6 +15,10 @@
  * The fixture appointments are inserted directly with times relative to now,
  * because the join window is (D-CW-07).
  *
+ * The API process applies the fake provider's events itself (T-CW-1.2,
+ * `CallsModule` on bootstrap), so the event applier runs during this suite:
+ * a simulated `MeetingEnded` closes a session as Chime's own end would.
+ *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
 import 'dotenv/config';
@@ -73,15 +77,25 @@ const APPT_NOW = 'appt_call_now';
 const APPT_LATER = 'appt_call_later';
 /** Canceled, inside the window. */
 const APPT_CANCELED = 'appt_call_canceled';
+/** Inside the window; its meeting is ended by the provider (T-CW-1.2). */
+const APPT_PROVIDER = 'appt_call_provider_end';
 
-/** Every key a call audit event may carry (guidelines 7.5). */
-const CALL_AUDIT_DETAIL_KEYS: Record<string, string[]> = {
-  'call.session.created': ['appointmentId', 'format', 'sessionId'],
-  'call.joined': ['participantId', 'role', 'sessionId'],
-  'call.ended': ['endedByUserId', 'sessionId'],
-  'call.outcome.recorded': ['outcomeStatus', 'sessionId'],
-  'call.feedback.submitted': ['sessionId'],
-  'call.diagnostics.viewed': ['sessionId', 'viewedByUserId'],
+/**
+ * Every key set a call audit event may carry (guidelines 7.5). `call.ended`
+ * has three: the expert's end, the expert's end after a concurrent close
+ * (`closedBy`), and the lifecycle's close on a provider event or job.
+ */
+const CALL_AUDIT_DETAIL_KEYS: Record<string, string[][]> = {
+  'call.session.created': [['appointmentId', 'format', 'sessionId']],
+  'call.joined': [['participantId', 'role', 'sessionId']],
+  'call.ended': [
+    ['endedByUserId', 'sessionId'],
+    ['closedBy', 'endedByUserId', 'sessionId'],
+    ['endReason', 'sessionId'],
+  ],
+  'call.outcome.recorded': [['outcomeStatus', 'sessionId']],
+  'call.feedback.submitted': [['sessionId']],
+  'call.diagnostics.viewed': [['sessionId', 'viewedByUserId']],
 };
 
 interface SignedIn {
@@ -231,6 +245,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     await insertAppointment(APPT_NOW, new Date(now + 5 * MINUTE));
     await insertAppointment(APPT_LATER, new Date(now + 3 * 24 * 60 * MINUTE));
     await insertAppointment(APPT_CANCELED, new Date(now + 5 * MINUTE), 'CANCELED');
+    await insertAppointment(APPT_PROVIDER, new Date(now + 5 * MINUTE));
 
     // Stefan keeps team_manager only: an employer-scoped principal.
     await testDb.db
@@ -550,20 +565,31 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     expect(res.status).toBe(204);
     expect(endSession).toHaveBeenCalledWith({ providerMeetingId: expertJoin.meeting.MeetingId });
 
+    // The expert's DeleteMeeting raises MeetingEnded, which the applier in this process may commit first;
+    // either closer announces the end exactly once, and the end stays the expert's (T-CW-1.2).
     const [session] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, sessionId));
-    expect(session).toMatchObject({ status: 'ENDED', locationText: null });
+    expect(session).toMatchObject({ status: 'ENDED', endReason: 'EXPERT', locationText: null });
     expect(session!.endedAt).toBeInstanceOf(Date);
+    await vi.waitFor(() =>
+      expect(emitted('call.session.ended')).toEqual([
+        [`call:${sessionId}`, 'call.session.ended', { sessionId, endedAt: session!.endedAt!.toISOString() }],
+      ]),
+    );
     expect(await kv.get(callParticipantCredentialsKey(sessionId, expertJoin.participantId))).toBeNull();
     expect(await kv.get(callParticipantCredentialsKey(sessionId, employeeJoin.participantId))).toBeNull();
-    expect(emitted('call.session.ended')).toEqual([
-      [`call:${sessionId}`, 'call.session.ended', { sessionId, endedAt: session!.endedAt!.toISOString() }],
-    ]);
 
-    const [ended] = await testDb.db
+    const byExpert = await testDb.db
       .select()
       .from(auditEvents)
-      .where(and(eq(auditEvents.action, 'call.ended'), eq(auditEvents.recordId, sessionId)));
-    expect(ended!.details).toEqual({ sessionId, endedByUserId: 'user_milica' });
+      .where(
+        and(
+          eq(auditEvents.action, 'call.ended'),
+          eq(auditEvents.recordId, sessionId),
+          eq(auditEvents.actorUserId, 'user_milica'),
+        ),
+      );
+    expect(byExpert).toHaveLength(1);
+    expect(byExpert[0]!.details).toMatchObject({ sessionId, endedByUserId: 'user_milica' });
 
     // The location is gone and no longer readable (CW-R-80a).
     const locationAfterEnd = await location(milica);
@@ -574,6 +600,39 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     const rejoin = await join(jovan);
     expect(rejoin.status).toBe(409);
     expect(rejoin.body.code).toBe('appointment_not_joinable');
+  });
+
+  // ── Provider-side end (T-CW-1.2, D-CW-09, D-CW-12) ──────────────────────────
+
+  it('a MeetingEnded from the provider closes the session, and a join inside the window opens a new meeting', async () => {
+    const first = CallJoinResponseSchema.parse((await join(jovan, APPT_PROVIDER)).body);
+
+    // Chime ends an empty meeting on its own (CORE-16): the event reaches the applier in this process.
+    video.simulateEvent('MeetingEnded', first.meeting.MeetingId);
+    await vi.waitFor(async () => {
+      const [row] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, first.sessionId));
+      expect(row).toMatchObject({ status: 'ENDED', endReason: 'PROVIDER' });
+    });
+    await vi.waitFor(() =>
+      expect(emitted('call.session.ended').filter((call) => call[0] === `call:${first.sessionId}`)).toHaveLength(1),
+    );
+
+    const res = await join(jovan, APPT_PROVIDER);
+    expect(res.status).toBe(200);
+    const again = CallJoinResponseSchema.parse(res.body);
+    expect(again.sessionId).not.toBe(first.sessionId);
+    expect(again.meeting.MeetingId).not.toBe(first.meeting.MeetingId);
+    expect(again.attendee.JoinToken).not.toBe(first.attendee.JoinToken);
+    expect(await kv.get(callParticipantCredentialsKey(first.sessionId, first.participantId))).toBeNull();
+
+    const rows = await testDb.db
+      .select({ id: callSessions.id, status: callSessions.status, endReason: callSessions.endReason })
+      .from(callSessions)
+      .where(eq(callSessions.appointmentId, APPT_PROVIDER));
+    expect(rows.sort((a, b) => (a.id === first.sessionId ? -1 : b.id === first.sessionId ? 1 : 0))).toEqual([
+      { id: first.sessionId, status: 'ENDED', endReason: 'PROVIDER' },
+      { id: again.sessionId, status: 'ACTIVE', endReason: null },
+    ]);
   });
 
   // ── Outcome (CALL-23, CALL-24) ──────────────────────────────────────────────
@@ -656,9 +715,8 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     const events = await testDb.db.select().from(auditEvents).where(like(auditEvents.action, 'call.%'));
     expect(new Set(events.map((e) => e.action))).toEqual(new Set(Object.keys(CALL_AUDIT_DETAIL_KEYS)));
     for (const event of events) {
-      expect(Object.keys(event.details as Record<string, unknown>).sort(), event.action).toEqual(
-        CALL_AUDIT_DETAIL_KEYS[event.action],
-      );
+      const keys = Object.keys(event.details as Record<string, unknown>).sort();
+      expect(CALL_AUDIT_DETAIL_KEYS[event.action], `${event.action}: ${keys.join(',')}`).toContainEqual(keys);
     }
   });
 });

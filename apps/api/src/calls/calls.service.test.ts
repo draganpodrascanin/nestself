@@ -2,7 +2,9 @@
  * CallsService unit tests (T-CW-1.1): the join rules of guidelines 4.1 to 4.3
  * (participant, status and window checks, the creation lock, the credential
  * cache), the explicit end, the outcome, feedback, signal and client-event
- * paths, the diagnostics DTO allowlist (CW-R-86) and token hygiene (CW-R-69).
+ * paths, the diagnostics DTO allowlist (CW-R-86) and token hygiene (CW-R-69);
+ * with T-CW-1.2, the join after a provider-side end, the end-reason stamp,
+ * the no-show follow-up job and the `NestSelf/Video` metrics.
  *
  * The repositories are in memory; the provider is the real
  * `FakeVideoProvider` and the store the real `MemoryKeyValueStore`. Only
@@ -27,14 +29,17 @@ import { ParticipantForbiddenException } from '../appointments/appointment-non-d
 import type { AppointmentRecord, AppointmentsRepository } from '../appointments/appointments.repository.js';
 import type { AuditEventInput, AuditWriter } from '../audit/audit-writer.js';
 import type { DbService } from '../db/db.service.js';
+import type { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis-keys.js';
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import { RoomAccessRegistry } from '../ws/room-access.registry.js';
 import type { RoomEmitter } from '../ws/room-emitter.js';
 import { toDiagnosticsResponse } from './call-mapper.js';
+import type { VideoMetrics } from './video-metrics.js';
 import type {
   CallConnectionMetrics,
+  CallSessionEndReason,
   CallParticipantRecord,
   CallSessionRecord,
   ClientEventSummary,
@@ -89,11 +94,17 @@ class InMemoryCallsRepository {
     return session ? { ...session } : null;
   }
 
+  /** The newest session that has not failed, as the repository orders it. */
   async findLiveSessionByAppointment(appointmentId: string): Promise<CallSessionRecord | null> {
-    return this.liveSession(appointmentId);
+    const live = [...this.sessions.values()].filter((s) => s.appointmentId === appointmentId && s.status !== 'failed');
+    const newest = live[live.length - 1];
+    return newest ? { ...newest } : null;
   }
 
-  /** Check and insert without yielding, as the partial unique index makes it atomic in PostgreSQL. */
+  /**
+   * Check and insert without yielding, as the partial unique index makes it
+   * atomic in PostgreSQL. The index skips FAILED rows and provider-ended ones.
+   */
   async createSessionForAppointment(record: AppointmentRecord): Promise<CallSessionRecord> {
     const live = this.liveSession(record.id);
     if (live) return live;
@@ -109,6 +120,7 @@ class InMemoryCallsRepository {
       endsAt: record.endsAt,
       startedAt: null,
       endedAt: null,
+      endReason: null,
       locationText: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -117,11 +129,33 @@ class InMemoryCallsRepository {
     return { ...session };
   }
 
+  /** The row the partial unique index holds for the appointment. */
   private liveSession(appointmentId: string): CallSessionRecord | null {
     for (const session of this.sessions.values()) {
-      if (session.appointmentId === appointmentId && session.status !== 'failed') return { ...session };
+      if (session.appointmentId === appointmentId && session.status !== 'failed' && session.endReason !== 'provider') {
+        return { ...session };
+      }
     }
     return null;
+  }
+
+  async stampEndReason(id: string, reason: CallSessionEndReason): Promise<boolean> {
+    const session = this.sessions.get(id);
+    if (session?.status !== 'active' || session.endReason) return false;
+    session.endReason = reason;
+    return true;
+  }
+
+  async closeSession(id: string, close: { endedAt: Date; reason: CallSessionEndReason }): Promise<CallSessionRecord | null> {
+    const session = this.sessions.get(id);
+    if (session?.status !== 'active') return null;
+    Object.assign(session, {
+      status: 'ended',
+      endedAt: close.endedAt,
+      locationText: null,
+      endReason: session.endReason ?? close.reason,
+    });
+    return { ...session };
   }
 
   async transitionSession(
@@ -264,6 +298,13 @@ describe('CallsService', () => {
   let kv: MemoryKeyValueStore;
   let audit: { record: ReturnType<typeof vi.fn> };
   let rooms: { emit: ReturnType<typeof vi.fn> };
+  let scheduler: { scheduleNoShowFollowUp: ReturnType<typeof vi.fn> };
+  let metrics: {
+    joinAttempt: ReturnType<typeof vi.fn>;
+    joinFailure: ReturnType<typeof vi.fn>;
+    meetingStartDuration: ReturnType<typeof vi.fn>;
+    meetingFailed: ReturnType<typeof vi.fn>;
+  };
   let service: CallsService;
   let logged: unknown[][];
 
@@ -280,6 +321,8 @@ describe('CallsService', () => {
     kv = new MemoryKeyValueStore();
     audit = { record: vi.fn(async () => undefined) };
     rooms = { emit: vi.fn(() => true) };
+    scheduler = { scheduleNoShowFollowUp: vi.fn(async () => true) };
+    metrics = { joinAttempt: vi.fn(), joinFailure: vi.fn(), meetingStartDuration: vi.fn(), meetingFailed: vi.fn() };
     const dbs = { withOrgScope: (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(undefined) };
     service = new CallsService(
       repo as unknown as CallsRepository,
@@ -291,6 +334,8 @@ describe('CallsService', () => {
       audit as unknown as AuditWriter,
       { get: () => 'none' } as never,
       new RoomAccessRegistry(),
+      scheduler as unknown as CallsJobSchedulerService,
+      metrics as unknown as VideoMetrics,
     );
     service.pollIntervalMs = 5;
     logged = [];
@@ -513,10 +558,74 @@ describe('CallsService', () => {
       expect(repo.sessions.get(retry.sessionId)!.status).toBe('active');
     });
 
-    it('answers 409 once the expert has ended the session', async () => {
-      await service.join('appt_1', principal(EXPERT), {});
+    it('answers 409 once the expert has ended the session, inside the window', async () => {
+      const joined = await service.join('appt_1', principal(EXPERT), {});
       await service.end('appt_1', principal(EXPERT));
+      expect(repo.sessions.get(joined.sessionId)).toMatchObject({ status: 'ended', endReason: 'expert' });
       await expectApiError(service.join('appt_1', principal(EMPLOYEE), {}), 409, 'appointment_not_joinable');
+      await expectApiError(service.join('appt_1', principal(EXPERT), {}), 409, 'appointment_not_joinable');
+      expect(repo.sessions.size).toBe(1);
+    });
+
+    it('starts a new meeting after the provider ended the old one inside the window (T-CW-1.2)', async () => {
+      const first = await service.join('appt_1', principal(EXPERT), {});
+      const employee = await service.join('appt_1', principal(EMPLOYEE), {});
+      // Chime ended the empty meeting on its own; the applier closed the row but left the cache.
+      video.simulateEvent('MeetingEnded', first.meeting.MeetingId);
+      await repo.closeSession(first.sessionId, { endedAt: new Date(), reason: 'provider' });
+      const create = vi.spyOn(video, 'createSession');
+
+      const again = await service.join('appt_1', principal(EXPERT), {});
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(again.sessionId).not.toBe(first.sessionId);
+      expect(again.meeting.MeetingId).not.toBe(first.meeting.MeetingId);
+      expect(again.participantId).not.toBe(first.participantId);
+      expect(again.attendee.JoinToken).not.toBe(first.attendee.JoinToken);
+      expect(repo.sessions.get(again.sessionId)).toMatchObject({ status: 'active', endReason: null });
+      expect(repo.sessions.get(first.sessionId)).toMatchObject({ status: 'ended', endReason: 'provider' });
+      // The dead meeting's credentials are gone, for both participants.
+      expect(await kv.get(callParticipantCredentialsKey(first.sessionId, first.participantId))).toBeNull();
+      expect(await kv.get(callParticipantCredentialsKey(first.sessionId, employee.participantId))).toBeNull();
+
+      // The employee joins the new meeting, never the old one.
+      const employeeAgain = await service.join('appt_1', principal(EMPLOYEE), {});
+      expect(employeeAgain.sessionId).toBe(again.sessionId);
+      expect(employeeAgain.meeting.MeetingId).toBe(again.meeting.MeetingId);
+    });
+
+    it('a provider end outside the window or of an appointment no longer confirmed stays refused', async () => {
+      const first = await service.join('appt_1', principal(EXPERT), {});
+      await repo.closeSession(first.sessionId, { endedAt: new Date(), reason: 'provider' });
+
+      vi.setSystemTime(appointment().endsAt.getTime() + (CALL_JOIN_WINDOW_AFTER_MINUTES + 1) * MINUTE);
+      await expectApiError(service.join('appt_1', principal(EXPERT), {}), 403, 'join_window_closed');
+      vi.setSystemTime(NOW);
+      appointments.rows.set('appt_1', appointment({ status: 'completed' }));
+      await expectApiError(service.join('appt_1', principal(EXPERT), {}), 409, 'appointment_not_joinable');
+      expect(repo.sessions.size).toBe(1);
+    });
+
+    it('counts join attempts and failures, the meeting start duration and failed creations (NestSelf/Video)', async () => {
+      // Refusals before a credential request are not join attempts.
+      await expectApiError(service.join('appt_1', principal(OUTSIDER), {}), 404, 'not_found');
+      expect(metrics.joinAttempt).not.toHaveBeenCalled();
+
+      await service.join('appt_1', principal(EXPERT), {});
+      expect(metrics.joinAttempt).toHaveBeenCalledTimes(1);
+      expect(metrics.joinFailure).not.toHaveBeenCalled();
+      expect(metrics.meetingStartDuration).toHaveBeenCalledTimes(1);
+      expect(metrics.meetingStartDuration.mock.calls[0]![0]).toEqual(expect.any(Number));
+
+      appointments.rows.set('appt_2', appointment({ id: 'appt_2' }));
+      vi.spyOn(video, 'createSession').mockRejectedValueOnce(
+        new ApiHttpException({ status: 503, code: 'video_provider_unavailable', message: 'down' }),
+      );
+      await expectApiError(service.join('appt_2', principal(EXPERT), {}), 503, 'video_provider_unavailable');
+      expect(metrics.joinAttempt).toHaveBeenCalledTimes(2);
+      expect(metrics.joinFailure).toHaveBeenCalledTimes(1);
+      expect(metrics.meetingFailed).toHaveBeenCalledTimes(1);
+      expect(metrics.meetingStartDuration).toHaveBeenCalledTimes(1);
     });
 
     it('keeps the employee location for a psychological session and refuses it from anyone else (CALL-34)', async () => {
@@ -628,6 +737,40 @@ describe('CallsService', () => {
     it('answers 409 when there is no running meeting to end', async () => {
       await expectApiError(service.end('appt_1', principal(EXPERT)), 409, 'appointment_not_joinable');
     });
+
+    it('stamps the expert end reason before asking the provider to end the meeting (T-CW-1.2)', async () => {
+      const joined = await service.join('appt_1', principal(EXPERT), {});
+      const stamp = vi.spyOn(repo, 'stampEndReason');
+      const endSession = vi.spyOn(video, 'endSession');
+
+      await service.end('appt_1', principal(EXPERT));
+
+      expect(stamp).toHaveBeenCalledWith(joined.sessionId, 'expert', undefined);
+      expect(stamp.mock.invocationCallOrder[0]!).toBeLessThan(endSession.mock.invocationCallOrder[0]!);
+      expect(repo.sessions.get(joined.sessionId)).toMatchObject({ status: 'ended', endReason: 'expert' });
+    });
+
+    it('keeps the expert reason and still audits call.ended when MeetingEnded closed the session first', async () => {
+      const joined = await service.join('appt_1', principal(EXPERT), {});
+      const realEnd = video.endSession.bind(video);
+      vi.spyOn(video, 'endSession').mockImplementationOnce(async (input) => {
+        await realEnd(input);
+        // The provider's MeetingEnded event commits before the expert's own close.
+        await repo.closeSession(joined.sessionId, { endedAt: new Date(), reason: 'provider' });
+      });
+
+      await service.end('appt_1', principal(EXPERT));
+
+      expect(repo.sessions.get(joined.sessionId)).toMatchObject({ status: 'ended', endReason: 'expert' });
+      expect(audited('call.ended')).toEqual([
+        expect.objectContaining({
+          actorUserId: EXPERT,
+          details: { sessionId: joined.sessionId, endedByUserId: EXPERT, closedBy: 'provider' },
+        }),
+      ]);
+      // The closer announced the end; this request does not announce it twice.
+      expect(rooms.emit.mock.calls.filter((call) => call[1] === 'call.session.ended')).toEqual([]);
+    });
   });
 
   // ── Outcome (CALL-23, CALL-24, D-CW-25) ─────────────────────────────────
@@ -659,6 +802,26 @@ describe('CallsService', () => {
         [{ sessionId: joined.sessionId, outcomeStatus: 'completed' }, ORG],
       ]);
       expect(audited('appointment.completed').map((e) => e.details)).toEqual([{ appointmentId: 'appt_1' }]);
+    });
+
+    it('schedules the no-show follow-up once, for no_show_employee only (CALL-07, T-CW-1.2)', async () => {
+      await service.recordOutcome('appt_1', principal(EXPERT), { status: 'no_show_employee' });
+      expect(scheduler.scheduleNoShowFollowUp).toHaveBeenCalledTimes(1);
+      expect(scheduler.scheduleNoShowFollowUp).toHaveBeenCalledWith('appt_1');
+
+      for (const status of ['completed', 'no_show_expert', 'technical_failure', 'canceled'] as const) {
+        appointments.rows.set('appt_1', appointment());
+        repo.sessions.clear();
+        await service.recordOutcome('appt_1', principal(EXPERT), { status });
+      }
+      expect(scheduler.scheduleNoShowFollowUp).toHaveBeenCalledTimes(1);
+    });
+
+    it('records the outcome even when the follow-up cannot be scheduled', async () => {
+      scheduler.scheduleNoShowFollowUp.mockRejectedValueOnce(new Error('redis down'));
+      const response = await service.recordOutcome('appt_1', principal(EXPERT), { status: 'no_show_employee' });
+      expect(response.status).toBe('no_show');
+      expect(repo.outcomes).toHaveLength(1);
     });
 
     it('maps each outcome to the appointment status', async () => {

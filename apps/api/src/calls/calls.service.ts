@@ -20,20 +20,30 @@
  *   transition CW-R-18 does not list (the guideline is being amended); the
  *   `ClientRequestToken` (the session id) keeps a second `CreateMeeting`
  *   from creating a second meeting.
+ *   After a provider-side end (Chime ended an empty meeting, `end_reason`
+ *   PROVIDER, T-CW-1.2) a join of a `confirmed` appointment inside the
+ *   window starts a new session through the same lock flow, after dropping
+ *   the dead meeting's cached credentials; any other ENDED session answers
+ *   409.
  * - Location (CALL-34, CW-R-80a): the employee of a psychological
  *   consultation may share a location with the join. It is stored only once
  *   the session is ACTIVE, cleared when the session fails, ends or gets its
  *   outcome, readable by the assigned expert only through
  *   `GET /appointments/:id/location` while the session is live, and never
  *   logged, audited or shown in diagnostics.
- * - End (`POST /appointments/:id/end`, D-CW-09): the expert only; deletes
- *   the meeting, closes the session, drops every cached credential and the
- *   location text, emits `call.session.ended`, audits `call.ended`.
+ * - End (`POST /appointments/:id/end`, D-CW-09): the expert only; stamps
+ *   the EXPERT end reason before deleting the meeting (so a `MeetingEnded`
+ *   event that commits first keeps it), closes the session, drops every
+ *   cached credential and the location text, emits `call.session.ended`,
+ *   audits `call.ended`. When the provider event or a job closed the session
+ *   first, that closer announced the end and `call.ended` is still audited
+ *   for the expert with `closedBy`.
  * - Outcome (`POST /appointments/:id/outcome`, CALL-23): the expert records
  *   the delivery status with connection metadata on the latest session (a
  *   FAILED one included, so a technical failure stays with the attempt that
  *   failed); the appointment moves out of `confirmed` in the same
- *   transaction.
+ *   transaction. `no_show_employee` schedules `calls.no_show_followup`
+ *   (CALL-07).
  * - Feedback (`POST /appointments/:id/feedback`, CALL-15): the employee who
  *   joined, once per session; never readable by the employer or the expert.
  * - Signal (`POST /appointments/:id/signal`, D-CW-27): emitted as
@@ -48,6 +58,10 @@
  *   each payload checked against its schema by `RoomEmitter` (CW-R-36).
  * - Client events (`POST /calls/:sessionId/client-events`, D-CW-13).
  * - Diagnostics (`GET /ops/calls/:sessionId/diagnostics`, D-CW-28).
+ *
+ * - Metrics (D-CW-13): `JoinAttempts`, `JoinFailures`,
+ *   `MeetingStartDurationMs` and `MeetingFailed` on `NestSelf/Video`
+ *   (`VideoMetrics`).
  *
  * A join token never reaches PostgreSQL, a log line, an audit `details`
  * object or a room event (CW-R-13, CW-R-69). Logs carry the session id,
@@ -93,6 +107,8 @@ import { AppointmentsRepository, type AppointmentRecord } from '../appointments/
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db/db.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis-keys.js';
 import {
@@ -116,7 +132,14 @@ import {
   type CachedCredentials,
 } from './call-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from './calls.repository.js';
+import {
+  CallsRepository,
+  type CallParticipantRecord,
+  type CallSessionEndReason,
+  type CallSessionRecord,
+} from './calls.repository.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { VideoMetrics } from './video-metrics.js';
 import { appointmentOfCallSession } from './call-session.resolver.js';
 
 /** A consultation is one expert and one employee (D-CW-02). */
@@ -179,6 +202,8 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditWriter,
     private readonly config: ConfigService,
     private readonly roomAccess: RoomAccessRegistry,
+    private readonly scheduler: CallsJobSchedulerService,
+    private readonly metrics: VideoMetrics,
   ) {}
 
   onModuleInit(): void {
@@ -201,8 +226,24 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const session = await this.ensureSession(appointment);
-    if (session.status === 'ended') throw notJoinable();
+    // A join attempt from here on: the caller asks for media credentials (D-CW-13).
+    this.metrics.joinAttempt();
+    try {
+      return await this.joinSession(appointment, role, principal, body, started);
+    } catch (error) {
+      this.metrics.joinFailure();
+      throw error;
+    }
+  }
+
+  private async joinSession(
+    appointment: AppointmentRecord,
+    role: ConsultationRole,
+    principal: Principal,
+    body: CallJoinRequest,
+    started: number,
+  ): Promise<CallJoinResponse> {
+    const session = await this.joinableSession(appointment);
     const participant = await this.scoped(appointment.orgId, (tx) =>
       this.repo.ensureParticipant({ sessionId: session.id, orgId: appointment.orgId, userId: principal.userId, role }, tx),
     );
@@ -253,6 +294,30 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
       meeting: credentials.meeting,
       attendee: credentials.attendee,
     });
+  }
+
+  /**
+   * The session a join enters: the live one, or a new PENDING one when the
+   * provider ended the last meeting on its own inside the window (T-CW-1.2).
+   * The caller has already checked that the appointment is `confirmed` and
+   * the window open. Any other ENDED session answers 409.
+   */
+  private async joinableSession(appointment: AppointmentRecord): Promise<CallSessionRecord> {
+    const session = await this.ensureSession(appointment);
+    if (session.status !== 'ended') return session;
+    if (session.endReason !== 'provider') throw notJoinable();
+
+    // The dead meeting's credentials must never be handed out again (D-CW-08); the applier may not have dropped them.
+    await this.dropCredentials(session);
+    const next = await this.dbs.withOrgScope(appointment.orgId, (tx) =>
+      this.repo.createSessionForAppointment(appointment, tx),
+    );
+    if (next.status === 'ended') throw notJoinable();
+    this.logger.log(
+      { sessionId: next.id, operation: 'reopen', previousSessionId: session.id },
+      'Call session reopened after a provider end',
+    );
+    return next;
   }
 
   /**
@@ -326,6 +391,7 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
         participant: { participantId: participant.id, role: participant.role },
       });
     } catch (error) {
+      this.metrics.meetingFailed();
       await this.scoped(orgId, (tx) =>
         this.repo.transitionSession(session.id, ['creating'], 'failed', { locationText: null }, tx),
       );
@@ -341,6 +407,7 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
       );
       throw error;
     }
+    this.metrics.meetingStartDuration(Date.now() - started);
 
     const active = await this.scoped(orgId, async (tx) => {
       const moved = await this.repo.transitionSession(
@@ -431,27 +498,45 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     if (session?.status !== 'active' || !session.providerMeetingId) throw notJoinable();
 
     const started = Date.now();
+    // Stamped before the provider call, so the MeetingEnded event that DeleteMeeting raises, if it
+    // commits first, records the end as the expert's and never as a provider-side end (T-CW-1.2).
+    const stamped = await this.scoped(appointment.orgId, (tx) => this.repo.stampEndReason(session.id, 'expert', tx));
     await this.video.endSession({ providerMeetingId: session.providerMeetingId });
-    const endedAt = new Date();
     const ended = await this.scoped(appointment.orgId, (tx) =>
-      this.repo.transitionSession(session.id, ['active'], 'ended', { endedAt, locationText: null }, tx),
+      this.repo.closeSession(session.id, { endedAt: new Date(), reason: 'expert' }, tx),
     );
-    // Another request (or the provider's MeetingEnded event) closed it first.
-    if (!ended) return;
 
-    const participants = await this.scoped(appointment.orgId, (tx) => this.repo.listParticipants(session.id, tx));
-    if (participants.length > 0) {
-      await this.kv.del(...participants.map((p) => callParticipantCredentialsKey(session.id, p.id)));
+    if (!ended) {
+      // The provider event (or a job) closed it first and announced the end; the expert's action is still audited.
+      const current = await this.scoped(appointment.orgId, (tx) => this.repo.findSessionById(session.id, tx));
+      const closedBy: CallSessionEndReason = stamped ? 'provider' : (current?.endReason ?? 'provider');
+      await this.record(principal.userId, appointment.orgId, session.id, 'call.ended', {
+        sessionId: session.id,
+        endedByUserId: principal.userId,
+        closedBy,
+      });
+      this.logger.log({ sessionId: session.id, operation: 'end', closedBy, latencyMs: Date.now() - started }, 'Call ended');
+      return;
     }
+
+    await this.dropCredentials(ended);
     this.rooms.emit(callRoom(session.id), 'call.session.ended', {
       sessionId: session.id,
-      endedAt: endedAt.toISOString(),
+      endedAt: (ended.endedAt ?? new Date()).toISOString(),
     });
     await this.record(principal.userId, appointment.orgId, session.id, 'call.ended', {
       sessionId: session.id,
       endedByUserId: principal.userId,
     });
     this.logger.log({ sessionId: session.id, operation: 'end', latencyMs: Date.now() - started }, 'Call ended');
+  }
+
+  /** Deletes every participant's cached credentials of the session (D-CW-08). */
+  private async dropCredentials(session: Pick<CallSessionRecord, 'id' | 'orgId'>): Promise<void> {
+    const participants = await this.scoped(session.orgId, (tx) => this.repo.listParticipants(session.id, tx));
+    if (participants.length > 0) {
+      await this.kv.del(...participants.map((p) => callParticipantCredentialsKey(session.id, p.id)));
+    }
   }
 
   /**
@@ -508,7 +593,21 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
       outcomeStatus: body.status,
     });
     await this.recordAppointmentTransition(principal, updated, body);
+    if (body.status === 'no_show_employee') await this.scheduleNoShowFollowUp(appointment.id);
     return toAppointmentResponse(updated);
+  }
+
+  /** `calls.no_show_followup` (CALL-07): best effort after the commit; the outcome stands either way. */
+  private async scheduleNoShowFollowUp(appointmentId: string): Promise<void> {
+    try {
+      const scheduled = await this.scheduler.scheduleNoShowFollowUp(appointmentId);
+      if (!scheduled) this.logger.warn({ appointmentId, operation: 'scheduleNoShowFollowUp' }, 'No-show follow-up not scheduled');
+    } catch (error) {
+      this.logger.error(
+        { appointmentId, operation: 'scheduleNoShowFollowUp', error: errorName(error) },
+        'No-show follow-up not scheduled',
+      );
+    }
   }
 
   private async recordAppointmentTransition(

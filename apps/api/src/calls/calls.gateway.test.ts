@@ -37,7 +37,12 @@ import { RoomAccessRegistry } from '../ws/room-access.registry.js';
 import { RoomEmitter } from '../ws/room-emitter.js';
 import { RoomEventRelay } from '../ws/room-event-relay.js';
 import { SubscriptionAuthorizer } from '../ws/subscription-authorizer.js';
-import type { CallParticipantRecord, CallSessionRecord, CallsRepository } from './calls.repository.js';
+import type {
+  CallParticipantRecord,
+  CallSessionEndReason,
+  CallSessionRecord,
+  CallsRepository,
+} from './calls.repository.js';
 import { CallsService } from './calls.service.js';
 
 const NOW = new Date('2026-11-10T15:00:00.000Z');
@@ -227,6 +232,22 @@ class InMemoryCallsRepository {
     return true;
   }
 
+  /** The expert's end stamps its reason before the provider call, then closes the session (T-CW-1.2). */
+  async stampEndReason(id: string, reason: CallSessionEndReason): Promise<boolean> {
+    const session = this.sessions.get(id);
+    if (session?.status !== 'active' || session.endReason) return false;
+    session.endReason = reason;
+    return true;
+  }
+
+  async closeSession(id: string, close: { endedAt: Date; reason: CallSessionEndReason }): Promise<CallSessionRecord | null> {
+    const session = this.sessions.get(id);
+    if (session?.status !== 'active') return null;
+    Object.assign(session, { status: 'ended', endedAt: close.endedAt, locationText: null });
+    session.endReason = session.endReason ?? close.reason;
+    return { ...session };
+  }
+
   async findParticipant(sessionId: string, userId: string): Promise<CallParticipantRecord | null> {
     const found = [...this.participants.values()].find((p) => p.sessionId === sessionId && p.userId === userId);
     return found ? { ...found } : null;
@@ -399,6 +420,8 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
       { record: vi.fn(async () => undefined) } as unknown as AuditWriter,
       { get: () => 'none' } as never,
       registry,
+      { scheduleNoShowFollowUp: vi.fn(async () => true) } as never,
+      { joinAttempt: vi.fn(), joinFailure: vi.fn(), meetingStartDuration: vi.fn(), meetingFailed: vi.fn() } as never,
     );
     service.pollIntervalMs = 5;
     service.onModuleInit();
