@@ -90,10 +90,13 @@ export const WEBINAR_MESSAGE_STATUSES = ['pending', 'published', 'answered', 'di
 export const WebinarMessageStatusSchema = z.enum(WEBINAR_MESSAGE_STATUSES);
 export type WebinarMessageStatus = z.infer<typeof WebinarMessageStatusSchema>;
 
-/** Values of the `VIDEO_PROVIDER` environment variable. */
-export const VIDEO_PROVIDERS = ['none', 'chime'] as const;
-export const VideoProviderSchema = z.enum(VIDEO_PROVIDERS);
-export type VideoProvider = z.infer<typeof VideoProviderSchema>;
+/**
+ * Values of the `VIDEO_PROVIDER` environment variable. Named `...Name` so the
+ * canonical `VideoProvider` stays the API adapter class (apps/api/src/video).
+ */
+export const VIDEO_PROVIDER_NAMES = ['none', 'chime'] as const;
+export const VideoProviderNameSchema = z.enum(VIDEO_PROVIDER_NAMES);
+export type VideoProviderName = z.infer<typeof VideoProviderNameSchema>;
 
 // ---------------------------------------------------------------------------
 // Error codes (CW-R-27)
@@ -318,7 +321,7 @@ export const DiagnosticsResponseSchema = z.strictObject({
   startedAt: z.string().datetime().nullable(),
   endedAt: z.string().datetime().nullable(),
   status: CallSessionStatusSchema,
-  provider: VideoProviderSchema,
+  provider: VideoProviderNameSchema,
   providerMeetingId: z.string().min(1).nullable(),
   participants: z.array(DiagnosticsParticipantSchema),
 });

@@ -93,16 +93,44 @@ describe('join token never reaches audit details (CW-R-69)', () => {
     expect(sanitizeDetails({ joinToken: 'x', JoinToken: 'y', meetingId: 'z' })).toEqual({ meetingId: 'z' });
   });
 
+  it('matches forbidden keys regardless of casing and separators', () => {
+    expect(
+      sanitizeDetails({ jointoken: 'a', JOINTOKEN: 'b', join_token: 'c', 'join-token': 'd', meetingId: 'z' }),
+    ).toEqual({ meetingId: 'z' });
+    expect(sanitizeDetails({ access_token: 'a', RefreshToken: 'b', Body: 'c', IP: 'd', sessionId: 's1' })).toEqual({
+      sessionId: 's1',
+    });
+  });
+
+  it('strips credentials (CW-R-33a) at any depth', () => {
+    expect(sanitizeDetails({ credentials: { meeting: {}, attendee: {} }, participantId: 'p1' })).toEqual({
+      participantId: 'p1',
+    });
+    expect(sanitizeDetails({ nested: { Credentials: 'x', role: 'expert' } })).toEqual({ nested: { role: 'expert' } });
+  });
+
+  it('keeps legitimate keys that merely contain a forbidden word', () => {
+    const kept = {
+      codeVerifierHash: 'h',
+      tokenFamily: 'f',
+      emailNormalised: 'a@example.test',
+      meetingId: 'm1',
+      participantId: 'p1',
+      recordingNoticeShown: true,
+    };
+    expect(sanitizeDetails(kept)).toEqual(kept);
+  });
+
   it('strips the Chime attendee JoinToken when nested', () => {
     const details = {
       sessionId: 's1',
       attendee: { AttendeeId: 'a1', ExternalUserId: 'p1', JoinToken: 'secret' },
-      credentials: [{ joinToken: 'secret' }],
+      attendees: [{ joinToken: 'secret', role: 'employee' }],
     };
     expect(sanitizeDetails(details)).toEqual({
       sessionId: 's1',
       attendee: { AttendeeId: 'a1', ExternalUserId: 'p1' },
-      credentials: [{}],
+      attendees: [{ role: 'employee' }],
     });
   });
 });

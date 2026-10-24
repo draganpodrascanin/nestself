@@ -8,15 +8,16 @@ import {
   AppointmentApprovalDecisionRequestSchema,
   AppointmentApprovalStatusSchema,
   AppointmentCreateRequestSchema,
+  AppointmentFollowUpRequestSchema,
   AppointmentListResponseSchema,
   AppointmentResponseSchema,
   AppointmentSchema,
   AppointmentStatusSchema,
+  AppointmentSuggestTimesRequestSchema,
   FOLLOW_UP_APPROVAL_POLICIES,
   FOLLOW_UP_DURATION_MAX_MINUTES,
   FOLLOW_UP_DURATION_MIN_MINUTES,
   FOLLOW_UP_MAX_SUGGESTED_WINDOWS,
-  FOLLOW_UP_NOTE_MAX_LENGTH,
   FollowUpApprovalPolicySchema,
   FollowUpConfirmRequestSchema,
   FollowUpDeclineRequestSchema,
@@ -28,6 +29,7 @@ import {
   isIanaTimeZone,
   type AppointmentStatus,
 } from './appointments.ts';
+import * as appointmentsModule from './appointments.ts';
 
 const appointment = {
   id: 'appt_1',
@@ -138,6 +140,13 @@ describe('time zone validation (CALL-29)', () => {
       expect(TimeZoneSchema.safeParse(tz).success, JSON.stringify(tz)).toBe(false);
     }
   });
+
+  it('rejects case variants that Intl would otherwise match', () => {
+    for (const tz of ['europe/belgrade', 'EUROPE/BELGRADE', 'Europe/belgrade', 'utc', 'america/new_york']) {
+      expect(isIanaTimeZone(tz), tz).toBe(false);
+      expect(TimeZoneSchema.safeParse(tz).success, tz).toBe(false);
+    }
+  });
 });
 
 describe('AppointmentSchema (seam, CALL-31)', () => {
@@ -218,77 +227,92 @@ describe('AppointmentCreateRequestSchema', () => {
   });
 });
 
-describe('FollowUpProposeRequestSchema (CALL-35)', () => {
-  const valid = { date: '2026-11-10', time: '09:30', durationMinutes: 50 };
+describe('AppointmentFollowUpRequestSchema (CALL-35, guidelines section 6)', () => {
+  const valid = { startsAt: '2026-11-10T08:30:00.000Z', durationMinutes: 50, timeZone: 'Europe/Belgrade' };
 
-  it('accepts a valid proposal with and without a note', () => {
-    expect(FollowUpProposeRequestSchema.parse(valid)).toEqual(valid);
-    expect(FollowUpProposeRequestSchema.parse({ ...valid, note: '  Same time works.  ' }).note).toBe('Same time works.');
+  it('accepts a valid proposal', () => {
+    expect(AppointmentFollowUpRequestSchema.parse(valid)).toEqual(valid);
+  });
+
+  it('keeps the T-CW-1.9 name as an alias', () => {
+    expect(FollowUpProposeRequestSchema).toBe(AppointmentFollowUpRequestSchema);
   });
 
   it('rejects each missing required field with its path', () => {
-    for (const field of ['date', 'time', 'durationMinutes'] as const) {
+    for (const field of ['startsAt', 'durationMinutes', 'timeZone'] as const) {
       const input: Record<string, unknown> = { ...valid };
       delete input[field];
-      expect(issuePaths(FollowUpProposeRequestSchema.safeParse(input)), field).toEqual([field]);
+      expect(issuePaths(AppointmentFollowUpRequestSchema.safeParse(input)), field).toEqual([field]);
     }
   });
 
-  it('rejects an impossible date, a malformed time and an out-of-range duration', () => {
-    expect(issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, date: '2026-02-30' }))).toEqual(['date']);
-    expect(issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, time: '24:00' }))).toEqual(['time']);
-    expect(issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, time: '9:30' }))).toEqual(['time']);
+  it('rejects a non-ISO start, an invalid time zone and an out-of-range duration', () => {
+    expect(issuePaths(AppointmentFollowUpRequestSchema.safeParse({ ...valid, startsAt: '2026-11-10 09:30' }))).toEqual([
+      'startsAt',
+    ]);
+    expect(issuePaths(AppointmentFollowUpRequestSchema.safeParse({ ...valid, timeZone: 'europe/belgrade' }))).toEqual([
+      'timeZone',
+    ]);
     expect(
-      issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, durationMinutes: FOLLOW_UP_DURATION_MIN_MINUTES - 1 })),
+      issuePaths(
+        AppointmentFollowUpRequestSchema.safeParse({ ...valid, durationMinutes: FOLLOW_UP_DURATION_MIN_MINUTES - 1 }),
+      ),
     ).toEqual(['durationMinutes']);
     expect(
-      issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, durationMinutes: FOLLOW_UP_DURATION_MAX_MINUTES + 1 })),
+      issuePaths(
+        AppointmentFollowUpRequestSchema.safeParse({ ...valid, durationMinutes: FOLLOW_UP_DURATION_MAX_MINUTES + 1 }),
+      ),
     ).toEqual(['durationMinutes']);
-    expect(issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, durationMinutes: 50.5 }))).toEqual([
+    expect(issuePaths(AppointmentFollowUpRequestSchema.safeParse({ ...valid, durationMinutes: 50.5 }))).toEqual([
       'durationMinutes',
     ]);
   });
 
-  it('caps the note length', () => {
-    const long = 'a'.repeat(FOLLOW_UP_NOTE_MAX_LENGTH + 1);
-    expect(issuePaths(FollowUpProposeRequestSchema.safeParse({ ...valid, note: long }))).toEqual(['note']);
+  it('carries no free text from expert to employee (D-CW-04, D-22)', () => {
+    const parsed = AppointmentFollowUpRequestSchema.parse({ ...valid, note: 'Bring your notes' });
+    expect(parsed).not.toHaveProperty('note');
+    expect(Object.keys(AppointmentFollowUpRequestSchema.shape).sort()).toEqual(['durationMinutes', 'startsAt', 'timeZone']);
+    expect('FOLLOW_UP_NOTE_MAX_LENGTH' in appointmentsModule).toBe(false);
   });
 
   it('exposes the follow-up limits', () => {
     expect(FOLLOW_UP_DURATION_MIN_MINUTES).toBe(15);
     expect(FOLLOW_UP_DURATION_MAX_MINUTES).toBe(120);
     expect(FOLLOW_UP_MAX_SUGGESTED_WINDOWS).toBe(3);
-    expect(FOLLOW_UP_NOTE_MAX_LENGTH).toBe(500);
     expect(APPROVAL_SAFE_REASON_MAX_LENGTH).toBe(300);
   });
 });
 
-describe('FollowUpSuggestTimesRequestSchema (CALL-37)', () => {
+describe('AppointmentSuggestTimesRequestSchema (CALL-37)', () => {
   const window = (day: number) => ({
     startsAt: `2026-11-${String(day).padStart(2, '0')}T09:00:00.000Z`,
     endsAt: `2026-11-${String(day).padStart(2, '0')}T09:50:00.000Z`,
   });
 
+  it('keeps the T-CW-1.9 name as an alias', () => {
+    expect(FollowUpSuggestTimesRequestSchema).toBe(AppointmentSuggestTimesRequestSchema);
+  });
+
   it('accepts one to three windows', () => {
     for (const n of [1, 2, 3]) {
       const windows = Array.from({ length: n }, (_, i) => window(10 + i));
-      expect(FollowUpSuggestTimesRequestSchema.parse({ windows })).toEqual({ windows });
+      expect(AppointmentSuggestTimesRequestSchema.parse({ windows })).toEqual({ windows });
     }
   });
 
   it('rejects zero or more than three windows', () => {
-    expect(issuePaths(FollowUpSuggestTimesRequestSchema.safeParse({ windows: [] }))).toEqual(['windows']);
+    expect(issuePaths(AppointmentSuggestTimesRequestSchema.safeParse({ windows: [] }))).toEqual(['windows']);
     const four = [window(10), window(11), window(12), window(13)];
-    expect(issuePaths(FollowUpSuggestTimesRequestSchema.safeParse({ windows: four }))).toEqual(['windows']);
-    expect(issuePaths(FollowUpSuggestTimesRequestSchema.safeParse({}))).toEqual(['windows']);
+    expect(issuePaths(AppointmentSuggestTimesRequestSchema.safeParse({ windows: four }))).toEqual(['windows']);
+    expect(issuePaths(AppointmentSuggestTimesRequestSchema.safeParse({}))).toEqual(['windows']);
   });
 
   it('rejects a window with a missing bound or an end before its start', () => {
-    expect(issuePaths(FollowUpSuggestTimesRequestSchema.safeParse({ windows: [{ startsAt: window(10).startsAt }] }))).toEqual([
+    expect(issuePaths(AppointmentSuggestTimesRequestSchema.safeParse({ windows: [{ startsAt: window(10).startsAt }] }))).toEqual([
       'windows.0.endsAt',
     ]);
     const reversed = { startsAt: window(10).endsAt, endsAt: window(10).startsAt };
-    expect(issuePaths(FollowUpSuggestTimesRequestSchema.safeParse({ windows: [window(11), reversed] }))).toEqual([
+    expect(issuePaths(AppointmentSuggestTimesRequestSchema.safeParse({ windows: [window(11), reversed] }))).toEqual([
       'windows.1.endsAt',
     ]);
   });

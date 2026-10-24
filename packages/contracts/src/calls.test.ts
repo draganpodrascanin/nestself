@@ -28,7 +28,8 @@ import {
   RECORDING_STATUSES,
   REMINDER_OFFSETS_MINUTES,
   RecordingStatusSchema,
-  VIDEO_PROVIDERS,
+  VIDEO_PROVIDER_NAMES,
+  VideoProviderNameSchema,
   WEBINAR_HOST_JOIN_BEFORE_MINUTES,
   WEBINAR_MESSAGE_KINDS,
   WEBINAR_MESSAGE_STATUSES,
@@ -96,8 +97,10 @@ describe('call enums', () => {
     });
   }
 
-  it('video providers match the VIDEO_PROVIDER env values', () => {
-    expect(VIDEO_PROVIDERS).toEqual(['none', 'chime']);
+  it('video provider names match the VIDEO_PROVIDER env values', () => {
+    expect(VIDEO_PROVIDER_NAMES).toEqual(['none', 'chime']);
+    expect(VideoProviderNameSchema.safeParse('chime').success).toBe(true);
+    expect(VideoProviderNameSchema.safeParse('fake').success).toBe(false);
   });
 });
 
@@ -395,5 +398,11 @@ describe('package entry', () => {
     expect(entry.AppointmentSchema).toBeDefined();
     expect(entry.FollowUpSuggestTimesRequestSchema).toBeDefined();
     expect(entry.APPOINTMENT_STATUS_TRANSITIONS).toBeDefined();
+  });
+
+  it('leaves the VideoProvider name to the API adapter class (decision record section 7)', () => {
+    expect(entry.VideoProviderNameSchema).toBe(VideoProviderNameSchema);
+    expect('VideoProviderSchema' in entry).toBe(false);
+    expect('VIDEO_PROVIDERS' in entry).toBe(false);
   });
 });

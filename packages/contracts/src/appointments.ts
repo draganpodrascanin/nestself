@@ -20,8 +20,6 @@ export const FOLLOW_UP_DURATION_MIN_MINUTES = 15;
 export const FOLLOW_UP_DURATION_MAX_MINUTES = 120;
 /** The employee suggests at most this many alternative windows (CALL-37). */
 export const FOLLOW_UP_MAX_SUGGESTED_WINDOWS = 3;
-/** Optional note on a follow-up proposal. */
-export const FOLLOW_UP_NOTE_MAX_LENGTH = 500;
 /** Approver-visible reason on a rejected follow-up (CW-R-109). */
 export const APPROVAL_SAFE_REASON_MAX_LENGTH = 300;
 
@@ -85,16 +83,17 @@ const idField = z.string().min(1);
 const isoDateTime = z.string().datetime();
 
 /**
- * True for an IANA time zone name the runtime knows (`Europe/Belgrade`,
- * `UTC`). Fixed offsets such as `+01:00` are refused even though recent
- * runtimes accept them in `Intl.DateTimeFormat`, because an offset cannot
- * follow daylight saving time (CALL-29).
+ * True for an IANA time zone name the runtime knows, spelled exactly as the
+ * runtime resolves it (`Europe/Belgrade`, `UTC`). Intl matches names case
+ * insensitively, so `europe/belgrade` is refused here rather than stored in a
+ * second spelling. Fixed offsets such as `+01:00` are refused even though
+ * recent runtimes accept them, because an offset cannot follow daylight
+ * saving time (CALL-29).
  */
 export function isIanaTimeZone(value: string): boolean {
   if (!/^[A-Za-z][A-Za-z0-9_+\-/]*$/.test(value)) return false;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value });
-    return true;
+    return new Intl.DateTimeFormat(undefined, { timeZone: value }).resolvedOptions().timeZone === value;
   } catch {
     return false;
   }
@@ -179,20 +178,25 @@ export type AppointmentCreateRequest = z.infer<typeof AppointmentCreateRequestSc
 // ---------------------------------------------------------------------------
 
 /**
- * `POST /appointments/:id/follow-up` (expert). Date and time are wall-clock
- * values in the finished appointment's `timeZone`.
+ * `POST /appointments/:id/follow-up` (expert). The client converts the picked
+ * wall-clock date and time in `timeZone` to the UTC instant `startsAt`. There
+ * is no free-text field: nothing travels from expert to employee but the
+ * time (D-CW-04, D-22; the card copy is fixed, D-CW-37).
  */
-export const FollowUpProposeRequestSchema = z.object({
-  date: z.iso.date(),
-  time: z.iso.time({ precision: -1 }),
+export const AppointmentFollowUpRequestSchema = z.object({
+  startsAt: isoDateTime,
   durationMinutes: z
     .number()
     .int()
     .min(FOLLOW_UP_DURATION_MIN_MINUTES)
     .max(FOLLOW_UP_DURATION_MAX_MINUTES),
-  note: z.string().trim().min(1).max(FOLLOW_UP_NOTE_MAX_LENGTH).optional(),
+  timeZone: TimeZoneSchema,
 });
-export type FollowUpProposeRequest = z.infer<typeof FollowUpProposeRequestSchema>;
+export type AppointmentFollowUpRequest = z.infer<typeof AppointmentFollowUpRequestSchema>;
+
+/** Alias used by T-CW-1.9. */
+export const FollowUpProposeRequestSchema = AppointmentFollowUpRequestSchema;
+export type FollowUpProposeRequest = AppointmentFollowUpRequest;
 
 /** `POST /appointments/:id/confirm` (employee). Empty body. */
 export const FollowUpConfirmRequestSchema = z.strictObject({});
@@ -211,10 +215,14 @@ export const FollowUpTimeWindowSchema = z
 export type FollowUpTimeWindow = z.infer<typeof FollowUpTimeWindowSchema>;
 
 /** `POST /appointments/:id/suggest-times` (employee): one to three windows. */
-export const FollowUpSuggestTimesRequestSchema = z.object({
+export const AppointmentSuggestTimesRequestSchema = z.object({
   windows: z.array(FollowUpTimeWindowSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS),
 });
-export type FollowUpSuggestTimesRequest = z.infer<typeof FollowUpSuggestTimesRequestSchema>;
+export type AppointmentSuggestTimesRequest = z.infer<typeof AppointmentSuggestTimesRequestSchema>;
+
+/** Alias used by T-CW-1.9. */
+export const FollowUpSuggestTimesRequestSchema = AppointmentSuggestTimesRequestSchema;
+export type FollowUpSuggestTimesRequest = AppointmentSuggestTimesRequest;
 
 /** `POST /appointments/:id/schedule` (expert picks one suggested window). */
 export const FollowUpScheduleRequestSchema = z.object({
