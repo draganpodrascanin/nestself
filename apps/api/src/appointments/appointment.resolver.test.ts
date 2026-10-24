@@ -36,10 +36,16 @@ async function notFoundError(promise: Promise<unknown>): Promise<ApiHttpExceptio
 describe('appointmentResource', () => {
   afterEach(() => bindAppointmentLookup(null));
 
-  it('derives the organization, owner and id from the loaded row', async () => {
+  it('derives the organization, owner, id and category from the loaded row', async () => {
     bindAppointmentLookup(lookup);
     const resource = await appointmentResource({ params: { id: 'appt_1' } }, principal);
-    expect(resource).toEqual({ type: 'appointment', id: 'appt_1', orgId: 'org_sample', ownerId: 'user_jovan' });
+    expect(resource).toEqual({
+      type: 'appointment',
+      id: 'appt_1',
+      orgId: 'org_sample',
+      ownerId: 'user_jovan',
+      category: 'psychological',
+    });
   });
 
   it('answers 404 for a missing row or a route without :id', async () => {

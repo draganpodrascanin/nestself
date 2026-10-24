@@ -9,6 +9,9 @@ import {
   AppointmentApprovalStatusSchema,
   AppointmentCreateRequestSchema,
   AppointmentFollowUpRequestSchema,
+  APPOINTMENT_LIST_DEFAULT_LIMIT,
+  APPOINTMENT_LIST_MAX_LIMIT,
+  AppointmentListQuerySchema,
   AppointmentListResponseSchema,
   AppointmentResponseSchema,
   AppointmentSchema,
@@ -201,11 +204,47 @@ describe('AppointmentSchema (seam, CALL-31)', () => {
 
   it('AppointmentResponseSchema and AppointmentListResponseSchema carry the seam', () => {
     expect(AppointmentResponseSchema.parse(appointment)).toEqual(appointment);
-    expect(AppointmentListResponseSchema.parse({ items: [appointment] })).toEqual({ items: [appointment] });
+    const page = { items: [appointment], nextCursor: 'cursor_1' };
+    expect(AppointmentListResponseSchema.parse(page)).toEqual(page);
+    expect(AppointmentListResponseSchema.parse({ items: [], nextCursor: null })).toEqual({ items: [], nextCursor: null });
     expect(AppointmentListResponseSchema.safeParse({}).success).toBe(false);
-    expect(issuePaths(AppointmentListResponseSchema.safeParse({ items: [{ ...appointment, id: '' }] }))).toEqual([
-      'items.0.id',
-    ]);
+    expect(issuePaths(AppointmentListResponseSchema.safeParse({ items: [appointment] }))).toEqual(['nextCursor']);
+    expect(
+      issuePaths(AppointmentListResponseSchema.safeParse({ items: [{ ...appointment, id: '' }], nextCursor: null })),
+    ).toEqual(['items.0.id']);
+  });
+});
+
+describe('AppointmentListQuerySchema (GET /appointments, CALL-18, CALL-28)', () => {
+  it('defaults the page size and accepts every filter, coercing the query-string limit', () => {
+    expect(AppointmentListQuerySchema.parse({})).toEqual({ limit: APPOINTMENT_LIST_DEFAULT_LIMIT });
+    expect(APPOINTMENT_LIST_DEFAULT_LIMIT).toBe(50);
+    expect(APPOINTMENT_LIST_MAX_LIMIT).toBe(100);
+    const query = {
+      cursor: 'cursor_1',
+      limit: '20',
+      orgId: 'org_1',
+      status: 'proposed',
+      from: '2026-11-01T00:00:00.000Z',
+      to: '2026-12-01T00:00:00.000Z',
+    };
+    expect(AppointmentListQuerySchema.parse(query)).toEqual({ ...query, limit: 20 });
+  });
+
+  it('bounds the page size', () => {
+    expect(AppointmentListQuerySchema.parse({ limit: '100' }).limit).toBe(100);
+    for (const limit of ['0', '101', '2.5', 'ten']) {
+      expect(issuePaths(AppointmentListQuerySchema.safeParse({ limit })), limit).toEqual(['limit']);
+    }
+  });
+
+  it('rejects an unknown status, a non-ISO date, an empty cursor and a range that ends before it starts', () => {
+    expect(issuePaths(AppointmentListQuerySchema.safeParse({ status: 'booked' }))).toEqual(['status']);
+    expect(issuePaths(AppointmentListQuerySchema.safeParse({ from: '1 Nov 2026' }))).toEqual(['from']);
+    expect(issuePaths(AppointmentListQuerySchema.safeParse({ cursor: '' }))).toEqual(['cursor']);
+    const reversed = { from: '2026-12-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' };
+    expect(issuePaths(AppointmentListQuerySchema.safeParse(reversed))).toEqual(['to']);
+    expect(issuePaths(AppointmentListQuerySchema.safeParse({ ...reversed, to: reversed.from }))).toEqual(['to']);
   });
 });
 

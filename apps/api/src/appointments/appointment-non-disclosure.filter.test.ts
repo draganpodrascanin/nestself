@@ -24,15 +24,17 @@ function respond(exception: ApiHttpException): { status: number; body: Record<st
 }
 
 describe('AppointmentNonDisclosureFilter', () => {
-  it('answers an authorization denial with the not-found envelope (CALL-17, D-CW-30)', () => {
-    const sent = respond(new ApiHttpException({ status: 403, code: 'forbidden', message: 'Access denied' }));
-    expect(sent.status).toBe(404);
-    expect(sent.body).toMatchObject({ status: 404, code: 'not_found', message: 'Resource not found' });
+  it('answers an authorization denial or a context mismatch with the not-found envelope (CALL-17, D-CW-30)', () => {
+    for (const code of ['forbidden', 'context_mismatch']) {
+      const sent = respond(new ApiHttpException({ status: 403, code, message: 'Access denied' }));
+      expect(sent.status, code).toBe(404);
+      expect(sent.body).toMatchObject({ status: 404, code: 'not_found', message: 'Resource not found' });
+    }
   });
 
   it('keeps every other error as it is', () => {
     for (const [status, code] of [
-      [403, 'context_mismatch'],
+      [403, 'session_required'],
       [403, 'step_up_required'],
       [409, 'appointment_not_joinable'],
       [400, 'validation'],

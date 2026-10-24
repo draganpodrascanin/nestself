@@ -1,41 +1,55 @@
 /**
  * AppointmentsService: the appointment spine (T-CW-0.6, D-CW-02).
  *
- * - Create (`POST /orgs/:orgId/appointments`, CALL-26): the employee must be
- *   an active member of the organization and the expert must be able to join
- *   (an expert record and a current `assigned_cases` grant holding
- *   `consultation.join`, the `expert` template). The appointment starts
- *   `confirmed`; the expert gets the CASE assignment that brings it into the
- *   scope of that grant; `appointment.created` is audited.
+ * - Create (`POST /orgs/:orgId/appointments`, CALL-26): NestSelf operations
+ *   in the operations context with `bookings.coordinate` on the organization
+ *   (`client_operations` through its CLIENT assignment). Service coordinators
+ *   (`bookings.coordinate` scoped to queues) and `platform_owner` (no
+ *   `bookings.coordinate`) cannot create appointments yet; experts create
+ *   follow-ups through the T-CW-1.9 route (`POST /appointments/:id/follow-up`).
+ *   The employee must be an active member of the organization. The expert
+ *   must be allowed `consultation.join` on the new appointment by the engine:
+ *   the expert, in the expert context, with the CASE assignment the
+ *   appointment adds, the appointment's service category against the grant's
+ *   `categories` condition. The appointment starts `confirmed`, the expert
+ *   gets that CASE assignment, and `appointment.created` is audited.
  * - Read (`GET /appointments/:id`): authorized by the guard through
  *   `appointmentResource`.
  * - List (`GET /appointments`, CALL-18, CALL-28, CALL-42): `@Authenticated()`
- *   on the route, authorized here. Outside the operations context it lists
- *   the rows where the caller is the employee or the expert and keeps those
- *   `authorize()` allows for `consultation.join`; a caller who holds
- *   `consultation.join` in no grant (an employer-scoped principal, CALL-17)
- *   gets 404. In the operations context it lists the organizations the caller
- *   may coordinate bookings for (`bookings.coordinate`: a platform-scoped
- *   grant reaches every organization, `client_operations` its CLIENT
- *   assignments), with `orgId`, `status` and date filters.
+ *   on the route, authorized here, paged on `(startsAt, id)`. Outside the
+ *   operations context it lists the rows where the caller is the employee or
+ *   the expert and keeps those `authorize()` allows for `consultation.join`; a
+ *   caller who holds `consultation.join` in no grant (an employer-scoped
+ *   principal, CALL-17) gets 404. In the operations context it lists the
+ *   organizations the caller may coordinate bookings for
+ *   (`bookings.coordinate`: a platform-scoped grant reaches every
+ *   organization, `client_operations` its CLIENT assignments), with `orgId`,
+ *   `status` and date filters.
  * - Cancel (`POST /appointments/:id/cancel`, CALL-27, CALL-30): only a
  *   `confirmed` appointment; anything else is 409 `appointment_not_joinable`.
- *   `appointment.canceled` is audited.
+ *   `appointment.canceled` is audited. Only the employee cancels: the
+ *   canonical templates table keeps `appointment.cancel` with the `employee`
+ *   template, and the expert gets 404 (guidelines 4.5 and CALL-27, which say
+ *   either party, are being amended). The expert's CASE assignment is kept
+ *   after a cancellation, so the expert can still read the record; every
+ *   join path must therefore check the appointment's status, not only the
+ *   authorization decision.
  *
  * Writes run inside `DbService.withOrgScope` (RLS). Audit details carry
  * identifiers only (CW-R-33a).
  */
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { z } from 'zod';
 import {
   ACTIONS,
-  AppointmentStatusSchema,
   canTransitionAppointment,
   type Action,
   type ApiErrorCode,
   type AppointmentCreateRequest,
+  type AppointmentListQuery,
   type AppointmentListResponse,
   type AppointmentResponse,
+  type AssignmentInput,
   type AuthorizationContext,
   type GrantInput,
   type Principal,
@@ -55,28 +69,20 @@ import { AuthorizationService } from '../authz/authorization.service.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from '../authz/authorize.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
+import { assemblePrincipal } from '../principal/assemble-principal.js';
 import { ApiHttpException } from '../common/api-error.js';
-import { appointmentResourceOf, toAppointmentResponse } from './appointment-mapper.js';
+import {
+  appointmentResourceOf,
+  decodeAppointmentCursor,
+  encodeAppointmentCursor,
+  toAppointmentResponse,
+} from './appointment-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import {
   AppointmentsRepository,
   type AppointmentListFilter,
   type AppointmentRecord,
 } from './appointments.repository.js';
-
-/** `GET /appointments` query (CALL-28): all filters optional; dates bound `startsAt`. */
-export const AppointmentListQuerySchema = z
-  .object({
-    orgId: z.string().min(1).optional(),
-    status: AppointmentStatusSchema.optional(),
-    from: z.string().datetime().optional(),
-    to: z.string().datetime().optional(),
-  })
-  .refine((q) => !q.from || !q.to || Date.parse(q.from) < Date.parse(q.to), {
-    path: ['to'],
-    message: 'to must be after from',
-  });
-export type AppointmentListQuery = z.infer<typeof AppointmentListQuerySchema>;
 
 /** An appointment between one expert and one employee is a consultation (D-CW-02). */
 const APPOINTMENT_FORMAT = 'consultation';
@@ -114,8 +120,15 @@ function isCurrentGrantFor(grant: GrantInput, userId: string, action: Action, no
   );
 }
 
-function byStart(a: AppointmentRecord, b: AppointmentRecord): number {
-  return a.startsAt.getTime() - b.startsAt.getTime() || a.id.localeCompare(b.id);
+function byKey(a: AppointmentRecord, b: AppointmentRecord): number {
+  return a.startsAt.getTime() - b.startsAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/** Split `limit + 1` candidate rows into the page window and the cursor of the next page. */
+function paginate(rows: AppointmentRecord[], limit: number): { window: AppointmentRecord[]; nextCursor: string | null } {
+  const window = rows.slice(0, limit);
+  const last = window[window.length - 1];
+  return { window, nextCursor: rows.length > limit && last ? encodeAppointmentCursor(last) : null };
 }
 
 @Injectable()
@@ -145,13 +158,16 @@ export class AppointmentsService {
         field: 'employeeUserId',
       });
     }
-    if (!(await this.expertCanJoin(body.expertUserId, orgId))) {
-      throw invalidField('expertUserId', 'The expert cannot join consultations');
+    const id = randomUUID();
+    const planned = { id, orgId, employeeUserId: body.employeeUserId, serviceCategory: body.serviceCategory };
+    if (!(await this.expertCanJoin(body.expertUserId, planned))) {
+      throw invalidField('expertUserId', 'The expert cannot join this consultation');
     }
 
     const created = await this.dbs.withOrgScope(orgId, async (tx) => {
       const record = await this.repo.create(
         {
+          id,
           orgId,
           expertUserId: body.expertUserId,
           employeeUserId: body.employeeUserId,
@@ -204,21 +220,32 @@ export class AppointmentsService {
   }
 
   /**
-   * True when the expert's `assigned_cases` grant holding `consultation.join`
-   * (the `expert` template) will cover the appointment once the CASE
-   * assignment exists. Another scope (an employee's `own` grant) never
-   * reaches somebody else's appointment, so it does not count.
+   * Whether `authorize()` allows the expert `consultation.join` on the planned
+   * appointment: the expert in the expert context, with the CASE assignment
+   * `assignExpert` adds for it. The engine applies user state, context
+   * validity (an expert record), grant scope (`assigned_cases`) and the
+   * `categories` condition against the service category; an employee's
+   * `own` grant never reaches somebody else's appointment.
    */
-  private async expertCanJoin(expertUserId: string, orgId: string): Promise<boolean> {
-    const expert = await this.principals.load(expertUserId);
-    if (!expert?.expert || expert.isSuspended || expert.isDeactivated) return false;
-    const now = new Date();
-    const grants = await this.principals.loadGrants(expertUserId, orgId);
-    return grants.some(
-      (grant) =>
-        grant.scopeType === 'assigned_cases' &&
-        isCurrentGrantFor(grant, expertUserId, ACTIONS['consultation.join'], now),
-    );
+  private async expertCanJoin(
+    expertUserId: string,
+    planned: Pick<AppointmentRecord, 'id' | 'orgId' | 'employeeUserId' | 'serviceCategory'>,
+  ): Promise<boolean> {
+    const loaded = await this.principals.load(expertUserId);
+    if (!loaded) return false;
+    const expert = assemblePrincipal(loaded, { kind: 'expert' });
+    const action = ACTIONS['consultation.join'];
+    const resource = appointmentResourceOf(planned);
+    const ctx = await this.contextLoader.build(expert, resource, { action, loadedPrincipal: loaded });
+    const assignment: AssignmentInput = {
+      id: `planned_${planned.id}`,
+      userId: expertUserId,
+      kind: 'CASE',
+      targetId: planned.id,
+      startAt: ctx.now,
+      endAt: null,
+    };
+    return authorize(expert, action, resource, { ...ctx, assignments: [...ctx.assignments, assignment] }).allowed;
   }
 
   // ── Read ────────────────────────────────────────────────────────────────
@@ -231,32 +258,36 @@ export class AppointmentsService {
   }
 
   async list(principal: Principal, query: AppointmentListQuery): Promise<AppointmentListResponse> {
+    const after = query.cursor ? decodeAppointmentCursor(query.cursor) : undefined;
+    if (after === null) throw invalidField('cursor', 'The cursor is not valid');
     const filter: AppointmentListFilter = {
       orgId: query.orgId,
       status: query.status,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
+      after,
+      // One extra row tells whether there is a next page.
+      limit: query.limit + 1,
     };
-    const records =
-      principal.context.kind === 'operations'
-        ? await this.listForOperations(principal, filter)
-        : await this.listForParticipant(principal, filter);
-    return { items: records.map(toAppointmentResponse) };
-  }
 
-  /** CALL-18, CALL-42: the caller's own appointments, as employee or as expert. */
-  private async listForParticipant(principal: Principal, filter: AppointmentListFilter): Promise<AppointmentRecord[]> {
+    if (principal.context.kind === 'operations') {
+      const { window, nextCursor } = paginate(await this.listForOperations(principal, filter), query.limit);
+      return { items: window.map(toAppointmentResponse), nextCursor };
+    }
+
+    // The cursor follows the candidate rows, so a row the engine drops never shifts a page.
     const action = ACTIONS['consultation.join'];
     const candidates = await this.repo.list({ ...filter, participantUserId: principal.userId });
-    const visible = await this.authorizedRecords(principal, action, candidates);
+    const { window, nextCursor } = paginate(candidates, query.limit);
+    const visible = await this.authorizedRecords(principal, action, window);
     if (visible.length === 0 && !(await this.holdsAction(principal, action))) {
       await this.auditListDenial(principal, action);
       throw notFound();
     }
-    return visible;
+    return { items: visible.map(toAppointmentResponse), nextCursor };
   }
 
-  /** CALL-28: appointments of the organizations the caller coordinates bookings for. */
+  /** CALL-28: up to `filter.limit` appointments of the organizations the caller coordinates bookings for. */
   private async listForOperations(principal: Principal, filter: AppointmentListFilter): Promise<AppointmentRecord[]> {
     assertOperationsSession(principal);
     const action = ACTIONS['bookings.coordinate'];
@@ -269,11 +300,12 @@ export class AppointmentsService {
     }
     if (orgIds === null) return this.repo.list(filter);
 
+    // Each organization's first `limit` rows after the cursor hold the merged first `limit`.
     const records: AppointmentRecord[] = [];
     for (const orgId of orgIds) {
       records.push(...(await this.dbs.withOrgScope(orgId, (tx) => this.repo.list({ ...filter, orgId }, tx))));
     }
-    return records.sort(byStart);
+    return records.sort(byKey).slice(0, filter.limit);
   }
 
   /**
@@ -318,7 +350,11 @@ export class AppointmentsService {
     return visible;
   }
 
-  /** Whether any current grant of the caller lists `action`, in any organization they belong to. */
+  /**
+   * Whether any current grant of the caller lists `action`, in any
+   * organization they belong to: the line between a participant with no
+   * appointments (an empty page) and a caller who may never join one (404).
+   */
   private async holdsAction(principal: Principal, action: Action): Promise<boolean> {
     const now = new Date();
     const orgIds = new Set<string>(['platform']);

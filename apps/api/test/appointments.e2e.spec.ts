@@ -3,15 +3,13 @@
  * cancel over HTTP, with the authorization golden cases of guidelines 7.1 and
  * CALL-17 (employer-scoped principals get 404 on every appointment route).
  *
- * Principals: `user_jovan` is the employee, `user_milica` the expert (she
- * also gets an `org_sample` membership and an ad hoc organization-scoped
- * `appointment.propose` grant, because `POST /orgs/:orgId/appointments`
- * resolves the organization from the active context and no template reaches
- * it), `user_ana` a non-participant employee, `user_ivana` HR (employer
- * owner, hr_admin and employee templates), `user_stefan` a team manager whose
- * employee grant is revoked so that he is employer-scoped only, and
- * `user_nikola` operations (client_operations with a CLIENT assignment to
- * `org_sample`).
+ * Principals: `user_nikola` is operations (client_operations with a CLIENT
+ * assignment to `org_sample`) and creates appointments; `user_jovan` is the
+ * employee; `user_milica` the psychological expert; `user_test_expert_legal`
+ * a second, legal-only expert created here; `user_ana` an employee who is a
+ * participant only of the legal appointment; `user_ivana` HR (employer owner,
+ * hr_admin and employee templates); `user_stefan` a team manager whose
+ * employee grant is revoked, so that he is employer-scoped only.
  *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
@@ -22,7 +20,12 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { and, eq, inArray, like } from 'drizzle-orm';
-import { AppointmentListResponseSchema, AppointmentResponseSchema } from '@nestself/contracts';
+import {
+  AppointmentListResponseSchema,
+  AppointmentResponseSchema,
+  PERMISSION_TEMPLATES,
+  type AppointmentListResponse,
+} from '@nestself/contracts';
 import { SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
@@ -33,9 +36,11 @@ import {
   appointments,
   assignments,
   auditEvents,
+  experts,
+  externalIdentities,
   grants,
-  memberships,
   organizations,
+  users,
 } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
@@ -50,11 +55,14 @@ const LIST = '/api/appointments';
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 const STAFF = ['user_milica', 'user_nikola'];
 const PEOPLE = ['user_milica', 'user_nikola', 'user_jovan', 'user_ana', 'user_ivana', 'user_stefan'];
+/** A second expert, approved for legal consultations only. */
+const LEGAL_EXPERT = 'user_test_expert_legal';
 /** Inserted directly: proposing follow-ups is T-CW-1.9. */
 const PROPOSED_ID = 'appt_test_proposed';
 const OTHER_ORG_ID = 'appt_test_other_org';
 
 const SLOT = { startsAt: '2026-11-10T15:00:00.000Z', endsAt: '2026-11-10T15:50:00.000Z' };
+const LEGAL_SLOT = { startsAt: '2026-11-12T09:00:00.000Z', endsAt: '2026-11-12T09:50:00.000Z' };
 const FOLLOW_UP_SLOT = { startsAt: '2026-11-24T15:00:00.000Z', endsAt: '2026-11-24T15:50:00.000Z' };
 
 /** Every key an appointment audit event may carry (guidelines 7.5). */
@@ -91,12 +99,14 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
   const jwtSecret = randomBytes(32).toString('hex');
 
   let milica: SignedIn;
+  let legalExpert: SignedIn;
   let jovan: SignedIn;
   let ana: SignedIn;
   let ivana: SignedIn;
   let stefan: SignedIn;
   let nikola: SignedIn;
   let confirmedId: string;
+  let legalId: string;
 
   function extractCsrf(res: request.Response): string {
     const cookies = res.headers['set-cookie'] as string[] | undefined;
@@ -146,11 +156,12 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     who.agent.post(path).set('X-CSRF-Token', who.csrf).send(body);
   const cancel = (who: SignedIn, id: string) =>
     who.agent.post(`/api/appointments/${id}/cancel`).set('X-CSRF-Token', who.csrf).send({});
-  const listIds = async (who: SignedIn, query = '') => {
+  const listPage = async (who: SignedIn, query = ''): Promise<AppointmentListResponse> => {
     const res = await who.agent.get(`${LIST}${query}`);
     expect(res.status).toBe(200);
-    return AppointmentListResponseSchema.parse(res.body).items.map((a) => a.id);
+    return AppointmentListResponseSchema.parse(res.body);
   };
+  const listIds = async (who: SignedIn, query = '') => (await listPage(who, query)).items.map((a) => a.id);
 
   /** A 404 that tells the caller nothing about the appointment: the bare error envelope. */
   function expectNotFound(res: request.Response) {
@@ -181,38 +192,45 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     await app.init();
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
-    idp.seedUsers(
-      SAMPLE_EXTERNAL_IDENTITIES.filter((i) => PEOPLE.includes(i.userId)).map((i) => ({
+    const staffLogin = { password: SAMPLE_DEV_PASSWORD, totpSecret: TOTP_SECRET, totpEnrolled: true };
+    idp.seedUsers([
+      ...SAMPLE_EXTERNAL_IDENTITIES.filter((i) => PEOPLE.includes(i.userId)).map((i) => ({
         email: i.email,
         sub: i.subject,
         username: i.cognitoUsername,
-        ...(STAFF.includes(i.userId)
-          ? { password: SAMPLE_DEV_PASSWORD, totpSecret: TOTP_SECRET, totpEnrolled: true }
-          : {}),
+        ...(STAFF.includes(i.userId) ? staffLogin : {}),
       })),
-    );
+      { email: `${LEGAL_EXPERT}@example.com`, sub: `sub-${LEGAL_EXPERT}`, username: LEGAL_EXPERT, ...staffLogin },
+    ]);
 
     // A second organization nobody in this suite is assigned to.
     await testDb.db.insert(organizations).values({ id: OTHER_ORG, name: 'Other (fixture)', slug: 'appointments-other' });
 
-    // The expert in the client organization's context: a membership and an
-    // ad hoc organization-scoped appointment.propose grant (see header).
-    await testDb.db.insert(memberships).values({
-      userId: 'user_milica',
-      orgId: ORG,
-      status: 'ACTIVE',
-      startDate: new Date('2026-01-01'),
+    // The legal-only expert: user, expert record, identity and an expert-template grant.
+    const expertTemplate = PERMISSION_TEMPLATES.find((t) => t.key === 'expert')!;
+    await testDb.db
+      .insert(users)
+      .values({ id: LEGAL_EXPERT, email: `${LEGAL_EXPERT}@example.com`, displayName: 'Legal Expert (fixture)' });
+    await testDb.db.insert(experts).values({ id: 'expert_test_legal', userId: LEGAL_EXPERT, area: 'LEGAL' });
+    await testDb.db.insert(externalIdentities).values({
+      userId: LEGAL_EXPERT,
+      provider: 'cognito',
+      subject: `sub-${LEGAL_EXPERT}`,
+      cognitoUsername: LEGAL_EXPERT,
+      email: `${LEGAL_EXPERT}@example.com`,
+      emailVerified: true,
     });
     await testDb.db.insert(grants).values({
-      id: 'grant_test_milica_appointment_propose',
-      subjectUserId: 'user_milica',
-      templateKey: null,
-      actions: ['appointment.propose'],
-      scopeType: 'organization',
-      scopeOrgId: ORG,
+      id: `grant_${LEGAL_EXPERT}_expert`,
+      subjectUserId: LEGAL_EXPERT,
+      templateKey: expertTemplate.key,
+      actions: [...expertTemplate.actions],
+      scopeType: expertTemplate.scopeType,
+      scopeOrgId: null,
       scopeOrgUnitId: null,
       includeDescendants: false,
-      grantedByUserId: 'user_ivana',
+      conditions: [{ type: 'categories', allowed: ['legal'] }],
+      grantedByUserId: 'user_nikola',
       grantedAt: new Date('2026-01-01'),
       validFrom: new Date('2026-01-01'),
     });
@@ -223,8 +241,9 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       .set({ revokedAt: new Date('2026-01-02'), revokedReason: 'test_fixture' })
       .where(eq(grants.id, 'grant_user_stefan_employee'));
 
-    milica = await signInStaff('user_milica', { kind: 'organization', orgId: ORG });
     nikola = await signInStaff('user_nikola', { kind: 'operations' });
+    milica = await signInStaff('user_milica', { kind: 'expert' });
+    legalExpert = await signInStaff(LEGAL_EXPERT, { kind: 'expert' });
     jovan = await signInMember('user_jovan');
     ana = await signInMember('user_ana');
     ivana = await signInMember('user_ivana');
@@ -238,8 +257,8 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
 
   // ── Create (CALL-26) ─────────────────────────────────────────────────────
 
-  it('the expert creates a confirmed appointment for an employee of the organization', async () => {
-    const res = await create(milica, createBody());
+  it('operations create a confirmed appointment for an employee of an assigned organization', async () => {
+    const res = await create(nikola, createBody());
     expect(res.status).toBe(201);
     const body = AppointmentResponseSchema.parse(res.body);
     expect(body).toEqual({
@@ -266,7 +285,7 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       .where(and(eq(auditEvents.action, 'appointment.created'), eq(auditEvents.recordId, confirmedId)));
     expect(event).toMatchObject({
       category: 'ADMIN',
-      actorUserId: 'user_milica',
+      actorUserId: 'user_nikola',
       orgId: ORG,
       recordType: 'appointment',
       result: 'ALLOWED',
@@ -282,41 +301,46 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     // The expert reaches the appointment through her assigned_cases grant.
     const rows = await testDb.db.select().from(assignments).where(eq(assignments.targetId, confirmedId));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ userId: 'user_milica', kind: 'CASE', endAt: null });
+    expect(rows[0]).toMatchObject({ userId: 'user_milica', kind: 'CASE', assignedByUserId: 'user_nikola', endAt: null });
   });
 
   it('refuses invalid appointments and creates nothing', async () => {
-    const reversed = await create(milica, createBody({ startsAt: SLOT.endsAt, endsAt: SLOT.startsAt }));
+    const reversed = await create(nikola, createBody({ startsAt: SLOT.endsAt, endsAt: SLOT.startsAt }));
     expect(reversed.status).toBe(400);
     expect(reversed.body.code).toBe('validation');
 
-    const lowerCaseZone = await create(milica, createBody({ timeZone: 'europe/belgrade' }));
+    const lowerCaseZone = await create(nikola, createBody({ timeZone: 'europe/belgrade' }));
     expect(lowerCaseZone.status).toBe(400);
 
-    const otherOrgInBody = await create(milica, createBody({ orgId: OTHER_ORG }));
+    const otherOrgInBody = await create(nikola, createBody({ orgId: OTHER_ORG }));
     expect(otherOrgInBody.status).toBe(400);
     expect(otherOrgInBody.body).toMatchObject({ code: 'validation', details: { field: 'orgId' } });
 
-    const notMember = await create(milica, createBody({ employeeUserId: 'user_nikola' }));
+    const notMember = await create(nikola, createBody({ employeeUserId: 'user_nikola' }));
     expect(notMember.status).toBe(409);
     expect(notMember.body).toMatchObject({ code: 'subject_not_member', details: { field: 'employeeUserId' } });
 
     // Ana holds consultation.join through the employee template (own scope),
     // which never reaches somebody else's appointment.
-    const notAnExpert = await create(milica, createBody({ expertUserId: 'user_ana' }));
+    const notAnExpert = await create(nikola, createBody({ expertUserId: 'user_ana' }));
     expect(notAnExpert.status).toBe(400);
     expect(notAnExpert.body).toMatchObject({ code: 'validation', details: { field: 'expertUserId' } });
 
+    // Milica's expert grant is limited to psychological consultations.
+    const wrongCategory = await create(nikola, createBody({ serviceCategory: 'legal' }));
+    expect(wrongCategory.status).toBe(400);
+    expect(wrongCategory.body).toMatchObject({ code: 'validation', details: { field: 'expertUserId' } });
+
     const rows = await testDb.db.select({ id: appointments.id }).from(appointments);
     expect(rows.map((r) => r.id)).toEqual([confirmedId]);
+    const caseAssignments = await testDb.db.select().from(assignments).where(eq(assignments.kind, 'CASE'));
+    expect(caseAssignments.map((a) => a.targetId).filter((t) => t !== 'case_sample')).toEqual([confirmedId]);
   });
 
   // ── Read (CALL-18, CALL-42) ──────────────────────────────────────────────
 
   it('both participants list and read the appointment; others get 404', async () => {
-    expect(await listIds(jovan)).toEqual([confirmedId]);
-
-    await switchContext(milica, { kind: 'expert' });
+    expect(await listPage(jovan)).toEqual({ items: [expect.objectContaining({ id: confirmedId })], nextCursor: null });
     expect(await listIds(milica)).toEqual([confirmedId]);
 
     // Another employee holds consultation.join but has no appointments.
@@ -359,9 +383,7 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     await app.get(PrincipalLoader).invalidateUser('user_milica');
 
     for (const who of [jovan, milica]) {
-      const res = await who.agent.get(LIST);
-      expect(res.status).toBe(200);
-      const items = AppointmentListResponseSchema.parse(res.body).items;
+      const { items } = await listPage(who);
       expect(items.map((a) => [a.id, a.status, a.followUpOf])).toEqual([
         [confirmedId, 'confirmed', null],
         [PROPOSED_ID, 'proposed', confirmedId],
@@ -370,9 +392,41 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     }
   });
 
+  it('each expert lists and reads only their own appointments', async () => {
+    const res = await create(
+      nikola,
+      createBody({ expertUserId: LEGAL_EXPERT, employeeUserId: 'user_ana', ...LEGAL_SLOT, serviceCategory: 'legal' }),
+    );
+    expect(res.status).toBe(201);
+    legalId = AppointmentResponseSchema.parse(res.body).id;
+
+    expect(await listIds(milica)).toEqual([confirmedId, PROPOSED_ID]);
+    expect(await listIds(legalExpert)).toEqual([legalId]);
+    expect(await listIds(ana)).toEqual([legalId]);
+    expect(await listIds(jovan)).toEqual([confirmedId, PROPOSED_ID]);
+
+    expect((await legalExpert.agent.get(`${LIST}/${legalId}`)).status).toBe(200);
+    expectNotFound(await legalExpert.agent.get(`${LIST}/${confirmedId}`));
+    expectNotFound(await legalExpert.agent.get(`${LIST}/${PROPOSED_ID}`));
+    expectNotFound(await milica.agent.get(`${LIST}/${legalId}`));
+  });
+
+  it('pages the list on (startsAt, id)', async () => {
+    const first = await listPage(jovan, '?limit=1');
+    expect(first.items.map((a) => a.id)).toEqual([confirmedId]);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = await listPage(jovan, `?limit=1&cursor=${encodeURIComponent(first.nextCursor!)}`);
+    expect(second).toEqual({ items: [expect.objectContaining({ id: PROPOSED_ID })], nextCursor: null });
+
+    expect((await jovan.agent.get(`${LIST}?limit=101`)).status).toBe(400);
+    const badCursor = await jovan.agent.get(`${LIST}?cursor=not-a-cursor`);
+    expect(badCursor.status).toBe(400);
+    expect(badCursor.body).toMatchObject({ code: 'validation', details: { field: 'cursor' } });
+  });
+
   // ── Employer isolation golden cases (CALL-17, D-CW-30) ──────────────────
 
-  it('employer-scoped principals get 404 on every appointment route', async () => {
+  it('employer-scoped principals, the expert and another organization get 404 on every appointment route', async () => {
     // GET /appointments: Stefan holds team_manager only.
     expectNotFound(await stefan.agent.get(LIST));
     // Ivana also holds the employee template: she sees her own appointments, none of Jovan's.
@@ -382,11 +436,16 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     for (const who of [ivana, stefan]) {
       // GET /appointments/:id
       expectNotFound(await who.agent.get(`${LIST}/${confirmedId}`));
-      // POST /orgs/:orgId/appointments
+      // POST /orgs/:orgId/appointments (organization context, not operations)
       expectNotFound(await create(who, createBody()));
       // POST /appointments/:id/cancel
       expectNotFound(await cancel(who, confirmedId));
     }
+
+    // POST /orgs/:orgId/appointments: the expert in the expert context, and
+    // operations on an organization without a CLIENT assignment.
+    expectNotFound(await create(milica, createBody()));
+    expectNotFound(await create(nikola, createBody({ orgId: OTHER_ORG }), `/api/orgs/${OTHER_ORG}/appointments`));
 
     const denied = await testDb.db
       .select()
@@ -394,12 +453,11 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       .where(and(eq(auditEvents.action, 'access.denied'), eq(auditEvents.actorUserId, 'user_ivana')));
     expect(denied.map((e) => (e.details as { actionAttempted: string }).actionAttempted).sort()).toEqual([
       'appointment.cancel',
-      'appointment.propose',
       'consultation.join',
     ]);
 
-    const [row] = await testDb.db.select().from(appointments).where(eq(appointments.id, confirmedId));
-    expect(row!.status).toBe('CONFIRMED');
+    const rows = await testDb.db.select({ id: appointments.id }).from(appointments);
+    expect(rows.map((r) => r.id).sort()).toEqual([confirmedId, legalId, PROPOSED_ID].sort());
   });
 
   // ── Cancel (CALL-27, CALL-30) ────────────────────────────────────────────
@@ -446,7 +504,7 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
 
   // ── Operations listing (CALL-28) ─────────────────────────────────────────
 
-  it('operations list the appointments of their assigned organizations with filters', async () => {
+  it('operations list the appointments of their assigned organizations with filters and pages', async () => {
     await testDb.db.insert(appointments).values({
       id: OTHER_ORG_ID,
       orgId: OTHER_ORG,
@@ -454,17 +512,29 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       employeeUserId: 'user_ana',
       startsAt: new Date(SLOT.startsAt),
       endsAt: new Date(SLOT.endsAt),
-      serviceCategory: 'legal',
+      serviceCategory: 'psychological',
     });
 
-    expect(await listIds(nikola)).toEqual([confirmedId, PROPOSED_ID]);
+    expect(await listIds(nikola)).toEqual([confirmedId, legalId, PROPOSED_ID]);
     expect(await listIds(nikola, '?status=canceled')).toEqual([confirmedId]);
     expect(await listIds(nikola, `?orgId=${ORG}&from=2026-11-20T00:00:00.000Z`)).toEqual([PROPOSED_ID]);
-    expect(await listIds(nikola, `?to=2026-11-20T00:00:00.000Z`)).toEqual([confirmedId]);
+    expect(await listIds(nikola, `?to=2026-11-20T00:00:00.000Z`)).toEqual([confirmedId, legalId]);
+
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: AppointmentListResponse = await listPage(
+        nikola,
+        `?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      );
+      expect(page.items.length).toBeLessThanOrEqual(2);
+      ids.push(...page.items.map((a) => a.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(ids).toEqual([confirmedId, legalId, PROPOSED_ID]);
 
     // No CLIENT assignment to the other organization.
-    const other = await nikola.agent.get(`${LIST}?orgId=${OTHER_ORG}`);
-    expectNotFound(other);
+    expectNotFound(await nikola.agent.get(`${LIST}?orgId=${OTHER_ORG}`));
 
     const bogus = await nikola.agent.get(`${LIST}?status=bogus`);
     expect(bogus.status).toBe(400);
@@ -474,7 +544,7 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
 
   it('appointment audit events carry identifiers only', async () => {
     const events = await testDb.db.select().from(auditEvents).where(like(auditEvents.action, 'appointment.%'));
-    expect(events.length).toBeGreaterThanOrEqual(2);
+    expect(events.length).toBeGreaterThanOrEqual(3);
     for (const event of events) {
       for (const key of Object.keys(event.details as Record<string, unknown>)) {
         expect(AUDIT_DETAIL_KEYS.has(key), `${event.action}: ${key}`).toBe(true);

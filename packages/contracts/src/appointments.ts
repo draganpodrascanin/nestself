@@ -156,8 +156,40 @@ export type Appointment = z.infer<typeof AppointmentSchema>;
 export const AppointmentResponseSchema = AppointmentSchema;
 export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>;
 
+/** Default page size of `GET /appointments`. */
+export const APPOINTMENT_LIST_DEFAULT_LIMIT = 50;
+/** Largest page size of `GET /appointments`. */
+export const APPOINTMENT_LIST_MAX_LIMIT = 100;
+
+/**
+ * `GET /appointments` query (CALL-18, CALL-28). Every filter is optional; the
+ * dates bound `startsAt` (`from` inclusive, `to` exclusive). Pages follow
+ * `(startsAt, id)`; `cursor` is the opaque `nextCursor` of the previous page.
+ */
+export const AppointmentListQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(APPOINTMENT_LIST_MAX_LIMIT)
+      .default(APPOINTMENT_LIST_DEFAULT_LIMIT),
+    orgId: idField.optional(),
+    status: AppointmentStatusSchema.optional(),
+    from: isoDateTime.optional(),
+    to: isoDateTime.optional(),
+  })
+  .refine((q) => !q.from || !q.to || Date.parse(q.to) > Date.parse(q.from), {
+    path: ['to'],
+    message: 'to must be after from',
+  });
+export type AppointmentListQuery = z.infer<typeof AppointmentListQuerySchema>;
+
 export const AppointmentListResponseSchema = z.object({
   items: z.array(AppointmentResponseSchema),
+  /** Pass as `cursor` for the next page; null on the last page. */
+  nextCursor: z.string().nullable(),
 });
 export type AppointmentListResponse = z.infer<typeof AppointmentListResponseSchema>;
 

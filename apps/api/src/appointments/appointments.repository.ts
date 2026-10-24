@@ -12,7 +12,7 @@
  * `DbService.withOrgScope` (RLS).
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, gte, inArray, lt, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, lt, or, type SQL } from 'drizzle-orm';
 import {
   APPOINTMENT_STATUSES,
   canTransitionAppointment,
@@ -48,10 +48,17 @@ const TO_DB_STATUS: Readonly<Record<AppointmentStatus, DbAppointmentStatus>> = {
 /** An appointment row with the contract spelling of its status. */
 export type AppointmentRecord = Omit<AppointmentRow, 'status'> & { status: AppointmentStatus };
 
-export type NewAppointment = Omit<
-  typeof appointments.$inferInsert,
-  'id' | 'status' | 'createdAt' | 'updatedAt'
-> & { status: AppointmentStatus };
+/** The service generates `id` up front, so the expert's eligibility can be checked against it. */
+export type NewAppointment = Omit<typeof appointments.$inferInsert, 'id' | 'status' | 'createdAt' | 'updatedAt'> & {
+  id: string;
+  status: AppointmentStatus;
+};
+
+/** A position in the `(startsAt, id)` order: the last row of the previous page. */
+export interface AppointmentKey {
+  startsAt: Date;
+  id: string;
+}
 
 export interface AppointmentListFilter {
   /** Rows where this user is the employee or the expert. */
@@ -62,6 +69,10 @@ export interface AppointmentListFilter {
   from?: Date;
   /** Exclusive upper bound on `startsAt`. */
   to?: Date;
+  /** Rows strictly after this key. */
+  after?: AppointmentKey;
+  /** At most this many rows. */
+  limit?: number;
 }
 
 function toRecord(row: AppointmentRow): AppointmentRecord {
@@ -105,7 +116,7 @@ export class AppointmentsRepository {
     });
   }
 
-  /** Matching rows, earliest start first. */
+  /** Matching rows in `(startsAt, id)` order, earliest first. */
   async list(filter: AppointmentListFilter, tx?: DbExecutor): Promise<AppointmentRecord[]> {
     const conditions: SQL[] = [];
     if (filter.participantUserId) {
@@ -120,11 +131,20 @@ export class AppointmentsRepository {
     if (filter.status) conditions.push(eq(appointments.status, TO_DB_STATUS[filter.status]));
     if (filter.from) conditions.push(gte(appointments.startsAt, filter.from));
     if (filter.to) conditions.push(lt(appointments.startsAt, filter.to));
-    const rows = await this.exec(tx)
+    if (filter.after) {
+      conditions.push(
+        or(
+          gt(appointments.startsAt, filter.after.startsAt),
+          and(eq(appointments.startsAt, filter.after.startsAt), gt(appointments.id, filter.after.id)),
+        )!,
+      );
+    }
+    const query = this.exec(tx)
       .select()
       .from(appointments)
       .where(and(...conditions))
       .orderBy(asc(appointments.startsAt), asc(appointments.id));
+    const rows = filter.limit === undefined ? await query : await query.limit(filter.limit);
     return rows.map(toRecord);
   }
 

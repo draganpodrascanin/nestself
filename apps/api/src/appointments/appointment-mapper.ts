@@ -1,9 +1,9 @@
 /**
- * Appointment mappers: the API response (the contract seam, CALL-31) and the
- * authorization resource.
+ * Appointment mappers: the API response (the contract seam, CALL-31), the
+ * authorization resource and the list cursor.
  */
 import type { AppointmentResponse, Resource } from '@nestself/contracts';
-import type { AppointmentRecord } from './appointments.repository.js';
+import type { AppointmentKey, AppointmentRecord } from './appointments.repository.js';
 
 /** Exactly the seam fields; nothing else leaves the module. */
 export function toAppointmentResponse(record: AppointmentRecord): AppointmentResponse {
@@ -26,13 +26,37 @@ export function toAppointmentResponse(record: AppointmentRecord): AppointmentRes
  * The resource `authorize()` evaluates for one appointment. The employee
  * reaches it through the `employee` template (`own` scope: `ownerId`); the
  * expert through the `expert` template (`assigned_cases` scope: a CASE
- * assignment whose target is `id`). Nobody else holds a grant whose scope
- * covers it. The service category is not set as `category`: the expert
- * grant's `categories` condition holds credential categories in another
- * spelling, and eligibility is checked when the appointment is created.
+ * assignment whose target is `id`), whose required `categories` condition is
+ * checked against `category`. Nobody else holds a grant whose scope covers it.
  */
 export function appointmentResourceOf(
-  record: Pick<AppointmentRecord, 'id' | 'orgId' | 'employeeUserId'>,
+  record: Pick<AppointmentRecord, 'id' | 'orgId' | 'employeeUserId' | 'serviceCategory'>,
 ): Resource {
-  return { type: 'appointment', id: record.id, orgId: record.orgId, ownerId: record.employeeUserId };
+  return {
+    type: 'appointment',
+    id: record.id,
+    orgId: record.orgId,
+    ownerId: record.employeeUserId,
+    category: record.serviceCategory,
+  };
+}
+
+/** The opaque `nextCursor`: the `(startsAt, id)` key of a page's last row, base64url JSON. */
+export function encodeAppointmentCursor(key: AppointmentKey): string {
+  return Buffer.from(JSON.stringify([key.startsAt.toISOString(), key.id])).toString('base64url');
+}
+
+/** The key inside a cursor, or null when it is not one this API issued. */
+export function decodeAppointmentCursor(cursor: string): AppointmentKey | null {
+  try {
+    const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (!Array.isArray(value) || value.length !== 2) return null;
+    const [startsAt, id] = value as unknown[];
+    if (typeof startsAt !== 'string' || typeof id !== 'string' || id.length === 0) return null;
+    const date = new Date(startsAt);
+    if (Number.isNaN(date.getTime()) || date.toISOString() !== startsAt) return null;
+    return { startsAt: date, id };
+  } catch {
+    return null;
+  }
 }

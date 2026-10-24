@@ -140,7 +140,7 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     expect(policies).toEqual({
       list: 'authenticated',
       get: 'consultation.join',
-      create: 'appointment.propose',
+      create: 'bookings.coordinate',
       cancel: 'appointment.cancel',
     });
   });

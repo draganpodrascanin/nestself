@@ -3,43 +3,46 @@
  * guidelines 7.1).
  *
  * GET  /appointments                 list: `@Authenticated()`, authorized in the service (see below)
- * GET  /appointments/:id             consultation.join   appointmentResource
- * POST /orgs/:orgId/appointments     appointment.propose orgResourceFromContext('appointment')   10/60 s
- * POST /appointments/:id/cancel      appointment.cancel  appointmentResource                     10/60 s
+ * GET  /appointments/:id             consultation.join    appointmentResource
+ * POST /orgs/:orgId/appointments     bookings.coordinate  operationsOrgResource('appointment')   10/60 s
+ * POST /appointments/:id/cancel      appointment.cancel   appointmentResource                    10/60 s
+ *
+ * Creation belongs to NestSelf operations in the operations context
+ * (`client_operations` through its CLIENT assignment): no template reaches
+ * `appointment.propose` on an organization resource from an organization
+ * context. Experts propose follow-ups through T-CW-1.9's route.
  *
  * The list has no `:id`, so `appointmentResource` cannot resolve it, and the
  * rows it returns span organizations: the service authorizes every row with
  * `consultation.join` (participants) or the organization with
  * `bookings.coordinate` (operations), the same pattern as the professional
- * routes.
+ * routes. It is paged on `(startsAt, id)`.
  *
- * Every authorization denial on these routes answers 404 (CALL-17, D-CW-30;
- * `AppointmentNonDisclosureFilter`).
+ * Every authorization denial and context mismatch on these routes answers
+ * 404 (CALL-17, D-CW-30; `AppointmentNonDisclosureFilter`).
  */
 import { Body, Controller, Get, HttpCode, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ACTIONS,
   AppointmentCreateRequestSchema,
+  AppointmentListQuerySchema,
   type AppointmentCreateRequest,
+  type AppointmentListQuery,
   type AppointmentListResponse,
   type AppointmentResponse,
   type Principal,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
 import { Authenticated } from '../authz/authenticated.decorator.js';
-import { orgResourceFromContext } from '../authz/resolvers.js';
+import { operationsOrgResource } from '../authz/resolvers.js';
 import { WRITE_THROTTLE } from '../authz/throttles.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { appointmentResource } from './appointment.resolver.js';
 import { AppointmentNonDisclosureFilter } from './appointment-non-disclosure.filter.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import {
-  AppointmentListQuerySchema,
-  AppointmentsService,
-  type AppointmentListQuery,
-} from './appointments.service.js';
+import { AppointmentsService } from './appointments.service.js';
 
 @Controller()
 @UseFilters(AppointmentNonDisclosureFilter)
@@ -64,7 +67,7 @@ export class AppointmentsController {
   @Post('orgs/:orgId/appointments')
   @HttpCode(201)
   @Throttle(WRITE_THROTTLE)
-  @Authorize(ACTIONS['appointment.propose'], orgResourceFromContext('appointment'))
+  @Authorize(ACTIONS['bookings.coordinate'], operationsOrgResource('appointment'))
   create(
     @Param('orgId') orgId: string,
     @Body(new ZodValidationPipe(AppointmentCreateRequestSchema)) body: AppointmentCreateRequest,
