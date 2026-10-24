@@ -8,13 +8,14 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as cxapi from 'aws-cdk-lib/cx-api';
 import type { Construct } from 'constructs';
-import type { AuthStackProps } from './auth-stack.js';
+import type { StageConfig } from './config.js';
 
-export interface VideoStackProps extends AuthStackProps {
+export interface VideoStackProps extends cdk.StackProps {
+  readonly config: StageConfig;
   /**
-   * The platform KMS key from the security baseline stack (staging and
-   * production). The dev stage has no baseline stack and omits it; the video
-   * stack then creates its own `VideoKey` (D-CW-31).
+   * The platform KMS key from the security baseline stack, required for
+   * staging and production. The dev stage has no baseline stack and omits it;
+   * the video stack then creates its own `VideoKey` (D-CW-31).
    */
   readonly platformKey?: kms.IKey;
 }
@@ -55,6 +56,9 @@ export class NestSelfVideoStack extends cdk.Stack {
 
     const { config } = props;
     const stage = config.stage;
+    if (stage !== 'dev' && !props.platformKey) {
+      throw new Error(`NestSelfVideoStack: the ${stage} stage requires platformKey from the security baseline stack.`);
+    }
     const removalPolicy = config.removalPolicy === 'destroy'
       ? cdk.RemovalPolicy.DESTROY
       : cdk.RemovalPolicy.RETAIN;
@@ -104,6 +108,9 @@ export class NestSelfVideoStack extends cdk.Stack {
       conditions: chimeSourceConditions,
     }));
     // SSE queues also need the sender to use the key (OPS-16).
+    // SPIKE-CW-07 must confirm that direct SQS delivery from CreateMeeting
+    // works with these conditions; if it does not, drop the conditions on this
+    // one statement (the queue policy keeps its own).
     key.addToResourcePolicy(new iam.PolicyStatement({
       sid: 'ChimeMeetingsEncryptEvents',
       principals: [new iam.ServicePrincipal('meetings.chime.amazonaws.com')],
@@ -207,11 +214,12 @@ export class NestSelfVideoStack extends cdk.Stack {
       reason: 'D-CW-31, OPS-21: Chime SDK meetings actions do not support resource-level permissions.',
     });
 
-    // Worker: consume chime-events, run capture and concatenation pipelines,
-    // read and write the recordings bucket (D-CW-18, CW-R-79d).
+    // Worker: consume chime-events, clean up meetings, run capture and
+    // concatenation pipelines, read and write the recordings bucket
+    // (D-CW-09, D-CW-18, CW-R-79d).
     this.videoWorkerPolicy = new iam.ManagedPolicy(this, 'VideoWorkerPolicy', {
       managedPolicyName: `nestself-${stage}-video-worker`,
-      description: 'NestSelf worker: chime-events queue, Chime SDK media pipelines, recordings bucket',
+      description: 'NestSelf worker: chime-events queue, meeting cleanup, Chime SDK media pipelines, recordings bucket',
       statements: [
         new iam.PolicyStatement({
           sid: 'ConsumeChimeEvents',
@@ -236,6 +244,14 @@ export class NestSelfVideoStack extends cdk.Stack {
           ],
           resources: ['*'],
         }),
+        // calls.cleanup and calls.reconcile run in the worker and look up or
+        // end meetings (D-CW-09); meetings actions have no resource-level
+        // permissions (OPS-21).
+        new iam.PolicyStatement({
+          sid: 'ChimeMeetingCleanup',
+          actions: ['chime:GetMeeting', 'chime:DeleteMeeting'],
+          resources: ['*'],
+        }),
         // The first pipeline in an account creates the media pipelines
         // service-linked role (WEB-28).
         new iam.PolicyStatement({
@@ -251,9 +267,10 @@ export class NestSelfVideoStack extends cdk.Stack {
           actions: ['s3:PutObject', 's3:GetObject'],
           resources: [this.recordingsBucket.arnForObjects('*')],
         }),
+        // The media pipeline APIs read the sink bucket's policy as the caller.
         new iam.PolicyStatement({
-          sid: 'RecordingsList',
-          actions: ['s3:ListBucket'],
+          sid: 'RecordingsBucket',
+          actions: ['s3:ListBucket', 's3:GetBucketPolicy'],
           resources: [this.recordingsBucket.bucketArn],
         }),
         new iam.PolicyStatement({
@@ -269,7 +286,7 @@ export class NestSelfVideoStack extends cdk.Stack {
     Validations.of(this.videoWorkerPolicy).acknowledge(
       {
         id: 'AwsSolutions::AwsSolutions-IAM5[Resource::*]',
-        reason: 'D-CW-31, OPS-22: Chime SDK media pipeline create actions do not support resource-level permissions.',
+        reason: 'D-CW-31, OPS-21, OPS-22: ChimeMediaPipelines (media pipeline create actions) and ChimeMeetingCleanup (GetMeeting, DeleteMeeting) have no resource-level permissions.',
       },
       {
         id: `AwsSolutions::AwsSolutions-IAM5[Resource::<${recordingsBucketLogicalId}.Arn>/*]`,

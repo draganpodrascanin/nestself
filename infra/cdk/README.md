@@ -59,7 +59,7 @@ Deployment happens in three steps, matching the product rollout. Each step is an
 
 | Step | When | What is deployed | Command |
 |---|---|---|---|
-| 1. Cognito only | Now; development stays local (Docker Compose Postgres and Redis, API on the laptop) | `NestSelf-<stage>-Auth` only: user pool, app clients, triggers, secrets | `cdk deploy NestSelf-dev-Auth -c stage=dev -c account=<ACCOUNT_ID>` |
+| 1. Cognito and video (dev) | Now; development stays local (Docker Compose Postgres and Redis, API on the laptop) | `NestSelf-dev-Auth` (user pool, app clients, triggers, secrets) and `NestSelf-dev-Video` (chime-events queue, recordings bucket, video policies) | `cdk deploy NestSelf-dev-Auth NestSelf-dev-Video -c stage=dev -c account=<ACCOUNT_ID>` |
 | 2. Web applications | After the first features are complete | All platform stacks (network, data, compute, edge, observability, CI) | `cdk deploy --all -c stage=staging -c account=<ACCOUNT_ID> -c platform=true` |
 | 3. Mobile | After everything is verified end to end | No new stacks: the mobile client already exists in the auth stack; EAS builds point at the staging or production pool | `node infra/cdk/scripts/env-from-outputs.mjs <stage> --mobile` |
 
@@ -129,7 +129,7 @@ pnpm --filter @nestself/cdk typecheck
 | `nestself-<stage>-chime-meeting-state-change` rule | `source: aws.chime`, `detail-type: Chime Meeting State Change`, to the queue: the backstop to the direct notifications, so events arrive at least once (D-CW-12). |
 | `nestself-<stage>-recordings-<account>` bucket | SSE-KMS with an S3 bucket key, block public access, TLS only, server access logs to `nestself-<stage>-recordings-logs-<account>`. Capture pipelines write under `raw/` (expired after 30 days), concatenation writes under `concatenated/`. Bucket and key policies let `mediapipelines.chime.amazonaws.com` put, read and list with `aws:SourceAccount` and `aws:SourceArn` conditions (WEB-27). |
 | `nestself-<stage>-video-api` managed policy | Meeting and attendee actions plus `chime:TagResource` on `*` (the meetings actions have no resource-level permissions). No media pipeline actions (CW-R-79a). |
-| `nestself-<stage>-video-worker` managed policy | Consume the queue, media capture and concatenation pipelines (on `*`), the media pipelines service-linked role, put, get and list on the recordings bucket, decrypt and generate data keys on the key. |
+| `nestself-<stage>-video-worker` managed policy | Consume the queue, meeting cleanup (`chime:GetMeeting` and `chime:DeleteMeeting` on `*`, for `calls.cleanup` and `calls.reconcile`, D-CW-31), media capture and concatenation pipelines (on `*`), the media pipelines service-linked role, put, get, list and read the bucket policy on the recordings bucket, decrypt and generate data keys on the key. |
 
 Outputs and the variables `env-from-outputs.mjs` prints from them (API mode only):
 
@@ -150,6 +150,8 @@ aws sts get-caller-identity   # must print 634972095709
 pnpm --filter @nestself/cdk exec cdk deploy NestSelf-dev-Video -c stage=dev -c account=$AWS_ACCOUNT_DEV
 node infra/cdk/scripts/env-from-outputs.mjs dev   # replace the COGNITO_* block, add the three video lines
 ```
+
+Tearing the dev stack down: the buckets keep `DESTROY` but have no auto-delete, so empty `nestself-dev-recordings-<account>` and `nestself-dev-recordings-logs-<account>` first (`aws s3 rm s3://<bucket> --recursive`), otherwise `cdk destroy NestSelf-dev-Video` stops at the non-empty buckets.
 
 The local API and worker run as the developer identity, so in dev both managed policies are attached to the identity behind the `nestself-dev` profile (D-CW-31): `aws iam attach-user-policy` (or `attach-role-policy`) with the two ARNs the script prints. That needs IAM rights the day-to-day profile may not have. In staging and production the compute stack is to attach them to the API and worker task roles when `videoEnabled` is set for the stage; that wiring is not in place yet.
 
@@ -214,7 +216,7 @@ The trust policy constrains the OIDC `sub` claim: staging trusts `main` branch a
 
 ### Dev stage (auth and video)
 
-Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month. The video stack adds $1/month for its KMS key; SQS, EventBridge and S3 cost cents at dev volume. Chime SDK meeting and media pipeline minutes are billed per use and are not included.
+Under $5/month. Cognito Essentials charges per MAU after 50 MAU free tier. Secrets Manager is $0.40/secret/month. The video stack adds up to $3/month for its KMS key with rotation ($1 for the key, the first two rotations add $1 each); SQS, EventBridge and S3 cost cents at dev volume. Chime SDK meeting and media pipeline minutes are billed per use and are not included.
 
 ### Staging/production (all stacks)
 

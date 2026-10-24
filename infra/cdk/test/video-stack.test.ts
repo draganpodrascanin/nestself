@@ -23,6 +23,7 @@ const chimeSourceConditions = {
 };
 
 interface Statement {
+  Sid?: string;
   Effect: string;
   Principal?: { Service?: string | string[] } | string;
   Action: string | string[];
@@ -210,6 +211,30 @@ describe('NestSelfVideoStack -- dev stage (own key)', () => {
     });
   });
 
+  it('encrypts the log bucket with SSE-S3 and expires logs after 365 days', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: `nestself-dev-recordings-logs-${ACCOUNT}`,
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+      },
+      LifecycleConfiguration: {
+        Rules: [{ Id: 'ExpireAccessLogs', ExpirationInDays: 365, Status: 'Enabled' }],
+      },
+    });
+  });
+
+  it('delivers access logs through a bucket policy, not an ACL', () => {
+    const delivery = statementsFor(
+      statementsOf(template, 'AWS::S3::BucketPolicy', 'PolicyDocument'),
+      'logging.s3.amazonaws.com',
+    );
+    expect(delivery).toHaveLength(1);
+    expect(delivery[0]!.Action).toBe('s3:PutObject');
+    for (const bucket of Object.values(template.findResources('AWS::S3::Bucket'))) {
+      expect((bucket as { Properties: Record<string, unknown> }).Properties['AccessControl']).toBeUndefined();
+    }
+  });
+
   it('lets mediapipelines.chime.amazonaws.com write, read and list the recordings bucket with the conditions', () => {
     const bucketStatements = statementsOf(template, 'AWS::S3::BucketPolicy', 'PolicyDocument');
     const pipelines = statementsFor(bucketStatements, 'mediapipelines.chime.amazonaws.com');
@@ -262,11 +287,45 @@ describe('NestSelfVideoStack -- dev stage (own key)', () => {
       's3:PutObject',
       's3:GetObject',
       's3:ListBucket',
+      's3:GetBucketPolicy',
       'kms:Decrypt',
       'kms:GenerateDataKey',
     ]));
-    // No meeting-management actions on the worker: it does not create or end meetings.
-    expect(actions.filter((a) => /Meeting|Attendee/.test(a))).toEqual([]);
+  });
+
+  it('VideoWorkerPolicy reads the bucket policy, as the media pipeline APIs require', () => {
+    const statements = managedPolicyStatements(template, 'nestself-dev-video-worker');
+    const bucketId = Object.keys(template.findResources('AWS::S3::Bucket', {
+      Properties: { BucketName: `nestself-dev-recordings-${ACCOUNT}` },
+    }))[0];
+    const onBucket = statements.filter((s) => JSON.stringify(s.Resource) === JSON.stringify({ 'Fn::GetAtt': [bucketId, 'Arn'] }));
+    expect(allowedActions(onBucket).sort()).toEqual(['s3:GetBucketPolicy', 's3:ListBucket']);
+  });
+
+  it('VideoWorkerPolicy may only look up and delete meetings (calls.cleanup, calls.reconcile)', () => {
+    const actions = allowedActions(managedPolicyStatements(template, 'nestself-dev-video-worker'));
+    expect(actions.filter((a) => /Meeting|Attendee/.test(a)).sort()).toEqual(['chime:DeleteMeeting', 'chime:GetMeeting']);
+  });
+
+  it('VideoWorkerPolicy keeps * resources to the media pipeline and meeting cleanup statements', () => {
+    const statements = managedPolicyStatements(template, 'nestself-dev-video-worker');
+    const wildcard = statements.filter((s) => asArray(s.Resource as string | string[]).includes('*'));
+    expect(wildcard.map((s) => s.Sid).sort()).toEqual(['ChimeMediaPipelines', 'ChimeMeetingCleanup']);
+    const cleanup = wildcard.find((s) => s.Sid === 'ChimeMeetingCleanup')!;
+    expect(asArray(cleanup.Action).sort()).toEqual(['chime:DeleteMeeting', 'chime:GetMeeting']);
+  });
+
+  it('VideoWorkerPolicy may create only the media pipelines service-linked role', () => {
+    const statements = managedPolicyStatements(template, 'nestself-dev-video-worker');
+    const slr = statements.filter((s) => allowedActions([s]).includes('iam:CreateServiceLinkedRole'));
+    expect(slr).toHaveLength(1);
+    expect(slr[0]!.Action).toBe('iam:CreateServiceLinkedRole');
+    expect(slr[0]!.Condition).toEqual({
+      StringEquals: { 'iam:AWSServiceName': 'mediapipelines.chime.amazonaws.com' },
+    });
+    expect(JSON.stringify(slr[0]!.Resource)).toContain(
+      ':iam::111111111111:role/aws-service-role/mediapipelines.chime.amazonaws.com/AWSServiceRoleForAmazonChimeSDKMediaPipelines',
+    );
   });
 
   it('exports the five canonical outputs', () => {
@@ -278,6 +337,28 @@ describe('NestSelfVideoStack -- dev stage (own key)', () => {
       'VideoApiPolicyArn',
       'VideoWorkerPolicyArn',
     ]);
+  });
+
+  it('exports the outputs under stage-scoped names', () => {
+    const outputs = template.findOutputs('*') as Record<string, { Export: { Name: string } }>;
+    expect(Object.fromEntries(Object.entries(outputs).map(([key, o]) => [key, o.Export.Name]))).toEqual({
+      ChimeEventsQueueUrl: 'nestself-dev-chime-events-queue-url',
+      ChimeEventsQueueArn: 'nestself-dev-chime-events-queue-arn',
+      RecordingsBucketName: 'nestself-dev-recordings-bucket-name',
+      VideoApiPolicyArn: 'nestself-dev-video-api-policy-arn',
+      VideoWorkerPolicyArn: 'nestself-dev-video-worker-policy-arn',
+    });
+  });
+});
+
+describe('NestSelfVideoStack -- props', () => {
+  it.each(['staging', 'production'] as const)('refuses the %s stage without the platform key', (stage) => {
+    const app = new cdk.App();
+    expect(() => new NestSelfVideoStack(app, `Test-${stage}-Video`, {
+      config: getStageConfig(stage),
+      env: sharedEnv,
+      ...synthesizerProps,
+    })).toThrow(/platformKey/);
   });
 });
 
