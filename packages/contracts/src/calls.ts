@@ -135,13 +135,14 @@ export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 /**
  * Media placement of a Chime SDK meeting. `EventIngestionUrl` is deliberately
  * absent: parsing drops it, so no client telemetry reaches a third endpoint
- * (D-CW-13, CW-R-48). Audio host is `host:port`, not a URL.
+ * (D-CW-13, CW-R-48). Audio host is `host:port`, not a URL. The SDK marks
+ * `TurnControlUrl` deprecated, so a meeting without it is still joinable.
  */
 const ChimeMediaPlacementSchema = z.object({
   AudioHostUrl: z.string().min(1),
   AudioFallbackUrl: z.string().min(1),
   SignalingUrl: z.string().min(1),
-  TurnControlUrl: z.string().min(1),
+  TurnControlUrl: z.string().min(1).optional(),
   ScreenDataUrl: z.string().min(1).optional(),
   ScreenViewingUrl: z.string().min(1).optional(),
   ScreenSharingUrl: z.string().min(1).optional(),

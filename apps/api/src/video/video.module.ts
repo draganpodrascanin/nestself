@@ -16,19 +16,24 @@ import { FakeVideoProvider } from './fake-video-provider.js';
 import { VIDEO_PROVIDER, type VideoProvider } from './video-provider.js';
 
 /**
- * Builds the provider from the validated configuration. The `stage` tag comes
- * from `STAGE`, which the compute stack sets on every task; the API only runs
- * outside it in the dev stage (CW-R-66), hence the fallback.
+ * Builds the provider from the validated configuration. The env schema already
+ * requires these values for `chime` and defaults `STAGE` (set by the compute
+ * stack) to `dev`; the guard still names a missing one at start-up rather than
+ * failing on the first meeting.
  */
 export function createVideoProvider(config: Pick<ConfigService, 'get'>): VideoProvider {
-  if (config.get<string>('VIDEO_PROVIDER') === 'chime') {
-    return new ChimeVideoProvider({
-      eventsQueueArn: config.get<string>('CHIME_EVENTS_QUEUE_ARN')!,
-      recordingsBucket: config.get<string>('RECORDINGS_BUCKET')!,
-      stage: config.get<string>('STAGE') ?? 'dev',
-    });
-  }
-  return new FakeVideoProvider();
+  if (config.get<string>('VIDEO_PROVIDER') !== 'chime') return new FakeVideoProvider();
+
+  const required = (key: 'CHIME_EVENTS_QUEUE_ARN' | 'RECORDINGS_BUCKET' | 'STAGE'): string => {
+    const value = config.get<string>(key);
+    if (!value) throw new Error(`${key} is required when VIDEO_PROVIDER=chime`);
+    return value;
+  };
+  return new ChimeVideoProvider({
+    eventsQueueArn: required('CHIME_EVENTS_QUEUE_ARN'),
+    recordingsBucket: required('RECORDINGS_BUCKET'),
+    stage: required('STAGE'),
+  });
 }
 
 @Module({

@@ -4,6 +4,7 @@
  * OPS-31, CW-R-81), the fake provider's stubs and events, and the module's
  * provider selection.
  */
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { mockClient } from 'aws-sdk-client-mock';
@@ -29,14 +30,21 @@ import {
   NotFoundException as PipelineNotFoundException,
   ServiceUnavailableException as PipelineServiceUnavailableException,
 } from '@aws-sdk/client-chime-sdk-media-pipelines';
-import { CALL_FORMATS, CALL_PARTICIPANT_ROLES } from '@nestself/contracts';
+import {
+  CALL_FORMATS,
+  CALL_PARTICIPANT_ROLES,
+  WEBINAR_SINGLE_MEETING_CAPACITY,
+  WORKSHOP_CAPACITY,
+} from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import {
+  CHIME_TENANT_ID_PATTERN,
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoCapabilityError,
   assertCapabilitiesAllowed,
   capabilitiesForRole,
+  encodeTenantId,
   type CreateSessionInput,
   type VideoProviderEvent,
 } from './video-provider.js';
@@ -49,6 +57,8 @@ const PARTICIPANT_ID = '5d2c8e17-9b4a-4f3e-8c21-7a6b5d4c3e21';
 const SECOND_PARTICIPANT_ID = 'a3e1c5d7-2b4f-4a6c-9e8d-1f3b5a7c9e02';
 const ORG_ID = 'c8d2e4f6-1a3b-4c5d-8e7f-9a1b2c3d4e5f';
 const WEBINAR_ID = 'e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b';
+/** Fails Chime's TenantIds pattern raw: four identical characters in a row. */
+const REPEATING_ID = 'aaaa0000-1111-4222-8333-444455556666';
 const QUEUE_ARN = 'arn:aws:sqs:eu-central-1:111122223333:nestself-dev-chime-events';
 const BUCKET = 'nestself-dev-recordings-111122223333';
 const JOIN_TOKEN = 'join-token-secret-value';
@@ -65,10 +75,19 @@ const consultationInput: CreateSessionInput = {
 const webinarInput: CreateSessionInput = {
   sessionId: SESSION_ID,
   format: 'webinar',
-  capacity: 250,
+  capacity: WEBINAR_SINGLE_MEETING_CAPACITY,
   orgId: null,
   webinarId: WEBINAR_ID,
   participant: { participantId: PARTICIPANT_ID, role: 'presenter' },
+};
+
+const workshopInput: CreateSessionInput = {
+  sessionId: SESSION_ID,
+  format: 'workshop',
+  capacity: WORKSHOP_CAPACITY,
+  orgId: ORG_ID,
+  webinarId: null,
+  participant: { participantId: PARTICIPANT_ID, role: 'facilitator' },
 };
 
 const MEETING: Meeting = {
@@ -95,6 +114,19 @@ function attendee(externalUserId: string, attendeeId = 'attendee-1') {
     Capabilities: { Audio: 'SendReceive', Video: 'SendReceive', Content: 'SendReceive' },
   } as const;
 }
+
+/** A ConfigService stand-in over the parsed env values. */
+function config(values: Record<string, string | undefined>) {
+  return { get: <T = string>(key: string): T | undefined => values[key] as T | undefined };
+}
+
+const CHIME_CONFIG = {
+  VIDEO_PROVIDER: 'chime',
+  CHIME_REGION: 'eu-central-1',
+  CHIME_EVENTS_QUEUE_ARN: QUEUE_ARN,
+  RECORDINGS_BUCKET: BUCKET,
+  STAGE: 'dev',
+};
 
 /** Waits until the fake provider's queued events have been delivered. */
 function flushEvents(): Promise<void> {
@@ -179,6 +211,28 @@ describe('assertCapabilitiesAllowed', () => {
   });
 });
 
+describe('encodeTenantId (Chime TenantIds pattern)', () => {
+  it('makes an id with four identical characters in a row acceptable to Chime', () => {
+    expect(REPEATING_ID).not.toMatch(CHIME_TENANT_ID_PATTERN);
+    const encoded = encodeTenantId(REPEATING_ID);
+    expect(encoded).toMatch(CHIME_TENANT_ID_PATTERN);
+    expect(encoded).toHaveLength(47);
+  });
+
+  it('encodes every UUID to 47 characters that match the pattern', () => {
+    for (let i = 0; i < 2000; i += 1) {
+      const encoded = encodeTenantId(randomUUID());
+      expect(encoded).toHaveLength(47);
+      expect(encoded).toMatch(CHIME_TENANT_ID_PATTERN);
+    }
+  });
+
+  it('refuses an id the encoding cannot make valid', () => {
+    expect(() => encodeTenantId('org id')).toThrow(/TenantIds/);
+    expect(() => encodeTenantId('a')).toThrow(/TenantIds/);
+  });
+});
+
 describe('MEETING_FEATURES', () => {
   it('never requests FHD video, so no meeting is capped at 25 attendees (CW-R-08)', () => {
     for (const format of CALL_FORMATS) {
@@ -190,7 +244,7 @@ describe('MEETING_FEATURES', () => {
 
   it('sizes each format per D-CW-10', () => {
     expect(MEETING_FEATURES.consultation.Attendee.MaxCount).toBe(4);
-    expect(MEETING_FEATURES.webinar.Attendee.MaxCount).toBe(250);
+    expect(MEETING_FEATURES.webinar.Attendee.MaxCount).toBe(WEBINAR_SINGLE_MEETING_CAPACITY);
     expect(MEETING_FEATURES.workshop.Attendee.MaxCount).toBe(30);
   });
 });
@@ -244,7 +298,7 @@ describe('ChimeVideoProvider', () => {
       expect(request.ExternalMeetingId).toBe(SESSION_ID);
       expect(request.MeetingFeatures).toEqual(MEETING_FEATURES.consultation);
       expect(request.NotificationsConfiguration).toEqual({ SqsQueueArn: QUEUE_ARN });
-      expect(request.TenantIds).toEqual([ORG_ID]);
+      expect(request.TenantIds).toEqual([encodeTenantId(ORG_ID)]);
       expect(request.Attendees).toEqual([
         {
           ExternalUserId: PARTICIPANT_ID,
@@ -269,6 +323,19 @@ describe('ChimeVideoProvider', () => {
       ]);
     });
 
+    it('tags the stage the module reads from the parsed env', async () => {
+      meetings.on(CreateMeetingWithAttendeesCommand).resolves({
+        Meeting: MEETING,
+        Attendees: [attendee(PARTICIPANT_ID)],
+      });
+      const staged = createVideoProvider(config({ ...CHIME_CONFIG, STAGE: 'staging' }));
+
+      await staged.createSession(consultationInput);
+
+      const request = meetings.commandCalls(CreateMeetingWithAttendeesCommand)[0]!.args[0].input;
+      expect(request.Tags).toContainEqual({ Key: 'stage', Value: 'staging' });
+    });
+
     it('uses the webinar id as tenant id for webinars and omits the orgId tag when there is none', async () => {
       meetings.on(CreateMeetingWithAttendeesCommand).resolves({
         Meeting: { ...MEETING, TenantIds: [WEBINAR_ID] },
@@ -278,7 +345,7 @@ describe('ChimeVideoProvider', () => {
       await provider.createSession(webinarInput);
 
       const request = meetings.commandCalls(CreateMeetingWithAttendeesCommand)[0]!.args[0].input;
-      expect(request.TenantIds).toEqual([WEBINAR_ID]);
+      expect(request.TenantIds).toEqual([encodeTenantId(WEBINAR_ID)]);
       expect(request.MeetingFeatures).toEqual(MEETING_FEATURES.webinar);
       expect(request.Tags).toEqual([
         { Key: 'stage', Value: 'dev' },
@@ -319,7 +386,17 @@ describe('ChimeVideoProvider', () => {
 
     it('rejects a capacity above the single-meeting limit with capacity_above_limit', async () => {
       await expectApiError(
-        provider.createSession({ ...webinarInput, capacity: 251 }),
+        provider.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY + 1 }),
+        400,
+        'capacity_above_limit',
+      );
+      expect(meetings.commandCalls(CreateMeetingWithAttendeesCommand)).toHaveLength(0);
+    });
+
+    it('rejects a workshop above WORKSHOP_CAPACITY even though the meeting holds more', async () => {
+      expect(MEETING_FEATURES.workshop.Attendee.MaxCount).toBeGreaterThan(WORKSHOP_CAPACITY);
+      await expectApiError(
+        provider.createSession({ ...workshopInput, capacity: WORKSHOP_CAPACITY + 1 }),
         400,
         'capacity_above_limit',
       );
@@ -349,14 +426,49 @@ describe('ChimeVideoProvider', () => {
       expect(logged.join('\n')).not.toContain('internal provider detail');
     });
 
-    it('fails with 502 when Chime reports an error for the attendee', async () => {
+    it('deletes the new meeting and fails with 502 when Chime reports an error for the attendee', async () => {
       meetings.on(CreateMeetingWithAttendeesCommand).resolves({
         Meeting: MEETING,
         Attendees: [],
         Errors: [{ ExternalUserId: PARTICIPANT_ID, ErrorCode: 'BadRequest', ErrorMessage: 'nope' }],
       });
+      meetings.on(DeleteMeetingCommand).resolves({});
 
       await expectApiError(provider.createSession(consultationInput), 502, 'video_provider_unavailable');
+
+      const deletes = meetings.commandCalls(DeleteMeetingCommand);
+      expect(deletes).toHaveLength(1);
+      expect(deletes[0]!.args[0].input).toEqual({ MeetingId: 'meeting-1' });
+      expect(logged.join('\n')).not.toContain('nope');
+    });
+
+    it('still fails with 502 when deleting the half-created meeting fails too', async () => {
+      meetings.on(CreateMeetingWithAttendeesCommand).resolves({
+        Meeting: MEETING,
+        Attendees: [],
+        Errors: [{ ExternalUserId: PARTICIPANT_ID, ErrorCode: 'BadRequest', ErrorMessage: 'nope' }],
+      });
+      meetings.on(DeleteMeetingCommand).rejects(new ServiceUnavailableException({ message: 'down', $metadata: {} }));
+
+      await expectApiError(provider.createSession(consultationInput), 502, 'video_provider_unavailable');
+      expect(meetings.commandCalls(DeleteMeetingCommand)).toHaveLength(1);
+    });
+
+    it('sends the session and participant ids raw; only tenant ids are encoded', async () => {
+      meetings.on(CreateMeetingWithAttendeesCommand).resolves({
+        Meeting: MEETING,
+        Attendees: [attendee(PARTICIPANT_ID)],
+      });
+
+      await provider.createSession({ ...consultationInput, orgId: REPEATING_ID });
+
+      const request = meetings.commandCalls(CreateMeetingWithAttendeesCommand)[0]!.args[0].input;
+      expect(request.ClientRequestToken).toBe(SESSION_ID);
+      expect(request.ExternalMeetingId).toBe(SESSION_ID);
+      expect(request.Attendees?.[0]?.ExternalUserId).toBe(PARTICIPANT_ID);
+      expect(request.TenantIds).toEqual([encodeTenantId(REPEATING_ID)]);
+      expect(request.TenantIds?.[0]).toMatch(CHIME_TENANT_ID_PATTERN);
+      expect(request.Tags).toContainEqual({ Key: 'orgId', Value: REPEATING_ID });
     });
 
     it('never logs the join token (CW-R-69)', async () => {
@@ -677,7 +789,7 @@ describe('FakeVideoProvider', () => {
     expect(session.meeting.ExternalMeetingId).toBe(SESSION_ID);
     expect(session.meeting.MediaRegion).toBe('eu-central-1');
     expect(session.meeting.MeetingFeatures).toEqual(MEETING_FEATURES.consultation);
-    expect(session.meeting.TenantIds).toEqual([ORG_ID]);
+    expect(session.meeting.TenantIds).toEqual([encodeTenantId(ORG_ID)]);
     expect(session.participant.attendee).toEqual({
       AttendeeId: `fake-attendee-${PARTICIPANT_ID}`,
       ExternalUserId: PARTICIPANT_ID,
@@ -812,7 +924,8 @@ describe('FakeVideoProvider', () => {
   });
 
   it('applies the same capacity limit as the Chime adapter', async () => {
-    await expectApiError(fake.createSession({ ...webinarInput, capacity: 251 }), 400, 'capacity_above_limit');
+    await expectApiError(fake.createSession({ ...webinarInput, capacity: WEBINAR_SINGLE_MEETING_CAPACITY + 1 }), 400, 'capacity_above_limit');
+    await expectApiError(fake.createSession({ ...workshopInput, capacity: WORKSHOP_CAPACITY + 1 }), 400, 'capacity_above_limit');
   });
 
   it('starts and stops a stub recording', async () => {
@@ -829,6 +942,80 @@ describe('FakeVideoProvider', () => {
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
   });
 
+  describe('simulateEvent', () => {
+    it('emits an attendee event the provider did not cause, leaving the attendee in place', async () => {
+      const session = await fake.createSession(consultationInput);
+      await flushEvents();
+      events.length = 0;
+
+      const event = fake.simulateEvent('AttendeeDropped', session.providerMeetingId, session.participant.providerAttendeeId);
+      expect(events).toHaveLength(0);
+      await flushEvents();
+
+      const expected: VideoProviderEvent = {
+        eventType: 'AttendeeDropped',
+        providerMeetingId: session.providerMeetingId,
+        providerAttendeeId: session.participant.providerAttendeeId,
+        externalMeetingId: SESSION_ID,
+        externalUserId: PARTICIPANT_ID,
+        occurredAt: NOW,
+      };
+      expect(event).toEqual(expected);
+      expect(events).toEqual([expected]);
+      const again = await fake.createParticipant({
+        providerMeetingId: session.providerMeetingId,
+        participantId: PARTICIPANT_ID,
+        role: 'expert',
+      });
+      expect(again).toEqual(session.participant);
+    });
+
+    it('drives AttendeeLeft without removing the attendee', async () => {
+      const session = await fake.createSession(consultationInput);
+      await flushEvents();
+      events.length = 0;
+
+      fake.simulateEvent('AttendeeLeft', session.providerMeetingId, session.participant.providerAttendeeId);
+      await flushEvents();
+
+      expect(events.map((event) => [event.eventType, event.externalUserId])).toEqual([['AttendeeLeft', PARTICIPANT_ID]]);
+    });
+
+    it('ends the meeting on MeetingEnded, as when Chime ends an empty meeting', async () => {
+      const session = await fake.createSession(consultationInput);
+      await flushEvents();
+      events.length = 0;
+
+      fake.simulateEvent('MeetingEnded', session.providerMeetingId);
+      await flushEvents();
+
+      expect(events).toEqual([
+        {
+          eventType: 'MeetingEnded',
+          providerMeetingId: session.providerMeetingId,
+          providerAttendeeId: null,
+          externalMeetingId: SESSION_ID,
+          externalUserId: null,
+          occurredAt: NOW,
+        },
+      ]);
+      await expect(fake.describeSession({ providerMeetingId: session.providerMeetingId })).resolves.toBeNull();
+    });
+
+    it('refuses an unknown meeting or attendee, and attendee events without an attendee', async () => {
+      const session = await fake.createSession(consultationInput);
+
+      expect(() => fake.simulateEvent('MeetingEnded', 'fake-meeting-unknown')).toThrow(/unknown meeting/);
+      expect(() => fake.simulateEvent('AttendeeDropped', session.providerMeetingId, 'fake-attendee-unknown')).toThrow(
+        /unknown attendee/,
+      );
+      expect(() => fake.simulateEvent('AttendeeLeft', session.providerMeetingId)).toThrow(/needs an attendee/);
+      expect(() =>
+        fake.simulateEvent('MeetingEnded', session.providerMeetingId, session.participant.providerAttendeeId),
+      ).toThrow(/meeting event/);
+    });
+  });
+
   it('forgets every session on reset()', async () => {
     const session = await fake.createSession(consultationInput);
     fake.reset();
@@ -841,10 +1028,6 @@ describe('FakeVideoProvider', () => {
 // ---------------------------------------------------------------------------
 
 describe('createVideoProvider', () => {
-  function config(values: Record<string, string | undefined>) {
-    return { get: <T = string>(key: string): T | undefined => values[key] as T | undefined };
-  }
-
   it('selects the fake when VIDEO_PROVIDER is absent', () => {
     expect(createVideoProvider(config({}))).toBeInstanceOf(FakeVideoProvider);
   });
@@ -854,14 +1037,15 @@ describe('createVideoProvider', () => {
   });
 
   it('selects the Chime adapter for VIDEO_PROVIDER=chime', () => {
-    const provider = createVideoProvider(
-      config({
-        VIDEO_PROVIDER: 'chime',
-        CHIME_REGION: 'eu-central-1',
-        CHIME_EVENTS_QUEUE_ARN: QUEUE_ARN,
-        RECORDINGS_BUCKET: BUCKET,
-      }),
-    );
-    expect(provider).toBeInstanceOf(ChimeVideoProvider);
+    expect(createVideoProvider(config(CHIME_CONFIG))).toBeInstanceOf(ChimeVideoProvider);
   });
+
+  it.each(['CHIME_EVENTS_QUEUE_ARN', 'RECORDINGS_BUCKET', 'STAGE'] as const)(
+    'refuses to start the Chime adapter without %s',
+    (key) => {
+      expect(() => createVideoProvider(config({ ...CHIME_CONFIG, [key]: undefined }))).toThrow(
+        `${key} is required when VIDEO_PROVIDER=chime`,
+      );
+    },
+  );
 });

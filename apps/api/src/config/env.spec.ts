@@ -199,6 +199,12 @@ describe('envSchema: video provider (T-CW-0.2, D-CW-05, D-CW-06)', () => {
     expect(envSchema.parse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'true' }).VIDEO_SMOKE_ENABLED).toBe(true);
     expect(envSchema.safeParse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'yes' }).success).toBe(false);
   });
+
+  it('reads STAGE for the provider tags, defaulting to dev', () => {
+    expect(envSchema.parse(baseEnv).STAGE).toBe('dev');
+    expect(envSchema.parse({ ...baseEnv, STAGE: '' }).STAGE).toBe('dev');
+    expect(envSchema.parse({ ...baseEnv, STAGE: 'staging' }).STAGE).toBe('staging');
+  });
 });
 
 describe('resolveAppEnv', () => {

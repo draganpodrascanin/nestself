@@ -97,6 +97,39 @@ export class FakeVideoProvider extends VideoProvider {
     };
   }
 
+  /**
+   * Emits an event no provider call caused, so handler tests can drive
+   * `AttendeeDropped`, `AttendeeLeft` or `MeetingEnded` (for example Chime's
+   * own end of an empty meeting, CORE-16). Attendee events leave the attendee
+   * in the meeting, as Chime does until `DeleteAttendee`; `MeetingEnded`
+   * forgets the meeting, so `describeSession` then returns null. Delivery is
+   * deferred like every other event. Returns the event.
+   */
+  simulateEvent(
+    eventType: VideoProviderEventType,
+    providerMeetingId: string,
+    providerAttendeeId?: string,
+  ): VideoProviderEvent {
+    const state = this.meetings.get(providerMeetingId);
+    if (!state) throw new Error(`simulateEvent: unknown meeting ${providerMeetingId}`);
+
+    if (!eventType.startsWith('Attendee')) {
+      if (providerAttendeeId) {
+        throw new Error(`simulateEvent: ${eventType} is a meeting event and takes no attendee`);
+      }
+      if (eventType === 'MeetingEnded') {
+        this.meetings.delete(providerMeetingId);
+        this.pipelines.delete(this.pipelineId(state.sessionId));
+      }
+      return this.emit(eventType, state, null);
+    }
+
+    if (!providerAttendeeId) throw new Error(`simulateEvent: ${eventType} needs an attendee id`);
+    const attendee = this.findAttendee(providerMeetingId, providerAttendeeId);
+    if (!attendee) throw new Error(`simulateEvent: unknown attendee ${providerAttendeeId}`);
+    return this.emit(eventType, state, attendee);
+  }
+
   /** Forgets every meeting and recording; listeners stay subscribed. */
   reset(): void {
     this.meetings.clear();
@@ -222,7 +255,11 @@ export class FakeVideoProvider extends VideoProvider {
     return undefined;
   }
 
-  private emit(eventType: VideoProviderEventType, state: FakeMeeting, attendee: ProviderAttendee | null): void {
+  private emit(
+    eventType: VideoProviderEventType,
+    state: FakeMeeting,
+    attendee: ProviderAttendee | null,
+  ): VideoProviderEvent {
     const event: VideoProviderEvent = {
       eventType,
       providerMeetingId: state.meeting.MeetingId,
@@ -232,6 +269,7 @@ export class FakeVideoProvider extends VideoProvider {
       externalUserId: attendee?.ExternalUserId ?? null,
     };
     setImmediate(() => this.emitter.emit(EVENT, event));
+    return event;
   }
 
   private listenerFailed(event: VideoProviderEvent, error: unknown): void {

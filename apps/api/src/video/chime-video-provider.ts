@@ -204,7 +204,9 @@ export class ChimeVideoProvider extends VideoProvider {
     );
     if (!meeting || !participant) {
       const codes = (response.Errors ?? []).map((e) => e.ErrorCode ?? 'unknown').join(', ');
-      throw this.incomplete('CreateMeetingWithAttendees', context, codes);
+      const error = this.incomplete('CreateMeetingWithAttendees', context, codes);
+      await this.discardMeeting(response.Meeting?.MeetingId, context);
+      throw error;
     }
     return { providerMeetingId: meeting.MeetingId, meeting, participant };
   }
@@ -322,6 +324,22 @@ export class ChimeVideoProvider extends VideoProvider {
     ];
     if (input.orgId) tags.push({ Key: 'orgId', Value: input.orgId });
     return tags;
+  }
+
+  /**
+   * Deletes a meeting created without a usable attendee, so it does not sit
+   * idle until Chime ends it. Best effort: `send` already logs a failure, and
+   * the caller's 502 must not be replaced by the cleanup's error.
+   */
+  private async discardMeeting(meetingId: string | undefined, context: CallContext): Promise<void> {
+    if (!meetingId) return;
+    try {
+      await this.send('DeleteMeeting', { ...context, providerMeetingId: meetingId }, () =>
+        this.meetingsClient.send(new DeleteMeetingCommand({ MeetingId: meetingId })),
+      );
+    } catch {
+      // Logged by send(); the meeting still auto-ends after 5 empty minutes (CORE-16).
+    }
   }
 
   private async getMeeting(providerMeetingId: string, context: CallContext): Promise<ProviderMeeting | null> {

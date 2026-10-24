@@ -11,8 +11,18 @@
  * @see D-CW-05, D-CW-06, D-CW-10, D-CW-11, D-CW-12, D-CW-35
  */
 import { HttpStatus } from '@nestjs/common';
-import type { MeetingFeaturesConfiguration } from '@aws-sdk/client-chime-sdk-meetings';
-import type { CallErrorCode, CallFormat, CallParticipantRole } from '@nestself/contracts';
+import type {
+  AttendeeCapabilities,
+  MediaCapabilities,
+  MeetingFeaturesConfiguration,
+} from '@aws-sdk/client-chime-sdk-meetings';
+import {
+  WEBINAR_SINGLE_MEETING_CAPACITY,
+  WORKSHOP_CAPACITY,
+  type CallErrorCode,
+  type CallFormat,
+  type CallParticipantRole,
+} from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 
 /** Injection token of the selected {@link VideoProvider}. */
@@ -30,15 +40,13 @@ export type VideoMediaRegion = typeof VIDEO_MEDIA_REGION;
 // Capabilities (D-CW-10, D-CW-15, D-CW-35)
 // ---------------------------------------------------------------------------
 
-/** Chime SDK media capability values. */
-export type MediaCapability = 'SendReceive' | 'Send' | 'Receive' | 'None';
-
-/** Chime `AttendeeCapabilities`. */
-export interface ParticipantCapabilities {
-  Audio: MediaCapability;
-  Video: MediaCapability;
-  Content: MediaCapability;
-}
+/**
+ * Chime `AttendeeCapabilities` with every channel set: the SDK type allows
+ * `undefined` per channel, which a request built here never sends.
+ */
+export type ParticipantCapabilities = {
+  [Channel in keyof AttendeeCapabilities]-?: NonNullable<AttendeeCapabilities[Channel]>;
+};
 
 /**
  * Capabilities for a participant role, per the D-CW-10 table. A webinar
@@ -76,7 +84,7 @@ export class VideoCapabilityError extends Error {
   }
 }
 
-function sends(capability: MediaCapability): boolean {
+function sends(capability: MediaCapabilities): boolean {
   return capability === 'SendReceive' || capability === 'Send';
 }
 
@@ -124,7 +132,7 @@ export const MEETING_FEATURES: Readonly<Record<CallFormat, MeetingFeatures>> = {
     Audio: { EchoReduction: 'AVAILABLE' },
     Video: { MaxResolution: 'HD' },
     Content: { MaxResolution: 'FHD' },
-    Attendee: { MaxCount: 250 },
+    Attendee: { MaxCount: WEBINAR_SINGLE_MEETING_CAPACITY },
   },
   workshop: {
     Audio: { EchoReduction: 'AVAILABLE' },
@@ -295,7 +303,28 @@ export type VideoProviderEventListener = (event: VideoProviderEvent) => void | P
 // Shared rules
 // ---------------------------------------------------------------------------
 
-/** Tenant id per D-CW-11: the organisation, or the webinar for webinars. */
+/**
+ * Chime's `TenantIds` item pattern: 2 to 256 characters from a small set, and
+ * never four identical characters in a row. About 1 in 250 random UUIDs breaks
+ * the second rule, so ids are encoded before they are sent.
+ */
+export const CHIME_TENANT_ID_PATTERN = /^(?!.*?(.)\1{3})[-_!@#$a-zA-Z0-9]{2,256}$/;
+
+/**
+ * Encodes an id for `TenantIds` by putting `_` after every third character,
+ * so no run of identical characters can reach four (a UUID becomes 47
+ * characters). Only `TenantIds` is encoded; `ExternalMeetingId`,
+ * `ExternalUserId` and `ClientRequestToken` take the raw ids.
+ */
+export function encodeTenantId(id: string): string {
+  const encoded = id.replace(/(.{3})(?=.)/g, '$1_');
+  if (!CHIME_TENANT_ID_PATTERN.test(encoded)) {
+    throw new Error('The id cannot be encoded as a Chime TenantIds value');
+  }
+  return encoded;
+}
+
+/** Tenant id per D-CW-11: the organisation, or the webinar for webinars, encoded. */
 export function tenantIdsFor(input: CreateSessionInput): string[] {
   const tenantId = input.format === 'webinar' ? input.webinarId : input.orgId;
   if (!tenantId) {
@@ -305,11 +334,16 @@ export function tenantIdsFor(input: CreateSessionInput): string[] {
         : `A ${input.format} session needs an orgId (D-CW-11)`,
     );
   }
-  return [tenantId];
+  return [encodeTenantId(tenantId)];
 }
 
-function callError(status: number, code: CallErrorCode, message: string): ApiHttpException {
-  return new ApiHttpException({ status, code, message });
+function callError(
+  status: number,
+  code: CallErrorCode,
+  message: string,
+  details?: Record<string, unknown>,
+): ApiHttpException {
+  return new ApiHttpException({ status, code, message, details });
 }
 
 /** 503 by default; 429 when the provider throttles; 502 for an unexpected provider failure. */
@@ -324,16 +358,26 @@ export function sessionNotJoinable(): ApiHttpException {
   return callError(HttpStatus.CONFLICT, 'appointment_not_joinable', 'The call session is no longer available');
 }
 
-/** A single meeting holds at most the format's `Attendee.MaxCount` (D-CW-10, D-CW-36). */
+/**
+ * Largest audience per format: the contract constants for webinars (until the
+ * M3 replication, D-CW-36) and workshops (CW-R-26). Consultations have no
+ * contract constant and are bounded by the meeting itself (D-CW-10).
+ */
+const CAPACITY_LIMITS: Readonly<Record<CallFormat, number>> = {
+  consultation: MEETING_FEATURES.consultation.Attendee.MaxCount,
+  webinar: WEBINAR_SINGLE_MEETING_CAPACITY,
+  workshop: WORKSHOP_CAPACITY,
+};
+
 export function assertCapacityWithinLimit(format: CallFormat, capacity: number): void {
-  const limit = MEETING_FEATURES[format].Attendee.MaxCount;
+  const limit = CAPACITY_LIMITS[format];
   if (capacity > limit) {
-    throw new ApiHttpException({
-      status: HttpStatus.BAD_REQUEST,
-      code: 'capacity_above_limit',
-      message: `A ${format} session holds at most ${limit} participants`,
-      details: { limit },
-    });
+    throw callError(
+      HttpStatus.BAD_REQUEST,
+      'capacity_above_limit',
+      `A ${format} session holds at most ${limit} participants`,
+      { limit },
+    );
   }
 }
 

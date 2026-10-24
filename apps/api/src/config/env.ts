@@ -108,6 +108,9 @@ export const envSchema = z
       z.string().regex(/^\d{6}$/),
     ]).optional(),
 
+    // Deployment stage (set by the compute stack); tags provider resources (D-CW-11)
+    STAGE: optionalString.transform((v) => v ?? 'dev'),
+
     // Video provider (NS-CALLS-01, D-CW-05, D-CW-06): `none` selects the fake
     VIDEO_PROVIDER: z.enum(VIDEO_PROVIDER_NAMES).default('none'),
     // Only Frankfurt is accepted, even outside the chime refinement (CW-R-68)

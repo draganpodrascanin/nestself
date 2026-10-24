@@ -185,6 +185,18 @@ describe('CallJoinResponseSchema', () => {
     expect(issuePaths(CallJoinResponseSchema.safeParse(noSignal))).toEqual(['meeting.MediaPlacement.SignalingUrl']);
   });
 
+  it('accepts a media placement without the deprecated TurnControlUrl', () => {
+    const { TurnControlUrl: _, ...placement } = valid.meeting.MediaPlacement;
+    const withoutTurn = { ...valid, meeting: { ...valid.meeting, MediaPlacement: placement } };
+    const parsed = CallJoinResponseSchema.parse(withoutTurn);
+    expect(parsed.meeting.MediaPlacement).not.toHaveProperty('TurnControlUrl');
+    const emptyTurn = {
+      ...valid,
+      meeting: { ...valid.meeting, MediaPlacement: { ...placement, TurnControlUrl: '' } },
+    };
+    expect(issuePaths(CallJoinResponseSchema.safeParse(emptyTurn))).toEqual(['meeting.MediaPlacement.TurnControlUrl']);
+  });
+
   it('drops the provider event ingestion URL (D-CW-13)', () => {
     const withIngestion = {
       ...valid,
