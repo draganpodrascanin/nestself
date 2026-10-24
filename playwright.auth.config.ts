@@ -19,6 +19,7 @@
  *   - Chromium installed: `pnpm exec playwright install chromium`
  */
 import { defineConfig } from '@playwright/test';
+import { ADMIN_PORT, ADMIN_URL, API_PORT, API_URL, MARKETING_URL, WORKSPACE_PORT, WORKSPACE_URL } from './e2e/ports';
 
 const CI = !!process.env.CI;
 
@@ -56,10 +57,14 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm --filter @nestself/api dev',
-      url: 'http://localhost:4000/api/health',
+      url: `${API_URL}/api/health`,
       reuseExistingServer: !CI,
       timeout: 180_000,
       env: {
+        PORT: String(API_PORT),
+        WORKSPACE_URL,
+        ADMIN_URL,
+        MARKETING_URL,
         AUTH_MODE: 'stub',
         FAKE_IDP_FIXED_OTP: '123456',
         SESSION_COOKIE_INSECURE_DEV: 'true',
@@ -68,20 +73,24 @@ export default defineConfig({
     },
     {
       command: 'pnpm --filter @nestself/workspace dev',
-      url: 'http://localhost:5173',
+      url: WORKSPACE_URL,
       reuseExistingServer: !CI,
       timeout: 180_000,
       env: {
         VITE_DATA_SOURCE: 'api',
+        VITE_PORT: String(WORKSPACE_PORT),
+        VITE_API_PROXY_TARGET: API_URL,
       },
     },
     {
       command: 'pnpm --filter @nestself/admin dev',
-      url: 'http://localhost:5174',
+      url: ADMIN_URL,
       reuseExistingServer: !CI,
       timeout: 180_000,
       env: {
         VITE_DATA_SOURCE: 'api',
+        VITE_PORT: String(ADMIN_PORT),
+        VITE_API_PROXY_TARGET: API_URL,
       },
     },
   ],

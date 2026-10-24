@@ -3,6 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { applyTheme, applyLocale, settle, prepareActions } from './helpers';
 import { pages } from './pages';
+import { MARKETING_URL } from './ports';
 
 for (const entry of pages) {
   test(`a11y: ${entry.name}`, async ({ page }) => {
@@ -36,7 +37,7 @@ for (const entry of pages) {
 
 test.describe('keyboard navigation: marketing-home', () => {
   test('first Tab focuses the skip link', async ({ page }) => {
-    await page.goto('http://localhost:3000/en');
+    await page.goto(`${MARKETING_URL}/en`);
     await settle(page);
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => document.activeElement?.textContent);
@@ -44,7 +45,7 @@ test.describe('keyboard navigation: marketing-home', () => {
   });
 
   test('privacy dialog traps focus and Escape returns it to trigger', async ({ page }) => {
-    await page.goto('http://localhost:3000/en');
+    await page.goto(`${MARKETING_URL}/en`);
     await settle(page);
 
     // Open the privacy dialog (trigger selector will be finalised in Task 3.1)
@@ -78,7 +79,7 @@ test.describe('keyboard navigation: marketing-home', () => {
 
 test.describe('keyboard navigation: marketing site', () => {
   test('a wellbeing check-in can be completed with the keyboard only', async ({ page }) => {
-    await page.goto('http://localhost:3000/en/tools/wellbeing-check-in');
+    await page.goto(`${MARKETING_URL}/en/tools/wellbeing-check-in`);
     await settle(page);
     await page.getByRole('button', { name: 'Start' }).focus();
     await page.keyboard.press('Enter');
@@ -100,7 +101,7 @@ test.describe('keyboard navigation: marketing site', () => {
   });
 
   test('submitting the empty demo form moves focus to the error summary', async ({ page }) => {
-    await page.goto('http://localhost:3000/en/demo');
+    await page.goto(`${MARKETING_URL}/en/demo`);
     await settle(page);
     const submit = page.getByRole('button', { name: 'Send request' });
     await submit.focus();
@@ -114,7 +115,7 @@ test.describe('keyboard navigation: marketing site', () => {
   });
 
   test('the locale switcher menu changes the URL and the document language', async ({ page }) => {
-    await page.goto('http://localhost:3000/en/plans');
+    await page.goto(`${MARKETING_URL}/en/plans`);
     await settle(page);
 
     // Open the header locale menu
@@ -140,7 +141,7 @@ test.describe('keyboard navigation: marketing site', () => {
   });
 
   test('choosing Serbian leads to the unprefixed URL and the Serbian document language', async ({ page }) => {
-    await page.goto('http://localhost:3000/en/plans');
+    await page.goto(`${MARKETING_URL}/en/plans`);
     await settle(page);
     const headerTrigger = page.getByRole('button', { name: /language/i }).first();
     await headerTrigger.click();
@@ -151,7 +152,7 @@ test.describe('keyboard navigation: marketing site', () => {
     await settle(page);
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('sr-Latn');
     // The old prefixed address redirects to the unprefixed one.
-    const response = await page.goto('http://localhost:3000/sr-Latn/plans');
-    expect(response?.url()).toBe('http://localhost:3000/plans');
+    const response = await page.goto(`${MARKETING_URL}/sr-Latn/plans`);
+    expect(response?.url()).toBe(`${MARKETING_URL}/plans`);
   });
 });

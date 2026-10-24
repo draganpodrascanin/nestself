@@ -18,8 +18,8 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computeTotp } from './totp';
+import { ADMIN_URL } from '../ports';
 
-const ADMIN_URL = 'http://localhost:5174';
 const STAFF_EMAIL = 'user_nikola@example.com';
 const STAFF_PASSWORD = 'Nestself-dev-1234!';
 

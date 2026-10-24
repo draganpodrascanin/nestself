@@ -114,3 +114,29 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - The `DATABASE_URL` default matches the Docker Compose service in `docker/docker-compose.yml` (user `nestself`, password `nestself_dev`, database `nestself` on port 5432). For Docker deployments, `DATABASE_URL` should use the `nestself_api` login role (created by `docker/initdb/01-app-role.sql`). Migrations run as the database owner, not as `nestself_api`.
 - The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`.
 - Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
+
+## Running a second worktree
+
+The dev servers and Playwright suites have fixed default ports. A second git worktree can run them next to the main checkout's servers by overriding the ports through environment variables; the defaults are unchanged when the variables are unset.
+
+| Variable | Read by | Default |
+| --- | --- | --- |
+| `E2E_API_PORT` | `e2e/ports.ts` (all Playwright configs and specs); the auth config passes it to the API as `PORT` | `4000` |
+| `E2E_WORKSPACE_PORT` | `e2e/ports.ts`; passed to the workspace Vite server as `VITE_PORT` | `5173` |
+| `E2E_ADMIN_PORT` | `e2e/ports.ts`; passed to the admin Vite server as `VITE_PORT` | `5174` |
+| `E2E_MARKETING_PORT` | `e2e/ports.ts`; passed to `next dev` as `PORT` | `3000` |
+| `E2E_STORYBOOK_PORT` | `playwright.motion.config.ts` (`MOTION_STORYBOOK_PORT` still wins if set) | `6106` |
+| `VITE_PORT` | `apps/workspace/vite.config.ts`, `apps/admin/vite.config.ts` (`pnpm dev` outside Playwright) | `5173` / `5174` |
+| `VITE_API_PROXY_TARGET` | the same Vite configs, target of the `/api` proxy | `http://localhost:4000` |
+
+`playwright.auth.config.ts` also sets `WORKSPACE_URL`, `ADMIN_URL` and `MARKETING_URL` on the API process from these ports, so CORS, CSRF and WebSocket origin checks accept the shifted apps. Because the URLs differ, `reuseExistingServer` never attaches to a server on the default ports.
+
+The `cms-ee` worktree uses API 4100, workspace 5273, admin 5274, marketing 3100, Storybook 6206 and the database `nestself_cmsee` (set in that worktree's `apps/api/.env`):
+
+```bash
+E2E_API_PORT=4100 E2E_WORKSPACE_PORT=5273 E2E_ADMIN_PORT=5274 pnpm e2e:auth
+E2E_MARKETING_PORT=3100 E2E_WORKSPACE_PORT=5273 E2E_ADMIN_PORT=5274 pnpm e2e
+E2E_STORYBOOK_PORT=6206 pnpm e2e:motion
+```
+
+When starting servers by hand, set the same values: `PORT=4100 WORKSPACE_URL=http://localhost:5273 ADMIN_URL=http://localhost:5274 pnpm --filter @nestself/api dev`, `VITE_PORT=5273 VITE_API_PROXY_TARGET=http://localhost:4100 pnpm --filter @nestself/workspace dev`, `PORT=3100 pnpm --filter @nestself/marketing dev`.

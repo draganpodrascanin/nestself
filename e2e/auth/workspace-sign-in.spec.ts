@@ -8,12 +8,12 @@
  * flow is covered without AWS.
  */
 import { test, expect } from '@playwright/test';
+import { WORKSPACE_URL } from '../ports';
 
 // ---------------------------------------------------------------------------
 // Constants -- labels come from packages/i18n/locales/en/auth.json
 // ---------------------------------------------------------------------------
 
-const WORKSPACE_URL = 'http://localhost:5173';
 const EMPLOYEE_EMAIL = 'user_jovan@example.com';
 const FIXED_OTP = '123456';
 

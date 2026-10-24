@@ -16,10 +16,10 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    port: 5173,
+    port: Number(process.env.VITE_PORT ?? 5173),
     strictPort: true,
     fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] },
-    proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true } },
+    proxy: { '/api': { target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000', changeOrigin: true } },
   },
   build: { sourcemap: true },
 });

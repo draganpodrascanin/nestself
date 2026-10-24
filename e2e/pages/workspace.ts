@@ -1,21 +1,22 @@
+import { WORKSPACE_URL } from '../ports';
 import type { PageEntry } from '../pages';
 import type { Page } from '@playwright/test';
 
 export const workspacePages: PageEntry[] = [
-  { name: 'workspace-home', url: 'http://localhost:5173/' },
-  { name: 'workspace-home-dark', url: 'http://localhost:5173/', theme: { palette: 'forest', mode: 'dark' } },
-  { name: 'workspace-home-sr-cyrl', url: 'http://localhost:5173/', locale: 'sr-Cyrl' },
-  { name: 'workspace-support', url: 'http://localhost:5173/support' },
-  { name: 'workspace-support-psychological', url: 'http://localhost:5173/support/psychological' },
-  { name: 'workspace-channels', url: 'http://localhost:5173/channels' },
-  { name: 'workspace-channel-detail', url: 'http://localhost:5173/channels/channel_good_news' },
-  { name: 'workspace-appointments', url: 'http://localhost:5173/appointments' },
-  { name: 'workspace-messages', url: 'http://localhost:5173/messages' },
-  { name: 'workspace-polls', url: 'http://localhost:5173/polls' },
-  { name: 'workspace-settings', url: 'http://localhost:5173/settings' },
-  { name: 'workspace-hr', url: 'http://localhost:5173/hr?role=hr_admin', prepare: 'setHrAdminRole' },
-  { name: 'workspace-manage', url: 'http://localhost:5173/manage?role=manager', prepare: 'setManagerRole' },
-  { name: 'workspace-sign-in', url: 'http://localhost:5173/sign-in' },
+  { name: 'workspace-home', url: `${WORKSPACE_URL}/` },
+  { name: 'workspace-home-dark', url: `${WORKSPACE_URL}/`, theme: { palette: 'forest', mode: 'dark' } },
+  { name: 'workspace-home-sr-cyrl', url: `${WORKSPACE_URL}/`, locale: 'sr-Cyrl' },
+  { name: 'workspace-support', url: `${WORKSPACE_URL}/support` },
+  { name: 'workspace-support-psychological', url: `${WORKSPACE_URL}/support/psychological` },
+  { name: 'workspace-channels', url: `${WORKSPACE_URL}/channels` },
+  { name: 'workspace-channel-detail', url: `${WORKSPACE_URL}/channels/channel_good_news` },
+  { name: 'workspace-appointments', url: `${WORKSPACE_URL}/appointments` },
+  { name: 'workspace-messages', url: `${WORKSPACE_URL}/messages` },
+  { name: 'workspace-polls', url: `${WORKSPACE_URL}/polls` },
+  { name: 'workspace-settings', url: `${WORKSPACE_URL}/settings` },
+  { name: 'workspace-hr', url: `${WORKSPACE_URL}/hr?role=hr_admin`, prepare: 'setHrAdminRole' },
+  { name: 'workspace-manage', url: `${WORKSPACE_URL}/manage?role=manager`, prepare: 'setManagerRole' },
+  { name: 'workspace-sign-in', url: `${WORKSPACE_URL}/sign-in` },
 ];
 
 export const workspacePrepareActions: Record<string, (page: Page) => Promise<void>> = {

@@ -10,7 +10,7 @@ Chromium must be installed for Playwright:
 pnpm exec playwright install chromium
 ```
 
-All three apps must be running (or the test runner starts them via `webServer` config):
+All three apps must be running (or the test runner starts them via `webServer` config). Default ports are below; override them with `E2E_*_PORT` (see `docs/environment.md`, "Running a second worktree"):
 
 - Marketing: `http://localhost:3000`
 - Workspace: `http://localhost:5173`
