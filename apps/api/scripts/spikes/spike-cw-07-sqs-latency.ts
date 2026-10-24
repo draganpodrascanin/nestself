@@ -18,18 +18,35 @@
  * This also proves that direct delivery works with the queue and key policies in
  * video-stack.ts (the comment above the ChimeMeetingsEncryptEvents statement).
  *
- * Messages of this run's meetings (and of any spike-cw-* meeting) are deleted
- * from the queue; other messages are left alone. Stop the local worker
- * (chime.events.consume) while this runs so it does not consume the events first.
+ * Every message the spike receives counts toward the queue's dead-letter threshold
+ * (5 receives), and a message it leaves in the queue is received again after the
+ * 60-second visibility timeout. So the spike refuses to start (exit 2) while the
+ * queue holds any message, visible or in flight. It deletes the messages of its own
+ * meetings and of any spike-cw-* meeting; a message of another meeting that
+ * arrives during the run is left in the queue, counted and reported. Stop the
+ * local worker (chime.events.consume) and run no other meeting while this runs.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-07-sqs-latency.ts
+ * --drain-spike-leftovers first deletes events of earlier spike runs (other spikes
+ * leave theirs in the queue, which keeps messages for 4 days by default). It stops
+ * at the first message of any other meeting, makes it visible again at once (one
+ * extra receive on that message) and the spike then refuses.
+ *
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-07-sqs-latency.ts
  */
 import { CreateAttendeeCommand, DeleteAttendeeCommand } from '@aws-sdk/client-chime-sdk-meetings';
-import { DeleteMessageCommand, GetQueueAttributesCommand, ReceiveMessageCommand, type Message } from '@aws-sdk/client-sqs';
+import {
+  ChangeMessageVisibilityCommand,
+  DeleteMessageCommand,
+  GetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  type Message,
+} from '@aws-sdk/client-sqs';
 import {
   CAPABILITIES,
   EXTERNAL_MEETING_ID_PREFIX,
+  SpikeRefusal,
   createSpikeMeeting,
+  flagArg,
   meetingCleanupKey,
   numberArg,
   runSpike,
@@ -39,6 +56,9 @@ import {
 } from './lib.js';
 
 type Path = 'direct' | 'eventbridge';
+
+/** Room for the first attendee plus every attendee a cycle creates before it deletes them. */
+const MAX_COUNT = 20;
 
 interface Received {
   readonly meetingId?: string;
@@ -126,9 +146,9 @@ async function collect(ctx: SpikeContext, queueUrl: string, meetingIds: Readonly
         continue;
       }
       const ours = parsed.meetingId !== undefined && meetingIds.has(parsed.meetingId);
-      const spikeLeftover = parsed.externalMeetingId?.toLowerCase().startsWith(EXTERNAL_MEETING_ID_PREFIX) ?? false;
+      const spikeLeftover = isSpikeEvent(parsed);
       if (!ours && !spikeLeftover) {
-        collector.foreign += 1; // not ours: left in the queue untouched
+        collector.foreign += 1; // another meeting's event that arrived during the run: left in the queue
         continue;
       }
       if (ours && parsed.meetingId) {
@@ -139,6 +159,44 @@ async function collect(ctx: SpikeContext, queueUrl: string, meetingIds: Readonly
       }
       if (message.ReceiptHandle) await ctx.sqs.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle }));
     }
+  }
+}
+
+function isSpikeEvent(parsed: Received | null): boolean {
+  return parsed?.externalMeetingId?.toLowerCase().startsWith(EXTERNAL_MEETING_ID_PREFIX) ?? false;
+}
+
+async function queueBacklog(ctx: SpikeContext, queueUrl: string): Promise<{ visible: number; inFlight: number }> {
+  const attributes = await ctx.sqs.send(
+    new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible'] }),
+  );
+  return {
+    visible: Number(attributes.Attributes?.ApproximateNumberOfMessages ?? 0),
+    inFlight: Number(attributes.Attributes?.ApproximateNumberOfMessagesNotVisible ?? 0),
+  };
+}
+
+/**
+ * Deletes events of earlier spike runs. Stops at the first message of any other
+ * meeting and makes it (and the rest of that batch) visible again immediately.
+ */
+async function drainSpikeLeftovers(ctx: SpikeContext, queueUrl: string): Promise<{ deleted: number; stoppedAtForeign: boolean }> {
+  let deleted = 0;
+  for (;;) {
+    const response = await ctx.sqs.send(new ReceiveMessageCommand({ QueueUrl: queueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 1 }));
+    const messages = response.Messages ?? [];
+    if (messages.length === 0) return { deleted, stoppedAtForeign: false };
+    const foreignIndex = messages.findIndex((m) => !isSpikeEvent(parseMessage(m)));
+    for (const [index, message] of messages.entries()) {
+      if (!message.ReceiptHandle) continue;
+      if (foreignIndex === -1 || index < foreignIndex) {
+        await ctx.sqs.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle }));
+        deleted += 1;
+      } else {
+        await ctx.sqs.send(new ChangeMessageVisibilityCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle, VisibilityTimeout: 0 }));
+      }
+    }
+    if (foreignIndex !== -1) return { deleted, stoppedAtForeign: true };
   }
 }
 
@@ -184,23 +242,32 @@ runSpike({
     events: { type: 'string', default: '20', description: 'Attendee events to generate on the test meeting (half added, half deleted)' },
     'interval-ms': { type: 'string', default: '500', description: 'Pause between attendee calls' },
     'collect-seconds': { type: 'string', default: '120', description: 'How long to keep reading the queue after the last call' },
+    'drain-spike-leftovers': { type: 'boolean', description: 'First delete events of earlier spike runs; stops at any other message' },
   },
-  help: ['Stop the local worker first: it consumes the same queue. Runs about 3 minutes; nobody joins media.'],
+  help: [
+    'Refuses to start while the queue holds any message (visible or in flight); see --drain-spike-leftovers.',
+    'Stop the local worker first: it consumes the same queue. Runs about 3 minutes; nobody joins media.',
+  ],
   async run(ctx) {
     const queueUrl = ctx.env.queueUrl ?? '';
     const cycles = Math.max(1, Math.ceil(numberArg(ctx.args, 'events', 20) / 2));
     const intervalMs = numberArg(ctx.args, 'interval-ms', 500);
     const collectSeconds = numberArg(ctx.args, 'collect-seconds', 120);
+    if (cycles + 1 > MAX_COUNT) throw new SpikeRefusal(`--events allows at most ${2 * (MAX_COUNT - 1)} events (MaxCount ${MAX_COUNT}).`);
 
-    const attributes = await ctx.sqs.send(
-      new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible'] }),
-    );
-    const backlog = {
-      visible: Number(attributes.Attributes?.ApproximateNumberOfMessages ?? 0),
-      inFlight: Number(attributes.Attributes?.ApproximateNumberOfMessagesNotVisible ?? 0),
-    };
+    let drained: { deleted: number; stoppedAtForeign: boolean } | null = null;
+    if (flagArg(ctx.args, 'drain-spike-leftovers')) {
+      drained = await drainSpikeLeftovers(ctx, queueUrl);
+      ctx.log(`drained ${drained.deleted} event(s) of earlier spike runs${drained.stoppedAtForeign ? '; stopped at a message of another meeting' : ''}`);
+    }
+    const backlog = await queueBacklog(ctx, queueUrl);
     if (backlog.visible + backlog.inFlight > 0) {
-      ctx.log(`queue backlog before the run: ${backlog.visible} visible, ${backlog.inFlight} in flight (spike-cw-* leftovers are deleted, others left alone)`);
+      throw new SpikeRefusal(
+        `The chime-events queue holds ${backlog.visible} visible and ${backlog.inFlight} in-flight message(s). Every receive counts toward the ` +
+          'dead-letter threshold of 5, so the spike only runs on an empty queue. Stop the local worker, then re-run with ' +
+          '--drain-spike-leftovers to delete events of earlier spike runs; if a message of another meeting remains, wait for it to be consumed or to expire.',
+        { backlog, drained },
+      );
     }
 
     const meetingIds = new Set<string>();
@@ -236,6 +303,7 @@ runSpike({
       const control = await createSpikeMeeting(ctx, {
         format: 'consultation',
         label: 'control',
+        maxCount: MAX_COUNT,
         notifications: false,
         attendees: [{ key: 'c0', capabilities: CAPABILITIES.expert }],
       });
@@ -247,6 +315,7 @@ runSpike({
       const test = await createSpikeMeeting(ctx, {
         format: 'consultation',
         label: 'test',
+        maxCount: MAX_COUNT,
         notifications: true,
         attendees: [{ key: 't0', capabilities: CAPABILITIES.expert }],
       });
@@ -313,7 +382,7 @@ runSpike({
         outcome,
         ok: byPath.direct.length > 0 && byPath.eventbridge.length > 0,
         measurements: {
-          backlogBefore: backlog,
+          drainedBefore: drained,
           generated: { testMeetingAttendeeCalls: calls, expectedAttendeeEvents: 2 * cycles },
           controlMeeting: { meetingId: control.meetingId, ...pathReport(controlEvents) },
           classification,

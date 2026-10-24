@@ -135,7 +135,8 @@ export const CHIME_SDK_MISSING_INSTRUCTIONS = [
   "     with the workspace app's Vite. Nothing else is needed.",
   '  2. Or, before then, build a single-file browser bundle of amazon-chime-sdk-js 3.32.0 outside this repository (the SDK',
   '     repository\'s demos/singlejs produces one that defines the global ChimeSDK) and point the harness at it:',
-  '       SPIKE_CHIME_SDK_BUNDLE=/absolute/path/to/amazon-chime-sdk.min.js pnpm --filter @nestself/api exec tsx scripts/spikes/<spike>.ts',
+  '       SPIKE_CHIME_SDK_BUNDLE=/absolute/path/to/amazon-chime-sdk.min.js AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 \\',
+  '         pnpm --filter @nestself/api exec tsx scripts/spikes/<spike>.ts',
 ].join('\n');
 
 /**

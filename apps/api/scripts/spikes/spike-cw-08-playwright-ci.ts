@@ -16,8 +16,8 @@
  * --device keeps one Chromium far end in the meeting and serves a second slot
  * for a phone's WebView on a fixed loopback port (SPIKE-CW-05, variant A).
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts [--headed]
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --device --port 5199 --minutes 20
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts [--headed]
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --device --port 5199 --minutes 20
  */
 import {
   launchBrowser,
@@ -32,12 +32,6 @@ import {
 } from './browser-harness.js';
 import { CAPABILITIES, createSpikeMeeting, flagArg, numberArg, requireAttendee, runSpike } from './lib.js';
 
-if (process.env.CI && process.env.VIDEO_SMOKE_ENABLED !== 'true') {
-  console.log('SPIKE-CW-08 skipped: CI is set and VIDEO_SMOKE_ENABLED is not "true" (CW-R-90).');
-  console.log(JSON.stringify({ spike: 'SPIKE-CW-08', ok: true, outcome: 'skipped', measurements: {} }));
-  process.exit(0);
-}
-
 runSpike({
   meta: {
     id: 'SPIKE-CW-08',
@@ -46,6 +40,9 @@ runSpike({
     binds: ['D-CW-33'],
   },
   requiredEnv: ['CHIME_EVENTS_QUEUE_ARN'],
+  // After --help and before any guard or AWS client: skipped, not failed, in CI without the flag (CW-R-90).
+  skip: () =>
+    process.env.CI && process.env.VIDEO_SMOKE_ENABLED !== 'true' ? 'CI is set and VIDEO_SMOKE_ENABLED is not "true" (CW-R-90)' : undefined,
   options: {
     'observe-seconds': { type: 'string', default: '20', description: 'How long both contexts stay in the meeting after joining' },
     headed: { type: 'boolean', description: 'Show the Chromium window (local runs only)' },
@@ -109,6 +106,8 @@ runSpike({
       return {
         outcome,
         ok: deviceJoined,
+        // Ctrl-C is the normal way to end the device session early.
+        validWhenInterrupted: true,
         measurements: {
           meetingId: meeting.meetingId,
           attendees: ids,

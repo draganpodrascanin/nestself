@@ -14,7 +14,7 @@
  *    as the control for the 5-minute auto-end (OPS-03). Both meetings are polled
  *    with GetMeeting every 30 s for --wait-minutes.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts [--with-browsers]
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts [--with-browsers]
  */
 import { CreateAttendeeCommand, DeleteAttendeeCommand, GetMeetingCommand } from '@aws-sdk/client-chime-sdk-meetings';
 import type { BrowserType } from '@playwright/test';
@@ -162,9 +162,11 @@ runSpike({
       ctx.log('p1 and p2 left; the room is empty from now');
     }
 
+    // A pipeline that fails or is refused does not show why: MaxCount is one possible cause among
+    // several (bucket policy, KMS, quota), so the answer stays inconclusive and the JSON line carries
+    // the error and the status history for the founder to read.
     let countsAgainstMaxCount: string;
-    if (pipelineCreateError) countsAgainstMaxCount = /attendee|limit|capacity|max/i.test(pipelineCreateError.message) ? 'likely-yes' : 'inconclusive';
-    else if (pipelineSettled === 'Failed') countsAgainstMaxCount = 'likely-yes';
+    if (pipelineCreateError || pipelineSettled === 'Failed') countsAgainstMaxCount = 'inconclusive-pipeline-failed';
     else if (pipelineSettled !== 'InProgress') countsAgainstMaxCount = 'inconclusive';
     else if (controlThirdAttendee.outcome === 'refused' || withBrowsers) countsAgainstMaxCount = 'no';
     else countsAgainstMaxCount = 'inconclusive-rerun-with-browsers';
@@ -210,15 +212,19 @@ runSpike({
     console.log(`--- answer ---\n  pipeline counts against MaxCount: ${countsAgainstMaxCount}\n  pipeline keeps the empty meeting alive: ${keepsMeetingAlive}`);
     return {
       outcome: `counts-against-max-count=${countsAgainstMaxCount}; keeps-meeting-alive=${keepsMeetingAlive}`,
-      ok: !pipelineCreateError || countsAgainstMaxCount === 'likely-yes',
+      ok: !pipelineCreateError,
       measurements: {
         withBrowsers,
         meetingA: a.meetingId,
         attendees: { p1: p1.AttendeeId, p2: p2.AttendeeId },
         controlThirdAttendee,
-        pipeline: pipeline
-          ? { pipelineId: pipeline.pipelineId, sourceArnStyle: pipeline.sourceArnStyle, settled: pipelineSettled, history: pipelineHistory }
-          : { error: pipelineCreateError ?? null },
+        pipeline: {
+          pipelineId: pipeline?.pipelineId ?? null,
+          sourceArnStyle: pipeline?.sourceArnStyle ?? null,
+          settled: pipelineSettled,
+          statusHistory: pipelineHistory,
+          createError: pipelineCreateError ?? null,
+        },
         browsersBeforePipeline: browserStatesBefore,
         browsersAfterPipeline: browserStatesAfter,
         countsAgainstMaxCount,

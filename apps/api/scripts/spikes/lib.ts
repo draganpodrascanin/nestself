@@ -11,7 +11,10 @@
  * - never prints a join token: attendee ids and meeting ids only (OPS-07, D-CW-08);
  * - prints its measurements as one JSON object on the last line, ready to paste
  *   into 07-spikes.md;
- * - exits 0 when the measurement completed, 1 on failure, 2 when it refused to run.
+ * - exits 0 when the measurement completed, 2 on every refusal (bad option, wrong
+ *   region or profile, missing environment, unsafe queue state) and 1 on every
+ *   runtime failure (an AWS or harness error, a failed measurement, a failed
+ *   cleanup, an interrupted run).
  */
 import 'dotenv/config';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -47,6 +50,11 @@ export const EXTERNAL_MEETING_ID_PREFIX = 'spike-cw-';
 const EXPECTED_PROFILE = 'nestself-dev';
 /** Capture pipelines write under this prefix, which the bucket expires after 30 days (D-CW-18). */
 export const RECORDINGS_RAW_PREFIX = 'raw';
+/**
+ * Prefix for every command that touches AWS (CLAUDE.md "AWS and CDK" items 1 and 2):
+ * per command, never exported, because the CLI and env-from-outputs.mjs read the ambient region.
+ */
+export const AWS_COMMAND_PREFIX = `AWS_PROFILE=${EXPECTED_PROFILE} AWS_REGION=${CHIME_REGION}`;
 
 export type SpikeEnvName = 'CHIME_EVENTS_QUEUE_URL' | 'CHIME_EVENTS_QUEUE_ARN' | 'RECORDINGS_BUCKET';
 
@@ -85,6 +93,11 @@ export interface SpikeOutcome {
   readonly ok?: boolean;
   readonly measurements: Record<string, unknown>;
   readonly notes?: readonly string[];
+  /**
+   * True when Ctrl-C is the normal way to end this run (SPIKE-CW-08 --device). Otherwise an
+   * interrupted run is reported with `interrupted: true` and exits 1, because its numbers are partial.
+   */
+  readonly validWhenInterrupted?: boolean;
 }
 
 export interface ErrorInfo {
@@ -93,9 +106,17 @@ export interface ErrorInfo {
   readonly httpStatus?: number;
 }
 
-/** Thrown when the environment is unsafe or incomplete; the script exits 2. */
+/** Thrown when the environment or the request is unsafe or incomplete; the script exits 2. */
 export class SpikeRefusal extends Error {
   override readonly name = 'SpikeRefusal';
+
+  /** Extra fields for the JSON result line, e.g. `{ status: 'placeholder' }`. */
+  constructor(
+    message: string,
+    readonly details: Record<string, unknown> = {},
+  ) {
+    super(message);
+  }
 }
 
 // ── Small utilities ──────────────────────────────────────────────────────────
@@ -158,7 +179,8 @@ export function attendeeIds(attendees: readonly (Attendee | undefined)[]): strin
 
 // ── Environment and guards ───────────────────────────────────────────────────
 
-function chimeRegionFromEnv(): typeof CHIME_REGION {
+/** CHIME_REGION, defaulting to eu-central-1; any other value is refused (D-CW-06). */
+export function chimeRegionFromEnv(): typeof CHIME_REGION {
   const value = process.env.CHIME_REGION?.trim();
   if (value && value !== CHIME_REGION) {
     throw new SpikeRefusal(
@@ -181,7 +203,7 @@ function credentialSource(): string {
   if (envCredentials) return 'environment credentials';
   throw new SpikeRefusal(
     `AWS_PROFILE is not set, so the SDK would use the [default] profile, which points at an unrelated account (CLAUDE.md "AWS and CDK"). ` +
-      `Run from the main checkout (its chpwd hook sets AWS_PROFILE=${EXPECTED_PROFILE}) or prefix this one command with AWS_PROFILE=${EXPECTED_PROFILE}. Never export it globally.`,
+      `Prefix this one command with ${AWS_COMMAND_PREFIX} (the main checkout's chpwd hook sets both). Never export them globally.`,
   );
 }
 
@@ -323,8 +345,15 @@ export interface SpikeDefinition {
   readonly options?: Readonly<Record<string, SpikeOption>>;
   /** Extra lines printed under the usage line by --help. */
   readonly help?: readonly string[];
+  /**
+   * Checked after the options are parsed (so --help still works) and before any
+   * guard or AWS client: a returned reason skips the run with exit 0 (CW-R-90).
+   */
+  skip?(args: SpikeArgs): string | undefined;
   run(ctx: SpikeContext): Promise<SpikeOutcome>;
 }
+
+type UsageDefinition = Pick<SpikeDefinition, 'meta' | 'options' | 'help'>;
 
 function spikeNumber(meta: SpikeMeta): string {
   return meta.id.replace(/^SPIKE-CW-/, '');
@@ -347,8 +376,8 @@ function printHeader(meta: SpikeMeta, lines: readonly string[]): void {
   console.log(rule());
 }
 
-function printUsage(def: Pick<SpikeDefinition, 'meta' | 'options' | 'help'>): void {
-  console.log(`Usage: pnpm --filter @nestself/api exec tsx scripts/spikes/${def.meta.file} [options]`);
+function printUsage(def: UsageDefinition, commandPrefix: string): void {
+  console.log(`Usage: ${commandPrefix}pnpm --filter @nestself/api exec tsx scripts/spikes/${def.meta.file} [options]`);
   console.log(`  ${def.meta.id}: ${def.meta.question}`);
   for (const line of def.help ?? []) console.log(`  ${line}`);
   console.log('Options:');
@@ -360,39 +389,57 @@ function printUsage(def: Pick<SpikeDefinition, 'meta' | 'options' | 'help'>): vo
   console.log('  --help  Print this text and exit without calling AWS');
 }
 
-function parseSpikeArgs(def: Pick<SpikeDefinition, 'meta' | 'options' | 'help'>): SpikeArgs {
-  const options: Record<string, { type: 'string' | 'boolean'; default?: string | boolean }> = { help: { type: 'boolean' } };
-  for (const [name, option] of Object.entries(def.options ?? {})) {
-    options[name] = option.default === undefined ? { type: option.type } : { type: option.type, default: option.default };
-  }
-  try {
-    const { values } = parseArgs({ args: process.argv.slice(2), options, strict: true, allowPositionals: false });
-    const args = values as Record<string, string | boolean | undefined>;
-    if (args.help) {
-      printUsage(def);
-      process.exit(0);
-    }
-    return args;
-  } catch (error) {
-    printUsage(def);
-    console.error(`\n${describeError(error).message}`);
-    process.exit(2);
-  }
-}
-
 function emitResult(payload: Record<string, unknown>, exitCode: number): void {
   process.stdout.write(`${JSON.stringify(payload)}\n`, () => process.exit(exitCode));
 }
 
+/** Prints the refusal and its JSON line, then exits 2. */
+function refuse(meta: SpikeMeta, error: SpikeRefusal, extra: Record<string, unknown> = {}): void {
+  console.error(`REFUSED: ${error.message}`);
+  emitResult({ spike: meta.id, ...extra, ok: false, outcome: 'refused', ...error.details, error: error.message }, 2);
+}
+
+/** Parses the options; --help prints usage and exits 0, a bad option is a refusal (exit 2). */
+function parseSpikeArgs(def: UsageDefinition, commandPrefix: string): SpikeArgs | undefined {
+  const options: Record<string, { type: 'string' | 'boolean'; default?: string | boolean }> = { help: { type: 'boolean' } };
+  for (const [name, option] of Object.entries(def.options ?? {})) {
+    options[name] = option.default === undefined ? { type: option.type } : { type: option.type, default: option.default };
+  }
+  let args: Record<string, string | boolean | undefined>;
+  try {
+    args = parseArgs({ args: process.argv.slice(2), options, strict: true, allowPositionals: false }).values as Record<
+      string,
+      string | boolean | undefined
+    >;
+  } catch (error) {
+    printUsage(def, commandPrefix);
+    refuse(def.meta, new SpikeRefusal(describeError(error).message));
+    return undefined;
+  }
+  if (args.help) {
+    printUsage(def, commandPrefix);
+    process.exit(0);
+  }
+  return args;
+}
+
 /**
  * Runs a spike: guards, header, cleanup in `finally`, one JSON line at the end.
- * The process exits when this finishes.
+ * The process exits when this finishes: 0 measured, 1 runtime failure, 2 refused.
  */
 export function runSpike(def: SpikeDefinition): void {
-  const args = parseSpikeArgs(def);
+  const args = parseSpikeArgs(def, `${AWS_COMMAND_PREFIX} `);
+  if (!args) return;
   const startedAt = new Date();
   const runId = newRunId();
   const log = (line: string): void => console.log(`[${new Date().toISOString().slice(11, 23)}] ${line}`);
+
+  const skipReason = def.skip?.(args);
+  if (skipReason) {
+    printHeader(def.meta, [`Skipped:  ${skipReason}`]);
+    emitResult({ spike: def.meta.id, runId, ok: true, outcome: 'skipped', reason: skipReason, measurements: {} }, 0);
+    return;
+  }
 
   let env: SpikeEnv;
   try {
@@ -400,8 +447,7 @@ export function runSpike(def: SpikeDefinition): void {
   } catch (error) {
     if (!(error instanceof SpikeRefusal)) throw error;
     printHeader(def.meta, []);
-    console.error(`REFUSED: ${error.message}`);
-    emitResult({ spike: def.meta.id, runId, ok: false, outcome: 'refused', error: error.message }, 2);
+    refuse(def.meta, error, { runId });
     return;
   }
 
@@ -421,8 +467,8 @@ export function runSpike(def: SpikeDefinition): void {
       controller.abort();
       return;
     }
-    console.error('Forced exit: running cleanup now.');
-    void cleanup.runAll().finally(() => process.exit(130));
+    console.error('Forced exit: running cleanup now (exit 1).');
+    void cleanup.runAll().finally(() => process.exit(1));
   });
 
   const ctx: SpikeContext = {
@@ -450,22 +496,32 @@ export function runSpike(def: SpikeDefinition): void {
   void (async () => {
     let outcome: SpikeOutcome | undefined;
     let failure: ErrorInfo | undefined;
+    let refusal: SpikeRefusal | undefined;
     let report: CleanupReport;
     try {
       outcome = await def.run(ctx);
     } catch (error) {
-      failure = describeError(error);
-      console.error(`FAILED: ${failure.name}: ${failure.message}`);
+      if (error instanceof SpikeRefusal) {
+        refusal = error;
+      } else {
+        failure = describeError(error);
+        console.error(`FAILED: ${failure.name}: ${failure.message}`);
+      }
     } finally {
       console.log('--- cleanup ---');
       report = await cleanup.runAll();
     }
     if (!report.ok) {
-      console.error('MANUAL CLEANUP NEEDED (run with the nestself-dev profile):');
+      console.error('MANUAL CLEANUP NEEDED:');
       for (const item of report.failed) console.error(`  ${item.label}: ${item.manual ?? 'see the error above'}`);
     }
+    if (refusal && report.ok) {
+      refuse(def.meta, refusal, { runId });
+      return;
+    }
     for (const note of outcome?.notes ?? []) console.log(`note: ${note}`);
-    const ok = !failure && outcome?.ok !== false && report.ok;
+    const interrupted = controller.signal.aborted;
+    const ok = !failure && !refusal && outcome?.ok !== false && report.ok && (!interrupted || outcome?.validWhenInterrupted === true);
     const finishedAt = new Date();
     console.log('--- result (paste the next line into research/07-spikes.md) ---');
     emitResult(
@@ -473,13 +529,15 @@ export function runSpike(def: SpikeDefinition): void {
         spike: def.meta.id,
         runId,
         ok,
-        outcome: failure ? 'error' : (outcome?.outcome ?? 'unknown'),
+        outcome: failure ? 'error' : refusal ? 'refused' : (outcome?.outcome ?? 'unknown'),
+        interrupted,
         region: env.region,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
         durationSeconds: Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000),
         measurements: outcome?.measurements ?? {},
         ...(failure ? { error: failure } : {}),
+        ...(refusal ? { error: refusal.message } : {}),
         cleanup: { ok: report.ok, done: report.done.length, failed: report.failed },
       },
       ok ? 0 : 1,
@@ -489,15 +547,30 @@ export function runSpike(def: SpikeDefinition): void {
 
 /**
  * For spikes that only print instructions or a plan (SPIKE-CW-05, SPIKE-CW-06):
- * no AWS client, no credentials check, same header and JSON last line.
+ * no AWS client and no credentials check, but the same region guard, header and
+ * JSON last line. `print` may throw a SpikeRefusal (exit 2).
  */
-export function runPrintOnlySpike(
-  def: Pick<SpikeDefinition, 'meta' | 'options' | 'help'>,
-  print: (args: SpikeArgs) => SpikeOutcome,
-): void {
-  const args = parseSpikeArgs(def);
-  printHeader(def.meta, [`Region:   ${CHIME_REGION}`, 'Mode:     prints instructions only; makes no AWS call']);
-  const outcome = print(args);
+export function runPrintOnlySpike(def: UsageDefinition, print: (args: SpikeArgs) => SpikeOutcome): void {
+  const args = parseSpikeArgs(def, '');
+  if (!args) return;
+  let region: typeof CHIME_REGION;
+  try {
+    region = chimeRegionFromEnv();
+  } catch (error) {
+    if (!(error instanceof SpikeRefusal)) throw error;
+    printHeader(def.meta, []);
+    refuse(def.meta, error);
+    return;
+  }
+  printHeader(def.meta, [`Region:   ${region}`, 'Mode:     prints instructions only; makes no AWS call']);
+  let outcome: SpikeOutcome;
+  try {
+    outcome = print(args);
+  } catch (error) {
+    if (!(error instanceof SpikeRefusal)) throw error;
+    refuse(def.meta, error);
+    return;
+  }
   console.log('--- result (paste the next line into research/07-spikes.md) ---');
   emitResult({ spike: def.meta.id, ok: true, outcome: outcome.outcome, measurements: outcome.measurements }, 0);
 }
@@ -605,7 +678,7 @@ export function registerMeeting(ctx: SpikeContext, meetingId: string): void {
   if (ctx.cleanup.has(key)) return;
   ctx.cleanup.add(key, {
     label: `DeleteMeeting ${meetingId}`,
-    manual: `aws chime-sdk-meetings delete-meeting --meeting-id ${meetingId} --region ${CHIME_REGION}`,
+    manual: `${AWS_COMMAND_PREFIX} aws chime-sdk-meetings delete-meeting --meeting-id ${meetingId} --region ${CHIME_REGION}`,
     run: async () => {
       try {
         await ctx.meetings.send(new DeleteMeetingCommand({ MeetingId: meetingId }));
@@ -731,7 +804,7 @@ export async function startCapturePipeline(
       if (!pipelineId || !pipelineArn) throw new Error('CreateMediaCapturePipeline returned no pipeline id');
       ctx.cleanup.add(capturePipelineCleanupKey(pipelineId), {
         label: `DeleteMediaCapturePipeline ${pipelineId}`,
-        manual: `aws chime-sdk-media-pipelines delete-media-capture-pipeline --media-pipeline-id ${pipelineId} --region ${CHIME_REGION}`,
+        manual: `${AWS_COMMAND_PREFIX} aws chime-sdk-media-pipelines delete-media-capture-pipeline --media-pipeline-id ${pipelineId} --region ${CHIME_REGION}`,
         run: async () => {
           try {
             await ctx.pipelines.send(new DeleteMediaCapturePipelineCommand({ MediaPipelineId: pipelineId }));
@@ -798,7 +871,7 @@ export async function waitForCaptureStatus(
 export function registerMediaPipeline(ctx: SpikeContext, pipelineId: string): void {
   ctx.cleanup.add(`pipeline:${pipelineId}`, {
     label: `DeleteMediaPipeline ${pipelineId}`,
-    manual: `aws chime-sdk-media-pipelines delete-media-pipeline --media-pipeline-id ${pipelineId} --region ${CHIME_REGION}`,
+    manual: `${AWS_COMMAND_PREFIX} aws chime-sdk-media-pipelines delete-media-pipeline --media-pipeline-id ${pipelineId} --region ${CHIME_REGION}`,
     run: async () => {
       try {
         await ctx.pipelines.send(new DeleteMediaPipelineCommand({ MediaPipelineId: pipelineId }));

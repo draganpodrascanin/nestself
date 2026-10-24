@@ -18,22 +18,23 @@ The scripts live in `apps/api/scripts/spikes/` and call the AWS SDK clients dire
 ## Prerequisites shared by every spike
 
 1. `NestSelf-dev-Video` is deployed to the dev account (`infra/cdk/README.md`, D-CW-31, CW-R-66).
-2. `node infra/cdk/scripts/env-from-outputs.mjs dev` has run and its `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` lines are in `apps/api/.env`. `CHIME_REGION` is unset or `eu-central-1`; the scripts refuse any other value (D-CW-06).
+2. `AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 node infra/cdk/scripts/env-from-outputs.mjs dev` has run and its `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` lines are in `apps/api/.env`. `CHIME_REGION` is unset or `eu-central-1`; the scripts refuse any other value (D-CW-06).
 3. Both managed policies of the video stack (outputs `VideoApiPolicyArn` and `VideoWorkerPolicyArn`) are attached to the `nestself-dev` identity (D-CW-31). The scripts use only the actions those two policies grant.
-4. `aws sts get-caller-identity` shows account `634972095709`. `AWS_PROFILE=nestself-dev` comes from the repository's chpwd hook in the main checkout; from a worktree elsewhere, prefix the single command with `AWS_PROFILE=nestself-dev`. Never export it globally (CLAUDE.md, "AWS and CDK"). The scripts refuse any other profile and refuse to fall back to the `[default]` profile.
+4. `AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 aws sts get-caller-identity` shows account `634972095709`. Every command in this document that touches AWS carries the prefix `AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1`, per command and never exported (CLAUDE.md, "AWS and CDK", items 1 and 2): the CLI, `cdk` and `env-from-outputs.mjs` read the ambient region, and the repository's chpwd hook does not fire in a worktree outside the main checkout. The scripts refuse any profile other than `nestself-dev`, refuse to fall back to the `[default]` profile, and refuse a `CHIME_REGION` other than `eu-central-1`.
 5. For SPIKE-CW-03 with `--with-browsers`, SPIKE-CW-04, SPIKE-CW-05 and SPIKE-CW-08 only:
    - Playwright's Chromium: `pnpm exec playwright install chromium` from the repository root (downloads a browser; does not touch the lockfile).
    - A browser build of `amazon-chime-sdk-js`. It is pinned in the catalog (3.32.0) but no package depends on it until T-CW-1.4. Once `packages/video` exists and the post-merge `pnpm install` has run, the harness finds the SDK there and bundles it with the workspace app's Vite into the OS temp directory; nothing else is needed. Before that, build a single-file bundle of the SDK outside this repository (the SDK repository's `demos/singlejs` produces one that defines the global `ChimeSDK`) and pass its path as `SPIKE_CHIME_SDK_BUNDLE=/absolute/path/amazon-chime-sdk.min.js`. Without either, these spikes print this step and exit before creating any meeting.
 
 ## What every script does
 
-- Prints a header with the spike id, the question, the decisions it binds, the region, the account (from the queue ARN) and a run id. `--help` prints the options and exits without calling AWS.
+- Prints a header with the spike id, the question, the decisions it binds, the region, the account (from the queue ARN) and a run id. `--help` prints the options and exits 0 without calling AWS, also in CI.
 - Creates meetings with the adapter's `CreateMeetingWithAttendees` shape (guidelines section 3): `MediaRegion` `eu-central-1`, a `ClientRequestToken`, an `ExternalMeetingId` of the form `spike-cw-<nn>-<runId>-<label>`, the meeting features of D-CW-10, `NotificationsConfiguration.SqsQueueArn` set to the chime-events queue (D-CW-12), `TenantIds` and the three permitted tags (D-CW-11). External user ids are synthetic (`spike-cw-<nn>-<runId>-<key>`), never personal data (CW-R-03).
 - Registers every meeting, media pipeline, browser and local server it creates in a cleanup registry that runs in a `finally` block and on Ctrl-C. If a cleanup step fails, the script prints the `aws` command that does it by hand and exits 1.
 - Never prints a join token; attendee ids and meeting ids only (OPS-07, D-CW-08). The browser pages fetch their credentials from a local server on 127.0.0.1, so tokens never appear in a URL, and page console output is counted, not printed.
 - Writes recordings under `raw/spike-cw-<nn>/<runId>/` in the recordings bucket, a prefix the bucket expires after 30 days (D-CW-18).
 - Prints its measurements as one JSON object on the last line. Paste that line into the Result table of the spike and into the results log at the end of this file.
-- Exits 0 when the measurement completed (whatever the answer), 1 on failure, 2 when it refused to run (wrong region or profile, missing environment).
+- Exits with one of three codes. 0: the measurement completed, whatever the answer (also a CI skip of SPIKE-CW-08 and the print-only output of SPIKE-CW-05 and SPIKE-CW-06). 2: every refusal, always before or instead of the measurement: an unknown option or a bad option value, a `CHIME_REGION` other than `eu-central-1`, a profile other than `nestself-dev` or no credentials, missing environment, a non-empty chime-events queue (SPIKE-CW-07), and `--run` on the SPIKE-CW-06 placeholder. 1: every runtime failure: an AWS or harness error, a measurement that failed (for example SPIKE-CW-08 without media both ways), a failed cleanup, and a run interrupted with Ctrl-C (its numbers are partial and the JSON line says `"interrupted": true`), except SPIKE-CW-08 `--device`, where Ctrl-C is the normal way to end the session. Refusals and failures also end with the JSON line.
+- SPIKE-CW-05 and SPIKE-CW-06 make no AWS call but apply the same region guard.
 
 Shared code: `lib.ts` (guards, cleanup registry, meeting and pipeline helpers) and `browser-harness.ts` (the local page, the Chime SDK bundle, Playwright helpers).
 
@@ -50,7 +51,7 @@ The prices are those of `research/03-compliance-consent-cost.md`: $0.0017 per at
 | SPIKE-CW-02 | under 1 minute | 0 | 0 | none in Chime charges |
 | SPIKE-CW-08 | about 2 minutes | about 3 (2 contexts) | 0 | about $0.01 |
 | SPIKE-CW-03 | about 10 minutes | 0 (about 4 with `--with-browsers`) | about 10 capture | about $0.13 |
-| SPIKE-CW-04 | about 5 minutes, run twice | 15, then 20 with `--control-sender` | about 3.5 capture and 3.5 concatenation per run | about $0.08 per run |
+| SPIKE-CW-04 | about 5 minutes, run twice | 15 per run (the same three attendees both times) | about 3.5 capture and 3.5 concatenation per run | about $0.08 per run |
 | SPIKE-CW-05 | 20 minutes per platform | 40 per platform (far end and phone) | 0 | about $0.07 per platform |
 | SPIKE-CW-06 (M3) | 60 minutes | up to 180 (presenter, replica attendee, promoted attendee) | 60 replica-session-minutes | about $0.82 |
 
@@ -63,10 +64,10 @@ The M0 spikes together come to well under $1 in Chime charges; SPIKE-CW-06 adds 
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-01-client-request-token.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-01-client-request-token.ts
 ```
 
-Phase A sends two calls with identical input and the same token at the same moment (0 ms apart). Phase B sends two identical calls 2 s apart (`--gap-ms` to change it). Phase C deletes phase B's meeting and calls once more with B's token, because a session whose meeting ended after 5 empty minutes (OPS-03) would reuse its `call_sessions.id` as the token (CW-R-11). Each phase has its own token and `ExternalMeetingId`; nobody joins media.
+Phase A sends two calls with identical input and the same token at the same moment (0 ms apart). Phase B sends two identical calls 2 s apart (`--gap-ms` to change it). Phase C deletes phase B's meeting and calls once more with B's token, because a session whose meeting ended after 5 empty minutes (OPS-03) would reuse its `call_sessions.id` as the token (CW-R-11). Each phase has its own token and `ExternalMeetingId`; up to five meetings in total, nobody joins media.
 
 **Prerequisites.** The shared ones (items 1 to 4).
 
@@ -97,10 +98,10 @@ Phase A sends two calls with identical input and the same token at the same mome
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-02-external-user-id.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-02-external-user-id.ts
 ```
 
-One consultation meeting created with the expert's attendee. Case A: `CreateAttendee` twice in sequence with the same `ExternalUserId`. Case B: twice concurrently (two devices at once). Case C: `CreateAttendee` with the `ExternalUserId` that `CreateMeetingWithAttendees` used (the first joiner's cached credentials lost). Join tokens are compared for equality inside the process and never printed.
+One consultation meeting, with `MaxCount` 10 so the expert and up to five further attendees fit, created with the expert's attendee. Case A: `CreateAttendee` twice in sequence with the same `ExternalUserId`. Case B: twice concurrently (two devices at once). Case C: `CreateAttendee` with the `ExternalUserId` that `CreateMeetingWithAttendees` used (the first joiner's cached credentials lost). Join tokens are compared for equality inside the process and never printed.
 
 **Prerequisites.** The shared ones (items 1 to 4).
 
@@ -129,8 +130,8 @@ One consultation meeting created with the expert's attendee. Case A: `CreateAtte
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts --with-browsers
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-03-pipeline-attendee-count.ts --with-browsers
 ```
 
 1. Meeting A with `MaxCount` 2 and two attendees, p1 and p2. With `--with-browsers` both join from Chromium with fake media first.
@@ -151,7 +152,8 @@ Run the plain variant first. If the control in step 2 is accepted, the plain run
 | Third attendee on the full meeting (`refused` with error name, or `created`) | |
 | Pipeline create accepted, settled status | |
 | Source ARN form accepted (`documented` or `meeting-arn`) | |
-| Pipeline counts against MaxCount (`no`, `likely-yes`, `inconclusive...`) | |
+| Pipeline counts against MaxCount (`no`, `inconclusive-pipeline-failed`, `inconclusive`, `inconclusive-rerun-with-browsers`) | |
+| Pipeline status history and create error (from the JSON line) | |
 | Control meeting C ended after (seconds since creation) | |
 | Meeting A ended after (seconds since empty), or alive at the end | |
 | Pipeline keeps the empty meeting alive (`yes`, `no`, `inconclusive...`) | |
@@ -160,7 +162,7 @@ Run the plain variant first. If the control in step 2 is accepted, the plain run
 **Binding change.**
 
 - Counts `no`: D-CW-10 stands; a single-meeting webinar keeps `WEBINAR_SINGLE_MEETING_CAPACITY = 250` with no allowance for the recording, and the consultation `MaxCount` of 4 keeps its stated reserve.
-- Counts `likely-yes`: the recording takes one of the 250 places of a webinar meeting (and `MaxCount` cannot exceed 250, OPS-26). Proposed amendment to D-CW-10, D-CW-14 and D-CW-36: the registration capacity of a single-meeting webinar is 250 minus its hosts minus one, and the occurrence form and `capacity_above_limit` check use that figure.
+- `inconclusive-pipeline-failed`: the pipeline was refused or reached `Failed` on the full meeting. The script does not infer that `MaxCount` was the cause, because the bucket policy, the key policy or a quota fail the same way; the JSON line carries the status history and the error. If they point at attendee capacity, the recording takes one of the 250 places of a webinar meeting (and `MaxCount` cannot exceed 250, OPS-26), and the proposed amendment to D-CW-10, D-CW-14 and D-CW-36 is: the registration capacity of a single-meeting webinar is 250 minus its hosts minus one, and the occurrence form and `capacity_above_limit` check use that figure. Otherwise fix the cause and re-run.
 - Keeps alive `yes`: OPS-42 confirmed. D-CW-09 stands (the cleanup job deletes the meeting regardless of attendee count) and D-CW-18's explicit stop at webinar end is required, as designed.
 - Keeps alive `no`: a recorded webinar ends 5 minutes after the last person leaves, recording or not. D-CW-18: `webinar.recording.finalize` must also start on the meeting's `MeetingEnded` event, not only on the moderator's end.
 - Source ARN form: T-CW-2.5 uses the form recorded here.
@@ -172,13 +174,13 @@ Run the plain variant first. If the control in step 2 is accepted, the plain run
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts --control-sender
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts --control-sender
 ```
 
 A 3-minute test webinar (`--minutes`) in one meeting with webinar features: one presenter (`SendReceive` on everything) and two attendees (`Receive` on audio, video and content, D-CW-10 and D-CW-35), each in its own Chromium context with fake media. The presenter sends a blue canvas labelled PRESENTER as camera video and, from 45 s until 45 s before the end, a green canvas as content share. The capture pipeline uses the D-CW-18 shape with `SelectedVideoStreams` set to the presenter's attendee id. After the capture stops, a concatenation pipeline (WEB-29) writes one MP4. `--control-sender` makes the second attendee send a red canvas labelled CONTROL SENDER that is not selected, which proves the filter excludes a stream that exists (the product never lets attendees send video, D-CW-35). `--include-content-attendee` also lists `<presenterId>#content` in `SelectedVideoStreams`, for the case where content is missing from the composite.
 
-After the run, list and download the output with the commands the script prints (`aws s3 ls`, `aws s3 cp`), check one object with `aws s3api head-object` (encryption), and watch the MP4.
+After the run, list and download the output with the commands the script prints (`aws s3 ls`, `aws s3 cp`, each with the `AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1` prefix), check one object with `aws s3api head-object` (encryption), and watch the MP4.
 
 **Prerequisites.** The shared ones and item 5.
 
@@ -212,12 +214,12 @@ After the run, list and download the output with the commands the script prints 
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-05-mobile-webview.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-05-mobile-webview.ts
 ```
 
 The script prints the full procedure and makes no AWS call. In short:
 
-- Variant A (runs now): `spike-cw-08-playwright-ci.ts --device --port 5199 --minutes 20` keeps a Chromium far end in a meeting and serves a second slot at `http://127.0.0.1:5199/?slot=device`. A temporary, uncommitted Expo Router screen `apps/mobile/src/app/spike-webview.tsx` opens it in a `react-native-webview` `WebView` (`allowsInlineMediaPlayback`, `mediaPlaybackRequiresUserAction={false}`, `mediaCapturePermissionGrantType="prompt"`). In the "NestSelf iPhone" simulator (iOS 17.5, Expo Go) the page is reachable on the Mac's loopback; on the physical Android device through `adb reverse tcp:5199 tcp:5199`. Loopback matters: `getUserMedia` needs a secure context, which `http://127.0.0.1` is and a LAN address is not.
+- Variant A (runs now): `spike-cw-08-playwright-ci.ts --device --port 5199 --minutes 20` (with the prefix) keeps a Chromium far end in a meeting and serves a second slot at `http://127.0.0.1:5199/?slot=device`. A temporary, uncommitted Expo Router screen `apps/mobile/src/app/spike-webview.tsx` opens it in a `react-native-webview` `WebView` (`allowsInlineMediaPlayback`, `mediaPlaybackRequiresUserAction={false}`, `mediaCapturePermissionGrantType="prompt"`). In the "NestSelf iPhone" simulator (iOS 17.5, Expo Go) the page is reachable on the Mac's loopback; on the physical Android device through `adb reverse tcp:5199 tcp:5199`. Loopback matters: `getUserMedia` needs a secure context, which `http://127.0.0.1` is and a LAN address is not.
 - Variant B (after T-CW-1.5 and T-CW-4.1): the same check on the canonical route `apps/workspace/src/routes/call/$appointmentId.tsx`, opened as `{WORKSPACE_URL}/call/{appointmentId}?ticket={ticket}` after `POST /appointments/:id/call-ticket` (D-CW-24, guidelines section 13), with `adb reverse` for ports 5173 and 4000 on Android.
 
 What to observe: the camera and microphone permission prompt inside the WebView (whose prompt, persistence across a reload, behaviour after "Don't allow"); `audioVideoDidStart` for the phone; media both ways (the phone shows the blue FAR END tile, the far end reports the phone's video and audio); autoplay (the page reports `audioAutoplayBlocked` and shows a tap-to-start button); background behaviour (30 s in another app or with the screen locked, then back); rotation. The Simulator has no camera, so camera capture on iOS can only be confirmed on a physical iPhone, if one is available.
@@ -253,10 +255,10 @@ What to observe: the camera and microphone permission prompt inside the WebView 
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-06-replica-audio.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-06-replica-audio.ts
 ```
 
-Placeholder until T-CW-3.1: it prints the plan and the typed request shapes; `--run` is refused. The plan: a primary meeting with the presenter; a replica with `PrimaryMeetingId` (WEB-07); a replica attendee with `Receive` capabilities; the floor as an attendee created on the primary with audio `SendReceive`, video and content `Receive` (D-CW-35), which the replica client takes with `promoteToPrimaryMeeting` (WEB-09); a 60-minute soak in which the presenter's page samples the promoted attendee's volume every 10 seconds; on a dropout, demote and promote again and record whether audio returns.
+Placeholder until T-CW-3.1: it prints the plan and the typed request shapes; `--run` is refused (exit 2, JSON line with `"status": "placeholder"`). The plan: a primary meeting with the presenter; a replica with `PrimaryMeetingId` (WEB-07); a replica attendee with `Receive` capabilities; the floor as an attendee created on the primary with audio `SendReceive`, video and content `Receive` (D-CW-35), which the replica client takes with `promoteToPrimaryMeeting` (WEB-09); a 60-minute soak in which the presenter's page samples the promoted attendee's volume every 10 seconds; on a dropout, demote and promote again and record whether audio returns.
 
 Note for T-CW-3.1: its step 3 names `UpdateAttendeeCapabilities` on the replica attendee. That is the single-meeting floor of D-CW-35; replica attendees only receive the primary's media (WEB-07) and speak through promotion (WEB-09), which is also the path WEB-39 reports. The soak follows WEB-09.
 
@@ -286,12 +288,12 @@ Note for T-CW-3.1: its step 3 names `UpdateAttendeeCapabilities` on the replica 
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-07-sqs-latency.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-07-sqs-latency.ts
 ```
 
-Both paths end in the chime-events queue (D-CW-12, `video-stack.ts`). A control meeting without `NotificationsConfiguration` produces events that can only arrive through EventBridge, which identifies EventBridge's `SenderId` and envelope. The test meeting has `NotificationsConfiguration.SqsQueueArn`; 10 `CreateAttendee` and 10 `DeleteAttendee` calls produce 20 attendee events (`chime:AttendeeAdded`, `chime:AttendeeDeleted`, OPS-10), each expected on both paths. Latency per path is the SQS `SentTimestamp` minus the event's own timestamp (both AWS clocks); for each event seen on both paths, the gap between the two arrivals. The script also records whether both copies carry the same timestamp, the envelope keys of each path, duplicates and out-of-order arrivals (OPS-15). Messages of this run's meetings and of any `spike-cw-*` meeting are deleted; other messages are left in the queue untouched.
+Both paths end in the chime-events queue (D-CW-12, `video-stack.ts`). A control meeting without `NotificationsConfiguration` produces events that can only arrive through EventBridge, which identifies EventBridge's `SenderId` and envelope. Both meetings use `MaxCount` 20, since a cycle creates all its attendees before deleting them. The test meeting has `NotificationsConfiguration.SqsQueueArn`; 10 `CreateAttendee` and 10 `DeleteAttendee` calls produce 20 attendee events (`chime:AttendeeAdded`, `chime:AttendeeDeleted`, OPS-10), each expected on both paths. Latency per path is the SQS `SentTimestamp` minus the event's own timestamp (both AWS clocks); for each event seen on both paths, the gap between the two arrivals. The script also records whether both copies carry the same timestamp, the envelope keys of each path, duplicates and out-of-order arrivals (OPS-15). Every message the spike receives counts toward the queue's dead-letter threshold (5 receives, D-CW-12), and a message it receives but does not delete becomes visible again after the 60-second visibility timeout and is received again. So the spike refuses to start (exit 2) while the queue holds any message, visible or in flight. During the run it deletes the messages of its own meetings and of any `spike-cw-*` meeting; a message of another meeting that arrives meanwhile is left in the queue, may be received several times before the run ends, and is counted in the JSON line (`foreignMessagesLeftInQueue`). The other spikes leave their events in the queue (SQS keeps them 4 days by default), which is one reason to run this spike first; `--drain-spike-leftovers` deletes events of earlier spike runs before the check, stops at the first message of any other meeting and makes it visible again at once (one extra receive on that message), and the spike then refuses.
 
-**Prerequisites.** The shared ones. Stop the local worker (`chime.events.consume`) while this runs, so it does not consume the events first.
+**Prerequisites.** The shared ones. An empty chime-events queue (see above). Stop the local worker (`chime.events.consume`) and run no other meeting while this runs, so nothing else consumes or adds events.
 
 **Result.**
 
@@ -327,11 +329,11 @@ Both paths end in the chime-events queue (D-CW-12, `video-stack.ts`). A control 
 **Method.**
 
 ```
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts
-pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --headed
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts
+AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --headed
 ```
 
-One consultation meeting with two attendees. One headless Chromium launched with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`, two browser contexts (separate cookies, devices and WebRTC stacks), each opening the harness page for its slot. Each page joins with the fake camera and microphone and reports `audioVideoDidStart`, the other side's video tile and the other side's audio volume; both stay for 20 s (`--observe-seconds`). Pass means both joined, both saw the other's video and both heard the other's audio, the assertion the nightly `video-smoke` workflow of T-CW-1.7 needs. With `CI` set and `VIDEO_SMOKE_ENABLED` not `true`, the script prints a skip result and exits 0 without calling AWS (CW-R-90). `--device` serves the SPIKE-CW-05 far end instead.
+One consultation meeting with two attendees. One headless Chromium launched with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`, two browser contexts (separate cookies, devices and WebRTC stacks), each opening the harness page for its slot. Each page joins with the fake camera and microphone and reports `audioVideoDidStart`, the other side's video tile and the other side's audio volume; both stay for 20 s (`--observe-seconds`). Pass means both joined, both saw the other's video and both heard the other's audio, the assertion the nightly `video-smoke` workflow of T-CW-1.7 needs. With `CI` set and `VIDEO_SMOKE_ENABLED` not `true`, the script prints its header and a skip result and exits 0 without calling AWS (CW-R-90); `--help` still prints the options first. `--device` serves the SPIKE-CW-05 far end instead.
 
 **Prerequisites.** The shared ones and item 5. For a CI trial, AWS credentials for the dev account in the runner's environment (the scripts accept environment credentials when `AWS_PROFILE` is unset).
 

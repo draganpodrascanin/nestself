@@ -4,7 +4,8 @@
  *
  * Run at the start of M3, before replication is built (T-CW-3.1 fills this in).
  * Today it prints the plan and the request shapes it will send, typed against
- * the SDK so they stay correct as the SDK moves; it makes no AWS call.
+ * the SDK so they stay correct as the SDK moves; it makes no AWS call. A CHIME_REGION
+ * other than eu-central-1 and --run are refused (exit 2, JSON line with status placeholder).
  *
  * Method (WEB-07, WEB-09, D-CW-35):
  *   1. Primary meeting (webinar features) with the presenter.
@@ -22,10 +23,10 @@
  *   6. Record the minute of any dropout, then demote (demoteFromPrimaryMeeting) and promote again
  *      to see whether that restores audio (the workaround T-CW-3.2 step 6 would implement).
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-06-replica-audio.ts
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-06-replica-audio.ts
  */
 import type { CreateAttendeeCommandInput, CreateMeetingCommandInput } from '@aws-sdk/client-chime-sdk-meetings';
-import { CAPABILITIES, CHIME_REGION, MEETING_FEATURES, flagArg, runPrintOnlySpike } from './lib.js';
+import { CAPABILITIES, CHIME_REGION, MEETING_FEATURES, SpikeRefusal, flagArg, runPrintOnlySpike } from './lib.js';
 
 const SOAK_MINUTES = 60;
 
@@ -69,8 +70,10 @@ runPrintOnlySpike(
   },
   (args) => {
     if (flagArg(args, 'run')) {
-      console.error('The soak is implemented in T-CW-3.1 at the start of M3; this placeholder only prints the plan.');
-      process.exit(2);
+      // A refusal: exit 2 with a JSON line carrying status "placeholder".
+      throw new SpikeRefusal('The soak is implemented in T-CW-3.1 at the start of M3; this placeholder only prints the plan.', {
+        status: 'placeholder',
+      });
     }
     console.log(`
 PLAN (T-CW-3.1, start of M3, before replication is built)

@@ -10,7 +10,7 @@
  * Join tokens are compared for equality inside this process; they are never printed.
  * No attendee joins media.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-02-external-user-id.ts
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-02-external-user-id.ts
  */
 import { CreateAttendeeCommand, type Attendee } from '@aws-sdk/client-chime-sdk-meetings';
 import { CAPABILITIES, createSpikeMeeting, describeError, requireAttendee, runSpike, spikeName, type ErrorInfo, type SpikeContext } from './lib.js';
@@ -52,11 +52,13 @@ runSpike({
     binds: ['D-CW-08'],
   },
   requiredEnv: ['CHIME_EVENTS_QUEUE_ARN'],
-  help: ['Creates one meeting and up to five attendees; nobody joins media. The meeting is deleted at the end.'],
+  help: ['Creates one meeting (MaxCount 10) and up to six attendees; nobody joins media. The meeting is deleted at the end.'],
   async run(ctx) {
     const meeting = await createSpikeMeeting(ctx, {
       format: 'consultation',
       label: 'm',
+      // The expert plus up to five more attendees (cases A, B and C) must fit.
+      maxCount: 10,
       attendees: [{ key: 'expert', capabilities: CAPABILITIES.expert }],
     });
     const expert = requireAttendee(meeting, 'expert');

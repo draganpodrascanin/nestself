@@ -21,7 +21,7 @@
  * in SelectedVideoStreams) to prove the filter excludes a stream that exists; the
  * product never lets an attendee send video (D-CW-35), so this is a control only.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts [--control-sender]
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-04-selected-video-streams.ts [--control-sender]
  */
 import {
   CreateMediaConcatenationPipelineCommand,
@@ -40,6 +40,7 @@ import {
   waitForPhase,
 } from './browser-harness.js';
 import {
+  AWS_COMMAND_PREFIX,
   CAPABILITIES,
   CHIME_REGION,
   bucketArn,
@@ -241,10 +242,12 @@ runSpike({
 
     const s3 = `s3://${bucket}/${recordingsPrefix(ctx)}/`;
     const local = `./spike-cw-04-${ctx.runId}`;
-    console.log('--- check the recording by hand (nestself-dev profile) ---');
-    console.log(`  aws s3 ls ${s3} --recursive --region ${CHIME_REGION}`);
-    console.log(`  aws s3 cp s3://${bucket}/${concatenatedPrefix}/ ${local}/ --recursive --region ${CHIME_REGION}`);
-    console.log(`  aws s3api head-object --bucket ${bucket} --key <one key from the listing> --region ${CHIME_REGION}   # ServerSideEncryption, SSEKMSKeyId`);
+    console.log('--- check the recording by hand ---');
+    console.log(`  ${AWS_COMMAND_PREFIX} aws s3 ls ${s3} --recursive --region ${CHIME_REGION}`);
+    console.log(`  ${AWS_COMMAND_PREFIX} aws s3 cp s3://${bucket}/${concatenatedPrefix}/ ${local}/ --recursive --region ${CHIME_REGION}`);
+    console.log(
+      `  ${AWS_COMMAND_PREFIX} aws s3api head-object --bucket ${bucket} --key <one key from the listing> --region ${CHIME_REGION}   # ServerSideEncryption, SSEKMSKeyId`,
+    );
     console.log(`  ffprobe -hide_banner ${local}/<file>.mp4   # if ffmpeg is installed`);
     console.log('  Expected: only the blue PRESENTER tile; the green content with the presenter in the top-right corner between the');
     console.log('  content-share marks above; no ATTENDEE tile; with --control-sender, never the red CONTROL SENDER tile.');

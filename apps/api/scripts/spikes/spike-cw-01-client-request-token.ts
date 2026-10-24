@@ -11,7 +11,7 @@
  *      5 empty minutes would reuse its `call_sessions.id` as the token.)
  * No attendee joins media, so no attendee-minutes accrue.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-01-client-request-token.ts
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-01-client-request-token.ts
  */
 import { CreateMeetingWithAttendeesCommand, GetMeetingCommand } from '@aws-sdk/client-chime-sdk-meetings';
 import {
@@ -84,7 +84,7 @@ runSpike({
   options: {
     'gap-ms': { type: 'string', default: '2000', description: 'Delay between the two calls of phase B, in milliseconds' },
   },
-  help: ['Creates up to four meetings with one attendee each; nobody joins media. Every meeting is deleted at the end.'],
+  help: ['Creates up to five meetings with one attendee each (two per phase A and B, one in phase C); nobody joins media. Every meeting is deleted at the end.'],
   async run(ctx) {
     const gapMs = numberArg(ctx.args, 'gap-ms', 2000);
     const attendees = [{ key: 'p1', capabilities: CAPABILITIES.expert }];

@@ -4,11 +4,12 @@
  * (D-CW-24, CW-R-65, CORE-23, CORE-36, research/01 open question 4.)
  *
  * Instructions only: this script prints the manual procedure and makes no AWS
- * call. Variant A runs now, against the spike harness page served by
- * SPIKE-CW-08 --device. Variant B repeats the check on the canonical ticket
- * route once T-CW-1.5 and T-CW-4.1 exist.
+ * call; it still refuses a CHIME_REGION other than eu-central-1 (exit 2).
+ * Variant A runs now, against the spike harness page served by SPIKE-CW-08
+ * --device. Variant B repeats the check on the canonical ticket route once
+ * T-CW-1.5 and T-CW-4.1 exist.
  *
- *   pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-05-mobile-webview.ts
+ *   AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-05-mobile-webview.ts
  */
 import { numberArg, runPrintOnlySpike } from './lib.js';
 
@@ -64,7 +65,7 @@ PREREQUISITES
 
 VARIANT A: SPIKE HARNESS (runs now; no call route needed)
   1. Start a meeting with a Chromium far end and a slot for the phone, and leave it running:
-       pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --device --port ${port} --minutes 20
+       AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 pnpm --filter @nestself/api exec tsx scripts/spikes/spike-cw-08-playwright-ci.ts --device --port ${port} --minutes 20
      It prints every event the phone's page reports (permission grants, audioVideoDidStart, remote video and audio,
      visibility changes, failures) and ends with the JSON result line. Ctrl-C ends it early and still prints the result.
   2. iOS Simulator:
