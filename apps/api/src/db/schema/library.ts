@@ -8,6 +8,8 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
+  index,
   integer,
   pgPolicy,
   pgTable,
@@ -38,6 +40,12 @@ export const savedItems = pgTable(
   },
   (t) => [
     uniqueIndex('saved_items_membership_resource_key').on(t.membershipId, t.contentResourceId),
+    index('saved_items_membership_created_idx').on(t.membershipId, sql`created_at DESC`, t.id),
+    foreignKey({
+      columns: [t.membershipId, t.orgId],
+      foreignColumns: [memberships.id, memberships.orgId],
+      name: 'saved_items_membership_org_fk',
+    }),
     pgPolicy('saved_items_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),
@@ -67,6 +75,11 @@ export const playbackStates = pgTable(
       t.membershipId,
       t.contentResourceId,
     ),
+    foreignKey({
+      columns: [t.membershipId, t.orgId],
+      foreignColumns: [memberships.id, memberships.orgId],
+      name: 'playback_states_membership_org_fk',
+    }),
     pgPolicy('playback_states_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),
@@ -99,6 +112,11 @@ export const contentPreferences = pgTable(
       'content_preferences_interest_limit',
       sql`array_length(interest_category_ids, 1) IS NULL OR array_length(interest_category_ids, 1) <= 3`,
     ),
+    foreignKey({
+      columns: [t.membershipId, t.orgId],
+      foreignColumns: [memberships.id, memberships.orgId],
+      name: 'content_preferences_membership_org_fk',
+    }),
     pgPolicy('content_preferences_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),

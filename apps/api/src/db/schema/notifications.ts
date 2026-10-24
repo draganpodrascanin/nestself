@@ -8,6 +8,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -39,8 +40,14 @@ export const outboxEvents = pgTable(
     lastErrorCode: text(),
   },
   (t) => [
-    index('outbox_events_unpublished_idx').on(t.publishedAt).where(sql`published_at IS NULL`),
+    index('outbox_events_dispatch_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`published_at IS NULL`),
     index('outbox_events_aggregate_idx').on(t.aggregateType, t.aggregateId),
+    check(
+      'outbox_events_payload_object_check',
+      sql`jsonb_typeof(payload) = 'object'`,
+    ),
   ],
 );
 
@@ -63,6 +70,9 @@ export const outboxDeliveries = pgTable(
   },
   (t) => [
     uniqueIndex('outbox_deliveries_event_consumer_key').on(t.outboxEventId, t.consumer),
+    index('outbox_deliveries_state_next_attempt_idx')
+      .on(t.state, t.nextAttemptAt)
+      .where(sql`state IN ('pending', 'failed')`),
   ],
 );
 
@@ -87,7 +97,7 @@ export const notifications = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    index('notifications_user_org_read_idx').on(t.userId, t.orgId, t.readAt),
+    index('notifications_user_org_created_idx').on(t.userId, t.orgId, sql`created_at DESC`),
     pgPolicy('notifications_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),

@@ -2,6 +2,7 @@
  * Media tables: assets and their processed renditions [C-14].
  * Platform data, no RLS [C-07].
  */
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -56,6 +57,9 @@ export const mediaAssets = pgTable(
   (t) => [
     index('media_assets_state_idx').on(t.state),
     index('media_assets_owner_category_idx').on(t.ownerCategoryId),
+    index('media_assets_rights_expires_at_idx')
+      .on(t.rightsExpiresAt)
+      .where(sql`rights_expires_at IS NOT NULL`),
   ],
 );
 

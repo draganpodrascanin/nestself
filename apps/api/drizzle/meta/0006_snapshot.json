@@ -1,5 +1,5 @@
 {
-  "id": "0ef99eb6-d321-4265-82fb-9aa5abf842ae",
+  "id": "8ebc7c1d-cc65-433c-b26a-c556dbd90aac",
   "prevId": "1337bdfe-334f-4080-9f3b-ac384d616370",
   "version": "7",
   "dialect": "postgresql",
@@ -440,6 +440,27 @@
           ],
           "isUnique": false,
           "where": "\"memberships\".\"status\" = 'ACTIVE'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memberships_id_org_id_key": {
+          "name": "memberships_id_org_id_key",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4016,6 +4037,36 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "content_publication_audiences_org_id_idx": {
+          "name": "content_publication_audiences_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "content_publication_audiences_org_unit_id_idx": {
+          "name": "content_publication_audiences_org_unit_id_idx",
+          "columns": [
+            {
+              "expression": "org_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -4062,7 +4113,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "content_publication_audiences_kind_check": {
+          "name": "content_publication_audiences_kind_check",
+          "value": "(kind = 'all_eligible' AND org_id IS NULL AND org_unit_id IS NULL)\n       OR (kind = 'organization' AND org_id IS NOT NULL AND org_unit_id IS NULL)\n       OR (kind = 'org_unit' AND org_id IS NOT NULL AND org_unit_id IS NOT NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.content_publications": {
@@ -4167,8 +4223,8 @@
         }
       },
       "indexes": {
-        "content_publications_variant_state_starts_idx": {
-          "name": "content_publications_variant_state_starts_idx",
+        "content_publications_variant_active_idx": {
+          "name": "content_publications_variant_active_idx",
           "columns": [
             {
               "expression": "content_variant_id",
@@ -4177,13 +4233,23 @@
               "nulls": "last"
             },
             {
-              "expression": "state",
-              "isExpression": false,
+              "expression": "starts_at DESC",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
-            },
+            }
+          ],
+          "isUnique": false,
+          "where": "withdrawn_at IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "content_publications_state_idx": {
+          "name": "content_publications_state_idx",
+          "columns": [
             {
-              "expression": "starts_at",
+              "expression": "state",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4194,11 +4260,11 @@
           "method": "btree",
           "with": {}
         },
-        "content_publications_state_idx": {
-          "name": "content_publications_state_idx",
+        "content_publications_content_revision_id_idx": {
+          "name": "content_publications_content_revision_id_idx",
           "columns": [
             {
-              "expression": "state",
+              "expression": "content_revision_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4267,7 +4333,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "content_publications_window_check": {
+          "name": "content_publications_window_check",
+          "value": "ends_at IS NULL OR ends_at > starts_at"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.content_resources": {
@@ -4511,6 +4582,21 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "content_revision_media_media_asset_id_idx": {
+          "name": "content_revision_media_media_asset_id_idx",
+          "columns": [
+            {
+              "expression": "media_asset_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5118,6 +5204,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "media_assets_rights_expires_at_idx": {
+          "name": "media_assets_rights_expires_at_idx",
+          "columns": [
+            {
+              "expression": "rights_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "rights_expires_at IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5388,6 +5490,21 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "content_preferences_membership_org_fk": {
+          "name": "content_preferences_membership_org_fk",
+          "tableFrom": "content_preferences",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "membership_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5655,6 +5772,21 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "playback_states_membership_org_fk": {
+          "name": "playback_states_membership_org_fk",
+          "tableFrom": "playback_states",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "membership_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5738,6 +5870,33 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "saved_items_membership_created_idx": {
+          "name": "saved_items_membership_created_idx",
+          "columns": [
+            {
+              "expression": "membership_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at DESC",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5791,6 +5950,21 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "saved_items_membership_org_fk": {
+          "name": "saved_items_membership_org_fk",
+          "tableFrom": "saved_items",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "membership_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -5874,8 +6048,8 @@
         }
       },
       "indexes": {
-        "notifications_user_org_read_idx": {
-          "name": "notifications_user_org_read_idx",
+        "notifications_user_org_created_idx": {
+          "name": "notifications_user_org_created_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -5890,9 +6064,9 @@
               "nulls": "last"
             },
             {
-              "expression": "read_at",
-              "isExpression": false,
+              "expression": "created_at DESC",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
@@ -6026,6 +6200,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "outbox_deliveries_state_next_attempt_idx": {
+          "name": "outbox_deliveries_state_next_attempt_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "state IN ('pending', 'failed')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -6118,11 +6314,17 @@
         }
       },
       "indexes": {
-        "outbox_events_unpublished_idx": {
-          "name": "outbox_events_unpublished_idx",
+        "outbox_events_dispatch_idx": {
+          "name": "outbox_events_dispatch_idx",
           "columns": [
             {
-              "expression": "published_at",
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6160,7 +6362,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "outbox_events_payload_object_check": {
+          "name": "outbox_events_payload_object_check",
+          "value": "jsonb_typeof(payload) = 'object'"
+        }
+      },
       "isRLSEnabled": false
     }
   },

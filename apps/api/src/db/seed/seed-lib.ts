@@ -297,9 +297,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   // ── Organization content capabilities (T-C1.04) ──
-  // Every seeded organization gets the 'library' capability enabled.
-  const orgIds = [SAMPLE_ORG.id];
-  for (const orgId of orgIds) {
+  // Every seeded organization gets the 'library' capability.
+  // configuredByUserId is the client-operations staff member (holds
+  // service.configure) rather than the HR admin.
+  const clientOps = SAMPLE_PEOPLE.find((p) => p.platformRole === 'operations');
+  const configuredByUserId = clientOps?.id ?? SAMPLE_PEOPLE[0]!.id;
+
+  // Iterate the organization fixtures, not a hard-coded list. The seed only
+  // manages organizations it inserted (SAMPLE_ORG and any future additions);
+  // test-created orgs are not seeded.
+  const seededOrgIds = [SAMPLE_ORG.id];
+  for (const orgId of seededOrgIds) {
     const capId = `org_cap_${orgId}_library`;
     await upsertById(
       db,
@@ -309,7 +317,7 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         orgId,
         capability: 'library',
         enabledFrom: SAMPLE_START_DATE,
-        configuredByUserId: hrAdmin?.id ?? SAMPLE_PEOPLE[0]!.id,
+        configuredByUserId,
       },
       { enabledFrom: SAMPLE_START_DATE },
     );

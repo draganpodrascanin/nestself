@@ -59,7 +59,10 @@ CREATE TABLE "content_publication_audiences" (
 	"kind" "content_audience_kind" NOT NULL,
 	"org_id" text,
 	"org_unit_id" text,
-	"include_descendants" boolean DEFAULT true NOT NULL
+	"include_descendants" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "content_publication_audiences_kind_check" CHECK ((kind = 'all_eligible' AND org_id IS NULL AND org_unit_id IS NULL)
+       OR (kind = 'organization' AND org_id IS NOT NULL AND org_unit_id IS NULL)
+       OR (kind = 'org_unit' AND org_id IS NOT NULL AND org_unit_id IS NOT NULL))
 );
 --> statement-breakpoint
 CREATE TABLE "content_publications" (
@@ -77,7 +80,8 @@ CREATE TABLE "content_publications" (
 	"withdrawal_reason" text,
 	"published_by_user_id" text NOT NULL,
 	"editorial_priority" integer DEFAULT 0 NOT NULL,
-	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "content_publications_window_check" CHECK (ends_at IS NULL OR ends_at > starts_at)
 );
 --> statement-breakpoint
 CREATE TABLE "content_resources" (
@@ -261,9 +265,11 @@ CREATE TABLE "outbox_events" (
 	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	"published_at" timestamp (3) with time zone,
 	"attempts" integer DEFAULT 0 NOT NULL,
-	"last_error_code" text
+	"last_error_code" text,
+	CONSTRAINT "outbox_events_payload_object_check" CHECK (jsonb_typeof(payload) = 'object')
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "memberships_id_org_id_key" ON "memberships" USING btree ("id","org_id");--> statement-breakpoint
 ALTER TABLE "category_labels" ADD CONSTRAINT "category_labels_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "content_publication_audiences" ADD CONSTRAINT "content_publication_audiences_publication_id_content_publications_id_fk" FOREIGN KEY ("publication_id") REFERENCES "public"."content_publications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "content_publication_audiences" ADD CONSTRAINT "content_publication_audiences_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -288,42 +294,52 @@ ALTER TABLE "media_renditions" ADD CONSTRAINT "media_renditions_media_asset_id_m
 ALTER TABLE "content_preferences" ADD CONSTRAINT "content_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "content_preferences" ADD CONSTRAINT "content_preferences_membership_id_memberships_id_fk" FOREIGN KEY ("membership_id") REFERENCES "public"."memberships"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "content_preferences" ADD CONSTRAINT "content_preferences_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "content_preferences" ADD CONSTRAINT "content_preferences_membership_org_fk" FOREIGN KEY ("membership_id","org_id") REFERENCES "public"."memberships"("id","org_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "org_content_capabilities" ADD CONSTRAINT "org_content_capabilities_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "org_content_capabilities" ADD CONSTRAINT "org_content_capabilities_configured_by_user_id_users_id_fk" FOREIGN KEY ("configured_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "playback_states" ADD CONSTRAINT "playback_states_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "playback_states" ADD CONSTRAINT "playback_states_membership_id_memberships_id_fk" FOREIGN KEY ("membership_id") REFERENCES "public"."memberships"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "playback_states" ADD CONSTRAINT "playback_states_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "playback_states" ADD CONSTRAINT "playback_states_content_resource_id_content_resources_id_fk" FOREIGN KEY ("content_resource_id") REFERENCES "public"."content_resources"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "playback_states" ADD CONSTRAINT "playback_states_membership_org_fk" FOREIGN KEY ("membership_id","org_id") REFERENCES "public"."memberships"("id","org_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "saved_items" ADD CONSTRAINT "saved_items_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "saved_items" ADD CONSTRAINT "saved_items_membership_id_memberships_id_fk" FOREIGN KEY ("membership_id") REFERENCES "public"."memberships"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "saved_items" ADD CONSTRAINT "saved_items_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "saved_items" ADD CONSTRAINT "saved_items_content_resource_id_content_resources_id_fk" FOREIGN KEY ("content_resource_id") REFERENCES "public"."content_resources"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "saved_items" ADD CONSTRAINT "saved_items_membership_org_fk" FOREIGN KEY ("membership_id","org_id") REFERENCES "public"."memberships"("id","org_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "outbox_deliveries" ADD CONSTRAINT "outbox_deliveries_outbox_event_id_outbox_events_id_fk" FOREIGN KEY ("outbox_event_id") REFERENCES "public"."outbox_events"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "categories_slug_key" ON "categories" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "category_labels_category_locale_key" ON "category_labels" USING btree ("category_id","locale");--> statement-breakpoint
 CREATE INDEX "content_publication_audiences_pub_idx" ON "content_publication_audiences" USING btree ("publication_id");--> statement-breakpoint
-CREATE INDEX "content_publications_variant_state_starts_idx" ON "content_publications" USING btree ("content_variant_id","state","starts_at");--> statement-breakpoint
+CREATE INDEX "content_publication_audiences_org_id_idx" ON "content_publication_audiences" USING btree ("org_id");--> statement-breakpoint
+CREATE INDEX "content_publication_audiences_org_unit_id_idx" ON "content_publication_audiences" USING btree ("org_unit_id");--> statement-breakpoint
+CREATE INDEX "content_publications_variant_active_idx" ON "content_publications" USING btree ("content_variant_id",starts_at DESC) WHERE withdrawn_at IS NULL;--> statement-breakpoint
 CREATE INDEX "content_publications_state_idx" ON "content_publications" USING btree ("state");--> statement-breakpoint
+CREATE INDEX "content_publications_content_revision_id_idx" ON "content_publications" USING btree ("content_revision_id");--> statement-breakpoint
 CREATE INDEX "content_resources_type_state_idx" ON "content_resources" USING btree ("type","state");--> statement-breakpoint
 CREATE INDEX "content_resources_primary_category_id_idx" ON "content_resources" USING btree ("primary_category_id");--> statement-breakpoint
 CREATE INDEX "content_resources_owner_user_id_idx" ON "content_resources" USING btree ("owner_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_revision_media_revision_asset_key" ON "content_revision_media" USING btree ("content_revision_id","media_asset_id");--> statement-breakpoint
+CREATE INDEX "content_revision_media_media_asset_id_idx" ON "content_revision_media" USING btree ("media_asset_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_revisions_variant_number_key" ON "content_revisions" USING btree ("content_variant_id","revision_number");--> statement-breakpoint
 CREATE INDEX "content_revisions_variant_state_idx" ON "content_revisions" USING btree ("content_variant_id","state");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_variants_resource_locale_key" ON "content_variants" USING btree ("content_resource_id","locale");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_variants_slug_locale_key" ON "content_variants" USING btree ("slug","locale");--> statement-breakpoint
 CREATE INDEX "media_assets_state_idx" ON "media_assets" USING btree ("state");--> statement-breakpoint
 CREATE INDEX "media_assets_owner_category_idx" ON "media_assets" USING btree ("owner_category_id");--> statement-breakpoint
+CREATE INDEX "media_assets_rights_expires_at_idx" ON "media_assets" USING btree ("rights_expires_at") WHERE rights_expires_at IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "media_renditions_asset_kind_key" ON "media_renditions" USING btree ("media_asset_id","kind");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_preferences_membership_key" ON "content_preferences" USING btree ("membership_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "org_content_capabilities_org_capability_key" ON "org_content_capabilities" USING btree ("org_id","capability");--> statement-breakpoint
 CREATE UNIQUE INDEX "playback_states_membership_resource_key" ON "playback_states" USING btree ("membership_id","content_resource_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "saved_items_membership_resource_key" ON "saved_items" USING btree ("membership_id","content_resource_id");--> statement-breakpoint
-CREATE INDEX "notifications_user_org_read_idx" ON "notifications" USING btree ("user_id","org_id","read_at");--> statement-breakpoint
+CREATE INDEX "saved_items_membership_created_idx" ON "saved_items" USING btree ("membership_id",created_at DESC,"id");--> statement-breakpoint
+CREATE INDEX "notifications_user_org_created_idx" ON "notifications" USING btree ("user_id","org_id",created_at DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "outbox_deliveries_event_consumer_key" ON "outbox_deliveries" USING btree ("outbox_event_id","consumer");--> statement-breakpoint
-CREATE INDEX "outbox_events_unpublished_idx" ON "outbox_events" USING btree ("published_at") WHERE published_at IS NULL;--> statement-breakpoint
+CREATE INDEX "outbox_deliveries_state_next_attempt_idx" ON "outbox_deliveries" USING btree ("state","next_attempt_at") WHERE state IN ('pending', 'failed');--> statement-breakpoint
+CREATE INDEX "outbox_events_dispatch_idx" ON "outbox_events" USING btree ("created_at","id") WHERE published_at IS NULL;--> statement-breakpoint
 CREATE INDEX "outbox_events_aggregate_idx" ON "outbox_events" USING btree ("aggregate_type","aggregate_id");--> statement-breakpoint
 CREATE POLICY "content_preferences_tenant_isolation" ON "content_preferences" AS PERMISSIVE FOR ALL TO public USING ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "content_preferences"."org_id" = current_setting('app.current_org_id', true))) WITH CHECK ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "content_preferences"."org_id" = current_setting('app.current_org_id', true)));--> statement-breakpoint
 CREATE POLICY "org_content_capabilities_tenant_isolation" ON "org_content_capabilities" AS PERMISSIVE FOR ALL TO public USING ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "org_content_capabilities"."org_id" = current_setting('app.current_org_id', true))) WITH CHECK ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "org_content_capabilities"."org_id" = current_setting('app.current_org_id', true)));--> statement-breakpoint
@@ -331,18 +347,23 @@ CREATE POLICY "playback_states_tenant_isolation" ON "playback_states" AS PERMISS
 CREATE POLICY "saved_items_tenant_isolation" ON "saved_items" AS PERMISSIVE FOR ALL TO public USING ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "saved_items"."org_id" = current_setting('app.current_org_id', true))) WITH CHECK ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "saved_items"."org_id" = current_setting('app.current_org_id', true)));--> statement-breakpoint
 CREATE POLICY "notifications_tenant_isolation" ON "notifications" AS PERMISSIVE FOR ALL TO public USING ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "notifications"."org_id" = current_setting('app.current_org_id', true))) WITH CHECK ((coalesce(current_setting('app.current_org_id', true), '') = '' OR "notifications"."org_id" = current_setting('app.current_org_id', true)));--> statement-breakpoint
 -- ========================================================================
--- Custom part (not generated by drizzle-kit)
+-- Hand-written tail (not generated by drizzle-kit).
+-- Do not remove this section when regenerating: re-append it after the
+-- generated DDL, following the precedent of migration 0003.
 -- ========================================================================
 
--- Extensions
-CREATE EXTENSION IF NOT EXISTS unaccent;--> statement-breakpoint
-CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
+-- Extensions pinned to the public schema so nestself_unaccent resolves
+-- under the restricted search_path Postgres 17 uses for CREATE INDEX,
+-- REINDEX and VACUUM.
+CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;--> statement-breakpoint
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;--> statement-breakpoint
 
--- Immutable wrapper for expression indexes and tsvector generation [X-09]
-CREATE OR REPLACE FUNCTION nestself_unaccent(text)
-RETURNS text AS $$
-  SELECT unaccent('unaccent', $1);
-$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;--> statement-breakpoint
+-- Immutable wrapper for expression indexes and tsvector generation [X-09].
+-- Schema-qualified so it works when search_path is empty (PG 17 indexes).
+CREATE OR REPLACE FUNCTION public.nestself_unaccent(text)
+RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT AS $$
+  SELECT public.unaccent('public.unaccent'::regdictionary, $1)
+$$;--> statement-breakpoint
 
 -- FORCE ROW LEVEL SECURITY on new tenant tables
 ALTER TABLE saved_items FORCE ROW LEVEL SECURITY;--> statement-breakpoint

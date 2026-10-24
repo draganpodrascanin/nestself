@@ -49,9 +49,45 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
 
   it('nestself_unaccent returns unaccented text', async () => {
     const { rows } = await owner.pool.query<{ result: string }>(
-      "SELECT nestself_unaccent('Đorđe Šarić') AS result",
+      "SELECT public.nestself_unaccent('Đorđe Šarić') AS result",
     );
     expect(rows[0]!.result).toBe('Dorde Saric');
+  });
+
+  it('nestself_unaccent works under empty search_path (PG 17 index safety)', async () => {
+    // Postgres 17 restricts search_path during CREATE INDEX / REINDEX / VACUUM.
+    // The function must resolve when search_path is empty.
+    const client = await owner.pool.connect();
+    try {
+      await client.query("SET LOCAL search_path = ''");
+      const { rows } = await client.query<{ result: string }>(
+        "SELECT public.nestself_unaccent('Āçcéntèd') AS result",
+      );
+      expect(rows[0]!.result).toBe('Accented');
+    } finally {
+      client.release();
+    }
+  });
+
+  it('expression and trigram indexes using nestself_unaccent work', async () => {
+    await owner.pool.query(`
+      CREATE TEMP TABLE _scratch_unaccent (id serial PRIMARY KEY, name text NOT NULL);
+      INSERT INTO _scratch_unaccent (name) VALUES ('Đorđe'), ('Šarić'), ('Normal');
+    `);
+    // Expression index
+    await owner.pool.query(
+      `CREATE INDEX _scratch_expr_idx ON _scratch_unaccent (public.nestself_unaccent(name))`,
+    );
+    // Trigram index
+    await owner.pool.query(
+      `CREATE INDEX _scratch_trgm_idx ON _scratch_unaccent USING gist (public.nestself_unaccent(name) gist_trgm_ops)`,
+    );
+    // Query using the expression
+    const { rows } = await owner.pool.query<{ name: string }>(
+      `SELECT name FROM _scratch_unaccent WHERE public.nestself_unaccent(name) = 'Dorde'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.name).toBe('Đorđe');
   });
 
   it('pg_trgm extension is installed', async () => {
@@ -59,6 +95,24 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
       "SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
     );
     expect(rows).toHaveLength(1);
+  });
+
+  it('nestself_app has privileges on every new table', async () => {
+    const tables = [
+      'saved_items', 'playback_states', 'content_preferences',
+      'org_content_capabilities', 'notifications', 'content_resources',
+      'content_variants', 'content_revisions', 'content_revision_media',
+      'content_publications', 'content_publication_audiences',
+      'categories', 'category_labels', 'media_assets', 'media_renditions',
+      'outbox_events', 'outbox_deliveries',
+    ];
+    for (const table of tables) {
+      const { rows } = await owner.pool.query<{ has: boolean }>(
+        `SELECT has_table_privilege('nestself_app', $1, 'SELECT,INSERT,UPDATE,DELETE') AS has`,
+        [table],
+      );
+      expect(rows[0]!.has, `nestself_app missing privileges on ${table}`).toBe(true);
+    }
   });
 
   // ── RLS on the five new tenant tables ─────────────────────────────────
@@ -310,15 +364,8 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
       ).rejects.toThrow(/content_revisions_working_key/);
     });
 
-    it('required_capability not null on publications', async () => {
-      await expect(
-        owner.pool.query(
-          `INSERT INTO content_publications (id, content_variant_id, content_revision_id, approval_hash, state, required_capability, starts_at, published_by_user_id)
-           VALUES ('inv_pub', $1, 'inv_rev_1', 'hash', 'live', NULL, now(), $2)`,
-          [variantId, userId],
-        ),
-      ).rejects.toThrow(/not-null|null value.*column.*required_capability/i);
-    });
+    // required_capability NOT NULL and default 'library' are covered by
+    // dedicated tests below (item 9: pin NOT NULL + default assertion).
 
     it('saved items unique per (membership_id, content_resource_id)', async () => {
       const orgId = 'inv_si_org';
@@ -483,6 +530,229 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
         ),
       ).rejects.toThrow(/content_preferences_membership_key/);
     });
+
+    // ── slug / locale uniqueness tests (item 9) ──
+
+    it('content_variants_slug_locale_key rejects duplicate (slug, locale)', async () => {
+      // inv-variant + sr-Latn already exists on resourceId. Create a separate
+      // resource so resource_locale_key does not fire first.
+      const res2 = 'inv_resource_slug';
+      await owner.pool.query(
+        `INSERT INTO content_resources (id, type, primary_category_id, owner_user_id, review_discipline) VALUES ($1, 'article', $2, $3, 'general')`,
+        [res2, catId, userId],
+      );
+      await expect(
+        owner.pool.query(
+          `INSERT INTO content_variants (id, content_resource_id, locale, slug) VALUES ('inv_v_slug', $1, 'sr-Latn', 'inv-variant')`,
+          [res2],
+        ),
+      ).rejects.toThrow(/content_variants_slug_locale_key/);
+    });
+
+    it('content_revisions_variant_number_key rejects duplicate (variant, number)', async () => {
+      // inv_rev_1 is revision_number=1 on variantId (state was set to approved)
+      await expect(
+        owner.pool.query(
+          `INSERT INTO content_revisions (id, content_variant_id, revision_number, state, body, title, summary, author_user_id, last_editor_user_id)
+           VALUES ('inv_rev_dup_num', $1, 1, 'approved', '{}', 'Dup', 'Dup', $2, $2)`,
+          [variantId, userId],
+        ),
+      ).rejects.toThrow(/content_revisions_variant_number_key/);
+    });
+
+    it('categories_slug_key rejects duplicate slug', async () => {
+      // catId ('inv-cat') exists from beforeAll
+      await expect(
+        owner.pool.query(
+          `INSERT INTO categories (id, slug) VALUES ('inv_cat_dup', 'inv-cat')`,
+        ),
+      ).rejects.toThrow(/categories_slug_key/);
+    });
+
+    it('category_labels_category_locale_key rejects duplicate (category, locale)', async () => {
+      await owner.pool.query(
+        `INSERT INTO category_labels (id, category_id, locale, name) VALUES ('inv_cl_1', $1, 'en', 'English')`,
+        [catId],
+      );
+      await expect(
+        owner.pool.query(
+          `INSERT INTO category_labels (id, category_id, locale, name) VALUES ('inv_cl_dup', $1, 'en', 'Dup')`,
+          [catId],
+        ),
+      ).rejects.toThrow(/category_labels_category_locale_key/);
+    });
+
+    // ── FK RESTRICT tests (item 9) ──
+
+    it('FK RESTRICT prevents deleting a category with resources', async () => {
+      // resourceId references catId via primary_category_id
+      await expect(
+        owner.pool.query(`DELETE FROM categories WHERE id = $1`, [catId]),
+      ).rejects.toThrow(/content_resources_primary_category_id_categories_id_fk/);
+    });
+
+    it('FK RESTRICT prevents deleting a media asset referenced by a revision', async () => {
+      // inv_media_1 is referenced by inv_crm_1 in content_revision_media
+      await expect(
+        owner.pool.query(`DELETE FROM media_assets WHERE id = 'inv_media_1'`),
+      ).rejects.toThrow(/content_revision_media_media_asset_id_media_assets_id_fk/);
+    });
+
+    // ── required_capability defaults and NOT NULL (item 9) ──
+
+    it('required_capability defaults to library when omitted', async () => {
+      await owner.pool.query(
+        `INSERT INTO content_publications (id, content_variant_id, content_revision_id, approval_hash, state, starts_at, published_by_user_id)
+         VALUES ('inv_pub_def', $1, 'inv_rev_1', 'hash', 'live', now(), $2)`,
+        [variantId, userId],
+      );
+      const { rows } = await owner.pool.query<{ cap: string }>(
+        `SELECT required_capability AS cap FROM content_publications WHERE id = 'inv_pub_def'`,
+      );
+      expect(rows[0]!.cap).toBe('library');
+    });
+
+    it('required_capability IS NOT NULL constraint', async () => {
+      await expect(
+        owner.pool.query(
+          `INSERT INTO content_publications (id, content_variant_id, content_revision_id, approval_hash, state, required_capability, starts_at, published_by_user_id)
+           VALUES ('inv_pub_null', $1, 'inv_rev_1', 'hash', 'live', NULL, now(), $2)`,
+          [variantId, userId],
+        ),
+      ).rejects.toThrow(/not-null|null value.*column.*required_capability/i);
+    });
+
+    // ── content_publications_window_check (item 8) ──
+
+    it('content_publications_window_check rejects ends_at <= starts_at', async () => {
+      await expect(
+        owner.pool.query(
+          `INSERT INTO content_publications (id, content_variant_id, content_revision_id, approval_hash, state, starts_at, ends_at, published_by_user_id)
+           VALUES ('inv_pub_win', $1, 'inv_rev_1', 'hash', 'scheduled', '2026-06-01', '2026-05-01', $2)`,
+          [variantId, userId],
+        ),
+      ).rejects.toThrow(/content_publications_window_check/);
+    });
+
+    // ── outbox_events_payload_object_check (item 8) ──
+
+    it('outbox_events_payload_object_check rejects non-object payload', async () => {
+      await expect(
+        owner.pool.query(
+          `INSERT INTO outbox_events (id, type, aggregate_type, aggregate_id, payload) VALUES ('inv_oe_arr', 'test', 'test', 'test', '[]')`,
+        ),
+      ).rejects.toThrow(/outbox_events_payload_object_check/);
+
+      await expect(
+        owner.pool.query(
+          `INSERT INTO outbox_events (id, type, aggregate_type, aggregate_id, payload) VALUES ('inv_oe_str', 'test', 'test', 'test', '"hello"')`,
+        ),
+      ).rejects.toThrow(/outbox_events_payload_object_check/);
+    });
+
+    // ── content_publication_audiences_kind_check (item 6) ──
+
+    describe('content_publication_audiences_kind_check', () => {
+      let pubId: string;
+
+      beforeAll(async () => {
+        pubId = 'inv_pub_aud';
+        await owner.pool.query(
+          `INSERT INTO content_publications (id, content_variant_id, content_revision_id, approval_hash, state, starts_at, published_by_user_id)
+           VALUES ($1, $2, 'inv_rev_1', 'hash', 'live', now(), $3)
+           ON CONFLICT (id) DO NOTHING`,
+          [pubId, variantId, userId],
+        );
+      });
+
+      it('all_eligible rejects non-null org_id', async () => {
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind, org_id)
+             VALUES ('inv_cpa_1', $1, 'all_eligible', 'some_org')`,
+            [pubId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+
+      it('all_eligible rejects non-null org_unit_id', async () => {
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind, org_unit_id)
+             VALUES ('inv_cpa_2', $1, 'all_eligible', 'some_unit')`,
+            [pubId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+
+      it('organization rejects null org_id', async () => {
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind)
+             VALUES ('inv_cpa_3', $1, 'organization')`,
+            [pubId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+
+      it('organization rejects non-null org_unit_id', async () => {
+        const orgId = 'inv_aud_org';
+        await owner.pool.query(`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Aud Org', 'aud-org') ON CONFLICT DO NOTHING`, [orgId]);
+        const ouId = 'inv_aud_ou';
+        await owner.pool.query(`INSERT INTO org_units (id, org_id, name, kind) VALUES ($1, $2, 'Aud OU', 'TEAM') ON CONFLICT DO NOTHING`, [ouId, orgId]);
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind, org_id, org_unit_id)
+             VALUES ('inv_cpa_4', $1, 'organization', $2, $3)`,
+            [pubId, orgId, ouId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+
+      it('org_unit rejects null org_id', async () => {
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind, org_unit_id)
+             VALUES ('inv_cpa_5', $1, 'org_unit', 'some_unit')`,
+            [pubId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+
+      it('org_unit rejects null org_unit_id', async () => {
+        const orgId = 'inv_aud_org2';
+        await owner.pool.query(`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Aud Org2', 'aud-org2') ON CONFLICT DO NOTHING`, [orgId]);
+        await expect(
+          owner.pool.query(
+            `INSERT INTO content_publication_audiences (id, publication_id, kind, org_id)
+             VALUES ('inv_cpa_6', $1, 'org_unit', $2)`,
+            [pubId, orgId],
+          ),
+        ).rejects.toThrow(/content_publication_audiences_kind_check/);
+      });
+    });
+
+    // ── Tenant consistency: composite FK rejects cross-org insert (item 7) ──
+
+    it('composite FK rejects saved_items with mismatched membership/org', async () => {
+      const orgX = 'inv_xorg_x';
+      const orgY = 'inv_xorg_y';
+      const membX = 'inv_xmemb_x';
+      await owner.pool.query(`INSERT INTO organizations (id, name, slug) VALUES ($1, 'X Org', 'x-org') ON CONFLICT DO NOTHING`, [orgX]);
+      await owner.pool.query(`INSERT INTO organizations (id, name, slug) VALUES ($1, 'Y Org', 'y-org') ON CONFLICT DO NOTHING`, [orgY]);
+      await owner.pool.query(
+        `INSERT INTO memberships (id, user_id, org_id, status, start_date) VALUES ($1, $2, $3, 'ACTIVE', '2026-01-01') ON CONFLICT DO NOTHING`,
+        [membX, userId, orgX],
+      );
+      // membership membX belongs to orgX; inserting with orgY should fail the composite FK
+      await expect(
+        owner.pool.query(
+          `INSERT INTO saved_items (id, user_id, membership_id, org_id, content_resource_id)
+           VALUES ('inv_si_xorg', $1, $2, $3, $4)`,
+          [userId, membX, orgY, resourceId],
+        ),
+      ).rejects.toThrow(/saved_items_membership_org_fk/);
+    });
   });
 
   // ── Seed tests ────────────────────────────────────────────────────────
@@ -508,7 +778,7 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
       }
     });
 
-    it('capability rows per organization are present', async () => {
+    it('capability rows per organization, configured by client-operations staff', async () => {
       await seed(owner.db);
 
       const caps = await owner.db
@@ -518,6 +788,9 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
         (c) => c.orgId === 'org_sample' && c.capability === 'library',
       );
       expect(sampleOrgCap).toBeDefined();
+      // configuredByUserId must be the client-operations staff (user_nikola
+      // holds service.configure), not the HR admin.
+      expect(sampleOrgCap!.configuredByUserId).toBe('user_nikola');
     });
 
     it('seed is idempotent (run twice, counts equal)', async () => {

@@ -30,11 +30,10 @@ import {
   reviewDiscipline,
 } from './enums.js';
 import { users } from './identity.js';
-import { organizations } from './organization.js';
+import { organizations, orgUnits } from './organization.js';
 import { categories } from './taxonomy.js';
 import { mediaAssets } from './media.js';
 import { createdAt, idColumn, textArray, ts, updatedAt } from './_shared.js';
-import { orgUnits } from './organization.js';
 
 /**
  * Language-independent identity of a content item [C-06].
@@ -168,6 +167,7 @@ export const contentRevisionMedia = pgTable(
       t.contentRevisionId,
       t.mediaAssetId,
     ),
+    index('content_revision_media_media_asset_id_idx').on(t.mediaAssetId),
   ],
 );
 
@@ -201,10 +201,15 @@ export const contentPublications = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    index('content_publications_variant_state_starts_idx').on(
-      t.contentVariantId, t.state, t.startsAt,
-    ),
+    index('content_publications_variant_active_idx')
+      .on(t.contentVariantId, sql`starts_at DESC`)
+      .where(sql`withdrawn_at IS NULL`),
     index('content_publications_state_idx').on(t.state),
+    index('content_publications_content_revision_id_idx').on(t.contentRevisionId),
+    check(
+      'content_publications_window_check',
+      sql`ends_at IS NULL OR ends_at > starts_at`,
+    ),
   ],
 );
 
@@ -224,5 +229,15 @@ export const contentPublicationAudiences = pgTable(
     orgUnitId: text().references(() => orgUnits.id, { onDelete: 'restrict' }),
     includeDescendants: boolean().notNull().default(true),
   },
-  (t) => [index('content_publication_audiences_pub_idx').on(t.publicationId)],
+  (t) => [
+    index('content_publication_audiences_pub_idx').on(t.publicationId),
+    index('content_publication_audiences_org_id_idx').on(t.orgId),
+    index('content_publication_audiences_org_unit_id_idx').on(t.orgUnitId),
+    check(
+      'content_publication_audiences_kind_check',
+      sql`(kind = 'all_eligible' AND org_id IS NULL AND org_unit_id IS NULL)
+       OR (kind = 'organization' AND org_id IS NOT NULL AND org_unit_id IS NULL)
+       OR (kind = 'org_unit' AND org_id IS NOT NULL AND org_unit_id IS NOT NULL)`,
+    ),
+  ],
 );
