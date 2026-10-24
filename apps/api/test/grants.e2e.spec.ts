@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { CONFIDENTIAL_ACTIONS, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
@@ -86,18 +86,6 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       grantedAt: new Date('2026-01-01'),
       validFrom: new Date('2026-01-01'),
     };
-    // Seed defect (reported with T-2.1): seed-lib matches templates whose
-    // legacyRole is null against a null platformRole, so every sample person
-    // also receives employer_owner, approver, employer_finance,
-    // reporting_user and event_supplier. Revoke jovan's extras so he is the
-    // plain employee the 403 case needs.
-    await testDb.db
-      .update(grants)
-      .set({ revokedAt: new Date(), revokedReason: 'test_fixture' })
-      .where(
-        and(eq(grants.subjectUserId, 'user_jovan'), ne(grants.templateKey, 'employee')),
-      );
-
     await testDb.db.insert(grants).values([
       { ...base, id: IVANA_EMPLOYER_OWNER, templateKey: employerOwner.key, actions: [...employerOwner.actions] },
       { ...base, id: IVANA_ACCESS_ADMIN, templateKey: null, actions: ['access.grant', 'access.revoke'] },

@@ -21,7 +21,7 @@ import {
   SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_CASE,
 } from '@nestself/sample-data';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
 import { buildClosureRows } from '../../org-units/closure.js';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
@@ -299,16 +299,7 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     // grants from their staff or expert template.
     if (!person.orgId && !platformRole) continue;
 
-    const matching = PERMISSION_TEMPLATES.filter(
-      (tmpl) => tmpl.legacyRole === legacyRole || tmpl.legacyRole === platformRole,
-    );
-    // Every org member also receives the employee template.
-    if (legacyRole && !matching.some((tmpl) => tmpl.key === 'employee')) {
-      const employee = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
-      if (employee) matching.push(employee);
-    }
-
-    for (const tmpl of matching) {
+    for (const tmpl of templatesForLegacyRoles(legacyRole, platformRole)) {
       const scope = resolveSampleScope(tmpl.scopeType, person.orgId ?? null, defaultTeamId);
       const conditions: unknown[] = [];
       if (tmpl.scopeType === 'assigned_cases' && tmpl.key === 'expert') {
@@ -407,6 +398,28 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   );
 
   return countAll(db);
+}
+
+/**
+ * The permission templates a legacy org role and platform role map to.
+ * Templates without a legacy role (employer_owner, approver, ...) are never
+ * derived: they are granted explicitly. Every org member also receives the
+ * employee template. Roles are matched case-insensitively.
+ */
+export function templatesForLegacyRoles(
+  orgRole: string | null,
+  platformRole: string | null,
+): PermissionTemplateDefinition[] {
+  const org = orgRole?.toUpperCase() ?? null;
+  const platform = platformRole?.toUpperCase() ?? null;
+  const matching = PERMISSION_TEMPLATES.filter(
+    (tmpl) => tmpl.legacyRole != null && (tmpl.legacyRole === org || tmpl.legacyRole === platform),
+  );
+  if (org && !matching.some((tmpl) => tmpl.key === 'employee')) {
+    const employee = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
+    if (employee) matching.push(employee);
+  }
+  return matching;
 }
 
 function resolveSampleScope(scopeType: string, orgId: string | null, defaultTeamId: string | null) {
