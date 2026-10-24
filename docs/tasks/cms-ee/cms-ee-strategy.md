@@ -3854,6 +3854,8 @@ These follow RFC 9110 [X-19] [FND-03].
 
 **MED-R-32** Captions for `sr-Cyrl` readers are produced on delivery: `GET /api/library/media/:assetId/captions_vtt` with an `sr-Cyrl` interface locale streams the `sr-Latn` WebVTT file with every cue's text passed through `transliterateText()` (cue timings and settings unchanged). Caption files are small (512 KB limit), so the transformation runs in memory per request; the response is `Cache-Control: private, no-store` like every other media response (C-28) [EMP-C04].
 
+**MED-R-33** Upload and delivery mechanics fixed in review: uploads are `multipart/form-data` parsed by `FileInterceptor` (multer from `@nestjs/platform-express`) with limits `{ files: 1, fields: 10, fieldSize: 4096, parts: 12, headerPairs: 50, fileSize: min(per-kind cap, MEDIA_MAX_UPLOAD_BYTES) }`; metadata travels as form fields before the file part and never in the query string (access logs record URLs); a custom storage engine streams into `quarantine/<id>/original` through a byte counter and a SHA-256 hash, the asset row is inserted first and both are removed on failure or client abort; the first bytes are sniffed during the request (415 `media_type_rejected`) and again in the worker; uploads require `Content-Digest: sha-256=:<base64>:` (RFC 9530), which the idempotency fingerprint includes and the storage engine verifies; processing claims the asset with a state-guarded update and finishes renditions and state in one transaction, ending in `rejected` with a code on any failure; `sharp` runs with `limitInputPixels` 40 MP, `failOn: 'error'` and a re-encoded original of at most 4,096 px; delivery is one shared helper built on `pipeline()` so read errors never crash the process and aborted clients release the source; the employee media check uses the reader's authored locale [FND-03, C-14].
+
 ### 8.10 CDK media stack
 
 **MED-R-25** A new CDK stack `NestSelf-{stage}-Media` is deployed only with `-c platform=true` (staging and production). It contains:
@@ -6214,7 +6216,7 @@ This section states the conventions every endpoint of the epic follows and index
 
 **RTE-R-04** Errors use the existing envelope `{ status, code, message, requestId, details? }` (`apps/api/src/common/api-error.ts`). Codes are those of Appendix B Part B plus the existing `validation`, `forbidden`, `not_found`, `conflict`, `invalid_context`, `context_mismatch`, `session_required`, `step_up_required`, `csrf_rejected`, `rate_limited`. A resource the caller may not know exists returns 404 (AUTHZ-R-61, ACC-R-22).
 
-**RTE-R-05** State-changing requests from the web apps carry the CSRF token (the global `CsrfGuard`); creation commands that a retry could duplicate (editorial request submission, question submission, clarification, reply, poll response, feedback, publication commands, media upload) carry `@Idempotent()` and accept an `Idempotency-Key` header (3.5 The `@Idempotent()` decorator).
+**RTE-R-05** State-changing requests from the web apps carry the CSRF token (the global `CsrfGuard`); creation commands that a retry could duplicate (editorial request submission, question submission, clarification, reply, poll response, feedback, publication commands, media upload) carry `@Idempotent()` and accept an `Idempotency-Key` header (3.5 The `@Idempotent()` decorator). Media uploads also require a `Content-Digest` header, which the fingerprint includes (MED-R-33); the fingerprint covers method, path, canonical query and canonical body.
 
 **RTE-R-06** Lists return `{ items, nextCursor }` with an opaque cursor over a stable order and a `limit` capped at 50 (default 20). Offsets are not used, so "Show more" never repeats or skips an item when content changes between pages.
 
@@ -6637,6 +6639,10 @@ Exit evidence: a professional answer without admin or HR leakage, and the comple
 | T-C4.09 | Acceptance scenario and negative cases | `e2e/content/acceptance.spec.ts`, API negative specs | The fifteen steps of epic 23.2 and the cases of epic 23.3 pass | all M4 tasks | L | OPS-C04 |
 | T-C4.10 | Runbooks and documentation | `docs/cms-ee/publication-runbook.md`, `docs/cms-ee/intake-runbook.md`, `docs/cms-ee/content-schema.md`, `docs/cms-ee/api-read-models.md`, retention job specification | Reviewed by the editorial lead and the intake owner | T-C4.09 | M | OPS-C04, epic 24.4 |
 | T-C4.11 | Performance and accessibility verification | k6 or Playwright load script, accessibility audit record | P95 below 500 ms for list and detail at 100 sessions on the pilot dataset; keyboard, focus, captions, zoom and reduced motion verified | T-C4.09 | M | epic 23.4 |
+| T-C4.12 | Frontend coverage audit | `docs/cms-ee/frontend-coverage.md`, missing screens | Every endpoint of 15 API surface and every requirement with user-facing behaviour maps to a working screen in `apps/workspace` or `apps/admin` (or is explicitly API-only, such as jobs and media delivery); gaps are built before close | T-C4.09 | M | OPS-C04 |
+| T-C4.13 | User manual PDF | `docs/cms-ee/manual/` (HTML on the PDF pipeline, `screenshots/` written by the Playwright journeys), `docs/cms-ee/manual/user-manual.pdf` | Per-role chapters (employee, author, reviewer, publisher, editorial lead, professional, HR) with real screenshots captured during the e2e runs in `sr-Latn` and one locale sample each; no overflow; fonts embedded | T-C4.12 | M | epic 24.4 |
+
+Screenshots: from T-C1.15 on, every Playwright journey in `e2e/content/` saves named screenshots of the steps it passes to `docs/cms-ee/manual/screenshots/<role>/<step>.png` (phone and desktop), so the manual of T-C4.13 is built from tested states.
 
 ### 18.6 Parallel work
 
@@ -7008,7 +7014,7 @@ Every backlog item of the epic (epic 21.1 to 21.7) with the requirements that sa
 |---|---|---|---|---|
 | FND-01 | M1 | As the platform, I distinguish editorial, personal, and restricted data. | ACC-R-27, ARC-R-01, ARC-R-04, DEM-R-18, INT-R-01, INT-R-03, INT-R-25, RET-R-01, TST-R-04, TST-R-05, TST-R-06 | T-C1.02, T-C1.04, T-C1.09, T-C3.04 |
 | FND-02 | M1 | As an owner, I assign content privileges through grants. | ACC-R-01, ACC-R-02, ACC-R-03, ACC-R-04, ACC-R-05, ACC-R-11, ACC-R-12, ACC-R-15, ACC-R-19, ACC-R-24, TST-R-01, TST-R-03, WRK-R-31 | T-C1.03 |
-| FND-03 | M1 | As an editor, I add media delivered only to its authorized audience. | ACC-R-17, FMT-R-01, FMT-R-07, FMT-R-19, FMT-R-20, MED-R-01, MED-R-02, MED-R-03, MED-R-05, MED-R-06, MED-R-07, MED-R-08, MED-R-10, MED-R-12, MED-R-13, MED-R-14, MED-R-15, MED-R-16, MED-R-17, MED-R-18, MED-R-20, MED-R-21, MED-R-22, MED-R-26, MED-R-27, MED-R-28, MED-R-29 | T-C1.08, T-C2.09 |
+| FND-03 | M1 | As an editor, I add media delivered only to its authorized audience. | ACC-R-17, FMT-R-01, FMT-R-07, FMT-R-19, FMT-R-20, MED-R-01, MED-R-02, MED-R-03, MED-R-05, MED-R-06, MED-R-07, MED-R-08, MED-R-10, MED-R-12, MED-R-13, MED-R-14, MED-R-15, MED-R-16, MED-R-17, MED-R-18, MED-R-20, MED-R-21, MED-R-22, MED-R-26, MED-R-27, MED-R-28, MED-R-29, MED-R-33 | T-C1.08, T-C2.09 |
 | FND-04 | M1 | As a development team, we have a stable content format and renderer. | ACC-R-14, ACC-R-16, ACC-R-21, MED-R-23, MED-R-24, MED-R-30 | T-C1.00, T-C1.05, T-C1.06 |
 | EDT-01 | M1 | As an author, I prepare and preview an article. | ACC-R-05, ACC-R-06, FMT-R-01, FMT-R-02, FMT-R-03, FMT-R-04, FMT-R-05, FMT-R-06, FMT-R-07, FMT-R-10, FMT-R-11, FMT-R-12, FMT-R-13, FMT-R-20, FMT-R-21, FMT-R-22, FMT-R-23, FMT-R-24, WRK-R-01, WRK-R-02, WRK-R-29, WRK-R-30, WRK-R-35 | T-C1.10, T-C1.12 |
 | EDT-02 | M2 | As a professional reviewer, I approve an exact revision. | ACC-R-07, ACC-R-08, FMT-R-08, FMT-R-09, WRK-R-01, WRK-R-03, WRK-R-04, WRK-R-05, WRK-R-06 | T-C2.01 |
@@ -7037,7 +7043,7 @@ Every backlog item of the epic (epic 21.1 to 21.7) with the requirements that sa
 | OPS-C01 | M4 | As a product owner, I measure usefulness and quality without exposing people. | NTF-R-11, NTF-R-17, NTF-R-18, NTF-R-22, POL-R-06, POL-R-25 | T-C4.04, T-C4.05 |
 | OPS-C02 | M3-M4 | As a user, I receive neutral updates about my request. | NTF-R-01, NTF-R-10, WRK-R-25, WRK-R-26, WRK-R-28, WRK-R-30 | T-C2.03, T-C3.08 |
 | OPS-C03 | M4 | As a user and platform, we control private state and retention. | LIB-R-30, POL-R-27, TST-R-08 | T-C4.06 |
-| OPS-C04 | M4 | As a release owner, I launch a complete flow the team can operate. | TST-R-09 | T-C4.09, T-C4.10 |
+| OPS-C04 | M4 | As a release owner, I launch a complete flow the team can operate. | TST-R-09 | T-C4.09, T-C4.10, T-C4.12 |
 
 
 ## Appendix D Sources
