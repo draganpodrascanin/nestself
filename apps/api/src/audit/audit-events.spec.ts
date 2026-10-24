@@ -42,6 +42,13 @@ describe('audit-events', () => {
     }
   });
 
+  it('grant.adjusted and emergency_access.revoked are catalogued as AUTHORIZATION', () => {
+    expect(AUDIT_ACTIONS).toContain('grant.adjusted');
+    expect(AUDIT_ACTIONS).toContain('emergency_access.revoked');
+    expect(categoryFor('grant.adjusted')).toBe('AUTHORIZATION');
+    expect(categoryFor('emergency_access.revoked')).toBe('AUTHORIZATION');
+  });
+
   it('content and export actions map to CONTENT_ACCESS', () => {
     for (const action of AUDIT_ACTIONS.filter(
       (a) => a.startsWith('content.') || a === 'export.generated',

@@ -4,7 +4,7 @@
  * authorization context need from Postgres.
  */
 import { Injectable } from '@nestjs/common';
-import { and, eq, gt, inArray, isNotNull, isNull, lte, notExists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, notExists, or, sql, type SQL } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import {
@@ -21,6 +21,13 @@ import {
 export type GrantRow = typeof grants.$inferSelect;
 export type AssignmentRow = typeof assignments.$inferSelect;
 export type EmergencyAccessRow = typeof emergencyAccess.$inferSelect;
+
+/** Who revoked a grant, when, and why; written to every revoked row. */
+export interface RevocationInput {
+  at: Date;
+  byUserId: string | null;
+  reason: string;
+}
 
 export interface OrgSettings {
   selfApprovalAllowed: boolean;
@@ -87,16 +94,156 @@ export class AuthorizationRepository {
       .where(and(inArray(grants.parentGrantId, parentGrantIds), isNull(grants.revokedAt)));
   }
 
+  /**
+   * Revoke the given grants that are still unrevoked. Returns the ids this
+   * call actually revoked (already-revoked rows are left untouched).
+   */
   async revokeGrants(
     grantIds: string[],
-    revoked: { at: Date; byUserId: string | null; reason: string },
+    revoked: RevocationInput,
     tx?: DbExecutor,
-  ): Promise<void> {
-    if (grantIds.length === 0) return;
-    await this.exec(tx)
+  ): Promise<string[]> {
+    if (grantIds.length === 0) return [];
+    const rows = await this.exec(tx)
       .update(grants)
       .set({ revokedAt: revoked.at, revokedByUserId: revoked.byUserId, revokedReason: revoked.reason })
-      .where(and(inArray(grants.id, grantIds), isNull(grants.revokedAt)));
+      .where(and(inArray(grants.id, grantIds), isNull(grants.revokedAt)))
+      .returning({ id: grants.id });
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Revoke the root grants and every unrevoked descendant delegated from
+   * them, all with the same revocation record. `roots` lists the roots this
+   * call revoked; `children` every descendant it revoked, breadth first.
+   * Run inside the root grants' tenant scope (`withOrgScope(orgId)`) or the
+   * system context; descendants of an org grant share its organization.
+   */
+  async revokeGrantTree(
+    rootIds: string[],
+    revoked: RevocationInput,
+    tx?: DbExecutor,
+  ): Promise<{ roots: string[]; children: string[] }> {
+    const roots = await this.revokeGrants(rootIds, revoked, tx);
+    const children: string[] = [];
+    // Revoked rows drop out of findActiveChildGrants, so the walk terminates
+    // even on a malformed (cyclic) parent chain.
+    let parents = rootIds;
+    while (parents.length > 0) {
+      const next = await this.findActiveChildGrants(parents, tx);
+      if (next.length === 0) break;
+      const revokedIds = await this.revokeGrants(
+        next.map((g) => g.id),
+        revoked,
+        tx,
+      );
+      children.push(...revokedIds);
+      parents = revokedIds;
+    }
+    return { roots, children };
+  }
+
+  // ── Grant administration (auth phase 2) ───────────────────────────────
+
+  /** One grant by id, or null when absent or hidden by the tenant scope. */
+  async findGrantById(id: string, tx?: DbExecutor): Promise<GrantRow | null> {
+    const [row] = await this.exec(tx).select().from(grants).where(eq(grants.id, id));
+    return row ?? null;
+  }
+
+  /**
+   * Grants scoped to one organization (`scope_org_id = orgId`), newest
+   * first; unrevoked only unless `includeRevoked`. Run inside
+   * `withOrgScope(orgId)`.
+   */
+  async listGrantsForOrg(
+    orgId: string,
+    filter: { subjectUserId?: string; includeRevoked?: boolean },
+    tx?: DbExecutor,
+  ): Promise<GrantRow[]> {
+    const where: SQL[] = [eq(grants.scopeOrgId, orgId)];
+    if (filter.subjectUserId) where.push(eq(grants.subjectUserId, filter.subjectUserId));
+    if (!filter.includeRevoked) where.push(isNull(grants.revokedAt));
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(...where))
+      .orderBy(desc(grants.grantedAt), desc(grants.id));
+  }
+
+  /**
+   * Platform-wide and own-scoped grants (`scope_org_id IS NULL`), newest
+   * first; unrevoked only unless `includeRevoked`. Visible in every scope;
+   * the system context is the natural caller.
+   */
+  async listPlatformGrants(filter: { includeRevoked?: boolean }, tx?: DbExecutor): Promise<GrantRow[]> {
+    const where: SQL[] = [isNull(grants.scopeOrgId)];
+    if (!filter.includeRevoked) where.push(isNull(grants.revokedAt));
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(...where))
+      .orderBy(desc(grants.grantedAt), desc(grants.id));
+  }
+
+  /**
+   * Adjust a grant's conditions or validity window; omitted fields are kept.
+   * Throws when the grant is absent or hidden by the tenant scope, so run it
+   * in the grant's scope (`withOrgScope(orgId)` for org grants).
+   */
+  async updateGrant(
+    id: string,
+    patch: { conditions?: unknown[]; validFrom?: Date; validUntil?: Date | null },
+    tx?: DbExecutor,
+  ): Promise<GrantRow> {
+    const set: Partial<typeof grants.$inferInsert> = {};
+    if (patch.conditions !== undefined) set.conditions = patch.conditions;
+    if (patch.validFrom !== undefined) set.validFrom = patch.validFrom;
+    if (patch.validUntil !== undefined) set.validUntil = patch.validUntil;
+    if (Object.keys(set).length === 0) {
+      const existing = await this.findGrantById(id, tx);
+      if (!existing) throw new Error(`Grant ${id} not found`);
+      return existing;
+    }
+    const [row] = await this.exec(tx).update(grants).set(set).where(eq(grants.id, id)).returning();
+    if (!row) throw new Error(`Grant ${id} not found`);
+    return row;
+  }
+
+  /**
+   * Number of `parent_grant_id` hops from the grant to its root (root = 0).
+   * Run in the grant's tenant scope; a parent hidden by the scope or deleted
+   * ends the chain.
+   */
+  async delegationDepth(grantId: string, tx?: DbExecutor): Promise<number> {
+    const result = await this.exec(tx).execute<{ depth: number }>(sql`
+      with recursive chain(id, parent_grant_id, depth) as (
+        select ${grants.id}, ${grants.parentGrantId}, 0
+        from ${grants} where ${grants.id} = ${grantId}
+        union all
+        select g.id, g.parent_grant_id, chain.depth + 1
+        from ${grants} as g join chain on g.id = chain.parent_grant_id
+        where chain.depth < 64
+      )
+      select coalesce(max(depth), 0)::int as depth from chain
+    `);
+    return Number(result.rows[0]?.depth ?? 0);
+  }
+
+  /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
+  async findActiveMembership(
+    userId: string,
+    orgId: string,
+    tx?: DbExecutor,
+  ): Promise<{ membershipId: string; orgUnitId: string | null } | null> {
+    const [row] = await this.exec(tx)
+      .select({ membershipId: memberships.id, orgUnitId: memberships.orgUnitId })
+      .from(memberships)
+      .where(
+        and(eq(memberships.userId, userId), eq(memberships.orgId, orgId), eq(memberships.status, 'ACTIVE')),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   // ── Nightly reconciliation (T-2.10, D-17) ─────────────────────────────
