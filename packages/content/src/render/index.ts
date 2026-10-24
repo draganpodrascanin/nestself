@@ -13,6 +13,7 @@ export type {
   ResolvedCta,
   RelatedResourceResolver,
   ResolvedRelatedResource,
+  InternalLinkResolver,
 } from './types.ts';
 
 export { isSafeHref, isInternalHref, extractContentId } from './safe-href.ts';

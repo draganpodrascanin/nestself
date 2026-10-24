@@ -17,6 +17,7 @@
  * `rel="noopener noreferrer"` and `target="_blank"`. We follow the
  * strategy document.
  */
+import { Accordion, AccordionItem } from '@nestself/ui';
 import { type ReactNode, useState, useRef, useEffect } from 'react';
 
 import { isSafeHref, isInternalHref } from './safe-href.ts';
@@ -24,6 +25,7 @@ import type {
   MediaUrlResolver,
   CtaResolver,
   RelatedResourceResolver,
+  InternalLinkResolver,
 } from './types.ts';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +36,7 @@ export interface BlockContext {
   mediaUrl: MediaUrlResolver;
   resolveCta: CtaResolver;
   resolveRelated: RelatedResourceResolver;
+  resolveInternalLink: InternalLinkResolver;
   headingOffset: number;
 }
 
@@ -63,7 +66,7 @@ function renderInlineNodes(
 
 function renderInlineNode(
   node: RawNode,
-  _ctx: BlockContext,
+  ctx: BlockContext,
   key: number,
 ): ReactNode {
   if (node.type === 'hardBreak') {
@@ -84,17 +87,21 @@ function renderInlineNode(
           const href = mark.attrs?.href as string | undefined;
           if (href && isSafeHref(href)) {
             if (isInternalHref(href)) {
-              // Internal links: resolve to /content/<id>
+              // Internal links: resolve via the app-provided resolver
               const contentId = href.slice('nestself:content/'.length);
-              content = (
-                <a
-                  key={`${key}-link`}
-                  href={`/content/${contentId}`}
-                  className="text-primary underline underline-offset-[0.2em] hover:text-primary-hover focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
-                >
-                  {content}
-                </a>
-              );
+              const resolved = ctx.resolveInternalLink(contentId);
+              if (resolved) {
+                content = (
+                  <a
+                    key={`${key}-link`}
+                    href={resolved}
+                    className="text-primary underline underline-offset-[0.2em] hover:text-primary-hover focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  >
+                    {content}
+                  </a>
+                );
+              }
+              // else: resolver returned null — render as plain text
             } else {
               // External links open in a new tab (FMT-R-17)
               content = (
@@ -436,28 +443,29 @@ function VideoPlayer({ src, caption }: { src: string; caption?: string | null })
 }
 
 /**
- * TranscriptPanel — a disclosure using <details>/<summary> (6.8.1).
+ * TranscriptPanel — a disclosure using the `@nestself/ui` Accordion (6.8.1).
  *
- * The Motion rule requires animated open/close for disclosures. We
- * use native <details> with CSS transitions on the panel content.
- * The `@base-ui/react` Accordion was considered, but using native
- * <details> is simpler and satisfies a11y (aria-expanded is implicit).
- *
- * Content is present in the DOM when collapsed (via CSS) so screen
- * readers can reach it and search engines index it.
+ * The Motion rule requires every disclosure to use the repository's
+ * Motion-backed primitives. The Accordion from `@nestself/ui` uses Base
+ * UI's Accordion underneath, which transitions height from
+ * `--accordion-panel-height` with `data-starting-style`/`data-ending-style`
+ * on the tokens and includes `motion-reduce:transition-none` for
+ * reduced-motion. The panel content is kept mounted (`keepMounted`) so it
+ * remains reachable by assistive technology and in-page search when
+ * collapsed; Base UI manages `aria-expanded` on the trigger.
  */
 function TranscriptPanel({ node, ctx }: { node: RawNode; ctx: BlockContext }) {
+  const mediaAssetId = (node.attrs?.mediaAssetId as string) ?? 'transcript';
   return (
-    <details className="mb-4 border border-border-subtle rounded-lg">
-      <summary className="cursor-pointer px-4 py-3 text-text type-label select-none focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus">
-        Transcript
-      </summary>
-      <div className="px-4 pb-4 text-text-secondary type-body">
-        {node.content?.map((child, i) => (
-          <ContentParagraph key={i} node={child} ctx={ctx} />
-        ))}
-      </div>
-    </details>
+    <Accordion className="mb-4 border border-border-subtle rounded-lg">
+      <AccordionItem value={`transcript-${mediaAssetId}`} title="Transcript" keepMounted>
+        <div className="text-text-secondary type-body">
+          {node.content?.map((child, i) => (
+            <ContentParagraph key={i} node={child} ctx={ctx} />
+          ))}
+        </div>
+      </AccordionItem>
+    </Accordion>
   );
 }
 

@@ -52,6 +52,16 @@ export interface ResolvedRelatedResource {
 export type RelatedResourceResolver = (id: string) => ResolvedRelatedResource | null;
 
 /**
+ * Resolves a `nestself:content/<id>` internal link to an app-specific
+ * navigation path, or returns null when the target is unavailable
+ * (the link renders as plain text in that case).
+ *
+ * The workspace app maps to `/content/<id>`, the admin preview to
+ * `/admin/content/<id>/preview`, etc.
+ */
+export type InternalLinkResolver = (contentResourceId: string) => string | null;
+
+/**
  * Props for the ContentRenderer.
  */
 export interface ContentRendererProps {
@@ -67,6 +77,11 @@ export interface ContentRendererProps {
   resolveCta: CtaResolver;
   /** Resolves a related resource id to display data or null. */
   resolveRelated: RelatedResourceResolver;
+  /**
+   * Resolves an internal `nestself:content/<id>` link to an app path.
+   * Returns null when the target is unavailable (renders plain text).
+   */
+  resolveInternalLink: InternalLinkResolver;
   /**
    * Offset heading levels so the page title can be h1.
    * Default 0: sectionHeading level 2 renders as h2.

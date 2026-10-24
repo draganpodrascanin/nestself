@@ -10,6 +10,7 @@
  * - mediaUrl: resolves asset id + rendition to a delivery URL
  * - resolveCta: resolves a CTA to a rendered action or null
  * - resolveRelated: resolves a related resource id or null
+ * - resolveInternalLink: resolves nestself:content/<id> to an app path
  * - headingOffset: shifts heading levels (default 0)
  */
 import { BlockNode, type BlockContext } from './blocks.tsx';
@@ -27,12 +28,14 @@ export function ContentRenderer({
   mediaUrl,
   resolveCta,
   resolveRelated,
+  resolveInternalLink,
   headingOffset = 0,
 }: ContentRendererProps) {
   const ctx: BlockContext = {
     mediaUrl,
     resolveCta,
     resolveRelated,
+    resolveInternalLink,
     headingOffset,
   };
 

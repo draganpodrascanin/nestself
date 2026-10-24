@@ -31,6 +31,9 @@ const resolveRelated: ContentRendererProps['resolveRelated'] = (id) => ({
   description: 'A related content resource.',
 });
 
+const resolveInternalLink: ContentRendererProps['resolveInternalLink'] = (id) =>
+  `/content/${id}`;
+
 // ---------------------------------------------------------------------------
 // Sample document with every block type
 // ---------------------------------------------------------------------------
@@ -211,6 +214,7 @@ export const AllBlocks: StoryObj = {
         mediaUrl={mediaUrl}
         resolveCta={resolveCta}
         resolveRelated={resolveRelated}
+        resolveInternalLink={resolveInternalLink}
       />
     </div>
   ),
@@ -225,6 +229,7 @@ export const WithHeadingOffset: StoryObj = {
         mediaUrl={mediaUrl}
         resolveCta={resolveCta}
         resolveRelated={resolveRelated}
+        resolveInternalLink={resolveInternalLink}
         headingOffset={1}
       />
     </div>
@@ -241,6 +246,7 @@ export const CyrillicDocument: StoryObj = {
           mediaUrl={mediaUrl}
           resolveCta={resolveCta}
           resolveRelated={resolveRelated}
+          resolveInternalLink={resolveInternalLink}
         />
       </div>
     );
@@ -259,6 +265,7 @@ export const DarkMode: StoryObj = {
           mediaUrl={mediaUrl}
           resolveCta={resolveCta}
           resolveRelated={resolveRelated}
+          resolveInternalLink={resolveInternalLink}
         />
       </div>
     </div>
@@ -279,6 +286,7 @@ export const MinimalDocument: StoryObj = {
         mediaUrl={mediaUrl}
         resolveCta={resolveCta}
         resolveRelated={resolveRelated}
+        resolveInternalLink={resolveInternalLink}
       />
     </div>
   ),

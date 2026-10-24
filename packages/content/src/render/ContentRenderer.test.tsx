@@ -1,19 +1,11 @@
 /**
  * Tests for ContentRenderer and block components (T-C1.06).
  *
- * Uses renderToStaticMarkup from react-dom/server so tests run in
- * the node environment without @testing-library/react or jsdom.
- * The tests parse the HTML string to assert structure, attributes
- * and accessibility. Interactive tests (checklist state) need
- * @testing-library/react + jsdom and are marked as such.
- *
- * Missing dev dependencies for interactive tests:
- * - @testing-library/react (catalog:)
- * - @testing-library/jest-dom (catalog:)
- * - @testing-library/user-event (catalog:)
- *
- * axe-core is not available in this package; accessibility is tested
- * through role-based assertions here and the Storybook a11y addon.
+ * Uses renderToStaticMarkup from react-dom/server for structural tests
+ * (element types, attributes, marks, XSS safety). Interactive tests
+ * (checklist, media, transcript keyboard) are in the companion
+ * ContentRenderer.interactive.test.tsx which runs under jsdom with
+ * @testing-library/react.
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -57,6 +49,11 @@ const mockResolveRelated: ContentRendererProps['resolveRelated'] = (id) => {
   };
 };
 
+const mockResolveInternalLink: ContentRendererProps['resolveInternalLink'] = (id) => {
+  if (id === 'unavailable-link') return null;
+  return `/content/${id}`;
+};
+
 function render(document: ContentDocument, headingOffset = 0): string {
   return renderToStaticMarkup(
     <ContentRenderer
@@ -64,6 +61,7 @@ function render(document: ContentDocument, headingOffset = 0): string {
       mediaUrl={mockMediaUrl}
       resolveCta={mockResolveCta}
       resolveRelated={mockResolveRelated}
+      resolveInternalLink={mockResolveInternalLink}
       headingOffset={headingOffset}
     />,
   );
@@ -469,7 +467,7 @@ describe('ContentRenderer — approvedMedia', () => {
 // ---------------------------------------------------------------------------
 
 describe('ContentRenderer — transcript', () => {
-  it('renders as <details> with <summary>', () => {
+  it('renders transcript text and the "Transcript" trigger label', () => {
     const html = render(doc([
       {
         type: 'approvedMedia',
@@ -481,8 +479,7 @@ describe('ContentRenderer — transcript', () => {
         content: [paragraph('This is the transcript')],
       },
     ]));
-    expect(html).toContain('<details');
-    expect(html).toContain('<summary');
+    // The Accordion renders a button trigger with the title
     expect(html).toContain('Transcript');
     expect(html).toContain('This is the transcript');
   });
@@ -729,7 +726,7 @@ describe('ContentRenderer — full document', () => {
     expect(html).toContain('<section');
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('<audio');
-    expect(html).toContain('<details');
+    expect(html).toContain('Transcript');
     expect(html).toContain('Resource res-1');
     expect(html).toContain('Read more');
   });
