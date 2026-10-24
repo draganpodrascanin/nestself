@@ -7,6 +7,10 @@
  * PUT    /api/ops/cms/media/:assetId        — update (media.manage)
  * DELETE /api/ops/cms/media/:assetId        — delete (media.manage)
  * GET    /api/ops/cms/media/:assetId/:rendition — preview (content.preview)
+ *
+ * C2: Upload uses FileInterceptor (multer) for real multipart streaming.
+ *     JSON-body mode is kept for e2e test convenience.
+ * C3: Delivery uses deliverRendition() for pipeline-based streaming.
  */
 import {
   Body,
@@ -21,12 +25,15 @@ import {
   Query,
   Req,
   Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import type { Readable } from 'node:stream';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ACTIONS,
   MediaAssetUpdateSchema,
   MediaListQuerySchema,
+  MediaRenditionKindSchema,
   type MediaAssetUpdate,
   type MediaListQuery,
   type Principal,
@@ -46,7 +53,7 @@ import { MediaService } from './media.service.js';
 import { CmsScopeService } from '../authz/cms-scope.service.js';
 import { Inject } from '@nestjs/common';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage.js';
-import { parseRangeHeader, resolveRange } from './range-parser.js';
+import { deliverRendition, type DeliverReq, type DeliverRes } from './deliver-rendition.js';
 
 /** Minimal request shape (avoids `@types/express`). */
 interface HttpReq {
@@ -60,6 +67,7 @@ interface HttpRes {
   setHeader(name: string, value: string | number): void;
   status(code: number): HttpRes;
   end(): void;
+  on(event: string, listener: (...args: unknown[]) => void): void;
 }
 
 /** Route-parameter id extractor for `operationsResource`. */
@@ -78,7 +86,9 @@ function uploadCategoryResolver(type: string): ResourceResolver {
     assertOperationsSession(principal);
     const body = (req as { body?: Record<string, unknown> }).body;
     const query = (req as { query?: Record<string, unknown> }).query;
-    const catId = (body?.ownerCategoryId ?? query?.ownerCategoryId) as string | undefined;
+    // Take the first value if query param is an array (reject duplicate params)
+    let catId = (body?.ownerCategoryId ?? query?.ownerCategoryId) as string | string[] | undefined;
+    if (Array.isArray(catId)) catId = catId[0];
     if (catId) return { type, collectionId: catId };
     // Without a category, return type-only so the guard can check the action exists
     return { type };
@@ -95,27 +105,34 @@ export class MediaOpsController {
   ) {}
 
   /**
-   * Upload a media file (streaming multipart).
+   * Upload a media file.
    *
-   * The body is consumed as raw bytes because Nest's JSON body parser must not
-   * buffer the file. We read it manually from the request stream. The metadata
-   * fields are passed as query parameters since the file occupies the body.
+   * Supports two modes:
+   * 1. Multipart form-data (Content-Type: multipart/form-data):
+   *    File field "file", metadata in query params.
+   * 2. JSON body (for e2e tests): file as base64 string in "file" field,
+   *    metadata inline.
    */
   @Post()
   @Authorize(ACTIONS['media.upload'], uploadCategoryResolver('media_asset'))
   @Idempotent('media.upload', { inFlightTtlSeconds: 900 })
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      // Hard cap — the kind-specific limit is checked after.
+      fileSize: 300 * 1024 * 1024, // 300 MB (largest kind: video)
+    },
+  }))
   async upload(
     @Req() req: HttpReq & AsyncIterable<Buffer>,
+    @UploadedFile() uploadedFile: { buffer: Buffer; mimetype: string; originalname: string } | undefined,
     @CurrentPrincipal() principal: Principal,
   ) {
-    // Parse metadata from query params (multipart metadata fields)
-    const rawMetadata = req.query;
-    // Also accept metadata from body if it's a JSON body (for e2e testing simplicity)
+    // Parse metadata from query params (multipart) or body (JSON)
     const contentType = (req.headers['content-type'] ?? '') as string;
     const metadataSource = contentType.startsWith('multipart')
-      ? rawMetadata
-      : (req.body ?? rawMetadata);
+      ? req.query
+      : (req.body ?? req.query);
 
     const metadata = MediaUploadMetadataSchema.parse(metadataSource);
 
@@ -129,22 +146,18 @@ export class MediaOpsController {
       });
     }
 
-    // Read file from body
-    // For multipart, we just consume the body as-is since no multipart library is installed
-    // For JSON test mode, the file is expected as a base64 `file` field
+    // Get file buffer
     let fileBuffer: Buffer;
     let originalFilename = 'upload';
     let mimeType = 'application/octet-stream';
 
-    if (contentType.startsWith('multipart')) {
-      // Consume raw body as the file
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-      }
-      fileBuffer = Buffer.concat(chunks);
-    } else {
-      // JSON mode: file as base64, or raw buffer on req
+    if (uploadedFile) {
+      // Multipart upload via FileInterceptor/multer (C2)
+      fileBuffer = uploadedFile.buffer;
+      originalFilename = uploadedFile.originalname || 'upload';
+      mimeType = uploadedFile.mimetype || 'application/octet-stream';
+    } else if (!contentType.startsWith('multipart')) {
+      // JSON mode: file as base64
       const body = req.body;
       if (body?.file && typeof body.file === 'string') {
         fileBuffer = Buffer.from(body.file, 'base64');
@@ -163,9 +176,16 @@ export class MediaOpsController {
       if (typeof body?.mimeType === 'string') {
         mimeType = body.mimeType;
       }
+    } else {
+      // Multipart but multer didn't find a file
+      throw new ApiHttpException({
+        status: 400,
+        code: 'validation',
+        message: 'No file provided in multipart request (expected field name "file")',
+      });
     }
 
-    // Size cap before processing
+    // Size cap before processing (413)
     const maxBytes = MEDIA_KIND_MAX_BYTES[metadata.kind];
     if (fileBuffer.length > maxBytes) {
       throw new ApiHttpException({
@@ -240,8 +260,9 @@ export class MediaOpsController {
   async update(
     @Param('assetId') assetId: string,
     @Body(new ZodValidationPipe(MediaAssetUpdateSchema)) body: MediaAssetUpdate,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    const result = await this.mediaService.updateAsset(assetId, body);
+    const result = await this.mediaService.updateAsset(assetId, body, principal);
     if (!result) {
       throw new ApiHttpException({
         status: 404,
@@ -255,8 +276,11 @@ export class MediaOpsController {
   @Delete(':assetId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Authorize(ACTIONS['media.manage'], operationsResource('media_asset', assetIdFromParam))
-  async deleteAsset(@Param('assetId') assetId: string) {
-    await this.mediaService.deleteAsset(assetId);
+  async deleteAsset(
+    @Param('assetId') assetId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    await this.mediaService.deleteAsset(assetId, principal);
   }
 
   @Get(':assetId/:rendition')
@@ -267,6 +291,16 @@ export class MediaOpsController {
     @Req() req: HttpReq,
     @Res() res: HttpRes,
   ) {
+    // I7: Validate rendition kind against the enum
+    const renditionParsed = MediaRenditionKindSchema.safeParse(renditionKind);
+    if (!renditionParsed.success) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Invalid rendition kind',
+      });
+    }
+
     // Only ready assets can be previewed by staff
     const asset = await this.mediaService.getAsset(assetId);
     if (!asset || asset.state !== 'ready') {
@@ -286,73 +320,17 @@ export class MediaOpsController {
       });
     }
 
-    await this.streamRendition(rendition, req, res, false);
-  }
-
-  /**
-   * Stream a rendition with Range support.
-   */
-  private async streamRendition(
-    rendition: { storageKey: string; mimeType: string; byteSize: number },
-    req: HttpReq,
-    res: HttpRes,
-    isPdf: boolean,
-  ): Promise<void> {
-    const rangeHeader = req.headers['range'] as string | undefined;
-    const parsed = parseRangeHeader(rangeHeader);
-
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Content-Type', rendition.mimeType);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'private, no-store');
-
-    // Card/cover renditions get short cache
-    if (rendition.storageKey.includes('/card_')) {
-      res.setHeader('Cache-Control', 'private, max-age=300');
-    }
-
-    if (isPdf) {
-      res.setHeader('Content-Disposition', 'attachment; filename="resource.pdf"');
-      res.setHeader('Content-Security-Policy', 'sandbox');
-    }
-
-    if (parsed.type === 'none' || parsed.type === 'multiple') {
-      // Full response
-      const { stream, contentLength } = await this.storage.get(rendition.storageKey);
-      res.setHeader('Content-Length', String(contentLength));
-      res.status(200);
-      (stream as Readable).pipe(res as unknown as NodeJS.WritableStream);
-      return;
-    }
-
-    if (parsed.type === 'invalid') {
-      const totalSize = rendition.byteSize;
-      res.setHeader('Content-Range', `bytes */${totalSize}`);
-      res.status(416).end();
-      return;
-    }
-
-    // Resolve the range against the total size
-    const headResult = await this.storage.head(rendition.storageKey);
-    const totalSize = headResult.contentLength;
-    const byteRange = resolveRange(parsed, totalSize);
-
-    if (!byteRange) {
-      res.setHeader('Content-Range', `bytes */${totalSize}`);
-      res.status(416).end();
-      return;
-    }
-
-    const { stream, contentLength, contentRange } = await this.storage.get(
-      rendition.storageKey,
-      byteRange,
+    // Stream using the shared delivery helper (C3)
+    await deliverRendition(
+      this.storage,
+      {
+        storageKey: rendition.storageKey,
+        mimeType: rendition.mimeType,
+        byteSize: rendition.byteSize,
+        kind: rendition.kind,
+      },
+      req as DeliverReq,
+      res as DeliverRes,
     );
-
-    res.setHeader('Content-Length', String(contentLength));
-    if (contentRange) {
-      res.setHeader('Content-Range', contentRange);
-    }
-    res.status(206);
-    (stream as Readable).pipe(res as unknown as NodeJS.WritableStream);
   }
 }

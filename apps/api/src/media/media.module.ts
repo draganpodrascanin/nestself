@@ -30,15 +30,21 @@ export class MediaModule {
         {
           provide: MEDIA_STORAGE,
           inject: [ConfigService],
-          useFactory: (config: ConfigService): MediaStorage => {
+          useFactory: async (config: ConfigService): Promise<MediaStorage> => {
             const mode = config.get<string>('MEDIA_STORAGE') ?? 'local';
             const nodeEnv = config.get<string>('NODE_ENV') ?? 'development';
 
             if (mode === 's3') {
               // S3 driver: deferred to T-C2.09
-              // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy load to avoid bundling unused S3 deps
-              const mod = require('./storage/s3-media-storage.js') as { S3MediaStorage: new () => MediaStorage };
-              return new mod.S3MediaStorage();
+              const bucket = config.get<string>('MEDIA_BUCKET');
+              if (!bucket) {
+                throw new Error(
+                  'MEDIA_BUCKET is required when MEDIA_STORAGE=s3',
+                );
+              }
+              // Dynamic import instead of require() (ESM-compatible)
+              const { S3MediaStorage } = await import('./storage/s3-media-storage.js');
+              return new S3MediaStorage();
             }
 
             if (mode === 'local' && nodeEnv === 'production') {

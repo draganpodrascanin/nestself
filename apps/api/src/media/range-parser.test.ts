@@ -29,8 +29,8 @@ describe('parseRangeHeader', () => {
     expect(parseRangeHeader('bytes=500-0')).toEqual({ type: 'invalid' });
   });
 
-  it('returns invalid for non-bytes unit', () => {
-    expect(parseRangeHeader('chars=0-10')).toEqual({ type: 'invalid' });
+  it('returns unknown_unit for non-bytes unit (M11)', () => {
+    expect(parseRangeHeader('chars=0-10')).toEqual({ type: 'unknown_unit' });
   });
 
   it('returns multiple for multi-range', () => {
@@ -43,6 +43,45 @@ describe('parseRangeHeader', () => {
 
   it('returns invalid for garbage', () => {
     expect(parseRangeHeader('bytes=abc')).toEqual({ type: 'invalid' });
+  });
+
+  // ── New tests from security review (M11) ──
+
+  it('case-insensitive: Bytes=0-1 → range', () => {
+    expect(parseRangeHeader('Bytes=0-1')).toEqual({ type: 'range', start: 0, end: 1 });
+  });
+
+  it('case-insensitive: BYTES=10-20 → range', () => {
+    expect(parseRangeHeader('BYTES=10-20')).toEqual({ type: 'range', start: 10, end: 20 });
+  });
+
+  it('unknown unit pages=1-5 → unknown_unit', () => {
+    expect(parseRangeHeader('pages=1-5')).toEqual({ type: 'unknown_unit' });
+  });
+
+  it('hex values bytes=0x10-20 → invalid', () => {
+    expect(parseRangeHeader('bytes=0x10-20')).toEqual({ type: 'invalid' });
+  });
+
+  it('scientific notation bytes=1e3-2000 → invalid', () => {
+    expect(parseRangeHeader('bytes=1e3-2000')).toEqual({ type: 'invalid' });
+  });
+
+  it('whitespace inside range spec bytes=0 -1 → invalid', () => {
+    expect(parseRangeHeader('bytes=0 -1')).toEqual({ type: 'invalid' });
+  });
+
+  it('leading zeros bytes=00001-2 → valid range', () => {
+    // Leading zeros are valid decimal; parseInt handles them
+    expect(parseRangeHeader('bytes=00001-2')).toEqual({ type: 'range', start: 1, end: 2 });
+  });
+
+  it('bare hyphen bytes=- → invalid', () => {
+    expect(parseRangeHeader('bytes=-')).toEqual({ type: 'invalid' });
+  });
+
+  it('overflow number → invalid', () => {
+    expect(parseRangeHeader('bytes=99999999999999999999-')).toEqual({ type: 'invalid' });
   });
 });
 
@@ -74,5 +113,14 @@ describe('resolveRange', () => {
 
   it('returns null for none type', () => {
     expect(resolveRange({ type: 'none' }, 100)).toBeNull();
+  });
+
+  it('suffix range on zero-length file → null (M11)', () => {
+    const parsed = parseRangeHeader('bytes=-50');
+    expect(resolveRange(parsed, 0)).toBeNull();
+  });
+
+  it('unknown_unit → null (delivered as 200 full by controller)', () => {
+    expect(resolveRange({ type: 'unknown_unit' }, 100)).toBeNull();
   });
 });

@@ -2,10 +2,13 @@
  * LocalMediaStorage — filesystem-backed storage driver (MED-R-01, MED-R-26).
  *
  * Stores files under MEDIA_LOCAL_DIR. Refused when NODE_ENV=production.
+ *
+ * Key pattern: `^(quarantine|assets)/[0-9a-f-]{36}/[a-z0-9_]+$`
+ * Any key that does not match is rejected before touching the filesystem.
  */
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, stat, unlink, access } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, stat, unlink, access, writeFile, readFile } from 'node:fs/promises';
+import { dirname, resolve, relative } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
 import type {
@@ -16,11 +19,33 @@ import type {
   ByteRange,
 } from './media-storage.js';
 
+/** Only these key shapes are allowed — prevents traversal and injection. */
+const SAFE_KEY_PATTERN = /^(quarantine|assets)\/[0-9a-f-]{36}\/[a-z0-9_]+$/;
+
+function assertSafeKey(key: string): void {
+  if (!SAFE_KEY_PATTERN.test(key)) {
+    throw new Error(`Invalid storage key: ${key}`);
+  }
+  // Double-check: resolved path must stay inside baseDir (defence in depth).
+  // The caller passes baseDir to filePath() which also checks.
+}
+
 export class LocalMediaStorage implements MediaStorage {
-  constructor(private readonly baseDir: string) {}
+  private readonly resolvedBase: string;
+
+  constructor(private readonly baseDir: string) {
+    this.resolvedBase = resolve(baseDir);
+  }
 
   private filePath(key: string): string {
-    return join(this.baseDir, key);
+    assertSafeKey(key);
+    const fp = resolve(this.resolvedBase, key);
+    // Defence-in-depth: even after the regex, verify containment
+    const rel = relative(this.resolvedBase, fp);
+    if (rel.startsWith('..') || resolve(this.resolvedBase, rel) !== fp) {
+      throw new Error(`Storage key escapes base directory: ${key}`);
+    }
+    return fp;
   }
 
   async put(key: string, stream: Readable, opts: PutOptions): Promise<void> {
@@ -34,7 +59,6 @@ export class LocalMediaStorage implements MediaStorage {
       contentType: opts.contentType,
       contentLength: opts.contentLength,
     });
-    const { writeFile } = await import('node:fs/promises');
     await writeFile(metaPath, meta, 'utf-8');
   }
 
@@ -102,7 +126,6 @@ export class LocalMediaStorage implements MediaStorage {
   private async readMeta(filePath: string): Promise<{ contentType: string; contentLength: number }> {
     const metaPath = filePath + '.meta';
     try {
-      const { readFile } = await import('node:fs/promises');
       const raw = await readFile(metaPath, 'utf-8');
       return JSON.parse(raw);
     } catch {

@@ -1,7 +1,14 @@
 /**
  * Media job processor — runs on the `nestself-media` queue (8.4).
  *
- * Concurrency 2, worker process only.
+ * Concurrency 2, worker process only. The API process only enqueues.
+ *
+ * C1 fixes:
+ * - No inline fallback when Redis is absent (upload returns 'uploaded', the
+ *   queue processes later).
+ * - Shared BullMQ connection: one connection for the queue, one for the worker.
+ * - Job options: attempts 3, exponential 60 s, keep 30 completed / 100 failed
+ *   (ARC-R-14).
  */
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -20,7 +27,8 @@ export interface MediaJobData {
 @Injectable()
 export class MediaJobProcessor implements OnModuleDestroy {
   private readonly logger = new Logger(MediaJobProcessor.name);
-  private connection: Redis | null = null;
+  private workerConnection: Redis | null = null;
+  private queueConnection: Redis | null = null;
   private queue: Queue | null = null;
   private worker: Worker | null = null;
 
@@ -40,16 +48,14 @@ export class MediaJobProcessor implements OnModuleDestroy {
       return false;
     }
 
-    this.connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
-    this.queue = new Queue(MEDIA_QUEUE, { connection: this.connection });
-
+    this.workerConnection = new Redis(redisUrl, { maxRetriesPerRequest: null });
     this.worker = new Worker(
       MEDIA_QUEUE,
       async (job: Job<MediaJobData>) => {
         this.logger.log(`Processing media asset: ${job.data.assetId}`);
         return this.mediaService.processAsset(job.data.assetId);
       },
-      { connection: this.connection, concurrency: 2 },
+      { connection: this.workerConnection, concurrency: 2 },
     );
 
     this.worker.on('completed', (job) =>
@@ -65,36 +71,41 @@ export class MediaJobProcessor implements OnModuleDestroy {
 
   /**
    * Enqueue a processing job. Used by the upload endpoint.
+   *
+   * When REDIS_URL is absent (test/dev without Redis), does nothing.
+   * The asset stays in 'uploaded' state until a worker picks it up or
+   * processAsset() is called directly in tests.
    */
   async enqueue(assetId: string): Promise<void> {
     const redisUrl = this.config.get<string>('REDIS_URL');
     if (!redisUrl) {
-      // In development/test without Redis, process inline
-      this.logger.warn(`No Redis; processing asset ${assetId} inline`);
-      await this.mediaService.processAsset(assetId);
+      // No Redis available — skip enqueue. The asset stays in 'uploaded'.
+      this.logger.debug(`No Redis; skipping enqueue for asset ${assetId}`);
       return;
     }
 
     if (!this.queue) {
       // API process: create a queue connection for enqueuing only
-      const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
-      this.queue = new Queue(MEDIA_QUEUE, { connection });
+      this.queueConnection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+      this.queue = new Queue(MEDIA_QUEUE, { connection: this.queueConnection });
     }
 
     await this.queue.add('process', { assetId } satisfies MediaJobData, {
-      removeOnComplete: { count: 50 },
+      removeOnComplete: { count: 30 },
       removeOnFail: { count: 100 },
       attempts: 3,
-      backoff: { type: 'exponential', delay: 10_000 },
+      backoff: { type: 'exponential', delay: 60_000 },
     });
   }
 
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close().catch(() => {});
     await this.queue?.close().catch(() => {});
-    this.connection?.disconnect();
+    this.workerConnection?.disconnect();
+    this.queueConnection?.disconnect();
     this.worker = null;
     this.queue = null;
-    this.connection = null;
+    this.workerConnection = null;
+    this.queueConnection = null;
   }
 }

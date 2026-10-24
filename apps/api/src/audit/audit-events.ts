@@ -63,6 +63,8 @@ export const AUDIT_ACTIONS = [
   'data.erasure.requested',
   'media.uploaded',
   'media.rejected',
+  'media.updated',
+  'media.deleted',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

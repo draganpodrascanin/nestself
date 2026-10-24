@@ -174,7 +174,8 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
       expect(res.body.state).toBe('uploaded');
 
       // Process the asset
-      await mediaService.processAsset(res.body.assetId);
+      const processResult = await mediaService.processAsset(res.body.assetId);
+      expect(processResult).not.toBeNull();
 
       // Verify it is now ready
       const detail = await mediaService.getDetail(res.body.assetId);
@@ -202,7 +203,8 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
       expect(res.status).toBe(201);
 
       // Process the asset — it should be rejected
-      await mediaService.processAsset(res.body.assetId);
+      const processResult = await mediaService.processAsset(res.body.assetId);
+      expect(processResult).not.toBeNull();
 
       const detail = await mediaService.getDetail(res.body.assetId);
       expect(detail).not.toBeNull();
@@ -1050,6 +1052,209 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
       } finally {
         process.env.NODE_ENV = origEnv;
       }
+    });
+
+    // ── 11. Invalid rendition kind → 404 (I7) ──
+
+    it('11. invalid rendition kind → 404', async () => {
+      const res = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/nonexistent_rendition`)
+        .set('x-csrf-token', jovanSession.csrf);
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('content_not_available');
+    });
+
+    // ── 12. Case-insensitive Range unit, unknown unit → 200 (M11) ──
+
+    it('12a. case-insensitive bytes unit: Bytes=0-99 → 206', async () => {
+      const res = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/original`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('Range', 'Bytes=0-99')
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+
+      expect(res.status).toBe(206);
+      expect((res.body as Buffer).length).toBe(100);
+    });
+
+    it('12b. unknown range unit → 200 full response', async () => {
+      const res = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/original`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('Range', 'pages=1-5')
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).length).toBe(originalRenditionSize);
+    });
+
+    it('12c. bytes=-0 → 416', async () => {
+      const res = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/original`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('Range', 'bytes=-0');
+
+      expect(res.status).toBe(416);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Security review: processing hardening (I2, I3), empty PUT, delete states
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('processing hardening', () => {
+    it('double-processing of same asset is a no-op (I2)', async () => {
+      const { agent, csrf } = await signInOps(KATARINA);
+      const jpeg = await createTestJpeg(200, 200);
+
+      const res = await agent
+        .post(OPS_MEDIA)
+        .set('x-csrf-token', csrf)
+        .send({
+          kind: 'image',
+          ownerCategoryId: CATEGORY_ID,
+          licenseKind: 'owned',
+          file: jpeg.toString('base64'),
+          mimeType: 'image/jpeg',
+          originalFilename: 'double-process.jpg',
+        });
+      expect(res.status).toBe(201);
+
+      // First processing should succeed
+      const first = await mediaService.processAsset(res.body.assetId);
+      expect(first).not.toBeNull();
+      expect(first!.newState).toBe('ready');
+
+      // Second processing should return null (already claimed)
+      const second = await mediaService.processAsset(res.body.assetId);
+      expect(second).toBeNull();
+    });
+
+    it('truncated JPEG results in rejection, not stuck state (I3)', async () => {
+      const { agent, csrf } = await signInOps(KATARINA);
+      // Create a valid JPEG and truncate it
+      const full = await sharp({
+        create: { width: 800, height: 600, channels: 3, background: { r: 128, g: 128, b: 128 } },
+      }).jpeg().toBuffer();
+      const truncated = full.subarray(0, Math.floor(full.length / 3));
+
+      const res = await agent
+        .post(OPS_MEDIA)
+        .set('x-csrf-token', csrf)
+        .send({
+          kind: 'image',
+          ownerCategoryId: CATEGORY_ID,
+          licenseKind: 'owned',
+          file: truncated.toString('base64'),
+          mimeType: 'image/jpeg',
+          originalFilename: 'truncated.jpg',
+        });
+      expect(res.status).toBe(201);
+
+      // Processing should handle the error gracefully (reject, not throw)
+      const result = await mediaService.processAsset(res.body.assetId);
+      expect(result).not.toBeNull();
+      // Could be 'rejected' due to processing error, or 'ready' if sharp handles it
+      const detail = await mediaService.getDetail(res.body.assetId);
+      expect(detail).not.toBeNull();
+      // The asset should not be stuck in 'processing' — it should be 'ready' or 'rejected'
+      expect(['ready', 'rejected']).toContain(detail!.state);
+    });
+  });
+
+  describe('staff endpoint edge cases', () => {
+    it('PUT with empty body → 400 (M11)', async () => {
+      // First upload an asset
+      const { agent, csrf } = await signInOps(KATARINA);
+      const jpeg = await createTestJpeg();
+      const uploadRes = await agent
+        .post(OPS_MEDIA)
+        .set('x-csrf-token', csrf)
+        .send({
+          kind: 'image',
+          ownerCategoryId: CATEGORY_ID,
+          licenseKind: 'owned',
+          file: jpeg.toString('base64'),
+          mimeType: 'image/jpeg',
+          originalFilename: 'empty-put.jpg',
+        });
+      expect(uploadRes.status).toBe(201);
+
+      const vukSession = await signInOps(VUK);
+      const putRes = await vukSession.agent
+        .put(`${OPS_MEDIA}/${uploadRes.body.assetId}`)
+        .set('x-csrf-token', vukSession.csrf)
+        .send({});
+
+      expect(putRes.status).toBe(400);
+      expect(putRes.body.code).toBe('validation');
+    });
+
+    it('DELETE of processing asset → 409 (M11)', async () => {
+      const { agent, csrf } = await signInOps(KATARINA);
+      const jpeg = await createTestJpeg();
+      const uploadRes = await agent
+        .post(OPS_MEDIA)
+        .set('x-csrf-token', csrf)
+        .send({
+          kind: 'image',
+          ownerCategoryId: CATEGORY_ID,
+          licenseKind: 'owned',
+          file: jpeg.toString('base64'),
+          mimeType: 'image/jpeg',
+          originalFilename: 'proc-delete.jpg',
+        });
+      expect(uploadRes.status).toBe(201);
+
+      // Force state to processing
+      await testDb.db.update(mediaAssets)
+        .set({ state: 'processing' })
+        .where(eq(mediaAssets.id, uploadRes.body.assetId));
+
+      const vukSession = await signInOps(VUK);
+      const delRes = await vukSession.agent
+        .delete(`${OPS_MEDIA}/${uploadRes.body.assetId}`)
+        .set('x-csrf-token', vukSession.csrf);
+
+      expect(delRes.status).toBe(409);
+      expect(delRes.body.code).toBe('media_in_use');
+    });
+
+    it('invalid rendition kind on staff preview → 404 (I7)', async () => {
+      // Upload and process an asset first
+      const { agent, csrf } = await signInOps(KATARINA);
+      const jpeg = await createTestJpeg(200, 200);
+      const uploadRes = await agent
+        .post(OPS_MEDIA)
+        .set('x-csrf-token', csrf)
+        .send({
+          kind: 'image',
+          ownerCategoryId: CATEGORY_ID,
+          licenseKind: 'owned',
+          file: jpeg.toString('base64'),
+          mimeType: 'image/jpeg',
+          originalFilename: 'inv-rendition.jpg',
+        });
+      expect(uploadRes.status).toBe(201);
+      await mediaService.processAsset(uploadRes.body.assetId);
+
+      const vukSession = await signInOps(VUK);
+      const res = await vukSession.agent
+        .get(`${OPS_MEDIA}/${uploadRes.body.assetId}/totally_invalid`)
+        .set('x-csrf-token', vukSession.csrf);
+
+      expect(res.status).toBe(404);
     });
   });
 });

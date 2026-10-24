@@ -2,11 +2,14 @@
  * Media asset state machine (MED-R-14, 8.5).
  *
  * Pure function: validates and returns the new state, or throws.
+ *
+ * The `uploaded → processing` transition is used by the atomic claim in
+ * MediaService.processAsset() (UPDATE ... WHERE state = 'uploaded').
  */
 import type { MediaAssetState } from '@nestself/contracts';
 
 const TRANSITIONS: ReadonlyMap<MediaAssetState, ReadonlySet<MediaAssetState>> = new Map([
-  ['uploaded', new Set<MediaAssetState>(['quarantined', 'rejected'])],
+  ['uploaded', new Set<MediaAssetState>(['quarantined', 'processing', 'rejected'])],
   ['quarantined', new Set<MediaAssetState>(['processing', 'rejected'])],
   ['processing', new Set<MediaAssetState>(['ready', 'rejected'])],
   ['ready', new Set<MediaAssetState>(['expired'])],

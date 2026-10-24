@@ -4,17 +4,20 @@
  * Runs in the worker process on the `nestself-media` queue. Steps:
  * 1. Magic-byte sniffing with `file-type`
  * 2. Size limits
- * 3. Malware verdict (local: not_scanned_local)
- * 4. Metadata stripping (sharp for images)
- * 5. Rendition generation
- * 6. State transition to ready or rejected
+ * 3. Format validation (sniffed type must match declared kind)
+ * 4. Malware verdict (local: not_scanned_local)
+ * 5. Metadata stripping (sharp for images) with safety limits
+ * 6. Rendition generation
+ * 7. State transition to ready or rejected
+ *
+ * Sharp safety: limitInputPixels 40 000 000, failOn 'error',
+ * animated images rejected, original re-encoded to max 4096px long edge.
  */
 import { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { fileTypeFromBuffer } from 'file-type';
 import type { MediaStorage } from './storage/media-storage.js';
-import { assertTransition } from './media-state-machine.js';
 import {
   MEDIA_KIND_ALLOWED_MIMES,
   MEDIA_KIND_MAX_BYTES,
@@ -23,6 +26,11 @@ import {
   type MediaRenditionKind,
   type MediaScanStatus,
 } from '@nestself/contracts';
+
+/** Maximum input pixels for sharp (40 megapixels). */
+const LIMIT_INPUT_PIXELS = 40_000_000;
+/** Maximum long edge for the stored original (px). */
+const MAX_ORIGINAL_LONG_EDGE = 4096;
 
 export interface ProcessingInput {
   assetId: string;
@@ -52,17 +60,33 @@ export interface ProcessingResult {
 }
 
 /**
+ * Mapping from sniffed MIME to sharp format name for re-encoding.
+ */
+const MIME_TO_FORMAT: Record<string, 'jpeg' | 'png' | 'webp'> = {
+  'image/jpeg': 'jpeg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+/**
  * Run the processing pipeline for one asset.
  * The caller is responsible for updating the database.
+ *
+ * Reprocessing a non-uploaded asset throws (the caller must use UPDATE ...
+ * WHERE state = 'uploaded' RETURNING to claim the job).
  */
 export async function processMediaAsset(
   storage: MediaStorage,
   input: ProcessingInput,
 ): Promise<ProcessingResult> {
-  const quarantineKey = `quarantine/${input.assetId}/original`;
+  // Guard: only uploaded assets can enter processing.
+  if (input.currentState !== 'uploaded') {
+    throw new Error(
+      `Cannot process asset ${input.assetId}: state is '${input.currentState}', expected 'uploaded'`,
+    );
+  }
 
-  // Transition: uploaded -> quarantined
-  assertTransition(input.currentState, 'quarantined');
+  const quarantineKey = `quarantine/${input.assetId}/original`;
 
   // Step 1: Read the quarantined file for magic-byte sniffing
   const { stream: readStream } = await storage.get(quarantineKey);
@@ -82,39 +106,18 @@ export async function processMediaAsset(
 
   // For PDFs, file-type detects 'application/pdf'
   if (!detectedMime || !allowedMimes.includes(detectedMime)) {
-    return {
-      newState: 'rejected',
-      scanStatus: 'pending',
-      rejectionCode: 'type_mismatch',
-      renditions: [],
-      width: null,
-      height: null,
-      checksumSha256,
-    };
+    return rejected('type_mismatch', checksumSha256);
   }
 
   // Step 2: Size limits
   if (fileBuffer.length > MEDIA_KIND_MAX_BYTES[input.kind]) {
-    return {
-      newState: 'rejected',
-      scanStatus: 'pending',
-      rejectionCode: 'size_exceeded',
-      renditions: [],
-      width: null,
-      height: null,
-      checksumSha256,
-    };
+    return rejected('size_exceeded', checksumSha256);
   }
 
-  // Transition: quarantined -> processing
   // Step 3: Malware verdict (local: not_scanned_local)
   const scanStatus: MediaScanStatus =
     input.nodeEnv === 'production' ? 'pending' : 'not_scanned_local';
 
-  // In production, assets without scan cannot proceed.
-  // Cast to string for the comparison because the local code path assigns
-  // 'pending' | 'not_scanned_local', but the production path will be extended
-  // when the malware-scan integration lands (T-C2.10).
   if (input.nodeEnv === 'production' && (scanStatus as string) !== 'no_threats_found') {
     return {
       newState: 'rejected',
@@ -132,14 +135,27 @@ export async function processMediaAsset(
   let width: number | null = null;
   let height: number | null = null;
 
-  if (input.kind === 'image') {
-    const result = await processImage(storage, input.assetId, fileBuffer, input.focalPoint);
-    renditions.push(...result.renditions);
-    width = result.width;
-    height = result.height;
-  } else if (input.kind === 'pdf') {
-    const result = await processPdf(storage, input.assetId, fileBuffer);
-    renditions.push(...result.renditions);
+  try {
+    if (input.kind === 'image') {
+      const result = await processImage(
+        storage,
+        input.assetId,
+        fileBuffer,
+        detectedMime,
+        input.focalPoint,
+      );
+      renditions.push(...result.renditions);
+      width = result.width;
+      height = result.height;
+    } else if (input.kind === 'pdf') {
+      const result = await processPdf(storage, input.assetId, fileBuffer);
+      renditions.push(...result.renditions);
+    }
+  } catch (err) {
+    // Processing failure (corrupt image, pixel bomb, animated image, etc.)
+    // → reject the asset rather than leaving it stuck in processing.
+    const code = err instanceof ProcessingRejection ? err.code : 'processing_error';
+    return rejected(code, checksumSha256);
   }
 
   return {
@@ -153,46 +169,129 @@ export async function processMediaAsset(
   };
 }
 
+/** Helper for building a rejected result. */
+function rejected(code: string, checksumSha256: string | null): ProcessingResult {
+  return {
+    newState: 'rejected',
+    scanStatus: 'pending',
+    rejectionCode: code,
+    renditions: [],
+    width: null,
+    height: null,
+    checksumSha256,
+  };
+}
+
+/** Thrown by processing steps to trigger a clean rejection. */
+class ProcessingRejection extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = 'ProcessingRejection';
+  }
+}
+
 async function processImage(
   storage: MediaStorage,
   assetId: string,
   buffer: Buffer,
+  detectedMime: string,
   focalPoint?: { x: number; y: number } | null,
 ): Promise<{ renditions: RenditionOutput[]; width: number; height: number }> {
   const renditions: RenditionOutput[] = [];
 
+  // Determine expected format from sniffed MIME
+  const expectedFormat = MIME_TO_FORMAT[detectedMime];
+  if (!expectedFormat) {
+    throw new ProcessingRejection('type_mismatch', `No format mapping for ${detectedMime}`);
+  }
+
+  // Pre-flight: check metadata with safety limits
+  const meta = await sharp(buffer, {
+    limitInputPixels: LIMIT_INPUT_PIXELS,
+    failOn: 'error',
+  }).metadata();
+
+  // Reject animated images (GIF, animated WebP, animated PNG)
+  if (meta.pages && meta.pages > 1) {
+    throw new ProcessingRejection(
+      'animated_not_supported',
+      'Animated images are not supported',
+    );
+  }
+
+  // Verify sniffed format matches sharp's detection
+  if (meta.format && MIME_TO_FORMAT[`image/${meta.format}`] !== expectedFormat) {
+    throw new ProcessingRejection(
+      'format_mismatch',
+      `Sharp detected ${meta.format} but file-type said ${detectedMime}`,
+    );
+  }
+
   // Strip metadata from original (MED-R-10): sharp's default is to strip
   // all EXIF, ICC and GPS metadata. The .rotate() call auto-orients from
   // EXIF before the rotation metadata is discarded.
-  const stripped = await sharp(buffer)
-    .rotate() // auto-orient from EXIF before stripping
-    .toBuffer({ resolveWithObject: true });
+  //
+  // Re-encode the original to:
+  // - strip metadata
+  // - cap the long edge at MAX_ORIGINAL_LONG_EDGE px
+  // - ensure the stored format matches the sniffed format
+  let pipeline = sharp(buffer, {
+    limitInputPixels: LIMIT_INPUT_PIXELS,
+    failOn: 'error',
+  })
+    .rotate(); // auto-orient from EXIF before stripping
 
-  const { width: origW, height: origH } = stripped.info;
+  // Cap long edge
+  const origW = meta.width ?? 0;
+  const origH = meta.height ?? 0;
+  const longEdge = Math.max(origW, origH);
+  if (longEdge > MAX_ORIGINAL_LONG_EDGE) {
+    if (origW >= origH) {
+      pipeline = pipeline.resize({ width: MAX_ORIGINAL_LONG_EDGE, withoutEnlargement: true });
+    } else {
+      pipeline = pipeline.resize({ height: MAX_ORIGINAL_LONG_EDGE, withoutEnlargement: true });
+    }
+  }
+
+  // Re-encode in the detected format
+  if (expectedFormat === 'jpeg') {
+    pipeline = pipeline.jpeg({ quality: 90 });
+  } else if (expectedFormat === 'png') {
+    pipeline = pipeline.png();
+  } else if (expectedFormat === 'webp') {
+    pipeline = pipeline.webp({ quality: 90 });
+  }
+
+  const stripped = await pipeline.toBuffer({ resolveWithObject: true });
+  const { width: finalW, height: finalH } = stripped.info;
 
   // Original rendition
   const originalKey = `assets/${assetId}/original`;
+  const originalMime = `image/${expectedFormat}`;
   await storage.put(
     originalKey,
     Readable.from(stripped.data),
-    { contentType: `image/${stripped.info.format}`, contentLength: stripped.data.length },
+    { contentType: originalMime, contentLength: stripped.data.length },
   );
   renditions.push({
     kind: 'original',
-    width: origW,
-    height: origH,
+    width: finalW,
+    height: finalH,
     byteSize: stripped.data.length,
-    mimeType: `image/${stripped.info.format}`,
+    mimeType: originalMime,
     storageKey: originalKey,
   });
 
   // Card renditions (640px wide, focal-point crop to 16:9)
-  const cardWidth = Math.min(640, origW);
+  const cardWidth = Math.min(640, finalW);
   const cardHeight = Math.round(cardWidth * 9 / 16);
 
   for (const format of ['webp', 'jpeg'] as const) {
     const renditionKind: MediaRenditionKind = format === 'webp' ? 'card_webp' : 'card_jpeg';
-    let pipeline = sharp(stripped.data).resize({
+    let cardPipeline = sharp(stripped.data, {
+      limitInputPixels: LIMIT_INPUT_PIXELS,
+      failOn: 'error',
+    }).resize({
       width: cardWidth,
       height: cardHeight,
       fit: 'cover',
@@ -201,11 +300,11 @@ async function processImage(
         : 'centre',
     });
     if (format === 'webp') {
-      pipeline = pipeline.webp({ quality: 80 });
+      cardPipeline = cardPipeline.webp({ quality: 80 });
     } else {
-      pipeline = pipeline.jpeg({ quality: 80 });
+      cardPipeline = cardPipeline.jpeg({ quality: 80 });
     }
-    const result = await pipeline.toBuffer({ resolveWithObject: true });
+    const result = await cardPipeline.toBuffer({ resolveWithObject: true });
     const key = `assets/${assetId}/${renditionKind}`;
     await storage.put(
       key,
@@ -223,17 +322,20 @@ async function processImage(
   }
 
   // Detail renditions (1200px wide)
-  const detailWidth = Math.min(1200, origW);
+  const detailWidth = Math.min(1200, finalW);
 
   for (const format of ['webp', 'jpeg'] as const) {
     const renditionKind: MediaRenditionKind = format === 'webp' ? 'detail_webp' : 'detail_jpeg';
-    let pipeline = sharp(stripped.data).resize({ width: detailWidth, withoutEnlargement: true });
+    let detailPipeline = sharp(stripped.data, {
+      limitInputPixels: LIMIT_INPUT_PIXELS,
+      failOn: 'error',
+    }).resize({ width: detailWidth, withoutEnlargement: true });
     if (format === 'webp') {
-      pipeline = pipeline.webp({ quality: 85 });
+      detailPipeline = detailPipeline.webp({ quality: 85 });
     } else {
-      pipeline = pipeline.jpeg({ quality: 85 });
+      detailPipeline = detailPipeline.jpeg({ quality: 85 });
     }
-    const result = await pipeline.toBuffer({ resolveWithObject: true });
+    const result = await detailPipeline.toBuffer({ resolveWithObject: true });
     const key = `assets/${assetId}/${renditionKind}`;
     await storage.put(
       key,
@@ -250,7 +352,7 @@ async function processImage(
     });
   }
 
-  return { renditions, width: origW, height: origH };
+  return { renditions, width: finalW, height: finalH };
 }
 
 async function processPdf(

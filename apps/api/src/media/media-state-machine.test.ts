@@ -7,6 +7,7 @@ import { assertTransition, canTransition } from './media-state-machine.js';
 describe('media state machine', () => {
   it.each([
     ['uploaded', 'quarantined'],
+    ['uploaded', 'processing'],
     ['uploaded', 'rejected'],
     ['quarantined', 'processing'],
     ['quarantined', 'rejected'],
@@ -20,7 +21,6 @@ describe('media state machine', () => {
 
   it.each([
     ['uploaded', 'ready'],
-    ['uploaded', 'processing'],
     ['uploaded', 'expired'],
     ['quarantined', 'uploaded'],
     ['quarantined', 'ready'],
