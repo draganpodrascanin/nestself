@@ -7,7 +7,7 @@
  */
 import { useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { ActiveContext } from '@nestself/contracts';
+import type { ActiveContext, Principal, AvailableContextEntry } from '@nestself/contracts';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { AuthContext } from './auth-context';
 import { SampleAuthExtrasContext } from './sample-extras';
@@ -61,15 +61,37 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const [role, setRole] = useState<SampleRole>(
     initialRole ?? resolveInitialRole,
   );
-  const sample = SAMPLE_PRINCIPALS[role];
+  const baseSample = SAMPLE_PRINCIPALS[role];
+
+  // Context override for sample mode switchContext (ruling 8, T-C1.02).
+  const [contextOverride, setContextOverride] = useState<ActiveContext | null>(null);
+
+  const sample = useMemo(() => {
+    if (!contextOverride) return baseSample;
+    const updatedPrincipal: Principal = { ...baseSample.principal, context: contextOverride };
+    return {
+      principal: updatedPrincipal,
+      effectiveActions: baseSample.effectiveActions,
+      availableContexts: baseSample.availableContexts,
+    };
+  }, [baseSample, contextOverride]);
 
   const signOut = useCallback(async () => {
     setRole('admin');
+    setContextOverride(null);
   }, []);
 
-  const switchContext = useCallback(async (_context: ActiveContext) => {
-    // No-op in sample mode
-  }, []);
+  const switchContext = useCallback(async (context: ActiveContext) => {
+    const available = baseSample.availableContexts;
+    const matches = available.some((entry: AvailableContextEntry) => {
+      if (entry.kind !== context.kind) return false;
+      if (entry.kind === 'personal' && context.kind === 'personal') return entry.orgId === context.orgId;
+      if (entry.kind === 'organization' && context.kind === 'organization') return entry.orgId === context.orgId;
+      return true;
+    });
+    if (!matches) throw new Error('Context not available in sample mode');
+    setContextOverride(context);
+  }, [baseSample.availableContexts]);
 
   const stepUp = useCallback(() => {
     // No-op in sample mode
@@ -86,6 +108,7 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const setRoleDirectly = useCallback((newRole: string) => {
     const r = newRole as SampleRole;
     setRole(r);
+    setContextOverride(null);
     if (typeof window !== 'undefined' && import.meta.env.DEV) {
       const url = new URL(window.location.href);
       url.searchParams.set('role', r);

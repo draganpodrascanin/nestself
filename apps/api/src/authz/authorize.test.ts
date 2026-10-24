@@ -123,7 +123,7 @@ describe('Step 1: User state', () => {
 // ---------------------------------------------------------------------------
 
 describe('Step 2: Context validity', () => {
-  it('denies when org context has no active membership', () => {
+  it('denies when org context membership is date-expired', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -138,7 +138,7 @@ describe('Step 2: Context validity', () => {
     });
     const d = authorize(p, 'people.invite', baseResource, makeCtx());
     expect(d.allowed).toBe(false);
-    expect(d.denialReason).toBe('org_context_expired');
+    expect(d.denialReason).toBe('invalid_context');
   });
 
   it('denies personal context without any active membership', () => {

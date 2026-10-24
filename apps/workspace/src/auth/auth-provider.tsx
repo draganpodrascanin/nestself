@@ -89,11 +89,12 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
 
   const switchContext = useCallback(
     async (context: ActiveContext) => {
-      // CLI-R-08: cancel and clear all cached queries before applying the new
-      // principal so stale data from the previous context is never shown.
-      queryClient.cancelQueries();
-      queryClient.clear();
+      // Ruling 5: cancel in-flight queries first, then switch on the server,
+      // then clear the cache only on success. If the switch fails the old
+      // cache stays so the user is not stranded on an empty screen.
+      await queryClient.cancelQueries();
       const data = await authApi.switchContext(context);
+      queryClient.clear();
       applyMe(data);
     },
     [authApi, applyMe, queryClient],

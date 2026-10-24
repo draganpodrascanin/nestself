@@ -47,15 +47,15 @@ const CTX: AuthorizationContext = {
 describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
   it('valid when orgId matches an ACTIVE, date-current membership', () => {
     const p = makePrincipal({ context: { kind: 'personal', orgId: 'org_a' } });
-    expect(isContextValid(p, CTX)).toEqual({ valid: true });
+    expect(isContextValid(p, CTX)).toBe(true);
   });
 
-  it('invalid_context when orgId does not match any membership', () => {
+  it('invalid when orgId does not match any membership', () => {
     const p = makePrincipal({ context: { kind: 'personal', orgId: 'org_z' } });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('invalid_context when orgId matches an INVITED membership', () => {
+  it('invalid when orgId matches an INVITED membership', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -69,10 +69,10 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'personal', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('org_context_expired when orgId matches an expired membership', () => {
+  it('invalid when orgId matches an expired membership', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -86,15 +86,15 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'personal', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'org_context_expired' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
   it('still valid for personal context without orgId if any ACTIVE membership exists', () => {
     const p = makePrincipal({ context: { kind: 'personal' } });
-    expect(isContextValid(p, CTX)).toEqual({ valid: true });
+    expect(isContextValid(p, CTX)).toBe(true);
   });
 
-  it('org_context_expired for organization context with expired membership', () => {
+  it('invalid for organization context with expired membership', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -108,18 +108,18 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'organization', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'org_context_expired' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('invalid_context for organization context with no membership', () => {
+  it('invalid for organization context with no membership', () => {
     const p = makePrincipal({
       memberships: [],
       context: { kind: 'organization', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('invalid_context for organization context with not-yet-started membership (Ruling A, SYS-13)', () => {
+  it('invalid for organization context with not-yet-started membership (SYS-13)', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -133,10 +133,10 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'organization', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('invalid_context for personal context with not-yet-started membership (Ruling A)', () => {
+  it('invalid for personal context with not-yet-started membership', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -150,12 +150,10 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'personal', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 
-  it('org_context_expired for org context with INVITED membership (never activated, treated as ended)', () => {
-    // INVITED status at the Principal level means the membership was never
-    // activated, which is "invalid_context" (not "expired").
+  it('invalid for org context with INVITED membership (never activated)', () => {
     const p = makePrincipal({
       memberships: [
         {
@@ -169,11 +167,11 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       ],
       context: { kind: 'organization', orgId: 'org_a' },
     });
-    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+    expect(isContextValid(p, CTX)).toBe(false);
   });
 });
 
-describe('membershipContextCode (Ruling A)', () => {
+describe('membershipContextCode (used by guard and resolvers)', () => {
   const NOW = new Date('2026-10-22T10:00:00Z');
 
   it('returns invalid_context for INVITED membership', () => {

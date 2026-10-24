@@ -104,6 +104,40 @@ export class AuthorizationGuard implements CanActivate {
     }
 
     if (!decision.allowed) {
+      // Context expiry mapping: the engine always returns `invalid_context`;
+      // the guard upgrades to `org_context_expired` when the stored session
+      // context names an organization (personal+orgId or organization).
+      // This runs before 404/403 visibility so it always reaches the client.
+      if (decision.denialReason === 'invalid_context') {
+        const pctx = principal.context;
+        const namesOrg =
+          (pctx.kind === 'personal' && 'orgId' in pctx && pctx.orgId != null) ||
+          pctx.kind === 'organization';
+        const code = namesOrg ? 'org_context_expired' : 'invalid_context';
+
+        await this.audit.record({
+          action: 'access.denied',
+          actorUserId: principal.userId,
+          actorKind: 'USER',
+          orgId: resource.orgId ?? null,
+          recordType: resource.type,
+          recordId: resource.id ?? 'unknown',
+          result: 'DENIED',
+          details: {
+            actionAttempted: meta.action,
+            resourceType: resource.type,
+            resourceId: resource.id,
+            reason: code,
+          },
+        });
+
+        throw new ApiHttpException({
+          status: 403,
+          code,
+          message: 'Access denied',
+        });
+      }
+
       // Non-disclosure: 404 when no visibility into the org (AUTHZ-R-61)
       const hasVisibility = this.hasOrgVisibility(principal, resource);
 

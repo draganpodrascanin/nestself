@@ -1,6 +1,7 @@
 import { createRootRouteWithContext, Outlet, useRouter } from '@tanstack/react-router';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import type { QueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -11,6 +12,7 @@ import {
   SkipLink,
   SampleDataBanner,
   StatusBlock,
+  useToast,
 } from '@nestself/ui';
 import i18n from '../i18n';
 import { isSampleDataMode } from '../data-source';
@@ -18,6 +20,7 @@ import { useAuth, SampleAuthProvider, AuthProvider } from '../auth';
 import type { AuthSnapshot } from '../auth';
 import { RoleSwitcher } from '../components/RoleSwitcher';
 import { api } from '../api';
+import { globalErrorDepsRef } from '../main';
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -53,10 +56,14 @@ function AuthWrapper({ children }: { children: ReactNode }) {
 /**
  * Syncs auth state into the router context so `beforeLoad` gates
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
+ * Also wires the global error handler deps for QueryCache (ruling 6).
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions, availableContexts } = useAuth();
+  const { principal, effectiveActions, availableContexts, switchContext, refreshPrincipal } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { t } = useTranslation('workspace');
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
@@ -74,6 +81,19 @@ function AuthRouterSync({ children }: { children: ReactNode }) {
       void router.invalidate();
     }
   }, [principal, effectiveActions, availableContexts, router]);
+
+  // Keep the global error handler deps up to date (ruling 6, T-C1.02).
+  useEffect(() => {
+    globalErrorDepsRef.current = {
+      navigate: router.navigate,
+      queryClient,
+      refreshPrincipal,
+      switchContext,
+      showToast: (message: string) => toast.add({ title: message, tone: 'danger' }),
+      t,
+    };
+    return () => { globalErrorDepsRef.current = null; };
+  }, [router.navigate, queryClient, refreshPrincipal, switchContext, toast, t]);
 
   return <>{children}</>;
 }

@@ -7,12 +7,14 @@ export { authorize, evaluate } from './authorize.js';
 export { authorizeMany } from './authorize-many.js';
 export { explain } from './explain.js';
 export { effectiveAccess, effectiveActions } from './effective-access.js';
-export { isContextValid, type ContextValidationResult } from './context.js';
+export { isContextValid, membershipContextCode } from './context.js';
 export {
   isMembershipDateCurrent,
   hasActiveDateCurrentMembership,
   resolveDefaultPersonalOrgId,
+  defaultContext,
   computeAvailableContexts,
+  canEnterContext,
   type AvailableContextSource,
 } from './personal-context.js';
 export { matchesScope, ADMINISTRATIVE_SCOPE_TYPES } from './scope.js';

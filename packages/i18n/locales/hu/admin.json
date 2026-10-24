@@ -87,5 +87,12 @@
   "api": {
     "connected": "API csatlakoztatva",
     "notConnected": "API nincs csatlakoztatva (mintaadatok mód)"
+  },
+  "contextSwitcher": {
+    "error": {
+      "org_context_expired": "A szervezeti tagságod lejárt.",
+      "invalid_context": "Ez a munkaterület nem elérhető számodra.",
+      "unknown": "Nem sikerült váltani a munkaterületet. Kérjük, próbáld újra."
+    }
   }
 }

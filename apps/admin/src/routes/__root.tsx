@@ -1,6 +1,6 @@
 import { createRootRouteWithContext, Outlet, useRouter } from '@tanstack/react-router';
 import { I18nextProvider, useTranslation } from 'react-i18next';
-import { QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
@@ -12,6 +12,7 @@ import {
   ToastProvider,
   StatusBlock,
   Badge,
+  useToast,
 } from '@nestself/ui';
 import { SampleDataBanner } from '@nestself/ui';
 import { healthQueryOptions } from '@nestself/api-client';
@@ -20,6 +21,7 @@ import { isSampleDataMode } from '../data-source';
 import { useAuth, AuthProvider, SampleAuthProvider, SAMPLE_ROLE_ORDER, useSampleAuth } from '../auth';
 import type { AuthSnapshot } from '../auth';
 import { api } from '../api';
+import { globalErrorDepsRef } from '../main';
 import '../app.css';
 
 interface RouterContext {
@@ -83,10 +85,14 @@ function AuthWrapper({ children }: { children: ReactNode }) {
 /**
  * Syncs auth state into the router context so `beforeLoad` gates
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
+ * Also wires the global error handler deps for QueryCache (ruling 6).
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions, availableContexts } = useAuth();
+  const { principal, effectiveActions, availableContexts, switchContext, refreshPrincipal } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { t } = useTranslation('admin');
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
@@ -104,6 +110,19 @@ function AuthRouterSync({ children }: { children: ReactNode }) {
       void router.invalidate();
     }
   }, [principal, effectiveActions, availableContexts, router]);
+
+  // Keep the global error handler deps up to date (ruling 6, T-C1.02).
+  useEffect(() => {
+    globalErrorDepsRef.current = {
+      navigate: router.navigate,
+      queryClient,
+      refreshPrincipal,
+      switchContext,
+      showToast: (message: string) => toast.add({ title: message, tone: 'danger' }),
+      t,
+    };
+    return () => { globalErrorDepsRef.current = null; };
+  }, [router.navigate, queryClient, refreshPrincipal, switchContext, toast, t]);
 
   return <>{children}</>;
 }

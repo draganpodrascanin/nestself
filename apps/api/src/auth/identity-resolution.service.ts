@@ -27,9 +27,11 @@ import type {
 } from '../identity/identity-provider.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 import {
-  resolveDefaultPersonalOrgId,
+  defaultContext,
   computeAvailableContexts,
 } from '../authz/personal-context.js';
+import { ContextLoader } from '../authz/context-loader.js';
+import { effectiveActions as engineEffectiveActions } from '../authz/effective-access.js';
 import type {
   Principal,
   ActiveContext,
@@ -57,6 +59,7 @@ export class IdentityResolutionService {
   constructor(
     @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
+    @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => SignInThrottle)) private readonly throttle: SignInThrottle,
@@ -120,7 +123,7 @@ export class IdentityResolutionService {
       });
     }
 
-    const context = this.defaultContext(loaded);
+    const context = defaultContext(loaded);
     const population = this.resolvePopulation(loaded, context);
     const authMethod = authMethodFromOutcome({ kind: 'tokens', tokens }, wasPassword);
 
@@ -177,26 +180,26 @@ export class IdentityResolutionService {
     loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
-    const extras = await this.principalLoader.loadAvailableContextExtras(loaded);
-    // Ruling F: compute effective actions from grants for the active context.
+    const [extras, effectiveActions] = await Promise.all([
+      this.principalLoader.loadAvailableContextExtras(loaded),
+      this.loadEffectiveActions(principal),
+    ]);
+    return {
+      principal,
+      effectiveActions,
+      availableContexts: computeAvailableContexts(loaded, extras),
+    };
+  }
+
+  /** Engine-based effective actions (ruling 4, T-C1.02). */
+  private async loadEffectiveActions(principal: Principal): Promise<string[]> {
     const orgId =
       principal.context.kind === 'personal' ? principal.context.orgId
       : principal.context.kind === 'organization' ? principal.context.orgId
       : undefined;
-    const grants = await this.principalLoader.loadGrants(principal.userId, orgId ?? '');
-    const now = new Date();
-    const actions = new Set<string>();
-    for (const g of grants) {
-      if (g.revokedAt != null) continue;
-      if (g.validFrom != null && g.validFrom > now) continue;
-      if (g.validUntil != null && g.validUntil <= now) continue;
-      for (const a of g.actions) actions.add(a);
-    }
-    return {
-      principal,
-      effectiveActions: [...actions],
-      availableContexts: computeAvailableContexts(loaded, extras),
-    };
+    const resource = { type: 'synthetic', orgId };
+    const ctx = await this.contextLoader.build(principal, resource);
+    return engineEffectiveActions(principal, ctx);
   }
 
   resolvePopulation(
@@ -206,15 +209,6 @@ export class IdentityResolutionService {
     if (loaded.staffTemplates.length > 0) return 'staff';
     if (loaded.expert && context.kind === 'expert') return 'expert';
     return 'employee';
-  }
-
-  defaultContext(loaded: LoadedPrincipal): ActiveContext {
-    // Staff → operations, expert → expert, everyone else → personal (item 2).
-    if (loaded.staffTemplates.length > 0) return { kind: 'operations' };
-    if (loaded.expert) return { kind: 'expert' };
-    // ACC-R-12: personal context carries a resolved orgId when possible.
-    const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
-    return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
   }
 
   // -- Audit helpers (fire-and-forget) ----------------------------------------

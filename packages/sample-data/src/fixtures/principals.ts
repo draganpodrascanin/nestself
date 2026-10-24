@@ -122,8 +122,8 @@ const expertPrincipal: Principal = PrincipalSchema.parse({
 
 const operationsPrincipal: Principal = PrincipalSchema.parse({
   userId: 'user_nikola',
-  displayName: 'Nikola Djordjević',
-  initials: 'ND́',
+  displayName: 'Nikola Đorđević',
+  initials: 'NĐ',
   locale: 'sr-Latn',
   memberships: [],
   staffTemplates: ['client_operations', 'support_operator'],

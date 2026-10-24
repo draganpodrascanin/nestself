@@ -13,6 +13,8 @@ import type { Locale, MeResponse, Principal } from '@nestself/contracts';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
 
 import { PrincipalLoader } from '../principal/principal-loader.js';
+import { ContextLoader } from '../authz/context-loader.js';
+import { effectiveActions as engineEffectiveActions } from '../authz/effective-access.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
@@ -30,25 +32,48 @@ export class ProfileService {
   constructor(
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
+    @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
   ) {}
 
   async updateLocale(principal: Principal, locale: Locale, meta: Meta): Promise<MeResponse> {
     await this.apply(principal, { locale }, meta);
-    return {
-      principal: { ...principal, locale },
-      effectiveActions: [],
-      availableContexts: computeAvailableContexts(principal),
-    };
+    const updatedPrincipal = { ...principal, locale };
+    return this.buildMeResponse(updatedPrincipal);
   }
 
   async updateDisplayName(principal: Principal, displayName: string, meta: Meta): Promise<MeResponse> {
     await this.apply(principal, { displayName }, meta);
+    const updatedPrincipal = { ...principal, displayName, initials: computeInitials(displayName) };
+    return this.buildMeResponse(updatedPrincipal);
+  }
+
+  /** Build MeResponse with engine-based effectiveActions and extras (ruling 4, T-C1.02). */
+  private async buildMeResponse(principal: Principal): Promise<MeResponse> {
+    // Re-load the user after cache invalidation (apply already called invalidateUser).
+    const loaded = await this.principalLoader.load(principal.userId);
+    if (!loaded) {
+      throw new ApiHttpException({ status: 401, code: 'unauthenticated', message: 'User not found' });
+    }
+    const [extras, effectiveActions] = await Promise.all([
+      this.principalLoader.loadAvailableContextExtras(loaded),
+      this.loadEffectiveActions(principal),
+    ]);
     return {
-      principal: { ...principal, displayName, initials: computeInitials(displayName) },
-      effectiveActions: [],
-      availableContexts: computeAvailableContexts(principal),
+      principal,
+      effectiveActions,
+      availableContexts: computeAvailableContexts(loaded, extras),
     };
+  }
+
+  private async loadEffectiveActions(principal: Principal): Promise<string[]> {
+    const orgId =
+      principal.context.kind === 'personal' ? principal.context.orgId
+      : principal.context.kind === 'organization' ? principal.context.orgId
+      : undefined;
+    const resource = { type: 'synthetic', orgId };
+    const ctx = await this.contextLoader.build(principal, resource);
+    return engineEffectiveActions(principal, ctx);
   }
 
   private async apply(

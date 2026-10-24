@@ -99,31 +99,39 @@ export function ContextSwitcher() {
   };
 
   return (
-    <Menu>
-      <MenuTrigger variant="quiet" className="type-body-sm gap-1.5 max-w-[200px]">
-        <span className="truncate">{currentLabel}</span>
-        <CaretUpDown size={14} aria-hidden />
-      </MenuTrigger>
-      <MenuPopup aria-label={t('contextSwitcher.label')} className="min-w-[180px]">
-        {availableContexts.map((entry, i) => {
-          const current = isSameContext(principal.context, entry);
-          return (
-            <MenuItem
-              key={`${entry.kind}-${'orgId' in entry ? entry.orgId : ''}-${i}`}
-              onClick={() => void handleSwitch(entry)}
-              className={current ? 'text-primary font-medium' : ''}
-            >
-              <span className="flex-1 truncate">{contextLabel(entry, t)}</span>
-              {current && <Check size={16} className="text-primary ml-2" aria-hidden />}
-            </MenuItem>
-          );
-        })}
-      </MenuPopup>
-      {switching && (
-        <span className="absolute -bottom-5 left-0 type-metadata text-text-tertiary" aria-live="polite">
-          {t('contextSwitcher.label')}…
-        </span>
-      )}
-    </Menu>
+    <div className="relative">
+      <Menu>
+        <MenuTrigger
+          variant="quiet"
+          className="type-body-sm gap-1.5 max-w-[200px]"
+          aria-label={t('contextSwitcher.label')}
+        >
+          <span className="truncate">{currentLabel}</span>
+          <CaretUpDown size={14} aria-hidden />
+        </MenuTrigger>
+        <MenuPopup aria-label={t('contextSwitcher.label')} className="min-w-[180px]">
+          {availableContexts.map((entry, i) => {
+            const isCurrent = isSameContext(principal.context, entry);
+            return (
+              <MenuItem
+                key={`${entry.kind}-${'orgId' in entry ? entry.orgId : ''}-${i}`}
+                onClick={() => void handleSwitch(entry)}
+                current={isCurrent}
+                disabled={switching}
+                className={isCurrent ? 'text-primary font-medium' : ''}
+              >
+                <span className="flex-1 truncate">{contextLabel(entry, t)}</span>
+                {isCurrent && <Check size={16} className="text-primary ml-2" aria-hidden />}
+              </MenuItem>
+            );
+          })}
+        </MenuPopup>
+      </Menu>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {switching
+          ? `${t('contextSwitcher.label')}…`
+          : `${t('contextSwitcher.current')}: ${currentLabel}`}
+      </span>
+    </div>
   );
 }

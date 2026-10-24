@@ -4438,7 +4438,7 @@
     }
   },
   {
-    "label": "SYS-12: membership ended - org context expired",
+    "label": "SYS-12: membership ended - invalid context",
     "principal": {
       "userId": "u21",
       "displayName": "Ended",
@@ -4510,7 +4510,7 @@
     },
     "expected": {
       "allowed": false,
-      "denialReason": "org_context_expired"
+      "denialReason": "invalid_context"
     }
   },
   {

@@ -1,8 +1,9 @@
 /**
  * Context validity check for the authorization engine (step 2).
  *
- * Validates that the principal's active context is backed by a current
- * membership, expert capability or staff role.
+ * The pure engine only returns `invalid_context`; the authorization guard
+ * maps that to `org_context_expired` when the stored session context names
+ * an organization (personal with orgId, or organization).
  *
  * @see Section 4.5.3 step 2 of auth-strategy.md
  * Satisfies AUTHZ-R-32.
@@ -15,21 +16,13 @@ import type {
 import { isMembershipDateCurrent } from './personal-context.js';
 
 // ---------------------------------------------------------------------------
-// Return types
-// ---------------------------------------------------------------------------
-
-export type ContextValidationResult =
-  | { valid: true }
-  | { valid: false; code: 'invalid_context' | 'org_context_expired' };
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Classify a membership that is NOT date-current into the correct error code.
+ * Classify a membership that is NOT date-current into the correct error code
+ * for the authorization guard and resource resolvers (not for the engine).
  *
- * Ruling A (T-C1.02):
  * - ended (status no longer ACTIVE, or endDate in the past) → `org_context_expired`
  * - not yet started (status ACTIVE but startDate in the future) → `invalid_context`
  * - never activated (status INVITED) → `invalid_context`
@@ -59,17 +52,16 @@ export function membershipContextCode(
  * - `expert`: `principal.expert` must not be null.
  * - `operations`: `principal.staffTemplates` must be non-empty.
  *
- * Returns a result object: `{ valid: true }` on success, or
- * `{ valid: false, code }` where `code` distinguishes between
- * `invalid_context` (never had access) and `org_context_expired`
- * (membership exists but is no longer date-current).
+ * Returns `true` when the context is valid, `false` otherwise.
+ * The engine always denies with `invalid_context`; the guard decides
+ * whether to upgrade that to `org_context_expired`.
  *
  * Satisfies AUTHZ-R-32, ACC-R-15.
  */
 export function isContextValid(
   principal: Principal,
   ctx: AuthorizationContext,
-): ContextValidationResult {
+): boolean {
   const context = principal.context;
 
   switch (context.kind) {
@@ -77,11 +69,8 @@ export function isContextValid(
       const membership = principal.memberships.find(
         (m) => m.orgId === context.orgId,
       );
-      if (!membership) return { valid: false, code: 'invalid_context' };
-      if (!isMembershipDateCurrent(membership, ctx.now)) {
-        return { valid: false, code: membershipContextCode(membership, ctx.now) };
-      }
-      return { valid: true };
+      if (!membership) return false;
+      return isMembershipDateCurrent(membership, ctx.now);
     }
 
     case 'personal': {
@@ -91,32 +80,22 @@ export function isContextValid(
         const membership = principal.memberships.find(
           (m) => m.orgId === context.orgId,
         );
-        if (!membership) return { valid: false, code: 'invalid_context' };
-        if (!isMembershipDateCurrent(membership, ctx.now)) {
-          return { valid: false, code: membershipContextCode(membership, ctx.now) };
-        }
-        return { valid: true };
+        if (!membership) return false;
+        return isMembershipDateCurrent(membership, ctx.now);
       }
       // Without an orgId: at least one date-current membership.
-      const hasAny = principal.memberships.some((m) =>
+      return principal.memberships.some((m) =>
         isMembershipDateCurrent(m, ctx.now),
       );
-      return hasAny
-        ? { valid: true }
-        : { valid: false, code: 'invalid_context' };
     }
 
     case 'expert':
-      return principal.expert != null
-        ? { valid: true }
-        : { valid: false, code: 'invalid_context' };
+      return principal.expert != null;
 
     case 'operations':
-      return principal.staffTemplates.length > 0
-        ? { valid: true }
-        : { valid: false, code: 'invalid_context' };
+      return principal.staffTemplates.length > 0;
 
     default:
-      return { valid: false, code: 'invalid_context' };
+      return false;
   }
 }

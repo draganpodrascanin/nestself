@@ -35,6 +35,18 @@ function createMocks(memberships: PrincipalMembership[] = []) {
       }),
       loadGrants: vi.fn().mockResolvedValue([]),
     },
+    contextLoader: {
+      build: vi.fn().mockResolvedValue({
+        now: new Date(),
+        isDeactivated: false,
+        isSuspended: false,
+        grants: [],
+        assignments: [],
+        ancestorIds: [],
+        orgSelfApprovalAllowed: false,
+        organizationTimezone: 'Europe/Belgrade',
+      }),
+    },
     store: {
       set: vi.fn(),
       get: vi.fn(),
@@ -98,6 +110,7 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
     service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
+      mocks.contextLoader as never,
       mocks.store as never,
     );
   });
@@ -259,6 +272,7 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
     service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
+      mocks.contextLoader as never,
       mocks.store as never,
     );
   });
@@ -272,7 +286,7 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
     expect(result.principal.context).toEqual({ kind: 'organization', orgId: 'org_a' });
   });
 
-  it('rejects organization context with org_context_expired when membership endDate is past', async () => {
+  it('rejects organization context with invalid_context when membership endDate is past (ruling 2)', async () => {
     const expired: PrincipalMembership = {
       ...ACTIVE_MEMBERSHIP,
       endDate: '2025-01-01T00:00:00Z',
@@ -290,7 +304,9 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
     } catch (err) {
       const e = err as ApiHttpException;
       expect(e.getStatus()).toBe(403);
-      expect(e.code).toBe('org_context_expired');
+      // Ruling 2: switchContext always throws invalid_context;
+      // the guard (not the service) maps to org_context_expired.
+      expect(e.code).toBe('invalid_context');
     }
   });
 
@@ -343,6 +359,7 @@ describe('SessionEndpointsService.switchContext – lastPersonalOrgId (Ruling D)
     service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
+      mocks.contextLoader as never,
       mocks.store as never,
     );
   });
@@ -369,32 +386,44 @@ describe('SessionEndpointsService.switchContext – lastPersonalOrgId (Ruling D)
 // Ruling F: effectiveActions populated from grants
 // ---------------------------------------------------------------------------
 
-describe('SessionEndpointsService.getMe – effectiveActions (Ruling F)', () => {
-  it('returns actions from loaded grants', async () => {
+describe('SessionEndpointsService.getMe – effectiveActions via engine (Ruling F)', () => {
+  it('returns actions from engine effectiveActions via contextLoader', async () => {
     const mocks = createMocks([ACTIVE_MEMBERSHIP]);
-    mocks.principalLoader.loadGrants.mockResolvedValue([
-      {
-        id: 'g1',
-        subjectUserId: 'user-1',
-        templateKey: 'hr_admin',
-        actions: ['program.overview', 'people.invite'],
-        scopeType: 'organization',
-        scopeOrgId: 'org_a',
-        scopeOrgUnitId: null,
-        includeDescendants: false,
-        scopeRefKind: null,
-        scopeRefId: null,
-        conditions: [],
-        validFrom: null,
-        validUntil: null,
-        delegationEnvelope: null,
-        parentGrantId: null,
-        revokedAt: null,
-      },
-    ]);
+    // Mock contextLoader.build to return an AuthorizationContext with the grants
+    const now = new Date();
+    mocks.contextLoader.build.mockResolvedValue({
+      now,
+      isDeactivated: false,
+      isSuspended: false,
+      grants: [
+        {
+          id: 'g1',
+          subjectUserId: 'user-1',
+          templateKey: 'hr_admin',
+          actions: ['program.overview', 'people.invite'],
+          scopeType: 'organization',
+          scopeOrgId: 'org_a',
+          scopeOrgUnitId: null,
+          includeDescendants: false,
+          scopeRefKind: null,
+          scopeRefId: null,
+          conditions: [],
+          validFrom: null,
+          validUntil: null,
+          delegationEnvelope: null,
+          parentGrantId: null,
+          revokedAt: null,
+        },
+      ],
+      assignments: [],
+      ancestorIds: [],
+      orgSelfApprovalAllowed: false,
+      organizationTimezone: 'Europe/Belgrade',
+    });
     const service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
+      mocks.contextLoader as never,
       mocks.store as never,
     );
     const principal = makePrincipal(

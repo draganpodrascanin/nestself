@@ -131,8 +131,8 @@ export class JobAuthorization {
       loadedPrincipal: loaded,
     });
 
-    const contextResult = isContextValid(principal, ctx);
-    if (!contextResult.valid) {
+    const contextValid = isContextValid(principal, ctx);
+    if (!contextValid) {
       await this.auditSkip(job, payload, 'context_invalid', loaded.userId);
       return { status: 'skipped', reason: 'context_invalid' };
     }

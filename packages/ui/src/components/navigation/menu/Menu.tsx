@@ -86,16 +86,22 @@ export interface MenuItemProps {
   children: ReactNode;
   onClick?: () => void;
   className?: string;
+  /** Marks this item as the current selection (`aria-current="true"`). */
+  current?: boolean;
+  disabled?: boolean;
 }
 
-export function MenuItem({ children, onClick, className }: MenuItemProps) {
+export function MenuItem({ children, onClick, className, current, disabled }: MenuItemProps) {
   return (
     <BaseMenu.Item
       onClick={onClick}
+      disabled={disabled}
+      aria-current={current ? 'true' : undefined}
       className={cn(
         'flex items-center min-h-11 px-3 py-2 rounded-small cursor-pointer',
         'data-highlighted:bg-tint',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+        disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
     >

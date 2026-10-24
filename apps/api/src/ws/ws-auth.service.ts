@@ -23,7 +23,7 @@ import {
   type KeyValueStore,
 } from '../redis/key-value-store.js';
 import { wsTicketKey, WS_TICKET_TTL } from '../redis/redis-keys.js';
-import { resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
+import { defaultContext } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 
 export class WsAuthError extends Error {
@@ -189,7 +189,7 @@ export class WsAuthService {
     }
 
     // Default context for ticket/bearer callers (same logic as AuthenticationGuard)
-    const context = this.defaultContext(loaded);
+    const context = defaultContext(loaded);
 
     // Carry the issuing session's authentication strength (never upgrade it).
     return this.assemblePrincipal(loaded, {
@@ -206,7 +206,7 @@ export class WsAuthService {
   }
 
   // -------------------------------------------------------------------------
-  // Shared helpers (copied from AuthenticationGuard to keep it unmodified)
+  // Shared helpers
   // -------------------------------------------------------------------------
 
   private assemblePrincipal(
@@ -233,16 +233,5 @@ export class WsAuthService {
     };
   }
 
-  private defaultContext(loaded: LoadedPrincipal): ActiveContext {
-    // Staff → operations, expert → expert, everyone else → personal (item 2).
-    if (loaded.staffTemplates.length > 0) {
-      return { kind: 'operations' };
-    }
-    if (loaded.expert) {
-      return { kind: 'expert' };
-    }
-    // ACC-R-12: personal context carries a resolved orgId when possible.
-    const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
-    return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
-  }
+  // defaultContext is now imported from personal-context.ts (ruling 9, T-C1.02).
 }

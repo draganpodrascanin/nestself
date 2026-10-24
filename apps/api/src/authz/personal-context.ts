@@ -1,13 +1,13 @@
 /**
  * Shared helpers for personal-context resolution (T-C1.02).
  *
- * Consolidates the duplicate `isMembershipDateCurrent`,
- * `hasActiveDateCurrentMembership` and `resolveDefaultPersonalOrgId`
- * implementations that were scattered across three services.
+ * Consolidates `isMembershipDateCurrent`, `hasActiveDateCurrentMembership`,
+ * `resolveDefaultPersonalOrgId`, `defaultContext` (ruling 9), and
+ * `computeAvailableContexts` / `canEnterContext` (ruling 3).
  *
  * @see ACC-R-12, ACC-R-15
  */
-import type { PrincipalMembership, AvailableContextEntry } from '@nestself/contracts';
+import type { PrincipalMembership, AvailableContextEntry, ActiveContext } from '@nestself/contracts';
 
 /**
  * A membership is date-current when:
@@ -64,6 +64,22 @@ export function resolveDefaultPersonalOrgId(
 }
 
 /**
+ * Default initial context for a user who has no stored session context
+ * (sign-in via bearer token, WS ticket, or first session).
+ *
+ * Staff -> operations, expert -> expert, everyone else -> personal with
+ * a resolved orgId when possible (ACC-R-12).
+ */
+export function defaultContext(
+  loaded: { memberships: readonly Pick<PrincipalMembership, 'orgId' | 'status' | 'startDate' | 'endDate'>[]; staffTemplates: readonly unknown[]; expert: unknown | null },
+): ActiveContext {
+  if (loaded.staffTemplates.length > 0) return { kind: 'operations' };
+  if (loaded.expert) return { kind: 'expert' };
+  const orgId = resolveDefaultPersonalOrgId(loaded.memberships);
+  return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
+}
+
+/**
  * Build the `availableContexts` array for a MeResponse.
  *
  * - Personal: one entry per ACTIVE date-current membership (with orgName).
@@ -80,8 +96,7 @@ export interface AvailableContextSource {
 
 /**
  * Extra data that callers pre-load from the DB for `computeAvailableContexts`.
- * When omitted the function falls back to including an organization entry
- * for every ACTIVE membership (legacy / test paths).
+ * Required: callers must always load extras (ruling 3, T-C1.02).
  */
 export interface AvailableContextExtras {
   /** Active grant template keys per org, from the DB. */
@@ -101,36 +116,63 @@ const ORG_WORKSPACE_TEMPLATE_KEYS: ReadonlySet<string> = new Set(
 
 export function computeAvailableContexts(
   loaded: AvailableContextSource,
-  extras?: AvailableContextExtras,
+  extras: AvailableContextExtras,
 ): AvailableContextEntry[] {
   const entries: AvailableContextEntry[] = [];
   const now = new Date();
 
   for (const m of loaded.memberships) {
     if (!isMembershipDateCurrent(m, now)) continue;
-    const orgName = extras?.orgNames.get(m.orgId);
+    const orgName = extras.orgNames.get(m.orgId);
     entries.push({ kind: 'personal', orgId: m.orgId, ...(orgName ? { orgName } : {}) });
 
     // Organization entry: only when user holds a grant from an
     // organization-workspace template in this org (Ruling B).
-    if (extras) {
-      const templateKeys = extras.orgGrantTemplateKeys.get(m.orgId) ?? [];
-      const hasOrgGrant = templateKeys.some((k) => ORG_WORKSPACE_TEMPLATE_KEYS.has(k));
-      if (hasOrgGrant) {
-        entries.push({ kind: 'organization', orgId: m.orgId, ...(orgName ? { orgName } : {}) });
-      }
-    } else {
-      // Legacy fallback: include organization entry for every active membership.
-      entries.push({ kind: 'organization', orgId: m.orgId });
+    const templateKeys = extras.orgGrantTemplateKeys.get(m.orgId) ?? [];
+    const hasOrgGrant = templateKeys.some((k) => ORG_WORKSPACE_TEMPLATE_KEYS.has(k));
+    if (hasOrgGrant) {
+      entries.push({ kind: 'organization', orgId: m.orgId, ...(orgName ? { orgName } : {}) });
     }
   }
 
-  if (!entries.some((e) => e.kind === 'personal')) {
-    entries.push({ kind: 'personal' });
-  }
+  // No bare {kind:'personal'} fallback (ruling 3): every personal entry
+  // carries an orgId. Users with no active memberships have expert,
+  // operations, or no available contexts.
 
   if (loaded.expert) entries.push({ kind: 'expert' });
   if (loaded.staffTemplates.length > 0) entries.push({ kind: 'operations' });
 
+  // Deterministic order: personal entries first (tie-broken by orgId),
+  // then organization (tie-broken by orgId), then expert, then operations.
+  entries.sort((a, b) => {
+    const kindOrder = ['personal', 'organization', 'expert', 'operations'];
+    const ki = kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind);
+    if (ki !== 0) return ki;
+    const aOrg = 'orgId' in a ? a.orgId ?? '' : '';
+    const bOrg = 'orgId' in b ? b.orgId ?? '' : '';
+    return aOrg.localeCompare(bOrg);
+  });
+
   return entries;
+}
+
+/**
+ * Check whether a target context is available to enter (ruling 3, T-C1.02).
+ * Uses the same `computeAvailableContexts` output so switch acceptance and
+ * the available-contexts list are always consistent.
+ */
+export function canEnterContext(
+  available: readonly AvailableContextEntry[],
+  target: ActiveContext,
+): boolean {
+  return available.some((entry) => {
+    if (entry.kind !== target.kind) return false;
+    if (entry.kind === 'personal' && target.kind === 'personal') {
+      return entry.orgId === target.orgId;
+    }
+    if (entry.kind === 'organization' && target.kind === 'organization') {
+      return entry.orgId === target.orgId;
+    }
+    return true; // expert, operations — no orgId to compare
+  });
 }

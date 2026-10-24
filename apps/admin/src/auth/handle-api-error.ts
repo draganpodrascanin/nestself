@@ -1,17 +1,22 @@
 /**
  * Shared API error handler for the admin app (6.1.5).
+ *
+ * Wired through QueryClient cache onError so it fires on every failed
+ * query and mutation (ruling 6, T-C1.02).
  */
 import type { NavigateFn } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { ApiError } from '@nestself/api-client';
 import type { ActiveContext } from '@nestself/contracts';
 
-interface ErrorHandlerDeps {
+export interface ErrorHandlerDeps {
   navigate: NavigateFn;
   queryClient: QueryClient;
   refreshPrincipal: () => Promise<void>;
   switchContext: (ctx: ActiveContext) => Promise<void>;
   showToast?: (message: string) => void;
+  /** i18n translation function. */
+  t?: (key: string) => string;
 }
 
 export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
@@ -39,9 +44,10 @@ export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
 
   if (error.status === 403 && error.code === 'org_context_expired') {
     void deps.switchContext({ kind: 'personal' });
-    deps.showToast?.(
-      'Your organisation session has expired. Switched to personal context.',
-    );
+    const message = deps.t
+      ? deps.t('contextSwitcher.error.org_context_expired')
+      : 'Your organisation session has expired.';
+    deps.showToast?.(message);
     return;
   }
 

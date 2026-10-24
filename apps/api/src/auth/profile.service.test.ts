@@ -19,7 +19,36 @@ const META = { ip: '203.0.113.1', userAgent: 'test' };
 function createMocks() {
   return {
     identities: { updateProfile: vi.fn().mockResolvedValue({ id: 'user-1' }) },
-    principalLoader: { invalidateUser: vi.fn().mockResolvedValue(undefined) },
+    principalLoader: {
+      invalidateUser: vi.fn().mockResolvedValue(undefined),
+      load: vi.fn().mockResolvedValue({
+        userId: 'user-1',
+        displayName: 'Ana Petrović',
+        initials: 'AP',
+        locale: 'sr-Latn',
+        memberships: [],
+        staffTemplates: [],
+        expert: null,
+        isSuspended: false,
+        isDeactivated: false,
+      }),
+      loadAvailableContextExtras: vi.fn().mockResolvedValue({
+        orgGrantTemplateKeys: new Map(),
+        orgNames: new Map(),
+      }),
+    },
+    contextLoader: {
+      build: vi.fn().mockResolvedValue({
+        now: new Date(),
+        isDeactivated: false,
+        isSuspended: false,
+        grants: [],
+        assignments: [],
+        ancestorIds: [],
+        orgSelfApprovalAllowed: false,
+        organizationTimezone: 'Europe/Belgrade',
+      }),
+    },
     audit: { record: vi.fn().mockResolvedValue(undefined) },
   };
 }
@@ -33,6 +62,7 @@ describe('ProfileService', () => {
     service = new ProfileService(
       mocks.identities as never,
       mocks.principalLoader as never,
+      mocks.contextLoader as never,
       mocks.audit as never,
     );
   });
