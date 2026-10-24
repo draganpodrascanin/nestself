@@ -186,6 +186,20 @@ export function orgNamesKey(orgIds: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Availability version keys (ACC-R-20, 5.9.5)
+// ---------------------------------------------------------------------------
+
+/** `availability_version:{orgId}` — per-org availability version counter. */
+export function availabilityVersionKey(orgId: string): string {
+  return `availability_version:${orgId}`;
+}
+
+/** `availability_version:global` — global availability version counter. */
+export function availabilityVersionGlobalKey(): string {
+  return 'availability_version:global';
+}
+
+// ---------------------------------------------------------------------------
 // Pub/sub channels
 // ---------------------------------------------------------------------------
 
