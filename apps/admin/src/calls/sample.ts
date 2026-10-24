@@ -17,8 +17,8 @@ export function sampleConsultation(appointmentId: string, userId: string | undef
 }
 
 /**
- * A participant's first name (CALL-18). Only sample mode knows names: the
- * appointment contract carries user ids, so API mode shows a neutral label.
+ * A participant's first name in sample mode (CALL-18). In API mode the
+ * appointment response carries it (`employee.firstName`).
  */
 export function sampleFirstName(userId: string): string | null {
   const person = SAMPLE_PEOPLE.find((candidate) => candidate.id === userId);

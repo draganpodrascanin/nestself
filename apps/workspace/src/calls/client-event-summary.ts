@@ -4,7 +4,7 @@
  * Built from the client events of D-CW-13, so it holds connection metadata
  * only: never names, device labels or anything said.
  */
-import type { CallQualityMetrics, ClientEventRequest } from '@nestself/contracts';
+import type { CallProblemSummary, CallQualityMetrics, ClientEventRequest } from '@nestself/contracts';
 
 export interface ClientEventSummary {
   durationMs: number | null;
@@ -50,12 +50,15 @@ export class ClientEventSummaryRecorder {
     };
   }
 
-  /** The report as one strict client event: the call's final connection aggregate. */
-  reportEvent(now: number = Date.now()): ClientEventRequest {
-    const { durationMs, metrics, browser, os } = this.summary(now);
+  /**
+   * The `summary` of `POST /calls/:sessionId/problem-report` (CALL-16): the
+   * strict connection summary, with only the fields that were measured.
+   */
+  problemSummary(now: number = Date.now()): CallProblemSummary {
+    const { durationMs, reconnects, metrics, browser, os } = this.summary(now);
     return {
-      eventName: 'connectionStats',
       ...(durationMs !== null ? { durationMs: Math.round(durationMs) } : {}),
+      reconnectCount: reconnects,
       ...(metrics ? { metrics } : {}),
       ...(browser ? { browser } : {}),
       ...(os ? { os } : {}),

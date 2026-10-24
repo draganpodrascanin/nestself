@@ -6,7 +6,7 @@
  */
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { appointmentDetailQuery, appointmentListQuery } from '@nestself/api-client';
-import type { Appointment } from '@nestself/contracts';
+import type { AppointmentResponse } from '@nestself/contracts';
 import { useAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { callsApi } from './calls-api';
@@ -15,7 +15,7 @@ import { sampleConsultation, sampleConsultationsFor } from './sample';
 
 export interface ConsultationListState {
   status: 'pending' | 'error' | 'success';
-  items: Appointment[];
+  items: AppointmentResponse[];
   error: unknown;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -51,7 +51,7 @@ export function useConsultationList(): ConsultationListState {
 
 export interface ConsultationState {
   status: 'pending' | 'error' | 'success';
-  appointment: Appointment | null;
+  appointment: AppointmentResponse | null;
   error: unknown;
   refetch: () => void;
 }

@@ -2,7 +2,12 @@
  * The employee's consultation call (CALL-02 to CALL-16, CALL-34): join
  * window states, the optional location prompt, the mandatory pre-join
  * check, the call stage with its waiting state and quick signals, and the
- * post-call screen with feedback, the follow-up card and the problem report.
+ * post-call screen with feedback, then the follow-up card and the problem
+ * report.
+ *
+ * The follow-up card (D-CW-37) appears when a proposal for this consultation
+ * arrives on the call room or on the user's own room (`user:{userId}`), or
+ * when the post-call screen finds one already waiting (CALL-42).
  *
  * The join response is used once, to start the controller, and is never
  * stored (CW-R-59): only the session id (for the call room and the client
@@ -10,6 +15,7 @@
  * preview does not stay on.
  */
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +31,7 @@ import {
   useMotionPreset,
   useToast,
 } from '@nestself/ui';
-import { startClientEventPoster } from '@nestself/api-client';
+import { appointmentKeys, startClientEventPoster } from '@nestself/api-client';
 import type { ClientEventPoster, FollowUpProposedEvent } from '@nestself/api-client';
 import { CALL_LOCATION_TEXT_MAX_LENGTH } from '@nestself/contracts';
 import type { Appointment, CallJoinResponse, CallSignalPayload } from '@nestself/contracts';
@@ -44,8 +50,11 @@ import {
   useVideoTiles,
 } from '@nestself/video';
 import type { CallSessionControllerApi, CallSignal } from '@nestself/video';
+import { useAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { EmployeeFollowUpPanel } from './follow-up-panel';
+import { markJoined } from './joined-sessions';
+import { userRoomClient } from './user-room-client';
 import { callRoomClient } from './call-room-client';
 import { callsApi } from './calls-api';
 import { ClientEventSummaryRecorder } from './client-event-summary';
@@ -183,13 +192,32 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
   const [controlError, setControlError] = useState<string | null>(null);
   const [endReason, setEndReason] = useState<EndReason | null>(null);
   const [postCallDue, setPostCallDue] = useState(false);
-  const [proposal, setProposal] = useState<FollowUpProposedEvent | null>(null);
+  const [liveProposal, setLiveProposal] = useState<FollowUpProposedEvent | null>(null);
+  const { principal } = useAuth();
 
   const sharesLocation = supportAreaOf(appointment.serviceCategory) === 'psychological';
   const remotePresent = expertPresent || tiles.remoteTiles.length > 0;
   const left = joined && call.status === 'left';
   const reason: EndReason | null = endReason ?? (left ? 'ended' : null);
   const phase = !joined ? 'prejoin' : left && (reason !== 'ended' || postCallDue) ? 'post' : 'call';
+
+  // A proposal already waiting when the post-call screen opens (CALL-42): the room event may have come first.
+  const waiting = useQuery({
+    queryKey: [...appointmentKeys.lists(), 'follow-up-of', appointment.id],
+    queryFn: () => callsApi.listAppointments({ status: 'proposed', from: appointment.startsAt }),
+    enabled: phase === 'post' && !isSampleDataMode,
+    select: (page) => page.items.find((item) => item.followUpOf === appointment.id) ?? null,
+  });
+  const proposal: FollowUpProposedEvent | null =
+    liveProposal ??
+    (waiting.data
+      ? {
+          appointmentId: appointment.id,
+          followUpId: waiting.data.id,
+          startsAt: waiting.data.startsAt,
+          durationMinutes: durationMinutes(waiting.data),
+        }
+      : null);
 
   // An ended call shows the stage's "session ended" state, then the post-call screen.
   useEffect(() => {
@@ -264,10 +292,21 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
       onParticipantJoined: (event) => onExpertPresence(event.role, true),
       onParticipantLeft: (event) => onExpertPresence(event.role, false),
       onSessionEnded: () => onSessionEnded(),
-      onFollowUpProposed: (event) => setProposal(event),
+      onFollowUpProposed: (event) => setLiveProposal(event),
       onUnavailable: () => onUnavailable(),
     });
   }, [sessionId]);
+
+  // The user's own room: a proposal made while this screen is open but after the call room closed (CALL-42).
+  const userId = principal?.userId ?? null;
+  useEffect(() => {
+    if (!userId || !joined) return undefined;
+    return userRoomClient.subscribe(userId, {
+      onFollowUpProposed: (event) => {
+        if (event.appointmentId === appointment.id) setLiveProposal(event);
+      },
+    });
+  }, [userId, joined, appointment.id]);
 
   // Sample mode: the fake expert joins shortly after the employee.
   useEffect(() => {
@@ -305,6 +344,7 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
       return;
     }
     setSessionId(response.sessionId);
+    markJoined(appointment.id);
     setJoined(true);
     recorder.started();
     // A failure to connect media is shown by the stage (status `failed`, with Rejoin).
@@ -509,7 +549,8 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
               : t('postCall.ended')}
         </Heading>
         {sampleNotice}
-        {/* A proposal from the room (D-CW-37); the card animates in when it arrives. */}
+        {/* D-CW-37: feedback first, then the follow-up card, which animates in when a proposal arrives. */}
+        <FeedbackForm appointmentId={appointment.id} />
         {proposal ? (
           <EmployeeFollowUpPanel
             key={proposal.followUpId}
@@ -522,7 +563,6 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
             status="proposed"
           />
         ) : null}
-        <FeedbackForm appointmentId={appointment.id} />
         <ReportProblemDialog sessionId={sessionId} recorder={recorder} />
         <Link
           to="/appointments"

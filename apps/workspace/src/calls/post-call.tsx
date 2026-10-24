@@ -1,6 +1,8 @@
 /**
  * The employee's post-call screen pieces: the private feedback form
- * (CALL-15) and "Report a technical problem" (CALL-16).
+ * (CALL-15) and "Report a technical problem" (CALL-16), which sends a fixed
+ * category and the call's connection summary to
+ * `POST /calls/:sessionId/problem-report`.
  */
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -22,7 +24,13 @@ import {
   Textarea,
 } from '@nestself/ui';
 import type { FormError, FormErrorSummaryHandle } from '@nestself/ui';
-import { CALL_FEEDBACK_COMMENT_MAX_LENGTH, CALL_FEEDBACK_SCORE_MAX, CALL_FEEDBACK_SCORE_MIN } from '@nestself/contracts';
+import {
+  CALL_FEEDBACK_COMMENT_MAX_LENGTH,
+  CALL_FEEDBACK_SCORE_MAX,
+  CALL_FEEDBACK_SCORE_MIN,
+  CALL_PROBLEM_CATEGORIES,
+} from '@nestself/contracts';
+import type { CallProblemCategory } from '@nestself/contracts';
 import { classifyQuality } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
 import { callsApi } from './calls-api';
@@ -136,9 +144,10 @@ function formatQuality(t: TFunction<'calls'>, summary: ClientEventSummary): stri
 }
 
 /**
- * Sends this call's connection details to NestSelf support (CALL-16): the
- * call length, reconnections, the last connection aggregate, browser and
- * OS, as one strict client event. Nothing said, no names, no device labels.
+ * Sends this call's connection details to NestSelf support (CALL-16): what
+ * kind of problem it was (a fixed choice) and the call length,
+ * reconnections, the last connection aggregate, browser and OS. Nothing
+ * said, no names, no device labels, no free text.
  */
 export function ReportProblemDialog({ sessionId, recorder }: { sessionId: string | null; recorder: ClientEventSummaryRecorder }) {
   const { t } = useTranslation('calls');
@@ -146,6 +155,7 @@ export function ReportProblemDialog({ sessionId, recorder }: { sessionId: string
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<'sent' | 'sample' | null>(null);
+  const [category, setCategory] = useState<CallProblemCategory | ''>('');
   const summary = recorder.summary();
   const notMeasured = t('report.notMeasured');
 
@@ -162,6 +172,10 @@ export function ReportProblemDialog({ sessionId, recorder }: { sessionId: string
 
   const send = async () => {
     setError(null);
+    if (!category) {
+      setError(t('report.categoryRequired'));
+      return;
+    }
     if (isSampleDataMode || !sessionId) {
       setSent('sample');
       setOpen(false);
@@ -169,7 +183,7 @@ export function ReportProblemDialog({ sessionId, recorder }: { sessionId: string
     }
     setPending(true);
     try {
-      await callsApi.postClientEvents(sessionId, [recorder.reportEvent()]);
+      await callsApi.reportProblem(sessionId, { category, summary: recorder.problemSummary() });
       setSent('sent');
       setOpen(false);
     } catch (err) {
@@ -188,6 +202,19 @@ export function ReportProblemDialog({ sessionId, recorder }: { sessionId: string
           </Button>
         </DialogTrigger>
         <DialogContent title={t('report.title')} description={t('report.body')} closeLabel={t('report.cancel')}>
+          <RadioGroup
+            label={t('report.category')}
+            name="category"
+            value={category}
+            onValueChange={(value) => setCategory(value as CallProblemCategory)}
+            className="mb-4 gap-2 flex flex-col"
+          >
+            {CALL_PROBLEM_CATEGORIES.map((value) => (
+              <RadioItem key={value} value={value}>
+                {t(`report.categories.${value}`)}
+              </RadioItem>
+            ))}
+          </RadioGroup>
           <h3 className="mb-2 type-label text-text">{t('report.attached')}</h3>
           <dl className="gap-x-6 gap-y-2 m-0 grid grid-cols-[max-content_1fr]">
             {rows.map((row) => (

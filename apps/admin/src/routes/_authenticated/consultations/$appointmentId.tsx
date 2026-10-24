@@ -3,22 +3,22 @@
  * CALL-34, D-CW-37): participants, time, status and outcome; the running-late
  * signal and Join inside the join window; the call itself in place; after
  * the call, the outcome dialog (enum only) and, once the outcome is
- * `completed`, the follow-up proposal card.
+ * `completed`, the follow-up proposal card. On a follow-up the expert
+ * proposed, the employee's suggested windows to schedule one (CALL-37).
  */
 import { useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Button, Card, Field, Heading, Select, StatusBlock } from '@nestself/ui';
 import { ApiError } from '@nestself/api-client';
-import type { Appointment, CallOutcomeStatus, FollowUpProposeRequest } from '@nestself/contracts';
-import { FollowUpCard } from '@nestself/video';
-import type { ExpertFollowUpStatus, FollowUpProposal } from '@nestself/video';
+import type { Appointment, CallOutcomeStatus } from '@nestself/contracts';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
 import { callsApi } from '../../../calls/calls-api';
 import { ExpertCall } from '../../../calls/expert-call';
+import { ExpertFollowUp, ScheduleFollowUpCard } from '../../../calls/expert-follow-up';
 import type { ExpertCallEnd } from '../../../calls/expert-call';
-import { STATUS_TONE, durationMinutes, outcomeColumn, useCategoryLabel, useZonedFormat } from '../../../calls/format';
+import { STATUS_TONE, outcomeColumn, useCategoryLabel, useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
 import { OutcomeDialog } from '../../../calls/outcome-dialog';
 import { Reveal } from '../../../calls/reveal';
@@ -78,52 +78,6 @@ function RunningLate({ appointment }: { appointment: Appointment }) {
   );
 }
 
-function ExpertFollowUp({ appointment }: { appointment: Appointment }) {
-  const { t } = useTranslation('calls');
-  const [status, setStatus] = useState<ExpertFollowUpStatus>('idle');
-  const [proposal, setProposal] = useState<FollowUpProposal | null>(null);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const propose = async (request: FollowUpProposeRequest) => {
-    setError(null);
-    if (isSampleDataMode) {
-      setNotice(t('sample.actionNoop'));
-      return;
-    }
-    setPending(true);
-    try {
-      await callsApi.proposeFollowUp(appointment.id, request);
-      setProposal(request);
-      setStatus('proposed');
-    } catch (err) {
-      // Until T-CW-1.9 serves the route, the API answers 404 and this says so.
-      setError(mapCallError(err, t));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <div className="gap-3 flex flex-col">
-      <FollowUpCard
-        variant="expert"
-        status={status}
-        timeZone={appointment.timeZone}
-        defaultDurationMinutes={durationMinutes(appointment)}
-        proposal={proposal}
-        onPropose={(request) => void propose(request)}
-        pending={pending}
-        error={error}
-      />
-      <Reveal show={notice !== null}>
-        <Alert tone="info">{notice}</Alert>
-      </Reveal>
-    </div>
-  );
-}
-
 function ConsultationPage() {
   const { appointmentId } = Route.useParams();
   const { t } = useTranslation('calls');
@@ -164,7 +118,7 @@ function ConsultationPage() {
   }
   if (appointment.expertUserId !== principal?.userId) return permission;
 
-  const employeeName = isSampleDataMode ? sampleFirstName(appointment.employeeUserId) : null;
+  const employeeName = isSampleDataMode ? sampleFirstName(appointment.employeeUserId) : (appointment.employee?.firstName ?? null);
   const expertName = principal.displayName.split(' ')[0] ?? principal.displayName;
   const outcome = recorded ? (recorded === 'completed' ? 'completed' : recorded === 'canceled' || recorded === 'technical_failure' ? 'canceled' : 'no_show') : outcomeColumn(appointment, now);
   const canRecordOutcome = !recorded && appointment.status === 'confirmed' && (ended !== null || Date.parse(appointment.startsAt) <= now);
@@ -258,6 +212,7 @@ function ConsultationPage() {
             </Alert>
           </Reveal>
           {showFollowUp ? <ExpertFollowUp appointment={appointment} /> : null}
+          <ScheduleFollowUpCard appointment={appointment} />
         </>
       )}
 

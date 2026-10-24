@@ -1,16 +1,19 @@
 /**
- * The call route in API mode (T-CW-1.5): join failures render translated
- * copy, a closed window explains itself, a successful join reaches the call
- * and the post-call feedback posts to the API. The Chime controller is
- * replaced by `FakeCallSessionController`; the call room by a stub whose
- * handlers the test calls as the server would.
+ * The call route in API mode (T-CW-1.5, T-CW-1.9): join failures render
+ * translated copy, a closed window explains itself, a successful join
+ * reaches the call and the post-call feedback posts to the API; on the
+ * post-call screen the follow-up card follows the feedback when a proposal
+ * arrives (call room, user room or already waiting), and the problem report
+ * posts a category and the connection summary. The Chime controller is
+ * replaced by `FakeCallSessionController`; the call and user rooms by stubs
+ * whose handlers the test calls as the server would.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { CallRoomHandlers } from '@nestself/api-client';
+import type { CallRoomHandlers, UserRoomHandlers } from '@nestself/api-client';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import en from '@nestself/i18n/locales/en/calls.json';
 
@@ -43,6 +46,20 @@ vi.mock('../../calls/call-room-client', () => ({
       room.handlers = handlers;
       return () => {
         room.handlers = null;
+      };
+    },
+  },
+}));
+
+/** The user's own room, as the post-call screen sees it. */
+const userRoom = vi.hoisted(() => ({ userId: null as string | null, handlers: null as UserRoomHandlers | null }));
+vi.mock('../../calls/user-room-client', () => ({
+  userRoomClient: {
+    subscribe: (userId: string, handlers: UserRoomHandlers) => {
+      userRoom.userId = userId;
+      userRoom.handlers = handlers;
+      return () => {
+        userRoom.handlers = null;
       };
     },
   },
@@ -246,6 +263,107 @@ describe('call route (API mode)', () => {
     act(() => room.handlers?.onSessionEnded?.());
     expect(await screen.findByText(en.consultation.sessionEnded)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: en.postCall.ended }, { timeout: 8000 })).toBeInTheDocument();
+  }, 15_000);
+
+  async function toPostCall(routes: Record<string, () => Response> = {}, overrides: Record<string, unknown> = {}) {
+    const appointment = appointmentAt(Date.now() + 5 * MINUTE, overrides);
+    const sent = serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment),
+      'POST /api/appointments/appt_1/join': () => json(200, joinResponse(appointment)),
+      ...routes,
+    });
+    renderCall();
+    const user = userEvent.setup();
+    await user.click(await readyToJoin());
+    await user.click(await screen.findByRole('button', { name: en.consultation.leave }, { timeout: 5000 }));
+    await screen.findByRole('heading', { name: en.postCall.left }, { timeout: 5000 });
+    return { user, sent, appointment };
+  }
+
+  const proposal = (startsAt: number) => ({
+    appointmentId: 'appt_1',
+    followUpId: 'appt_2',
+    startsAt: new Date(startsAt).toISOString(),
+    durationMinutes: 50,
+  });
+
+  it('names the expert from the API in the waiting state', async () => {
+    const appointment = appointmentAt(Date.now() + 5 * MINUTE, { expert: { firstName: 'Milica' }, employee: { firstName: 'Jovan' } });
+    serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment),
+      'POST /api/appointments/appt_1/join': () => json(200, joinResponse(appointment)),
+    });
+    renderCall();
+    const user = userEvent.setup();
+    await user.click(await readyToJoin());
+    expect(await screen.findByText('Milica will join shortly', {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('shows the follow-up card after the feedback when the proposal arrives on the call room; approval wording on confirm', async () => {
+    const followUpAt = Date.now() + 7 * 24 * 60 * MINUTE;
+    const { user, sent } = await toPostCall({
+      'POST /api/appointments/appt_2/confirm': () =>
+        json(200, appointmentAt(followUpAt, { id: 'appt_2', status: 'awaiting_approval', followUpOf: 'appt_1' })),
+    });
+    expect(screen.queryByRole('heading', { name: en.followUp.employeeTitle })).not.toBeInTheDocument();
+
+    act(() => room.handlers?.onFollowUpProposed?.(proposal(followUpAt)));
+    const card = await screen.findByRole('heading', { name: en.followUp.employeeTitle });
+    const feedback = screen.getByRole('heading', { name: en.feedback.title });
+    // D-CW-37: feedback first, then the card.
+    expect(feedback.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: en.followUp.confirm }));
+    expect(await screen.findByText(en.followUp.awaitingApproval)).toBeInTheDocument();
+    expect(sent.find((s) => s.path === '/api/appointments/appt_2/confirm')).toMatchObject({ method: 'POST', body: {} });
+  });
+
+  it('renders approver_missing on the card when the organisation has no approver', async () => {
+    const { user } = await toPostCall({
+      'POST /api/appointments/appt_2/confirm': () => json(409, { code: 'approver_missing', message: 'English text for developers' }),
+    });
+    act(() => room.handlers?.onFollowUpProposed?.(proposal(Date.now() + 7 * 24 * 60 * MINUTE)));
+    await user.click(await screen.findByRole('button', { name: en.followUp.confirm }));
+    expect(await screen.findByText(en.errors.approverMissing)).toBeInTheDocument();
+    expect(screen.queryByText('English text for developers')).not.toBeInTheDocument();
+  });
+
+  it('shows a proposal that arrives on the user room, and one already waiting when the screen opens (CALL-42)', async () => {
+    const followUpAt = Date.now() + 7 * 24 * 60 * MINUTE;
+    const waiting = appointmentAt(followUpAt, { id: 'appt_2', status: 'proposed', followUpOf: 'appt_1' });
+    await toPostCall({ 'GET /api/appointments': () => json(200, { items: [waiting], nextCursor: null }) });
+    expect(await screen.findByRole('heading', { name: en.followUp.employeeTitle })).toBeInTheDocument();
+    cleanup();
+
+    await toPostCall();
+    expect(userRoom.userId).toBe(employee.principal.userId);
+    act(() => userRoom.handlers?.onFollowUpProposed?.({ ...proposal(followUpAt), appointmentId: 'appt_other' }));
+    expect(screen.queryByRole('heading', { name: en.followUp.employeeTitle })).not.toBeInTheDocument();
+    act(() => userRoom.handlers?.onFollowUpProposed?.(proposal(followUpAt)));
+    expect(await screen.findByRole('heading', { name: en.followUp.employeeTitle })).toBeInTheDocument();
+  }, 15_000);
+
+  it('reports a technical problem with a category and the connection summary, and renders a failure', async () => {
+    let fail = true;
+    const { user, sent } = await toPostCall({
+      'POST /api/calls/sess_1/problem-report': () =>
+        fail ? json(429, { code: 'rate_limited', message: 'Too many' }) : new Response(null, { status: 204 }),
+    });
+    await user.click(screen.getByRole('button', { name: en.report.open }));
+    const dialog = await screen.findByRole('dialog', { name: en.report.title });
+    await user.click(within(dialog).getByRole('button', { name: en.report.send }));
+    expect(await within(dialog).findByText(en.report.categoryRequired)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('radio', { name: en.report.categories.audio }));
+    await user.click(within(dialog).getByRole('button', { name: en.report.send }));
+    expect(await within(dialog).findByText(en.errors.rateLimited)).toBeInTheDocument();
+
+    fail = false;
+    await user.click(within(dialog).getByRole('button', { name: en.report.send }));
+    expect(await screen.findByText(en.report.sent)).toBeInTheDocument();
+    const report = sent.filter((s) => s.path === '/api/calls/sess_1/problem-report').at(-1)!;
+    expect(report.body).toMatchObject({ category: 'audio', summary: { reconnectCount: 0 } });
+    expect(Object.keys(report.body as object).sort()).toEqual(['category', 'summary']);
   }, 15_000);
 
   it('sends a signed-out visitor to sign-in with the call as the return path', async () => {

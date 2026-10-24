@@ -17,6 +17,7 @@ import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { isSampleDataMode } from '../data-source';
+import { UserRoomListener } from '../calls/user-room-listener';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
@@ -125,6 +126,8 @@ function AuthenticatedLayout() {
 
   return (
     <AppShell sidebar={sidebar} topbar={topbar} bottomBar={bottomBar}>
+      {/* Follow-up proposals and reminders on the user's own room, on every page (CALL-42, CALL-01). */}
+      <UserRoomListener />
       <Outlet />
     </AppShell>
   );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Heading, StatusBlock, Table, Td, Text, Th } from '@nestself/ui';
-import type { Appointment } from '@nestself/contracts';
+import type { AppointmentResponse } from '@nestself/contracts';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
 import { STATUS_TONE, outcomeColumn, useCategoryLabel, useZonedFormat } from '../../../calls/format';
@@ -16,11 +16,11 @@ export const Route = createFileRoute('/_authenticated/consultations/')({
   component: ConsultationsPage,
 });
 
-function ConsultationRow({ appointment, linked, now }: { appointment: Appointment; linked: boolean; now: number }) {
+function ConsultationRow({ appointment, linked, now }: { appointment: AppointmentResponse; linked: boolean; now: number }) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const categoryLabel = useCategoryLabel();
-  const employee = (isSampleDataMode ? sampleFirstName(appointment.employeeUserId) : null) ?? t('consultations.employeeFallback');
+  const employee = (isSampleDataMode ? sampleFirstName(appointment.employeeUserId) : appointment.employee?.firstName) ?? t('consultations.employeeFallback');
   const when = format.short(appointment.startsAt, appointment.timeZone);
   const outcome = outcomeColumn(appointment, now);
   return (

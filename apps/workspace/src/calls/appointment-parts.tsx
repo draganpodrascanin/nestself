@@ -8,7 +8,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, buttonClassNames, Button } from '@nestself/ui';
 import { CALL_JOIN_WINDOW_BEFORE_MINUTES } from '@nestself/contracts';
-import type { Appointment } from '@nestself/contracts';
+import type { Appointment, AppointmentResponse } from '@nestself/contracts';
 import { isSampleDataMode } from '../data-source';
 import { STATUS_TONE, supportAreaOf, useZonedFormat } from './format';
 import { sampleFirstName } from './sample';
@@ -29,11 +29,14 @@ export function useCategoryLabel() {
   };
 }
 
-/** The expert's first name where it is known (sample mode), otherwise a neutral label. */
+/**
+ * The expert's first name: from the API response (`expert.firstName`, first
+ * names only) or the sample people, otherwise a neutral label.
+ */
 export function useExpertLabel() {
   const { t } = useTranslation('calls');
-  return (appointment: Appointment) => {
-    const name = isSampleDataMode ? sampleFirstName(appointment.expertUserId) : null;
+  return (appointment: Pick<AppointmentResponse, 'expertUserId' | 'expert'>) => {
+    const name = isSampleDataMode ? sampleFirstName(appointment.expertUserId) : (appointment.expert?.firstName ?? null);
     return { name, label: name ?? t('appointments.yourExpert') };
   };
 }
