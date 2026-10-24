@@ -11,6 +11,7 @@
 export {
   // Schemas — public surface
   ContentIdSchema,
+  LinkHrefSchema,
   MarkSchema,
   SectionHeadingSchema,
   ParagraphSchema,

@@ -137,3 +137,39 @@ describe('ESLint guard — file extensions (N3)', () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// react/no-danger guard for render/ and editor/ (T-C1.06)
+// ---------------------------------------------------------------------------
+
+function hasNoDangerViolation(results: ESLint.LintResult[]): boolean {
+  return results.flatMap((r) => r.messages).some(
+    (m) => m.ruleId === 'no-restricted-syntax' && m.message.includes('dangerouslySetInnerHTML'),
+  );
+}
+
+describe('ESLint guard — no dangerouslySetInnerHTML (T-C1.06)', { timeout: 15_000 }, () => {
+  it('rejects dangerouslySetInnerHTML in render/', async () => {
+    const code = `import React from 'react';\nexport default function X() { return <div dangerouslySetInnerHTML={{ __html: '' }} />; }\n`;
+    const results = await lintFixture(code, 'src/render/test-fixture.tsx');
+    expect(hasNoDangerViolation(results)).toBe(true);
+  });
+
+  it('rejects dangerouslySetInnerHTML in editor/', async () => {
+    const code = `import React from 'react';\nexport default function X() { return <div dangerouslySetInnerHTML={{ __html: '' }} />; }\n`;
+    const results = await lintFixture(code, 'src/editor/test-fixture.tsx');
+    expect(hasNoDangerViolation(results)).toBe(true);
+  });
+
+  it('allows normal JSX in render/', async () => {
+    const code = `import React from 'react';\nexport default function X() { return <div>Hello</div>; }\n`;
+    const results = await lintFixture(code, 'src/render/test-fixture.tsx');
+    expect(hasNoDangerViolation(results)).toBe(false);
+  });
+
+  it('allows dangerouslySetInnerHTML outside render/ and editor/ (no rule applied)', async () => {
+    const code = `import React from 'react';\nexport default function X() { return <div dangerouslySetInnerHTML={{ __html: '' }} />; }\n`;
+    const results = await lintFixture(code, 'src/components/test-fixture.tsx');
+    expect(hasNoDangerViolation(results)).toBe(false);
+  });
+});

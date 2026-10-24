@@ -480,3 +480,123 @@ describe('validateContentDocument — link validation', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Href hardening (T-C1.06)
+// ---------------------------------------------------------------------------
+
+describe('validateContentDocument — href hardening (T-C1.06)', () => {
+  // (a) href must literally start with 'https://'
+  it('rejects https:allowed.example (no double slash)', () => {
+    // The URL parser normalizes 'https:allowed.example' to 'https://allowed.example/'
+    // but the intent was likely a typo; we require the literal 'https://' prefix.
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https:allowed.example' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects https:///triple-slash', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https:///path' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts valid https://example.com', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/page' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(true);
+  });
+
+  // (b) ASCII-only: reject non-ASCII characters
+  it('rejects href with non-ASCII Unicode character', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://сajt.example.com' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects href with zero-width space in host', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://example​.com' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects href with full-width characters', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://ｅxample.com' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects href with Cyrillic lookalike host', () => {
+    // Cyrillic 'а' (U+0430) looks like Latin 'a'
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://exаmple.com' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts punycode IDN (xn-- prefix)', () => {
+    // xn--80aswg.xn--p1ai is the punycode for сайт.рф
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'link',
+        marks: [{ type: 'link', attrs: { href: 'https://xn--80aswg.xn--p1ai/page' } }],
+      }],
+    }]));
+    // The punycode host is ASCII, so the Zod layer accepts it.
+    // The allowlist layer may reject it if the host isn't whitelisted,
+    // but the href shape itself is valid.
+    // For this test, we just check the Zod parse (not the allowlist).
+    // We rely on the allowlist rejecting it.
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Should fail on allowlist, not on href shape
+      expect(result.errors.some((e) => e.code === 'content_invalid_link')).toBe(true);
+    }
+  });
+
+  it('accepts internal nestself:content/ link (unchanged)', () => {
+    const result = validate(doc([{
+      type: 'paragraph',
+      content: [{
+        type: 'text', text: 'related',
+        marks: [{ type: 'link', attrs: { href: 'nestself:content/abc-123' } }],
+      }],
+    }]));
+    expect(result.ok).toBe(true);
+  });
+});

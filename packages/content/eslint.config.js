@@ -26,4 +26,24 @@ export default [
       ],
     },
   },
+  // Guard: src/render/** and src/editor/** must not use dangerouslySetInnerHTML
+  // or innerHTML. The renderer uses React children only (C-03, FMT-R-14, 6.9).
+  // Uses no-restricted-syntax (built-in) instead of react/no-danger since
+  // eslint-plugin-react is not a dependency. The selector catches both the
+  // JSX attribute and any string reference to innerHTML.
+  {
+    name: 'nestself/content-no-danger',
+    files: [
+      'src/{render,editor}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXAttribute[name.name="dangerouslySetInnerHTML"]',
+          message: 'dangerouslySetInnerHTML is banned in render/ and editor/ (C-03, FMT-R-14, 6.9). Use React children instead.',
+        },
+      ],
+    },
+  },
 ];

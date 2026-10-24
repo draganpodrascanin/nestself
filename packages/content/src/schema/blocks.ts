@@ -49,11 +49,21 @@ const WHITESPACE_OR_CONTROL_RE = /[\s\x00-\x1f\x7f\u00a0]/;
 const INTERNAL_LINK_RE = /^nestself:content\/[A-Za-z0-9_-]{1,64}$/;
 
 /**
+ * Non-ASCII character pattern.
+ * Used to reject hrefs containing any non-ASCII byte — IDN hosts must
+ * be given in punycode (T-C1.06 hardening item b).
+ */
+// eslint-disable-next-line no-control-regex -- intentionally matching all non-ASCII
+const NON_ASCII_RE = /[^\x00-\x7f]/;
+
+/**
  * Schema for link hrefs. Enforces:
  * - Non-empty (min 1)
  * - No whitespace or control characters (including U+00A0)
+ * - ASCII-only (IDN hosts must be punycode; T-C1.06 hardening b)
  * - Must be `https://...` or `nestself:content/<id>`
- * - HTTPS links: no userinfo (@), no non-default port
+ * - HTTPS links: must literally start with `https://` (T-C1.06 hardening a),
+ *   no userinfo (@), no non-default port
  *
  * The host allowlist is applied at runtime in validateContentDocument,
  * not in the base Zod schema (R4).
@@ -66,10 +76,17 @@ export const LinkHrefSchema = z
     'Link href must not contain whitespace or control characters.',
   )
   .refine(
+    (href) => !NON_ASCII_RE.test(href),
+    'Link href must be ASCII-only; use punycode for internationalized domain names.',
+  )
+  .refine(
     (href) => {
       // Accept internal links
       if (INTERNAL_LINK_RE.test(href)) return true;
-      // Must be https:
+      // Must literally start with 'https://' (T-C1.06 hardening a).
+      // This rejects inputs like 'https:allowed.example' that the URL
+      // parser would normalize into a valid https URL.
+      if (!href.startsWith('https://')) return false;
       try {
         const url = new URL(href);
         if (url.protocol !== 'https:') return false;

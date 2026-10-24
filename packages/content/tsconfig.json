@@ -1,1 +1,1 @@
-{ "extends": "@nestself/typescript-config/vite-react.json", "compilerOptions": { "types": [] }, "include": ["src"] }
+{ "extends": "@nestself/typescript-config/vite-react.json", "compilerOptions": { "types": [] }, "include": ["src"], "exclude": ["src/**/*.stories.tsx"] }
