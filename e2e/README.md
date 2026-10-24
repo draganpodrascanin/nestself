@@ -101,6 +101,8 @@ A separate Playwright config (`playwright.auth.config.ts`) exercises the real si
    pnpm --filter @nestself/api db:seed
    ```
 
+   The journeys need the seeded sample people. `hr-access.spec.ts` signs in as the sample HR admin (`user_ivana`), whom the seed also makes the employer owner (`grant_user_ivana_employer_owner`): that grant is what opens `/hr/access`. The seed must run before the first `pnpm e2e:auth`. Nothing in the suite seeds automatically, so it never writes to a database you did not choose.
+
 3. **`apps/api/.env`** present with a valid `DATABASE_URL` and `REDIS_URL`.
 
 4. **Chromium** installed for Playwright:
@@ -123,6 +125,14 @@ The fake identity provider keeps TOTP enrolment in memory. On the **first** run 
 
 If the API process is restarted but the secret file still exists the test will fail because the API no longer knows that secret. Delete `e2e/.auth-state/` and re-run to trigger a fresh enrolment.
 
+### Reused dev servers
+
+Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5174. An API started with `pnpm --filter @nestself/api dev` reads `AUTH_MODE` from `apps/api/.env`. If that is `cognito`, the email-code journeys fail because the fixed code `123456` only works in stub mode. Stop that server before `pnpm e2e:auth`, or start it yourself with `AUTH_MODE=stub FAKE_IDP_FIXED_OTP=123456 SESSION_COOKIE_INSECURE_DEV=true`.
+
+### HR grant administration journey
+
+`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link, checks the grant table, previews Ana Nikolić's effective access (`content.read`), and delegates `people.invite` from her HR administrator grant to Stefan Marković. The API accepts repeated delegations and the HR admin cannot revoke, so every run adds one more delegated row; the test only requires at least one. Assigning and revoking are not covered because no organization template holds `access.grant` or `access.revoke` yet.
+
 ### File structure
 
 ```
@@ -130,6 +140,7 @@ e2e/auth/
   totp.ts                       -- RFC 6238 TOTP helper (node:crypto only)
   workspace-sign-in.spec.ts     -- employee email-code, sign-out, guards, error
   admin-sign-in.spec.ts         -- staff password + TOTP enrol / challenge
+  hr-access.spec.ts             -- HR admin: grant table, access preview, delegation
   README section                -- this section
 ```
 

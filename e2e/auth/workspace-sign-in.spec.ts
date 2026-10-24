@@ -71,10 +71,21 @@ test.describe('Workspace email-code sign-in', () => {
     } else {
       // Fall back: call the sign-out API directly and reload.
       // This ensures the test still validates the unauthenticated redirect
-      // even if the sign-out UI is not yet wired up.
-      await page.evaluate(() =>
-        fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }),
-      );
+      // even if the sign-out UI is not yet wired up. The endpoint needs the
+      // CSRF token from the cookie, like every state-changing call.
+      const status = await page.evaluate(async () => {
+        const csrf = document.cookie
+          .split('; ')
+          .find((c) => c.startsWith('nestself_csrf=') || c.startsWith('__Host-nestself_csrf='))
+          ?.split('=')[1];
+        const res = await fetch('/api/auth/sign-out', {
+          method: 'POST',
+          credentials: 'include',
+          headers: csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {},
+        });
+        return res.status;
+      });
+      expect(status).toBeLessThan(300);
       await page.goto(`${WORKSPACE_URL}/`);
     }
 
