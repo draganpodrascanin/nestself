@@ -15,6 +15,7 @@
   "dependencies": {
     "@nestself/api-client": "workspace:*",
     "@nestself/assets": "workspace:*",
+    "@nestself/content": "workspace:*",
     "@nestself/contracts": "workspace:*",
     "@nestself/i18n": "workspace:*",
     "@nestself/sample-data": "workspace:*",
