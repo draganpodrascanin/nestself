@@ -181,8 +181,10 @@ export class GrantsService {
     const subject = await this.principalLoader.load(body.subjectUserId);
     if (!subject) throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found' });
 
-    // Insert and audit commit together (API-R-22): a failed audit event
-    // rolls the grant back. No tenant setting: the grant has no organization.
+    // The insert and the audit call share one transaction (no tenant
+    // setting: the grant has no organization). In strict mode a rejected
+    // audit write rolls the grant back; otherwise the audit writer logs the
+    // failure and the grant commits, as on the organization path (API-R-22).
     const row = await this.db.withTransaction(async (tx) => {
       const created = await this.authzRepo.createGrant(
         {

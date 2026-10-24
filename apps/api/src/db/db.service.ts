@@ -97,8 +97,10 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Plain transaction without a tenant setting: the system context, in which
-   * the RLS policies admit every row. Use it for writes that belong to no
+   * Plain transaction without a tenant setting: the system context. The RLS
+   * policies treat an empty `app.current_org_id` as the unscoped system
+   * context (`coalesce(current_setting(...), '') = ''` in `schema/_shared.ts`),
+   * so a plain transaction sees every row. Use it for writes that belong to no
    * organization (platform grants) and must commit or roll back as one unit
    * with their audit event; organization data goes through `withOrgScope`.
    */

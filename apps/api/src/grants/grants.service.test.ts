@@ -667,7 +667,7 @@ describe('GrantsService', () => {
       expect(order).toEqual(['begin', 'insert', 'audit', 'commit']);
     });
 
-    it('rejects and leaves no grant when the audit event cannot be recorded', async () => {
+    it('rolls the platform grant back when the audit writer rejects (strict mode)', async () => {
       let committed = false;
       m.db.withTransaction.mockImplementationOnce(async (fn: (tx: never) => Promise<unknown>) => {
         const result = await fn(SYSTEM_TX as never); // a rejection here rolls the insert back
