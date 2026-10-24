@@ -22,12 +22,20 @@
  * - Confirm, suggest times, decline (`consultation.join` on the follow-up):
  *   its employee only (the expert also holds `consultation.join`, and gets
  *   404 like anybody else), while it is `proposed` (409
- *   `appointment_not_proposed`).
+ *   `appointment_not_proposed`). Once the proposed start has passed, confirm
+ *   and suggest times answer 409 `follow_up_not_allowed` (the expert proposes
+ *   again; an expired proposal no longer counts as open); decline still
+ *   works.
  *   - Confirm follows the organization's `follow_up_approval_policy`:
  *     `automatic` confirms it (reminders, calendar email to both parties);
  *     `manager_approval` moves it to `awaiting_approval` and hands it to the
  *     {@link FOLLOW_UP_APPROVAL} requester in the same transaction, so a
  *     refusal (409 `approver_missing` until T-CW-1.10) leaves it `proposed`.
+ *     This service audits `appointment.approval.missing_approver` after the
+ *     rollback, on its own connection once the transaction has released its
+ *     one; requesters only throw. After a committed move to
+ *     `awaiting_approval` it runs the requester's optional `afterCommit`
+ *     (a failure there is logged and the status stays).
  *   - Suggest times stores one to three `{ startsAt, endsAt }` windows (a
  *     second suggestion replaces the first). Each must start in the future
  *     and be long enough for the proposed duration. The status stays
@@ -63,6 +71,8 @@ import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService } from '../db/db.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -109,6 +119,13 @@ function durationMsOf(appointment: Pick<AppointmentRecord, 'startsAt' | 'endsAt'
   return appointment.endsAt.getTime() - appointment.startsAt.getTime();
 }
 
+/** 409 `follow_up_not_allowed` once the proposed start has passed: the expert proposes again. */
+function assertNotExpired(followUp: AppointmentRecord, now: Date): void {
+  if (followUp.startsAt.getTime() <= now.getTime()) {
+    throw followUpNotAllowed('The proposed time has passed');
+  }
+}
+
 /** Where a confirmation lands under each policy. */
 const CONFIRMATION_TARGET: Readonly<Record<FollowUpApprovalPolicy, Extract<AppointmentStatus, 'confirmed' | 'awaiting_approval'>>> = {
   automatic: 'confirmed',
@@ -129,6 +146,7 @@ export class FollowUpService {
     @Inject(FOLLOW_UP_APPROVAL) private readonly approvals: FollowUpApprovalRequester,
     private readonly callRoom: FollowUpCallRoom,
     private readonly notifier: FollowUpNotifier,
+    private readonly memberships: MembershipsRepository,
   ) {}
 
   // ── Propose (CALL-35) ─────────────────────────────────────────────────────
@@ -190,6 +208,7 @@ export class FollowUpService {
   async confirm(followUpId: string, actor: Principal): Promise<AppointmentResponse> {
     const followUp = await this.proposedFollowUp(followUpId, actor, 'employee');
     const now = new Date();
+    assertNotExpired(followUp, now);
     return this.confirmWith(followUp, actor, { respondedAt: now });
   }
 
@@ -201,7 +220,9 @@ export class FollowUpService {
     actor: Principal,
   ): Promise<AppointmentResponse> {
     const followUp = await this.proposedFollowUp(followUpId, actor, 'employee');
-    const windows = this.checkedWindows(body.windows, durationMsOf(followUp), new Date());
+    const now = new Date();
+    assertNotExpired(followUp, now);
+    const windows = this.checkedWindows(body.windows, durationMsOf(followUp), now);
 
     const updated = await this.dbs.withOrgScope(followUp.orgId, (tx) =>
       this.repo.updateFromStatus(followUp.id, 'proposed', null, { suggestedWindows: windows, respondedAt: new Date() }, tx),
@@ -271,13 +292,21 @@ export class FollowUpService {
   ): Promise<AppointmentResponse> {
     const policy = await this.policies.policyOf(followUp.orgId);
     const target = CONFIRMATION_TARGET[policy];
-    const moved = await this.dbs.withOrgScope(followUp.orgId, async (tx) => {
-      const updated = await this.repo.updateFromStatus(followUp.id, 'proposed', target, changes, tx);
-      // A refusal throws and rolls the move back: the follow-up stays `proposed` (D-CW-37).
-      if (updated && target === 'awaiting_approval') await this.approvals.request(updated, tx, actor.userId);
-      return updated;
-    });
+    let moved: AppointmentRecord | null;
+    try {
+      moved = await this.dbs.withOrgScope(followUp.orgId, async (tx) => {
+        const updated = await this.repo.updateFromStatus(followUp.id, 'proposed', target, changes, tx);
+        // A refusal throws and rolls the move back: the follow-up stays `proposed` (D-CW-37).
+        if (updated && target === 'awaiting_approval') await this.approvals.request(updated, tx, actor.userId);
+        return updated;
+      });
+    } catch (error) {
+      if (error instanceof ApiHttpException && error.code === 'approver_missing') await this.recordMissingApprover(followUp, actor);
+      throw error;
+    }
     if (!moved) throw notProposed();
+    // Both the employee's confirm and the expert's pick of a window land here (T-CW-1.10 seam).
+    if (target === 'awaiting_approval') await this.approvalAfterCommit(moved, actor);
 
     await this.record('appointment.confirmed', actor, moved, { confirmedByUserId: actor.userId, policy });
     if (moved.startsAt.getTime() !== followUp.startsAt.getTime()) await this.cancelJobs(moved);
@@ -304,6 +333,41 @@ export class FollowUpService {
         throw invalidField(`windows.${index}.endsAt`, 'A suggested window must fit the proposed session');
       }
       return { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
+    });
+  }
+
+  /** The requester's post-commit work; a failure is logged and the follow-up stays `awaiting_approval`. */
+  private async approvalAfterCommit(moved: AppointmentRecord, actor: Principal): Promise<void> {
+    if (!this.approvals.afterCommit) return;
+    try {
+      await this.approvals.afterCommit(moved, actor.userId);
+    } catch (error) {
+      this.logger.error(
+        { appointmentId: moved.id, operation: 'approvalAfterCommit', error: errorName(error) },
+        'Approval follow-up work after the commit failed',
+      );
+    }
+  }
+
+  /**
+   * `appointment.approval.missing_approver` with the employee's unit
+   * (guidelines 7.4 step 8), written after the confirming transaction rolled
+   * back, so it never waits for a second pool connection while that
+   * transaction holds one.
+   */
+  private async recordMissingApprover(followUp: AppointmentRecord, actor: Principal): Promise<void> {
+    const membership = await this.dbs.withOrgScope(followUp.orgId, (tx) =>
+      this.memberships.findActiveByUserAndOrg(followUp.employeeUserId, followUp.orgId, tx),
+    );
+    await this.audit.record({
+      action: 'appointment.approval.missing_approver',
+      actorUserId: actor.userId,
+      actorKind: 'USER',
+      orgId: followUp.orgId,
+      recordType: 'appointment',
+      recordId: followUp.id,
+      result: 'DENIED',
+      details: { appointmentId: followUp.id, orgId: followUp.orgId, orgUnitId: membership?.orgUnitId ?? null },
     });
   }
 

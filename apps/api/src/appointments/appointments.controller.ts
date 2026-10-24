@@ -25,7 +25,8 @@
  * rows it returns span organizations: the service authorizes every row with
  * `consultation.join` (participants) or the organization with
  * `bookings.coordinate` (operations), the same pattern as the professional
- * routes. It is paged on `(startsAt, id)`.
+ * routes. It is paged on `(startsAt, id)`, and `?followUpOf=<id>` narrows it
+ * to one consultation's follow-ups (T-CW-1.9).
  *
  * Every authorization denial and context mismatch on these routes answers
  * 404 (CALL-17, D-CW-30; `AppointmentNonDisclosureFilter`).

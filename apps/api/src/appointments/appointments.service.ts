@@ -291,6 +291,7 @@ export class AppointmentsService {
     const filter: AppointmentListFilter = {
       orgId: query.orgId,
       status: query.status,
+      followUpOf: query.followUpOf,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
       after,

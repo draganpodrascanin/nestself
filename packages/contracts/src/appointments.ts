@@ -223,6 +223,8 @@ export const AppointmentListQuerySchema = z
     status: AppointmentStatusSchema.optional(),
     from: isoDateTime.optional(),
     to: isoDateTime.optional(),
+    /** Only the follow-ups of this consultation (T-CW-1.9). */
+    followUpOf: idField.optional(),
   })
   .refine((q) => !q.from || !q.to || Date.parse(q.to) > Date.parse(q.from), {
     path: ['to'],
@@ -327,27 +329,35 @@ export type AppointmentApprovalDecisionRequest = z.infer<
  * One user's own room: only that user may subscribe. It carries what must
  * reach the user wherever they are in the app, not only on a call page: a
  * follow-up proposal made after the employee left the post-call screen
- * (`appointment.follow_up.proposed`, the same payload as on the call room,
- * `FollowUpProposedPayloadSchema`) and the in-app reminder toast
+ * (`appointment.follow_up.proposed`, to the employee), the employee's
+ * alternative windows (`appointment.times_suggested`, to the expert), both
+ * with the call room's payloads (`FollowUpProposedPayloadSchema`,
+ * `TimesSuggestedPayloadSchema`), and the in-app reminder toast
  * (`appointment.remind`).
  */
 export function userRoomName(userId: string): string {
   return `user:${userId}`;
 }
 
-export const USER_ROOM_EVENT_NAMES = ['appointment.follow_up.proposed', 'appointment.remind'] as const;
+export const USER_ROOM_EVENT_NAMES = [
+  'appointment.follow_up.proposed',
+  'appointment.times_suggested',
+  'appointment.remind',
+] as const;
 export const UserRoomEventNameSchema = z.enum(USER_ROOM_EVENT_NAMES);
 export type UserRoomEventName = z.infer<typeof UserRoomEventNameSchema>;
 
 /**
  * `appointment.remind` on `user:{userId}`: a reminder fired while the user is
- * online (D-CW-26, guidelines 10.4). Ids and times only: no category, no
- * other participant.
+ * online (D-CW-26, guidelines 10.4). Ids, times and the appointment's time
+ * zone, in which the toast shows the start: no category, no other
+ * participant.
  */
 export const AppointmentRemindPayloadSchema = z.strictObject({
   appointmentId: idField,
   startsAt: isoDateTime,
   /** Minutes before `startsAt` this reminder belongs to (`REMINDER_OFFSETS_MINUTES`). */
   offsetMinutes: z.number().int().positive(),
+  timeZone: TimeZoneSchema,
 });
 export type AppointmentRemindPayload = z.infer<typeof AppointmentRemindPayloadSchema>;

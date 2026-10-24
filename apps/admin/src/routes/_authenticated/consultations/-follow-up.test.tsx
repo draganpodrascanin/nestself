@@ -1,11 +1,13 @@
 /**
  * The expert's follow-up pages in API mode (T-CW-1.9, CALL-35, CALL-37):
  * the employee's first name in the list and on the page, the state of a
- * follow-up already proposed after a completed consultation, picking one of
- * the employee's suggested windows, and every failure as translated copy.
+ * follow-up already proposed after a completed consultation (read with
+ * `?followUpOf=`), picking one of the employee's suggested windows, Rejoin
+ * after the first-join window, and every failure as translated copy. The
+ * Chime controller is the fake one; the user room never connects.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,6 +25,16 @@ vi.mock('../../../data-source', () => ({
   isSampleDataMode: false,
   resolveDataSource: () => 'api',
 }));
+
+vi.mock('../../../calls/user-room-client', () => ({ userRoomClient: { subscribe: () => () => undefined } }));
+
+vi.mock('../../../calls/use-consultation-controller', async () => {
+  const { useState } = await import('react');
+  const { FakeCallSessionController } = await import('@nestself/video');
+  return {
+    useConsultationController: () => useState(() => new FakeCallSessionController({ role: 'expert' }))[0],
+  };
+});
 
 import { routeTree } from '../../../routeTree.gen';
 import { api } from '../../../api';
@@ -79,6 +91,7 @@ const json = (status: number, body: unknown) =>
 interface Sent {
   method: string;
   path: string;
+  search: string;
   body: unknown;
 }
 
@@ -87,7 +100,7 @@ function serve(routes: Record<string, () => Response>): Sent[] {
   fetchMock.mockImplementation((input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
-    sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
+    sent.push({ method, path: url.pathname, search: url.search, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
     if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: expert.principal, effectiveActions: expert.effectiveActions }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
@@ -127,7 +140,7 @@ describe("the expert's follow-ups (API mode)", () => {
   });
 
   it('shows the follow-up already proposed after a completed consultation, with a link to it', async () => {
-    serve({
+    const sent = serve({
       'GET /api/appointments/appt_1': () => json(200, appointment()),
       'GET /api/appointments': () => json(200, { items: [followUp()], nextCursor: null }),
     });
@@ -136,6 +149,8 @@ describe("the expert's follow-ups (API mode)", () => {
     expect(screen.getByText('Jovan')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: en.followUp.openFollowUp })).toHaveAttribute('href', '/consultations/appt_2');
     expect(screen.queryByRole('button', { name: en.followUp.send })).not.toBeInTheDocument();
+    // The server narrows the list to this consultation's follow-ups.
+    expect(sent.find((s) => s.method === 'GET' && s.path === '/api/appointments')?.search).toBe('?followUpOf=appt_1');
   });
 
   it('offers a new proposal after a decline and renders a refused proposal', async () => {
@@ -198,6 +213,80 @@ describe("the expert's follow-ups (API mode)", () => {
     await user.click(screen.getByRole('button', { name: en.followUp.schedule }));
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
+
+  it('at start + 11 minutes offers Rejoin; a join the server refuses shows the translated copy', async () => {
+    const startsAt = Date.now() - 11 * 60_000;
+    const sent = serve({
+      'GET /api/appointments/appt_1': () =>
+        json(
+          200,
+          appointment({
+            status: 'confirmed',
+            startsAt: new Date(startsAt).toISOString(),
+            endsAt: new Date(startsAt + 50 * 60_000).toISOString(),
+          }),
+        ),
+      'POST /api/appointments/appt_1/join': () => json(403, { code: 'join_window_closed', message: 'English text for developers' }),
+    });
+    renderAt('/consultations/appt_1');
+    const user = userEvent.setup();
+
+    const rejoin = await screen.findByRole('button', { name: en.join.rejoin }, { timeout: 5000 });
+    expect(screen.getByText(/^If you already joined this session, you can rejoin until /)).toBeInTheDocument();
+    expect(screen.queryByText(en.join.windowClosed)).not.toBeInTheDocument();
+    await user.click(rejoin);
+
+    const join = await screen.findByRole('button', { name: en.prejoin.joinNow }, { timeout: 5000 });
+    await waitFor(() => expect(join).toBeEnabled());
+    await user.click(join);
+    expect(await screen.findByText(en.errors.joinWindowClosed)).toBeInTheDocument();
+    expect(screen.queryByText('English text for developers')).not.toBeInTheDocument();
+    expect(sent.some((s) => s.method === 'POST' && s.path === '/api/appointments/appt_1/join')).toBe(true);
+  }, 15_000);
+
+  it('after "End for everyone" shows the post-call state with no Join behind the outcome dialog', async () => {
+    const startsAt = Date.now() + 5 * 60_000;
+    const consultation = appointment({
+      status: 'confirmed',
+      startsAt: new Date(startsAt).toISOString(),
+      endsAt: new Date(startsAt + 50 * 60_000).toISOString(),
+    });
+    const sent = serve({
+      'GET /api/appointments/appt_1': () => json(200, consultation),
+      'POST /api/appointments/appt_1/join': () =>
+        json(200, {
+          sessionId: 'sess_1',
+          participantId: 'part_1',
+          role: 'expert',
+          format: 'consultation',
+          startsAt: consultation.startsAt,
+          endsAt: consultation.endsAt,
+          meeting: {
+            MeetingId: 'meeting_1',
+            MediaRegion: 'eu-central-1',
+            MediaPlacement: { AudioHostUrl: 'audio:3478', AudioFallbackUrl: 'wss://fallback', SignalingUrl: 'wss://signal' },
+          },
+          attendee: { AttendeeId: 'att_1', ExternalUserId: 'part_1', JoinToken: 'join-token' },
+        }),
+      'POST /api/appointments/appt_1/end': () => new Response(null, { status: 204 }),
+    });
+    renderAt('/consultations/appt_1');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: en.join.button }, { timeout: 5000 }));
+    const join = await screen.findByRole('button', { name: en.prejoin.joinNow }, { timeout: 5000 });
+    await waitFor(() => expect(join).toBeEnabled());
+    await user.click(join);
+    await user.click(await screen.findByRole('button', { name: en.controls.endForEveryone }, { timeout: 5000 }));
+    await user.click(await screen.findByRole('button', { name: en.consultation.end }));
+
+    expect(await screen.findByRole('dialog', { name: en.outcome.title }, { timeout: 5000 })).toBeInTheDocument();
+    expect(sent.some((s) => s.method === 'POST' && s.path === '/api/appointments/appt_1/end')).toBe(true);
+    expect(screen.getByText(en.postCall.ended)).toBeInTheDocument();
+    // Behind the modal too: neither Join nor Rejoin is offered once the session is ended.
+    expect(screen.queryByRole('button', { name: en.join.button, hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.join.rejoin, hidden: true })).not.toBeInTheDocument();
+  }, 20_000);
 
   it('says a scheduled follow-up waiting for approval is waiting', async () => {
     serve({ 'GET /api/appointments/appt_2': () => json(200, followUp({ status: 'awaiting_approval' })) });

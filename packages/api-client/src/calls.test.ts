@@ -68,6 +68,12 @@ describe('follow-up wrappers', () => {
     expect(last()).toEqual({ url: 'http://x/api/appointments/appt_next/decline', method: 'POST', body: {} });
   });
 
+  it('lists one consultation’s follow-ups with ?followUpOf=', async () => {
+    const { api, last } = setup({ items: [APPOINTMENT], nextCursor: null });
+    await api.listAppointments({ followUpOf: 'appt_done' });
+    expect(last()).toMatchObject({ url: 'http://x/api/appointments?followUpOf=appt_done', method: 'GET' });
+  });
+
   it('keeps the earlier name as an alias of suggestTimes', () => {
     const { api } = setup(APPOINTMENT);
     expect(api.suggestFollowUpTimes).toBe(api.suggestTimes);

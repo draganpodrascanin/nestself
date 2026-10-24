@@ -10,7 +10,7 @@ import { Alert, Badge, buttonClassNames, Button } from '@nestself/ui';
 import { CALL_JOIN_WINDOW_BEFORE_MINUTES } from '@nestself/contracts';
 import type { Appointment, AppointmentResponse } from '@nestself/contracts';
 import { isSampleDataMode } from '../data-source';
-import { STATUS_TONE, supportAreaOf, useZonedFormat } from './format';
+import { STATUS_TONE, roomClosesAt, supportAreaOf, useZonedFormat } from './format';
 import { sampleFirstName } from './sample';
 import { Reveal } from './reveal';
 import { useJoinWindow } from './use-join-window';
@@ -41,7 +41,7 @@ export function useExpertLabel() {
   };
 }
 
-/** "Join session" with the join window states of CALL-02, CALL-06 and CALL-07. */
+/** "Join session" with the join window states of CALL-02, CALL-06 and CALL-07, and "Rejoin" after the first-join window. */
 export function JoinPanel({ appointment }: { appointment: Appointment }) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
@@ -65,6 +65,20 @@ export function JoinPanel({ appointment }: { appointment: Appointment }) {
           {t('join.opensHint', { minutes: CALL_JOIN_WINDOW_BEFORE_MINUTES })}
         </p>
         {sampleDemo}
+      </div>
+    );
+  }
+
+  if (window.kind === 'closed' && window.rejoinable) {
+    // After the first-join window: a participant who already joined may rejoin until the room closes (CALL-06).
+    return (
+      <div className="gap-3 flex flex-col items-start">
+        <Link to="/call/$appointmentId" params={{ appointmentId: appointment.id }} className={buttonClassNames({ variant: 'secondary', size: 'md' })}>
+          {t('join.rejoin')}
+        </Link>
+        <p className="type-metadata text-text-secondary">
+          {t('join.rejoinHint', { time: format.time(roomClosesAt(appointment), appointment.timeZone) })}
+        </p>
       </div>
     );
   }

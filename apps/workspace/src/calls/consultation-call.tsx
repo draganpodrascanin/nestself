@@ -58,7 +58,7 @@ import { userRoomClient } from './user-room-client';
 import { callRoomClient } from './call-room-client';
 import { callsApi } from './calls-api';
 import { ClientEventSummaryRecorder } from './client-event-summary';
-import { durationMinutes, supportAreaOf, useZonedFormat } from './format';
+import { durationMinutes, roomClosesAt, supportAreaOf, useZonedFormat } from './format';
 import { mapCallError } from './map-call-error';
 import { FeedbackForm, ReportProblemDialog } from './post-call';
 import { Reveal } from './reveal';
@@ -141,6 +141,12 @@ function JoinGate({ appointment }: { appointment: Appointment }) {
       <Alert tone="info">
         {t('join.comeBackAt', { time: format.time(window.opensAt, appointment.timeZone) })}
       </Alert>
+    );
+  }
+  if (window.kind === 'closed' && window.rejoinable) {
+    // The pre-join check below stays available; the server refuses anyone who never joined (CALL-07).
+    return (
+      <Alert tone="info">{t('join.rejoinHint', { time: format.time(roomClosesAt(appointment), appointment.timeZone) })}</Alert>
     );
   }
   if (window.kind === 'closed') {
@@ -413,7 +419,7 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
 
   let content: ReactNode;
   if (phase === 'prejoin') {
-    const open = isSampleDataMode || window?.kind === 'open';
+    const open = isSampleDataMode || window?.kind === 'open' || (window?.kind === 'closed' && window.rejoinable);
     content = (
       <PageFrame>
         {backLink}

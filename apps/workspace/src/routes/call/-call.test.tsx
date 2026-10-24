@@ -185,6 +185,23 @@ describe('call route (API mode)', () => {
     expect(screen.queryByRole('button', { name: en.prejoin.joinNow })).not.toBeInTheDocument();
   });
 
+  it('at start + 11 minutes offers a rejoin; a first join the server refuses shows the translated copy', async () => {
+    const appointment = appointmentAt(Date.now() - 11 * MINUTE);
+    const sent = serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment),
+      'POST /api/appointments/appt_1/join': () => json(403, { code: 'join_window_closed', message: 'English text for developers' }),
+    });
+    renderCall();
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/^If you already joined this session, you can rejoin until /, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByText(en.join.windowClosed)).not.toBeInTheDocument();
+    await user.click(await readyToJoin());
+    expect(await screen.findByText(en.errors.joinWindowClosed)).toBeInTheDocument();
+    expect(screen.queryByText('English text for developers')).not.toBeInTheDocument();
+    expect(sent.some((s) => s.method === 'POST' && s.path === '/api/appointments/appt_1/join')).toBe(true);
+  });
+
   it('says when to come back before the window opens', async () => {
     serve({ 'GET /api/appointments/appt_1': () => json(200, appointmentAt(Date.now() + 2 * 60 * MINUTE)) });
     renderCall();

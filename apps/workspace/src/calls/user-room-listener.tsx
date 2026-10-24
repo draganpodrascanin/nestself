@@ -17,10 +17,12 @@ import type { FollowUpProposedEvent } from '@nestself/api-client';
 import type { AppointmentRemindPayload } from '@nestself/contracts';
 import { useToast } from '@nestself/ui';
 import { useAuth } from '../auth';
+import { useZonedFormat } from './format';
 import { userRoomClient } from './user-room-client';
 
 export function UserRoomListener() {
-  const { t, i18n } = useTranslation('calls');
+  const { t } = useTranslation('calls');
+  const format = useZonedFormat();
   const { principal } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -32,10 +34,8 @@ export function UserRoomListener() {
     toast.add({ title: t('followUp.employeeTitle'), tone: 'info' });
   });
   const onReminder = useEffectEvent((event: AppointmentRemindPayload) => {
-    const time = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { hour: '2-digit', minute: '2-digit' }).format(
-      new Date(event.startsAt),
-    );
-    toast.add({ title: t('reminder.toast', { time }), tone: 'info' });
+    // In the appointment's own time zone, as every appointment time (CALL-29).
+    toast.add({ title: t('reminder.toast', { time: format.time(event.startsAt, event.timeZone) }), tone: 'info' });
   });
 
   useEffect(() => {

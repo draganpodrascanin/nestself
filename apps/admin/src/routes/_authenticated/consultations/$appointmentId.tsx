@@ -18,7 +18,7 @@ import { callsApi } from '../../../calls/calls-api';
 import { ExpertCall } from '../../../calls/expert-call';
 import { ExpertFollowUp, ScheduleFollowUpCard } from '../../../calls/expert-follow-up';
 import type { ExpertCallEnd } from '../../../calls/expert-call';
-import { STATUS_TONE, outcomeColumn, useCategoryLabel, useZonedFormat } from '../../../calls/format';
+import { STATUS_TONE, outcomeColumn, roomClosesAt, useCategoryLabel, useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
 import { OutcomeDialog } from '../../../calls/outcome-dialog';
 import { Reveal } from '../../../calls/reveal';
@@ -123,6 +123,8 @@ function ConsultationPage() {
   const outcome = recorded ? (recorded === 'completed' ? 'completed' : recorded === 'canceled' || recorded === 'technical_failure' ? 'canceled' : 'no_show') : outcomeColumn(appointment, now);
   const canRecordOutcome = !recorded && appointment.status === 'confirmed' && (ended !== null || Date.parse(appointment.startsAt) <= now);
   const showFollowUp = recorded === 'completed' || (!recorded && appointment.status === 'completed');
+  // After "End for everyone" the page is the post-call state: no Join or Rejoin (the server refuses both, D-CW-09).
+  const joinable = !recorded && ended !== 'ended';
 
   const onCallEnded = (how: ExpertCallEnd) => {
     setInCall(false);
@@ -174,7 +176,7 @@ function ConsultationPage() {
             <p className="mt-4 type-metadata text-text-secondary">{t('followUp.timeZoneNote', { timeZone: appointment.timeZone })}</p>
           </Card>
 
-          {window?.kind === 'open' && !recorded ? (
+          {window?.kind === 'open' && joinable ? (
             <section aria-labelledby="join-title" className="gap-4 flex flex-col">
               <h2 id="join-title" className="sr-only">
                 {t('join.button')}
@@ -188,11 +190,22 @@ function ConsultationPage() {
               <RunningLate appointment={appointment} />
             </section>
           ) : null}
-          {window?.kind === 'closed' && !recorded ? <Alert tone="info">{t('join.windowClosed')}</Alert> : null}
-          {window?.kind === 'before' ? (
+          {window?.kind === 'closed' && window.rejoinable && joinable ? (
+            // After the first-join window: an expert who already joined may rejoin until the room closes (CALL-06).
+            <div className="gap-3 flex flex-col items-start">
+              <Button variant="secondary" onClick={() => setInCall(true)}>
+                {t('join.rejoin')}
+              </Button>
+              <p className="type-metadata text-text-secondary">
+                {t('join.rejoinHint', { time: format.time(roomClosesAt(appointment), appointment.timeZone) })}
+              </p>
+            </div>
+          ) : null}
+          {window?.kind === 'closed' && !window.rejoinable && joinable ? <Alert tone="info">{t('join.windowClosed')}</Alert> : null}
+          {window?.kind === 'before' && joinable ? (
             <Button disabled>{t('join.comeBackAt', { time: format.time(window.opensAt, appointment.timeZone) })}</Button>
           ) : null}
-          {isSampleDataMode && window?.kind !== 'open' && appointment.status === 'confirmed' ? (
+          {isSampleDataMode && window?.kind !== 'open' && appointment.status === 'confirmed' && joinable ? (
             <div>
               <Button variant="secondary" onClick={() => setInCall(true)}>
                 {t('join.sampleDemo')}

@@ -64,7 +64,8 @@
     "pickBody": "Válasszon egyet. Az alkalom a választott időszak elején kezdődik, és megtartja az időtartamát.",
     "pickLabel": "Javasolt időpontok",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
-    "scheduledFor": "Rögzítve: {{date}}, {{time}}."
+    "scheduledFor": "Rögzítve: {{date}}, {{time}}.",
+    "expired": "A javasolt időpont elmúlt. A szakértője javasolhat újat."
   },
   "approval": {
     "pending": "Döntésre vár",
@@ -297,7 +298,7 @@
     "joinWindowClosed": "Ehhez az alkalomhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik meg, és 10 perccel utána zárul; ha már csatlakozott, röviddel a befejezés utánig újra csatlakozhat.",
     "appointmentNotJoinable": "Ehhez az időponthoz a jelenlegi állapotában nem lehet csatlakozni, és nem is módosítható.",
     "appointmentNotProposed": "Ez a javaslat már nem vár az Ön válaszára.",
-    "followUpNotAllowed": "Következő alkalmat csak egy befejezett alkalom után lehet javasolni.",
+    "followUpNotAllowed": "Itt nem lehet következő alkalom: az alkalom nem zárult le, már van nyitott következő alkalom, vagy a javasolt időpont elmúlt.",
     "approvalNotPending": "Erről a kérelemről már döntöttek, vagy lejárt.",
     "approverMissing": "A szervezete még nem jelölte ki, ki hagyja jóvá a következő alkalmakat. Forduljon a HR-csapathoz.",
     "videoProviderUnavailable": "A videó jelenleg nem érhető el. Kérjük, próbálja újra később.",
@@ -461,7 +462,9 @@
     "lateJoin": "Az alkalom {{time}}-kor kezdődött. A hátralévő időre még csatlakozhat.",
     "windowClosed": "Ehhez az alkalomhoz már nem lehet csatlakozni.",
     "contactSupport": "Kapcsolatfelvétel az ügyfélszolgálattal",
-    "sampleDemo": "A hívásképernyő kipróbálása mintaadatokkal"
+    "sampleDemo": "A hívásképernyő kipróbálása mintaadatokkal",
+    "rejoin": "Újracsatlakozás",
+    "rejoinHint": "Ha már csatlakozott ehhez az alkalomhoz, eddig csatlakozhat újra: {{time}}."
   },
   "call": {
     "title": "Az Ön konzultációja",

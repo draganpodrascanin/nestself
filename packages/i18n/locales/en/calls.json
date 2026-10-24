@@ -65,7 +65,8 @@
     "pickBody": "Choose one of them. The session starts at the beginning of the time you choose and keeps its length.",
     "pickLabel": "Suggested times",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
-    "scheduledFor": "Scheduled for {{date}} at {{time}}."
+    "scheduledFor": "Scheduled for {{date}} at {{time}}.",
+    "expired": "The proposed time has passed. Your expert can propose a new one."
   },
   "approval": {
     "pending": "Waiting for a decision",
@@ -298,7 +299,7 @@
     "joinWindowClosed": "This session cannot be joined right now. Joining opens shortly before the start and closes 10 minutes after it; if you already joined, you can rejoin until shortly after the end.",
     "appointmentNotJoinable": "This appointment cannot be joined or changed in its current status.",
     "appointmentNotProposed": "This proposal is no longer waiting for your answer.",
-    "followUpNotAllowed": "A follow-up can only be proposed after a completed session.",
+    "followUpNotAllowed": "A follow-up is not possible here: the session was not completed, another follow-up is already open, or the proposed time has passed.",
     "approvalNotPending": "This request has already been decided or has expired.",
     "approverMissing": "Your organisation has not assigned anyone to approve follow-ups yet. Contact your HR team.",
     "videoProviderUnavailable": "Video is not available right now. Please try again later.",
@@ -463,7 +464,9 @@
     "lateJoin": "Your session started at {{time}}. You can still join for the remaining time.",
     "windowClosed": "The join window for this session has closed.",
     "contactSupport": "Contact support",
-    "sampleDemo": "Try the call screen with sample data"
+    "sampleDemo": "Try the call screen with sample data",
+    "rejoin": "Rejoin session",
+    "rejoinHint": "If you already joined this session, you can rejoin until {{time}}."
   },
   "call": {
     "title": "Your consultation",

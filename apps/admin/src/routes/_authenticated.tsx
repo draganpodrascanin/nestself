@@ -6,6 +6,7 @@ import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
+import { UserRoomListener } from '../calls/user-room-listener';
 import { ApiStatus } from './__root';
 
 function PermissionBlock() {
@@ -113,6 +114,8 @@ function AuthenticatedLayout() {
         </nav>
       }
     >
+      {/* Suggested times and reminders on the user's own room, on every page (T-CW-1.9, CALL-01). */}
+      <UserRoomListener />
       <Outlet />
     </AppShell>
   );

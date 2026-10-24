@@ -71,15 +71,16 @@ export class FollowUpCallRoom {
     return this.callsService().emitTimesSuggested(sessionId, payload);
   }
 
+  /** `ModuleRef.get` throws when the provider is not part of the application; that error is left to surface. */
   private callsService(): CallsService {
-    if (!this.calls) this.calls = this.moduleRef.get<CallsService>(CallsService, { strict: false });
-    if (!this.calls) throw new Error('CallsService is not part of this application');
-    return this.calls;
+    const calls = this.calls ?? this.moduleRef.get<CallsService>(CallsService, { strict: false });
+    this.calls = calls;
+    return calls;
   }
 
   private callsRepository(): CallsRepository {
-    if (!this.repo) this.repo = this.moduleRef.get<CallsRepository>(CallsRepository, { strict: false });
-    if (!this.repo) throw new Error('CallsRepository is not part of this application');
-    return this.repo;
+    const repo = this.repo ?? this.moduleRef.get<CallsRepository>(CallsRepository, { strict: false });
+    this.repo = repo;
+    return repo;
   }
 }

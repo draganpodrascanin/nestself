@@ -171,9 +171,10 @@ function callRoomEvent(event: CallRoomEventName): RoomEventSpec {
  * mapped type makes a missing event a compile error. Webinar events join
  * with T-CW-2.3.
  *
- * The user room (`user:{userId}`, T-CW-1.9) carries the follow-up proposal,
- * with the call room's payload, so an employee who left the post-call screen
- * still sees it (CALL-42), and the in-app reminder (`appointment.remind`,
+ * The user room (`user:{userId}`, T-CW-1.9) carries the follow-up proposal
+ * to the employee, so one who left the post-call screen still sees it
+ * (CALL-42), the employee's suggested times to the expert, both with the
+ * call room's payloads, and the in-app reminder (`appointment.remind`,
  * CALL-01 criterion 5). No other call event reaches it.
  */
 export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
@@ -188,7 +189,10 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   },
   'appointment.follow_up.confirmed': callRoomEvent('appointment.follow_up.confirmed'),
   'appointment.follow_up.declined': callRoomEvent('appointment.follow_up.declined'),
-  'appointment.times_suggested': callRoomEvent('appointment.times_suggested'),
+  'appointment.times_suggested': {
+    roomKinds: ['call', 'user'],
+    schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.times_suggested'],
+  },
   'appointment.remind': { roomKinds: ['user'], schema: AppointmentRemindPayloadSchema },
 };
 

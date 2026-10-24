@@ -12,12 +12,13 @@
  * `DbService.withOrgScope` (RLS).
  *
  * Follow-ups (T-CW-1.9): {@link lockById} serialises proposals on one
- * consultation, {@link findOpenFollowUp} finds the one open follow-up, and
+ * consultation, {@link findOpenFollowUp} finds the one open follow-up (a
+ * `proposed` one only while its start is ahead), and
  * {@link updateFromStatus} changes a follow-up only from the status the
  * caller read, so a concurrent response cannot slip in between.
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gt, gte, inArray, lt, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import {
   APPOINTMENT_STATUSES,
   canTransitionAppointment,
@@ -79,8 +80,6 @@ export type FollowUpChanges = Partial<
   Pick<typeof appointments.$inferInsert, 'startsAt' | 'endsAt' | 'suggestedWindows' | 'respondedAt'>
 >;
 
-/** Statuses of a follow-up nobody has closed yet: one per consultation (D-CW-37). */
-const OPEN_FOLLOW_UP_STATUSES: readonly DbAppointmentStatus[] = ['PROPOSED', 'AWAITING_APPROVAL'];
 
 /** A position in the `(startsAt, id)` order: the last row of the previous page. */
 export interface AppointmentKey {
@@ -91,6 +90,8 @@ export interface AppointmentKey {
 export interface AppointmentListFilter {
   /** Rows where this user is the employee or the expert. */
   participantUserId?: string;
+  /** The follow-ups of this consultation. */
+  followUpOf?: string;
   orgId?: string;
   status?: AppointmentStatus;
   /** Inclusive lower bound on `startsAt`. */
@@ -153,12 +154,23 @@ export class AppointmentsRepository {
     return row ? toRecord(row) : null;
   }
 
-  /** The follow-up of `followUpOf` that is still `proposed` or `awaiting_approval`, if any. */
+  /**
+   * The open follow-up of `followUpOf`, if any: one is open while it is
+   * `awaiting_approval`, or `proposed` with its start, or one of the
+   * employee's suggested windows, still ahead (the expert can still schedule
+   * a window). A proposal nobody answered in time no longer blocks a new one
+   * (D-CW-37); it can no longer be confirmed either.
+   */
   async findOpenFollowUp(followUpOf: string, tx?: DbExecutor): Promise<AppointmentRecord | null> {
+    const windowAhead = sql`exists (select 1 from jsonb_array_elements(coalesce(${appointments.suggestedWindows}, '[]'::jsonb)) as w where (w->>'startsAt')::timestamptz > now())`;
+    const open = or(
+      eq(appointments.status, TO_DB_STATUS.awaiting_approval),
+      and(eq(appointments.status, TO_DB_STATUS.proposed), or(gt(appointments.startsAt, sql`now()`), windowAhead)),
+    )!;
     const [row] = await this.exec(tx)
       .select()
       .from(appointments)
-      .where(and(eq(appointments.followUpOf, followUpOf), inArray(appointments.status, [...OPEN_FOLLOW_UP_STATUSES])))
+      .where(and(eq(appointments.followUpOf, followUpOf), open))
       .orderBy(desc(appointments.createdAt))
       .limit(1);
     return row ? toRecord(row) : null;
@@ -238,6 +250,7 @@ export class AppointmentsRepository {
       );
     }
     if (filter.orgId) conditions.push(eq(appointments.orgId, filter.orgId));
+    if (filter.followUpOf) conditions.push(eq(appointments.followUpOf, filter.followUpOf));
     if (filter.status) conditions.push(eq(appointments.status, TO_DB_STATUS[filter.status]));
     if (filter.from) conditions.push(gte(appointments.startsAt, filter.from));
     if (filter.to) conditions.push(lt(appointments.startsAt, filter.to));

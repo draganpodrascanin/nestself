@@ -26,12 +26,22 @@ export type JoinWindowState =
   | { kind: 'before'; opensAt: Date }
   /** Joinable now; `late` once the scheduled start has passed. */
   | { kind: 'open'; late: boolean; startsAt: Date; closesAt: Date }
-  /** Too late: joining closed at `closedAt`. */
-  | { kind: 'closed'; closedAt: Date };
+  /**
+   * Too late: joining closed at `closedAt`. `rejoinable` while the room is
+   * still open (until `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES`): a
+   * participant who already joined may rejoin, and the apps offer "Rejoin"
+   * (the server answers `join_window_closed` to anyone else).
+   */
+  | { kind: 'closed'; closedAt: Date; rejoinable: boolean };
 
 export interface JoinWindowOptions {
   /** The participant already joined this session: the window lasts until the room closes. */
   rejoin?: boolean;
+}
+
+/** When the room closes: `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES` (D-CW-09). */
+function roomClosesAt(appointment: Pick<Appointment, 'endsAt'>): Date {
+  return new Date(Date.parse(appointment.endsAt) + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE_MS);
 }
 
 export function joinWindowBounds(
@@ -41,7 +51,7 @@ export function joinWindowBounds(
   return {
     opensAt: new Date(Date.parse(appointment.startsAt) - CALL_JOIN_WINDOW_BEFORE_MINUTES * MINUTE_MS),
     closesAt: options.rejoin
-      ? new Date(Date.parse(appointment.endsAt) + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE_MS)
+      ? roomClosesAt(appointment)
       : new Date(Date.parse(appointment.startsAt) + CALL_JOIN_WINDOW_AFTER_MINUTES * MINUTE_MS),
   };
 }
@@ -54,12 +64,15 @@ export function joinWindowState(
   if (appointment.status !== 'confirmed') return { kind: 'not_joinable' };
   const { opensAt, closesAt } = joinWindowBounds(appointment, options);
   if (now < opensAt.getTime()) return { kind: 'before', opensAt };
-  if (now > closesAt.getTime()) return { kind: 'closed', closedAt: closesAt };
+  if (now > closesAt.getTime()) {
+    const rejoinable = !options.rejoin && now <= roomClosesAt(appointment).getTime();
+    return { kind: 'closed', closedAt: closesAt, rejoinable };
+  }
   const startsAt = new Date(appointment.startsAt);
   return { kind: 'open', late: now > startsAt.getTime(), startsAt, closesAt };
 }
 
-/** Milliseconds until the state can next change (window opens, start passes, window closes), or null when it cannot. */
+/** Milliseconds until the state can next change (window opens, start passes, a window closes, the room closes), or null when it cannot. */
 export function nextJoinWindowChange(
   appointment: Pick<Appointment, 'status' | 'startsAt' | 'endsAt'>,
   now: number = Date.now(),
@@ -67,6 +80,8 @@ export function nextJoinWindowChange(
 ): number | null {
   if (appointment.status !== 'confirmed') return null;
   const { opensAt, closesAt } = joinWindowBounds(appointment, options);
-  const next = [opensAt.getTime(), Date.parse(appointment.startsAt), closesAt.getTime()].find((at) => at > now);
+  const next = [opensAt.getTime(), Date.parse(appointment.startsAt), closesAt.getTime(), roomClosesAt(appointment).getTime()].find(
+    (at) => at > now,
+  );
   return next === undefined ? null : next - now;
 }

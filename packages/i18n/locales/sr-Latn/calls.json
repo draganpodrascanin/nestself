@@ -65,7 +65,8 @@
     "pickBody": "Izaberite jedan od njih. Sesija počinje na početku izabranog termina i zadržava svoje trajanje.",
     "pickLabel": "Predloženi termini",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
-    "scheduledFor": "Zakazano za {{date}} u {{time}}."
+    "scheduledFor": "Zakazano za {{date}} u {{time}}.",
+    "expired": "Predloženo vreme je prošlo. Vaš stručnjak može da predloži novo."
   },
   "approval": {
     "pending": "Čeka odluku",
@@ -298,7 +299,7 @@
     "joinWindowClosed": "Ovoj sesiji sada nije moguće pristupiti. Pristup se otvara malo pre početka i zatvara se 10 minuta posle njega; ako ste se već pridružili, možete se ponovo pridružiti do malo posle kraja.",
     "appointmentNotJoinable": "Ovom terminu nije moguće pristupiti niti ga menjati u trenutnom statusu.",
     "appointmentNotProposed": "Ovaj predlog više ne čeka vaš odgovor.",
-    "followUpNotAllowed": "Narednu sesiju je moguće predložiti tek posle završene sesije.",
+    "followUpNotAllowed": "Naredna sesija ovde nije moguća: sesija nije završena, druga naredna sesija je već otvorena ili je predloženo vreme prošlo.",
     "approvalNotPending": "O ovom zahtevu je već odlučeno ili je istekao.",
     "approverMissing": "Vaša organizacija još nije odredila ko odobrava naredne sesije. Obratite se HR timu.",
     "videoProviderUnavailable": "Video trenutno nije dostupan. Pokušajte ponovo kasnije.",
@@ -463,7 +464,9 @@
     "lateJoin": "Vaša sesija je počela u {{time}}. I dalje možete da se pridružite za preostalo vreme.",
     "windowClosed": "Vreme za pridruživanje ovoj sesiji je isteklo.",
     "contactSupport": "Kontaktirajte podršku",
-    "sampleDemo": "Isprobajte ekran poziva sa primerom podataka"
+    "sampleDemo": "Isprobajte ekran poziva sa primerom podataka",
+    "rejoin": "Ponovo se pridružite",
+    "rejoinHint": "Ako ste se već pridružili ovoj sesiji, možete se ponovo pridružiti do {{time}}."
   },
   "call": {
     "title": "Vaša konsultacija",

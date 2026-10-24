@@ -54,13 +54,13 @@ describe('RoomEmitter', () => {
   });
 
   it('emitToUser publishes a user room event on that user’s room (T-CW-1.9)', () => {
-    const remind = { appointmentId: 'appt_1', startsAt: '2026-11-24T15:00:00.000Z', offsetMinutes: 60 };
+    const remind = { appointmentId: 'appt_1', startsAt: '2026-11-24T15:00:00.000Z', offsetMinutes: 60, timeZone: 'Europe/Belgrade' };
     expect(emitter.emitToUser('user_jovan', 'appointment.remind', remind)).toBe(true);
     expect(published).toEqual([{ room: 'user:user_jovan', event: 'appointment.remind', payload: remind }]);
   });
 
   it('emitToUser drops a payload that fails its schema', () => {
-    const remind = { appointmentId: 'appt_1', startsAt: 'soon', offsetMinutes: 60 };
+    const remind = { appointmentId: 'appt_1', startsAt: 'soon', offsetMinutes: 60, timeZone: 'Europe/Belgrade' };
     expect(emitter.emitToUser('user_jovan', 'appointment.remind', remind)).toBe(false);
     expect(published).toEqual([]);
     expect(errors).toHaveLength(1);

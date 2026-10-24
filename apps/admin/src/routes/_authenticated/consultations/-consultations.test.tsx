@@ -97,6 +97,9 @@ describe('admin consultations (sample mode)', () => {
     await user.click(await screen.findByRole('button', { name: calls.consultation.end }));
 
     const dialog = await screen.findByRole('dialog', { name: calls.outcome.title }, { timeout: 5000 });
+    // The session is over: no way back into it behind the dialog.
+    expect(screen.queryByRole('button', { name: calls.join.sampleDemo, hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: calls.join.button, hidden: true })).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('radio', { name: calls.outcome.status.completed }));
     await user.click(within(dialog).getByRole('button', { name: calls.outcome.submit }));
 

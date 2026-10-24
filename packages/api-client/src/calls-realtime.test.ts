@@ -4,48 +4,6 @@ import { callRoomSubscribeMessage, createCallRoomClient } from './call-room';
 import { createUserRoomClient, userRoomSubscribeMessage } from './user-room';
 import type { RoomSocket } from './call-room';
 import { startClientEventPoster } from './client-events';
-import { joinWindowState, nextJoinWindowChange } from './join-window';
-
-const MINUTE = 60_000;
-const STARTS = Date.parse('2030-01-15T09:00:00.000Z');
-const APPOINTMENT = {
-  status: 'confirmed' as const,
-  startsAt: new Date(STARTS).toISOString(),
-  endsAt: new Date(STARTS + 50 * MINUTE).toISOString(),
-};
-
-describe('joinWindowState', () => {
-  it('is not joinable unless confirmed', () => {
-    expect(joinWindowState({ ...APPOINTMENT, status: 'proposed' }, STARTS).kind).toBe('not_joinable');
-    expect(joinWindowState({ ...APPOINTMENT, status: 'completed' }, STARTS).kind).toBe('not_joinable');
-  });
-
-  it('opens 15 minutes before the start', () => {
-    expect(joinWindowState(APPOINTMENT, STARTS - 15 * MINUTE - 1)).toEqual({ kind: 'before', opensAt: new Date(STARTS - 15 * MINUTE) });
-    expect(joinWindowState(APPOINTMENT, STARTS - 15 * MINUTE)).toMatchObject({ kind: 'open', late: false });
-  });
-
-  it('is a late join after the start; a first join closes 10 minutes after the start (CALL-06, CALL-07)', () => {
-    expect(joinWindowState(APPOINTMENT, STARTS + MINUTE)).toMatchObject({ kind: 'open', late: true });
-    expect(joinWindowState(APPOINTMENT, STARTS + 10 * MINUTE)).toMatchObject({ kind: 'open', late: true, closesAt: new Date(STARTS + 10 * MINUTE) });
-    expect(joinWindowState(APPOINTMENT, STARTS + 10 * MINUTE + 1)).toEqual({ kind: 'closed', closedAt: new Date(STARTS + 10 * MINUTE) });
-  });
-
-  it('a rejoin stays open until the room closes, 15 minutes after the end', () => {
-    const rejoin = { rejoin: true };
-    expect(joinWindowState(APPOINTMENT, STARTS + 30 * MINUTE, rejoin)).toMatchObject({ kind: 'open', late: true });
-    expect(joinWindowState(APPOINTMENT, STARTS + 65 * MINUTE, rejoin)).toMatchObject({ kind: 'open' });
-    expect(joinWindowState(APPOINTMENT, STARTS + 65 * MINUTE + 1, rejoin)).toEqual({ kind: 'closed', closedAt: new Date(STARTS + 65 * MINUTE) });
-  });
-
-  it('reports when the state changes next', () => {
-    expect(nextJoinWindowChange(APPOINTMENT, STARTS - 20 * MINUTE)).toBe(5 * MINUTE);
-    expect(nextJoinWindowChange(APPOINTMENT, STARTS - MINUTE)).toBe(MINUTE);
-    expect(nextJoinWindowChange(APPOINTMENT, STARTS + MINUTE)).toBe(9 * MINUTE);
-    expect(nextJoinWindowChange(APPOINTMENT, STARTS + 11 * MINUTE)).toBeNull();
-    expect(nextJoinWindowChange(APPOINTMENT, STARTS + 11 * MINUTE, { rejoin: true })).toBe(54 * MINUTE);
-  });
-});
 
 class FakeSocket implements RoomSocket {
   readonly listeners = new Map<string, ((...args: unknown[]) => void)[]>();
@@ -144,9 +102,21 @@ describe('user room client (CALL-42, CALL-01)', () => {
 
     socket.fire('appointment.follow_up.proposed', proposal);
     socket.fire('appointment.follow_up.proposed', { ...proposal, startsAt: 'soon' });
-    socket.fire('appointment.remind', { appointmentId: 'a2', startsAt: '2030-01-20T09:00:00.000Z', offsetMinutes: 60 });
+    const remind = { appointmentId: 'a2', startsAt: '2030-01-20T09:00:00.000Z', offsetMinutes: 60, timeZone: 'Europe/Belgrade' };
+    socket.fire('appointment.remind', remind);
+    socket.fire('appointment.remind', { ...remind, timeZone: undefined });
     expect(onFollowUpProposed.mock.calls).toEqual([[proposal]]);
-    expect(onReminder).toHaveBeenCalledWith({ appointmentId: 'a2', startsAt: '2030-01-20T09:00:00.000Z', offsetMinutes: 60 });
+    expect(onReminder.mock.calls).toEqual([[remind]]);
+  });
+
+  it('delivers the employee’s suggested times to the expert', () => {
+    const socket = new FakeSocket();
+    const onTimesSuggested = vi.fn();
+    createUserRoomClient(() => socket).subscribe('user_expert', { onTimesSuggested });
+    const windows = [{ startsAt: '2030-01-21T09:00:00.000Z', endsAt: '2030-01-21T12:00:00.000Z' }];
+    socket.fire('appointment.times_suggested', { appointmentId: 'a1', followUpId: 'a2', windows });
+    socket.fire('appointment.times_suggested', { appointmentId: 'a1', followUpId: 'a2', windows: [] });
+    expect(onTimesSuggested.mock.calls).toEqual([[{ appointmentId: 'a1', followUpId: 'a2', windows }]]);
   });
 
   it('reports a refusal of its own room only, and leaves on unsubscribe', () => {

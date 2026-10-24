@@ -167,10 +167,51 @@ describe('follow-ups on the appointment pages (API mode)', () => {
   });
 
   it.each([
-    ['appointment_not_proposed', 409, en.errors.appointmentNotProposed],
     ['approver_missing', 409, en.errors.approverMissing],
+    ['follow_up_not_allowed', 409, en.errors.followUpNotAllowed],
+  ])('renders %s from a refused confirmation as translated copy on the card', async (code, status, message) => {
+    serve({
+      'GET /api/appointments/appt_2': () => json(200, followUp()),
+      'POST /api/appointments/appt_2/confirm': () => json(status, { code, message: 'English text for developers' }),
+    });
+    renderAt('/appointments/appt_2');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: en.followUp.confirm }, { timeout: 5000 }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText('English text for developers')).not.toBeInTheDocument();
+  });
+
+  it('says a proposal whose time has passed has expired and offers no answer', async () => {
+    serve({ 'GET /api/appointments/appt_2': () => json(200, followUp({ startsAt: new Date(Date.now() - DAY).toISOString(), endsAt: new Date(Date.now() - DAY + 50 * 60_000).toISOString() })) });
+    renderAt('/appointments/appt_2');
+    expect(await screen.findByText(en.followUp.expired, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.followUp.confirm })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.followUp.suggestTimes })).not.toBeInTheDocument();
+  });
+
+  it('after its time, a proposal answered with other times waits for the expert', async () => {
+    const past = new Date(Date.now() - DAY);
+    serve({
+      'GET /api/appointments/appt_2': () =>
+        json(
+          200,
+          followUp({
+            startsAt: past.toISOString(),
+            endsAt: new Date(past.getTime() + 50 * 60_000).toISOString(),
+            suggestedWindows: [{ startsAt: new Date(Date.now() + 3 * DAY).toISOString(), endsAt: new Date(Date.now() + 3 * DAY + 3 * 60 * 60_000).toISOString() }],
+          }),
+        ),
+    });
+    renderAt('/appointments/appt_2');
+    expect(await screen.findByText(en.followUp.timesSuggested, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByText(en.followUp.expired)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.followUp.confirm })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['appointment_not_proposed', 409, en.errors.appointmentNotProposed],
     ['code_from_the_future', 500, en.errors.unknown],
-  ])('renders %s as translated copy on the card', async (code, status, message) => {
+  ])('renders %s from a refused decline as translated copy on the card', async (code, status, message) => {
     serve({
       'GET /api/appointments/appt_2': () => json(200, followUp()),
       'POST /api/appointments/appt_2/decline': () => json(status, { code, message: 'English text for developers' }),
@@ -198,5 +239,35 @@ describe('follow-ups on the appointment pages (API mode)', () => {
     renderAt('/appointments/appt_2');
     expect(await screen.findByText(en.followUp.awaitingApprovalBody, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: en.followUp.confirm })).not.toBeInTheDocument();
+  });
+});
+
+describe('the join panel after the first-join window (API mode, CALL-06, CALL-07)', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
+  afterEach(() => cleanup());
+
+  it('at start + 11 minutes offers Rejoin until the room closes instead of Join', async () => {
+    const startsAt = Date.now() - 11 * 60_000;
+    serve({
+      'GET /api/appointments/appt_1': () =>
+        json(
+          200,
+          followUp({
+            id: 'appt_1',
+            status: 'confirmed',
+            followUpOf: null,
+            startsAt: new Date(startsAt).toISOString(),
+            endsAt: new Date(startsAt + 50 * 60_000).toISOString(),
+          }),
+        ),
+    });
+    renderAt('/appointments/appt_1');
+    const rejoin = await screen.findByRole('link', { name: en.join.rejoin }, { timeout: 5000 });
+    expect(rejoin).toHaveAttribute('href', '/call/appt_1');
+    expect(screen.getByText(/^If you already joined this session, you can rejoin until /)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: en.join.button })).not.toBeInTheDocument();
+    expect(screen.queryByText(en.join.windowClosed)).not.toBeInTheDocument();
   });
 });

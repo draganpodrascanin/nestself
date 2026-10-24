@@ -55,7 +55,7 @@ export function ExpertFollowUp({ appointment }: { appointment: AppointmentRespon
   const queryClient = useQueryClient();
   const existing = useQuery({
     queryKey: [...appointmentKeys.lists(), 'follow-up-of', appointment.id],
-    queryFn: () => callsApi.listAppointments({ from: appointment.startsAt, limit: 100 }),
+    queryFn: () => callsApi.listAppointments({ followUpOf: appointment.id }),
     enabled: !isSampleDataMode,
     select: (page) => latestFollowUpOf(appointment.id, page.items),
   });

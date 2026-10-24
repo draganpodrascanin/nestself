@@ -4,7 +4,7 @@
  */
 import { useTranslation } from 'react-i18next';
 import { localeMeta } from '@nestself/i18n';
-import { SupportAreaSchema } from '@nestself/contracts';
+import { CALL_ROOM_CLOSE_AFTER_MINUTES, SupportAreaSchema } from '@nestself/contracts';
 import type { AppointmentStatus, SupportArea } from '@nestself/contracts';
 import type { BadgeTone } from '@nestself/ui';
 
@@ -49,4 +49,9 @@ export const STATUS_TONE: Readonly<Record<AppointmentStatus, BadgeTone>> = {
 /** Scheduled length in whole minutes. */
 export function durationMinutes(appointment: { startsAt: string; endsAt: string }): number {
   return Math.round((Date.parse(appointment.endsAt) - Date.parse(appointment.startsAt)) / 60_000);
+}
+
+/** When the room closes and a rejoin stops: `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES` (D-CW-09). */
+export function roomClosesAt(appointment: { endsAt: string }): Date {
+  return new Date(Date.parse(appointment.endsAt) + CALL_ROOM_CLOSE_AFTER_MINUTES * 60_000);
 }

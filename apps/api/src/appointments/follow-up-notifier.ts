@@ -7,7 +7,7 @@
  * | proposed         | `appointment.follow_up.proposed`                | `user:{employee}` (CALL-42)            | `appointment.follow_up.proposed`, employee   |
  * | confirmed        | `appointment.follow_up.confirmed`               |                                        | `appointment.follow_up.confirmed` with the calendar file, both parties |
  * | awaiting approval| `appointment.follow_up.confirmed` (`awaiting_approval`) |                                | none here: the approver's email is T-CW-1.10's |
- * | times suggested  | `appointment.times_suggested`                   |                                        | none (guidelines 10.5 names none)            |
+ * | times suggested  | `appointment.times_suggested`                   | `user:{expert}`                        | none (guidelines 10.5 names none)            |
  * | declined         | `appointment.follow_up.declined`                |                                        | `appointment.follow_up.declined`, expert     |
  *
  * Everything here is best effort: the step has already succeeded, so a
@@ -99,13 +99,10 @@ export class FollowUpNotifier {
   }
 
   async timesSuggested(followUp: AppointmentRecord, windows: FollowUpTimeWindow[]): Promise<void> {
-    await this.toCallRoom(followUp, 'timesSuggested', (sessionId) =>
-      this.callRoom.emitTimesSuggested(sessionId, {
-        appointmentId: followUp.followUpOf ?? followUp.id,
-        followUpId: followUp.id,
-        windows,
-      }),
-    );
+    const payload = { appointmentId: followUp.followUpOf ?? followUp.id, followUpId: followUp.id, windows };
+    await this.toCallRoom(followUp, 'timesSuggested', (sessionId) => this.callRoom.emitTimesSuggested(sessionId, payload));
+    // The expert's own room: the follow-up page refreshes wherever the expert is (T-CW-1.9).
+    this.guard(followUp, 'userRoom', () => this.rooms.emitToUser(followUp.expertUserId, 'appointment.times_suggested', payload));
   }
 
   async declined(followUp: AppointmentRecord): Promise<void> {

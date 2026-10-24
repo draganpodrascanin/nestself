@@ -46,6 +46,8 @@ export interface AppointmentListParams {
   from?: string;
   /** Exclusive upper bound of `startsAt` (ISO date-time). */
   to?: string;
+  /** Only the follow-ups of this consultation. */
+  followUpOf?: string;
 }
 
 const NoContentSchema = z.undefined();

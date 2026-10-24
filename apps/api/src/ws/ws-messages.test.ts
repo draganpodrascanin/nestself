@@ -121,6 +121,7 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
   it('serves the follow-up proposal and the reminder on the user room (CALL-42, CALL-01)', () => {
     for (const event of USER_ROOM_EVENT_NAMES) expect(ROOM_EVENTS[event].roomKinds).toContain('user');
     expect(ROOM_EVENTS['appointment.follow_up.proposed'].roomKinds).toEqual(['call', 'user']);
+    expect(ROOM_EVENTS['appointment.times_suggested'].roomKinds).toEqual(['call', 'user']);
     expect(ROOM_EVENTS['appointment.remind']).toEqual({ roomKinds: ['user'], schema: AppointmentRemindPayloadSchema });
     expect(Object.keys(ROOM_EVENTS).sort()).toEqual(
       [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES])].sort(),
@@ -135,7 +136,7 @@ describe('checkRoomEvent on the user room', () => {
     startsAt: '2026-11-24T15:00:00.000Z',
     durationMinutes: 50,
   };
-  const remind = { appointmentId: 'appt_next', startsAt: '2026-11-24T15:00:00.000Z', offsetMinutes: 60 };
+  const remind = { appointmentId: 'appt_next', startsAt: '2026-11-24T15:00:00.000Z', offsetMinutes: 60, timeZone: 'Europe/Belgrade' };
 
   it('passes the follow-up proposal and the reminder to a user room', () => {
     expect(checkRoomEvent(userRoomName('user_jovan'), 'appointment.follow_up.proposed', proposed)).toEqual(proposed);

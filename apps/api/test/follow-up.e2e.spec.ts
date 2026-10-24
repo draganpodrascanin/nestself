@@ -575,6 +575,12 @@ describe.skipIf(!shouldRun)('Follow-up lifecycle (e2e)', () => {
       followUpId: followUp.id,
       windows,
     });
+    // The expert's own room too, so the follow-up page refreshes wherever the expert is.
+    expect(emit).toHaveBeenCalledWith('user:user_milica', 'appointment.times_suggested', {
+      appointmentId: original,
+      followUpId: followUp.id,
+      windows,
+    });
     const [suggestedEvent] = await auditOf('appointment.times_suggested', followUp.id);
     expect(suggestedEvent!.details).toEqual({ appointmentId: followUp.id, windowCount: 2 });
 
@@ -614,6 +620,65 @@ describe.skipIf(!shouldRun)('Follow-up lifecycle (e2e)', () => {
 
     expectCode(await post(milica, `/appointments/${followUp.id}/schedule`, { selectedWindowIndex: 0 }), 409, 'appointment_not_proposed');
     expectCode(await post(jovan, `/appointments/${followUp.id}/suggest-times`, { windows }), 409, 'appointment_not_proposed');
+  });
+
+  // ── Expired proposals and the followUpOf filter ────────────────────────────
+
+  async function backdate(id: string) {
+    const startsAt = new Date(Date.now() - 2 * HOUR);
+    await testDb.db
+      .update(appointments)
+      .set({ startsAt, endsAt: new Date(startsAt.getTime() + 50 * 60_000) })
+      .where(eq(appointments.id, id));
+  }
+
+  it('a proposal whose time has passed cannot be confirmed or answered with times, and no longer blocks a new one', async () => {
+    const original = await completed(13);
+    const stale = await propose(original, 26);
+    await backdate(stale.id);
+
+    expectCode(await post(jovan, `/appointments/${stale.id}/confirm`), 409, 'follow_up_not_allowed');
+    expectCode(
+      await post(jovan, `/appointments/${stale.id}/suggest-times`, {
+        windows: [{ startsAt: at(27, 9).toISOString(), endsAt: at(27, 12).toISOString() }],
+      }),
+      409,
+      'follow_up_not_allowed',
+    );
+    expect((await statusOf(stale.id)).status).toBe('PROPOSED');
+
+    // The ignored proposal is not open any more: the expert proposes again.
+    const fresh = await post(milica, `/appointments/${original}/follow-up`, proposalBody(28));
+    expect(fresh.status).toBe(201);
+    // The employee can still clear the old one.
+    expect((await post(jovan, `/appointments/${stale.id}/decline`)).status).toBe(200);
+  });
+
+  it('a proposal with a suggested window still ahead stays open after its own time', async () => {
+    const original = await completed(14);
+    const followUp = await propose(original, 29);
+    const windows = [{ startsAt: at(31, 9).toISOString(), endsAt: at(31, 12).toISOString() }];
+    expect((await post(jovan, `/appointments/${followUp.id}/suggest-times`, { windows })).status).toBe(200);
+    await backdate(followUp.id);
+
+    expectCode(await post(milica, `/appointments/${original}/follow-up`, proposalBody(32)), 409, 'follow_up_not_allowed');
+    const scheduled = await post(milica, `/appointments/${followUp.id}/schedule`, { selectedWindowIndex: 0 });
+    expect(scheduled.status).toBe(200);
+    expect(scheduled.body).toMatchObject({ status: 'confirmed', startsAt: windows[0]!.startsAt });
+  });
+
+  it('GET /appointments?followUpOf= lists only that consultation’s follow-ups, for its participants', async () => {
+    const original = await completed(15);
+    const followUp = await propose(original, 33);
+    for (const who of [milica, jovan]) {
+      const res = await who.agent.get(`/api/appointments?followUpOf=${original}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items.map((a: AppointmentResponse) => a.id)).toEqual([followUp.id]);
+    }
+    const none = await ana.agent.get(`/api/appointments?followUpOf=${original}`);
+    expect(none.status).toBe(200);
+    expect(none.body.items).toEqual([]);
+    expect((await jovan.agent.get('/api/appointments?followUpOf=')).status).toBe(400);
   });
 
   // ── Non-disclosure and audit hygiene ───────────────────────────────────────

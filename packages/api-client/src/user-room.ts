@@ -1,20 +1,28 @@
 /**
  * The `user:{userId}` Socket.IO room as the web apps see it (T-CW-1.9,
  * CALL-42, CALL-01 criterion 5): only that user may subscribe, and it
- * carries what must reach them on any page, a follow-up proposal made after
- * they left the post-call screen and the in-app reminder.
+ * carries what must reach them on any page: a follow-up proposal made after
+ * the employee left the post-call screen, the employee's suggested times
+ * for the expert, and the in-app reminder.
  *
  * Like the call room client, it takes a socket factory, so the api-client
  * does not depend on `socket.io-client`. Payloads carry ids and times only;
  * anything that fails to parse is dropped.
  */
 import { z } from 'zod';
-import { AppointmentRemindPayloadSchema, FollowUpProposedPayloadSchema, userRoomName } from '@nestself/contracts';
-import type { AppointmentRemindPayload } from '@nestself/contracts';
+import {
+  AppointmentRemindPayloadSchema,
+  FollowUpProposedPayloadSchema,
+  TimesSuggestedPayloadSchema,
+  userRoomName,
+} from '@nestself/contracts';
+import type { AppointmentRemindPayload, TimesSuggestedPayload } from '@nestself/contracts';
 import type { FollowUpProposedEvent, RoomSocket } from './call-room';
 
 export interface UserRoomHandlers {
   onFollowUpProposed?: (event: FollowUpProposedEvent) => void;
+  /** The employee suggested other windows for the expert's proposal (to the expert). */
+  onTimesSuggested?: (event: TimesSuggestedPayload) => void;
   /** A reminder fired while the user is online (D-CW-26): the apps show a toast. */
   onReminder?: (event: AppointmentRemindPayload) => void;
   /** The subscription was refused or the socket could not connect. */
@@ -33,6 +41,7 @@ export const noopUserRoomClient: UserRoomClient = {
 
 export const USER_ROOM_EVENTS = {
   followUpProposed: 'appointment.follow_up.proposed',
+  timesSuggested: 'appointment.times_suggested',
   remind: 'appointment.remind',
 } as const;
 
@@ -68,6 +77,7 @@ export function createUserRoomClient(connect: () => RoomSocket): UserRoomClient 
         if (denied.room === room) handlers.onUnavailable?.(denied.reason ?? 'denied');
       });
       on(USER_ROOM_EVENTS.followUpProposed, FollowUpProposedPayloadSchema, handlers.onFollowUpProposed);
+      on(USER_ROOM_EVENTS.timesSuggested, TimesSuggestedPayloadSchema, handlers.onTimesSuggested);
       on(USER_ROOM_EVENTS.remind, AppointmentRemindPayloadSchema, handlers.onReminder);
 
       return () => {

@@ -219,6 +219,16 @@ describe('AppointmentSchema (seam, CALL-31)', () => {
   });
 });
 
+describe('AppointmentListQuerySchema followUpOf (T-CW-1.9)', () => {
+  it('filters on the consultation a follow-up continues', () => {
+    expect(AppointmentListQuerySchema.parse({ followUpOf: 'appt_1' })).toEqual({
+      limit: APPOINTMENT_LIST_DEFAULT_LIMIT,
+      followUpOf: 'appt_1',
+    });
+    expect(issuePaths(AppointmentListQuerySchema.safeParse({ followUpOf: '' }))).toEqual(['followUpOf']);
+  });
+});
+
 describe('AppointmentListQuerySchema (GET /appointments, CALL-18, CALL-28)', () => {
   it('defaults the page size and accepts every filter, coercing the query-string limit', () => {
     expect(AppointmentListQuerySchema.parse({})).toEqual({ limit: APPOINTMENT_LIST_DEFAULT_LIMIT });
@@ -456,12 +466,19 @@ describe('User room (CALL-42, CALL-01 criterion 5)', () => {
     expect(userRoomName('user_jovan')).toBe('user:user_jovan');
   });
 
-  it('serves the follow-up proposal and the reminder', () => {
-    expect(USER_ROOM_EVENT_NAMES).toEqual(['appointment.follow_up.proposed', 'appointment.remind']);
+  it('serves the follow-up proposal, the employee’s suggested times (to the expert) and the reminder', () => {
+    expect(USER_ROOM_EVENT_NAMES).toEqual(['appointment.follow_up.proposed', 'appointment.times_suggested', 'appointment.remind']);
   });
 
-  it('`appointment.remind` carries ids and times only', () => {
-    const payload = { appointmentId: 'appt_1', startsAt: '2026-11-10T09:00:00.000Z', offsetMinutes: 60 };
+  it('`appointment.remind` carries ids, times and the appointment’s time zone only', () => {
+    const payload = {
+      appointmentId: 'appt_1',
+      startsAt: '2026-11-10T09:00:00.000Z',
+      offsetMinutes: 60,
+      timeZone: 'Europe/Belgrade',
+    };
+    const { timeZone: _zone, ...withoutZone } = payload;
+    expect(issuePaths(AppointmentRemindPayloadSchema.safeParse(withoutZone))).toEqual(['timeZone']);
     expect(AppointmentRemindPayloadSchema.parse(payload)).toEqual(payload);
     expect(AppointmentRemindPayloadSchema.safeParse({ ...payload, serviceCategory: 'psychological' }).success).toBe(false);
     expect(issuePaths(AppointmentRemindPayloadSchema.safeParse({ ...payload, offsetMinutes: 0 }))).toEqual(['offsetMinutes']);

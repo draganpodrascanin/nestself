@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from '@nestself/ui';
 import { appointmentKeys } from '@nestself/api-client';
-import type { Appointment, FollowUpSuggestTimesRequest } from '@nestself/contracts';
+import type { Appointment, AppointmentResponse, FollowUpSuggestTimesRequest } from '@nestself/contracts';
 import { FollowUpCard } from '@nestself/video';
 import type { EmployeeFollowUpStatus, FollowUpProposal } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
@@ -26,14 +26,17 @@ export interface EmployeeFollowUpPanelProps {
   followUpId: string;
   proposal: FollowUpProposal | null;
   status: EmployeeFollowUpStatus;
+  /** The employee already suggested other windows (the API returns them). */
+  timesSuggested?: boolean;
 }
 
 /** The follow-up card's input for an appointment that is itself a proposal (CALL-42). */
-export function followUpOf(appointment: Appointment): EmployeeFollowUpPanelProps {
+export function followUpOf(appointment: AppointmentResponse): EmployeeFollowUpPanelProps {
   return {
     followUpId: appointment.id,
     proposal: { startsAt: appointment.startsAt, durationMinutes: durationMinutes(appointment), timeZone: appointment.timeZone },
     status: FOLLOW_UP_STATUS[appointment.status] ?? 'no_proposal',
+    timesSuggested: (appointment.suggestedWindows?.length ?? 0) > 0,
   };
 }
 
@@ -43,14 +46,19 @@ export function followUpOf(appointment: Appointment): EmployeeFollowUpPanelProps
  * mounted and shows the answer once given; every failure is rendered on the
  * card. In sample mode nothing is sent and a notice says so.
  */
-export function EmployeeFollowUpPanel({ followUpId, proposal, status: given }: EmployeeFollowUpPanelProps) {
+export function EmployeeFollowUpPanel({ followUpId, proposal, status: given, timesSuggested: suggestedBefore = false }: EmployeeFollowUpPanelProps) {
   const { t } = useTranslation('calls');
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [timesSuggested, setTimesSuggested] = useState(false);
+  const [timesSuggested, setTimesSuggested] = useState(suggestedBefore);
   const [answer, setAnswer] = useState<EmployeeFollowUpStatus | null>(null);
+  const [now] = useState(() => Date.now());
+  // The proposed time has passed: it can no longer be confirmed (409 follow_up_not_allowed). With other
+  // times already suggested, the expert may still pick one; otherwise the expert proposes again.
+  const expired = answer === null && given === 'proposed' && proposal !== null && Date.parse(proposal.startsAt) <= now;
+  const status = expired ? 'no_proposal' : (answer ?? given);
 
   const run = async (action: () => Promise<Appointment>, after: (updated: Appointment) => void) => {
     setError(null);
@@ -73,9 +81,12 @@ export function EmployeeFollowUpPanel({ followUpId, proposal, status: given }: E
 
   return (
     <div className="gap-3 flex flex-col">
+      <Reveal show={expired}>
+        <Alert tone="info">{timesSuggested ? t('followUp.timesSuggested') : t('followUp.expired')}</Alert>
+      </Reveal>
       <FollowUpCard
         variant="employee"
-        status={answer ?? given}
+        status={status}
         proposal={proposal}
         timesSuggested={timesSuggested}
         pending={pending}

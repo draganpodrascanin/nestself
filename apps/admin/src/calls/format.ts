@@ -4,7 +4,7 @@
  */
 import { useTranslation } from 'react-i18next';
 import { localeMeta } from '@nestself/i18n';
-import { SupportAreaSchema } from '@nestself/contracts';
+import { CALL_ROOM_CLOSE_AFTER_MINUTES, SupportAreaSchema } from '@nestself/contracts';
 import type { Appointment, AppointmentStatus, SupportArea } from '@nestself/contracts';
 import type { BadgeTone } from '@nestself/ui';
 
@@ -63,4 +63,9 @@ export function outcomeColumn(appointment: Pick<Appointment, 'status' | 'startsA
   if (appointment.status === 'completed' || appointment.status === 'no_show' || appointment.status === 'canceled') return appointment.status;
   if (appointment.status === 'confirmed' && Date.parse(appointment.startsAt) <= now) return 'toRecord';
   return 'notYet';
+}
+
+/** When the room closes and a rejoin stops: `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES` (D-CW-09). */
+export function roomClosesAt(appointment: { endsAt: string }): Date {
+  return new Date(Date.parse(appointment.endsAt) + CALL_ROOM_CLOSE_AFTER_MINUTES * 60_000);
 }
