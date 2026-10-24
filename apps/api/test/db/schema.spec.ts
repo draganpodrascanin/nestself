@@ -354,5 +354,31 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       const counts2 = await seed(owner.db);
       expect(counts2).toEqual(counts1);
     });
+
+    it('removes the over-privileged grants that seeds before the legacy-role fix created', async () => {
+      await seed(owner.db);
+      const stale = {
+        subjectUserId: 'user_jovan',
+        actions: ['people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org_sample',
+        grantedByUserId: 'user_ivana',
+        validFrom: new Date('2026-01-01'),
+      };
+      await owner.db.insert(grants).values([
+        { ...stale, id: 'grant_user_jovan_employer_owner', templateKey: 'employer_owner' },
+        { ...stale, id: 'grant_user_jovan_approver', templateKey: 'approver' },
+        { ...stale, id: 'grant_explicit_jovan_approver', templateKey: 'approver' },
+      ]);
+
+      await seed(owner.db);
+
+      const rows = await owner.db
+        .select({ id: grants.id })
+        .from(grants)
+        .where(eq(grants.subjectUserId, 'user_jovan'));
+      expect(rows.map((r) => r.id).sort()).toEqual(['grant_explicit_jovan_approver', 'grant_user_jovan_employee']);
+      await owner.db.delete(grants).where(eq(grants.id, 'grant_explicit_jovan_approver'));
+    });
   });
 });

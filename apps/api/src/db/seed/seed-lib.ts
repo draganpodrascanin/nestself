@@ -6,7 +6,7 @@
  * `@nestself/sample-data` (sample-data rule). Runs in system context (no RLS
  * tenant setting), as the migration/owner role.
  */
-import { count, eq } from 'drizzle-orm';
+import { count, eq, inArray } from 'drizzle-orm';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -287,6 +287,20 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       .values({ id: `tmpl_${tmpl.key}`, ...values })
       .onConflictDoUpdate({ target: t.permissionTemplates.key, set: values });
   }
+
+  // Seeds before the legacy-role fix (57bfd4f) also granted every sample person
+  // the templates without a legacy role (employer_owner, approver, ...). Remove
+  // those derived rows from databases seeded back then; explicitly created
+  // grants have other ids and stay.
+  const unmappedTemplateKeys = PERMISSION_TEMPLATES.filter((tmpl) => tmpl.legacyRole == null).map(
+    (tmpl) => tmpl.key,
+  );
+  await db.delete(t.grants).where(
+    inArray(
+      t.grants.id,
+      SAMPLE_PEOPLE.flatMap((p) => unmappedTemplateKeys.map((key) => `grant_${p.id}_${key}`)),
+    ),
+  );
 
   // ── Grants derived from the legacy roles ──
   for (const person of SAMPLE_PEOPLE) {

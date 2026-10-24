@@ -4,9 +4,11 @@
  *
  * The legacy columns are read through raw SQL so that this module still
  * compiles once the schema no longer declares them. Idempotent: grant ids are
- * `grant_{userId}_{templateKey}` and an existing id is never overwritten.
+ * `grant_{userId}_{templateKey}`, or `grant_{userId}_{orgId}_{templateKey}`
+ * when that id already holds the same template for another organization, and
+ * an existing grant is never overwritten.
  */
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Database } from '../db.service.js';
 import * as t from '../schema/index.js';
 import { derivedGrantConditions, resolveSampleScope, templatesForLegacyRoles } from './seed-lib.js';
@@ -68,7 +70,23 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
   const result: BackfillResult = { created: [], skipped: [] };
   for (const subject of subjects) {
     for (const tmpl of templatesForLegacyRoles(subject.orgRole, subject.platformRole)) {
-      const id = `grant_${subject.userId}_${tmpl.key}`;
+      const scope = resolveSampleScope(tmpl.scopeType, subject.orgId, subject.orgUnitId);
+      // The seed id stays for the first organization (sample parity). A grant
+      // already under that id for another organization means a second active
+      // membership: its grant gets an org-suffixed id instead of being lost.
+      let id = `grant_${subject.userId}_${tmpl.key}`;
+      const existing = await findGrantScopeOrg(db, id);
+      if (existing !== undefined && existing.scopeOrgId !== scope.scopeOrgId) {
+        id = `grant_${subject.userId}_${subject.orgId ?? 'platform'}_${tmpl.key}`;
+        if ((await findGrantScopeOrg(db, id)) !== undefined) {
+          result.skipped.push(id);
+          continue;
+        }
+      } else if (existing !== undefined) {
+        result.skipped.push(id);
+        continue;
+      }
+
       const inserted = await db
         .insert(t.grants)
         .values({
@@ -77,7 +95,7 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
           templateKey: tmpl.key,
           actions: [...tmpl.actions],
           scopeType: tmpl.scopeType,
-          ...resolveSampleScope(tmpl.scopeType, subject.orgId, subject.orgUnitId),
+          ...scope,
           conditions: await derivedGrantConditions(db, tmpl, subject.userId),
           grantedByUserId: subject.grantedByUserId,
           grantedAt: now,
@@ -89,4 +107,15 @@ export async function backfillGrants(db: Database, now: Date): Promise<BackfillR
     }
   }
   return result;
+}
+
+async function findGrantScopeOrg(
+  db: Database,
+  id: string,
+): Promise<{ scopeOrgId: string | null } | undefined> {
+  const [row] = await db
+    .select({ scopeOrgId: t.grants.scopeOrgId })
+    .from(t.grants)
+    .where(eq(t.grants.id, id));
+  return row;
 }

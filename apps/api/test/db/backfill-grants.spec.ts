@@ -9,16 +9,26 @@
  * Runs against TEST_DATABASE_URL. Skipped when it is unset.
  */
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { seed } from '../../src/db/seed/seed-lib.js';
 import { backfillGrants } from '../../src/db/seed/backfill-grants.js';
-import { grants } from '../../src/db/schema/index.js';
+import { grants, memberships, organizations } from '../../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const NOW = new Date('2026-10-24T12:00:00Z');
+
+/** Migration 0005's statements; the first one is the backfill guard. */
+const MIGRATION_0005 = readFileSync(
+  new URL('../../drizzle/0005_drop_legacy_roles.sql', import.meta.url),
+  'utf8',
+)
+  .split('--> statement-breakpoint')
+  .map((statement) => statement.trim())
+  .filter(Boolean);
 
 async function restoreLegacyRoleColumns(db: TestDatabase): Promise<void> {
   await db.pool.query(`
@@ -78,6 +88,13 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     await testDb?.close();
   });
 
+  it('0005 refuses to drop the legacy roles before the backfill', async () => {
+    expect(MIGRATION_0005[0]).toContain('DO $$');
+    await expect(testDb.pool.query(MIGRATION_0005[0]!)).rejects.toThrow(
+      /user user_milica holds a legacy role without a backfilled grant/,
+    );
+  });
+
   it('recreates the grants the seed derives from the legacy roles', async () => {
     const result = await backfillGrants(testDb.db, NOW);
 
@@ -117,5 +134,56 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     const result = await backfillGrants(testDb.db, NOW);
 
     expect(result.created).toEqual([]);
+  });
+
+  it('keeps the grants of a second active organization under org-suffixed ids', async () => {
+    await testDb.db.insert(organizations).values({ id: 'org_second', name: 'Second Org', slug: 'second-org' });
+    await testDb.db.insert(memberships).values({
+      userId: 'user_stefan',
+      orgId: 'org_second',
+      status: 'ACTIVE',
+      startDate: NOW,
+    });
+    await testDb.pool.query(
+      "UPDATE memberships SET role = 'MANAGER' WHERE user_id = 'user_stefan' AND org_id = 'org_second'",
+    );
+
+    const result = await backfillGrants(testDb.db, NOW);
+
+    expect([...result.created].sort()).toEqual([
+      'grant_user_stefan_org_second_employee',
+      'grant_user_stefan_org_second_team_manager',
+    ]);
+    const stefan = await testDb.db
+      .select({ id: grants.id, org: grants.scopeOrgId, by: grants.grantedByUserId })
+      .from(grants)
+      .where(eq(grants.subjectUserId, 'user_stefan'))
+      .orderBy(asc(grants.id));
+    expect(stefan).toEqual([
+      { id: 'grant_user_stefan_employee', org: 'org_sample', by: 'user_ivana' },
+      { id: 'grant_user_stefan_org_second_employee', org: 'org_second', by: 'user_stefan' },
+      { id: 'grant_user_stefan_org_second_team_manager', org: 'org_second', by: 'user_stefan' },
+      { id: 'grant_user_stefan_team_manager', org: 'org_sample', by: 'user_ivana' },
+    ]);
+
+    const again = await backfillGrants(testDb.db, NOW);
+    expect(again.created).toEqual([]);
+    expect(again.skipped).toEqual(
+      expect.arrayContaining([
+        'grant_user_stefan_org_second_employee',
+        'grant_user_stefan_org_second_team_manager',
+      ]),
+    );
+  });
+
+  it('0005 applies after the backfill and drops the legacy columns', async () => {
+    for (const statement of MIGRATION_0005) await testDb.pool.query(statement);
+
+    const { rows } = await testDb.pool.query<{ column_name: string }>(`
+      SELECT column_name FROM information_schema.columns
+      WHERE (table_name = 'users' AND column_name = 'platform_role')
+         OR (table_name = 'memberships' AND column_name = 'role')
+    `);
+    expect(rows).toEqual([]);
   });
 });
