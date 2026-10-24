@@ -104,8 +104,8 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     return csrf[1]!;
   }
 
-  /** Email-OTP sign-in, then switch to the organization context. */
-  async function signIn(userId: string) {
+  /** Email-OTP sign-in (personal context, no switch). */
+  async function signInPersonal(userId: string) {
     const email = `${userId}@example.com`;
     const agent = request.agent(app.getHttpServer());
     const start = await agent.post('/api/auth/email-otp/start').send({ email });
@@ -115,7 +115,12 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       .post('/api/auth/email-otp/verify')
       .send({ challengeToken: start.body.challengeToken, code });
     expect(verify.status).toBe(200);
-    const csrf = extractCsrf(verify);
+    return { agent, csrf: extractCsrf(verify) };
+  }
+
+  /** Email-OTP sign-in, then switch to the organization context. */
+  async function signIn(userId: string) {
+    const { agent, csrf } = await signInPersonal(userId);
     const ctx = await agent
       .post('/api/auth/context')
       .set('X-CSRF-Token', csrf)
@@ -306,10 +311,13 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
   });
 
   it('jovan (employee, a member) gets 403 on GET /', async () => {
-    const jovan = await signIn('user_jovan');
+    // C1: employee stays in personal context (no org-workspace grant).
+    const jovan = await signInPersonal('user_jovan');
     const res = await jovan.agent.get(BASE);
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('forbidden');
+    // C1: employee in personal context gets context_mismatch from the
+    // orgResourceFromContext resolver (org-admin route requires org context).
+    expect(res.body.code).toBe('context_mismatch');
   });
 
   describe('approval authorities', () => {

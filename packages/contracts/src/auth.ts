@@ -167,7 +167,7 @@ export const PrincipalSchema = z.object({
 export type Principal = z.infer<typeof PrincipalSchema>;
 
 export const AvailableContextEntrySchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('personal'), orgId: z.string().min(1).optional(), orgName: z.string().optional() }),
+  z.object({ kind: z.literal('personal'), orgId: z.string().min(1), orgName: z.string().optional() }),
   z.object({ kind: z.literal('organization'), orgId: z.string().min(1), orgName: z.string().optional() }),
   z.object({ kind: z.literal('expert') }),
   z.object({ kind: z.literal('operations') }),

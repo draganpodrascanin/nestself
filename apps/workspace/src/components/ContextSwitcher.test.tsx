@@ -198,16 +198,20 @@ describe('ContextSwitcher', () => {
     expect(otherItem).not.toHaveAttribute('aria-current');
   });
 
-  // Item 8: trigger's aria-label
-  it('trigger has aria-label from i18n contextSwitcher.label', () => {
+  // I5: trigger uses visible text with visually-hidden prefix (no replacing aria-label)
+  it('trigger includes visually-hidden prefix and visible context label', () => {
     const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' });
     renderSwitcher({ principal, availableContexts: contexts });
 
     const trigger = screen.getByRole('button');
-    expect(trigger).toHaveAttribute('aria-label', 'Switch workspace');
+    // The accessible name combines the sr-only prefix and the visible label.
+    expect(trigger).toHaveTextContent(/Switch workspace/);
+    expect(trigger).toHaveTextContent(/My space/);
+    // No replacing aria-label attribute.
+    expect(trigger).not.toHaveAttribute('aria-label');
   });
 
-  // Item 8: disabled state during pending switch
+  // I5: disabled state during pending switch
   it('disables all menu items while switching', async () => {
     const user = userEvent.setup();
     let resolveSwitch!: () => void;
@@ -227,7 +231,14 @@ describe('ContextSwitcher', () => {
 
     // The live region should announce the switching state.
     const liveRegion = document.querySelector('[aria-live="polite"]');
-    expect(liveRegion?.textContent).toContain('Switch workspace');
+    expect(liveRegion?.textContent).toContain('Switching workspace');
+
+    // Re-open the menu and assert disabled state on all items.
+    await user.click(screen.getByRole('button'));
+    const allItems = await screen.findAllByRole('menuitem');
+    for (const item of allItems) {
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+    }
 
     // Resolve the switch to clean up.
     resolveSwitch();

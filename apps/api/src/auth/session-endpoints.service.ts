@@ -16,8 +16,10 @@ import {
 } from '../redis/redis-keys.js';
 import { ApiHttpException } from '../common/api-error.js';
 import {
-  hasActiveDateCurrentMembership,
   resolveDefaultPersonalOrgId,
+  computeAvailableContexts,
+  canEnterContext,
+  resolvePopulation,
 } from '../authz/personal-context.js';
 import type {
   Principal,
@@ -75,44 +77,43 @@ export class SessionEndpointsService {
       });
     }
 
+    // C1: compute available contexts once and reuse for both validation and
+    // the response, so switch acceptance is always consistent with the list.
+    const extras = await this.principalLoader.loadAvailableContextExtras(loaded);
+    const now = new Date();
+    const available = computeAvailableContexts(loaded, extras, now);
+
     // ACC-R-12: resolve personal context orgId before validation.
     let resolvedContext: ActiveContext = newContext;
 
     if (newContext.kind === 'personal') {
       if (newContext.orgId) {
-        // (1) personal with orgId -> verify ACTIVE, date-current membership.
-        if (!hasActiveDateCurrentMembership(loaded.memberships, newContext.orgId)) {
-          denyContext();
-        }
         resolvedContext = { kind: 'personal', orgId: newContext.orgId };
       } else {
-        // (2) personal without orgId -> resolve default using sticky orgId.
+        // Resolve default using sticky orgId.
         const lastUsed = lastPersonalOrgId
           ?? (principal.context.kind === 'personal' ? principal.context.orgId : undefined);
         const defaultOrgId = resolveDefaultPersonalOrgId(
           loaded.memberships,
           lastUsed,
+          now,
         );
         resolvedContext = defaultOrgId
           ? { kind: 'personal', orgId: defaultOrgId }
           : { kind: 'personal' };
       }
-    } else if (newContext.kind === 'organization') {
-      // Must have an ACTIVE, date-current membership in the target org.
-      if (!hasActiveDateCurrentMembership(loaded.memberships, newContext.orgId)) {
-        denyContext();
-      }
-      // TODO(auth T-2.x, D-05): check second factor at organization context switch
-    } else if (newContext.kind === 'expert') {
-      if (loaded.expert == null) denyContext();
-    } else if (newContext.kind === 'operations') {
-      if (loaded.staffTemplates.length === 0) denyContext();
+    }
+    // TODO(auth T-2.x, D-05): check second factor at organization context switch
+
+    // C1: validate against available contexts (ruling 3).
+    if (!canEnterContext(available, resolvedContext)) {
+      denyContext();
     }
 
-    const population = this.resolvePopulation(loaded, resolvedContext);
+    const population = resolvePopulation(loaded, resolvedContext);
     await this.sessions.updateContext(sessionId, resolvedContext, population);
 
-    return this.meResponse.build({ ...principal, context: resolvedContext });
+    return this.meResponse.build({ ...principal, context: resolvedContext }, { availableContexts: available });
   }
 
   async signOut(sessionId: string): Promise<void> {
@@ -200,12 +201,4 @@ export class SessionEndpointsService {
     return ticket;
   }
 
-  private resolvePopulation(
-    loaded: { staffTemplates: unknown[]; expert: unknown | null },
-    context: ActiveContext,
-  ): 'employee' | 'expert' | 'staff' {
-    if (loaded.staffTemplates.length > 0) return 'staff';
-    if (loaded.expert && context.kind === 'expert') return 'expert';
-    return 'employee';
-  }
 }

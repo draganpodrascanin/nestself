@@ -1,16 +1,15 @@
 /**
  * Context validity check for the authorization engine (step 2).
  *
- * The pure engine only returns `invalid_context`; the authorization guard
- * maps that to `org_context_expired` when the stored session context names
- * an organization (personal with orgId, or organization).
+ * The pure engine only returns `invalid_context`; the guard and service-layer
+ * map that to `org_context_expired` through `denialCode` when the stored
+ * session context names an organization (personal+orgId or organization).
  *
  * @see Section 4.5.3 step 2 of auth-strategy.md
  * Satisfies AUTHZ-R-32.
  */
 import type {
   Principal,
-  PrincipalMembership,
   AuthorizationContext,
 } from '@nestself/contracts';
 import { isMembershipDateCurrent } from './personal-context.js';
@@ -20,21 +19,25 @@ import { isMembershipDateCurrent } from './personal-context.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Classify a membership that is NOT date-current into the correct error code
- * for the authorization guard and resource resolvers (not for the engine).
+ * Map a denial from the authorization engine into the HTTP error code.
  *
- * - ended (status no longer ACTIVE, or endDate in the past) → `org_context_expired`
- * - not yet started (status ACTIVE but startDate in the future) → `invalid_context`
- * - never activated (status INVITED) → `invalid_context`
+ * The engine always says `invalid_context`; this function upgrades it to
+ * `org_context_expired` when the principal's stored session context names an
+ * organization (personal+orgId or organization). Non-context denials pass
+ * through as `'forbidden'`.
+ *
+ * Used by both `AuthorizationGuard` and `AuthorizationService.require` (I2).
  */
-export function membershipContextCode(
-  m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'>,
-  now: Date,
-): 'invalid_context' | 'org_context_expired' {
-  if (m.status !== 'ACTIVE') return 'invalid_context'; // INVITED: never activated
-  if (new Date(m.startDate) > now) return 'invalid_context'; // not yet started
-  // ACTIVE with endDate in the past → expired
-  return 'org_context_expired';
+export function denialCode(
+  principal: Principal,
+  denialReason: string,
+): 'invalid_context' | 'org_context_expired' | 'forbidden' {
+  if (denialReason !== 'invalid_context') return 'forbidden';
+  const pctx = principal.context;
+  const namesOrg =
+    (pctx.kind === 'personal' && 'orgId' in pctx && pctx.orgId != null) ||
+    pctx.kind === 'organization';
+  return namesOrg ? 'org_context_expired' : 'invalid_context';
 }
 
 // ---------------------------------------------------------------------------

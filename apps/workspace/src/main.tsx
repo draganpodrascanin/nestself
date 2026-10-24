@@ -4,7 +4,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { routeTree } from './routeTree.gen';
 import { handleApiError } from './auth/handle-api-error';
-import type { ErrorHandlerDeps } from './auth/handle-api-error';
+import { globalErrorDepsRef } from './auth/global-error-deps';
 import './i18n';
 import './app.css';
 
@@ -15,12 +15,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
-/**
- * Mutable ref that the root component sets once auth and router are available.
- * The QueryCache/MutationCache onError callbacks read from it so that
- * org_context_expired and 401 errors are handled globally (ruling 6).
- */
-export const globalErrorDepsRef: { current: ErrorHandlerDeps | null } = { current: null };
+export { globalErrorDepsRef };
 
 const onCacheError = (error: Error) => {
   if (globalErrorDepsRef.current) {

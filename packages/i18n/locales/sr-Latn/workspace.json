@@ -258,6 +258,7 @@
     "operations": "Operacije",
     "switchFailed": "Promena radnog prostora nije uspela. Pokušajte ponovo.",
     "current": "Trenutni",
+    "switching": "Promena radnog prostora…",
     "error": {
       "org_context_expired": "Vaše članstvo u ovoj organizaciji je isteklo.",
       "invalid_context": "Ovaj radni prostor vam nije dostupan.",

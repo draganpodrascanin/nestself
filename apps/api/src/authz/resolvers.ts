@@ -16,8 +16,6 @@
 import type { Principal, Resource } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import type { ResourceResolver } from './authorize.decorator.js';
-import { isMembershipDateCurrent } from './personal-context.js';
-import { membershipContextCode } from './context.js';
 
 function routeOrgId(req: Record<string, unknown>): string | undefined {
   const params = req['params'] as Record<string, string | undefined> | undefined;
@@ -46,8 +44,8 @@ export function orgResourceFromContext(type: string): ResourceResolver {
  * Resource scoped to the personal context's organization (C-22, ACC-R-04).
  *
  * Used by `/library/*` and `/me/*` controllers. Requires the active context to
- * be `personal` with an `orgId` backed by an ACTIVE membership; returns a
- * resource with `{ type, id, orgId, ownerId }`.
+ * be `personal` with an `orgId`; the authorization engine and `denialCode`
+ * handle membership-currency validation.
  */
 export function personalOrgResource(
   type: string,
@@ -62,29 +60,10 @@ export function personalOrgResource(
         message: 'This endpoint requires a personal context with an organisation',
       });
     }
-    const orgId = ctx.orgId;
-    // ACC-R-15: membership must be ACTIVE *and* date-current.
-    // Distinguish between "no membership" (invalid_context) and
-    // "membership expired / not yet started" using membershipContextCode.
-    const membership = principal.memberships.find((m) => m.orgId === orgId);
-    if (!membership) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'invalid_context',
-        message: 'No membership for the selected organisation',
-      });
-    }
-    if (!isMembershipDateCurrent(membership)) {
-      throw new ApiHttpException({
-        status: 403,
-        code: membershipContextCode(membership, new Date()),
-        message: 'Organisation membership is not current',
-      });
-    }
     return {
       type,
       id: id?.(req),
-      orgId,
+      orgId: ctx.orgId,
       ownerId: principal.userId,
     };
   };

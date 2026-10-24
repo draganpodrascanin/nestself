@@ -265,16 +265,16 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     // ACC-R-12: personal context resolves orgId from ACTIVE date-current membership.
     expect(ctxBody.principal.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
 
-    // Switch back to the org context.
-    const backRes = await agent
+    // C1: a plain employee cannot switch to the organization context
+    // (no org-workspace template grant via canEnterContext).
+    const orgDenied = await agent
       .post('/api/auth/context')
       .set('X-CSRF-Token', csrfToken)
       .send({ context: { kind: 'organization', orgId: 'org_sample' } });
-    expect(backRes.status).toBe(200);
-    const backBody = MeResponseSchema.parse(backRes.body);
-    expect(backBody.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+    expect(orgDenied.status).toBe(403);
+    expect(orgDenied.body).toHaveProperty('code', 'invalid_context');
 
-    // An employee cannot claim the operations or expert contexts (AUTHZ-R-32).
+    // An employee cannot claim operations, expert, or unknown org contexts.
     for (const context of [{ kind: 'operations' }, { kind: 'expert' }, { kind: 'organization', orgId: 'org_other' }]) {
       const denied = await agent
         .post('/api/auth/context')
@@ -283,9 +283,11 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(denied.status).toBe(403);
       expect(denied.body).toHaveProperty('code', 'invalid_context');
     }
+
+    // Confirm the context was unchanged (still personal).
     const me = await agent.get('/api/auth/me');
     const meBody = MeResponseSchema.parse(me.body);
-    expect(meBody.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+    expect(meBody.principal.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
   });
 
   // -----------------------------------------------------------------------

@@ -8,7 +8,12 @@ import type { Principal, PrincipalMembership } from '@nestself/contracts';
 // Mocks
 // ---------------------------------------------------------------------------
 
-function createMocks(memberships: PrincipalMembership[] = []) {
+function createMocks(memberships: PrincipalMembership[] = [], opts?: {
+  staffTemplates?: string[];
+  expert?: { id: string; approvedCategories: string[] } | null;
+  orgGrantTemplateKeys?: Map<string, string[]>;
+  orgNames?: Map<string, string>;
+}) {
   return {
     sessions: {
       updateContext: vi.fn(),
@@ -24,33 +29,30 @@ function createMocks(memberships: PrincipalMembership[] = []) {
         initials: 'T',
         locale: 'sr-Latn',
         memberships,
-        staffTemplates: [],
-        expert: null,
+        staffTemplates: opts?.staffTemplates ?? [],
+        expert: opts?.expert ?? null,
         isSuspended: false,
         isDeactivated: false,
       }),
       loadAvailableContextExtras: vi.fn().mockResolvedValue({
-        orgGrantTemplateKeys: new Map(),
-        orgNames: new Map(),
+        orgGrantTemplateKeys: opts?.orgGrantTemplateKeys ?? new Map(),
+        orgNames: opts?.orgNames ?? new Map(),
       }),
       loadGrants: vi.fn().mockResolvedValue([]),
-    },
-    contextLoader: {
-      build: vi.fn().mockResolvedValue({
-        now: new Date(),
-        isDeactivated: false,
-        isSuspended: false,
-        grants: [],
-        assignments: [],
-        ancestorIds: [],
-        orgSelfApprovalAllowed: false,
-        organizationTimezone: 'Europe/Belgrade',
-      }),
     },
     store: {
       set: vi.fn(),
       get: vi.fn(),
       delete: vi.fn(),
+    },
+    meResponse: {
+      build: vi.fn().mockImplementation((principal: Principal, _opts?: unknown) => {
+        return Promise.resolve({
+          principal,
+          effectiveActions: [],
+          availableContexts: [],
+        });
+      }),
     },
   };
 }
@@ -110,8 +112,8 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
     service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
-      mocks.contextLoader as never,
       mocks.store as never,
+      mocks.meResponse as never,
     );
   });
 
@@ -163,7 +165,7 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
       kind: 'personal',
     });
 
-    // Last used was org_a, still valid → keeps org_a
+    // Last used was org_a, still valid -> keeps org_a
     expect(result.principal.context).toEqual({
       kind: 'personal',
       orgId: 'org_a',
@@ -179,14 +181,14 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
       kind: 'personal',
     });
 
-    // No last personal orgId → earliest is org_b (2023-06-01)
+    // No last personal orgId -> earliest is org_b (2023-06-01)
     expect(result.principal.context).toEqual({
       kind: 'personal',
       orgId: 'org_b',
     });
   });
 
-  it('returns personal without orgId when user has no ACTIVE memberships', async () => {
+  it('throws 403 invalid_context when user has no ACTIVE memberships and switches to personal (C1)', async () => {
     // Override loader to return no memberships
     mocks.principalLoader.load.mockResolvedValue({
       userId: 'user-1',
@@ -201,11 +203,14 @@ describe('SessionEndpointsService.switchContext – personal context orgId (ACC-
     });
 
     const principal = makePrincipal({ kind: 'personal' }, []);
-    const result = await service.switchContext('sess-1', principal, {
-      kind: 'personal',
-    });
-
-    expect(result.principal.context).toEqual({ kind: 'personal' });
+    try {
+      await service.switchContext('sess-1', principal, { kind: 'personal' });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const e = err as ApiHttpException;
+      expect(e.getStatus()).toBe(403);
+      expect(e.code).toBe('invalid_context');
+    }
   });
 });
 
@@ -260,29 +265,52 @@ describe('resolveDefaultPersonalOrgId (shared helper)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Ruling A: Organization context switch enforces date-currency
+// C1: Organization context switch requires canEnterContext
 // ---------------------------------------------------------------------------
 
-describe('SessionEndpointsService.switchContext – organization date-currency (Ruling A)', () => {
-  let mocks: ReturnType<typeof createMocks>;
-  let service: SessionEndpointsService;
-
-  beforeEach(() => {
-    mocks = createMocks([ACTIVE_MEMBERSHIP]);
-    service = new SessionEndpointsService(
+describe('SessionEndpointsService.switchContext – organization context via canEnterContext (C1)', () => {
+  it('rejects organization context for a plain employee (no org-workspace grant)', async () => {
+    // Employee: has active membership but no org-workspace grant.
+    const mocks = createMocks([ACTIVE_MEMBERSHIP]);
+    const service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
-      mocks.contextLoader as never,
       mocks.store as never,
+      mocks.meResponse as never,
     );
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' }, [ACTIVE_MEMBERSHIP]);
+
+    try {
+      await service.switchContext('sess-1', principal, {
+        kind: 'organization',
+        orgId: 'org_a',
+      });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const e = err as ApiHttpException;
+      expect(e.getStatus()).toBe(403);
+      expect(e.code).toBe('invalid_context');
+    }
   });
 
-  it('allows organization context when membership is ACTIVE and date-current', async () => {
+  it('allows organization context for HR admin (holds org-workspace grant)', async () => {
+    const mocks = createMocks([ACTIVE_MEMBERSHIP], {
+      orgGrantTemplateKeys: new Map([['org_a', ['hr_admin']]]),
+      orgNames: new Map([['org_a', 'Test Org']]),
+    });
+    const service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+      mocks.meResponse as never,
+    );
     const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' }, [ACTIVE_MEMBERSHIP]);
+
     const result = await service.switchContext('sess-1', principal, {
       kind: 'organization',
       orgId: 'org_a',
     });
+
     expect(result.principal.context).toEqual({ kind: 'organization', orgId: 'org_a' });
   });
 
@@ -291,11 +319,20 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
       ...ACTIVE_MEMBERSHIP,
       endDate: '2025-01-01T00:00:00Z',
     };
+    const mocks = createMocks([expired], {
+      orgGrantTemplateKeys: new Map([['org_a', ['hr_admin']]]),
+    });
     mocks.principalLoader.load.mockResolvedValue({
       userId: 'user-1', displayName: 'Test', initials: 'T', locale: 'sr-Latn',
       memberships: [expired], staffTemplates: [], expert: null,
       isSuspended: false, isDeactivated: false,
     });
+    const service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+      mocks.meResponse as never,
+    );
     const principal = makePrincipal({ kind: 'personal' }, [expired]);
 
     try {
@@ -315,11 +352,20 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
       ...ACTIVE_MEMBERSHIP,
       startDate: '2099-01-01T00:00:00Z',
     };
+    const mocks = createMocks([future], {
+      orgGrantTemplateKeys: new Map([['org_a', ['hr_admin']]]),
+    });
     mocks.principalLoader.load.mockResolvedValue({
       userId: 'user-1', displayName: 'Test', initials: 'T', locale: 'sr-Latn',
       memberships: [future], staffTemplates: [], expert: null,
       isSuspended: false, isDeactivated: false,
     });
+    const service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+      mocks.meResponse as never,
+    );
     const principal = makePrincipal({ kind: 'personal' }, [future]);
 
     try {
@@ -333,6 +379,13 @@ describe('SessionEndpointsService.switchContext – organization date-currency (
   });
 
   it('rejects organization context with invalid_context when no membership exists', async () => {
+    const mocks = createMocks([ACTIVE_MEMBERSHIP]);
+    const service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+      mocks.meResponse as never,
+    );
     const principal = makePrincipal({ kind: 'personal' }, [ACTIVE_MEMBERSHIP]);
 
     try {
@@ -359,8 +412,8 @@ describe('SessionEndpointsService.switchContext – lastPersonalOrgId (Ruling D)
     service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
-      mocks.contextLoader as never,
       mocks.store as never,
+      mocks.meResponse as never,
     );
   });
 
@@ -387,44 +440,18 @@ describe('SessionEndpointsService.switchContext – lastPersonalOrgId (Ruling D)
 // ---------------------------------------------------------------------------
 
 describe('SessionEndpointsService.getMe – effectiveActions via engine (Ruling F)', () => {
-  it('returns actions from engine effectiveActions via contextLoader', async () => {
+  it('returns actions from engine effectiveActions via MeResponseBuilder', async () => {
     const mocks = createMocks([ACTIVE_MEMBERSHIP]);
-    // Mock contextLoader.build to return an AuthorizationContext with the grants
-    const now = new Date();
-    mocks.contextLoader.build.mockResolvedValue({
-      now,
-      isDeactivated: false,
-      isSuspended: false,
-      grants: [
-        {
-          id: 'g1',
-          subjectUserId: 'user-1',
-          templateKey: 'hr_admin',
-          actions: ['program.overview', 'people.invite'],
-          scopeType: 'organization',
-          scopeOrgId: 'org_a',
-          scopeOrgUnitId: null,
-          includeDescendants: false,
-          scopeRefKind: null,
-          scopeRefId: null,
-          conditions: [],
-          validFrom: null,
-          validUntil: null,
-          delegationEnvelope: null,
-          parentGrantId: null,
-          revokedAt: null,
-        },
-      ],
-      assignments: [],
-      ancestorIds: [],
-      orgSelfApprovalAllowed: false,
-      organizationTimezone: 'Europe/Belgrade',
+    mocks.meResponse.build.mockResolvedValue({
+      principal: makePrincipal({ kind: 'organization', orgId: 'org_a' }, [ACTIVE_MEMBERSHIP]),
+      effectiveActions: ['program.overview', 'people.invite'],
+      availableContexts: [],
     });
     const service = new SessionEndpointsService(
       mocks.sessions as never,
       mocks.principalLoader as never,
-      mocks.contextLoader as never,
       mocks.store as never,
+      mocks.meResponse as never,
     );
     const principal = makePrincipal(
       { kind: 'organization', orgId: 'org_a' },

@@ -34,7 +34,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { requestMeta, type RequestMeta } from '../common/request-meta.js';
 import type { SessionRecord } from '../session/session.types.js';
-import { defaultContext, resolveDefaultPersonalOrgId } from '../authz/personal-context.js';
+import { defaultContext, resolveDefaultPersonalOrgId, resolvePopulation } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
   userMobileFamiliesKey,
@@ -161,9 +161,7 @@ export class AuthenticationGuard implements CanActivate {
           await this.sessions.updateContext(
             record.sessionId,
             resolvedContext,
-            loaded.staffTemplates.length > 0 ? 'staff'
-              : loaded.expert ? 'expert'
-              : 'employee',
+            resolvePopulation(loaded, resolvedContext),
           );
         } catch {
           // Non-critical: the session will be upgraded on the next request.

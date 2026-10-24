@@ -4,7 +4,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { routeTree } from './routeTree.gen';
 import { handleApiError } from './auth/handle-api-error';
-import type { ErrorHandlerDeps } from './auth/handle-api-error';
+import { globalErrorDepsRef } from './auth/global-error-deps';
 import './i18n';
 
 declare module '@tanstack/react-router' {
@@ -13,11 +13,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
-/**
- * Mutable ref for the root component to set auth + router deps into.
- * QueryCache/MutationCache onError reads from it (ruling 6, T-C1.02).
- */
-export const globalErrorDepsRef: { current: ErrorHandlerDeps | null } = { current: null };
+export { globalErrorDepsRef };
 
 const onCacheError = (error: Error) => {
   if (globalErrorDepsRef.current) {

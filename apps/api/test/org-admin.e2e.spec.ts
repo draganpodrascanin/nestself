@@ -164,13 +164,10 @@ describe.skipIf(!shouldRun)('Org Admin (e2e)', () => {
         orgId: 'org_sample',
       });
 
+      // C1: employee stays in personal context (no org-workspace grant).
       const jovan = await signInEmailOtp('user_jovan@example.com');
       jovanAgent = jovan.agent;
       jovanCsrf = jovan.csrf;
-      await switchContext(jovanAgent, jovanCsrf, {
-        kind: 'organization',
-        orgId: 'org_sample',
-      });
     });
 
     it('GET /orgs/:orgId/org-units lists units ordered by depth then name', async () => {

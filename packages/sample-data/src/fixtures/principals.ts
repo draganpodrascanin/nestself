@@ -12,6 +12,7 @@
  */
 import { PrincipalSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import type { Principal, AvailableContextEntry } from '@nestself/contracts';
+import { SAMPLE_ORG } from './org.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,7 +32,6 @@ function actionsForTemplates(...keys: string[]): readonly string[] {
 }
 
 const AUTH_TIME = '2026-10-22T09:00:00Z';
-const SAMPLE_ORG_NAME = 'Sample Org';
 
 // ---------------------------------------------------------------------------
 // Principals — all org-based users default to personal context (Ruling E)
@@ -154,13 +154,13 @@ const adminPrincipal: Principal = PrincipalSchema.parse({
 
 /** Employee: personal only (no org-workspace template grant). */
 const EMPLOYEE_CONTEXTS: AvailableContextEntry[] = [
-  { kind: 'personal', orgId: 'org_sample', orgName: SAMPLE_ORG_NAME },
+  { kind: 'personal', orgId: 'org_sample', orgName: SAMPLE_ORG.name },
 ];
 
 /** Manager and HR admin: personal + organization (holds org-workspace grant). */
 const ORG_ADMIN_CONTEXTS: AvailableContextEntry[] = [
-  { kind: 'personal', orgId: 'org_sample', orgName: SAMPLE_ORG_NAME },
-  { kind: 'organization', orgId: 'org_sample', orgName: SAMPLE_ORG_NAME },
+  { kind: 'personal', orgId: 'org_sample', orgName: SAMPLE_ORG.name },
+  { kind: 'organization', orgId: 'org_sample', orgName: SAMPLE_ORG.name },
 ];
 
 // ---------------------------------------------------------------------------

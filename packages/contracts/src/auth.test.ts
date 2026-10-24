@@ -251,7 +251,7 @@ describe('MeResponseSchema', () => {
         tokenFamily: null,
       },
       effectiveActions: ['preferences.manage', 'feedback.submit'],
-      availableContexts: [{ kind: 'personal' }, { kind: 'organization', orgId: 'org1' }],
+      availableContexts: [{ kind: 'personal', orgId: 'org1' }, { kind: 'organization', orgId: 'org1' }],
     });
     expect(result.effectiveActions).toHaveLength(2);
     expect(result.availableContexts).toHaveLength(2);

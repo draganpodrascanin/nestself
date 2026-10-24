@@ -104,8 +104,8 @@ export function ContextSwitcher() {
         <MenuTrigger
           variant="quiet"
           className="type-body-sm gap-1.5 max-w-[200px]"
-          aria-label={t('contextSwitcher.label')}
         >
+          <span className="sr-only">{t('contextSwitcher.label')}: </span>
           <span className="truncate">{currentLabel}</span>
           <CaretUpDown size={14} aria-hidden />
         </MenuTrigger>
@@ -129,7 +129,7 @@ export function ContextSwitcher() {
       </Menu>
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {switching
-          ? `${t('contextSwitcher.label')}…`
+          ? t('contextSwitcher.switching')
           : `${t('contextSwitcher.current')}: ${currentLabel}`}
       </span>
     </div>

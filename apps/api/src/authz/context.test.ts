@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isContextValid, membershipContextCode } from './context.js';
-import type { Principal, AuthorizationContext, PrincipalMembership } from '@nestself/contracts';
+import { isContextValid, denialCode } from './context.js';
+import type { Principal, AuthorizationContext } from '@nestself/contracts';
 
 function makePrincipal(overrides: Partial<Principal> = {}): Principal {
   return {
@@ -171,33 +171,25 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
   });
 });
 
-describe('membershipContextCode (used by guard and resolvers)', () => {
-  const NOW = new Date('2026-10-22T10:00:00Z');
-
-  it('returns invalid_context for INVITED membership', () => {
-    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
-      status: 'INVITED',
-      startDate: '2024-01-01T00:00:00Z',
-      endDate: null,
-    };
-    expect(membershipContextCode(m, NOW)).toBe('invalid_context');
+describe('denialCode (I2: used by guard and service)', () => {
+  it('returns org_context_expired for invalid_context when principal is in org context', () => {
+    const p = makePrincipal({ context: { kind: 'organization', orgId: 'org_a' } });
+    expect(denialCode(p, 'invalid_context')).toBe('org_context_expired');
   });
 
-  it('returns invalid_context for ACTIVE membership with future startDate', () => {
-    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
-      status: 'ACTIVE',
-      startDate: '2099-01-01T00:00:00Z',
-      endDate: null,
-    };
-    expect(membershipContextCode(m, NOW)).toBe('invalid_context');
+  it('returns org_context_expired for invalid_context when principal has personal context with orgId', () => {
+    const p = makePrincipal({ context: { kind: 'personal', orgId: 'org_a' } });
+    expect(denialCode(p, 'invalid_context')).toBe('org_context_expired');
   });
 
-  it('returns org_context_expired for ACTIVE membership with past endDate', () => {
-    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
-      status: 'ACTIVE',
-      startDate: '2024-01-01T00:00:00Z',
-      endDate: '2025-01-01T00:00:00Z',
-    };
-    expect(membershipContextCode(m, NOW)).toBe('org_context_expired');
+  it('returns invalid_context for invalid_context when principal has bare personal context', () => {
+    const p = makePrincipal({ context: { kind: 'personal' } });
+    expect(denialCode(p, 'invalid_context')).toBe('invalid_context');
+  });
+
+  it('returns forbidden for non-context denial reasons', () => {
+    const p = makePrincipal({ context: { kind: 'organization', orgId: 'org_a' } });
+    expect(denialCode(p, 'scope_mismatch')).toBe('forbidden');
+    expect(denialCode(p, 'suspended')).toBe('forbidden');
   });
 });

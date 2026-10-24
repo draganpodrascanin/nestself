@@ -258,6 +258,7 @@
     "operations": "Operációk",
     "switchFailed": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra.",
     "current": "Aktuális",
+    "switching": "Munkaterület váltása…",
     "error": {
       "org_context_expired": "A tagsága ebben a szervezetben lejárt.",
       "invalid_context": "Ez a munkaterület nem elérhető az Ön számára.",

@@ -41,6 +41,7 @@ import type {
   GrantCondition,
 } from '@nestself/contracts';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { isMembershipDateCurrent } from '../authz/personal-context.js';
 import type { AvailableContextExtras } from '../authz/personal-context.js';
 
 // ---------------------------------------------------------------------------
@@ -85,16 +86,21 @@ function computeInitials(displayName: string): string {
   return letters.join('') || '?';
 }
 
+/** Adapts DB-level membership to the shared currency check from personal-context. */
 function isMembershipActive(
   status: string,
   startDate: Date,
   endDate: Date | null,
   now: Date,
 ): boolean {
-  if (status !== 'ACTIVE') return false;
-  if (startDate > now) return false;
-  if (endDate != null && endDate <= now) return false;
-  return true;
+  return isMembershipDateCurrent(
+    {
+      status: status as 'ACTIVE' | 'INVITED',
+      startDate: startDate.toISOString(),
+      endDate: endDate?.toISOString() ?? null,
+    },
+    now,
+  );
 }
 
 // ---------------------------------------------------------------------------

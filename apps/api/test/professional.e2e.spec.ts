@@ -158,7 +158,7 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   }
 
   /** Email-OTP sign-in for employees and organization admins. */
-  async function signInMember(userId: string) {
+  async function signInMember(userId: string, orgContext = true) {
     const email = `${userId}@example.com`;
     const agent = request.agent(app.getHttpServer());
     const start = await agent.post('/api/auth/email-otp/start').send({ email });
@@ -168,7 +168,9 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
       .post('/api/auth/email-otp/verify')
       .send({ challengeToken: start.body.challengeToken, code });
     expect(verify.status).toBe(200);
-    await switchContext(agent, extractCsrf(verify), { kind: 'organization', orgId: ORG });
+    if (orgContext) {
+      await switchContext(agent, extractCsrf(verify), { kind: 'organization', orgId: ORG });
+    }
     return agent;
   }
 
@@ -234,7 +236,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   });
 
   it('the participant reads their own conversation but not through the expert route', async () => {
-    const jovan = await signInMember('user_jovan');
+    // C1: employee stays in personal context (no org-workspace grant).
+    const jovan = await signInMember('user_jovan', false);
 
     const own = await jovan.get(MY_CONV);
     expect(own.status).toBe(200);

@@ -7,6 +7,9 @@
  * 403 step_up_required -> open the step-up dialog (`stepUp()`); wrap the call in
  *   `withStepUp` to retry it after verification. `StepUpCancelledError` (the
  *   user cancelled) is ignored.
+ * 403 org_context_expired -> switch to personal context and toast.
+ *   At most one recovery switch runs at a time (module-level in-flight promise,
+ *   I4).  Failed recovery shows `contextSwitcher.error.unknown`.
  */
 import type { NavigateFn } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
@@ -20,10 +23,13 @@ export interface ErrorHandlerDeps {
   refreshPrincipal: () => Promise<void>;
   switchContext: (ctx: ActiveContext) => Promise<void>;
   stepUp: () => Promise<boolean>;
-  showToast?: (message: string) => void;
-  /** i18n translation function. */
-  t?: (key: string) => string;
+  showToast: (message: string) => void;
+  /** i18n translation function. Required (I4). */
+  t: (key: string) => string;
 }
+
+/** Module-level in-flight promise prevents concurrent recovery switches (I4). */
+let recoveryInFlight: Promise<void> | null = null;
 
 export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
   // The user cancelled the step-up dialog: already handled, do not re-prompt.
@@ -47,11 +53,18 @@ export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
   }
 
   if (error.status === 403 && error.code === 'org_context_expired') {
-    void deps.switchContext({ kind: 'personal' });
-    const message = deps.t
-      ? deps.t('contextSwitcher.error.org_context_expired')
-      : 'Your organisation session has expired.';
-    deps.showToast?.(message);
+    // At most one recovery at a time; subsequent errors are silently coalesced.
+    if (recoveryInFlight) return;
+    recoveryInFlight = deps.switchContext({ kind: 'personal' })
+      .then(() => {
+        deps.showToast(deps.t('contextSwitcher.error.org_context_expired'));
+      })
+      .catch(() => {
+        deps.showToast(deps.t('contextSwitcher.error.unknown'));
+      })
+      .finally(() => {
+        recoveryInFlight = null;
+      });
     return;
   }
 

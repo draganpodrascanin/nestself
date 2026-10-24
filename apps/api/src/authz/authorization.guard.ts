@@ -26,6 +26,7 @@ import { ContextLoader } from './context-loader.js';
  
 import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from './authorize.js';
+import { denialCode } from './context.js';
 import { ApiHttpException } from '../common/api-error.js';
 import type { Principal, Resource } from '@nestself/contracts';
 import { STEP_UP_CLASS_BY_ACTION } from '@nestself/contracts';
@@ -107,17 +108,9 @@ export class AuthorizationGuard implements CanActivate {
     }
 
     if (!decision.allowed) {
-      // Context expiry mapping: the engine always returns `invalid_context`;
-      // the guard upgrades to `org_context_expired` when the stored session
-      // context names an organization (personal+orgId or organization).
-      // This runs before 404/403 visibility so it always reaches the client.
-      if (decision.denialReason === 'invalid_context') {
-        const pctx = principal.context;
-        const namesOrg =
-          (pctx.kind === 'personal' && 'orgId' in pctx && pctx.orgId != null) ||
-          pctx.kind === 'organization';
-        const code = namesOrg ? 'org_context_expired' : 'invalid_context';
-
+      // Context expiry mapping via shared denialCode helper (I2).
+      const code = denialCode(principal, decision.denialReason ?? 'forbidden');
+      if (code === 'invalid_context' || code === 'org_context_expired') {
         await this.audit.record({
           action: 'access.denied',
           actorUserId: principal.userId,

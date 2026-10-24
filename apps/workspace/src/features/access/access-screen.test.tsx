@@ -124,7 +124,13 @@ function makeAdminApi(overrides: Partial<Record<keyof OrgAdminApi, unknown>> = {
   } as unknown as OrgAdminApi;
 }
 
-const BASE_PRINCIPAL: Principal = SAMPLE_PRINCIPALS.hr_admin.principal;
+// The sample HR admin signs in to personal context by default (C1).
+// The access screen auto-switches to org context, so these tests
+// start the principal in the organization context directly.
+const BASE_PRINCIPAL: Principal = {
+  ...SAMPLE_PRINCIPALS.hr_admin.principal,
+  context: { kind: 'organization', orgId: 'org_sample' },
+};
 
 function makeAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {

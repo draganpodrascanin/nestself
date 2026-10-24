@@ -8,6 +8,7 @@
  * @see ACC-R-12, ACC-R-15
  */
 import type { PrincipalMembership, AvailableContextEntry, ActiveContext } from '@nestself/contracts';
+import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 
 /**
  * A membership is date-current when:
@@ -89,8 +90,9 @@ export function defaultContext(
  * - Organization: only for an org where the user holds at least one active
  *   grant whose template's `workspace` is `'organization'` (Ruling B).
  * - Expert and operations entries when the user has the capability.
+ *
+ * Fields read by `computeAvailableContexts`. Both `Principal` and `LoadedPrincipal` satisfy this.
  */
-/** Fields read by `computeAvailableContexts`. Both `Principal` and `LoadedPrincipal` satisfy this. */
 export interface AvailableContextSource {
   memberships: readonly Pick<PrincipalMembership, 'orgId' | 'status' | 'startDate' | 'endDate'>[];
   staffTemplates: readonly string[];
@@ -108,8 +110,6 @@ export interface AvailableContextExtras {
   orgNames: ReadonlyMap<string, string>;
 }
 
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-
 /** Template keys whose workspace is 'organization'. */
 const ORG_WORKSPACE_TEMPLATE_KEYS: ReadonlySet<string> = new Set(
   PERMISSION_TEMPLATES
@@ -120,9 +120,9 @@ const ORG_WORKSPACE_TEMPLATE_KEYS: ReadonlySet<string> = new Set(
 export function computeAvailableContexts(
   loaded: AvailableContextSource,
   extras: AvailableContextExtras,
+  now: Date = new Date(),
 ): AvailableContextEntry[] {
   const entries: AvailableContextEntry[] = [];
-  const now = new Date();
 
   for (const m of loaded.memberships) {
     if (!isMembershipDateCurrent(m, now)) continue;
@@ -157,6 +157,21 @@ export function computeAvailableContexts(
   });
 
   return entries;
+}
+
+/**
+ * Resolve population category for a user in the given context (I3, T-C1.02).
+ *
+ * Used by session creation (identity-resolution), session upgrade
+ * (authentication.guard) and context switch (session-endpoints).
+ */
+export function resolvePopulation(
+  loaded: { staffTemplates: readonly unknown[]; expert: unknown | null },
+  context: ActiveContext,
+): 'employee' | 'expert' | 'staff' {
+  if (loaded.staffTemplates.length > 0) return 'staff';
+  if (loaded.expert && context.kind === 'expert') return 'expert';
+  return 'employee';
 }
 
 /**
