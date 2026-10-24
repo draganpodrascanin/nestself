@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { ACTIONS, ACTION_LIST, isAction, CONFIDENTIAL_ACTIONS, APPROVAL_ACTIONS } from './actions.ts';
 
 describe('actions', () => {
-  it('has exactly 88 actions in the catalogue', () => {
-    expect(Object.keys(ACTIONS)).toHaveLength(95);
+  it('has exactly 97 actions in the catalogue', () => {
+    expect(Object.keys(ACTIONS)).toHaveLength(97);
+  });
+
+  it('includes the event actions of NS-CALLS-01 (decision record section 7)', () => {
+    expect(isAction('event.present')).toBe(true);
+    expect(isAction('event.manage')).toBe(true);
+    expect(isAction('event.moderate')).toBe(true);
   });
 
   it('ACTION_LIST length matches ACTIONS keys', () => {

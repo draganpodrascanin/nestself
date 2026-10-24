@@ -84,6 +84,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'access.preview', 'access.emergency.request', 'access.emergency.approve',
       'policy.manage', 'service.enable', 'audit.read', 'platform.configure',
       'sso.manage', 'session.revoke.any', 'people.deactivate',
+      'event.manage', 'event.moderate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'platform',
@@ -106,6 +107,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     actions: [
       'client.configure', 'people.import', 'people.onboard', 'people.deactivate',
       'service.configure', 'request.view', 'request.route', 'bookings.coordinate',
+      'event.manage', 'event.moderate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_clients',
@@ -142,7 +144,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     population: 'staff',
     actions: [
       'content.review', 'content.publish', 'content.schedule',
-      'content.archive', 'content.restrict',
+      'content.archive', 'content.restrict', 'event.manage',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_collections',
@@ -160,7 +162,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     population: 'staff',
     actions: [
       'request.route', 'request.assign', 'request.escalate',
-      'bookings.coordinate', 'appointment.propose',
+      'bookings.coordinate', 'appointment.propose', 'event.moderate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_queues',
@@ -215,6 +217,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'availability.manage', 'case.accept', 'case.decline',
       'appointment.propose', 'conversation.participate', 'conversation.read.assigned',
       'consultation.join', 'delivery.record', 'earnings.read', 'expert.profile.edit',
+      'event.present',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_cases',

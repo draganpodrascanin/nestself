@@ -61,6 +61,49 @@ export const AUDIT_ACTIONS = [
   'sso_connection.activated',
   'sso_connection.deactivated',
   'data.erasure.requested',
+  // Consultations and webinars (NS-CALLS-01, decision record section 7)
+  'appointment.created',
+  'appointment.canceled',
+  'appointment.completed',
+  'appointment.no_show',
+  'appointment.follow_up.proposed',
+  'appointment.confirmed',
+  'appointment.declined',
+  'appointment.times_suggested',
+  'appointment.approval.requested',
+  'appointment.approval.approved',
+  'appointment.approval.rejected',
+  'appointment.approval.expired',
+  'appointment.approval.missing_approver',
+  'org.follow_up_policy.changed',
+  'call.session.created',
+  'call.joined',
+  'call.ended',
+  'call.outcome.recorded',
+  'call.feedback.submitted',
+  'call.diagnostics.viewed',
+  'call.ticket.issued',
+  'webinar.created',
+  'webinar.published',
+  'webinar.canceled',
+  'webinar.started',
+  'webinar.ended',
+  'webinar.registered',
+  'webinar.unregistered',
+  'webinar.joined',
+  'webinar.message.submitted',
+  'webinar.message.published',
+  'webinar.message.answered',
+  'webinar.message.dismissed',
+  'webinar.floor.given',
+  'webinar.floor.taken',
+  'webinar.poll.opened',
+  'webinar.poll.closed',
+  'webinar.recording.started',
+  'webinar.recording.stopped',
+  'webinar.recording.ready',
+  'webinar.recording.handed_off',
+  'webinar.certificate.issued',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -93,6 +136,25 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('content.')) return 'CONTENT_ACCESS';
   if (action.startsWith('sso_connection.')) return 'ADMIN';
   if (action === 'data.erasure.requested') return 'ADMIN';
+  // NS-CALLS-01 (guidelines 7.5, CW-R-27a, CW-R-33b): completion and no-show
+  // and the outcome feed settlement; joins and tickets prove who was in the
+  // room; messages, the floor and recordings are content access.
+  if (action === 'appointment.completed' || action === 'appointment.no_show') return 'FINANCIAL';
+  if (action.startsWith('appointment.')) return 'ADMIN';
+  if (action === 'org.follow_up_policy.changed') return 'ADMIN';
+  if (action === 'call.outcome.recorded') return 'FINANCIAL';
+  if (action === 'call.joined' || action === 'call.ticket.issued') return 'SECURITY';
+  if (action === 'call.diagnostics.viewed') return 'CONTENT_ACCESS';
+  if (action.startsWith('call.')) return 'ADMIN';
+  if (action === 'webinar.joined') return 'SECURITY';
+  if (
+    action.startsWith('webinar.message.') ||
+    action.startsWith('webinar.floor.') ||
+    action.startsWith('webinar.recording.')
+  ) {
+    return 'CONTENT_ACCESS';
+  }
+  if (action.startsWith('webinar.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

@@ -47,6 +47,9 @@ const FORBIDDEN_KEYS = new Set([
   'accessToken',
   'idToken',
   'refreshToken',
+  // Chime SDK attendee credential, in both casings (CW-R-69, D-CW-08)
+  'joinToken',
+  'JoinToken',
   'secret',
   'cookie',
   'authorization',
