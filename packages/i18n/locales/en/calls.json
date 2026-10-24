@@ -55,8 +55,17 @@
     "errors": {
       "dateTimeRequired": "Choose a date and a time.",
       "past": "Choose a time in the future.",
-      "endBeforeStart": "The end time must be after the start time."
-    }
+      "endBeforeStart": "The end time must be after the start time.",
+      "pickRequired": "Choose one of the suggested times."
+    },
+    "openFollowUp": "Open the follow-up",
+    "awaitingApprovalExpert": "The employee's organisation approves follow-ups before they are booked. You will both be told when it is decided.",
+    "declinedPropose": "The employee declined the last proposal. You can propose another time.",
+    "pickTitle": "The employee suggested other times",
+    "pickBody": "Choose one of them. The session starts at the beginning of the time you choose and keeps its length.",
+    "pickLabel": "Suggested times",
+    "pickWindow": "{{date}}, {{from}} – {{to}}",
+    "scheduledFor": "Scheduled for {{date}} at {{time}}."
   },
   "approval": {
     "pending": "Waiting for a decision",
@@ -155,7 +164,7 @@
     "joining": "Joining…"
   },
   "errors": {
-    "joinWindowClosed": "This session cannot be joined right now. Joining opens shortly before the start and closes after the scheduled end.",
+    "joinWindowClosed": "This session cannot be joined right now. Joining opens shortly before the start and closes 10 minutes after it; if you already joined, you can rejoin until shortly after the end.",
     "appointmentNotJoinable": "This appointment cannot be joined or changed in its current status.",
     "appointmentNotProposed": "This proposal is no longer waiting for your answer.",
     "followUpNotAllowed": "A follow-up can only be proposed after a completed session.",
@@ -396,7 +405,15 @@
     "notMeasured": "Not measured",
     "send": "Send report",
     "cancel": "Cancel",
-    "sent": "Report sent. NestSelf support can now see the connection details of this call."
+    "sent": "Report sent. NestSelf support can now see the connection details of this call.",
+    "category": "What went wrong?",
+    "categories": {
+      "audio": "Sound",
+      "video": "Video",
+      "connection": "Connection",
+      "other": "Something else"
+    },
+    "categoryRequired": "Choose what went wrong."
   },
   "consultations": {
     "nav": "Consultations",
@@ -455,5 +472,8 @@
   },
   "sample": {
     "actionNoop": "This is a demonstration with sample data. Nothing was created, changed or sent."
+  },
+  "reminder": {
+    "toast": "Reminder: your NestSelf session starts at {{time}}."
   }
 }

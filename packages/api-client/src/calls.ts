@@ -10,8 +10,9 @@
  * drops it (CW-R-59, CW-R-69); there is deliberately no query or mutation
  * option for it, because both would hold the credentials in a cache.
  *
- * The follow-up methods serve T-CW-1.9's routes. Until those routes land the
- * server answers 404, which the apps render through their call error map.
+ * The follow-up methods serve T-CW-1.9's routes; each answers the appointment
+ * it changed or created, with the participants' first names and, for a
+ * proposal the employee answered with other times, the suggested windows.
  */
 import { z } from 'zod';
 import {
@@ -24,6 +25,7 @@ import {
 import type {
   AppointmentStatus,
   CallFeedbackRequest,
+  CallProblemReportRequest,
   CallJoinRequest,
   CallOutcomeRequest,
   CallSignalRequest,
@@ -71,6 +73,13 @@ const appointmentPath = (id: string, suffix = '') => `/api/appointments/${encode
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 export function createCallsApi(client: ApiClient) {
+  /** POST /appointments/:id/suggest-times: the employee suggests one to three other windows. */
+  const suggestTimes = (appointmentId: string, body: FollowUpSuggestTimesRequest) =>
+    client.request(appointmentPath(appointmentId, '/suggest-times'), {
+      ...jsonPost(body),
+      schema: AppointmentResponseSchema,
+    });
+
   return {
     /** GET /appointments: one cursor page of the caller's appointments (participants) or coordinated organizations (operations). */
     listAppointments: (params: AppointmentListParams = {}) =>
@@ -159,6 +168,17 @@ export function createCallsApi(client: ApiClient) {
       }
     },
 
+    /**
+     * POST /calls/:sessionId/problem-report (CALL-16): a fixed category and
+     * the call's connection summary, never free text (204).
+     */
+    reportProblem: (sessionId: string, body: CallProblemReportRequest) =>
+      client.request(`/api/calls/${encodeURIComponent(sessionId)}/problem-report`, {
+        ...jsonPost(body),
+        schema: NoContentSchema,
+        expectBody: false,
+      }),
+
     /** POST /appointments/:id/follow-up: the expert proposes a follow-up; returns the new `proposed` appointment. */
     proposeFollowUp: (appointmentId: string, body: FollowUpProposeRequest) =>
       client.request(appointmentPath(appointmentId, '/follow-up'), {
@@ -173,12 +193,9 @@ export function createCallsApi(client: ApiClient) {
         schema: AppointmentResponseSchema,
       }),
 
-    /** POST /appointments/:id/suggest-times: the employee suggests one to three other windows. */
-    suggestFollowUpTimes: (appointmentId: string, body: FollowUpSuggestTimesRequest) =>
-      client.request(appointmentPath(appointmentId, '/suggest-times'), {
-        ...jsonPost(body),
-        schema: AppointmentResponseSchema,
-      }),
+    suggestTimes,
+    /** The T-CW-1.5 name of {@link suggestTimes}, kept as an alias. */
+    suggestFollowUpTimes: suggestTimes,
 
     /** POST /appointments/:id/schedule: the expert picks one suggested window. */
     scheduleFollowUp: (appointmentId: string, body: FollowUpScheduleRequest) =>

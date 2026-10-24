@@ -10,7 +10,9 @@ export { meQueryOptions } from './queries/auth';
 export { createCallsApi } from './calls';
 export type { CallsApi, AppointmentListParams } from './calls';
 export { joinWindowBounds, joinWindowState, nextJoinWindowChange } from './join-window';
-export type { JoinWindowState } from './join-window';
+export type { JoinWindowOptions, JoinWindowState } from './join-window';
+export { USER_ROOM_EVENTS, createUserRoomClient, noopUserRoomClient, userRoomSubscribeMessage } from './user-room';
+export type { UserRoomClient, UserRoomHandlers } from './user-room';
 export {
   CALL_ROOM_EVENTS,
   callRoomName,
@@ -43,4 +45,5 @@ export {
   suggestFollowUpTimesMutation,
   scheduleFollowUpMutation,
   declineFollowUpMutation,
+  reportProblemMutation,
 } from './queries/calls';

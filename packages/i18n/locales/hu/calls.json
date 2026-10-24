@@ -54,8 +54,17 @@
     "errors": {
       "dateTimeRequired": "Válasszon dátumot és időpontot.",
       "past": "Jövőbeli időpontot válasszon.",
-      "endBeforeStart": "A befejezés időpontjának a kezdés utánra kell esnie."
-    }
+      "endBeforeStart": "A befejezés időpontjának a kezdés utánra kell esnie.",
+      "pickRequired": "Válasszon egyet a javasolt időpontok közül."
+    },
+    "openFollowUp": "A következő alkalom megnyitása",
+    "awaitingApprovalExpert": "A munkavállaló szervezete foglalás előtt jóváhagyja a következő alkalmakat. Mindketten értesítést kapnak a döntésről.",
+    "declinedPropose": "A munkavállaló elutasította az utolsó javaslatot. Javasolhat másik időpontot.",
+    "pickTitle": "A munkavállaló más időpontokat javasolt",
+    "pickBody": "Válasszon egyet. Az alkalom a választott időszak elején kezdődik, és megtartja az időtartamát.",
+    "pickLabel": "Javasolt időpontok",
+    "pickWindow": "{{date}}, {{from}} – {{to}}",
+    "scheduledFor": "Rögzítve: {{date}}, {{time}}."
   },
   "approval": {
     "pending": "Döntésre vár",
@@ -154,7 +163,7 @@
     "joining": "Csatlakozás…"
   },
   "errors": {
-    "joinWindowClosed": "Ehhez az alkalomhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik meg, és a tervezett befejezés után zárul.",
+    "joinWindowClosed": "Ehhez az alkalomhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik meg, és 10 perccel utána zárul; ha már csatlakozott, röviddel a befejezés utánig újra csatlakozhat.",
     "appointmentNotJoinable": "Ehhez az időponthoz a jelenlegi állapotában nem lehet csatlakozni, és nem is módosítható.",
     "appointmentNotProposed": "Ez a javaslat már nem vár az Ön válaszára.",
     "followUpNotAllowed": "Következő alkalmat csak egy befejezett alkalom után lehet javasolni.",
@@ -392,7 +401,15 @@
     "notMeasured": "Nincs mérve",
     "send": "Bejelentés küldése",
     "cancel": "Mégse",
-    "sent": "A bejelentést elküldtük. A NestSelf ügyfélszolgálata most látja a hívás kapcsolati adatait."
+    "sent": "A bejelentést elküldtük. A NestSelf ügyfélszolgálata most látja a hívás kapcsolati adatait.",
+    "category": "Mi nem működött?",
+    "categories": {
+      "audio": "Hang",
+      "video": "Kép",
+      "connection": "Kapcsolat",
+      "other": "Valami más"
+    },
+    "categoryRequired": "Válassza ki, mi nem működött."
   },
   "consultations": {
     "nav": "Konzultációk",
@@ -451,5 +468,8 @@
   },
   "sample": {
     "actionNoop": "Ez egy bemutató mintaadatokkal. Semmi sem jött létre, nem változott és nem lett elküldve."
+  },
+  "reminder": {
+    "toast": "Emlékeztető: a NestSelf alkalma ekkor kezdődik: {{time}}."
   }
 }

@@ -6,6 +6,7 @@
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type {
   CallFeedbackRequest,
+  CallProblemReportRequest,
   CallOutcomeRequest,
   CallSignalRequest,
   FollowUpProposeRequest,
@@ -106,7 +107,7 @@ export const confirmFollowUpMutation = (api: CallsApi, appointmentId: string) =>
 export const suggestFollowUpTimesMutation = (api: CallsApi, appointmentId: string) =>
   mutationOptions({
     mutationKey: [...appointmentKeys.detail(appointmentId), 'suggest-times'],
-    mutationFn: (body: FollowUpSuggestTimesRequest) => api.suggestFollowUpTimes(appointmentId, body),
+    mutationFn: (body: FollowUpSuggestTimesRequest) => api.suggestTimes(appointmentId, body),
   });
 
 export const scheduleFollowUpMutation = (api: CallsApi, appointmentId: string) =>
@@ -119,4 +120,11 @@ export const declineFollowUpMutation = (api: CallsApi, appointmentId: string) =>
   mutationOptions({
     mutationKey: [...appointmentKeys.detail(appointmentId), 'decline'],
     mutationFn: () => api.declineFollowUp(appointmentId),
+  });
+
+/** `POST /calls/:sessionId/problem-report` (CALL-16). */
+export const reportProblemMutation = (api: CallsApi, sessionId: string) =>
+  mutationOptions({
+    mutationKey: ['calls', sessionId, 'problem-report'],
+    mutationFn: (body: CallProblemReportRequest) => api.reportProblem(sessionId, body),
   });

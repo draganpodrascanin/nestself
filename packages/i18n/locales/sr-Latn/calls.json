@@ -55,8 +55,17 @@
     "errors": {
       "dateTimeRequired": "Izaberite datum i vreme.",
       "past": "Izaberite vreme u budućnosti.",
-      "endBeforeStart": "Vreme završetka mora biti posle vremena početka."
-    }
+      "endBeforeStart": "Vreme završetka mora biti posle vremena početka.",
+      "pickRequired": "Izaberite jedan od predloženih termina."
+    },
+    "openFollowUp": "Otvori narednu sesiju",
+    "awaitingApprovalExpert": "Organizacija zaposlenog odobrava naredne sesije pre zakazivanja. Oboje ćete biti obavešteni kada odluka bude doneta.",
+    "declinedPropose": "Zaposleni je odbio poslednji predlog. Možete predložiti drugi termin.",
+    "pickTitle": "Zaposleni je predložio druge termine",
+    "pickBody": "Izaberite jedan od njih. Sesija počinje na početku izabranog termina i zadržava svoje trajanje.",
+    "pickLabel": "Predloženi termini",
+    "pickWindow": "{{date}}, {{from}} – {{to}}",
+    "scheduledFor": "Zakazano za {{date}} u {{time}}."
   },
   "approval": {
     "pending": "Čeka odluku",
@@ -155,7 +164,7 @@
     "joining": "Pridruživanje…"
   },
   "errors": {
-    "joinWindowClosed": "Ovoj sesiji sada nije moguće pristupiti. Pristup se otvara malo pre početka i zatvara se posle zakazanog kraja.",
+    "joinWindowClosed": "Ovoj sesiji sada nije moguće pristupiti. Pristup se otvara malo pre početka i zatvara se 10 minuta posle njega; ako ste se već pridružili, možete se ponovo pridružiti do malo posle kraja.",
     "appointmentNotJoinable": "Ovom terminu nije moguće pristupiti niti ga menjati u trenutnom statusu.",
     "appointmentNotProposed": "Ovaj predlog više ne čeka vaš odgovor.",
     "followUpNotAllowed": "Narednu sesiju je moguće predložiti tek posle završene sesije.",
@@ -396,7 +405,15 @@
     "notMeasured": "Nije izmereno",
     "send": "Pošalji prijavu",
     "cancel": "Otkaži",
-    "sent": "Prijava je poslata. NestSelf podrška sada vidi podatke o vezi tokom ovog poziva."
+    "sent": "Prijava je poslata. NestSelf podrška sada vidi podatke o vezi tokom ovog poziva.",
+    "category": "Šta nije bilo u redu?",
+    "categories": {
+      "audio": "Zvuk",
+      "video": "Slika",
+      "connection": "Veza",
+      "other": "Nešto drugo"
+    },
+    "categoryRequired": "Izaberite šta nije bilo u redu."
   },
   "consultations": {
     "nav": "Konsultacije",
@@ -455,5 +472,8 @@
   },
   "sample": {
     "actionNoop": "Ovo je demonstracija sa primerom podataka. Ništa nije kreirano, promenjeno niti poslato."
+  },
+  "reminder": {
+    "toast": "Podsetnik: vaša NestSelf sesija počinje u {{time}}."
   }
 }
