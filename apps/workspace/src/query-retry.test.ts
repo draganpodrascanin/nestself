@@ -16,6 +16,18 @@ describe('shouldRetryQuery', () => {
     expect(shouldRetryQuery(3, apiError(500))).toBe(false);
   });
 
+  it('retries an API network failure (status 0) up to three times', () => {
+    const network = new ApiError({
+      status: 0,
+      code: 'network',
+      message: 'Network error',
+      requestId: null,
+    });
+    expect(shouldRetryQuery(0, network)).toBe(true);
+    expect(shouldRetryQuery(2, network)).toBe(true);
+    expect(shouldRetryQuery(3, network)).toBe(false);
+  });
+
   it('retries network and other errors up to three times', () => {
     expect(shouldRetryQuery(0, new TypeError('Failed to fetch'))).toBe(true);
     expect(shouldRetryQuery(3, new TypeError('Failed to fetch'))).toBe(false);
