@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Table, Td, Th } from '@nestself/ui';
 import type { BadgeTone } from '@nestself/ui';
@@ -29,8 +28,6 @@ export interface GrantTableProps {
 export function GrantTable({ caption, grants, members, onRevoke, actionsDisabled = false }: GrantTableProps) {
   const { t, i18n } = useTranslation(['admin', 'common']);
   const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
-  // Statuses are computed against the time the table first rendered.
-  const [now] = useState(() => Date.now());
 
   const nameOf = (userId: string) => members.find((m) => m.userId === userId)?.displayName ?? userId;
 
@@ -60,7 +57,9 @@ export function GrantTable({ caption, grants, members, onRevoke, actionsDisabled
       </thead>
       <tbody>
         {grants.map((grant) => {
-          const status = grantStatus(grant, now);
+          // Current time on every render (grantStatus defaults to Date.now()): a grant
+          // created after the first render shows Active once the list refetches.
+          const status = grantStatus(grant);
           const template = templateLabel(t, grant.templateKey);
           const subject = nameOf(grant.subjectUserId);
           return (
