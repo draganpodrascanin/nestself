@@ -192,4 +192,20 @@ describe('denialCode (I2: used by guard and service)', () => {
     expect(denialCode(p, 'scope_mismatch')).toBe('forbidden');
     expect(denialCode(p, 'suspended')).toBe('forbidden');
   });
+
+  it('returns invalid_context for expert and operations contexts', () => {
+    expect(denialCode(makePrincipal({ context: { kind: 'expert' } }), 'invalid_context')).toBe('invalid_context');
+    expect(denialCode(makePrincipal({ context: { kind: 'operations' } }), 'invalid_context')).toBe('invalid_context');
+  });
+
+  it('never upgrades a non-context reason, whatever the context', () => {
+    for (const context of [
+      { kind: 'personal', orgId: 'org_a' },
+      { kind: 'personal' },
+      { kind: 'expert' },
+      { kind: 'operations' },
+    ] as const) {
+      expect(denialCode(makePrincipal({ context }), 'no_grant')).toBe('forbidden');
+    }
+  });
 });

@@ -17,6 +17,7 @@ import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { externalIdentities, memberships } from '../src/db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
+import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
@@ -818,6 +819,73 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(me.body.effectiveActions).not.toContain('program.overview');
       expect(me.body.effectiveActions).not.toContain('access.preview');
       await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // org_context_expired (T-C1.02)
+  // -----------------------------------------------------------------------
+
+  describe('org context expiry', () => {
+    it('an ended membership turns an org route into 403 org_context_expired; the personal switch then follows the remaining memberships', async () => {
+      const email = 'user_ivana@example.com';
+      const ivana = request.agent(app.getHttpServer());
+      const startRes = await ivana.post('/api/auth/email-otp/start').send({ email });
+      expect(startRes.status).toBe(200);
+      const verifyRes = await ivana
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code: lastSentCode(email) });
+      expect(verifyRes.status).toBe(200);
+      const csrf = extractCsrf(verifyRes);
+
+      const ctxRes = await ivana
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', csrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+      expect(ctxRes.status).toBe(200);
+
+      const before = await ivana.get('/api/orgs/org_sample/programme');
+      expect(before.status).toBe(200);
+
+      const where = and(eq(memberships.userId, 'user_ivana'), eq(memberships.orgId, 'org_sample'));
+      const [original] = await testDb.db.select().from(memberships).where(where);
+      expect(original).toBeDefined();
+      const loader = app.get(PrincipalLoader);
+
+      try {
+        // End the membership the way the members module does, then drop the cache.
+        await testDb.db
+          .update(memberships)
+          .set({ status: 'ENDED', endDate: new Date(Date.now() - 60_000) })
+          .where(where);
+        await loader.invalidateUser('user_ivana', ['org_sample']);
+
+        const expired = await ivana.get('/api/orgs/org_sample/programme');
+        expect(expired.status).toBe(403);
+        expect(expired.body).toHaveProperty('code', 'org_context_expired');
+
+        // Other memberships of the user decide what the personal context resolves to.
+        const remaining = (
+          await testDb.db.select().from(memberships).where(eq(memberships.userId, 'user_ivana'))
+        ).filter((m) => m.status === 'ACTIVE');
+        const personal = await ivana
+          .post('/api/auth/context')
+          .set('X-CSRF-Token', csrf)
+          .send({ context: { kind: 'personal' } });
+        if (remaining.length === 0) {
+          expect(personal.status).toBe(403);
+          expect(personal.body).toHaveProperty('code', 'invalid_context');
+        } else {
+          expect(personal.status).toBe(200);
+          expect(personal.body.principal.context).toEqual({ kind: 'personal', orgId: remaining[0]!.orgId });
+        }
+      } finally {
+        await testDb.db
+          .update(memberships)
+          .set({ status: original!.status, endDate: original!.endDate })
+          .where(where);
+        await loader.invalidateUser('user_ivana', ['org_sample']);
+      }
     });
   });
 });
