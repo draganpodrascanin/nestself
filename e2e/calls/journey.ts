@@ -126,6 +126,8 @@ export async function openAs(browser: Browser, testInfo: TestInfo, person: Perso
 export async function expectApiMode(page: Page): Promise<void> {
   // The SampleDataBanner copy (common.sample.banner).
   await expect(page.getByText('Sample data. Nothing here is real, saved or sent.')).toHaveCount(0);
+  // The header's API status (where the screen has a header) is not the sample-mode warning.
+  await expect(page.getByText('API not connected (sample mode)')).toHaveCount(0);
 }
 
 /** Waits until the pre-join check finished and Join is enabled. */

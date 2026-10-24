@@ -90,14 +90,16 @@ export default defineConfig({
       url: WORKSPACE_URL,
       reuseExistingServer: !CI,
       timeout: 180_000,
-      env: { VITE_DATA_SOURCE: 'api' },
+      // VITE_API_URL is the app's own origin: every call still goes through the proxy, and the
+      // header's API status probes /api/health (it stays "not connected" without it).
+      env: { VITE_DATA_SOURCE: 'api', VITE_API_URL: WORKSPACE_URL },
     },
     {
       command: `pnpm --filter @nestself/admin exec vite --config ../../e2e/calls/vite-admin.config.mjs --port ${ADMIN_PORT}`,
       url: ADMIN_URL,
       reuseExistingServer: !CI,
       timeout: 180_000,
-      env: { VITE_DATA_SOURCE: 'api' },
+      env: { VITE_DATA_SOURCE: 'api', VITE_API_URL: ADMIN_URL },
     },
   ],
 });

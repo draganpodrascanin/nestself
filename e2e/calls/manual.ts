@@ -12,6 +12,7 @@
  * "Sample video", never a person.
  */
 import * as path from 'node:path';
+import { expect } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 
 export const SCREENSHOT_DIR = path.resolve(import.meta.dirname, '../../docs/tasks/calls-webinars/manual/screenshots');
@@ -253,6 +254,8 @@ export async function shot(page: Page, testInfo: TestInfo, key: ManualShotKey): 
   const viewport = viewportOf(testInfo);
   const only: string | undefined = (MANUAL_SHOTS[key] as ManualShot).only;
   if (only && only !== viewport) return;
+  // The manual never shows the header's sample-mode warning (workspace api.sampleMode, admin api.notConnected).
+  await expect(page.getByText('API not connected (sample mode)')).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
   // Let Motion's entries finish: the longest token is 280 ms.
   await page.waitForTimeout(450);
