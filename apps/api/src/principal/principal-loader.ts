@@ -38,6 +38,7 @@ import type {
   GrantCondition,
 } from '@nestself/contracts';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import type { AvailableContextExtras } from '../authz/personal-context.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,6 +188,35 @@ export class PrincipalLoader {
     await this.cache.set(cacheKey, JSON.stringify(loaded), ttl);
 
     return loaded;
+  }
+
+  /**
+   * Pre-load the extra data that `computeAvailableContexts` needs:
+   * per-org grant template keys and org names (Ruling B, T-C1.02).
+   */
+  async loadAvailableContextExtras(loaded: LoadedPrincipal): Promise<AvailableContextExtras> {
+    const orgIds = loaded.memberships
+      .filter((m) => m.status === 'ACTIVE')
+      .map((m) => m.orgId);
+
+    if (orgIds.length === 0) {
+      return { orgGrantTemplateKeys: new Map(), orgNames: new Map() };
+    }
+
+    const now = new Date();
+    const [grantRows, orgNames] = await Promise.all([
+      this.authzRepo.findActiveOrgGrantTemplateKeys(loaded.userId, orgIds, now),
+      this.authzRepo.findOrgNames(orgIds),
+    ]);
+
+    const keyMap = new Map<string, string[]>();
+    for (const { orgId, templateKey } of grantRows) {
+      const arr = keyMap.get(orgId) ?? [];
+      arr.push(templateKey);
+      keyMap.set(orgId, arr);
+    }
+
+    return { orgGrantTemplateKeys: keyMap, orgNames };
   }
 
   /** Load grants for a user in an org context. */

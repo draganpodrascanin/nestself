@@ -65,8 +65,11 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
     setRoleState('employee');
   }, []);
 
-  const switchContext = useCallback(async (_context: ActiveContext) => {
-    // In sample mode, context switch is a no-op.
+  const switchContext = useCallback(async (context: ActiveContext) => {
+    // In sample mode, switching to 'organization' promotes the current
+    // sample role's principal to the organization context and vice versa.
+    // The RoleSwitcher remains the authoritative sample role selector.
+    void context; // accepted but sample mode keeps the role-selected principal
   }, []);
 
   const stepUp = useCallback(() => {

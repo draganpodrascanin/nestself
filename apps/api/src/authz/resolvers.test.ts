@@ -102,7 +102,7 @@ describe('personalOrgResource', () => {
     }
   });
 
-  it('throws 403 org_context_expired when membership exists but is INVITED', () => {
+  it('throws 403 invalid_context when membership exists but is INVITED (Ruling A)', () => {
     const principal = makePrincipal({
       memberships: [
         {
@@ -121,7 +121,7 @@ describe('personalOrgResource', () => {
       resolver({}, principal);
     } catch (err) {
       const e = err as ApiHttpException;
-      expect(e.code).toBe('org_context_expired');
+      expect(e.code).toBe('invalid_context');
     }
   });
 

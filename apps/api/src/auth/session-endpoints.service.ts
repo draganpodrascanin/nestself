@@ -17,14 +17,43 @@ import {
 import { ApiHttpException } from '../common/api-error.js';
 import {
   hasActiveDateCurrentMembership,
+  isMembershipDateCurrent,
   resolveDefaultPersonalOrgId,
   computeAvailableContexts,
 } from '../authz/personal-context.js';
+import { membershipContextCode } from '../authz/context.js';
 import type {
   Principal,
   ActiveContext,
   MeResponse,
+  GrantInput,
 } from '@nestself/contracts';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract the orgId relevant for grant loading from a context. */
+function contextOrgId(ctx: ActiveContext): string | undefined {
+  if (ctx.kind === 'personal') return ctx.orgId;
+  if (ctx.kind === 'organization') return ctx.orgId;
+  return undefined;
+}
+
+/**
+ * Compute the flat list of effective actions from loaded grants.
+ * Filters out revoked and out-of-validity grants (Ruling F, T-C1.02).
+ */
+function computeEffectiveActions(grants: GrantInput[], now: Date): string[] {
+  const actions = new Set<string>();
+  for (const g of grants) {
+    if (g.revokedAt != null) continue;
+    if (g.validFrom != null && g.validFrom > now) continue;
+    if (g.validUntil != null && g.validUntil <= now) continue;
+    for (const a of g.actions) actions.add(a);
+  }
+  return [...actions];
+}
 
 @Injectable()
 export class SessionEndpointsService {
@@ -43,10 +72,14 @@ export class SessionEndpointsService {
         message: 'User not found',
       });
     }
+    const [extras, effectiveActions] = await Promise.all([
+      this.principalLoader.loadAvailableContextExtras(loaded),
+      this.loadEffectiveActions(principal.userId, principal.context),
+    ]);
     return {
       principal,
-      effectiveActions: [],
-      availableContexts: computeAvailableContexts(loaded),
+      effectiveActions,
+      availableContexts: computeAvailableContexts(loaded, extras),
     };
   }
 
@@ -92,30 +125,56 @@ export class SessionEndpointsService {
           : { kind: 'personal' };
       }
     } else {
-      // Non-personal: original validation logic.
-      const contextAllowed =
-        (newContext.kind === 'organization' &&
-          loaded.memberships.some(
-            (m) => m.orgId === newContext.orgId && m.status === 'ACTIVE',
-          )) ||
-        (newContext.kind === 'expert' && loaded.expert != null) ||
-        (newContext.kind === 'operations' && loaded.staffTemplates.length > 0);
-      if (!contextAllowed) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'invalid_context',
-          message: 'The requested context is not available to this user',
-        });
+      // Non-personal: validate context kind.
+      if (newContext.kind === 'organization') {
+        // Must have an ACTIVE, date-current membership in the target org.
+        const membership = loaded.memberships.find(
+          (m) => m.orgId === newContext.orgId,
+        );
+        if (!membership) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'invalid_context',
+            message: 'The requested context is not available to this user',
+          });
+        }
+        if (!isMembershipDateCurrent(membership)) {
+          throw new ApiHttpException({
+            status: 403,
+            code: membershipContextCode(membership, new Date()),
+            message: 'The requested context is not available to this user',
+          });
+        }
+      } else if (newContext.kind === 'expert') {
+        if (loaded.expert == null) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'invalid_context',
+            message: 'The requested context is not available to this user',
+          });
+        }
+      } else if (newContext.kind === 'operations') {
+        if (loaded.staffTemplates.length === 0) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'invalid_context',
+            message: 'The requested context is not available to this user',
+          });
+        }
       }
     }
 
     const population = this.resolvePopulation(loaded, resolvedContext);
     await this.sessions.updateContext(sessionId, resolvedContext, population);
 
+    const [extras, effectiveActions] = await Promise.all([
+      this.principalLoader.loadAvailableContextExtras(loaded),
+      this.loadEffectiveActions(principal.userId, resolvedContext),
+    ]);
     return {
       principal: { ...principal, context: resolvedContext },
-      effectiveActions: [],
-      availableContexts: computeAvailableContexts(loaded),
+      effectiveActions,
+      availableContexts: computeAvailableContexts(loaded, extras),
     };
   }
 
@@ -202,6 +261,21 @@ export class SessionEndpointsService {
       { ttlSeconds: WS_TICKET_TTL },
     );
     return ticket;
+  }
+
+  /**
+   * Load the effective actions for the given context.
+   * Uses the same grant loader the authorization engine relies on (Ruling F).
+   */
+  private async loadEffectiveActions(
+    userId: string,
+    ctx: ActiveContext,
+  ): Promise<string[]> {
+    const orgId = contextOrgId(ctx);
+    // loadGrants(userId, orgId) returns org-scoped + platform/own-scoped grants.
+    // For contexts without an orgId we pass '' which matches only scopeOrgId IS NULL.
+    const grants = await this.principalLoader.loadGrants(userId, orgId ?? '');
+    return computeEffectiveActions(grants, new Date());
   }
 
   private resolvePopulation(

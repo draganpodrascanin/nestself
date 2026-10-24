@@ -9,6 +9,7 @@
  */
 import type {
   Principal,
+  PrincipalMembership,
   AuthorizationContext,
 } from '@nestself/contracts';
 import { isMembershipDateCurrent } from './personal-context.js';
@@ -20,6 +21,28 @@ import { isMembershipDateCurrent } from './personal-context.js';
 export type ContextValidationResult =
   | { valid: true }
   | { valid: false; code: 'invalid_context' | 'org_context_expired' };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify a membership that is NOT date-current into the correct error code.
+ *
+ * Ruling A (T-C1.02):
+ * - ended (status no longer ACTIVE, or endDate in the past) → `org_context_expired`
+ * - not yet started (status ACTIVE but startDate in the future) → `invalid_context`
+ * - never activated (status INVITED) → `invalid_context`
+ */
+export function membershipContextCode(
+  m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'>,
+  now: Date,
+): 'invalid_context' | 'org_context_expired' {
+  if (m.status !== 'ACTIVE') return 'invalid_context'; // INVITED: never activated
+  if (new Date(m.startDate) > now) return 'invalid_context'; // not yet started
+  // ACTIVE with endDate in the past → expired
+  return 'org_context_expired';
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -56,7 +79,7 @@ export function isContextValid(
       );
       if (!membership) return { valid: false, code: 'invalid_context' };
       if (!isMembershipDateCurrent(membership, ctx.now)) {
-        return { valid: false, code: membership.status === 'ACTIVE' ? 'org_context_expired' : 'invalid_context' };
+        return { valid: false, code: membershipContextCode(membership, ctx.now) };
       }
       return { valid: true };
     }
@@ -70,7 +93,7 @@ export function isContextValid(
         );
         if (!membership) return { valid: false, code: 'invalid_context' };
         if (!isMembershipDateCurrent(membership, ctx.now)) {
-          return { valid: false, code: membership.status === 'ACTIVE' ? 'org_context_expired' : 'invalid_context' };
+          return { valid: false, code: membershipContextCode(membership, ctx.now) };
         }
         return { valid: true };
       }

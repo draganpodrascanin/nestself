@@ -177,10 +177,25 @@ export class IdentityResolutionService {
     loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
+    const extras = await this.principalLoader.loadAvailableContextExtras(loaded);
+    // Ruling F: compute effective actions from grants for the active context.
+    const orgId =
+      principal.context.kind === 'personal' ? principal.context.orgId
+      : principal.context.kind === 'organization' ? principal.context.orgId
+      : undefined;
+    const grants = await this.principalLoader.loadGrants(principal.userId, orgId ?? '');
+    const now = new Date();
+    const actions = new Set<string>();
+    for (const g of grants) {
+      if (g.revokedAt != null) continue;
+      if (g.validFrom != null && g.validFrom > now) continue;
+      if (g.validUntil != null && g.validUntil <= now) continue;
+      for (const a of g.actions) actions.add(a);
+    }
     return {
       principal,
-      effectiveActions: [],
-      availableContexts: computeAvailableContexts(loaded),
+      effectiveActions: [...actions],
+      availableContexts: computeAvailableContexts(loaded, extras),
     };
   }
 

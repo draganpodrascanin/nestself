@@ -127,6 +127,11 @@
     "expert": "Expert",
     "operations": "Operations",
     "switchFailed": "Could not switch workspace. Please try again.",
-    "current": "Current"
+    "current": "Current",
+    "error": {
+      "org_context_expired": "Your membership in this organisation has ended.",
+      "invalid_context": "This workspace is not available to you.",
+      "unknown": "Could not switch workspace. Please try again."
+    }
   }
 }

@@ -14,7 +14,8 @@
 import type { Principal, Resource } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import type { ResourceResolver } from './authorize.decorator.js';
-import { hasActiveDateCurrentMembership } from './personal-context.js';
+import { isMembershipDateCurrent } from './personal-context.js';
+import { membershipContextCode } from './context.js';
 
 function routeOrgId(req: Record<string, unknown>): string | undefined {
   const params = req['params'] as Record<string, string | undefined> | undefined;
@@ -62,7 +63,7 @@ export function personalOrgResource(
     const orgId = ctx.orgId;
     // ACC-R-15: membership must be ACTIVE *and* date-current.
     // Distinguish between "no membership" (invalid_context) and
-    // "membership expired" (org_context_expired) for the UI.
+    // "membership expired / not yet started" using membershipContextCode.
     const membership = principal.memberships.find((m) => m.orgId === orgId);
     if (!membership) {
       throw new ApiHttpException({
@@ -71,11 +72,11 @@ export function personalOrgResource(
         message: 'No membership for the selected organisation',
       });
     }
-    if (!hasActiveDateCurrentMembership(principal.memberships, orgId)) {
+    if (!isMembershipDateCurrent(membership)) {
       throw new ApiHttpException({
         status: 403,
-        code: 'org_context_expired',
-        message: 'Organisation membership is no longer current',
+        code: membershipContextCode(membership, new Date()),
+        message: 'Organisation membership is not current',
       });
     }
     return {

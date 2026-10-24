@@ -127,6 +127,11 @@
     "expert": "Szakértő",
     "operations": "Operációk",
     "switchFailed": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra.",
-    "current": "Aktuális"
+    "current": "Aktuális",
+    "error": {
+      "org_context_expired": "A tagsága ebben a szervezetben lejárt.",
+      "invalid_context": "Ez a munkaterület nem elérhető az Ön számára.",
+      "unknown": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra."
+    }
   }
 }

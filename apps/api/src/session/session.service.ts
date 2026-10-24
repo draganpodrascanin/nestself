@@ -92,6 +92,11 @@ export class SessionService {
     const stored: StoredRecord = {
       userId: input.userId, surface: input.surface,
       population: input.population, context: input.context,
+      // Ruling D: set lastPersonalOrgId at session creation when the
+      // initial context is personal with an orgId.
+      ...(input.context.kind === 'personal' && input.context.orgId
+        ? { lastPersonalOrgId: input.context.orgId }
+        : {}),
       cognito: {
         username: input.cognitoUsername,
         accessToken: this.cipher.encrypt(input.tokens.accessToken),

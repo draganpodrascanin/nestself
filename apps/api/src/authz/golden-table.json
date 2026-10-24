@@ -4514,7 +4514,7 @@
     }
   },
   {
-    "label": "SYS-13: membership not yet started - org context expired",
+    "label": "SYS-13: membership not yet started - invalid context",
     "principal": {
       "userId": "u22",
       "displayName": "Future",
@@ -4586,7 +4586,7 @@
     },
     "expected": {
       "allowed": false,
-      "denialReason": "org_context_expired"
+      "denialReason": "invalid_context"
     }
   },
   {

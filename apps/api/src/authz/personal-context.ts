@@ -66,9 +66,10 @@ export function resolveDefaultPersonalOrgId(
 /**
  * Build the `availableContexts` array for a MeResponse.
  *
- * Each ACTIVE date-current membership produces a personal entry (with orgId)
- * and an organization entry. Expert and operations entries are added when the
- * user has the corresponding capability.
+ * - Personal: one entry per ACTIVE date-current membership (with orgName).
+ * - Organization: only for an org where the user holds at least one active
+ *   grant whose template's `workspace` is `'organization'` (Ruling B).
+ * - Expert and operations entries when the user has the capability.
  */
 /** Fields read by `computeAvailableContexts`. Both `Principal` and `LoadedPrincipal` satisfy this. */
 export interface AvailableContextSource {
@@ -77,14 +78,51 @@ export interface AvailableContextSource {
   expert: { id: string } | null;
 }
 
-export function computeAvailableContexts(loaded: AvailableContextSource): AvailableContextEntry[] {
+/**
+ * Extra data that callers pre-load from the DB for `computeAvailableContexts`.
+ * When omitted the function falls back to including an organization entry
+ * for every ACTIVE membership (legacy / test paths).
+ */
+export interface AvailableContextExtras {
+  /** Active grant template keys per org, from the DB. */
+  orgGrantTemplateKeys: ReadonlyMap<string, readonly string[]>;
+  /** Org names keyed by orgId. */
+  orgNames: ReadonlyMap<string, string>;
+}
+
+import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+
+/** Template keys whose workspace is 'organization'. */
+const ORG_WORKSPACE_TEMPLATE_KEYS: ReadonlySet<string> = new Set(
+  PERMISSION_TEMPLATES
+    .filter((t) => t.workspace === 'organization')
+    .map((t) => t.key as string),
+);
+
+export function computeAvailableContexts(
+  loaded: AvailableContextSource,
+  extras?: AvailableContextExtras,
+): AvailableContextEntry[] {
   const entries: AvailableContextEntry[] = [];
   const now = new Date();
 
   for (const m of loaded.memberships) {
     if (!isMembershipDateCurrent(m, now)) continue;
-    entries.push({ kind: 'personal', orgId: m.orgId });
-    entries.push({ kind: 'organization', orgId: m.orgId });
+    const orgName = extras?.orgNames.get(m.orgId);
+    entries.push({ kind: 'personal', orgId: m.orgId, ...(orgName ? { orgName } : {}) });
+
+    // Organization entry: only when user holds a grant from an
+    // organization-workspace template in this org (Ruling B).
+    if (extras) {
+      const templateKeys = extras.orgGrantTemplateKeys.get(m.orgId) ?? [];
+      const hasOrgGrant = templateKeys.some((k) => ORG_WORKSPACE_TEMPLATE_KEYS.has(k));
+      if (hasOrgGrant) {
+        entries.push({ kind: 'organization', orgId: m.orgId, ...(orgName ? { orgName } : {}) });
+      }
+    } else {
+      // Legacy fallback: include organization entry for every active membership.
+      entries.push({ kind: 'organization', orgId: m.orgId });
+    }
   }
 
   if (!entries.some((e) => e.kind === 'personal')) {

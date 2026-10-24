@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isContextValid } from './context.js';
-import type { Principal, AuthorizationContext } from '@nestself/contracts';
+import { isContextValid, membershipContextCode } from './context.js';
+import type { Principal, AuthorizationContext, PrincipalMembership } from '@nestself/contracts';
 
 function makePrincipal(overrides: Partial<Principal> = {}): Principal {
   return {
@@ -117,5 +117,89 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
       context: { kind: 'organization', orgId: 'org_a' },
     });
     expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+  });
+
+  it('invalid_context for organization context with not-yet-started membership (Ruling A, SYS-13)', () => {
+    const p = makePrincipal({
+      memberships: [
+        {
+          membershipId: 'mem-1',
+          orgId: 'org_a',
+          orgUnitId: null,
+          status: 'ACTIVE',
+          startDate: '2099-01-01T00:00:00Z',
+          endDate: null,
+        },
+      ],
+      context: { kind: 'organization', orgId: 'org_a' },
+    });
+    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+  });
+
+  it('invalid_context for personal context with not-yet-started membership (Ruling A)', () => {
+    const p = makePrincipal({
+      memberships: [
+        {
+          membershipId: 'mem-1',
+          orgId: 'org_a',
+          orgUnitId: null,
+          status: 'ACTIVE',
+          startDate: '2099-01-01T00:00:00Z',
+          endDate: null,
+        },
+      ],
+      context: { kind: 'personal', orgId: 'org_a' },
+    });
+    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+  });
+
+  it('org_context_expired for org context with INVITED membership (never activated, treated as ended)', () => {
+    // INVITED status at the Principal level means the membership was never
+    // activated, which is "invalid_context" (not "expired").
+    const p = makePrincipal({
+      memberships: [
+        {
+          membershipId: 'mem-1',
+          orgId: 'org_a',
+          orgUnitId: null,
+          status: 'INVITED',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: null,
+        },
+      ],
+      context: { kind: 'organization', orgId: 'org_a' },
+    });
+    expect(isContextValid(p, CTX)).toEqual({ valid: false, code: 'invalid_context' });
+  });
+});
+
+describe('membershipContextCode (Ruling A)', () => {
+  const NOW = new Date('2026-10-22T10:00:00Z');
+
+  it('returns invalid_context for INVITED membership', () => {
+    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
+      status: 'INVITED',
+      startDate: '2024-01-01T00:00:00Z',
+      endDate: null,
+    };
+    expect(membershipContextCode(m, NOW)).toBe('invalid_context');
+  });
+
+  it('returns invalid_context for ACTIVE membership with future startDate', () => {
+    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
+      status: 'ACTIVE',
+      startDate: '2099-01-01T00:00:00Z',
+      endDate: null,
+    };
+    expect(membershipContextCode(m, NOW)).toBe('invalid_context');
+  });
+
+  it('returns org_context_expired for ACTIVE membership with past endDate', () => {
+    const m: Pick<PrincipalMembership, 'status' | 'startDate' | 'endDate'> = {
+      status: 'ACTIVE',
+      startDate: '2024-01-01T00:00:00Z',
+      endDate: '2025-01-01T00:00:00Z',
+    };
+    expect(membershipContextCode(m, NOW)).toBe('org_context_expired');
   });
 });

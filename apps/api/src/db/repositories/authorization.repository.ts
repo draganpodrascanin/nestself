@@ -205,6 +205,47 @@ export class AuthorizationRepository {
       );
   }
 
+  /**
+   * Distinct (scopeOrgId, templateKey) pairs for active grants scoped to one
+   * of the given organizations. Used by `computeAvailableContexts` to decide
+   * which orgs get an `organization` context entry (Ruling B, T-C1.02).
+   */
+  async findActiveOrgGrantTemplateKeys(
+    userId: string,
+    orgIds: string[],
+    now: Date,
+    tx?: DbExecutor,
+  ): Promise<Array<{ orgId: string; templateKey: string }>> {
+    if (orgIds.length === 0) return [];
+    const rows = await this.exec(tx)
+      .selectDistinct({
+        orgId: grants.scopeOrgId,
+        templateKey: grants.templateKey,
+      })
+      .from(grants)
+      .where(
+        and(
+          eq(grants.subjectUserId, userId),
+          isNull(grants.revokedAt),
+          inArray(grants.scopeOrgId, orgIds),
+          or(isNull(grants.validFrom), lte(grants.validFrom, now)),
+          or(isNull(grants.validUntil), gt(grants.validUntil, now)),
+        ),
+      );
+    return rows
+      .filter((r): r is { orgId: string; templateKey: string } => r.orgId != null && r.templateKey != null);
+  }
+
+  /** Organization names keyed by orgId (Ruling B, T-C1.02). */
+  async findOrgNames(orgIds: string[], tx?: DbExecutor): Promise<Map<string, string>> {
+    if (orgIds.length === 0) return new Map();
+    const rows = await this.exec(tx)
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(inArray(organizations.id, orgIds));
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
   /** Service categories with an APPROVED, effective, unexpired credential. */
   async findApprovedCategories(expertId: string, now: Date, tx?: DbExecutor): Promise<string[]> {
     const rows = await this.exec(tx)

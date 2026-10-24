@@ -29,6 +29,11 @@ function createMocks(memberships: PrincipalMembership[] = []) {
         isSuspended: false,
         isDeactivated: false,
       }),
+      loadAvailableContextExtras: vi.fn().mockResolvedValue({
+        orgGrantTemplateKeys: new Map(),
+        orgNames: new Map(),
+      }),
+      loadGrants: vi.fn().mockResolvedValue([]),
     },
     store: {
       set: vi.fn(),
@@ -238,5 +243,167 @@ describe('resolveDefaultPersonalOrgId (shared helper)', () => {
     };
     const result = resolveDefaultPersonalOrgId([invited, ACTIVE_MEMBERSHIP]);
     expect(result).toBe('org_a');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ruling A: Organization context switch enforces date-currency
+// ---------------------------------------------------------------------------
+
+describe('SessionEndpointsService.switchContext – organization date-currency (Ruling A)', () => {
+  let mocks: ReturnType<typeof createMocks>;
+  let service: SessionEndpointsService;
+
+  beforeEach(() => {
+    mocks = createMocks([ACTIVE_MEMBERSHIP]);
+    service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+    );
+  });
+
+  it('allows organization context when membership is ACTIVE and date-current', async () => {
+    const principal = makePrincipal({ kind: 'personal', orgId: 'org_a' }, [ACTIVE_MEMBERSHIP]);
+    const result = await service.switchContext('sess-1', principal, {
+      kind: 'organization',
+      orgId: 'org_a',
+    });
+    expect(result.principal.context).toEqual({ kind: 'organization', orgId: 'org_a' });
+  });
+
+  it('rejects organization context with org_context_expired when membership endDate is past', async () => {
+    const expired: PrincipalMembership = {
+      ...ACTIVE_MEMBERSHIP,
+      endDate: '2025-01-01T00:00:00Z',
+    };
+    mocks.principalLoader.load.mockResolvedValue({
+      userId: 'user-1', displayName: 'Test', initials: 'T', locale: 'sr-Latn',
+      memberships: [expired], staffTemplates: [], expert: null,
+      isSuspended: false, isDeactivated: false,
+    });
+    const principal = makePrincipal({ kind: 'personal' }, [expired]);
+
+    try {
+      await service.switchContext('sess-1', principal, { kind: 'organization', orgId: 'org_a' });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const e = err as ApiHttpException;
+      expect(e.getStatus()).toBe(403);
+      expect(e.code).toBe('org_context_expired');
+    }
+  });
+
+  it('rejects organization context with invalid_context when membership startDate is future', async () => {
+    const future: PrincipalMembership = {
+      ...ACTIVE_MEMBERSHIP,
+      startDate: '2099-01-01T00:00:00Z',
+    };
+    mocks.principalLoader.load.mockResolvedValue({
+      userId: 'user-1', displayName: 'Test', initials: 'T', locale: 'sr-Latn',
+      memberships: [future], staffTemplates: [], expert: null,
+      isSuspended: false, isDeactivated: false,
+    });
+    const principal = makePrincipal({ kind: 'personal' }, [future]);
+
+    try {
+      await service.switchContext('sess-1', principal, { kind: 'organization', orgId: 'org_a' });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const e = err as ApiHttpException;
+      expect(e.getStatus()).toBe(403);
+      expect(e.code).toBe('invalid_context');
+    }
+  });
+
+  it('rejects organization context with invalid_context when no membership exists', async () => {
+    const principal = makePrincipal({ kind: 'personal' }, [ACTIVE_MEMBERSHIP]);
+
+    try {
+      await service.switchContext('sess-1', principal, { kind: 'organization', orgId: 'org_nonexistent' });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      const e = err as ApiHttpException;
+      expect(e.getStatus()).toBe(403);
+      expect(e.code).toBe('invalid_context');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ruling D: lastPersonalOrgId stickiness
+// ---------------------------------------------------------------------------
+
+describe('SessionEndpointsService.switchContext – lastPersonalOrgId (Ruling D)', () => {
+  let mocks: ReturnType<typeof createMocks>;
+  let service: SessionEndpointsService;
+
+  beforeEach(() => {
+    mocks = createMocks([ACTIVE_MEMBERSHIP, EARLIER_MEMBERSHIP]);
+    service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+    );
+  });
+
+  it('switching org -> bare personal returns lastPersonalOrgId rather than earliest', async () => {
+    const principal = makePrincipal(
+      { kind: 'organization', orgId: 'org_a' },
+      [ACTIVE_MEMBERSHIP, EARLIER_MEMBERSHIP],
+    );
+    // lastPersonalOrgId was previously set to org_a.
+    const result = await service.switchContext(
+      'sess-1',
+      principal,
+      { kind: 'personal' },
+      'org_a', // lastPersonalOrgId from the session
+    );
+
+    // Should pick org_a (the sticky value), not org_b (earliest).
+    expect(result.principal.context).toEqual({ kind: 'personal', orgId: 'org_a' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ruling F: effectiveActions populated from grants
+// ---------------------------------------------------------------------------
+
+describe('SessionEndpointsService.getMe – effectiveActions (Ruling F)', () => {
+  it('returns actions from loaded grants', async () => {
+    const mocks = createMocks([ACTIVE_MEMBERSHIP]);
+    mocks.principalLoader.loadGrants.mockResolvedValue([
+      {
+        id: 'g1',
+        subjectUserId: 'user-1',
+        templateKey: 'hr_admin',
+        actions: ['program.overview', 'people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org_a',
+        scopeOrgUnitId: null,
+        includeDescendants: false,
+        scopeRefKind: null,
+        scopeRefId: null,
+        conditions: [],
+        validFrom: null,
+        validUntil: null,
+        delegationEnvelope: null,
+        parentGrantId: null,
+        revokedAt: null,
+      },
+    ]);
+    const service = new SessionEndpointsService(
+      mocks.sessions as never,
+      mocks.principalLoader as never,
+      mocks.store as never,
+    );
+    const principal = makePrincipal(
+      { kind: 'organization', orgId: 'org_a' },
+      [ACTIVE_MEMBERSHIP],
+    );
+    const result = await service.getMe(principal);
+
+    expect(result.effectiveActions).toContain('program.overview');
+    expect(result.effectiveActions).toContain('people.invite');
   });
 });
