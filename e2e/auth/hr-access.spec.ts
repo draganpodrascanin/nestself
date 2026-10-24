@@ -92,7 +92,7 @@ test.describe('Workspace HR grant administration', () => {
     const dialog = page.getByRole('dialog', { name: 'Delegate part of your access' });
     await expect(dialog).toBeVisible();
     // A pointer click on the option: the select's popup layers above the
-    // dialog (--z-popup, set by DialogContent).
+    // dialog (--z-popup, set on the dialog's portal element).
     const member = dialog.getByRole('combobox', { name: 'Member' });
     await member.click();
     await page.getByRole('option', { name: MANAGER_NAME }).click();

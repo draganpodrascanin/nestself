@@ -272,6 +272,10 @@ export class GrantsService {
         if (grant.parentGrantId) {
           await this.assertWithinParent(grant, patch.conditions, tx);
         }
+        // AUTHZ-R-37: the engine checks ancestors only for revocation and
+        // validity at runtime, so the parent's new conditions must still
+        // contain every active child; otherwise nothing is written.
+        await this.assertChildrenWithinPatched({ ...grant, conditions: patch.conditions }, tx);
       }
 
       const row = await this.authzRepo.updateGrant(grantId, patch, tx);
@@ -544,6 +548,30 @@ export class GrantsService {
     const ancestorIds = grant.scopeOrgUnitId ? await this.authzRepo.findAncestorIds(grant.scopeOrgUnitId, tx) : [];
     const bound = checkDelegationBounds(parent, { ...toGrantInput(grant), conditions }, ancestorIds);
     if (bound) throw exceedsBoundary(bound);
+  }
+
+  /**
+   * Refuse with 409 `conflict` when a direct active child of `patched` would
+   * fall outside its bounds (`details.children` lists them). Deeper
+   * descendants are bounded by their own parents, which do not change.
+   */
+  private async assertChildrenWithinPatched(patched: GrantRow, tx: DbExecutor): Promise<void> {
+    const children = await this.authzRepo.findActiveChildGrants([patched.id], tx);
+    if (children.length === 0) return;
+    const parent = toGrantInput(patched);
+    const offending: string[] = [];
+    for (const child of children) {
+      const ancestorIds = child.scopeOrgUnitId ? await this.authzRepo.findAncestorIds(child.scopeOrgUnitId, tx) : [];
+      if (checkDelegationBounds(parent, toGrantInput(child), ancestorIds)) offending.push(child.id);
+    }
+    if (offending.length > 0) {
+      throw new ApiHttpException({
+        status: 409,
+        code: 'conflict',
+        message: 'Delegated grants would exceed the adjusted grant',
+        details: { children: offending },
+      });
+    }
   }
 
   /** The parent grant and its ancestors as stored, nearest first. */

@@ -9,7 +9,8 @@ export default meta;
 
 /**
  * A Select opened inside an open dialog: the popup layers above the dialog
- * (`--z-popup` set by `DialogContent`), so options take a mouse click.
+ * (`--z-popup` set on the dialog's portal element, which Base UI nests the
+ * select's portal inside), so options take a mouse click.
  */
 export const InsideDialog: StoryObj = {
   name: 'Inside Dialog',

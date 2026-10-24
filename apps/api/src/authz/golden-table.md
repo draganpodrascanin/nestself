@@ -58,3 +58,12 @@ grant; delegatee `u50` holds a child listing `people.invite` only.
 
 SYS-11 evaluates as `u1`, the holder of the depth-4 grant, since another
 user's grant in `ctx.grants` no longer matches.
+
+No DELEG row covers a child condition (e.g. `spending_ceiling`) that exceeds
+its ancestor's: at runtime `validateDelegation` checks ancestors only for
+presence, revocation and validity window, and the parent's delegation
+envelope. Condition bounds are enforced when grants are written:
+`GrantsService.delegate` and `update` of a delegated grant check the child
+against its parent, and `update` of a parent refuses (409 `conflict`,
+`details.children`) conditions that would leave an active child outside
+them (AUTHZ-R-37).

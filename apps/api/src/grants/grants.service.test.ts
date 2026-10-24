@@ -328,6 +328,34 @@ describe('GrantsService', () => {
       expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
     });
 
+    describe('active delegated children (AUTHZ-R-37)', () => {
+      const ceiling = (amountMinor: number) => [{ type: 'spending_ceiling' as const, amountMinor, currency: 'EUR' }];
+      beforeEach(() => {
+        m.authzRepo.findActiveChildGrants.mockImplementation(async (parentIds: string[]) =>
+          parentIds.includes('grant_1')
+            ? [row({ id: 'grant_child', subjectUserId: 'user_stefan', parentGrantId: 'grant_1', templateKey: null, actions: ['budget.read'], conditions: ceiling(800) })]
+            : [],
+        );
+      });
+
+      it('refuses a ceiling below a child ceiling: 409 conflict naming the child, nothing written or audited', async () => {
+        const err = await apiError(svc.update(ORG, 'grant_1', { conditions: ceiling(500) }, ACTOR));
+        expect(err.getStatus()).toBe(409);
+        expect(err.code).toBe('conflict');
+        expect(err.details).toEqual({ children: ['grant_child'] });
+        expect(m.authzRepo.updateGrant).not.toHaveBeenCalled();
+        expect(m.audit.record).not.toHaveBeenCalled();
+        expect(m.principalLoader.invalidateUser).not.toHaveBeenCalled();
+      });
+
+      it('accepts a tighter ceiling that still contains the children and invalidates them', async () => {
+        const res = await svc.update(ORG, 'grant_1', { conditions: ceiling(900) }, ACTOR);
+        expect(res.conditions).toEqual(ceiling(900));
+        expect(m.authzRepo.updateGrant).toHaveBeenCalledOnce();
+        expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
+      });
+    });
+
     it('rejects conditions missing a required type of the template', async () => {
       const err = await apiError(svc.update(ORG, 'grant_1', { conditions: [] }, ACTOR));
       expect(err.code).toBe('missing_conditions');
