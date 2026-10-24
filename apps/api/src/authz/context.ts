@@ -57,6 +57,13 @@ export function isContextValid(
       );
 
     case 'personal':
+      // C-22 / ACC-R-15: when a personal context carries `orgId`, the
+      // membership in that specific org must be ACTIVE and date-current.
+      if (context.orgId) {
+        return principal.memberships.some(
+          (m) => m.orgId === context.orgId && isMembershipCurrent(m, ctx.now),
+        );
+      }
       return principal.memberships.some((m) =>
         isMembershipCurrent(m, ctx.now),
       );

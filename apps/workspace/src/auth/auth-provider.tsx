@@ -85,10 +85,14 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
 
   const switchContext = useCallback(
     async (context: ActiveContext) => {
+      // CLI-R-08: cancel and clear all cached queries before applying the new
+      // principal so stale data from the previous context is never shown.
+      queryClient.cancelQueries();
+      queryClient.clear();
       const data = await authApi.switchContext(context);
       applyMe(data);
     },
-    [authApi, applyMe],
+    [authApi, applyMe, queryClient],
   );
 
   const stepUp = useCallback(() => {

@@ -7,6 +7,9 @@
  * - `operationsResource`: for `/ops/*` controllers. Enforces API-R-28: the
  *   active context must be `operations` and the caller must hold a session
  *   (bearer tokens are rejected with `session_required`).
+ * - `personalOrgResource`: for `/library/*` and `/me/*` controllers. Enforces
+ *   C-22 / ACC-R-04: the active context must be `personal` with an `orgId`
+ *   matching an ACTIVE membership.
  */
 import type { Principal, Resource } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
@@ -32,6 +35,46 @@ export function orgResourceFromContext(type: string): ResourceResolver {
       });
     }
     return { type, orgId };
+  };
+}
+
+/**
+ * Resource scoped to the personal context's organization (C-22, ACC-R-04).
+ *
+ * Used by `/library/*` and `/me/*` controllers. Requires the active context to
+ * be `personal` with an `orgId` backed by an ACTIVE membership; returns a
+ * resource with `{ type, id, orgId, ownerId }`.
+ */
+export function personalOrgResource(
+  type: string,
+  id?: (req: Record<string, unknown>) => string | undefined,
+): ResourceResolver {
+  return (req, principal: Principal): Resource => {
+    const ctx = principal.context;
+    if (ctx.kind !== 'personal' || !ctx.orgId) {
+      throw new ApiHttpException({
+        status: 403,
+        code: 'invalid_context',
+        message: 'This endpoint requires a personal context with an organisation',
+      });
+    }
+    const orgId = ctx.orgId;
+    const hasActiveMembership = principal.memberships.some(
+      (m) => m.orgId === orgId && m.status === 'ACTIVE',
+    );
+    if (!hasActiveMembership) {
+      throw new ApiHttpException({
+        status: 403,
+        code: 'invalid_context',
+        message: 'No active membership for the selected organisation',
+      });
+    }
+    return {
+      type,
+      id: id?.(req),
+      orgId,
+      ownerId: principal.userId,
+    };
   };
 }
 

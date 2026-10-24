@@ -119,7 +119,7 @@ export type PasswordResetConfirmResponse = z.infer<typeof PasswordResetConfirmRe
 // ---------------------------------------------------------------------------
 
 export const ActiveContextSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('personal') }),
+  z.object({ kind: z.literal('personal'), orgId: z.string().min(1).optional() }),
   z.object({ kind: z.literal('organization'), orgId: z.string().min(1) }),
   z.object({ kind: z.literal('expert') }),
   z.object({ kind: z.literal('operations') }),

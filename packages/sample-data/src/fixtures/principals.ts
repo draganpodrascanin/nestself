@@ -12,7 +12,7 @@ import type { Principal } from '@nestself/contracts';
 // Helpers
 // ---------------------------------------------------------------------------
 
-type LegacyRole = 'employee' | 'manager' | 'hr_admin' | 'expert' | 'operations' | 'admin';
+type LegacyRole = 'employee' | 'employee_personal' | 'manager' | 'hr_admin' | 'expert' | 'operations' | 'admin';
 
 function actionsForTemplates(...keys: string[]): readonly string[] {
   const set = new Set<string>();
@@ -51,6 +51,30 @@ const employeePrincipal: Principal = PrincipalSchema.parse({
   context: { kind: 'organization', orgId: 'org_sample' },
   auth: { method: 'email_otp', time: AUTH_TIME, secondFactor: false, lastStepUpAt: null },
   sessionId: 'sess_sample_employee',
+  tokenFamily: null,
+});
+
+/** Employee principal in personal context with orgId (C-22). */
+const employeePersonalPrincipal: Principal = PrincipalSchema.parse({
+  userId: 'user_jovan',
+  displayName: 'Jovan Petrović',
+  initials: 'JP',
+  locale: 'sr-Latn',
+  memberships: [
+    {
+      membershipId: 'mem_jovan',
+      orgId: 'org_sample',
+      orgUnitId: 'team_product',
+      status: 'ACTIVE',
+      startDate: '2024-01-15T00:00:00Z',
+      endDate: null,
+    },
+  ],
+  staffTemplates: [],
+  expert: null,
+  context: { kind: 'personal', orgId: 'org_sample' },
+  auth: { method: 'email_otp', time: AUTH_TIME, secondFactor: false, lastStepUpAt: null },
+  sessionId: 'sess_sample_employee_personal',
   tokenFamily: null,
 });
 
@@ -152,6 +176,10 @@ export const SAMPLE_PRINCIPALS: Record<
 > = {
   employee: {
     principal: employeePrincipal,
+    effectiveActions: actionsForTemplates('employee'),
+  },
+  employee_personal: {
+    principal: employeePersonalPrincipal,
     effectiveActions: actionsForTemplates('employee'),
   },
   manager: {

@@ -271,6 +271,25 @@ export class AuthenticationGuard implements CanActivate {
     if (activeMembership) {
       return { kind: 'organization', orgId: activeMembership.orgId };
     }
-    return { kind: 'personal' };
+    // ACC-R-12: personal context carries a resolved orgId when possible.
+    const orgId = this.resolveDefaultPersonalOrgId(loaded.memberships);
+    return orgId ? { kind: 'personal', orgId } : { kind: 'personal' };
+  }
+
+  private resolveDefaultPersonalOrgId(
+    memberships: readonly { orgId: string; status: string; startDate: string; endDate: string | null }[],
+  ): string | undefined {
+    const now = new Date();
+    const active = memberships.filter((m) => {
+      if (m.status !== 'ACTIVE') return false;
+      if (new Date(m.startDate) > now) return false;
+      if (m.endDate != null && new Date(m.endDate) <= now) return false;
+      return true;
+    });
+    if (active.length === 0) return undefined;
+    const sorted = [...active].sort(
+      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+    );
+    return sorted[0]?.orgId;
   }
 }

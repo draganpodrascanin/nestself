@@ -3,9 +3,10 @@ import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { ApiError } from '@nestself/api-client';
+import type { ApiClient } from '@nestself/api-client';
+import type { ActiveContext } from '@nestself/contracts';
 import { AuthProvider } from './auth-provider';
 import { useAuth } from './auth-context';
-import type { ApiClient } from '@nestself/api-client';
 
 const sampleMe = {
   principal: SAMPLE_PRINCIPALS.employee.principal,
@@ -98,6 +99,68 @@ describe('AuthProvider', () => {
       expect(screen.getByTestId('status').textContent).toBe('authenticated');
       expect(screen.getByTestId('name').textContent).toBe('Jovan Petrović');
     });
+  });
+
+  it('clears query cache on context switch (CLI-R-08)', async () => {
+    const switchMe = {
+      principal: {
+        ...SAMPLE_PRINCIPALS.employee.principal,
+        context: { kind: 'personal' as const, orgId: 'org_b' },
+      },
+      effectiveActions: [...SAMPLE_PRINCIPALS.employee.effectiveActions],
+    };
+
+    let callCount = 0;
+    const client = createMockClient(() => {
+      callCount++;
+      // First call is GET /auth/me (initial load)
+      if (callCount === 1) return Promise.resolve(sampleMe);
+      // Second call is POST /auth/context (switch)
+      return Promise.resolve(switchMe);
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    // Seed cache with data under an organization key
+    queryClient.setQueryData(['ctx', 'organization', 'org_a', 'library'], { items: ['cached'] });
+
+    const onSwitch = vi.fn<(ctx: ActiveContext) => Promise<void>>();
+
+    function CaptureSwitchContext() {
+      const { switchContext } = useAuth();
+      onSwitch.mockImplementation(switchContext);
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>
+          <CaptureSwitchContext />
+          <AuthStatus />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+
+    // Verify the cached data exists
+    expect(
+      queryClient.getQueryData(['ctx', 'organization', 'org_a', 'library']),
+    ).toEqual({ items: ['cached'] });
+
+    // Switch context
+    await act(async () => {
+      await onSwitch({ kind: 'personal', orgId: 'org_b' });
+    });
+
+    // Cached data should be gone after context switch
+    expect(
+      queryClient.getQueryData(['ctx', 'organization', 'org_a', 'library']),
+    ).toBeUndefined();
   });
 
   it('refetches on window focus', async () => {
