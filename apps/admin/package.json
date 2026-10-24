@@ -20,6 +20,7 @@
     "@nestself/sample-data": "workspace:*",
     "@nestself/tokens": "workspace:*",
     "@nestself/ui": "workspace:*",
+    "@nestself/video": "workspace:*",
     "@phosphor-icons/react": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
@@ -29,6 +30,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
+    "socket.io-client": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
