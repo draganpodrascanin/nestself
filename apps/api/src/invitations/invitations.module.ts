@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { InvitationsController } from './invitations.controller.js';
 import { InvitationActivationController } from './invitation-activation.controller.js';
+import { OpsInvitationsController } from './ops-invitations.controller.js';
 import { InvitationsService } from './invitations.service.js';
 import { InvitationActivationService } from './invitation-activation.service.js';
 import {
@@ -18,7 +19,7 @@ import { SesInvitationMailer } from './ses-invitation-mailer.js';
 
 @Module({
   imports: [AuthModule, IdentityModule],
-  controllers: [InvitationsController, InvitationActivationController],
+  controllers: [InvitationsController, InvitationActivationController, OpsInvitationsController],
   providers: [
     InvitationsService,
     InvitationActivationService,
