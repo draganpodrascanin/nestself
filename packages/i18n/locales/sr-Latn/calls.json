@@ -171,7 +171,12 @@
     "recordingNotAllowed": "Ova radnja sa snimkom nije dozvoljena.",
     "capacityAboveLimit": "Ovaj kapacitet je veći od onoga što jedan vebinar trenutno podržava.",
     "invalidTicket": "Ovaj link je istekao ili je već iskorišćen. Ponovo otvorite termin da biste dobili novi.",
-    "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
+    "unknown": "Nešto je pošlo naopako. Pokušajte ponovo.",
+    "notFound": "Ovo nije dostupno. Možda ne postoji ili vam nije dostupno.",
+    "network": "Izgleda da niste povezani na internet. Proverite vezu i pokušajte ponovo.",
+    "rateLimited": "Previše pokušaja. Sačekajte minut, pa pokušajte ponovo.",
+    "forbidden": "Ova radnja vam nije dostupna.",
+    "validation": "Nešto u zahtevu nije prihvaćeno. Proverite i pokušajte ponovo."
   },
   "email": {
     "reminderSubject": "Vaša NestSelf sesija",
@@ -279,5 +284,176 @@
       "call": "Pozovite 112 sa drugog telefona, recite adresu i ostanite sa zaposlenim dok pomoć ne stigne."
     },
     "close": "Zatvori"
+  },
+  "appointments": {
+    "upcoming": "Predstojeći",
+    "past": "Prethodni",
+    "loadMore": "Učitaj još",
+    "loadingMore": "Učitava se…",
+    "errorTitle": "Vaši termini nisu mogli da se učitaju",
+    "notFoundTitle": "Ovaj termin nije dostupan",
+    "notFoundBody": "Možda je otkazan ili nije vaš termin.",
+    "back": "Nazad na termine",
+    "withExpert": "Stručnjak: {{name}}",
+    "yourExpert": "Vaš NestSelf stručnjak",
+    "categoryOther": "Konsultacija",
+    "dateTime": "{{date}}, {{time}}",
+    "open": "Otvori termin od {{date}}",
+    "details": {
+      "expert": "Stručnjak",
+      "date": "Datum",
+      "time": "Vreme",
+      "category": "Usluga",
+      "status": "Status"
+    },
+    "status": {
+      "proposed": "Predložen",
+      "awaiting_approval": "Čeka odobrenje",
+      "confirmed": "Potvrđen",
+      "completed": "Završen",
+      "canceled": "Otkazan",
+      "declined": "Odbijen",
+      "no_show": "Propušten"
+    }
+  },
+  "join": {
+    "button": "Pridruži se sesiji",
+    "comeBackAt": "Vratite se u {{time}}",
+    "opensHint": "Možete da se pridružite {{minutes}} minuta pre početka.",
+    "lateJoin": "Vaša sesija je počela u {{time}}. I dalje možete da se pridružite za preostalo vreme.",
+    "windowClosed": "Vreme za pridruživanje ovoj sesiji je isteklo.",
+    "contactSupport": "Kontaktirajte podršku",
+    "sampleDemo": "Isprobajte ekran poziva sa primerom podataka"
+  },
+  "call": {
+    "title": "Vaša konsultacija",
+    "sampleNotice": "Ovo je demonstracija sa primerom podataka. Poziv se ne pokreće i ništa se ne snima niti šalje.",
+    "backToAppointment": "Nazad na termin",
+    "realtimeUnavailable": "Ažuriranja uživo trenutno nisu dostupna. To ne utiče na sam poziv."
+  },
+  "location": {
+    "label": "Vaša trenutna lokacija",
+    "prompt": "Podelite svoju trenutnu lokaciju sa stručnjakom radi bezbednosti.",
+    "hint": "Vidi je samo vaš stručnjak i samo tokom ove sesije. Briše se kada se sesija završi. Polje možete ostaviti prazno.",
+    "optional": "Nije obavezno",
+    "tooLong": "Unesite najviše {{max}} znakova."
+  },
+  "waiting": {
+    "expertSoon": "Vaš stručnjak će se uskoro pridružiti",
+    "expertSoonNamed": "{{name}} će se uskoro pridružiti",
+    "scheduled": "Zakazano za {{time}}",
+    "runningLate": "Vaš stručnjak kasni nekoliko minuta.",
+    "runningLateEta_one": "Vaš stručnjak kasni i pridružiće se za oko {{count}} minut.",
+    "runningLateEta_few": "Vaš stručnjak kasni i pridružiće se za oko {{count}} minuta.",
+    "runningLateEta_other": "Vaš stručnjak kasni i pridružiće se za oko {{count}} minuta.",
+    "tipsTitle": "Dok čekate",
+    "tips": {
+      "private": "Pronađite mirno i privatno mesto gde možete slobodno da razgovarate.",
+      "headphones": "Slušalice pomažu da razgovor ostane privatan.",
+      "notes": "Ako vam pomaže, zapišite o čemu želite da razgovarate."
+    }
+  },
+  "signals": {
+    "cannotHear": "Drugi učesnik vas ne čuje.",
+    "cannotSee": "Drugi učesnik vas ne vidi.",
+    "runningLate": "Stručnjak kasni."
+  },
+  "postCall": {
+    "ended": "Konsultacija je završena",
+    "left": "Napustili ste konsultaciju",
+    "roomClosed": "Vreme sesije je isteklo",
+    "backToAppointments": "Nazad na termine"
+  },
+  "feedback": {
+    "title": "Kakva je bila vaša sesija?",
+    "rating": "Vaša ocena",
+    "ratingOption": "{{score}} od 5",
+    "comment": "Komentar",
+    "privacy": "Vaše mišljenje je privatno i vaš poslodavac ga neće videti.",
+    "submit": "Pošalji mišljenje",
+    "skip": "Preskoči",
+    "thanks": "Hvala. Vaše mišljenje je poslato.",
+    "skipped": "Mišljenje nije poslato.",
+    "errorSummary": "Vaše mišljenje nije poslato",
+    "errors": {
+      "ratingRequired": "Izaberite ocenu od 1 do 5 ili preskočite.",
+      "commentTooLong": "Unesite najviše {{max}} znakova."
+    }
+  },
+  "report": {
+    "open": "Prijavite tehnički problem",
+    "title": "Prijavite tehnički problem",
+    "body": "Podatke o vezi tokom ovog poziva šaljemo NestSelf podršci. Ništa od onoga što ste rekli, nijedno ime i nijedan naziv uređaja nisu uključeni.",
+    "attached": "Podaci koji se šalju",
+    "duration": "Trajanje poziva",
+    "minutes_one": "{{count}} minut",
+    "minutes_few": "{{count}} minuta",
+    "minutes_other": "{{count}} minuta",
+    "reconnects": "Ponovna povezivanja",
+    "quality": "Veza",
+    "browser": "Pregledač",
+    "os": "Operativni sistem",
+    "notMeasured": "Nije izmereno",
+    "send": "Pošalji prijavu",
+    "cancel": "Otkaži",
+    "sent": "Prijava je poslata. NestSelf podrška sada vidi podatke o vezi tokom ovog poziva."
+  },
+  "consultations": {
+    "nav": "Konsultacije",
+    "title": "Konsultacije",
+    "intro": "Vaše konsultacije redom kojim se održavaju. Vremena su u vremenskoj zoni svakog termina.",
+    "operationsNote": "Prikaz za operativni tim: samo dodeljeni stručnjak može da otvori konsultaciju, pridruži joj se ili zabeleži ishod.",
+    "emptyTitle": "Još nema konsultacija",
+    "emptyBody": "Ovde se prikazuju konsultacije koje su vam dodeljene.",
+    "errorTitle": "Konsultacije nisu mogle da se učitaju",
+    "employee": "Zaposleni",
+    "employeeFallback": "Zaposleni",
+    "columns": {
+      "employee": "Zaposleni",
+      "service": "Usluga",
+      "time": "Vreme",
+      "status": "Status",
+      "outcome": "Ishod"
+    },
+    "outcomeColumn": {
+      "completed": "Održana",
+      "no_show": "Nije došao",
+      "canceled": "Nije održana",
+      "toRecord": "Za beleženje",
+      "notYet": "Još ne"
+    },
+    "back": "Nazad na konsultacije",
+    "participants": "Učesnici",
+    "you": "{{name}} (vi)",
+    "expertFallback": "Vi",
+    "runningLate": "Javi da kasnim",
+    "runningLateEta": "Procenjeno kašnjenje",
+    "runningLateSent": "Zaposleni je obavešten da kasnite.",
+    "location": {
+      "title": "Lokacija koju je zaposleni podelio",
+      "none": "Zaposleni nije podelio lokaciju.",
+      "hint": "Vidljivo samo vama i samo tokom ove sesije. Briše se kada se sesija završi."
+    },
+    "recordOutcome": "Zabeleži ishod",
+    "outcomeRecorded": "Ishod je zabeležen: {{status}}"
+  },
+  "outcome": {
+    "title": "Zabeležite ishod sesije",
+    "description": "Izaberite šta se dogodilo. Beleške se ne čuvaju.",
+    "label": "Ishod",
+    "submit": "Sačuvaj ishod",
+    "cancel": "Otkaži",
+    "required": "Izaberite ishod.",
+    "errorSummary": "Ishod nije sačuvan",
+    "status": {
+      "completed": "Održana",
+      "no_show_employee": "Zaposleni se nije pridružio",
+      "no_show_expert": "Stručnjak nije mogao da se pridruži",
+      "technical_failure": "Tehnički problem",
+      "canceled": "Otkazana"
+    }
+  },
+  "sample": {
+    "actionNoop": "Ovo je demonstracija sa primerom podataka. Ništa nije kreirano, promenjeno niti poslato."
   }
 }

@@ -14,10 +14,12 @@ import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedHrRouteImport } from './routes/_authenticated/_hr'
 import { Route as AuthenticatedManagerRouteImport } from './routes/_authenticated/_manager'
-import { Route as AuthenticatedAppointmentsRouteImport } from './routes/_authenticated/appointments'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
+import { Route as CallAppointmentIdRouteImport } from './routes/call/$appointmentId'
+import { Route as AuthenticatedAppointmentsIndexRouteImport } from './routes/_authenticated/appointments/index'
+import { Route as AuthenticatedAppointmentsAppointmentIdRouteImport } from './routes/_authenticated/appointments/$appointmentId'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelsChannelIdRouteImport } from './routes/_authenticated/channels/$channelId'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
@@ -56,12 +58,6 @@ const AuthenticatedManagerRoute = AuthenticatedManagerRouteImport.update({
   id: '/_manager',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAppointmentsRoute =
-  AuthenticatedAppointmentsRouteImport.update({
-    id: '/appointments',
-    path: '/appointments',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -77,6 +73,23 @@ const PublicSignInRoute = PublicSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => PublicRoute,
 } as any)
+const CallAppointmentIdRoute = CallAppointmentIdRouteImport.update({
+  id: '/call/$appointmentId',
+  path: '/call/$appointmentId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAppointmentsIndexRoute =
+  AuthenticatedAppointmentsIndexRouteImport.update({
+    id: '/appointments/',
+    path: '/appointments/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAppointmentsAppointmentIdRoute =
+  AuthenticatedAppointmentsAppointmentIdRouteImport.update({
+    id: '/appointments/$appointmentId',
+    path: '/appointments/$appointmentId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
     id: '/channels/',
@@ -171,14 +184,16 @@ const AuthenticatedManagerManagePollsNewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
-  '/appointments': typeof AuthenticatedAppointmentsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/polls/': typeof AuthenticatedPollsIndexRoute
@@ -194,14 +209,16 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
-  '/appointments': typeof AuthenticatedAppointmentsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/appointments': typeof AuthenticatedAppointmentsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/polls': typeof AuthenticatedPollsIndexRoute
@@ -221,15 +238,17 @@ export interface FileRoutesById {
   '/_public': typeof PublicRouteWithChildren
   '/_authenticated/_hr': typeof AuthenticatedHrRouteWithChildren
   '/_authenticated/_manager': typeof AuthenticatedManagerRouteWithChildren
-  '/_authenticated/appointments': typeof AuthenticatedAppointmentsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
+  '/_authenticated/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
@@ -247,14 +266,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/appointments'
     | '/settings'
     | '/reset-password'
     | '/sign-in'
+    | '/call/$appointmentId'
+    | '/appointments/$appointmentId'
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
+    | '/appointments/'
     | '/channels/'
     | '/messages/'
     | '/polls/'
@@ -270,14 +291,16 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/appointments'
     | '/settings'
     | '/reset-password'
     | '/sign-in'
+    | '/call/$appointmentId'
+    | '/appointments/$appointmentId'
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
+    | '/appointments'
     | '/channels'
     | '/messages'
     | '/polls'
@@ -296,15 +319,17 @@ export interface FileRouteTypes {
     | '/_public'
     | '/_authenticated/_hr'
     | '/_authenticated/_manager'
-    | '/_authenticated/appointments'
     | '/_authenticated/settings'
     | '/_public/reset-password'
     | '/_public/sign-in'
+    | '/call/$appointmentId'
     | '/_authenticated/'
+    | '/_authenticated/appointments/$appointmentId'
     | '/_authenticated/channels/$channelId'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
     | '/_public/invite/$token'
+    | '/_authenticated/appointments/'
     | '/_authenticated/channels/'
     | '/_authenticated/messages/'
     | '/_authenticated/polls/'
@@ -322,6 +347,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   PublicRoute: typeof PublicRouteWithChildren
+  CallAppointmentIdRoute: typeof CallAppointmentIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -361,13 +387,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedManagerRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/appointments': {
-      id: '/_authenticated/appointments'
-      path: '/appointments'
-      fullPath: '/appointments'
-      preLoaderRoute: typeof AuthenticatedAppointmentsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -388,6 +407,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/sign-in'
       preLoaderRoute: typeof PublicSignInRouteImport
       parentRoute: typeof PublicRoute
+    }
+    '/call/$appointmentId': {
+      id: '/call/$appointmentId'
+      path: '/call/$appointmentId'
+      fullPath: '/call/$appointmentId'
+      preLoaderRoute: typeof CallAppointmentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/appointments/': {
+      id: '/_authenticated/appointments/'
+      path: '/appointments'
+      fullPath: '/appointments/'
+      preLoaderRoute: typeof AuthenticatedAppointmentsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/appointments/$appointmentId': {
+      id: '/_authenticated/appointments/$appointmentId'
+      path: '/appointments/$appointmentId'
+      fullPath: '/appointments/$appointmentId'
+      preLoaderRoute: typeof AuthenticatedAppointmentsAppointmentIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
@@ -544,12 +584,13 @@ const AuthenticatedManagerRouteWithChildren =
 interface AuthenticatedRouteChildren {
   AuthenticatedHrRoute: typeof AuthenticatedHrRouteWithChildren
   AuthenticatedManagerRoute: typeof AuthenticatedManagerRouteWithChildren
-  AuthenticatedAppointmentsRoute: typeof AuthenticatedAppointmentsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAppointmentsAppointmentIdRoute: typeof AuthenticatedAppointmentsAppointmentIdRoute
   AuthenticatedChannelsChannelIdRoute: typeof AuthenticatedChannelsChannelIdRoute
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
+  AuthenticatedAppointmentsIndexRoute: typeof AuthenticatedAppointmentsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPollsIndexRoute: typeof AuthenticatedPollsIndexRoute
@@ -559,12 +600,14 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedHrRoute: AuthenticatedHrRouteWithChildren,
   AuthenticatedManagerRoute: AuthenticatedManagerRouteWithChildren,
-  AuthenticatedAppointmentsRoute: AuthenticatedAppointmentsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAppointmentsAppointmentIdRoute:
+    AuthenticatedAppointmentsAppointmentIdRoute,
   AuthenticatedChannelsChannelIdRoute: AuthenticatedChannelsChannelIdRoute,
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,
+  AuthenticatedAppointmentsIndexRoute: AuthenticatedAppointmentsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPollsIndexRoute: AuthenticatedPollsIndexRoute,
@@ -593,6 +636,7 @@ const PublicRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   PublicRoute: PublicRouteWithChildren,
+  CallAppointmentIdRoute: CallAppointmentIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

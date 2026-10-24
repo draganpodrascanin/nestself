@@ -170,7 +170,12 @@
     "recordingNotAllowed": "Ez a felvétellel kapcsolatos művelet nem engedélyezett.",
     "capacityAboveLimit": "Ez a létszám meghaladja azt, amit egy webinárium jelenleg támogat.",
     "invalidTicket": "Ez a hivatkozás lejárt, vagy már felhasználták. Nyissa meg újra az időpontot egy új hivatkozásért.",
-    "unknown": "Hiba történt. Kérjük, próbálja újra."
+    "unknown": "Hiba történt. Kérjük, próbálja újra.",
+    "notFound": "Ez nem érhető el. Lehet, hogy nem létezik, vagy Ön számára nem elérhető.",
+    "network": "Úgy tűnik, nincs internetkapcsolat. Ellenőrizze a kapcsolatot, és próbálja újra.",
+    "rateLimited": "Túl sok próbálkozás. Várjon egy percet, majd próbálja újra.",
+    "forbidden": "Ez a művelet Ön számára nem érhető el.",
+    "validation": "A kérés egy része nem lett elfogadva. Ellenőrizze, és próbálja újra."
   },
   "email": {
     "reminderSubject": "Az Ön NestSelf alkalma",
@@ -277,5 +282,174 @@
       "call": "Hívja a 112-t egy másik telefonról, adja meg a címet, és maradjon a munkavállalóval, amíg a segítség megérkezik."
     },
     "close": "Bezárás"
+  },
+  "appointments": {
+    "upcoming": "Közelgő",
+    "past": "Korábbi",
+    "loadMore": "Továbbiak betöltése",
+    "loadingMore": "Betöltés…",
+    "errorTitle": "Az időpontjait nem sikerült betölteni",
+    "notFoundTitle": "Ez az időpont nem érhető el",
+    "notFoundBody": "Lehet, hogy lemondták, vagy nem az Ön időpontja.",
+    "back": "Vissza az időpontokhoz",
+    "withExpert": "Szakértő: {{name}}",
+    "yourExpert": "Az Ön NestSelf-szakértője",
+    "categoryOther": "Konzultáció",
+    "dateTime": "{{date}}, {{time}}",
+    "open": "A(z) {{date}} időpont megnyitása",
+    "details": {
+      "expert": "Szakértő",
+      "date": "Dátum",
+      "time": "Időpont",
+      "category": "Szolgáltatás",
+      "status": "Állapot"
+    },
+    "status": {
+      "proposed": "Javasolt",
+      "awaiting_approval": "Jóváhagyásra vár",
+      "confirmed": "Megerősítve",
+      "completed": "Lezajlott",
+      "canceled": "Lemondva",
+      "declined": "Elutasítva",
+      "no_show": "Elmaradt"
+    }
+  },
+  "join": {
+    "button": "Csatlakozás az alkalomhoz",
+    "comeBackAt": "Térjen vissza ekkor: {{time}}",
+    "opensHint": "A kezdés előtt {{minutes}} perccel csatlakozhat.",
+    "lateJoin": "Az alkalom {{time}}-kor kezdődött. A hátralévő időre még csatlakozhat.",
+    "windowClosed": "Ehhez az alkalomhoz már nem lehet csatlakozni.",
+    "contactSupport": "Kapcsolatfelvétel az ügyfélszolgálattal",
+    "sampleDemo": "A hívásképernyő kipróbálása mintaadatokkal"
+  },
+  "call": {
+    "title": "Az Ön konzultációja",
+    "sampleNotice": "Ez egy bemutató mintaadatokkal. Hívás nem indul, és semmi sem kerül rögzítésre vagy elküldésre.",
+    "backToAppointment": "Vissza az időponthoz",
+    "realtimeUnavailable": "Az élő frissítések most nem érhetők el. Ez magát a hívást nem érinti."
+  },
+  "location": {
+    "label": "Az Ön jelenlegi tartózkodási helye",
+    "prompt": "Biztonsági okokból ossza meg jelenlegi tartózkodási helyét a szakértővel.",
+    "hint": "Csak a szakértője látja, és csak ezen az alkalmon. Az alkalom végén törlődik. Üresen is hagyhatja.",
+    "optional": "Nem kötelező",
+    "tooLong": "Legfeljebb {{max}} karaktert használjon."
+  },
+  "waiting": {
+    "expertSoon": "A szakértője hamarosan csatlakozik",
+    "expertSoonNamed": "{{name}} hamarosan csatlakozik",
+    "scheduled": "Tervezett kezdés: {{time}}",
+    "runningLate": "A szakértője néhány percet késik.",
+    "runningLateEta_one": "A szakértője késik, és körülbelül {{count}} perc múlva csatlakozik.",
+    "runningLateEta_other": "A szakértője késik, és körülbelül {{count}} perc múlva csatlakozik.",
+    "tipsTitle": "Amíg vár",
+    "tips": {
+      "private": "Keressen egy csendes, zavartalan helyet, ahol szabadon beszélhet.",
+      "headphones": "A fejhallgató segít bizalmasan tartani a beszélgetést.",
+      "notes": "Ha segít, írja le, miről szeretne beszélni."
+    }
+  },
+  "signals": {
+    "cannotHear": "A másik résztvevő nem hallja Önt.",
+    "cannotSee": "A másik résztvevő nem látja Önt.",
+    "runningLate": "A szakértő késik."
+  },
+  "postCall": {
+    "ended": "A konzultáció véget ért",
+    "left": "Ön kilépett a konzultációból",
+    "roomClosed": "Az alkalom ideje lejárt",
+    "backToAppointments": "Vissza az időpontokhoz"
+  },
+  "feedback": {
+    "title": "Milyen volt az alkalom?",
+    "rating": "Az Ön értékelése",
+    "ratingOption": "{{score}} / 5",
+    "comment": "Megjegyzés",
+    "privacy": "A visszajelzése bizalmas, a munkáltatója nem látja.",
+    "submit": "Visszajelzés küldése",
+    "skip": "Kihagyás",
+    "thanks": "Köszönjük. A visszajelzését elküldtük.",
+    "skipped": "Nem küldött visszajelzést.",
+    "errorSummary": "A visszajelzés nem lett elküldve",
+    "errors": {
+      "ratingRequired": "Válasszon 1 és 5 közötti értékelést, vagy hagyja ki.",
+      "commentTooLong": "Legfeljebb {{max}} karaktert használjon."
+    }
+  },
+  "report": {
+    "open": "Műszaki probléma bejelentése",
+    "title": "Műszaki probléma bejelentése",
+    "body": "A hívás kapcsolati adatait elküldjük a NestSelf ügyfélszolgálatának. Semmi, amit mondott, és semmilyen név vagy eszköznév nem kerül bele.",
+    "attached": "Az elküldött adatok",
+    "duration": "A hívás hossza",
+    "minutes_one": "{{count}} perc",
+    "minutes_other": "{{count}} perc",
+    "reconnects": "Újracsatlakozások",
+    "quality": "Kapcsolat",
+    "browser": "Böngésző",
+    "os": "Operációs rendszer",
+    "notMeasured": "Nincs mérve",
+    "send": "Bejelentés küldése",
+    "cancel": "Mégse",
+    "sent": "A bejelentést elküldtük. A NestSelf ügyfélszolgálata most látja a hívás kapcsolati adatait."
+  },
+  "consultations": {
+    "nav": "Konzultációk",
+    "title": "Konzultációk",
+    "intro": "Az Ön konzultációi időrendben. Az időpontok az adott alkalom időzónájában értendők.",
+    "operationsNote": "Operatív nézet: csak a kijelölt szakértő nyithatja meg a konzultációt, csatlakozhat hozzá, vagy rögzítheti az eredményét.",
+    "emptyTitle": "Még nincs konzultáció",
+    "emptyBody": "Itt jelennek meg az Önhöz rendelt konzultációk.",
+    "errorTitle": "A konzultációkat nem sikerült betölteni",
+    "employee": "Munkavállaló",
+    "employeeFallback": "Munkavállaló",
+    "columns": {
+      "employee": "Munkavállaló",
+      "service": "Szolgáltatás",
+      "time": "Időpont",
+      "status": "Állapot",
+      "outcome": "Eredmény"
+    },
+    "outcomeColumn": {
+      "completed": "Megtartva",
+      "no_show": "Nem jelent meg",
+      "canceled": "Nem tartották meg",
+      "toRecord": "Rögzítendő",
+      "notYet": "Még nem"
+    },
+    "back": "Vissza a konzultációkhoz",
+    "participants": "Résztvevők",
+    "you": "{{name}} (Ön)",
+    "expertFallback": "Ön",
+    "runningLate": "Késés jelzése",
+    "runningLateEta": "Várható késés",
+    "runningLateSent": "A munkavállalót értesítettük, hogy késik.",
+    "location": {
+      "title": "A munkavállaló által megosztott hely",
+      "none": "A munkavállaló nem osztott meg tartózkodási helyet.",
+      "hint": "Csak Ön látja, és csak ezen az alkalmon. Az alkalom végén törlődik."
+    },
+    "recordOutcome": "Eredmény rögzítése",
+    "outcomeRecorded": "Rögzített eredmény: {{status}}"
+  },
+  "outcome": {
+    "title": "Az alkalom eredményének rögzítése",
+    "description": "Válassza ki, mi történt. Jegyzet nem kerül rögzítésre.",
+    "label": "Eredmény",
+    "submit": "Eredmény mentése",
+    "cancel": "Mégse",
+    "required": "Válasszon eredményt.",
+    "errorSummary": "Az eredmény nem lett mentve",
+    "status": {
+      "completed": "Megtartva",
+      "no_show_employee": "A munkavállaló nem csatlakozott",
+      "no_show_expert": "Nem tudtam csatlakozni",
+      "technical_failure": "Műszaki hiba",
+      "canceled": "Lemondva"
+    }
+  },
+  "sample": {
+    "actionNoop": "Ez egy bemutató mintaadatokkal. Semmi sem jött létre, nem változott és nem lett elküldve."
   }
 }

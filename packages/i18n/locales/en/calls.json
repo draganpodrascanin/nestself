@@ -171,7 +171,12 @@
     "recordingNotAllowed": "This recording action is not allowed.",
     "capacityAboveLimit": "This capacity is above what a single webinar supports for now.",
     "invalidTicket": "This link has expired or was already used. Open the appointment again to get a new one.",
-    "unknown": "Something went wrong. Please try again."
+    "unknown": "Something went wrong. Please try again.",
+    "notFound": "This is not available. It may not exist, or it is not available to you.",
+    "network": "You seem to be offline. Check your connection and try again.",
+    "rateLimited": "Too many attempts. Wait a minute, then try again.",
+    "forbidden": "This action is not available to you.",
+    "validation": "Something in the request was not accepted. Check it and try again."
   },
   "email": {
     "reminderSubject": "Your NestSelf session",
@@ -279,5 +284,176 @@
       "call": "Call 112 from another phone, give the address and stay with the employee until help arrives."
     },
     "close": "Close"
+  },
+  "appointments": {
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "errorTitle": "Your appointments could not be loaded",
+    "notFoundTitle": "This appointment is not available",
+    "notFoundBody": "It may have been canceled, or it is not one of your appointments.",
+    "back": "Back to appointments",
+    "withExpert": "With {{name}}",
+    "yourExpert": "Your NestSelf expert",
+    "categoryOther": "Consultation",
+    "dateTime": "{{date}}, {{time}}",
+    "open": "Open the appointment on {{date}}",
+    "details": {
+      "expert": "Expert",
+      "date": "Date",
+      "time": "Time",
+      "category": "Service",
+      "status": "Status"
+    },
+    "status": {
+      "proposed": "Proposed",
+      "awaiting_approval": "Waiting for approval",
+      "confirmed": "Confirmed",
+      "completed": "Completed",
+      "canceled": "Canceled",
+      "declined": "Declined",
+      "no_show": "Missed"
+    }
+  },
+  "join": {
+    "button": "Join session",
+    "comeBackAt": "Come back at {{time}}",
+    "opensHint": "You can join from {{minutes}} minutes before the start.",
+    "lateJoin": "Your session started at {{time}}. You can still join for the remaining time.",
+    "windowClosed": "The join window for this session has closed.",
+    "contactSupport": "Contact support",
+    "sampleDemo": "Try the call screen with sample data"
+  },
+  "call": {
+    "title": "Your consultation",
+    "sampleNotice": "This is a demonstration with sample data. No call is started, and nothing is recorded or sent.",
+    "backToAppointment": "Back to the appointment",
+    "realtimeUnavailable": "Live updates are not available right now. The call itself is not affected."
+  },
+  "location": {
+    "label": "Your current location",
+    "prompt": "Share your current location with the expert for safety purposes.",
+    "hint": "Only your expert sees it, and only during this session. It is deleted when the session ends. You can leave it empty.",
+    "optional": "Optional",
+    "tooLong": "Use at most {{max}} characters."
+  },
+  "waiting": {
+    "expertSoon": "Your expert will join shortly",
+    "expertSoonNamed": "{{name}} will join shortly",
+    "scheduled": "Scheduled for {{time}}",
+    "runningLate": "Your expert is running a few minutes late.",
+    "runningLateEta_one": "Your expert is running late and will join in about {{count}} minute.",
+    "runningLateEta_few": "Your expert is running late and will join in about {{count}} minutes.",
+    "runningLateEta_other": "Your expert is running late and will join in about {{count}} minutes.",
+    "tipsTitle": "While you wait",
+    "tips": {
+      "private": "Find a quiet, private place where you can talk freely.",
+      "headphones": "Headphones help keep the conversation private.",
+      "notes": "If it helps, write down what you would like to talk about."
+    }
+  },
+  "signals": {
+    "cannotHear": "The other participant cannot hear you.",
+    "cannotSee": "The other participant cannot see you.",
+    "runningLate": "The expert is running late."
+  },
+  "postCall": {
+    "ended": "The consultation has ended",
+    "left": "You left the consultation",
+    "roomClosed": "The session time is over",
+    "backToAppointments": "Back to appointments"
+  },
+  "feedback": {
+    "title": "How was your session?",
+    "rating": "Your rating",
+    "ratingOption": "{{score}} of 5",
+    "comment": "Comment",
+    "privacy": "Your feedback is private and your employer will not see it.",
+    "submit": "Send feedback",
+    "skip": "Skip",
+    "thanks": "Thank you. Your feedback was sent.",
+    "skipped": "No feedback was sent.",
+    "errorSummary": "Your feedback was not sent",
+    "errors": {
+      "ratingRequired": "Choose a rating from 1 to 5, or skip.",
+      "commentTooLong": "Use at most {{max}} characters."
+    }
+  },
+  "report": {
+    "open": "Report a technical problem",
+    "title": "Report a technical problem",
+    "body": "We send the connection details of this call to NestSelf support. Nothing you said, no names and no device names are included.",
+    "attached": "Details that are sent",
+    "duration": "Call length",
+    "minutes_one": "{{count}} minute",
+    "minutes_few": "{{count}} minutes",
+    "minutes_other": "{{count}} minutes",
+    "reconnects": "Reconnections",
+    "quality": "Connection",
+    "browser": "Browser",
+    "os": "Operating system",
+    "notMeasured": "Not measured",
+    "send": "Send report",
+    "cancel": "Cancel",
+    "sent": "Report sent. NestSelf support can now see the connection details of this call."
+  },
+  "consultations": {
+    "nav": "Consultations",
+    "title": "Consultations",
+    "intro": "Your consultations, in the order they take place. Times are in each appointment's time zone.",
+    "operationsNote": "Operations view: only the assigned expert can open a consultation, join it or record its outcome.",
+    "emptyTitle": "No consultations yet",
+    "emptyBody": "Consultations you are assigned to appear here.",
+    "errorTitle": "Consultations could not be loaded",
+    "employee": "Employee",
+    "employeeFallback": "Employee",
+    "columns": {
+      "employee": "Employee",
+      "service": "Service",
+      "time": "Time",
+      "status": "Status",
+      "outcome": "Outcome"
+    },
+    "outcomeColumn": {
+      "completed": "Delivered",
+      "no_show": "No-show",
+      "canceled": "Not delivered",
+      "toRecord": "To record",
+      "notYet": "Not yet"
+    },
+    "back": "Back to consultations",
+    "participants": "Participants",
+    "you": "{{name}} (you)",
+    "expertFallback": "You",
+    "runningLate": "Send running late",
+    "runningLateEta": "Estimated delay",
+    "runningLateSent": "The employee was told that you are running late.",
+    "location": {
+      "title": "Location the employee shared",
+      "none": "The employee has not shared a location.",
+      "hint": "Visible to you only during this session. It is deleted when the session ends."
+    },
+    "recordOutcome": "Record the outcome",
+    "outcomeRecorded": "Outcome recorded: {{status}}"
+  },
+  "outcome": {
+    "title": "Record the session outcome",
+    "description": "Choose what happened. No notes are recorded.",
+    "label": "Outcome",
+    "submit": "Save outcome",
+    "cancel": "Cancel",
+    "required": "Choose an outcome.",
+    "errorSummary": "The outcome was not saved",
+    "status": {
+      "completed": "Completed",
+      "no_show_employee": "The employee did not join",
+      "no_show_expert": "I could not join",
+      "technical_failure": "Technical failure",
+      "canceled": "Canceled"
+    }
+  },
+  "sample": {
+    "actionNoop": "This is a demonstration with sample data. Nothing was created, changed or sent."
   }
 }
