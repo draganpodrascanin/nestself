@@ -9,6 +9,7 @@
  * template. They have no legacy role, so the API seed grants their templates
  * explicitly (like the sample employer owner) and never derives them.
  */
+import type { ReviewDiscipline } from '@nestself/contracts';
 
 export const SAMPLE_CATEGORY_IDS = {
   stress: 'cat_stress',
@@ -28,10 +29,10 @@ export const SAMPLE_EDITORIAL_STAFF = [
   {
     id: 'user_katarina',
     displayName: 'Katarina',
-    initials: 'KA',
+    initials: 'K',
     templateKey: 'content_author' as const,
     /** Review disciplines for a `categories` condition; empty for non-reviewers. */
-    disciplines: [] as readonly string[],
+    disciplines: [] as readonly ReviewDiscipline[],
     categoryIds: SAMPLE_CATEGORY_ID_LIST,
     portrait: null,
     sample: true as const,
@@ -39,19 +40,19 @@ export const SAMPLE_EDITORIAL_STAFF = [
   {
     id: 'user_darko',
     displayName: 'Darko',
-    initials: 'DA',
+    initials: 'D',
     templateKey: 'content_reviewer' as const,
-    disciplines: ['psychological', 'general'] as readonly string[],
+    disciplines: ['psychological', 'general'] as readonly ReviewDiscipline[],
     categoryIds: SAMPLE_CATEGORY_ID_LIST,
     portrait: null,
     sample: true as const,
   },
   {
-    id: 'user_milena',
-    displayName: 'Milena',
-    initials: 'ML',
+    id: 'user_teodora',
+    displayName: 'Teodora',
+    initials: 'T',
     templateKey: 'content_publisher' as const,
-    disciplines: [] as readonly string[],
+    disciplines: [] as readonly ReviewDiscipline[],
     categoryIds: SAMPLE_CATEGORY_ID_LIST,
     portrait: null,
     sample: true as const,
@@ -59,9 +60,9 @@ export const SAMPLE_EDITORIAL_STAFF = [
   {
     id: 'user_vuk',
     displayName: 'Vuk',
-    initials: 'VU',
+    initials: 'V',
     templateKey: 'editorial_lead' as const,
-    disciplines: [] as readonly string[],
+    disciplines: [] as readonly ReviewDiscipline[],
     categoryIds: [] as readonly SampleCategoryId[],
     portrait: null,
     sample: true as const,

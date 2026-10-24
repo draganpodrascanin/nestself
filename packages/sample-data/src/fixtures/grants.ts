@@ -2,6 +2,7 @@ import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import type { GrantResponse } from '@nestself/contracts';
 import { SAMPLE_PEOPLE } from './people.ts';
 import { SAMPLE_TEAMS } from './org.ts';
+import { SAMPLE_EDITORIAL_STAFF } from './editorial-staff.ts';
 
 /** A sample grant row; `sample: true` is the fixture marker, not part of the API shape. */
 export type SampleGrant = GrantResponse & { sample: true };
@@ -82,4 +83,33 @@ const OWNER_GRANT: SampleGrant = {
   sample: true,
 };
 
-export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT];
+/**
+ * Grants of the editorial staff. They have no legacy role, so the seed grants
+ * them explicitly (`SAMPLE_EDITORIAL_STAFF`): the reviewer carries its review
+ * disciplines as a `categories` condition, and no staff grant has an
+ * organization.
+ */
+const EDITORIAL_GRANTS: SampleGrant[] = SAMPLE_EDITORIAL_STAFF.map((staff): SampleGrant => {
+  const tmpl = PERMISSION_TEMPLATES.find((t) => t.key === staff.templateKey)!;
+  return {
+    id: `grant_${staff.id}_${tmpl.key}`,
+    subjectUserId: staff.id,
+    templateKey: tmpl.key,
+    actions: [...tmpl.actions],
+    scopeType: tmpl.scopeType,
+    scopeOrgId: null,
+    scopeOrgUnitId: null,
+    includeDescendants: false,
+    conditions:
+      staff.disciplines.length > 0 ? [{ type: 'categories', allowed: [...staff.disciplines] }] : [],
+    validFrom: GRANTED_AT,
+    validUntil: null,
+    parentGrantId: null,
+    grantedByUserId: GRANTED_BY,
+    grantedAt: GRANTED_AT,
+    revokedAt: null,
+    sample: true,
+  };
+});
+
+export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT, ...EDITORIAL_GRANTS];

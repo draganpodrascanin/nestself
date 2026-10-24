@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TEMPLATE_KEYS, PERMISSION_TEMPLATES } from './templates.ts';
-import { isAction } from './actions.ts';
+import { TEMPLATE_KEYS, PERMISSION_TEMPLATES, REVIEW_DISCIPLINES } from './templates.ts';
+import { isAction, CONFIDENTIAL_ACTIONS } from './actions.ts';
 import { STEP_UP_CLASS_BY_ACTION } from './authorization.ts';
 
 describe('templates', () => {
@@ -174,9 +174,9 @@ describe('templates', () => {
         expect(t.scopeType).toBe('assigned_queues');
         expect(t.legacyRole).toBeNull();
       }
-      expect(professional.actions).toEqual(['intake.queue.view', 'intake.claim']);
+      expect(professional.actions).toEqual(['intake.queue.view', 'intake.claim', ...baseline]);
       expect([...professional.requiredConditionTypes]).toEqual(['categories']);
-      expect(lead.actions).toEqual(['intake.queue.view', 'intake.reassign']);
+      expect(lead.actions).toEqual(['intake.queue.view', 'intake.reassign', ...baseline]);
     });
 
     it('employee gains poll.respond and editorial.request.submit', () => {
@@ -191,5 +191,27 @@ describe('templates', () => {
       );
       expect(byKey('expert').scopeType).toBe('assigned_cases');
     });
+  });
+
+  it('no administrative-scope template lists a confidential action', () => {
+    const administrative = [
+      'platform', 'organization', 'org_unit', 'assigned_clients', 'assigned_queues',
+      'assigned_practice', 'assigned_collections',
+    ];
+    for (const t of PERMISSION_TEMPLATES) {
+      if (!administrative.includes(t.scopeType)) continue;
+      for (const a of t.actions) {
+        expect(
+          (CONFIDENTIAL_ACTIONS as readonly string[]).includes(a),
+          `${t.key} (${t.scopeType}) lists confidential action ${a}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('REVIEW_DISCIPLINES lists the six review disciplines', () => {
+    expect([...REVIEW_DISCIPLINES]).toEqual([
+      'psychological', 'legal', 'financial', 'health', 'nutrition', 'general',
+    ]);
   });
 });

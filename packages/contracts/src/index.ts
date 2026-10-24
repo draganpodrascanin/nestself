@@ -64,8 +64,8 @@ export type { Action } from './actions.ts';
 // Templates (4.4)
 // ---------------------------------------------------------------------------
 
-export { TEMPLATE_KEYS, PERMISSION_TEMPLATES } from './templates.ts';
-export type { TemplateKey, PermissionTemplateDefinition } from './templates.ts';
+export { TEMPLATE_KEYS, PERMISSION_TEMPLATES, REVIEW_DISCIPLINES } from './templates.ts';
+export type { TemplateKey, PermissionTemplateDefinition, ReviewDiscipline } from './templates.ts';
 
 // ---------------------------------------------------------------------------
 // Authorization types (4.5, 5.8.2)

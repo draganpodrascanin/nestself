@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GrantResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
-import { SAMPLE_GRANTS, SAMPLE_PEOPLE } from '../index.ts';
+import { SAMPLE_EDITORIAL_STAFF, SAMPLE_GRANTS, SAMPLE_PEOPLE } from '../index.ts';
 
 describe('SAMPLE_GRANTS', () => {
   it('every row validates against GrantResponseSchema and is marked as sample', () => {
@@ -51,11 +51,22 @@ describe('SAMPLE_GRANTS', () => {
   });
 
   it('is granted by user_ivana, never revoked, and covers only known people', () => {
-    const ids = new Set<string>(SAMPLE_PEOPLE.map((p) => p.id));
+    const ids = new Set<string>([...SAMPLE_PEOPLE, ...SAMPLE_EDITORIAL_STAFF].map((p) => p.id));
     for (const g of SAMPLE_GRANTS) {
       expect(g.grantedByUserId).toBe('user_ivana');
       expect(g.revokedAt).toBeNull();
       expect(ids.has(g.subjectUserId)).toBe(true);
+    }
+  });
+
+  it('mirrors the editorial staff grants, the reviewer with its categories condition', () => {
+    for (const staff of SAMPLE_EDITORIAL_STAFF) {
+      const grant = SAMPLE_GRANTS.find((g) => g.id === `grant_${staff.id}_${staff.templateKey}`);
+      expect(grant, staff.id).toBeDefined();
+      expect(grant!.conditions).toEqual(
+        staff.disciplines.length > 0 ? [{ type: 'categories', allowed: [...staff.disciplines] }] : [],
+      );
+      expect(grant!.scopeOrgId).toBeNull();
     }
   });
 });

@@ -399,12 +399,22 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   // ── Editorial staff grants and category assignments (T-C1.03) ──
-  // Granted explicitly from the template (no legacy role). The reviewer's
+  // Granted explicitly from the template (no legacy role). ACC-R-06
+  // exception: grants derived from a legacy role carry no category
+  // assignment, so user_nikola's content_author and content_publisher (from
+  // the OPERATIONS role) stay fail-closed: no COLLECTION assignment, no
+  // content access, until one is created explicitly. The reviewer's
   // categories condition holds its review disciplines (ACC-R-07); the
   // COLLECTION assignments target category ids (C-09, ACC-R-06).
   for (const staff of SAMPLE_EDITORIAL_STAFF) {
     const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === staff.templateKey);
     if (!tmpl) throw new Error(`SAMPLE_EDITORIAL_STAFF names an unknown template: ${staff.templateKey}`);
+    // A template that requires the categories condition (the reviewer) must
+    // get its disciplines from the fixture; a grant without them would be
+    // unusable, so fail the seed loudly.
+    if (tmpl.requiredConditionTypes.includes('categories') && staff.disciplines.length === 0) {
+      throw new Error(`${staff.id} holds ${tmpl.key} but the fixture names no review disciplines`);
+    }
     const update = {
       actions: [...tmpl.actions],
       scopeType: tmpl.scopeType,

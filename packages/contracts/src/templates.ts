@@ -38,6 +38,21 @@ export const TEMPLATE_KEYS = [
   'event_supplier',
 ] as const;
 
+/**
+ * Review disciplines (cms-ee C-08, ACC-R-07): the values a `content_reviewer`
+ * grant's `categories` condition may hold.
+ */
+export const REVIEW_DISCIPLINES = [
+  'psychological',
+  'legal',
+  'financial',
+  'health',
+  'nutrition',
+  'general',
+] as const;
+
+export type ReviewDiscipline = (typeof REVIEW_DISCIPLINES)[number];
+
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 // ---------------------------------------------------------------------------
@@ -295,7 +310,10 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     name: 'Intake Professional',
     workspace: 'expert',
     population: 'expert',
-    actions: ['intake.queue.view', 'intake.claim'],
+    actions: [
+      'intake.queue.view', 'intake.claim',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
     scopeType: 'assigned_queues',
     defaultConditions: [],
     requiredConditionTypes: ['categories'],
@@ -309,7 +327,10 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     name: 'Intake Lead',
     workspace: 'expert',
     population: 'expert',
-    actions: ['intake.queue.view', 'intake.reassign'],
+    actions: [
+      'intake.queue.view', 'intake.reassign',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
     scopeType: 'assigned_queues',
     defaultConditions: [],
     requiredConditionTypes: [],

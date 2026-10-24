@@ -377,7 +377,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       }
       const reviewerRows = await owner.db.select().from(grants).where(eq(grants.templateKey, 'content_reviewer'));
       expect(reviewerRows.flatMap((r) => r.actions)).toContain('content.review');
-      const publisherRows = await owner.db.select().from(grants).where(eq(grants.subjectUserId, 'user_milena'));
+      const publisherRows = await owner.db.select().from(grants).where(eq(grants.subjectUserId, 'user_teodora'));
       expect(publisherRows[0]!.actions).not.toContain('content.review');
     });
 

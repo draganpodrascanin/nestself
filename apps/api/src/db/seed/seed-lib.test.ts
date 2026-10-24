@@ -33,6 +33,12 @@ describe('templatesForLegacyRoles', () => {
     );
   });
 
+  it('never derives the editorial templates from the operations role', () => {
+    const operations = keys(null, 'OPERATIONS');
+    expect(operations).not.toContain('content_reviewer');
+    expect(operations).not.toContain('editorial_lead');
+  });
+
   it('accepts lower-case fixture roles', () => {
     expect(keys('hr_admin', null)).toEqual(['employee', 'hr_admin']);
   });
@@ -60,12 +66,12 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     expect(Object.values(EXTRA_SAMPLE_TEMPLATES).flat().every((key) => known.has(key))).toBe(true);
   });
 
-  it('seeds the same 17 grant ids as SAMPLE_GRANTS', () => {
+  it('seeds the same 21 grant ids as SAMPLE_GRANTS', () => {
     const derived = SAMPLE_PEOPLE.filter((p) => p.orgId || p.platformRole).flatMap((p) =>
       templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => `grant_${p.id}_${tmpl.key}`),
     );
-    const seeded = [...derived, ...extraSampleGrantIds()].sort();
-    expect(seeded).toHaveLength(17);
+    const seeded = [...derived, ...extraSampleGrantIds(), ...editorialStaffGrantIds()].sort();
+    expect(seeded).toHaveLength(21);
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
   });
 });

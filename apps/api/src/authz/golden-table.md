@@ -56,3 +56,11 @@ reason is reserved for step 3 (a non-confidential action on a confidential
 resource), while step 5 skips administrative scopes silently, as in
 CONF-DENY-01 and CONF-DENY-02. CMSE-30 (ended CASE assignment) returns
 `no_matching_assignment`.
+
+Added in the review follow-up: CMSE-20 carries `collectionId: cat-sleep`, so
+adding `media.manage` to the author grant flips it to allowed. CMSE-31 to
+CMSE-35 cover an ended CASE assignment on `intake.respond` (denied), an
+`intake_professional` with QUEUE and CASE assignments reading the record body
+(denied: wrong scope), an author calling `content.publish` in an assigned
+category, and `editorial_lead` and `platform_owner` calling `content.review`
+(all denied).
