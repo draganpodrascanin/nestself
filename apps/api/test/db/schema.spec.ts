@@ -12,6 +12,10 @@ import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
 import {
   appointments,
+  callFeedback,
+  callOutcomes,
+  callParticipants,
+  callSessions,
   channels,
   conversationMessages,
   conversations,
@@ -45,7 +49,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(7);
+    expect(Number(rows[0]!.n)).toBe(8);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -178,9 +182,11 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
          WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
-                           'conversations','conversation_messages','intake_records','appointments')`,
+                           'conversations','conversation_messages','intake_records','appointments',
+                           'call_sessions','call_participants','call_events','call_client_events',
+                           'call_outcomes','call_feedback','call_consents')`,
       );
-      expect(rows).toHaveLength(17);
+      expect(rows).toHaveLength(24);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -363,6 +369,71 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
           .insert(appointments)
           .values({ ...appointment, id: 'rls_appt_reversed', orgId: 'rls_org_a', endsAt: appointment.startsAt }),
       ).rejects.toThrow();
+    });
+
+    it('call tables are isolated by tenant and keep no join token (T-CW-1.1, D-CW-25)', async () => {
+      const session = {
+        format: 'CONSULTATION' as const,
+        startsAt: new Date('2026-11-10T15:00:00Z'),
+        endsAt: new Date('2026-11-10T15:50:00Z'),
+      };
+      await owner.db.insert(callSessions).values([
+        { ...session, id: 'rls_call_a', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' },
+        { ...session, id: 'rls_call_b', appointmentId: 'rls_appt_b', orgId: 'rls_org_b' },
+      ]);
+      await owner.db.insert(callParticipants).values([
+        { id: 'rls_part_a', sessionId: 'rls_call_a', orgId: 'rls_org_a', userId: 'rls_user', role: 'EMPLOYEE' },
+        { id: 'rls_part_b', sessionId: 'rls_call_b', orgId: 'rls_org_b', userId: 'rls_user', role: 'EMPLOYEE' },
+      ]);
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', async (tx) => ({
+        sessions: await tx.select({ id: callSessions.id }).from(callSessions),
+        participants: await tx.select({ id: callParticipants.id }).from(callParticipants),
+      }));
+      expect(fromA.sessions.map((r) => r.id)).toEqual(['rls_call_a']);
+      expect(fromA.participants.map((r) => r.id)).toEqual(['rls_part_a']);
+
+      const leak = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(callFeedback).values({ sessionId: 'rls_call_b', orgId: 'rls_org_b', userId: 'rls_user', score: 4 }),
+      ).catch((e: unknown) => e);
+      expect(leak).toBeInstanceOf(Error);
+      const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // A consultation session needs its appointment and organization; one live session per appointment.
+      await expect(
+        owner.db.insert(callSessions).values({ ...session, id: 'rls_call_orphan', orgId: 'rls_org_a' }),
+      ).rejects.toThrow();
+      await expect(
+        owner.db.insert(callSessions).values({ ...session, id: 'rls_call_dup', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' }),
+      ).rejects.toThrow();
+      // A failed session does not block the next one.
+      await owner.db.update(callSessions).set({ status: 'FAILED' }).where(eq(callSessions.id, 'rls_call_a'));
+      await owner.db
+        .insert(callSessions)
+        .values({ ...session, id: 'rls_call_retry', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' });
+
+      // Feedback scores stay within 1 to 5; one outcome per session.
+      await expect(
+        owner.db.insert(callFeedback).values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', userId: 'rls_user', score: 6 }),
+      ).rejects.toThrow();
+      await owner.db
+        .insert(callOutcomes)
+        .values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', status: 'COMPLETED', recordedByUserId: 'rls_user' });
+      await expect(
+        owner.db
+          .insert(callOutcomes)
+          .values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', status: 'CANCELED', recordedByUserId: 'rls_user' }),
+      ).rejects.toThrow();
+
+      // CW-R-13: no call column can hold a join token or credentials.
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name LIKE 'call\\_%'`,
+      );
+      expect(rows.length).toBeGreaterThan(40);
+      for (const { column_name } of rows) {
+        expect(column_name, column_name).not.toMatch(/token|credential|secret/);
+      }
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

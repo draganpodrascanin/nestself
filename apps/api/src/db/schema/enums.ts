@@ -98,3 +98,48 @@ export const appointmentApprovalStatus = pgEnum('appointment_approval_status', [
   'REJECTED',
   'EXPIRED',
 ]);
+
+/** Call session lifecycle [D-CW-07, guidelines 4.9]: PENDING -> CREATING -> ACTIVE -> ENDED, or CREATING -> FAILED. */
+export const callSessionStatus = pgEnum('call_session_status', [
+  'PENDING',
+  'CREATING',
+  'ACTIVE',
+  'ENDED',
+  'FAILED',
+]);
+
+/** Role of a participant in a call session [D-CW-10]. */
+export const callParticipantRole = pgEnum('call_participant_role', [
+  'EXPERT',
+  'EMPLOYEE',
+  'PRESENTER',
+  'MODERATOR',
+  'ATTENDEE',
+  'FACILITATOR',
+  'PARTICIPANT',
+]);
+
+/** Format of a real-time session; selects the meeting features [D-CW-10]. */
+export const callFormat = pgEnum('call_format', ['CONSULTATION', 'WEBINAR', 'WORKSHOP']);
+
+/** Delivery outcome the expert records; no free text exists beside it [D-CW-25, CW-R-21]. */
+export const callOutcomeStatus = pgEnum('call_outcome_status', [
+  'COMPLETED',
+  'NO_SHOW_EMPLOYEE',
+  'NO_SHOW_EXPERT',
+  'TECHNICAL_FAILURE',
+  'CANCELED',
+]);
+
+/** Webinar recording pipeline [D-CW-18]; the `webinar_recordings` table arrives with T-CW-2.5. */
+export const recordingStatus = pgEnum('recording_status', [
+  'SCHEDULED',
+  'RECORDING',
+  'PROCESSING',
+  'READY',
+  'HANDED_OFF',
+  'FAILED',
+]);
+
+/** Consent kinds of `call_consents`, schema only in this epic [D-CW-19, CW-R-79b]. */
+export const callConsentType = pgEnum('call_consent_type', ['RECORDING', 'TRANSCRIPTION']);
