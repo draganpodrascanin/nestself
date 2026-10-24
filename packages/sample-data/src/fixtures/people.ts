@@ -67,6 +67,20 @@ export const SAMPLE_PEOPLE = [
     portrait: null,
     sample: true as const,
   },
+  {
+    // Real developer account linked to the Cognito dev pool. Must stay AFTER
+    // user_ivana: seed-lib picks the granting HR admin with
+    // `SAMPLE_PEOPLE.find((p) => p.orgRole === 'hr_admin')`, and moving this
+    // entry earlier would reassign every grant's granted_by_user_id.
+    id: 'user_dragan',
+    displayName: 'Dragan Podrašćanin',
+    initials: 'DP',
+    orgId: 'org_sample',
+    orgRole: 'hr_admin' as const,
+    platformRole: null,
+    portrait: null,
+    sample: true as const,
+  },
 ] as const;
 
 export const SAMPLE_SESSIONS: Record<OrgRole | PlatformRole, Session> = {

@@ -247,6 +247,47 @@ describe('OtpScreen', () => {
     });
   });
 
+  // CLAUDE.md "Error states must be visible in the UI": onError alone used to
+  // swallow every verify failure, so a wrong code showed nothing but a console 401.
+  it('shows external error from props', () => {
+    renderOtp({ error: 'That code has expired or was already used. Request a new one.' });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('That code has expired or was already used. Request a new one.').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('renders the parent error even when the local validation error is empty', async () => {
+    const emailOtpVerify = vi.fn().mockRejectedValue(new Error('boom'));
+    const onError = vi.fn();
+    renderOtp({
+      authApi: makeAuthApi({ emailOtpVerify }),
+      onError,
+      error: 'The code you entered is not valid.',
+    });
+
+    await user.type(screen.getByRole('textbox'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(screen.getAllByText('The code you entered is not valid.').length).toBeGreaterThan(0);
+  });
+
+  // Cognito EMAIL_OTP codes are eight digits; a six-digit cap silently truncated
+  // the real code and produced a CodeMismatchException.
+  it('accepts an eight digit code and submits it whole', async () => {
+    const emailOtpVerify = vi.fn().mockResolvedValue(undefined);
+    renderOtp({ authApi: makeAuthApi({ emailOtpVerify }) });
+
+    const input = screen.getByRole('textbox');
+    await user.type(input, '63822125');
+    expect(input).toHaveValue('63822125');
+
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(emailOtpVerify).toHaveBeenCalledWith('tok_123', '63822125'));
+  });
+
   it('has aria-live="polite" on the resend countdown', () => {
     renderOtp();
 

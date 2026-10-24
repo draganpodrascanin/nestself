@@ -214,11 +214,23 @@ export function resolveAppEnv(env: Env): AppEnv {
 /**
  * Validation function for NestJS ConfigModule.
  * Returns the raw env object (NestJS expects `Record<string, unknown>`).
+ *
+ * `envSchema` is a plain `z.object`, so Zod strips every key it does not
+ * declare. ConfigModule assigns whatever this function returns back onto
+ * `process.env`, and its `validate:` branch - unlike its `validationSchema:`
+ * branch - does not merge the stripped keys back in. Returning only the
+ * parsed object therefore drops ambient variables that are read straight from
+ * `process.env` by libraries rather than through ConfigService, most notably
+ * the AWS SDK credential chain (`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`,
+ * `AWS_SESSION_TOKEN`). Without them the Cognito admin calls silently fall
+ * back to the machine's default profile and fail with a cross-account IAM
+ * error. Spreading `config` first keeps those available while the validated
+ * and coerced values still win for every declared key.
  */
 export function validateEnv(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
   const parsed = envSchema.parse(config);
   const appEnv = resolveAppEnv(parsed);
-  return appEnv as unknown as Record<string, unknown>;
+  return { ...config, ...(appEnv as unknown as Record<string, unknown>) };
 }

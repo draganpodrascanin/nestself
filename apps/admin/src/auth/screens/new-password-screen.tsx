@@ -21,6 +21,8 @@ interface Props {
   /** Called when the challenge completed the sign-in (no second factor required). */
   onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
+  /** Error raised by the parent sign-in page; rendered together with local validation. */
+  error?: string | null;
 }
 
 export function NewPasswordScreen({
@@ -29,12 +31,14 @@ export function NewPasswordScreen({
   onChallengeRequired,
   onSuccess,
   onError,
+  error: externalError = null,
 }: Props) {
   const { t } = useTranslation(['auth', 'common']);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayError = externalError ?? error;
   const errorSummaryRef = useRef<FormErrorSummaryHandle>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,12 +73,12 @@ export function NewPasswordScreen({
     }
   };
 
-  const errors = error
+  const errors = displayError
     ? [
         {
           id: 'new-password',
           label: t('auth:newPassword.newPasswordLabel'),
-          message: error,
+          message: displayError,
         },
       ]
     : [];
@@ -106,13 +110,13 @@ export function NewPasswordScreen({
           autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          aria-describedby={error ? 'new-password-error' : undefined}
-          aria-invalid={!!error}
+          aria-describedby={displayError ? 'new-password-error' : undefined}
+          aria-invalid={!!displayError}
           showLabel={t('auth:a11y.showPassword')}
           hideLabel={t('auth:a11y.hidePassword')}
         />
-        {error ? (
-          <p id="new-password-error" className="type-metadata text-danger">{error}</p>
+        {displayError ? (
+          <p id="new-password-error" className="type-metadata text-danger">{displayError}</p>
         ) : null}
       </div>
 

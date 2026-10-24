@@ -43,7 +43,26 @@ aws sts get-caller-identity          # "Account" is your <ACCOUNT_ID>
 export AWS_ACCOUNT_DEV=<ACCOUNT_ID>  # the CDK app reads this when -c account is not passed
 ```
 
-Put the three `export` lines in your shell profile so every terminal has them.
+Do **not** export these globally in your shell profile. `AWS_PROFILE` is read by every AWS call in every terminal, so a global export silently redirects any other project that relies on the `[default]` profile. Scope it to this repository instead, either with `direnv` and an `.envrc`, or with a `chpwd` hook in `~/.zshrc`:
+
+```bash
+NESTSELF_ROOT="$HOME/path/to/Nestself"
+_nestself_aws_hook() {
+  if [[ "$PWD" == "$NESTSELF_ROOT" || "$PWD" == "$NESTSELF_ROOT"/* ]]; then
+    [[ -n "${_NS_AWS_ACTIVE-}" ]] && return
+    _NS_AWS_PREV_PROFILE="${AWS_PROFILE-__unset__}"
+    export AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 AWS_ACCOUNT_DEV=<ACCOUNT_ID>
+    _NS_AWS_ACTIVE=1
+  elif [[ -n "${_NS_AWS_ACTIVE-}" ]]; then
+    unset AWS_ACCOUNT_DEV
+    [[ "$_NS_AWS_PREV_PROFILE" == "__unset__" ]] && unset AWS_PROFILE || export AWS_PROFILE="$_NS_AWS_PREV_PROFILE"
+    unset _NS_AWS_ACTIVE _NS_AWS_PREV_PROFILE
+  fi
+}
+autoload -Uz add-zsh-hook && add-zsh-hook chpwd _nestself_aws_hook && _nestself_aws_hook
+```
+
+`AWS_REGION` matters as much as the profile: `env-from-outputs.mjs` runs `aws cloudformation describe-stacks` with neither `--region` nor `--profile`, so with the wrong ambient region it prints `Warning: output ... not found` for every value and appends empty variables without failing.
 
 Recommended before creating the pool (OPS-R-16 in the strategy): enable CloudTrail in the dev account so Cognito administrative calls are logged from day one. The security-baseline stack does this for staging and production; for dev do it once in the console (CloudTrail, Create trail, one region, default S3 bucket) or skip it knowingly.
 
@@ -156,7 +175,7 @@ Add `ses:SendEmail` and `ses:SendRawEmail` on your SES identity when you set `SE
 pnpm db:up                                    # Postgres and Redis
 pnpm --filter @nestself/api db:migrate
 pnpm --filter @nestself/api db:seed           # sample organization, people, grants
-pnpm --filter @nestself/api dev               # http://localhost:4000/api/health must report redis and database up
+pnpm --filter @nestself/api dev               # http://localhost:4000/api/health must report database up
 pnpm --filter @nestself/api worker:dev        # optional: nightly maintenance jobs on the Redis queue
 ```
 
@@ -166,7 +185,7 @@ The health endpoint must show Redis connected; in cognito mode the API refuses t
 
 Self sign-up is disabled; people enter through invitations. The seed creates sample people with placeholder identity subjects, so for a first test link one sample person to a real pool user, then invite everyone else through the product.
 
-Usernames in this pool must not look like email addresses (email is an alias); use the sample id as username.
+Usernames in this pool **are** email addresses. `auth-stack.ts` sets `signInAliases: { email: true }` without `username: true`, which CDK compiles to `UsernameAttributes: ['email']`, so `AdminCreateUser` rejects a plain handle with `Username should be an email`. Cognito generates the internal username itself and it equals `sub`, so the same UUID goes into both `subject` and `cognito_username` when linking `external_identities` by hand.
 
 Employee who signs in with an email code (`user_ivana`, the sample HR admin):
 
@@ -207,7 +226,7 @@ From here on, invite real people as the HR admin (`POST /orgs/:orgId/invitations
 
 ## 7. Verify, operate, tear down
 
-- `GET http://localhost:4000/api/auth/me` after sign-in returns the principal; `GET /api/health` shows database and Redis.
+- `GET http://localhost:4000/api/auth/me` after sign-in returns the principal; `GET /api/health` reports the **database only** (`health.controller.ts` registers just `DbHealthIndicator`). Redis is confirmed by the `Connected to Redis` line in the API log at boot; in cognito mode the process refuses to start without it.
 - Lambda trigger logs: CloudWatch log groups `/aws/lambda/nestself-dev-cognito-custom-message` and `...-pre-sign-up`.
 - Pool users: `aws cognito-idp list-users --user-pool-id <USER_POOL_ID>`.
 - Change the stack (`infra/cdk/lib/auth-stack.ts`, `lib/config.ts`) and redeploy with the same `cdk deploy` command; `cdk diff -c stage=dev -c account=<ACCOUNT_ID>` previews the change.
@@ -262,7 +281,12 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | API refuses to start: `REDIS_URL is required when AUTH_MODE=cognito` | Start Redis (`pnpm db:up`) and set `REDIS_URL` |
 | API refuses to start: `SESSION_ENCRYPTION_KEY is required` or `Must be a 64-character hex string` | Re-run `env-from-outputs.mjs dev` or `openssl rand -hex 32` |
 | Sign-in fails with `No linked identity found. Complete onboarding first.` | The pool user's `sub` is not in `external_identities`; link it (section 6) or onboard through an invitation |
-| `admin-create-user`: `Username cannot be of email format, since user pool is configured for email alias` | Use a plain username such as `user_ivana`; the email goes in the attributes |
+| `admin-create-user`: `Username should be an email` | This pool uses `UsernameAttributes: ['email']`; pass the address as `--username`. The opposite error (`Username cannot be of email format`) only appears on a pool built with `signInAliases: { username: true, email: true }` |
+| `delete-user-pool`: `deletion protection is activated`, then `It has a domain configured` | Three calls in order: `update-user-pool --deletion-protection INACTIVE`, `delete-user-pool-domain`, `delete-user-pool` |
+| Sign-in returns 401 `invalid_code` although the code was copied correctly | Cognito's EMAIL_OTP code is **eight** digits. Any field or schema capped at six truncates it; use `EMAIL_OTP_MIN_LENGTH`/`EMAIL_OTP_MAX_LENGTH` from `@nestself/contracts` |
+| Sign-in returns 401 `invalid_challenge` on every retry | The challenge token is single-use and is consumed before the code is checked, so one wrong digit ends it. Go back and request a new code |
+| Cognito calls fail with `AccessDenied` naming an account you did not deploy to | The API process did not see `AWS_PROFILE`. It must reach `process.env`: either exported in the shell that runs `pnpm dev`, or in `apps/api/.env` together with the `validateEnv` passthrough in `apps/api/src/config/env.ts` |
+| The hosted Cognito domain does not resolve right after deploy | macOS caches the NXDOMAIN from any lookup made before the domain existed. `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`. `dig` bypasses the cache and will look fine while `curl` and the browser still fail |
 | `Unable to locate credentials` in the API log | `AWS_PROFILE` not visible to the API process; put it in `apps/api/.env` or export it in the shell that runs `pnpm dev` |
 | No email arrives | Dev has no SES; Cognito's default sender is limited to 50 messages a day and lands in spam easily. Check the Lambda trigger logs and the mailbox's spam folder |
 | `cdk-nag` errors during synth | A stack change violates a rule; add a documented suppression in the stack or fix the resource. CI synthesizes with `-c platform=true` so platform stacks stay reviewed |

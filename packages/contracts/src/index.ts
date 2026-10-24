@@ -142,6 +142,8 @@ export {
   ApiErrorResponseSchema,
   StepUpRequiredErrorSchema,
   AUTH_ERROR_CODES,
+  EMAIL_OTP_MIN_LENGTH,
+  EMAIL_OTP_MAX_LENGTH,
 } from './auth.ts';
 export type {
   DiscoverRequest,

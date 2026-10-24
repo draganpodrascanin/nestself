@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@nestself/contracts';
 import {
   View,
   KeyboardAvoidingView,
@@ -48,7 +49,9 @@ type SignInStep = 'email' | 'otp' | 'sso_pending' | 'password_web';
 // ---------------------------------------------------------------------------
 
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
-const OTP_CODE_LENGTH = 6;
+// Cognito EMAIL_OTP codes are eight digits; the stub provider issues six.
+const OTP_CODE_LENGTH = EMAIL_OTP_MAX_LENGTH;
+const OTP_CODE_MIN_LENGTH = EMAIL_OTP_MIN_LENGTH;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -184,7 +187,7 @@ export default function SignInScreen() {
 
   const handleOtpSubmit = useCallback(async () => {
     const trimmed = otpCode.trim();
-    if (trimmed.length !== OTP_CODE_LENGTH) return;
+    if (trimmed.length < OTP_CODE_MIN_LENGTH) return;
 
     setLoading(true);
     setErrorMessage(null);
@@ -346,7 +349,7 @@ export default function SignInScreen() {
               <Button
                 variant="primary"
                 onPress={() => void handleOtpSubmit()}
-                disabled={loading || otpCode.length !== OTP_CODE_LENGTH}
+                disabled={loading || otpCode.length < OTP_CODE_MIN_LENGTH}
                 label={loading ? t('a11y.loading') : t('otp.submit')}
                 loading={loading}
               />

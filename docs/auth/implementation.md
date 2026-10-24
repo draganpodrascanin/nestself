@@ -80,8 +80,11 @@ The seed creates the sample organization, org units, people, grants and an `exte
 | Stefan Marković | `user_stefan@example.com` | team manager | Email code |
 | Nikola Đorđević | `user_nikola@example.com` | operations staff | Password `Nestself-dev-1234!`, then authenticator enrolment on first sign-in |
 | Milica Ristić | `user_milica@example.com` | expert | Password `Nestself-dev-1234!`, then authenticator enrolment |
+| Dragan Podrašćanin | `user_dragan@example.com` | employer HR admin | Email code. Added 2026-10-24 as the developer account linked to the real dev pool; see section 17 |
 
 For TOTP in development use any authenticator app with the QR code, or compute codes with `computeTotp(secret)` from `apps/api/src/identity/totp.ts`. The web apps run in sample mode by default (`VITE_DATA_SOURCE=sample`); set `VITE_DATA_SOURCE=api` in `apps/workspace/.env.local` or `apps/admin/.env.local` to use the real sign-in screens against the API. Set `SESSION_COOKIE_INSECURE_DEV=true` in the API env so the session cookie works on plain `http://localhost`.
+
+`pnpm db:up` publishes Redis on `6379:6379`, so it fails when a local Redis or Valkey already owns that port. A machine that already runs PostgreSQL and Redis outside Docker needs only `DATABASE_URL` and `REDIS_URL` pointed at them; skip `db:up` entirely.
 
 Switching to a real Cognito pool is described in section 17.
 
@@ -147,6 +150,10 @@ Both return `AuthOutcome`, either `{ kind: 'tokens', tokens }` or `{ kind: 'chal
 
 All flows start at `POST /auth/discover` (`discover.service.ts`), which answers `email_otp`, `password` or `sso` without revealing whether the address exists. Interactive steps are stitched together with **challenge tokens**: `ChallengeStore` (`src/auth/challenge-store.ts`) stores the provider session under `challenge:{sha256(token)}` for 5 minutes and consumes it on first use. Failed attempts count in `SignInThrottle` (`throttle:otp:{email}`): five failures lock the identifier for 15 minutes with 429 `too_many_attempts`. Unknown addresses go through the same timing (`neutral-delay.ts`) and receive a dummy challenge so responses do not reveal existence.
 
+**Cognito's EMAIL_OTP code is eight digits**, unlike the six-digit codes it issues for sign-up confirmation, forgot-password and authenticator apps, and unlike the stub provider's `FAKE_IDP_FIXED_OTP`. `EMAIL_OTP_MIN_LENGTH` and `EMAIL_OTP_MAX_LENGTH` in `packages/contracts/src/auth.ts` hold that range; `EmailOtpVerifyRequestSchema`, `OtpInput` and the mobile field all read it. Before 2026-10-24 every one of them hard-coded six, so the input truncated the real code, the user could not type the last two digits, and Cognito answered `CodeMismatchException`.
+
+`ChallengeStore.consume()` runs **before** the code is checked, so a single mistyped digit ends the challenge. The first wrong code reaches Cognito, comes back as `CodeMismatchException` and is returned as 401 `invalid_code`; every later attempt with the same token returns 401 `invalid_challenge` in about two milliseconds without an AWS call, even when the code is now correct. The user has to go back and request a new code. Cognito itself is more forgiving: replaying the same `Session` after a wrong code is still answered with `CodeMismatchException` rather than a rejected session, so the provider does not force the restart, the single-use token does. Reusing the challenge on `CodeMismatchException` with a bounded attempt counter is listed in section 21.
+
 **Employees: email code.** `POST /auth/email-otp/start` → `{ challengeToken }`; `POST /auth/email-otp/verify` with `{ challengeToken, code }` → tokens → `IdentityResolutionService.resolveIdentityAndCreateSession()` maps the token `sub` to an `external_identities` row, loads the principal, creates the Redis session, sets the cookies and returns `{ principal, effectiveActions }`.
 
 **Experts and staff: password and authenticator.** `POST /auth/password` returns either the signed-in principal or `{ step, challengeToken }` where `step` is `new_password`, `totp` or `totp_enrol`. `POST /auth/challenge` with `{ challengeToken, response }` answers one step and returns either the next `{ step, challengeToken }` (200) or the principal. For `totp_enrol` the client first calls `POST /auth/totp/enrol` with the challenge token to receive the `otpauth://` URI and a rotated challenge token, then `POST /auth/challenge` with the authenticator code; the API verifies the software token and completes `MFA_SETUP` in one step (`sign-in.service.ts`, `totp.service.ts`). `POST /auth/totp/confirm` is the signed-in variant for adding an authenticator later.
@@ -166,6 +173,8 @@ Every sign-in writes `auth.sign_in.succeeded` or `auth.sign_in.failed` through `
 Cookies (`session-cookie.ts`): `__Host-nestself_session` and `__Host-nestself_csrf`, `Secure`, `HttpOnly` for the session, `SameSite=Lax`, `Path=/`. `SESSION_COOKIE_INSECURE_DEV=true` drops the `__Host-` prefix and `Secure` for plain-HTTP localhost. The CSRF cookie is readable by JavaScript on purpose: the API client copies it into `X-CSRF-Token`.
 
 Lifetimes (`session-policy.ts`) depend on population and context, for example employee personal 30 minutes idle and 12 hours absolute, employee organization 60 minutes and 8 hours, expert 8 hours and 7 days, staff 60 minutes and 8 hours; `SESSION_LIFETIME_OVERRIDES` (JSON) adjusts them per environment within the 30-day idle and 90-day absolute caps. Each request extends the idle window; the absolute expiry never moves. The session id is regenerated at sign-in and will be again after step-up.
+
+**No ETags on API responses.** `main.ts` calls `set('etag', false)` on the Express instance. Express otherwise emits a weak ETag for every JSON response, the browser revalidates with `If-None-Match`, and the API answers `304 Not Modified` with no body. `@nestself/api-client` treats anything outside 2xx as a failure (`if (!response.ok)`), so a page refresh turned a live session into an `ApiError` with status 304 and bounced the user to `/sign-in` while the Redis session was still healthy. These responses are per-principal and already `Cache-Control: no-store`; they must never be revalidated.
 
 Access-token refresh happens lazily: `ensureFreshAccessToken` refreshes through the identity provider under `lock:session:{hash}` so concurrent requests do not race; a failed refresh destroys the session.
 
@@ -270,6 +279,43 @@ The step-by-step account setup, credentials, IAM permissions and every environme
 
 The API process needs AWS credentials for the Cognito admin calls (`AdminInitiateAuth`, `AdminRespondToAuthChallenge`, `AdminCreateUser`, `AdminDeleteUser`, `AdminDisableUser`, `AdminEnableUser`, `AdminGetUser`, `AdminSetUserPassword`, `AdminUserGlobalSignOut`, `GetTokensFromRefreshToken`, `RevokeToken`, `ListUsers`, `DescribeUserPoolClient`) and, when `SES_FROM_EMAIL` is set, `ses:SendEmail`. In AWS these come from the ECS task role (`infra/cdk/lib/constructs/ecs-task-roles.ts`); locally from the default credential chain (`AWS_PROFILE`). The compute stack's `worker` service runs `node dist/worker/main.js` (section 14) with the worker task role.
 
+### 17.1 The dev pool as deployed
+
+First deployed 2026-10-24 into a dedicated account. Current coordinates:
+
+| | |
+|---|---|
+| Account / region | `634972095709` / `eu-central-1` |
+| Stacks | `CDKToolkit`, `NestSelf-dev-Auth` |
+| User pool | `eu-central-1_g6OGYONQ0`, hosted domain `nestself-dev` |
+| App clients | `nestself-web-dev`, `nestself-mobile-dev`, `nestself-m2m-dev` |
+| Secrets | `nestself-dev/cognito/web-client-secret`, `nestself-dev/api/session-encryption-key` |
+| Triggers | `nestself-dev-cognito-custom-message`, `nestself-dev-cognito-pre-sign-up` |
+
+Three things about this stack are easy to get wrong.
+
+**The username is the email address.** `auth-stack.ts` sets `signInAliases: { email: true }` without `username: true`, which CDK compiles to `UsernameAttributes: ['email']`, not `AliasAttributes: ['email']`. `AdminCreateUser` therefore **requires** an email as `--username` and rejects a plain handle with `Username should be an email`. Cognito then generates the internal username itself, and it is the same UUID as `sub`, so a manually linked `external_identities` row gets that one value in both `subject` and `cognito_username`:
+
+```bash
+aws cognito-idp admin-create-user --user-pool-id eu-central-1_g6OGYONQ0   --username <address> --user-attributes Name=email,Value=<address> Name=email_verified,Value=true   --message-action SUPPRESS
+```
+
+`--message-action SUPPRESS` keeps AWS from sending anything at creation time; the first mail is the sign-in code. The `PreSignUp` trigger refuses self sign-up but does not block `AdminCreateUser`.
+
+**`USER_ID_FOR_SRP` is absent in the EMAIL_OTP challenge.** `AdminInitiateAuth` with `PREFERRED_CHALLENGE: EMAIL_OTP` returns only `CODE_DELIVERY_DELIVERY_MEDIUM` and `CODE_DELIVERY_DESTINATION` in `ChallengeParameters`. `startEmailOtp` reads `ChallengeParameters['USER_ID_FOR_SRP'] ?? input.email`, so the fallback always wins and the email is the username in both the initiate and the respond call. That keeps `SECRET_HASH` consistent across the two calls, which is what the confidential web client requires.
+
+**The email code is eight digits, not six.** See section 6. Anything that validates or caps the length must use `EMAIL_OTP_MIN_LENGTH`/`EMAIL_OTP_MAX_LENGTH`; a six-digit `maxLength` silently truncates and produces `CodeMismatchException`.
+
+**`AWS_PROFILE` in `apps/api/.env` needs the ConfigModule merge.** `envSchema` is a plain `z.object`, which strips undeclared keys, and ConfigModule's `validate:` branch assigns only what the function returns back onto `process.env` (its `validationSchema:` branch merges them back, `validate:` does not). Before 2026-10-24 that silently dropped `AWS_PROFILE`, the SDK fell back to the machine's default profile, and the Cognito calls failed with a cross-account `AccessDenied` that still named the correct pool id. `validateEnv` now returns `{ ...config, ...appEnv }`, which also preserves `AWS_ACCESS_KEY_ID`, `AWS_SESSION_TOKEN`, `HTTPS_PROXY` and `NODE_EXTRA_CA_CERTS`.
+
+Tearing the pool down takes three calls in order, because the stack enables deletion protection and Cognito refuses to drop a pool that still has a domain:
+
+```bash
+aws cognito-idp update-user-pool --user-pool-id <id> --deletion-protection INACTIVE
+aws cognito-idp delete-user-pool-domain --user-pool-id <id> --domain <prefix>
+aws cognito-idp delete-user-pool --user-pool-id <id>
+```
+
 ## 18. Configuration reference
 
 Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
@@ -291,6 +337,9 @@ Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
 | `JOBS_TIMEZONE` | Worker process: IANA timezone of the nightly job schedules (default `Europe/Belgrade`) |
 | `FAKE_IDP_FIXED_OTP` | Stub mode: an always-accepted six-digit code |
 | `TEST_DATABASE_URL` | Integration tests; suites create `<name>_schema`, `<name>_auth`, ... databases |
+| `AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, `AWS_SESSION_TOKEN`, `HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS` | Not declared in `envSchema`, but passed through to `process.env` for the AWS SDK and the HTTP stack; see the merge in `validateEnv` and section 17.1 |
+
+Anything not declared in `envSchema` is still forwarded to `process.env`, because `validateEnv` returns `{ ...config, ...appEnv }`. Removing that spread re-breaks every library that reads `process.env` directly instead of through `ConfigService`.
 
 Redis keys and TTLs are listed in `apps/api/src/redis/redis-keys.ts`.
 
@@ -327,3 +376,7 @@ Phase 1 is complete; `docs/tasks/auth/phase-2-readiness.md` lists the phase 2 wo
 - **Compliance track** before the first real employee signs in: privacy notices, processing agreement, breach procedure, data-subject-rights endpoints (T-C.4).
 - **Legacy community tables** (`posts`, `polls`, `poll_options`, `poll_votes`) and `legacy_teams` are now tenant-isolated but still deprecated; phase 2 retires them with the legacy team model (strategy Appendix A).
 - **Mobile authentication strength** is reported as `email_otp` without a second factor because that is the only first factor the mobile client allows; it must be revisited when mobile gains passkeys or SSO.
+- **One mistyped code ends the email-code challenge.** `emailOtpVerify` consumes the challenge token before asking Cognito, so the first wrong digit forces a full restart and every retry answers 401 `invalid_challenge` without an AWS call, which reads like a broken endpoint rather than a wrong code (section 6). Cognito accepts a replayed `Session` after `CodeMismatchException`, so the fix is to re-store the challenge on that error with a per-challenge attempt counter, bounded well below the existing five-failure `SignInThrottle` lock.
+- **The email code length is AWS's, not ours.** Cognito's managed `EMAIL_OTP` challenge always sends eight digits: there is no pool setting, no CDK property and no CLI parameter for it (verified 2026-10-24 against `describe-user-pool`, `update-user-pool` and `UserPoolProps`). Shortening it to four or six means leaving the managed flow for `CUSTOM_AUTH` with Define, Create and Verify Auth Challenge triggers, where the code, its delivery through SES, its expiry and its attempt counter all become ours. That is a deliberate trade: shorter codes are friendlier to type and materially weaker (four digits is 10,000 combinations), and the throttle would have to tighten to compensate. Not started.
+- **`GET /api/health` reports only the database.** `health.controller.ts` registers `DbHealthIndicator` alone, so a dead Redis is invisible there even though cognito mode refuses to start without it; the only signal is the `Connected to Redis` line at boot. A Redis indicator belongs in the same check.
+- **The CustomMessage locale is always the default.** `emailOtpStart` calls `startEmailOtp({ email })` without a locale, so `ClientMetadata` is empty and the trigger falls back to `sr-Latn` for every sign-in code unless the user has a `custom:locale` attribute, regardless of the language chosen on the sign-in screen.

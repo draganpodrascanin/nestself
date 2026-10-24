@@ -17,6 +17,14 @@ async function bootstrap() {
 
   app.use(helmet());
 
+  // Express sends a weak ETag on every JSON response, so a browser revalidates
+  // with If-None-Match and gets a bodyless 304. `@nestself/api-client` treats
+  // anything outside 2xx as a failure (`if (!response.ok)`), so a refresh turned
+  // a live session into an ApiError and bounced the user to /sign-in. Responses
+  // here are per-principal and already Cache-Control: no-store; they must never
+  // be revalidated by ETag.
+  app.getHttpAdapter().getInstance().set('etag', false);
+
   // Trust proxy for X-Forwarded-For when behind a load balancer
   const trustProxyHops = config.get<number>('TRUST_PROXY_HOPS', 0);
   if (trustProxyHops > 0) {

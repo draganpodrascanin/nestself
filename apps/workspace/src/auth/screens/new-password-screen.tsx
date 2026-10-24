@@ -23,6 +23,8 @@ interface Props {
   /** Called when the challenge completed the sign-in (no second factor required). */
   onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
+  /** Error raised by the parent sign-in page; rendered together with local validation. */
+  error?: string | null;
 }
 
 export function NewPasswordScreen({
@@ -31,12 +33,14 @@ export function NewPasswordScreen({
   onChallengeRequired,
   onSuccess,
   onError,
+  error: externalError = null,
 }: Props) {
   const { t } = useTranslation('auth');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayError = externalError ?? error;
   const errorRef = useRef<FormErrorSummaryHandle>(null);
 
   const handleSubmit = useCallback(
@@ -75,8 +79,8 @@ export function NewPasswordScreen({
     [password, confirm, challengeToken, authApi, onChallengeRequired, onSuccess, onError, t],
   );
 
-  const errors = error
-    ? [{ id: 'new-password', label: t('newPassword.newPasswordLabel'), message: error }]
+  const errors = displayError
+    ? [{ id: 'new-password', label: t('newPassword.newPasswordLabel'), message: displayError }]
     : [];
 
   return (
@@ -108,11 +112,11 @@ export function NewPasswordScreen({
           onChange={(e) => setPassword(e.target.value)}
           showLabel={t('a11y.showPassword')}
           hideLabel={t('a11y.hidePassword')}
-          aria-describedby={error ? 'new-password-error' : undefined}
-          aria-invalid={!!error}
+          aria-describedby={displayError ? 'new-password-error' : undefined}
+          aria-invalid={!!displayError}
         />
-        {error ? (
-          <p id="new-password-error" className="type-metadata text-danger">{error}</p>
+        {displayError ? (
+          <p id="new-password-error" className="type-metadata text-danger">{displayError}</p>
         ) : null}
       </div>
 

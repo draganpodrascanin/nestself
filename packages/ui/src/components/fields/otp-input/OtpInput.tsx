@@ -9,10 +9,16 @@ export interface OtpInputProps
     'type' | 'inputMode' | 'maxLength' | 'autoComplete' | 'pattern'
   > {
   length?: number;
+  /** Shortest accepted code; defaults to `length` (an exact-length field). */
+  minLength?: number;
 }
 
 export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(
-  function OtpInput({ length = 6, className, onChange, onPaste, ...rest }, ref) {
+  function OtpInput(
+    { length = 6, minLength, className, onChange, onPaste, ...rest },
+    ref,
+  ) {
+    const min = minLength ?? length;
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         // Strip non-digits on regular typing
@@ -50,7 +56,7 @@ export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(
         inputMode="numeric"
         autoComplete="one-time-code"
         maxLength={length}
-        pattern={`[0-9]{${length}}`}
+        pattern={min === length ? `[0-9]{${length}}` : `[0-9]{${min},${length}}`}
         className={cn(
           'w-full px-3 min-h-12 rounded-control border border-border-control bg-surface text-text text-center tracking-[0.3em] font-[var(--font-weight-label)]',
           'placeholder:text-text-secondary placeholder:tracking-normal',

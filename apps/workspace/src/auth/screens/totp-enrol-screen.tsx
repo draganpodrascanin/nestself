@@ -25,6 +25,8 @@ interface Props {
   authApi: AuthApi;
   onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
+  /** Error raised by the parent sign-in page; rendered together with local validation. */
+  error?: string | null;
 }
 
 /** Extracts the secret from an otpauth:// URI for manual entry. */
@@ -42,11 +44,13 @@ export function TotpEnrolScreen({
   authApi,
   onSuccess,
   onError,
+  error: externalError = null,
 }: Props) {
   const { t } = useTranslation('auth');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayError = externalError ?? error;
   const [secretUri, setSecretUri] = useState<string | null>(null);
   // The enrol call rotates the challengeToken; the rotated one completes the step.
   const [activeToken, setActiveToken] = useState<string>(challengeToken);
@@ -106,8 +110,8 @@ export function TotpEnrolScreen({
 
   const manualKey = secretUri ? extractSecret(secretUri) : '';
 
-  const errors = error
-    ? [{ id: 'enrol-code', label: t('totpEnrol.codeLabel'), message: error }]
+  const errors = displayError
+    ? [{ id: 'enrol-code', label: t('totpEnrol.codeLabel'), message: displayError }]
     : [];
 
   return (
@@ -149,11 +153,11 @@ export function TotpEnrolScreen({
           id="enrol-code-input"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          aria-describedby={error ? 'enrol-code-error' : undefined}
-          aria-invalid={!!error}
+          aria-describedby={displayError ? 'enrol-code-error' : undefined}
+          aria-invalid={!!displayError}
         />
-        {error ? (
-          <p id="enrol-code-error" className="type-metadata text-danger">{error}</p>
+        {displayError ? (
+          <p id="enrol-code-error" className="type-metadata text-danger">{displayError}</p>
         ) : null}
       </div>
 

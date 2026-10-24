@@ -53,6 +53,8 @@ All variables are listed in `.env.example` at the repository root; each app has 
 
 The API process also needs AWS credentials (task role in ECS, `AWS_PROFILE` or access keys locally) for the Cognito admin calls and, if `SES_FROM_EMAIL` is set, for SES. The IAM actions are listed in `CDK-setup.md`.
 
+These AWS variables are not declared in `envSchema` and reach the SDK only because `validateEnv` spreads the raw config before the parsed one (`{ ...config, ...appEnv }`). ConfigModule's `validate:` branch writes back exactly what the function returns, unlike its `validationSchema:` branch which merges stripped keys itself, so dropping that spread makes `AWS_PROFILE` in `apps/api/.env` a silent no-op and the SDK falls through to the machine's default profile.
+
 ### Origins and email
 
 | Variable | Meaning | Default |

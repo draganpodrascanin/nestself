@@ -93,6 +93,13 @@ export function SignInPage({ returnPath }: Props) {
           setError(t('error.invalidCode'));
           return;
         }
+        // The challenge token is single-use and is consumed before the code is
+        // checked, so a wrong digit ends it. Tell the user to ask for a new code
+        // instead of leaking the API's English "Challenge expired or invalid".
+        if (err.code === 'invalid_challenge') {
+          setError(t('error.challengeExpired'));
+          return;
+        }
         if (err.code === 'invalid_credentials') {
           setError(t('error.invalidCredentials'));
           return;
@@ -152,6 +159,7 @@ export function SignInPage({ returnPath }: Props) {
           authApi={authApi}
           onSuccess={handleSuccess}
           onError={handleApiError}
+          error={error}
           onBack={() => {
             setScreen({ kind: 'identifier' });
             setError(null);
@@ -190,6 +198,7 @@ export function SignInPage({ returnPath }: Props) {
           authApi={authApi}
           onSuccess={handleSuccess}
           onError={handleApiError}
+          error={error}
         />
       );
 
@@ -200,6 +209,7 @@ export function SignInPage({ returnPath }: Props) {
           authApi={authApi}
           onSuccess={handleSuccess}
           onError={handleApiError}
+          error={error}
         />
       );
 
@@ -217,6 +227,7 @@ export function SignInPage({ returnPath }: Props) {
               setScreen({ kind: 'totp_enrol', challengeToken: token });
           }}
           onError={handleApiError}
+          error={error}
         />
       );
 

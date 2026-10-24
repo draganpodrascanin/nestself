@@ -12,6 +12,17 @@ import { LocaleSchema } from './locale.ts';
 
 const emailField = z.string().trim().toLowerCase().email();
 
+/**
+ * Cognito's EMAIL_OTP challenge (the USER_AUTH flow) delivers an EIGHT digit
+ * code, unlike the six digit codes it uses for sign-up confirmation, forgot
+ * password and authenticator apps. The stub identity provider still issues six
+ * (`FAKE_IDP_FIXED_OTP`), so the email code accepts the whole range and lets
+ * the provider decide. Hard-coding six here truncated the real code in the
+ * input and produced a CodeMismatchException that read as a broken endpoint.
+ */
+export const EMAIL_OTP_MIN_LENGTH = 6;
+export const EMAIL_OTP_MAX_LENGTH = 8;
+
 // ---------------------------------------------------------------------------
 // Sign-in schemas (5.1)
 // ---------------------------------------------------------------------------
@@ -41,7 +52,7 @@ export type EmailOtpStartResponse = z.infer<typeof EmailOtpStartResponseSchema>;
 
 export const EmailOtpVerifyRequestSchema = z.object({
   challengeToken: z.string().min(1),
-  code: z.string().min(6).max(6),
+  code: z.string().min(EMAIL_OTP_MIN_LENGTH).max(EMAIL_OTP_MAX_LENGTH),
 });
 export type EmailOtpVerifyRequest = z.infer<typeof EmailOtpVerifyRequestSchema>;
 

@@ -12,6 +12,24 @@ First-time setup of an AWS account, credentials, IAM permissions and the environ
 | `staging` | dedicated | All eight stacks. Custom domain (follow-up), WAF, SES, `RETAIN`. |
 | `production` | dedicated | All eight stacks. Custom domain, WAF, SES, multi-AZ RDS, VPC flow logs, `RETAIN`. |
 
+## Deployed environments
+
+| Stage | Account | Status |
+|---|---|---|
+| `dev` | `634972095709` | **Live since 2026-10-24.** `CDKToolkit` + `NestSelf-dev-Auth`. Pool `eu-central-1_g6OGYONQ0`, hosted domain `nestself-dev`, clients `nestself-web-dev` / `nestself-mobile-dev` / `nestself-m2m-dev`, secrets `nestself-dev/cognito/web-client-secret` and `nestself-dev/api/session-encryption-key`, triggers `nestself-dev-cognito-custom-message` and `nestself-dev-cognito-pre-sign-up`. |
+| `staging` | not created | Section "Manual steps for staging and production" below. |
+| `production` | not created | Same. |
+
+Credentials for dev come from the `nestself-dev` profile, which a `chpwd` hook activates inside the repository. **Never export `AWS_PROFILE` globally**: the machine's `[default]` profile is an unrelated account, and the resulting `AccessDenied` names the correct pool id with the wrong account, which reads like a pool permission problem. Check with `aws sts get-caller-identity` before deploying; it must print `634972095709`. The repository rule is in `CLAUDE.md`, the first-time setup in `CDK-setup.md`.
+
+Teardown is three calls in order, because the stack enables deletion protection and Cognito refuses to drop a pool that still owns a domain:
+
+```bash
+aws cognito-idp update-user-pool --user-pool-id <id> --deletion-protection INACTIVE
+aws cognito-idp delete-user-pool-domain --user-pool-id <id> --domain <prefix>
+aws cognito-idp delete-user-pool --user-pool-id <id>
+```
+
 ## Stacks
 
 | Stack | Key resources | Deployed in |

@@ -20,13 +20,16 @@ interface Props {
   authApi: AuthApi;
   onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
+  /** Error raised by the parent sign-in page; rendered together with local validation. */
+  error?: string | null;
 }
 
-export function TotpScreen({ challengeToken, authApi, onSuccess, onError }: Props) {
+export function TotpScreen({ challengeToken, authApi, onSuccess, onError, error: externalError = null }: Props) {
   const { t } = useTranslation('auth');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayError = externalError ?? error;
   const errorRef = useRef<FormErrorSummaryHandle>(null);
 
   const handleSubmit = useCallback(
@@ -53,8 +56,8 @@ export function TotpScreen({ challengeToken, authApi, onSuccess, onError }: Prop
     [code, challengeToken, authApi, onSuccess, onError, t],
   );
 
-  const errors = error
-    ? [{ id: 'totp-code', label: t('totp.codeLabel'), message: error }]
+  const errors = displayError
+    ? [{ id: 'totp-code', label: t('totp.codeLabel'), message: displayError }]
     : [];
 
   return (
@@ -82,11 +85,11 @@ export function TotpScreen({ challengeToken, authApi, onSuccess, onError }: Prop
           id="totp-code-input"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          aria-describedby={error ? 'totp-code-error' : undefined}
-          aria-invalid={!!error}
+          aria-describedby={displayError ? 'totp-code-error' : undefined}
+          aria-invalid={!!displayError}
         />
-        {error ? (
-          <p id="totp-code-error" className="type-metadata text-danger">{error}</p>
+        {displayError ? (
+          <p id="totp-code-error" className="type-metadata text-danger">{displayError}</p>
         ) : null}
       </div>
 

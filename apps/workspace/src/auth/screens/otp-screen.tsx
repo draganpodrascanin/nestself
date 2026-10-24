@@ -15,6 +15,7 @@ import {
 } from '@nestself/ui';
 import type { FormErrorSummaryHandle } from '@nestself/ui';
 import type { AuthApi } from '@nestself/api-client';
+import { EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@nestself/contracts';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -24,6 +25,8 @@ interface Props {
   authApi: AuthApi;
   onSuccess: () => Promise<void>;
   onError: (err: unknown) => void;
+  /** Error raised by the parent sign-in page; rendered together with local validation. */
+  error?: string | null;
   onBack: () => void;
 }
 
@@ -33,6 +36,7 @@ export function OtpScreen({
   authApi,
   onSuccess,
   onError,
+  error: externalError = null,
   onBack,
 }: Props) {
   const { t } = useTranslation('auth');
@@ -40,6 +44,7 @@ export function OtpScreen({
   const [token, setToken] = useState(challengeToken);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayError = externalError ?? error;
   const [countdown, setCountdown] = useState(RESEND_COOLDOWN_SECONDS);
   const errorRef = useRef<FormErrorSummaryHandle>(null);
 
@@ -55,7 +60,7 @@ export function OtpScreen({
       e.preventDefault();
       setError(null);
 
-      if (code.length !== 6) {
+      if (code.length < EMAIL_OTP_MIN_LENGTH) {
         setError(t('error.invalidCode'));
         errorRef.current?.focus();
         return;
@@ -86,8 +91,8 @@ export function OtpScreen({
     }
   }, [authApi, email, onError]);
 
-  const errors = error
-    ? [{ id: 'otp-code', label: t('otp.codeLabel'), message: error }]
+  const errors = displayError
+    ? [{ id: 'otp-code', label: t('otp.codeLabel'), message: displayError }]
     : [];
 
   return (
@@ -112,14 +117,16 @@ export function OtpScreen({
           <span className="ml-0.5 text-danger" aria-hidden>*</span>
         </label>
         <OtpInput
+          length={EMAIL_OTP_MAX_LENGTH}
+          minLength={EMAIL_OTP_MIN_LENGTH}
           id="otp-code-input"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          aria-describedby={error ? 'otp-code-error' : undefined}
-          aria-invalid={!!error}
+          aria-describedby={displayError ? 'otp-code-error' : undefined}
+          aria-invalid={!!displayError}
         />
-        {error ? (
-          <p id="otp-code-error" className="type-metadata text-danger">{error}</p>
+        {displayError ? (
+          <p id="otp-code-error" className="type-metadata text-danger">{displayError}</p>
         ) : null}
       </div>
 

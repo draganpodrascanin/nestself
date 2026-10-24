@@ -33,7 +33,7 @@ NestSelf serves five populations from one platform: employees of client companie
 
 ## How sign-in works
 
-- **Employee**: enter email → receive a code → enter it → session cookie. Five wrong codes lock the address for 15 minutes.
+- **Employee**: enter email → receive an **eight digit** code (Cognito's length, not configurable) → enter it → session cookie. Five wrong codes lock the address for 15 minutes, and one wrong code already ends that challenge: the token is single-use, so a retry answers `invalid_challenge` and the user must request a new code (`implementation.md`, sections 6 and 21).
 - **Expert or staff**: enter email → password → authenticator code (first time: scan a QR code) → session cookie. Invited staff set a password first.
 - **Invitation**: HR invites by email; the link previews the organization name and activates the membership on acceptance, then runs the matching sign-in.
 - **Mobile**: email code directly against Cognito; the app refreshes tokens itself and uses short-lived tickets to open WebSockets.
@@ -64,7 +64,9 @@ pnpm --filter @nestself/api dev
 pnpm --filter @nestself/api worker:dev   # optional: nightly jobs, needs REDIS_URL
 ```
 
-Stub mode uses a fake identity provider pre-loaded with the sample people. Employees (`user_jovan@example.com`, `user_ivana@example.com`, `user_stefan@example.com`) sign in with the code printed in the API log; staff and experts (`user_nikola@example.com`, `user_milica@example.com`) use the password `Nestself-dev-1234!` and enrol an authenticator on first sign-in. Set `VITE_DATA_SOURCE=api` in a web app's `.env.local` to use the real screens.
+Stub mode uses a fake identity provider pre-loaded with the sample people. Employees (`user_jovan@example.com`, `user_ivana@example.com`, `user_stefan@example.com`, `user_dragan@example.com`) sign in with the code printed in the API log; staff and experts (`user_nikola@example.com`, `user_milica@example.com`) use the password `Nestself-dev-1234!` and enrol an authenticator on first sign-in. Set `VITE_DATA_SOURCE=api` in a web app's `.env.local` to use the real screens. Skip `pnpm db:up` when PostgreSQL and Redis already run outside Docker; the Compose file claims port 6379 and fails against a local Redis or Valkey.
+
+A real Cognito dev pool exists since 2026-10-24 (`eu-central-1_g6OGYONQ0` in account `634972095709`). Set `AUTH_MODE=cognito` with the values `infra/cdk/scripts/env-from-outputs.mjs dev` prints, and note that pool usernames are email addresses, not handles. `implementation.md` section 17.1 has the deployed coordinates and the three traps worth knowing before touching it.
 
 ## Glossary
 
