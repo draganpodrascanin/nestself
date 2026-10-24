@@ -212,6 +212,22 @@ export const GrantPreviewResponseSchema = z.object({
 });
 export type GrantPreviewResponse = z.infer<typeof GrantPreviewResponseSchema>;
 
+// --- Ownership transfer (owner model, 2026-10-24) ---
+export const OwnershipTransferRequestSchema = z.object({
+  newOwnerUserId: z.string().min(1),
+});
+export type OwnershipTransferRequest = z.infer<typeof OwnershipTransferRequestSchema>;
+
+/**
+ * `revokedGrantId` is the previous owner's `employer_owner` grant. It is null
+ * only on the staff route when the organization had no owner yet.
+ */
+export const OwnershipTransferResponseSchema = z.object({
+  revokedGrantId: z.string().min(1).nullable(),
+  createdGrant: GrantResponseSchema,
+});
+export type OwnershipTransferResponse = z.infer<typeof OwnershipTransferResponseSchema>;
+
 // --- Approval authorities ---
 export const ApprovalAuthorityCreateRequestSchema = z.object({
   userId: z.string().min(1),

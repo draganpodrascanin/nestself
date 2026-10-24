@@ -13,6 +13,8 @@ import {
   ApprovalAuthorityListResponseSchema,
   GrantListResponseSchema,
   GrantRevokeRequestSchema,
+  OwnershipTransferRequestSchema,
+  OwnershipTransferResponseSchema,
 } from './org-admin.ts';
 import { AUTH_ERROR_CODES } from './auth.ts';
 
@@ -183,7 +185,31 @@ describe('grant administration', () => {
     expect(GrantListResponseSchema.safeParse({}).success).toBe(false);
   });
 
+  it('OwnershipTransferRequestSchema requires a non-empty newOwnerUserId', () => {
+    expect(OwnershipTransferRequestSchema.parse({ newOwnerUserId: 'user_stefan' })).toEqual({
+      newOwnerUserId: 'user_stefan',
+    });
+    expect(OwnershipTransferRequestSchema.safeParse({}).success).toBe(false);
+    expect(OwnershipTransferRequestSchema.safeParse({ newOwnerUserId: '' }).success).toBe(false);
+  });
+
+  it('OwnershipTransferResponseSchema carries the revoked grant id and the created grant', () => {
+    const parsed = OwnershipTransferResponseSchema.parse({
+      revokedGrantId: 'grant_old',
+      createdGrant: { ...grant, templateKey: 'employer_owner' },
+    });
+    expect(parsed.revokedGrantId).toBe('grant_old');
+    expect(parsed.createdGrant.templateKey).toBe('employer_owner');
+    expect(OwnershipTransferResponseSchema.safeParse({ createdGrant: grant }).success).toBe(false);
+    expect(OwnershipTransferResponseSchema.safeParse({ revokedGrantId: 'g' }).success).toBe(false);
+  });
+
+  it('OwnershipTransferResponseSchema accepts a null revokedGrantId (staff path, no previous owner)', () => {
+    expect(OwnershipTransferResponseSchema.safeParse({ revokedGrantId: null, createdGrant: grant }).success).toBe(true);
+  });
+
   it('AUTH_ERROR_CODES includes the grant administration codes', () => {
+    expect(AUTH_ERROR_CODES).toContain('owner_exists');
     expect(AUTH_ERROR_CODES).toContain('subject_not_member');
     expect(AUTH_ERROR_CODES).toContain('template_inactive');
     expect(AUTH_ERROR_CODES).toContain('missing_conditions');
