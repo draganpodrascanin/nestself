@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ApiError } from '@nestself/api-client';
-import { withStepUp } from './with-step-up';
+import { withStepUp, StepUpCancelledError } from './with-step-up';
 
 function stepUpRequired(): ApiError {
   return new ApiError({
@@ -22,12 +22,11 @@ describe('withStepUp', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it('rethrows the step-up error when stepUp() resolves false', async () => {
-    const err = stepUpRequired();
-    const fn = vi.fn().mockRejectedValue(err);
+  it('throws StepUpCancelledError when stepUp() resolves false', async () => {
+    const fn = vi.fn().mockRejectedValue(stepUpRequired());
     const stepUp = vi.fn().mockResolvedValue(false);
 
-    await expect(withStepUp(stepUp, fn)).rejects.toBe(err);
+    await expect(withStepUp(stepUp, fn)).rejects.toBeInstanceOf(StepUpCancelledError);
     expect(fn).toHaveBeenCalledTimes(1);
   });
 

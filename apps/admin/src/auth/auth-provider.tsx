@@ -14,6 +14,11 @@ import { AuthContext } from './auth-context';
 import { StepUpDialog } from './step-up-dialog';
 import type { AuthStatus } from './types';
 
+interface StepUpEntry {
+  promise: Promise<boolean>;
+  resolve: (ok: boolean) => void;
+}
+
 interface Props {
   client: ApiClient;
   children: ReactNode;
@@ -95,29 +100,32 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     [authApi, applyMe],
   );
 
-  const [pendingStepUp, setPendingStepUp] = useState<{
-    resolve: (ok: boolean) => void;
-  } | null>(null);
-  /** Shared by concurrent callers so two failing requests open one dialog. */
-  const pendingPromiseRef = useRef<Promise<boolean> | null>(null);
+  /** One entry per step-up request; concurrent callers share the same entry. */
+  const [pendingStepUp, setPendingStepUp] = useState<StepUpEntry | null>(null);
+  const pendingStepUpRef = useRef<StepUpEntry | null>(null);
 
   const stepUp = useCallback(() => {
-    if (!pendingPromiseRef.current) {
-      pendingPromiseRef.current = new Promise<boolean>((resolve) => {
-        setPendingStepUp({ resolve });
+    if (!pendingStepUpRef.current) {
+      let resolve!: (ok: boolean) => void;
+      const promise = new Promise<boolean>((r) => {
+        resolve = r;
       });
+      const entry = { promise, resolve };
+      pendingStepUpRef.current = entry;
+      setPendingStepUp(entry);
     }
-    return pendingPromiseRef.current;
+    return pendingStepUpRef.current.promise;
   }, []);
 
-  const finishStepUp = useCallback(
-    (verified: boolean) => {
-      pendingStepUp?.resolve(verified);
-      pendingPromiseRef.current = null;
-      setPendingStepUp(null);
-    },
-    [pendingStepUp],
-  );
+  /**
+   * Settles one specific entry. A late callback from a dialog that was already
+   * cancelled (its verify still in flight) must not close a newer step-up.
+   */
+  const finishStepUp = useCallback((entry: StepUpEntry, verified: boolean) => {
+    entry.resolve(verified);
+    if (pendingStepUpRef.current === entry) pendingStepUpRef.current = null;
+    setPendingStepUp((current) => (current === entry ? null : current));
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -149,8 +157,8 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
         <StepUpDialog
           open
           authApi={authApi}
-          onVerified={() => finishStepUp(true)}
-          onCancel={() => finishStepUp(false)}
+          onVerified={() => finishStepUp(pendingStepUp, true)}
+          onCancel={() => finishStepUp(pendingStepUp, false)}
         />
       ) : null}
     </AuthContext>
