@@ -95,7 +95,7 @@
     "notConnected": "API not connected (sample mode)"
   },
   "access": {
-    "sampleNote": "Sample mode: assigning and revoking are turned off. Nothing is created, changed or revoked.",
+    "sampleNote": "Sample mode: assigning, revoking and transferring ownership are turned off. Nothing is created, changed or revoked.",
     "loading": "Loading access",
     "empty": "No grants in this organisation yet.",
     "org": {
@@ -205,6 +205,17 @@
       "cancel": "Keep grant",
       "success": "Grant revoked."
     },
+    "transfer": {
+      "open": "Transfer ownership",
+      "title": "Transfer ownership",
+      "description": "Choose the active member who becomes the owner of this organisation.",
+      "member": "New owner",
+      "currentOwner": "{{name}} loses owner rights as soon as the transfer completes. Grants delegated from them move to the new owner.",
+      "noOwner": "This organisation has no owner yet. The member you choose becomes its first owner.",
+      "submit": "Transfer ownership",
+      "cancel": "Cancel",
+      "success": "Ownership transferred."
+    },
     "reason": {
       "label": "Reason",
       "hint": "Between 3 and 500 characters. The reason is kept in the audit log."
@@ -235,7 +246,9 @@
       "notFound": "This item no longer exists. Refresh the list and try again.",
       "userNotFound": "No user with this ID exists.",
       "forbidden": "Your account is not allowed to do this.",
-      "userIdRequired": "Enter a user ID."
+      "userIdRequired": "Enter a user ID.",
+      "alreadyOwner": "This person is already the owner of the organisation.",
+      "ownerExists": "This organisation already has an owner. Transfer ownership instead."
     }
   }
 }

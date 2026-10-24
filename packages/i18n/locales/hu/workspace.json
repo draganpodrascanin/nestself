@@ -123,7 +123,7 @@
     "nav": "Hozzáférés",
     "title": "Hozzáférés-kezelés",
     "lead": "Ki melyik jogosultságsablonnal rendelkezik a szervezetedben, és mire jogosítja fel az egyes sablon.",
-    "sampleNote": "Mintaadatok: a kiosztás, a delegálás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
+    "sampleNote": "Mintaadatok: a kiosztás, a delegálás, a visszavonás és a tulajdonjog átruházása ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
     "loading": "Hozzáférés betöltése",
     "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
     "noOrganization": "A hozzáférés-kezeléshez a fiókodnak pontosan egy aktív szervezeti tagsággal kell rendelkeznie.",
@@ -224,6 +224,16 @@
       "cancel": "Mégse",
       "success": "A hozzáférés delegálva."
     },
+    "transfer": {
+      "open": "Tulajdonjog átruházása",
+      "title": "Tulajdonjog átruházása",
+      "description": "Válaszd ki azt az aktív tagot, aki a szervezet tulajdonosa lesz.",
+      "member": "Új tulajdonos",
+      "confirmation": "Az átruházás befejeztével elveszíted a tulajdonosi jogaidat. Az ezekből általad delegált jogosultságok az új tulajdonoshoz kerülnek.",
+      "submit": "Tulajdonjog átruházása",
+      "cancel": "Mégse",
+      "success": "A tulajdonjog átruházva."
+    },
     "preview": {
       "title": "Tényleges hozzáférés",
       "lead": "Válassz egy tagot, hogy lásd, milyen műveleteket biztosítanak számára a jogosultságai ebben a szervezetben.",
@@ -246,7 +256,10 @@
       "templateRequired": "Válassz sablont.",
       "orgUnitRequired": "Válassz szervezeti egységet.",
       "reasonLength": "Adj meg 3–500 karakter hosszú indoklást.",
-      "actionsRequired": "Válassz legalább egy műveletet."
+      "actionsRequired": "Válassz legalább egy műveletet.",
+      "notOwner": "Csak a szervezet jelenlegi tulajdonosa ruházhatja át a tulajdonjogot.",
+      "alreadyOwner": "Ez a személy már a szervezet tulajdonosa.",
+      "ownerExists": "A szervezetnek már van tulajdonosa. A tulajdonjog csak átruházható."
     }
   }
 }

@@ -17,6 +17,8 @@ export type AccessErrorKey =
   | 'forbidden'
   | 'rateLimited'
   | 'conflict'
+  | 'ownerExists'
+  | 'alreadyOwner'
   | 'unknown';
 
 const BY_CODE: Record<string, AccessErrorKey> = {
@@ -27,6 +29,7 @@ const BY_CODE: Record<string, AccessErrorKey> = {
   forbidden: 'forbidden',
   rate_limited: 'rateLimited',
   conflict: 'conflict',
+  owner_exists: 'ownerExists',
 };
 
 export function accessErrorKey(err: unknown): AccessErrorKey | null {
@@ -38,6 +41,16 @@ export function accessErrorKey(err: unknown): AccessErrorKey | null {
     if (err.status === 409) return 'conflict';
   }
   return 'unknown';
+}
+
+/**
+ * Ownership transfer reuses the shared mapping; `conflict` there means the
+ * chosen member already holds the owner grant. `forbidden` keeps its staff
+ * meaning (the caller may not manage this organization).
+ */
+export function transferErrorKey(err: unknown): AccessErrorKey | null {
+  if (err instanceof ApiError && err.status !== 429 && err.code === 'conflict') return 'alreadyOwner';
+  return accessErrorKey(err);
 }
 
 /**

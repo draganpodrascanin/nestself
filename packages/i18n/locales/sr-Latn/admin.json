@@ -95,7 +95,7 @@
     "notConnected": "API nije povezan (režim uzorka)"
   },
   "access": {
-    "sampleNote": "Primer podataka: dodela i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "sampleNote": "Primer podataka: dodela, opoziv i prenos vlasništva su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
     "loading": "Učitavanje pristupa",
     "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
     "org": {
@@ -205,6 +205,17 @@
       "cancel": "Zadrži dozvolu",
       "success": "Dozvola je opozvana."
     },
+    "transfer": {
+      "open": "Prenesi vlasništvo",
+      "title": "Prenos vlasništva",
+      "description": "Izaberi aktivnog člana koji postaje vlasnik ove organizacije.",
+      "member": "Novi vlasnik",
+      "currentOwner": "{{name}} gubi vlasnička prava čim se prenos završi. Dozvole delegirane iz njih prelaze na novog vlasnika.",
+      "noOwner": "Ova organizacija još nema vlasnika. Član kog izabereš postaje njen prvi vlasnik.",
+      "submit": "Prenesi vlasništvo",
+      "cancel": "Otkaži",
+      "success": "Vlasništvo je preneto."
+    },
     "reason": {
       "label": "Razlog",
       "hint": "Od 3 do 500 znakova. Razlog se čuva u evidenciji revizije."
@@ -235,7 +246,9 @@
       "notFound": "Ova stavka više ne postoji. Osveži listu i pokušaj ponovo.",
       "userNotFound": "Ne postoji korisnik sa ovim ID-jem.",
       "forbidden": "Tvoj nalog nema dozvolu za ovo.",
-      "userIdRequired": "Unesi ID korisnika."
+      "userIdRequired": "Unesi ID korisnika.",
+      "alreadyOwner": "Ova osoba je već vlasnik organizacije.",
+      "ownerExists": "Ova organizacija već ima vlasnika. Umesto toga prenesi vlasništvo."
     }
   }
 }

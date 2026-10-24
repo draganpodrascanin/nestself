@@ -14,6 +14,7 @@ import type {
   GrantCreateRequest,
   GrantDelegateRequest,
   GrantRevokeRequest,
+  OwnershipTransferRequest,
 } from '@nestself/contracts';
 import { api } from '../../api';
 import { useAuth, withStepUp } from '../../auth';
@@ -94,4 +95,21 @@ export function useRevokeGrant(adminApi: OrgAdminApi, orgId: string) {
 
 export function useDelegateGrant(adminApi: OrgAdminApi, orgId: string) {
   return useGrantMutation((body: GrantDelegateRequest) => adminApi.delegateGrant(orgId, body), orgId);
+}
+
+/**
+ * Hands the owner grant to another member. The caller's own effective actions
+ * change with it, so the principal is reloaded after the grants.
+ */
+export function useTransferOwnership(adminApi: OrgAdminApi, orgId: string) {
+  const { stepUp, refreshPrincipal } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OwnershipTransferRequest) =>
+      withStepUp(stepUp, () => adminApi.transferOwnership(orgId, body)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: accessKeys.org(orgId) });
+      await refreshPrincipal();
+    },
+  });
 }

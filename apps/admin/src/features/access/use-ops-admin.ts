@@ -14,6 +14,7 @@ import type { OpsAdminApi } from '@nestself/api-client';
 import type {
   GrantCreateRequest,
   GrantRevokeRequest,
+  OwnershipTransferRequest,
   PlatformGrantCreateRequest,
 } from '@nestself/contracts';
 import { api } from '../../api';
@@ -115,4 +116,9 @@ export function useRevokeGrant(opsApi: OpsAdminApi, orgId: string | null) {
 
 export function useCreatePlatformGrant(opsApi: OpsAdminApi) {
   return useGrantMutation((body: PlatformGrantCreateRequest) => opsApi.createPlatformGrant(body));
+}
+
+/** Staff sets the organization owner (the first one when there is none). */
+export function useTransferOwnership(opsApi: OpsAdminApi, orgId: string) {
+  return useGrantMutation((body: OwnershipTransferRequest) => opsApi.transferOwnership(orgId, body));
 }

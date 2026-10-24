@@ -123,7 +123,7 @@
     "nav": "Access",
     "title": "Access management",
     "lead": "Who holds which permission template in your organization, and what each template lets them do.",
-    "sampleNote": "Sample mode: assigning, delegating and revoking are turned off. Nothing is created, changed or revoked.",
+    "sampleNote": "Sample mode: assigning, delegating, revoking and transferring ownership are turned off. Nothing is created, changed or revoked.",
     "loading": "Loading access",
     "empty": "No grants in this organization yet.",
     "noOrganization": "Access management needs exactly one active organization membership on your account.",
@@ -224,6 +224,16 @@
       "cancel": "Cancel",
       "success": "Access delegated."
     },
+    "transfer": {
+      "open": "Transfer ownership",
+      "title": "Transfer ownership",
+      "description": "Choose the active member who becomes the owner of the organization.",
+      "member": "New owner",
+      "confirmation": "You lose your owner rights as soon as the transfer completes. Grants you delegated from them move to the new owner.",
+      "submit": "Transfer ownership",
+      "cancel": "Cancel",
+      "success": "Ownership transferred."
+    },
     "preview": {
       "title": "Effective access",
       "lead": "Choose a member to see every action their grants give them in this organization.",
@@ -246,7 +256,10 @@
       "templateRequired": "Choose a template.",
       "orgUnitRequired": "Choose an org unit.",
       "reasonLength": "Enter a reason between 3 and 500 characters.",
-      "actionsRequired": "Choose at least one action."
+      "actionsRequired": "Choose at least one action.",
+      "notOwner": "Only the current owner of the organization can transfer ownership.",
+      "alreadyOwner": "This person is already the owner of the organization.",
+      "ownerExists": "The organization already has an owner. Ownership can only be transferred."
     }
   }
 }

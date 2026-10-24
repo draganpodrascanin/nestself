@@ -165,6 +165,17 @@ describe('createOrgAdminApi', () => {
       expect(update.last().url).toBe('http://x/api/orgs/org_1/approval-authorities/aa_1');
     });
 
+    it('transfers ownership with POST, CSRF and the new owner', async () => {
+      const { api, last } = setup({ revokedGrantId: 'grant_old', createdGrant: { ...GRANT, templateKey: 'employer_owner' } }, 'org');
+      const res = await api.transferOwnership('org_1', { newOwnerUserId: 'user_3' });
+      expect(res.revokedGrantId).toBe('grant_old');
+      expect(res.createdGrant.templateKey).toBe('employer_owner');
+      expect(last().method).toBe('POST');
+      expect(last().url).toBe('http://x/api/orgs/org_1/grants/transfer-ownership');
+      expect(last().csrf).toBe('tok');
+      expect(last().body).toEqual({ newOwnerUserId: 'user_3' });
+    });
+
     it('encodes path segments', async () => {
       const { api, last } = setup({ items: [] }, 'org');
       await api.listGrants('a/b');
@@ -226,6 +237,16 @@ describe('createOrgAdminApi', () => {
       expect(last().url).toBe('http://x/api/ops/grants/grant%2F9/revoke');
       expect(last().csrf).toBe('tok');
       expect(last().body).toEqual({ reason: 'off-boarded' });
+    });
+
+    it('transfers ownership through the ops route; a null revokedGrantId parses', async () => {
+      const { api, last } = setupOps({ revokedGrantId: null, createdGrant: { ...GRANT, templateKey: 'employer_owner' } });
+      const res = await api.transferOwnership('org_1', { newOwnerUserId: 'user_3' });
+      expect(res.revokedGrantId).toBeNull();
+      expect(last().method).toBe('POST');
+      expect(last().url).toBe('http://x/api/ops/orgs/org_1/grants/transfer-ownership');
+      expect(last().csrf).toBe('tok');
+      expect(last().body).toEqual({ newOwnerUserId: 'user_3' });
     });
 
     it('reads user access', async () => {

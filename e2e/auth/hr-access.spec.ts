@@ -6,13 +6,13 @@
  * hr_admin and employee grants, which is what makes `access.preview` and
  * `access.delegate` reachable here.
  *
- * Covered: the grant table, the effective-access preview and delegating
- * part of her own hr_admin grant. Assigning a template and revoking a grant
- * are NOT exercised: no organization template holds `access.grant` or
- * `access.revoke` yet (owner decision pending), so neither control renders
- * for any seeded person. Both are covered by the component tests in
- * `apps/workspace/src/features/access/access-screen.test.tsx` and the API e2e
- * in `apps/api/test/grants.e2e.spec.ts`.
+ * Covered: the grant table, the effective-access preview, delegating part
+ * of her own hr_admin grant, and (since the owner model of 2026-10-24 gave
+ * employer_owner `access.grant` and `access.revoke`) assigning team_manager
+ * to Ana and revoking it again with a reason. Ownership transfer is not run
+ * here: it would move the seeded owner grant away from Ivana and break the
+ * next run. It is covered by the component tests in
+ * `apps/workspace/src/features/access/access-screen.test.tsx` and the API e2e.
  *
  * The session is fresh, so no step-up dialog fires in this journey.
  *
@@ -20,15 +20,17 @@
  * for the session before deciding, and the Access nav item appears because
  * `/auth/me` carries the effective actions.
  *
- * Re-runs: the API accepts duplicate delegations and Ivana cannot revoke, so
- * every run adds one more delegated grant for Stefan. The assertions only
- * require at least one such row.
+ * Re-runs: the API accepts duplicate delegations, so every run adds one more
+ * delegated grant for Stefan; the assertions only require at least one such
+ * row. The team_manager grant for Ana is revoked in the same run, so the
+ * number of active ones is back where it started; revoked rows accumulate,
+ * and the assertions count them relative to the start of the run.
  *
  * Labels come from packages/i18n/locales/en/auth.json and workspace.json
  * (`access`).
  */
 import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 const WORKSPACE_URL = 'http://localhost:5173';
 const HR_ADMIN_EMAIL = 'user_ivana@example.com';
@@ -36,6 +38,8 @@ const FIXED_OTP = '123456';
 
 const EMPLOYEE_NAME = 'Ana Nikolić';
 const MANAGER_NAME = 'Stefan Marković';
+/** A seeded org unit of org_sample (packages/sample-data, org-units.ts). */
+const ORG_UNIT_NAME = 'Product';
 
 async function signIn(page: Page) {
   await page.goto(`${WORKSPACE_URL}/sign-in`);
@@ -50,6 +54,14 @@ async function signIn(page: Page) {
 }
 
 /** Picks a member in the effective-access preview and returns the panel. */
+/** Opens a select inside a dialog and picks an option (the popup is portalled). */
+async function pick(page: Page, scope: Locator, label: string, option: string) {
+  const combobox = scope.getByRole('combobox', { name: label });
+  await combobox.click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+  await expect(combobox).toHaveText(option);
+}
+
 async function previewFor(page: Page, memberName: string) {
   const panel = page.getByRole('region', { name: 'Effective access' });
   await panel.getByRole('combobox', { name: 'Member' }).click();
@@ -58,7 +70,7 @@ async function previewFor(page: Page, memberName: string) {
 }
 
 test.describe('Workspace HR grant administration', () => {
-  test('HR admin reviews grants, previews access and delegates part of a grant', async ({
+  test('HR admin reviews grants, previews access, delegates, assigns and revokes', async ({
     page,
   }) => {
     await signIn(page);
@@ -114,5 +126,42 @@ test.describe('Workspace HR grant administration', () => {
     // people.invite (the context carries the delegated grant's parent chain).
     const stefanPanel = await previewFor(page, MANAGER_NAME);
     await expect(stefanPanel.getByText('people.invite', { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Owner-driven assignment: team_manager for Ana on one org unit, with the
+    // spending ceiling the template requires.
+    const revokeAnaManager = page.getByRole('button', { name: `Revoke Team manager from ${EMPLOYEE_NAME}` });
+    const revokedAnaManagerRows = table
+      .getByRole('row')
+      .filter({ hasText: 'Team manager' })
+      .filter({ hasText: EMPLOYEE_NAME })
+      .filter({ hasText: 'Revoked' });
+    const activeBefore = await revokeAnaManager.count();
+    const revokedBefore = await revokedAnaManagerRows.count();
+
+    await page.getByRole('button', { name: 'Assign template' }).click();
+    const assign = page.getByRole('dialog', { name: 'Assign a permission template' });
+    await expect(assign).toBeVisible();
+    await pick(page, assign, 'Member', EMPLOYEE_NAME);
+    await pick(page, assign, 'Template', 'Team manager');
+    await pick(page, assign, 'Org unit', ORG_UNIT_NAME);
+    await assign.getByLabel('Amount').fill('500');
+    await assign.getByLabel('Currency').fill('EUR');
+    await assign.getByRole('button', { name: 'Assign', exact: true }).click();
+
+    await expect(page.getByText('Template assigned.')).toBeVisible({ timeout: 10_000 });
+    await expect(assign).toBeHidden();
+    await expect(revokeAnaManager).toHaveCount(activeBefore + 1, { timeout: 10_000 });
+
+    // Revoke it again with a reason; the row stays, marked Revoked.
+    await revokeAnaManager.first().click();
+    const revoke = page.getByRole('alertdialog', { name: 'Revoke this grant?' });
+    await expect(revoke).toBeVisible();
+    await revoke.getByLabel('Reason').fill('End-to-end run clean-up');
+    await revoke.getByRole('button', { name: 'Revoke grant' }).click();
+
+    await expect(page.getByText('Grant revoked.')).toBeVisible({ timeout: 10_000 });
+    await expect(revoke).toBeHidden();
+    await expect(revokeAnaManager).toHaveCount(activeBefore, { timeout: 10_000 });
+    await expect(revokedAnaManagerRows).toHaveCount(revokedBefore + 1);
   });
 });

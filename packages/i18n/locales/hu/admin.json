@@ -95,7 +95,7 @@
     "notConnected": "API nincs csatlakoztatva (mintaadatok mód)"
   },
   "access": {
-    "sampleNote": "Mintaadatok: a kiosztás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
+    "sampleNote": "Mintaadatok: a kiosztás, a visszavonás és a tulajdonjog átruházása ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
     "loading": "Hozzáférés betöltése",
     "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
     "org": {
@@ -205,6 +205,17 @@
       "cancel": "Megtartás",
       "success": "A jogosultság visszavonva."
     },
+    "transfer": {
+      "open": "Tulajdonjog átruházása",
+      "title": "Tulajdonjog átruházása",
+      "description": "Válaszd ki azt az aktív tagot, aki ennek a szervezetnek a tulajdonosa lesz.",
+      "member": "Új tulajdonos",
+      "currentOwner": "{{name}} az átruházás befejeztével elveszíti a tulajdonosi jogait. Az ezekből delegált jogosultságok az új tulajdonoshoz kerülnek.",
+      "noOwner": "Ennek a szervezetnek még nincs tulajdonosa. A kiválasztott tag lesz az első tulajdonosa.",
+      "submit": "Tulajdonjog átruházása",
+      "cancel": "Mégse",
+      "success": "A tulajdonjog átruházva."
+    },
     "reason": {
       "label": "Indoklás",
       "hint": "3–500 karakter. Az indoklás bekerül az auditnaplóba."
@@ -235,7 +246,9 @@
       "notFound": "Ez az elem már nem létezik. Frissítsd a listát, és próbáld újra.",
       "userNotFound": "Nincs ilyen azonosítójú felhasználó.",
       "forbidden": "A fiókod ehhez nem jogosult.",
-      "userIdRequired": "Adj meg egy felhasználói azonosítót."
+      "userIdRequired": "Adj meg egy felhasználói azonosítót.",
+      "alreadyOwner": "Ez a személy már a szervezet tulajdonosa.",
+      "ownerExists": "Ennek a szervezetnek már van tulajdonosa. Helyette ruházd át a tulajdonjogot."
     }
   }
 }

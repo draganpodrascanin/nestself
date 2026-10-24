@@ -123,7 +123,7 @@
     "nav": "Pristup",
     "title": "Upravljanje pristupom",
     "lead": "Ko ima koji šablon dozvola u tvojoj organizaciji i šta mu svaki šablon omogućava.",
-    "sampleNote": "Primer podataka: dodela, delegiranje i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "sampleNote": "Primer podataka: dodela, delegiranje, opoziv i prenos vlasništva su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
     "loading": "Učitavanje pristupa",
     "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
     "noOrganization": "Za upravljanje pristupom tvoj nalog mora imati tačno jedno aktivno članstvo u organizaciji.",
@@ -224,6 +224,16 @@
       "cancel": "Otkaži",
       "success": "Pristup je delegiran."
     },
+    "transfer": {
+      "open": "Prenesi vlasništvo",
+      "title": "Prenos vlasništva",
+      "description": "Izaberi aktivnog člana koji postaje vlasnik organizacije.",
+      "member": "Novi vlasnik",
+      "confirmation": "Gubiš vlasnička prava čim se prenos završi. Dozvole koje si delegirao iz njih prelaze na novog vlasnika.",
+      "submit": "Prenesi vlasništvo",
+      "cancel": "Otkaži",
+      "success": "Vlasništvo je preneto."
+    },
     "preview": {
       "title": "Stvarni pristup",
       "lead": "Izaberi člana da vidiš sve radnje koje mu njegove dozvole daju u ovoj organizaciji.",
@@ -246,7 +256,10 @@
       "templateRequired": "Izaberi šablon.",
       "orgUnitRequired": "Izaberi organizacionu jedinicu.",
       "reasonLength": "Unesi razlog dužine od 3 do 500 znakova.",
-      "actionsRequired": "Izaberi bar jednu radnju."
+      "actionsRequired": "Izaberi bar jednu radnju.",
+      "notOwner": "Samo trenutni vlasnik organizacije može da prenese vlasništvo.",
+      "alreadyOwner": "Ova osoba je već vlasnik organizacije.",
+      "ownerExists": "Organizacija već ima vlasnika. Vlasništvo se može samo preneti."
     }
   }
 }

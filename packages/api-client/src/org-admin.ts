@@ -18,6 +18,7 @@ import {
   GrantResponseSchema,
   MemberListResponseSchema,
   OrgUnitResponseSchema,
+  OwnershipTransferResponseSchema,
   UserAccessResponseSchema,
 } from '@nestself/contracts';
 import type {
@@ -28,6 +29,7 @@ import type {
   GrantRevokeRequest,
   GrantUpdateRequest,
   MemberListQuery,
+  OwnershipTransferRequest,
   PlatformGrantCreateRequest,
 } from '@nestself/contracts';
 import type { ApiClient } from './client';
@@ -96,6 +98,17 @@ function buildCommon(client: ApiClient, prefix: (orgId: string) => string) {
       client.request(`${orgPath(orgId)}/grants/preview${queryString({ userId })}`, {
         method: 'GET',
         schema: GrantPreviewResponseSchema,
+      }),
+
+    /**
+     * POST .../grants/transfer-ownership — hand `employer_owner` to another
+     * active member. The org route requires the caller to be the current
+     * owner; the ops route lets staff set the owner (and the first one).
+     */
+    transferOwnership: (orgId: string, body: OwnershipTransferRequest) =>
+      client.request(`${orgPath(orgId)}/grants/transfer-ownership`, {
+        ...send('POST', body),
+        schema: OwnershipTransferResponseSchema,
       }),
   };
 }
