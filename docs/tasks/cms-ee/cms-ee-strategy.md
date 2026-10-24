@@ -2683,6 +2683,8 @@ The `audiencePredicate(ctx)` helper returns an OR of three clauses: `kind = 'all
 
 The `mediaReady(now)` helper asserts `NOT EXISTS (SELECT 1 FROM content_revision_media crm JOIN media_assets ma ON ma.id = crm.media_asset_id WHERE crm.content_revision_id = cp.content_revision_id AND (ma.state != 'ready' OR (ma.rights_expires_at IS NOT NULL AND ma.rights_expires_at <= now)))`.
 
+**ACC-R-27** The sketch above shows the logical shape; the implemented query differs in three binding ways, found in review: (1) supersession is written literally as `NOT EXISTS` over a newer non-withdrawn started publication of the same variant ordered by `(starts_at, id)`, with `withdrawn_at IS NULL AND starts_at <= now` in the outer filter, so the partial index `content_publications_variant_active_idx` serves both sides and ties are deterministic (a `DISTINCT ON` CTE scanned and sorted every publication on every call); (2) every output column is aliased (`publication_id`, `variant_id`, `content_resource_id`, `locale`) so the subquery composes; (3) `availablePublications(ctx, db, filter?)` accepts `{ resourceIds, variantIds, publicationIds, mediaAssetId }` applied inside the SQL, and `isAvailable`, `availableResourceIds` and `isMediaAssetAvailable` are single queries built on it (media delivery runs one indexed query per request, about 0.1 ms on the pilot-scale seed). Reader contexts are built by `AvailabilityContextLoader.forReader`, which refuses an ended or foreign membership with 403 `org_context_expired`, and the query re-checks the membership with an uncorrelated `EXISTS`; preview contexts come from `forPreview` and carry no user or membership [FND-01, EMP-C01].
+
 #### 5.9.3 Composition rules
 
 **ACC-R-18** Every employee read path must compose `availablePublications(ctx)` as the base filter. The following table lists each read path and how it composes the subquery [EMP-C01, EMP-C02, EMP-C03, EMP-C04]:
@@ -2718,7 +2720,7 @@ The `mediaReady(now)` helper asserts `NOT EXISTS (SELECT 1 FROM content_revision
 
 The `library_home:{orgId}:{membershipId}:{locale}:{availabilityVersion}` cache key (60 s TTL) uses this version so that Home results are invalidated when availability changes.
 
-**ACC-R-25** `AvailabilityContext` carries `readerLocale` and the subquery filters `content_variants.locale = authoredLocale(readerLocale)`, where `authoredLocale('sr-Cyrl') = 'sr-Latn'` and every other locale maps to itself (C-28). Because publication covers every authored locale together, a resource available in one locale is available in all; the golden table adds `AV-23` (an `sr-Cyrl` reader gets the `sr-Latn` publication) and `AV-24` (a resource whose `hu` publication was withdrawn alone through data repair is unavailable to `hu` readers and stays available to others, and the inconsistency is logged).
+**ACC-R-25** `AvailabilityContext` carries `readerLocale` and the subquery filters `content_variants.locale = authoredLocale(readerLocale)`, where `authoredLocale('sr-Cyrl') = 'sr-Latn'` and every other locale maps to itself (C-28). Because publication covers every authored locale together, a resource available in one locale is available in all; the golden table adds `AV-23` (an `sr-Cyrl` reader gets the `sr-Latn` publication) and `AV-24` (a resource whose `hu` publication was withdrawn alone through data repair is unavailable to `hu` readers and stays available to others; the content detail read model logs the inconsistency, LIB-R-24).
 
 ### 5.10 Availability golden table
 
@@ -2787,7 +2789,7 @@ export const ContentDocumentSchema = z.object({
 export type ContentDocument = z.infer<typeof ContentDocumentSchema>;
 ```
 
-**FMT-R-02** The canonical JSON size of a `ContentDocument` must not exceed 200 KB. The validation function `validateContentDocument()` must check `JSON.stringify(doc).length <= 204_800` after Zod parsing and before ProseMirror validation. Violation returns error code `content_too_large` [EDT-01, C-05].
+**FMT-R-02** The canonical JSON size of a `ContentDocument` must not exceed 200 KB. The validation function `validateContentDocument()` must check that the canonical JSON is at most 204,800 UTF-8 bytes (`new TextEncoder().encode(canonicalize(doc)).length`) after Zod parsing and before ProseMirror validation. Violation returns error code `content_too_large` [EDT-01, C-05].
 
 ### 6.2 Block catalogue
 
@@ -2797,9 +2799,9 @@ C-05 defines a closed set of node `type` values. The following table specifies e
 
 | Node type | ProseMirror group | Content expression | Attributes | Limits |
 |---|---|---|---|---|
-| `doc` | (top) | `(sectionHeading \| paragraph \| bulletList \| orderedList \| quote \| image \| professionalNote \| practicalStep \| checklist \| approvedMedia \| transcript \| relatedResource \| cta \| hardBreak)+` | `schemaVersion: number` | max 400 child nodes |
+| `doc` | (top) | `(sectionHeading \| paragraph \| bulletList \| orderedList \| quote \| image \| professionalNote \| practicalStep \| checklist \| approvedMedia \| transcript \| relatedResource \| cta)+` | `schemaVersion: number` | max 400 child nodes |
 | `sectionHeading` | block | `text*` | `level: 2 \| 3` | text content max 200 chars |
-| `paragraph` | block | `text*` | (none) | text content max 5,000 chars |
+| `paragraph` | block | `(text \| hardBreak)*` | (none) | total text max 5,000 chars |
 | `text` | inline | (leaf) | `marks?: Mark[]` | max 5,000 chars per text node |
 | `bulletList` | block | `listItem+` | (none) | max 20 items |
 | `orderedList` | block | `listItem+` | `start?: number` | max 20 items |
@@ -2888,7 +2890,7 @@ This runs in Node.js without a DOM (confirmed: `prosemirror-model` runs server-s
 9. `reviewDiscipline`
 10. `proposedAudience` (sorted JSON of the `proposed_audience` JSONB column)
 
-The result is fed to `crypto.createHash('sha256').update(canonical).digest('hex')` to produce the `approval_hash`.
+The hashed structure also carries `durationSeconds`, `difficulty` and `sources` (the rest of the revision metadata, C-06) and starts with the format tag `'v1'`, so any later change of the field list is explicit. The canonical string is hashed with SHA-256 through Web Crypto (`approvalHash()`, async, identical in Node and browsers, frozen known-answer vectors in the tests); `outcome` is `string | null`. Unknown keys are rejected by strict schemas rather than stripped, the ProseMirror layer runs on Zod's parsed output, and callers persist only the validated `document` the function returns.
 
 **FMT-R-09** `approve` stores `approval_hash` on the revision. `publish` recomputes the hash from the same fields and refuses with error code `content_approval_stale` if the hashes do not match. This guarantees that no field covered by the hash can change between approval and publication without re-review (C-06) [EDT-02, EDT-03].
 
@@ -2990,7 +2992,7 @@ The `ContentRenderer` lives in `packages/content/src/render/` and is exported fr
 
 ### 6.9 XSS and injection
 
-**FMT-R-19** The following test cases must be included in `packages/content/src/schema/__tests__/xss.test.ts` to prove the structural XSS mitigation [FND-03, QA-01]:
+**FMT-R-19** The following test cases must be included in `packages/content/src/schema/xss.test.ts` (colocated) to prove the structural XSS mitigation [FND-03, QA-01]:
 
 | Case | Input | Expected |
 |---|---|---|
@@ -6750,16 +6752,16 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 - Dependencies (single upfront install, C-30): `@tiptap/core`, `@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-placeholder` in the catalog; `packages/content` depends on `@nestself/ui`, `@nestself/contracts`, `zod`, `react`.
 
 #### C-05 Block catalogue and CTA catalogue are closed [settled; M1]
-- Blocks (node `type` values): `doc`, `sectionHeading` (level 2 or 3 only), `paragraph`, `text` (marks `bold`, `italic`, `link` only), `bulletList`, `orderedList`, `listItem`, `quote`, `image`, `professionalNote`, `practicalStep`, `checklist`, `checklistItem`, `approvedMedia`, `transcript`, `relatedResource`, `cta`, `hardBreak`. Anything else is rejected with `content_invalid_block`. A `transcript` node (attrs `mediaAssetId`; content paragraphs) must follow every `approvedMedia` node whose asset is `audio` or `video`; submission fails with `content_missing_required` otherwise. Transcripts are content text in the revision, reviewed with it and indexed for search; they are not media files.
+- Blocks (node `type` values): `doc`, `sectionHeading` (level 2 or 3 only), `paragraph`, `text` (marks `bold`, `italic`, `link` only), `bulletList`, `orderedList`, `listItem`, `quote`, `image`, `professionalNote`, `practicalStep`, `checklist`, `checklistItem`, `approvedMedia`, `transcript`, `relatedResource`, `cta`, `hardBreak` (inline, inside `paragraph` and `checklistItem` only). Anything else, including unknown attributes and keys, is rejected with `content_invalid_block` (strict schemas; nothing is stripped). Lists nest at most two levels. A `transcript` node (attrs `mediaAssetId`; content paragraphs) must follow every `approvedMedia` node whose asset is `audio` or `video`; submission fails with `content_missing_required` otherwise. Transcripts are content text in the revision, reviewed with it and indexed for search; they are not media files.
 - `link` mark: `href` must be `https:` and its host must be on `CONTENT_LINK_HOST_ALLOWLIST`, or an internal reference `nestself:content/<contentResourceId>`; no `javascript:`, `data:`, `http:`, no protocol-relative URLs. `image` and `approvedMedia` carry a `mediaAssetId` only (never a URL); the renderer resolves the delivery path. `relatedResource` carries a `contentResourceId`.
 - CTA kinds (`ctaKind`): `open_content`, `open_collection`, `suggest_topic`, `ask_general_question`, `express_event_interest`, `open_service` (an enabled capability key from C-11). At most one `cta` node per document; the API validates targets and capability rules at save and the read model drops a CTA whose target is not available to the reader.
-- Limits: document at most 200 KB canonical JSON; at most 400 nodes; text node at most 5,000 characters; checklist at most 20 items; at most 3 `relatedResource` nodes.
+- Limits: document at most 204,800 UTF-8 bytes of canonical JSON; at most 400 nodes; text node at most 5,000 characters; checklist at most 20 items; at most 3 `relatedResource` nodes.
 
 #### C-06 Content model: resource, variant, revision, publication [settled; M1–M2]
 - `content_resources` (language-independent identity), `content_variants` (one per resource and locale; unique `(content_resource_id, locale)`), `content_revisions` (immutable once submitted), `content_publications` (an approved revision made available to an audience in a window). Six resource types: `article`, `video`, `audio`, `practical`, `qa`, `collection` (enum `content_type`). Collections are resources whose children live in `collection_entries`.
 - Revision states (`content_revision_state`): `draft`, `in_review`, `changes_requested`, `approved`, `superseded`. A variant has at most one revision in `draft` or `changes_requested` (the working revision). Edits after submission create a new revision. `superseded` marks an approved revision replaced by a newer approved one.
 - Publication states (`content_publication_state`): `scheduled`, `live`, `expired`, `withdrawn`. Resource states (`content_resource_state`): `active`, `archived`.
-- Approval binds a SHA-256 `approval_hash` over the canonical JSON of body, metadata, locale, media references, related references, CTA, review discipline and proposed audience. `approve` stores the hash; `publish` recomputes it and refuses on mismatch (`content_approval_stale`).
+- Approval binds a SHA-256 `approval_hash` (format tag `v1`) over the canonical JSON of body, metadata (title, summary, outcome, duration, difficulty, sources), locale, media references, related references, CTA, review discipline and proposed audience. `approve` stores the hash; `publish` recomputes it and refuses on mismatch (`content_approval_stale`).
 - Working-revision saves use optimistic concurrency: the client sends `If-Match: "<lockVersion>"`; mismatch returns 409 `content_edit_conflict` with the current server version; autosave never overwrites a newer change silently [EDT-01].
 
 #### C-07 Catalog tables are platform data; personal state is tenant data [settled; M1]
@@ -7004,7 +7006,7 @@ Every backlog item of the epic (epic 21.1 to 21.7) with the requirements that sa
 
 | Backlog id | Milestone | User story (epic) | Requirements | Tasks |
 |---|---|---|---|---|
-| FND-01 | M1 | As the platform, I distinguish editorial, personal, and restricted data. | ARC-R-01, ARC-R-04, DEM-R-18, INT-R-01, INT-R-03, INT-R-25, RET-R-01, TST-R-04, TST-R-05, TST-R-06 | T-C1.02, T-C1.04, T-C1.09, T-C3.04 |
+| FND-01 | M1 | As the platform, I distinguish editorial, personal, and restricted data. | ACC-R-27, ARC-R-01, ARC-R-04, DEM-R-18, INT-R-01, INT-R-03, INT-R-25, RET-R-01, TST-R-04, TST-R-05, TST-R-06 | T-C1.02, T-C1.04, T-C1.09, T-C3.04 |
 | FND-02 | M1 | As an owner, I assign content privileges through grants. | ACC-R-01, ACC-R-02, ACC-R-03, ACC-R-04, ACC-R-05, ACC-R-11, ACC-R-12, ACC-R-15, ACC-R-19, ACC-R-24, TST-R-01, TST-R-03, WRK-R-31 | T-C1.03 |
 | FND-03 | M1 | As an editor, I add media delivered only to its authorized audience. | ACC-R-17, FMT-R-01, FMT-R-07, FMT-R-19, FMT-R-20, MED-R-01, MED-R-02, MED-R-03, MED-R-05, MED-R-06, MED-R-07, MED-R-08, MED-R-10, MED-R-12, MED-R-13, MED-R-14, MED-R-15, MED-R-16, MED-R-17, MED-R-18, MED-R-20, MED-R-21, MED-R-22, MED-R-26, MED-R-27, MED-R-28, MED-R-29 | T-C1.08, T-C2.09 |
 | FND-04 | M1 | As a development team, we have a stable content format and renderer. | ACC-R-14, ACC-R-16, ACC-R-21, MED-R-23, MED-R-24, MED-R-30 | T-C1.00, T-C1.05, T-C1.06 |
@@ -7014,7 +7016,7 @@ Every backlog item of the epic (epic 21.1 to 21.7) with the requirements that sa
 | EDT-04 | M2 | As a taxonomy owner, I maintain categories, topics, and languages. | ACC-R-23, FMT-R-14, FMT-R-15, WRK-R-36 | T-C2.04 |
 | EDT-05 | M2 | As a publisher, I curate collections and Home slots. | WRK-R-13, WRK-R-14, WRK-R-15, WRK-R-16, WRK-R-17, WRK-R-18, WRK-R-19, WRK-R-20, WRK-R-21, WRK-R-22, WRK-R-23 | T-C2.05 |
 | EDT-06 | M4 | As a content owner, I know what needs review or withdrawal. | MED-R-16, MED-R-17, WRK-R-25, WRK-R-26, WRK-R-27, WRK-R-28, WRK-R-29, WRK-R-30 | T-C4.07 |
-| EMP-C01 | M1 | As an employee, I see a useful Home after sign-in. | ACC-R-04, ACC-R-11, ACC-R-12, ACC-R-13, ACC-R-17, ACC-R-18, ACC-R-20, ACC-R-22, ACC-R-23, ACC-R-26, CLI-R-08, LIB-R-01, LIB-R-04, LIB-R-05, LIB-R-08, LIB-R-33, LIB-R-34, LIB-R-36, LIB-R-37, LIB-R-39, POL-R-20, WRK-R-24 | T-C1.02, T-C1.13, T-C2.07 |
+| EMP-C01 | M1 | As an employee, I see a useful Home after sign-in. | ACC-R-04, ACC-R-11, ACC-R-12, ACC-R-13, ACC-R-17, ACC-R-18, ACC-R-20, ACC-R-22, ACC-R-23, ACC-R-26, ACC-R-27, CLI-R-08, LIB-R-01, LIB-R-04, LIB-R-05, LIB-R-08, LIB-R-33, LIB-R-34, LIB-R-36, LIB-R-37, LIB-R-39, POL-R-20, WRK-R-24 | T-C1.02, T-C1.13, T-C2.07 |
 | EMP-C02 | M2 | As an employee, I explore needs and categories. | ACC-R-18, LIB-R-09, LIB-R-10, LIB-R-11, LIB-R-12, LIB-R-13, LIB-R-14 | T-C2.08 |
 | EMP-C03 | M2 | As an employee, I find content using everyday language. | ACC-R-18, LIB-R-15, LIB-R-16, LIB-R-17, LIB-R-19, LIB-R-21, LIB-R-38, LIB-R-40 | T-C2.06 |
 | EMP-C04 | M1 | As an employee, I use content detail on my phone. | ACC-R-18, FMT-R-14, FMT-R-15, FMT-R-16, FMT-R-17, FMT-R-18, FMT-R-25, LIB-R-23, LIB-R-24, MED-R-30, MED-R-32 | T-C1.06, T-C1.11, T-C1.13, T-C2.09 |
