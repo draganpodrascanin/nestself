@@ -1,9 +1,11 @@
 /**
  * GrantsService — organization grant administration (T-2.1).
  *
- * Every read and write runs in the organization's tenant scope
- * (`withOrgScope`). Writes audit one `grant.*` event and invalidate the
- * affected principals for the organization. Rules live in `grant-rules.ts`.
+ * Organization grants: every read and write runs in the organization's
+ * tenant scope (`withOrgScope`). Platform grants (`scope_org_id` null, from
+ * operations templates) are visible in every scope. Writes audit one
+ * `grant.*` event and invalidate the affected principals. Rules live in
+ * `grant-rules.ts`.
  *
  * @see docs/tasks/auth/auth-strategy.md 4.4, 4.5.6, 4.5.10
  */
@@ -20,13 +22,17 @@ import {
   type GrantResponse,
   type GrantRevokeRequest,
   type GrantUpdateRequest,
+  type ActiveContext,
+  type PlatformGrantCreateRequest,
   type Principal,
+  type UserAccessContext,
+  type UserAccessResponse,
 } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import { DbService, type DbExecutor } from '../db/db.service.js';
 import { AuthorizationRepository, type GrantRow } from '../db/repositories/authorization.repository.js';
 import { OrgUnitsRepository } from '../db/repositories/org-units.repository.js';
-import { PrincipalLoader } from '../principal/principal-loader.js';
+import { PrincipalLoader, type LoadedPrincipal } from '../principal/principal-loader.js';
 import { ContextLoader } from '../authz/context-loader.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { validateDelegation } from '../authz/delegation.js';
@@ -139,6 +145,92 @@ export class GrantsService {
 
     await this.principalLoader.invalidateUser(created.subjectUserId, [orgId]);
     return toGrantResponse(created);
+  }
+
+  // ── Platform grants (operations) ──────────────────────────────────────
+
+  /** Grants without an organization (`scope_org_id IS NULL`), newest first. */
+  async listPlatform(filter: GrantListFilter): Promise<GrantListResponse> {
+    const rows = await this.authzRepo.listPlatformGrants({ includeRevoked: filter.includeRevoked });
+    const items = filter.subjectUserId ? rows.filter((r) => r.subjectUserId === filter.subjectUserId) : rows;
+    return { items: items.map(toGrantResponse) };
+  }
+
+  /**
+   * A grant from an operations template at the template's own scope
+   * (`platform` or `assigned_*`), never tied to an organization.
+   */
+  async createPlatform(body: PlatformGrantCreateRequest, actor: Principal): Promise<GrantResponse> {
+    const template = findActiveTemplate(body.templateKey);
+    if (!template) {
+      throw new ApiHttpException({ status: 400, code: 'template_inactive', message: 'Template is unknown or inactive' });
+    }
+    if (template.workspace !== 'operations') throw validation('Template is not an operations template');
+    if (body.scopeType !== template.scopeType) {
+      throw validation(`scopeType must be ${template.scopeType} for template ${template.key}`);
+    }
+    const missing = missingConditionTypes(template.requiredConditionTypes, body.conditions);
+    if (missing.length > 0) throw missingConditions(missing);
+
+    const validFrom = body.validFrom ? new Date(body.validFrom) : new Date();
+    const validUntil = body.validUntil ? new Date(body.validUntil) : null;
+    assertWindow(validFrom, validUntil);
+
+    const subject = await this.principalLoader.load(body.subjectUserId);
+    if (!subject) throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found' });
+
+    const row = await this.authzRepo.createGrant({
+      subjectUserId: body.subjectUserId,
+      templateKey: template.key,
+      actions: [...template.actions],
+      scopeType: template.scopeType,
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      includeDescendants: false,
+      conditions: body.conditions,
+      validFrom,
+      validUntil,
+      parentGrantId: null,
+      grantedByUserId: actor.userId,
+    });
+    await this.audit.record(
+      grantEvent('grant.created', row, actor, null, {
+        subjectUserId: row.subjectUserId,
+        templateKey: template.key,
+        scopeType: template.scopeType,
+        actionsCount: row.actions.length,
+        conditionTypes: conditionTypes(body.conditions),
+      }),
+    );
+
+    // A platform grant applies in every context: drop the cached grants for
+    // the platform, the subject's organizations and assigned clients.
+    const assignments = await this.principalLoader.loadAssignments(subject.userId);
+    const orgIds = new Set<string>([
+      'platform',
+      ...subject.memberships.map((ms) => ms.orgId),
+      ...assignments.filter((a) => a.kind === 'CLIENT').map((a) => a.targetId),
+    ]);
+    await this.principalLoader.invalidateUser(subject.userId, [...orgIds]);
+    return toGrantResponse(row);
+  }
+
+  /**
+   * Effective access of a user in each ACTIVE membership organization plus
+   * the platform context (`orgId: null`). Confidential actions are dropped
+   * as in the preview (AUDIT-R-02).
+   */
+  async userAccess(userId: string): Promise<UserAccessResponse> {
+    const loaded = await this.principalLoader.load(userId);
+    if (!loaded) throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found' });
+
+    const orgIds = loaded.memberships.filter((ms) => ms.status === 'ACTIVE').map((ms) => ms.orgId);
+    const contexts: UserAccessContext[] = [];
+    for (const orgId of orgIds) {
+      contexts.push(await this.evaluateAccess(loaded, orgId));
+    }
+    contexts.push(await this.evaluateAccess(loaded, null));
+    return { userId, contexts };
   }
 
   // ── Update ────────────────────────────────────────────────────────────
@@ -356,6 +448,20 @@ export class GrantsService {
       throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found in this organization' });
     }
 
+    const access = await this.evaluateAccess(loaded, orgId);
+    return { userId, orgId, actions: access.actions, grantIds: access.grantIds, assignmentIds: access.assignmentIds };
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  /**
+   * Run `effectiveAccess` for the subject in one organization, or in the
+   * platform context when `orgId` is null. The subject's principal never
+   * satisfies step-up (old snapshot, no second factor); confidential-domain
+   * actions are dropped (AUDIT-R-02).
+   */
+  private async evaluateAccess(loaded: LoadedPrincipal, orgId: string | null): Promise<UserAccessContext> {
+    const context: ActiveContext = orgId ? { kind: 'organization', orgId } : { kind: 'operations' };
     const principal: Principal = {
       userId: loaded.userId,
       displayName: loaded.displayName,
@@ -364,28 +470,23 @@ export class GrantsService {
       memberships: loaded.memberships,
       staffTemplates: loaded.staffTemplates,
       expert: loaded.expert,
-      context: { kind: 'organization', orgId },
-      // A preview never satisfies step-up: old snapshot, no second factor.
+      context,
       auth: { method: 'sso', time: new Date(0).toISOString(), secondFactor: false, lastStepUpAt: null },
       sessionId: null,
       tokenFamily: null,
     };
-    const ctx = await this.contextLoader.build(principal, { type: 'grant_preview', orgId }, { loadedPrincipal: loaded });
+    const resource = orgId ? { type: 'grant_preview', orgId } : { type: 'grant_preview' };
+    const ctx = await this.contextLoader.build(principal, resource, { loadedPrincipal: loaded });
 
-    // AUDIT-R-02: confidential-domain actions never appear in a preview.
     const confidential = new Set<string>(CONFIDENTIAL_ACTIONS);
     const entries = effectiveAccess(principal, ctx).filter((e) => !confidential.has(e.action));
-
     return {
-      userId,
       orgId,
       actions: [...new Set(entries.map((e) => e.action))],
       grantIds: [...new Set(entries.map((e) => e.grantId))],
       assignmentIds: ctx.assignments.map((a) => a.id),
     };
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────
 
   /** An organization-scoped grant of this org (platform grants are hidden here). */
   private async findOrgGrant(grantId: string, orgId: string, tx: DbExecutor): Promise<GrantRow> {
@@ -462,7 +563,7 @@ function grantEvent(
   action: 'grant.created' | 'grant.adjusted' | 'grant.revoked' | 'grant.delegated',
   row: GrantRow,
   actor: Principal,
-  orgId: string,
+  orgId: string | null,
   details: Record<string, unknown>,
 ): AuditEventInput {
   return {

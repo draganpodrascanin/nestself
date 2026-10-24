@@ -37,13 +37,14 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { GrantsService } from './grants.service.js';
 
-const WRITE_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
+/** Writes are throttled to 10 per minute per route; shared by the grant controllers. */
+export const WRITE_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
-const GrantListQuerySchema = z.object({
+export const GrantListQuerySchema = z.object({
   subjectUserId: z.string().min(1).optional(),
   includeRevoked: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
 });
-type GrantListQuery = z.infer<typeof GrantListQuerySchema>;
+export type GrantListQuery = z.infer<typeof GrantListQuerySchema>;
 
 @Controller('orgs/:orgId/grants')
 export class GrantsController {

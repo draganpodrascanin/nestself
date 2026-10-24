@@ -1,6 +1,6 @@
 /**
  * Grant administration e2e tests (T-2.1, organization side): create, list,
- * adjust, revoke, delegate and preview over HTTP.
+ * adjust, revoke, delegate and preview over HTTP, plus approval authorities.
  *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
@@ -322,6 +322,76 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     const res = await jovan.agent.get(BASE);
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('forbidden');
+  });
+
+  describe('approval authorities', () => {
+    const AA_BASE = `/api/orgs/${ORG}/approval-authorities`;
+    let authorityId: string;
+
+    it('creates, lists and adjusts an approval authority for stefan', async () => {
+      const created = await ivana.agent
+        .post(AA_BASE)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({
+          userId: 'user_stefan',
+          orgUnitId: 'team_product',
+          includeDescendants: true,
+          categories: ['events'],
+          maxAmountMinor: 50_000,
+          alternateUserId: 'user_ana',
+          orgId: 'org_other',
+        });
+      expect(created.status).toBe(201);
+      expect(created.body).toMatchObject({
+        userId: 'user_stefan',
+        orgId: ORG,
+        orgUnitId: 'team_product',
+        includeDescendants: true,
+        categories: ['events'],
+        maxAmountMinor: 50_000,
+        currency: 'EUR',
+        alternateUserId: 'user_ana',
+        isConfidentialApprover: false,
+        delegatedFromId: null,
+      });
+      authorityId = created.body.id as string;
+
+      const list = await ivana.agent.get(AA_BASE);
+      expect(list.status).toBe(200);
+      expect(list.body.items.map((a: { id: string }) => a.id)).toContain(authorityId);
+
+      const patched = await ivana.agent
+        .patch(`${AA_BASE}/${authorityId}`)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ maxAmountMinor: 75_000, isConfidentialApprover: true, userId: 'user_ivana' });
+      expect(patched.status).toBe(200);
+      expect(patched.body).toMatchObject({ id: authorityId, userId: 'user_stefan', maxAmountMinor: 75_000, isConfidentialApprover: true });
+
+      const events = await testDb.db
+        .select({ action: auditEvents.action, details: auditEvents.details })
+        .from(auditEvents)
+        .where(eq(auditEvents.recordId, authorityId));
+      expect(events).toHaveLength(2);
+      for (const event of events) expect(event.action).toBe('approval_authority.changed');
+      expect(events.map((e) => (e.details as { changedFields: string[] }).changedFields)).toEqual(
+        expect.arrayContaining([['maxAmountMinor', 'isConfidentialApprover']]),
+      );
+    });
+
+    it('rejects an alternate equal to the user: 400 validation', async () => {
+      const res = await ivana.agent
+        .post(AA_BASE)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ userId: 'user_stefan', alternateUserId: 'user_stefan' });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
+    });
+
+    it('rejects a user outside the organization: 409 subject_not_member', async () => {
+      const res = await ivana.agent.post(AA_BASE).set('X-CSRF-Token', ivana.csrf).send({ userId: 'user_milica' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('subject_not_member');
+    });
   });
 
   it('the 11th write within a minute returns 429 rate_limited', async () => {

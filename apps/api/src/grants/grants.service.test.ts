@@ -3,7 +3,7 @@
  * mocked repositories and loaders.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONFIDENTIAL_ACTIONS, type GrantInput, type Principal } from '@nestself/contracts';
+import { CONFIDENTIAL_ACTIONS, PERMISSION_TEMPLATES, type GrantInput, type Principal } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import type { GrantRow } from '../db/repositories/authorization.repository.js';
 import { GrantsService } from './grants.service.js';
@@ -82,6 +82,7 @@ function createMocks() {
     delegationDepth: vi.fn(async () => 0),
     listGrantsForOrg: vi.fn(async () => [row()]),
     findAncestorIds: vi.fn(async (id: string) => [id, 'ou_engineering']),
+    listPlatformGrants: vi.fn(async () => [row({ id: 'grant_platform', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null })]),
   };
   const orgUnits = {
     findByIdAndOrg: vi.fn(async (id: string) => ({ id, orgId: ORG })),
@@ -102,6 +103,9 @@ function createMocks() {
       populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
     })),
     invalidateUser: vi.fn(async () => {}),
+    loadAssignments: vi.fn(async () => [
+      { id: 'asg_client', userId: 'user_ana', kind: 'CLIENT', targetId: 'org_client', startAt: NOW, endAt: null },
+    ]),
   };
   const contextLoader = { build: vi.fn() };
   const audit = { record: vi.fn(async () => {}) };
@@ -565,6 +569,142 @@ describe('GrantsService', () => {
       const err = await apiError(svc.preview(ORG, 'user_other', ACTOR));
       expect(err.getStatus()).toBe(404);
       expect(m.contextLoader.build).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── platform grants (operations) ────────────────────────────────────
+
+  describe('createPlatform', () => {
+    const OPS_ACTOR = { userId: 'user_nikola', context: { kind: 'operations' } } as Principal;
+    const PLATFORM = {
+      templateKey: 'support_operator',
+      subjectUserId: 'user_nikola',
+      scopeType: 'assigned_cases' as const,
+      conditions: [],
+    };
+
+    it('rejects an unknown template with 400 template_inactive', async () => {
+      const err = await apiError(svc.createPlatform({ ...PLATFORM, templateKey: 'nope' }, OPS_ACTOR));
+      expect(err.getStatus()).toBe(400);
+      expect(err.code).toBe('template_inactive');
+    });
+
+    it('rejects a template outside the operations workspace with 400 validation', async () => {
+      for (const templateKey of ['hr_admin', 'employee', 'expert']) {
+        const err = await apiError(svc.createPlatform({ ...PLATFORM, templateKey, scopeType: 'organization' }, OPS_ACTOR));
+        expect(err.getStatus()).toBe(400);
+        expect(err.code).toBe('validation');
+      }
+      expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
+    });
+
+    it("rejects a scope type other than the template's own with 400 validation", async () => {
+      const err = await apiError(svc.createPlatform({ ...PLATFORM, scopeType: 'platform' }, OPS_ACTOR));
+      expect(err.getStatus()).toBe(400);
+      expect(err.code).toBe('validation');
+    });
+
+    it('returns 404 for an unknown subject', async () => {
+      m.principalLoader.load.mockResolvedValueOnce(null as never);
+      const err = await apiError(svc.createPlatform(PLATFORM, OPS_ACTOR));
+      expect(err.getStatus()).toBe(404);
+      expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
+    });
+
+    it('stores a grant without an organization, with the template actions and scope', async () => {
+      const res = await svc.createPlatform(PLATFORM, OPS_ACTOR);
+      const values = m.authzRepo.createGrant.mock.calls[0]![0] as Record<string, unknown>;
+      expect(values).toMatchObject({
+        subjectUserId: 'user_nikola',
+        templateKey: 'support_operator',
+        scopeType: 'assigned_cases',
+        scopeOrgId: null,
+        scopeOrgUnitId: null,
+        includeDescendants: false,
+        parentGrantId: null,
+        grantedByUserId: 'user_nikola',
+        validFrom: NOW,
+        validUntil: null,
+      });
+      expect(values['actions']).toEqual([...PERMISSION_TEMPLATES.find((t) => t.key === 'support_operator')!.actions]);
+      expect(m.db.withOrgScope).not.toHaveBeenCalled();
+      expect(res.id).toBe('grant_new');
+    });
+
+    it('audits grant.created without an organization', async () => {
+      await svc.createPlatform(PLATFORM, OPS_ACTOR);
+      const event = (m.audit.record.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+      expect(event).toMatchObject({ action: 'grant.created', orgId: null, recordId: 'grant_new' });
+      expect(event['details']).toMatchObject({ subjectUserId: 'user_nikola', templateKey: 'support_operator', scopeType: 'assigned_cases' });
+    });
+
+    it("invalidates the subject's grants for the platform, member and client organizations", async () => {
+      await svc.createPlatform(PLATFORM, OPS_ACTOR);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_nikola', ['platform', ORG, 'org_client']);
+    });
+  });
+
+  describe('listPlatform', () => {
+    it('lists grants without an organization and filters by subject', async () => {
+      m.authzRepo.listPlatformGrants.mockResolvedValueOnce([
+        row({ id: 'g_a', subjectUserId: 'user_ana', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null }),
+        row({ id: 'g_n', subjectUserId: 'user_nikola', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null }),
+      ]);
+      const res = await svc.listPlatform({ subjectUserId: 'user_nikola', includeRevoked: true });
+      expect(m.authzRepo.listPlatformGrants).toHaveBeenCalledWith({ includeRevoked: true });
+      expect(res.items.map((g) => g.id)).toEqual(['g_n']);
+    });
+  });
+
+  describe('userAccess', () => {
+    function ctxWith(grants: GrantInput[], assignmentIds: string[] = []) {
+      return {
+        now: NOW,
+        isDeactivated: false,
+        isSuspended: false,
+        grants,
+        assignments: assignmentIds.map((id) => ({ id, userId: 'user_ana', kind: 'CASE', targetId: 'c', startAt: NOW, endAt: null })),
+        ancestorIds: [],
+        orgSelfApprovalAllowed: false,
+        organizationTimezone: 'UTC',
+      };
+    }
+
+    it('evaluates one context per ACTIVE membership plus the platform context', async () => {
+      const baseLoaded = await m.principalLoader.load('user_ana');
+      m.principalLoader.load.mockResolvedValueOnce({
+        ...baseLoaded,
+        memberships: [
+          ...baseLoaded.memberships,
+          { membershipId: 'mem_2', orgId: 'org_invited', orgUnitId: null, status: 'INVITED', startDate: NOW.toISOString(), endDate: null },
+        ],
+      } as never);
+      const own = { ...input(row({ id: 'grant_own', scopeType: 'own', scopeOrgId: null, scopeOrgUnitId: null })), actions: ['content.read', 'conversation.participate'] };
+      m.contextLoader.build.mockResolvedValueOnce(ctxWith([own], ['asg_1'])).mockResolvedValueOnce(ctxWith([]));
+
+      const res = await svc.userAccess('user_ana');
+
+      expect(m.contextLoader.build).toHaveBeenCalledTimes(2);
+      const [orgPrincipal, orgResource] = m.contextLoader.build.mock.calls[0]! as [Principal, { orgId?: string }];
+      expect(orgPrincipal.context).toEqual({ kind: 'organization', orgId: ORG });
+      expect(orgResource.orgId).toBe(ORG);
+      const [platformPrincipal, platformResource] = m.contextLoader.build.mock.calls[1]! as [Principal, { orgId?: string }];
+      expect(platformPrincipal.context).toEqual({ kind: 'operations' });
+      expect(platformResource.orgId).toBeUndefined();
+
+      expect(res.userId).toBe('user_ana');
+      expect(res.contexts.map((c) => c.orgId)).toEqual([ORG, null]);
+      expect(res.contexts[0]!.actions).toContain('content.read');
+      expect(res.contexts[0]!.actions).not.toContain('conversation.participate');
+      expect(res.contexts[0]!.grantIds).toEqual(['grant_own']);
+      expect(res.contexts[0]!.assignmentIds).toEqual(['asg_1']);
+      expect(res.contexts[1]).toEqual({ orgId: null, actions: [], grantIds: [], assignmentIds: [] });
+    });
+
+    it('returns 404 for an unknown user', async () => {
+      m.principalLoader.load.mockResolvedValueOnce(null as never);
+      const err = await apiError(svc.userAccess('user_missing'));
+      expect(err.getStatus()).toBe(404);
     });
   });
 });
