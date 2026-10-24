@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
+import { VIDEO_PROVIDER_NAMES } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
 // Reusable field definitions
@@ -106,6 +107,20 @@ export const envSchema = z
       z.literal('').transform(() => undefined),
       z.string().regex(/^\d{6}$/),
     ]).optional(),
+
+    // Video provider (NS-CALLS-01, D-CW-05, D-CW-06): `none` selects the fake
+    VIDEO_PROVIDER: z.enum(VIDEO_PROVIDER_NAMES).default('none'),
+    // Only Frankfurt is accepted, even outside the chime refinement (CW-R-68)
+    CHIME_REGION: z.literal('eu-central-1').optional(),
+    CHIME_EVENTS_QUEUE_URL: optionalUrl,
+    CHIME_EVENTS_QUEUE_ARN: optionalString,
+    RECORDINGS_BUCKET: optionalString,
+    // Nightly real-provider smoke test (CI only). Parsed like the other boolean
+    // flags: `z.coerce.boolean()` would turn the string "false" into true.
+    VIDEO_SMOKE_ENABLED: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => v === 'true'),
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -162,6 +177,26 @@ export const envSchema = z
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message,
+            path: [key],
+          });
+        }
+      }
+    }
+
+    // D-CW-06: the real provider needs the Frankfurt region, the chime-events
+    // queue (D-CW-12) and the recordings bucket (D-CW-18) before start-up.
+    if (data.VIDEO_PROVIDER === 'chime') {
+      const requiredForChime = [
+        'CHIME_REGION',
+        'CHIME_EVENTS_QUEUE_URL',
+        'CHIME_EVENTS_QUEUE_ARN',
+        'RECORDINGS_BUCKET',
+      ] as const;
+      for (const key of requiredForChime) {
+        if (!data[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${key} is required when VIDEO_PROVIDER=chime`,
             path: [key],
           });
         }

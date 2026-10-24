@@ -28,6 +28,7 @@ import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
+import { VideoModule } from './video/video.module.js';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { EmergencyModule } from './emergency/emergency.module.js';
     GrantsModule,
     ProfessionalModule,
     EmergencyModule,
+    VideoModule,
     WsModule,
   ],
   providers: [
