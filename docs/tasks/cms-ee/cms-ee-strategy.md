@@ -2500,7 +2500,7 @@ The `authorizeMany` function (exists at `apps/api/src/authz/authorize-many.ts`, 
 
 **ACC-R-06** Content authoring, review, and publication scope are determined by COLLECTION assignments whose `targetId` is a `categories.id`. The seed and the grant administration endpoints (X-D02) must create these assignments for every staff member who holds `content_author`, `content_reviewer`, or `content_publisher` grants. Changing a resource's primary category requires `content.write` on both the old and the new category: the controller must authorize against both `{ type: 'content_resource', collectionId: oldCategoryId }` and `{ type: 'content_resource', collectionId: newCategoryId }` [EDT-01, epic 5.1].
 
-**ACC-R-07** The review-discipline condition reuses the existing `categories` GrantCondition; no new condition type is introduced (C-08). The `content_reviewer` template carries `requiredConditionTypes: ['categories']`; when a grant is created from it, the `categories` condition's `allowed` array holds the review discipline identifiers that the reviewer is qualified to assess. CMS controllers set `resource.category` to the resource's review discipline (from the `review_discipline` enum) when the action is `content.review`. The existing `evaluateCondition` function in `apps/api/src/authz/conditions.ts:47-51` handles the `categories` condition by checking `resource.category` against `condition.allowed`, so the engine enforces discipline-scoped review without any change to the condition evaluator [EDT-02, epic 9.5].
+**ACC-R-07** The review-discipline condition reuses the existing `categories` GrantCondition; no new condition type is introduced (C-08). The `content_reviewer` template carries `requiredConditionTypes: ['categories']`; when a grant is created from it, the `categories` condition's `allowed` array holds the review discipline identifiers that the reviewer is qualified to assess. CMS controllers set `resource.category` to the resource's review discipline (from the `review_discipline` enum) when the action is `content.review`. Because the `categories` condition passes when a resource carries no `category`, `CmsResourceLoader.forRevision` must always set it for `content.review`, and a resource without a `review_discipline` is refused with `content_review_discipline` before the engine runs, so discipline review can never fail open; a loader test covers it. The existing `evaluateCondition` function in `apps/api/src/authz/conditions.ts:47-51` handles the `categories` condition by checking `resource.category` against `condition.allowed`, so the engine enforces discipline-scoped review without any change to the condition evaluator [EDT-02, epic 9.5].
 
 ### 5.5 Self-review rule
 
@@ -2538,40 +2538,40 @@ The `ActiveContextSchema` personal variant in `packages/contracts/src/auth.ts:12
 
 ### 5.8 Golden-table additions
 
-**ACC-R-16** The following cases must be added to `apps/api/src/authz/golden-table.json`, following the existing tuple format (`GoldenTupleSchema` in `apps/api/src/authz/golden-table.schema.ts`). Each case exercises one new action or one new template [FND-04, C-29].
+**ACC-R-16** The following cases must be added to `apps/api/src/authz/golden-table.json`, following the existing tuple format (`GoldenTupleSchema` in `apps/api/src/authz/golden-table.schema.ts`). Each case exercises one new action or one new template. The ids use the prefix `CMSE` because `CMS-01` to `CMS-06` already exist in the table. Cases that prove the confidential hard deny give the administrative-scope grant the confidential action explicitly, so the denial comes from the scope exclusion and not from a missing action [FND-04, C-29].
 
 | Id | Label | Action | Resource | Key grant/assignment | Expected |
 |---|---|---|---|---|---|
-| `CMS-01` | Author writes in assigned category | `content.write` | `{ type: 'content_resource', collectionId: 'cat-sleep' }` | `content_author` grant, COLLECTION assignment `targetId: 'cat-sleep'` | allowed |
-| `CMS-02` | Author writes in unassigned category | `content.write` | `{ type: 'content_resource', collectionId: 'cat-money' }` | `content_author` grant, COLLECTION assignment `targetId: 'cat-sleep'` | denied, `no_matching_grant` |
-| `CMS-03` | Reviewer approves matching discipline | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep', category: 'psychological' }` | `content_reviewer` grant with `categories: ['psychological']`, COLLECTION assignment `targetId: 'cat-sleep'` | allowed |
-| `CMS-04` | Reviewer denied on wrong discipline | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep', category: 'legal' }` | `content_reviewer` grant with `categories: ['psychological']` | denied, `no_matching_grant` |
-| `CMS-05` | Publisher no longer reviews | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep' }` | `content_publisher` grant (no `content.review` action) | denied, `no_matching_grant` |
-| `CMS-06` | Publisher publishes in scope | `content.publish` | `{ type: 'content_publication', collectionId: 'cat-sleep' }` | `content_publisher` grant, COLLECTION assignment | allowed |
-| `CMS-07` | Publisher previews | `content.preview` | `{ type: 'content_resource', collectionId: 'cat-sleep' }` | `content_publisher` grant with `content.preview` | allowed |
-| `CMS-08` | Editorial lead manages taxonomy | `taxonomy.manage` | `{ type: 'taxonomy' }` | `editorial_lead` grant, scope `platform` | allowed |
-| `CMS-09` | Editorial lead manages home | `home.manage` | `{ type: 'home_slot' }` | `editorial_lead` grant | allowed |
-| `CMS-10` | Employee reads available content (personal with orgId) | `content.read` | `{ type: 'library', ownerId: 'u1', orgId: 'o1' }` | `employee` grant, scope `own` | allowed |
-| `CMS-11` | Employee bookmarks | `content.bookmark` | `{ type: 'saved_item', ownerId: 'u1' }` | `employee` grant | allowed |
-| `CMS-12` | Employee responds to poll | `poll.respond` | `{ type: 'poll_instance', ownerId: 'u1' }` | `employee` grant with `poll.respond` | allowed |
-| `CMS-13` | Employee submits editorial request | `editorial.request.submit` | `{ type: 'editorial_request', ownerId: 'u1' }` | `employee` grant with `editorial.request.submit` | allowed |
-| `CMS-14` | Intake professional views queue | `intake.queue.view` | `{ type: 'intake_queue', queueId: 'q-psych' }` | `intake_professional` grant, QUEUE assignment `targetId: 'q-psych'` | allowed |
-| `CMS-15` | Intake professional claims record | `intake.claim` | `{ type: 'intake_record', queueId: 'q-psych' }` | `intake_professional` grant, QUEUE assignment | allowed |
-| `CMS-16` | Expert responds to claimed intake (confidential) | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `expert` grant with `intake.respond`, CASE assignment `targetId: 'ir-1'` | allowed |
-| `CMS-17` | Expert responds without CASE assignment (denied) | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `expert` grant with `intake.respond`, no CASE assignment | denied |
-| `CMS-18` | Platform owner denied on confidential intake | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `platform_owner` grant, scope `platform` | denied, `confidential_domain_denied` |
-| `CMS-19` | Author uploads media | `media.upload` | `{ type: 'media_asset', collectionId: 'cat-sleep' }` | `content_author` grant with `media.upload`, COLLECTION assignment | allowed |
-| `CMS-20` | Author denied media.manage | `media.manage` | `{ type: 'media_asset' }` | `content_author` grant (no `media.manage`) | denied, `no_matching_grant` |
-| `CMS-21` | Intake lead reassigns | `intake.reassign` | `{ type: 'intake_record', queueId: 'q-psych' }` | `intake_lead` grant, QUEUE assignment | allowed |
-| `CMS-22` | Deactivated user denied content.read | `content.read` | `{ type: 'library', ownerId: 'u-deactivated' }` | `employee` grant | denied, `user_deactivated` |
-| `CMS-23` | Expired membership denied content.read | `content.read` | `{ type: 'library', ownerId: 'u1' }` | `employee` grant, membership `endDate` in the past | denied, `invalid_context` |
-| `CMS-24` | HR reads aggregate report | `reports.aggregate.read` | `{ type: 'content_summary', orgId: 'o1' }` | `hr_admin` grant, scope `organization`, orgId `o1` | allowed |
-| `CMS-25` | Assigned expert reads claimed record body | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `expert` grant with `conversation.read.assigned`, CASE assignment `targetId: 'ir-1'` | allowed |
-| `CMS-26` | Sender reads own intake record | `conversation.participate` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', ownerId: 'u-sender', isConfidential: true }` | `employee` grant with `conversation.participate`, scope `own`, `principal.userId = 'u-sender'` | allowed |
-| `CMS-27` | Another employee reads someone else's intake record | `conversation.participate` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', ownerId: 'u-sender', isConfidential: true }` | `employee` grant with `conversation.participate`, scope `own`, `principal.userId = 'u-other'` (ownerId mismatch) | denied |
-| `CMS-28` | Editorial lead (platform scope) reads intake record body | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `editorial_lead` grant, scope `platform` | denied, `confidential_domain_denied` |
-| `CMS-29` | HR admin (organization scope) reads intake record | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `hr_admin` grant, scope `organization` | denied, `confidential_domain_denied` |
-| `CMS-30` | Expert whose CASE assignment ended (reassigned) reads record | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `expert` grant with `conversation.read.assigned`, no active CASE assignment for `ir-1` | denied |
+| `CMSE-01` | Author writes in assigned category | `content.write` | `{ type: 'content_resource', collectionId: 'cat-sleep' }` | `content_author` grant, COLLECTION assignment `targetId: 'cat-sleep'` | allowed |
+| `CMSE-02` | Author writes in unassigned category | `content.write` | `{ type: 'content_resource', collectionId: 'cat-money' }` | `content_author` grant, COLLECTION assignment `targetId: 'cat-sleep'` | denied, `no_matching_grant` |
+| `CMSE-03` | Reviewer approves matching discipline | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep', category: 'psychological' }` | `content_reviewer` grant with `categories: ['psychological']`, COLLECTION assignment `targetId: 'cat-sleep'` | allowed |
+| `CMSE-04` | Reviewer denied on wrong discipline | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep', category: 'legal' }` | `content_reviewer` grant with `categories: ['psychological']` | denied, `no_matching_grant` |
+| `CMSE-05` | Publisher no longer reviews | `content.review` | `{ type: 'content_revision', collectionId: 'cat-sleep' }` | `content_publisher` grant (no `content.review` action) | denied, `no_matching_grant` |
+| `CMSE-06` | Publisher publishes in scope | `content.publish` | `{ type: 'content_publication', collectionId: 'cat-sleep' }` | `content_publisher` grant, COLLECTION assignment | allowed |
+| `CMSE-07` | Publisher previews | `content.preview` | `{ type: 'content_resource', collectionId: 'cat-sleep' }` | `content_publisher` grant with `content.preview` | allowed |
+| `CMSE-08` | Editorial lead manages taxonomy | `taxonomy.manage` | `{ type: 'taxonomy' }` | `editorial_lead` grant, scope `platform` | allowed |
+| `CMSE-09` | Editorial lead manages home | `home.manage` | `{ type: 'home_slot' }` | `editorial_lead` grant | allowed |
+| `CMSE-10` | Employee reads available content (personal with orgId) | `content.read` | `{ type: 'library', ownerId: 'u1', orgId: 'o1' }` | `employee` grant, scope `own` | allowed |
+| `CMSE-11` | Employee bookmarks | `content.bookmark` | `{ type: 'saved_item', ownerId: 'u1' }` | `employee` grant | allowed |
+| `CMSE-12` | Employee responds to poll | `poll.respond` | `{ type: 'poll_instance', ownerId: 'u1' }` | `employee` grant with `poll.respond` | allowed |
+| `CMSE-13` | Employee submits editorial request | `editorial.request.submit` | `{ type: 'editorial_request', ownerId: 'u1' }` | `employee` grant with `editorial.request.submit` | allowed |
+| `CMSE-14` | Intake professional views queue | `intake.queue.view` | `{ type: 'intake_queue', queueId: 'q-psych' }` | `intake_professional` grant, QUEUE assignment `targetId: 'q-psych'` | allowed |
+| `CMSE-15` | Intake professional claims record | `intake.claim` | `{ type: 'intake_record', queueId: 'q-psych' }` | `intake_professional` grant, QUEUE assignment | allowed |
+| `CMSE-16` | Expert responds to claimed intake (confidential) | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `expert` grant with `intake.respond`, CASE assignment `targetId: 'ir-1'` | allowed |
+| `CMSE-17` | Expert responds without CASE assignment (denied) | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `expert` grant with `intake.respond`, no CASE assignment | denied |
+| `CMSE-18` | Platform owner denied on confidential intake | `intake.respond` | `{ type: 'intake_record', id: 'ir-1', isConfidential: true }` | `platform_owner` grant, scope `platform` | denied, `no_matching_grant` (administrative scopes are skipped for confidential resources) |
+| `CMSE-19` | Author uploads media | `media.upload` | `{ type: 'media_asset', collectionId: 'cat-sleep' }` | `content_author` grant with `media.upload`, COLLECTION assignment | allowed |
+| `CMSE-20` | Author denied media.manage | `media.manage` | `{ type: 'media_asset', collectionId: 'cat-sleep' }` | `content_author` grant (no `media.manage`), COLLECTION assignment `targetId: 'cat-sleep'` | denied, `no_matching_grant` |
+| `CMSE-21` | Intake lead reassigns | `intake.reassign` | `{ type: 'intake_record', queueId: 'q-psych' }` | `intake_lead` grant, QUEUE assignment | allowed |
+| `CMSE-22` | Deactivated user denied content.read | `content.read` | `{ type: 'library', ownerId: 'u-deactivated' }` | `employee` grant | denied, `user_deactivated` |
+| `CMSE-23` | Expired membership denied content.read | `content.read` | `{ type: 'library', ownerId: 'u1' }` | `employee` grant, membership `endDate` in the past | denied, `invalid_context` |
+| `CMSE-24` | HR reads aggregate report | `reports.aggregate.read` | `{ type: 'content_summary', orgId: 'o1' }` | `hr_admin` grant, scope `organization`, orgId `o1` | allowed |
+| `CMSE-25` | Assigned expert reads claimed record body | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `expert` grant with `conversation.read.assigned`, CASE assignment `targetId: 'ir-1'` | allowed |
+| `CMSE-26` | Sender reads own intake record | `conversation.participate` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', ownerId: 'u-sender', isConfidential: true }` | `employee` grant with `conversation.participate`, scope `own`, `principal.userId = 'u-sender'` | allowed |
+| `CMSE-27` | Another employee reads someone else's intake record | `conversation.participate` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', ownerId: 'u-sender', isConfidential: true }` | `employee` grant with `conversation.participate`, scope `own`, `principal.userId = 'u-other'` (ownerId mismatch) | denied |
+| `CMSE-28` | Editorial lead (platform scope) reads intake record body | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `editorial_lead` grant, scope `platform` | denied, `no_matching_grant` (administrative scopes are skipped for confidential resources) |
+| `CMSE-29` | HR admin (organization scope) reads intake record | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `hr_admin` grant, scope `organization` | denied, `no_matching_grant` (administrative scopes are skipped for confidential resources) |
+| `CMSE-30` | Expert whose CASE assignment ended (reassigned) reads record | `conversation.read.assigned` | `{ type: 'intake_record', id: 'ir-1', orgId: 'o1', isConfidential: true }` | `expert` grant with `conversation.read.assigned`, no active CASE assignment for `ir-1` | denied, `no_matching_assignment` |
 
 ### 5.9 `AvailabilityService`
 
@@ -2759,8 +2759,8 @@ The `library_home:{orgId}:{membershipId}:{locale}:{availabilityVersion}` cache k
 2. The default-deny test covers every new CMS, library, engagement, editorial, professional, and reporting controller route.
 3. The availability golden table spec (`apps/api/test/db/availability.golden.spec.ts`) passes all 22 cases against real PostgreSQL with RLS enabled.
 4. A serialization test proves no employee-facing DTO leaks draft ids, review comments, audience rows, or unpublished translations.
-5. `content_publisher` no longer carries `content.review`; a publisher-only grant is denied on `content.review` (CMS-05).
-6. `intake.respond` on a confidential resource is denied without a CASE assignment (CMS-17) and denied for a platform owner (CMS-18).
+5. `content_publisher` no longer carries `content.review`; a publisher-only grant is denied on `content.review` (CMSE-05).
+6. `intake.respond` on a confidential resource is denied without a CASE assignment (CMSE-17) and denied for a platform owner (CMSE-18).
 7. The personal-context `orgId` extension is accepted by the updated `ActiveContextSchema` and the golden-table schema; existing tuples still pass.
 
 
