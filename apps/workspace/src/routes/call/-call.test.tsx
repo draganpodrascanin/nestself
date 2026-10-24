@@ -2,13 +2,15 @@
  * The call route in API mode (T-CW-1.5): join failures render translated
  * copy, a closed window explains itself, a successful join reaches the call
  * and the post-call feedback posts to the API. The Chime controller is
- * replaced by `FakeCallSessionController`; the call room by the no-op client.
+ * replaced by `FakeCallSessionController`; the call room by a stub whose
+ * handlers the test calls as the server would.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { CallRoomHandlers } from '@nestself/api-client';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import en from '@nestself/i18n/locales/en/calls.json';
 
@@ -32,10 +34,19 @@ vi.mock('../../calls/use-consultation-controller', async () => {
   };
 });
 
-vi.mock('../../calls/call-room-client', async () => {
-  const { noopCallRoomClient } = await import('@nestself/api-client');
-  return { callRoomClient: noopCallRoomClient };
-});
+/** The call room as the route sees it: the test fires the server's events. */
+const room = vi.hoisted(() => ({ sessionId: null as string | null, handlers: null as CallRoomHandlers | null }));
+vi.mock('../../calls/call-room-client', () => ({
+  callRoomClient: {
+    subscribe: (sessionId: string, handlers: CallRoomHandlers) => {
+      room.sessionId = sessionId;
+      room.handlers = handlers;
+      return () => {
+        room.handlers = null;
+      };
+    },
+  },
+}));
 
 import { routeTree } from '../../routeTree.gen';
 import { api } from '../../api';
@@ -212,6 +223,30 @@ describe('call route (API mode)', () => {
     await user.click(screen.getByRole('button', { name: en.feedback.submit }));
     expect((await screen.findAllByText(en.errors.rateLimited)).length).toBeGreaterThan(0);
   });
+
+  it('shows the expert running late, signals as toasts, and the post-call screen after the session ends', async () => {
+    const appointment = appointmentAt(Date.now() + 5 * MINUTE);
+    serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment),
+      'POST /api/appointments/appt_1/join': () => json(200, joinResponse(appointment)),
+    });
+    renderCall();
+    const user = userEvent.setup();
+    await user.click(await readyToJoin());
+
+    expect(await screen.findByText(en.waiting.expertSoon, {}, { timeout: 5000 })).toBeInTheDocument();
+    await waitFor(() => expect(room.sessionId).toBe('sess_1'));
+
+    act(() => room.handlers?.onSignal?.({ type: 'running_late', etaMinutes: 5, fromRole: 'expert' }));
+    expect(await screen.findByText('Your expert is running late and will join in about 5 minutes.')).toBeInTheDocument();
+
+    act(() => room.handlers?.onSignal?.({ type: 'cannot_hear', fromRole: 'expert' }));
+    expect((await screen.findAllByText(en.signals.cannotHear)).length).toBeGreaterThan(0);
+
+    act(() => room.handlers?.onSessionEnded?.());
+    expect(await screen.findByText(en.consultation.sessionEnded)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: en.postCall.ended }, { timeout: 8000 })).toBeInTheDocument();
+  }, 15_000);
 
   it('sends a signed-out visitor to sign-in with the call as the return path', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(json(401, { code: 'unauthenticated', message: 'No session' })));

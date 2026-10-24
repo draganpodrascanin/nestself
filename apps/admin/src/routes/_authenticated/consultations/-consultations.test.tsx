@@ -1,0 +1,106 @@
+/**
+ * Admin consultations in sample mode (CALL-18, CALL-21, CALL-23, D-CW-37):
+ * the expert's list with the outcome column, the operations view without
+ * links, and the expert's call ending in the outcome dialog and the
+ * follow-up card. Nothing is sent.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
+import { QueryClient } from '@tanstack/react-query';
+import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
+import calls from '@nestself/i18n/locales/en/calls.json';
+import common from '@nestself/i18n/locales/en/common.json';
+import { routeTree } from '../../../routeTree.gen';
+import i18n from '../../../i18n';
+
+/** 25 October 2026, 10:00 in Belgrade: before every upcoming sample appointment. */
+const NOW = new Date('2026-10-25T09:00:00.000Z');
+
+function renderAt(path: string, role: keyof typeof SAMPLE_PRINCIPALS) {
+  window.history.replaceState(null, '', `/?role=${role}`);
+  const sample = SAMPLE_PRINCIPALS[role];
+  const router = createRouter({
+    routeTree,
+    context: { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }), auth: { principal: sample.principal, effectiveActions: sample.effectiveActions } },
+    history: createMemoryHistory({ initialEntries: [path] }),
+  });
+  render(<RouterProvider router={router} />);
+  return router;
+}
+
+describe('admin consultations (sample mode)', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    await i18n.changeLanguage('en');
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it("lists the expert's consultations with employee, status and outcome, linked to the detail", async () => {
+    renderAt('/consultations', 'expert');
+
+    expect(await screen.findByRole('heading', { name: calls.consultations.title, level: 1 })).toBeInTheDocument();
+    expect(screen.getByText(common.sample.banner)).toBeInTheDocument();
+    const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(5);
+    // Sorted by start: the completed session of 14 October first.
+    expect(within(rows[0]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_completed');
+    expect(within(rows[0]!).getByText(calls.consultations.outcomeColumn.completed)).toBeInTheDocument();
+    expect(within(rows[1]!).getByText(calls.consultations.outcomeColumn.canceled)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: calls.consultations.nav }).length).toBeGreaterThan(0);
+  });
+
+  it('shows operations the list without links', async () => {
+    renderAt('/consultations', 'operations');
+
+    expect(await screen.findByText(calls.consultations.operationsNote)).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('keeps the employee out of the admin consultations', async () => {
+    renderAt('/consultations', 'employee');
+    expect(await screen.findByText(common.state.permission.title)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('offers the follow-up proposal on a completed consultation and sends nothing', async () => {
+    const user = userEvent.setup();
+    renderAt('/consultations/appt_sample_completed', 'expert');
+
+    expect(await screen.findByRole('heading', { name: calls.followUp.expertTitle })).toBeInTheDocument();
+    expect(screen.getByText(calls.consultations.you.replace('{{name}}', 'Milica'))).toBeInTheDocument();
+    await user.type(screen.getByLabelText(calls.followUp.date), '2026-11-20');
+    await user.type(screen.getByLabelText(calls.followUp.time), '10:00');
+    await user.click(screen.getByRole('button', { name: calls.followUp.send }));
+    expect(await screen.findByText(calls.sample.actionNoop)).toBeInTheDocument();
+  });
+
+  it('runs the sample call, ends it for everyone and records the outcome', async () => {
+    const user = userEvent.setup();
+    renderAt('/consultations/appt_sample_upcoming', 'expert');
+
+    const comeBack = await screen.findByRole('button', { name: /^Come back at / });
+    expect(comeBack).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: calls.join.sampleDemo }));
+
+    const join = await screen.findByRole('button', { name: calls.prejoin.joinNow });
+    await waitFor(() => expect(join).toBeEnabled());
+    await user.click(join);
+
+    await user.click(await screen.findByRole('button', { name: calls.controls.endForEveryone }, { timeout: 5000 }));
+    await user.click(await screen.findByRole('button', { name: calls.consultation.end }));
+
+    const dialog = await screen.findByRole('dialog', { name: calls.outcome.title }, { timeout: 5000 });
+    await user.click(within(dialog).getByRole('radio', { name: calls.outcome.status.completed }));
+    await user.click(within(dialog).getByRole('button', { name: calls.outcome.submit }));
+
+    expect(await screen.findByText(new RegExp(calls.consultations.outcomeRecorded.replace('{{status}}', calls.outcome.status.completed)))).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: calls.followUp.expertTitle })).toBeInTheDocument();
+  });
+});

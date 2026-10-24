@@ -72,7 +72,11 @@ export interface ConsultationCallProps {
 
 function PageFrame({ children }: { children: ReactNode }) {
   return (
-    <main id="main" tabIndex={-1} className="gap-6 px-4 py-6 sm:px-6 mx-auto flex w-full max-w-4xl flex-col">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="gap-6 px-4 py-6 sm:px-6 max-w-4xl mx-auto flex w-full flex-col"
+    >
       {children}
     </main>
   );
@@ -92,15 +96,19 @@ function WaitingPanel({
   return (
     <section
       aria-labelledby="waiting-title"
-      className="gap-3 p-4 mx-auto flex w-full max-w-md flex-col rounded-card border border-border-subtle bg-surface text-text shadow-low"
+      className="gap-3 p-4 max-w-md mx-auto flex w-full flex-col rounded-card border border-border-subtle bg-surface text-text shadow-low"
     >
       <h2 id="waiting-title" className="type-label text-text">
         {expertName ? t('waiting.expertSoonNamed', { name: expertName }) : t('waiting.expertSoon')}
       </h2>
-      <p className="type-metadata text-text-secondary">{t('waiting.scheduled', { time: format.time(appointment.startsAt, appointment.timeZone) })}</p>
+      <p className="type-metadata text-text-secondary">
+        {t('waiting.scheduled', { time: format.time(appointment.startsAt, appointment.timeZone) })}
+      </p>
       <Reveal show={runningLate !== null}>
         <Alert tone="info">
-          {runningLate?.etaMinutes ? t('waiting.runningLateEta', { count: runningLate.etaMinutes }) : t('waiting.runningLate')}
+          {runningLate?.etaMinutes
+            ? t('waiting.runningLateEta', { count: runningLate.etaMinutes })
+            : t('waiting.runningLate')}
         </Alert>
       </Reveal>
       <h3 className="type-metadata text-text">{t('waiting.tipsTitle')}</h3>
@@ -120,7 +128,11 @@ function JoinGate({ appointment }: { appointment: Appointment }) {
   const window = useJoinWindow(appointment);
   if (!window || window.kind === 'open') return null;
   if (window.kind === 'before') {
-    return <Alert tone="info">{t('join.comeBackAt', { time: format.time(window.opensAt, appointment.timeZone) })}</Alert>;
+    return (
+      <Alert tone="info">
+        {t('join.comeBackAt', { time: format.time(window.opensAt, appointment.timeZone) })}
+      </Alert>
+    );
   }
   if (window.kind === 'closed') {
     return (
@@ -144,7 +156,11 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
   const { announce } = useAnnounce();
   const phaseMotion = useMotionPreset('backdrop');
   const [probe] = useState(() => callsApi.networkProbe(appointment.id));
-  const controller: CallSessionControllerApi = useConsultationController({ role: 'employee', format: 'consultation', probeNetwork: probe });
+  const controller: CallSessionControllerApi = useConsultationController({
+    role: 'employee',
+    format: 'consultation',
+    probeNetwork: probe,
+  });
   const call = useCallSession(controller);
   const devices = useDevices(controller);
   const quality = useConnectionQuality(controller);
@@ -191,7 +207,10 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
         recorder.add(events);
         return events;
       },
-      post: (events) => (isSampleDataMode || !sessionId ? Promise.resolve() : callsApi.postClientEvents(sessionId, events)),
+      post: (events) =>
+        isSampleDataMode || !sessionId
+          ? Promise.resolve()
+          : callsApi.postClientEvents(sessionId, events),
     });
     poster.current = started;
     return () => {
@@ -210,10 +229,17 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
     if (signal.fromRole !== 'expert') return;
     if (signal.type === 'running_late') {
       setRunningLate({ etaMinutes: signal.etaMinutes });
-      announce(signal.etaMinutes ? t('waiting.runningLateEta', { count: signal.etaMinutes }) : t('waiting.runningLate'));
+      announce(
+        signal.etaMinutes
+          ? t('waiting.runningLateEta', { count: signal.etaMinutes })
+          : t('waiting.runningLate'),
+      );
       return;
     }
-    toast.add({ title: t(signal.type === 'cannot_hear' ? 'signals.cannotHear' : 'signals.cannotSee'), tone: 'warning' });
+    toast.add({
+      title: t(signal.type === 'cannot_hear' ? 'signals.cannotHear' : 'signals.cannotSee'),
+      tone: 'warning',
+    });
   });
   const onExpertPresence = useEffectEvent((role: string, present: boolean) => {
     if (role !== 'expert') return;
@@ -245,7 +271,8 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
 
   // Sample mode: the fake expert joins shortly after the employee.
   useEffect(() => {
-    if (!isSampleDataMode || !joined || !(controller instanceof FakeCallSessionController)) return undefined;
+    if (!isSampleDataMode || !joined || !(controller instanceof FakeCallSessionController))
+      return undefined;
     const id = setTimeout(() => {
       controller.simulate.remoteJoined();
       setExpertPresent(true);
@@ -269,7 +296,10 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
     const text = locationText.trim();
     let response: CallJoinResponse;
     try {
-      response = await callsApi.join(appointment.id, sharesLocation && text ? { locationText: text } : {});
+      response = await callsApi.join(
+        appointment.id,
+        sharesLocation && text ? { locationText: text } : {},
+      );
     } catch (err) {
       onError(mapCallError(err, t));
       return;
@@ -328,9 +358,15 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
     date: format.date(appointment.startsAt, appointment.timeZone),
     time: format.time(appointment.startsAt, appointment.timeZone),
   });
-  const sampleNotice = isSampleDataMode ? <Alert tone="info">{t('call.sampleNotice')}</Alert> : null;
+  const sampleNotice = isSampleDataMode ? (
+    <Alert tone="info">{t('call.sampleNotice')}</Alert>
+  ) : null;
   const backLink = (
-    <Link to="/appointments/$appointmentId" params={{ appointmentId: appointment.id }} className="type-body text-primary underline underline-offset-[0.2em]">
+    <Link
+      to="/appointments/$appointmentId"
+      params={{ appointmentId: appointment.id }}
+      className="type-body text-primary underline underline-offset-[0.2em]"
+    >
       {t('call.backToAppointment')}
     </Link>
   );
@@ -352,7 +388,11 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
         {open ? (
           <>
             <Reveal show={!isSampleDataMode && window?.kind === 'open' && window.late}>
-              <Alert tone="info">{t('join.lateJoin', { time: format.time(appointment.startsAt, appointment.timeZone) })}</Alert>
+              <Alert tone="info">
+                {t('join.lateJoin', {
+                  time: format.time(appointment.startsAt, appointment.timeZone),
+                })}
+              </Alert>
             </Reveal>
             {sharesLocation ? (
               <div className="max-w-xl">
@@ -362,11 +402,21 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
                   optionalLabel={t('location.optional')}
                   error={locationError ?? undefined}
                 >
-                  <Input value={locationText} onChange={(event) => setLocationText(event.target.value)} autoComplete="off" name="locationText" />
+                  <Input
+                    value={locationText}
+                    onChange={(event) => setLocationText(event.target.value)}
+                    autoComplete="off"
+                    name="locationText"
+                  />
                 </Field>
               </div>
             ) : null}
-            <PreJoinCheck controller={controller} onJoin={() => void join()} joining={joining} error={joinError} />
+            <PreJoinCheck
+              controller={controller}
+              onJoin={() => void join()}
+              joining={joining}
+              error={joinError}
+            />
           </>
         ) : null}
       </PageFrame>
@@ -374,7 +424,12 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
   } else if (phase === 'call') {
     const waiting = call.status === 'connected' && !remotePresent;
     content = (
-      <main id="main" tabIndex={-1} className="h-dvh w-full">
+      // The sample banner is sticky above the page: leave it room so the stage never scrolls under it.
+      <main
+        id="main"
+        tabIndex={-1}
+        className={isSampleDataMode ? 'h-[calc(100dvh-5rem)] w-full' : 'h-dvh w-full'}
+      >
         <CallStage
           controller={controller}
           remoteName={expertName ?? undefined}
@@ -398,31 +453,47 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
                     }}
                   />
                 ) : null}
-                <ConnectionBadge quality={quality.level} reconnecting={quality.reconnecting} videoPaused={quality.videoPaused} />
+                <ConnectionBadge
+                  quality={quality.level}
+                  reconnecting={quality.reconnecting}
+                  videoPaused={quality.videoPaused}
+                />
               </div>
               <CrisisResourcesButton audience="employee" />
-              <Reveal show={waiting} className="basis-full">
-                <WaitingPanel appointment={appointment} expertName={expertName} runningLate={runningLate} />
-              </Reveal>
             </>
           }
           controls={
-            <ControlBar
-              participantRole="employee"
-              muted={call.media.muted}
-              cameraOn={call.media.cameraOn}
-              blur={devices.blur}
-              fullscreen={fullscreen.isFullscreen}
-              devices={devices}
-              onToggleMute={call.toggleMute}
-              onToggleCamera={() => void call.toggleCamera()}
-              onToggleBlur={() => void controller.setBlur(!devices.blur.enabled)}
-              onSelectDevice={(kind, deviceId) => void controller.selectDevice(kind, deviceId)}
-              onToggleFullscreen={fullscreen.supported ? () => void fullscreen.toggle() : undefined}
-              onSignal={(signal) => void sendSignal(signal)}
-              onLeave={() => void leave()}
-              error={controlError}
-            />
+            <div className="gap-3 flex w-full flex-col items-center">
+              {/* Ended from the call room: the stage shows no overlay after our own leave, so say it here until the post-call screen. */}
+              <Reveal show={left && call.endReason === 'left'} className="w-full max-w-md">
+                <Alert tone="info">{t('consultation.sessionEnded')}</Alert>
+              </Reveal>
+              <Reveal show={waiting} className="w-full">
+                <WaitingPanel
+                  appointment={appointment}
+                  expertName={expertName}
+                  runningLate={runningLate}
+                />
+              </Reveal>
+              <ControlBar
+                participantRole="employee"
+                muted={call.media.muted}
+                cameraOn={call.media.cameraOn}
+                blur={devices.blur}
+                fullscreen={fullscreen.isFullscreen}
+                devices={devices}
+                onToggleMute={call.toggleMute}
+                onToggleCamera={() => void call.toggleCamera()}
+                onToggleBlur={() => void controller.setBlur(!devices.blur.enabled)}
+                onSelectDevice={(kind, deviceId) => void controller.selectDevice(kind, deviceId)}
+                onToggleFullscreen={
+                  fullscreen.supported ? () => void fullscreen.toggle() : undefined
+                }
+                onSignal={(signal) => void sendSignal(signal)}
+                onLeave={() => void leave()}
+                error={controlError}
+              />
+            </div>
           }
         />
       </main>
@@ -431,18 +502,32 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
     content = (
       <PageFrame>
         <Heading level={1} typeRole="screenTitle">
-          {reason === 'left' ? t('postCall.left') : reason === 'room_closed' ? t('postCall.roomClosed') : t('postCall.ended')}
+          {reason === 'left'
+            ? t('postCall.left')
+            : reason === 'room_closed'
+              ? t('postCall.roomClosed')
+              : t('postCall.ended')}
         </Heading>
         {sampleNotice}
-        <EmployeeFollowUpPanel
-          key={proposal?.followUpId ?? 'none'}
-          followUpId={proposal?.followUpId ?? appointment.id}
-          proposal={proposal ? { startsAt: proposal.startsAt, durationMinutes: proposal.durationMinutes, timeZone: appointment.timeZone } : null}
-          status={proposal ? 'proposed' : 'no_proposal'}
-        />
+        {/* A proposal from the room (D-CW-37); the card animates in when it arrives. */}
+        {proposal ? (
+          <EmployeeFollowUpPanel
+            key={proposal.followUpId}
+            followUpId={proposal.followUpId}
+            proposal={{
+              startsAt: proposal.startsAt,
+              durationMinutes: proposal.durationMinutes,
+              timeZone: appointment.timeZone,
+            }}
+            status="proposed"
+          />
+        ) : null}
         <FeedbackForm appointmentId={appointment.id} />
         <ReportProblemDialog sessionId={sessionId} recorder={recorder} />
-        <Link to="/appointments" className="type-body text-primary underline underline-offset-[0.2em]">
+        <Link
+          to="/appointments"
+          className="type-body text-primary underline underline-offset-[0.2em]"
+        >
           {t('postCall.backToAppointments')}
         </Link>
       </PageFrame>

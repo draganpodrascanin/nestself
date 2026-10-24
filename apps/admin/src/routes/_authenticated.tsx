@@ -1,10 +1,11 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
+import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
 import { ApiStatus } from './__root';
 
 function PermissionBlock() {
@@ -22,32 +23,40 @@ function PermissionBlock() {
 }
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation('admin');
+  const { t } = useTranslation(['admin', 'calls']);
   const { principal, effectiveActions } = useAuth();
 
   // Access gate: must have relevant admin permissions (CLIENT-R-05/06).
   // Smallest honest rule: at least one of these, or having staff templates.
-  const hasAccess =
-    principal &&
+  const staffAccess =
+    !!principal &&
     (can(principal, 'client.configure', undefined, effectiveActions) ||
       can(principal, 'content.publish', undefined, effectiveActions) ||
       principal.staffTemplates.length > 0);
+  // Experts hold no staff template; their admin space is their consultations (T-CW-1.5).
+  const expertAccess = isConsultingExpert(principal, effectiveActions);
 
-  if (!hasAccess) {
+  if (!principal || (!staffAccess && !expertAccess)) {
     return <PermissionBlock />;
   }
 
   const showAccess = can(principal, 'access.preview', undefined, effectiveActions);
+  const consultationsNav = canListConsultations(principal, effectiveActions)
+    ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
+    : [];
 
-  const navItems = [
-    { to: '/' as const, icon: House, label: t('nav.overview') },
-    { to: '/experts' as const, icon: Users, label: t('nav.experts') },
-    { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
-    ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
-    { to: '/content' as const, icon: Article, label: t('nav.content') },
-    { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
-    { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
-  ];
+  const navItems = staffAccess
+    ? [
+        { to: '/' as const, icon: House, label: t('nav.overview') },
+        ...consultationsNav,
+        { to: '/experts' as const, icon: Users, label: t('nav.experts') },
+        { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
+        ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
+        { to: '/content' as const, icon: Article, label: t('nav.content') },
+        { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
+        { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
+      ]
+    : [...consultationsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
 
   return (
     <AppShell
