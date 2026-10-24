@@ -244,10 +244,10 @@ This document is the engineering reference for epic `NS-CONTENT-01` (content, di
 
 | Milestone | Delivers (epic 22.1) | Sections to read |
 |---|---|---|
-| M1 | Domain boundaries, grants, minimal editor, article, private asset, employee detail, bookmark | 0, 1, 2, 3, 4 (tables of migration `0003`), 5 (all), 6, 7.1 to 7.4, 8.1 to 8.8, 9.1, 9.6, 9.7, 9.10, 9.11, 15, 16, 17, 18.1 and 18.2, Appendix B |
-| M2 | Full review and publishing, categories, languages, Home, collections, all formats, search | 4 (migration `0004`), 5.9 and 5.10, 7 (all), 8 (all), 9 (all), 15, 16, 18.3 |
-| M3 | Feedback, polls, requests, next-action queue, notifications | 4 (migration `0005`), 10, 11, 12.1, 12.2, 12.11, 13.1 to 13.5, 13.8, 14, 15, 16, 18.4 |
-| M4 | Restricted general questions, derived Q&A permission, metrics, retention, operational controls, pilot | 4 (migration `0006`), 12 (all), 13 (all), 14, 17, 18.5, 19 |
+| M1 | Domain boundaries, grants, minimal editor, article, private asset, employee detail, bookmark | 0, 1, 2, 3, 4 (tables of migration `0006`), 5 (all), 6, 7.1 to 7.4, 8.1 to 8.8, 9.1, 9.6, 9.7, 9.10, 9.11, 15, 16, 17, 18.1 and 18.2, Appendix B |
+| M2 | Full review and publishing, categories, languages, Home, collections, all formats, search | 4 (migration `0007`), 5.9 and 5.10, 7 (all), 8 (all), 9 (all), 15, 16, 18.3 |
+| M3 | Feedback, polls, requests, next-action queue, notifications | 4 (migration `0008`), 10, 11, 12.1, 12.2, 12.11, 13.1 to 13.5, 13.8, 14, 15, 16, 18.4 |
+| M4 | Restricted general questions, derived Q&A permission, metrics, retention, operational controls, pilot | 4 (migration `0009`), 12 (all), 13 (all), 14, 17, 18.5, 19 |
 
 Requirements are numbered by section prefix: `CTX-R-nn` (section 2), `ARC-R-nn` (3), `DAT-R-nn` (4), `ACC-R-nn` (5), `FMT-R-nn` (6), `WRK-R-nn` (7), `MED-R-nn` (8), `LIB-R-nn` (9), `POL-R-nn` (10), `DEM-R-nn` (11), `INT-R-nn` (12), `NTF-R-nn` (13), `RET-R-nn` (14), `RTE-R-nn` (15), `CLI-R-nn` (16), `TST-R-nn` (17). "Must", "must not" and "should" carry their standard force. The epic's backlog ids (`FND-01`, `EDT-02`, `EMP-C03`, `ENG-03`, `REQ-04`, `QA-02`, `OPS-C01` and so on) appear in brackets after the requirements that satisfy them; Appendix C maps every backlog id to its requirements and tasks.
 
@@ -744,7 +744,7 @@ The full list of new variables is in Appendix A. The critical additions are:
 
 ## 4 Data model
 
-This section is the canonical column-level definition of every table in Part B of the decision record. It specifies columns, types, nullability, defaults, primary keys, foreign keys, unique and partial indexes, check constraints and RLS policies. Drizzle sketches follow the actual style of `apps/api/src/db/schema/*.ts`. The section also maps the ten invariants of epic 18.2 to their enforcement mechanism, specifies migrations 0003 through 0006, defines the seed changes and describes the synthetic acceptance dataset.
+This section is the canonical column-level definition of every table in Part B of the decision record. It specifies columns, types, nullability, defaults, primary keys, foreign keys, unique and partial indexes, check constraints and RLS policies. Drizzle sketches follow the actual style of `apps/api/src/db/schema/*.ts`. The section also maps the ten invariants of epic 18.2 to their enforcement mechanism, specifies migrations 0006 through 0009, defines the seed changes and describes the synthetic acceptance dataset.
 
 ### 4.1 Enums
 
@@ -1045,7 +1045,7 @@ export const contentVariants = pgTable(
 | `created_at` | timestamptz(3) | no | `now()` | |
 | `updated_at` | timestamptz(3) | no | `now()` | |
 
-**PK:** `id`. **FKs:** `content_variant_id -> content_variants(id) ON DELETE CASCADE`; user FKs `ON DELETE RESTRICT`. **Unique:** `(content_variant_id, revision_number)`. **Partial unique index:** at most one working revision per variant: `CREATE UNIQUE INDEX content_revisions_working_key ON content_revisions (content_variant_id) WHERE state IN ('draft', 'changes_requested')` (Drizzle cannot express this; hand-written in migration 0003). **Check:** `array_length(related_resource_ids, 1) IS NULL OR array_length(related_resource_ids, 1) <= 3`. **RLS:** None.
+**PK:** `id`. **FKs:** `content_variant_id -> content_variants(id) ON DELETE CASCADE`; user FKs `ON DELETE RESTRICT`. **Unique:** `(content_variant_id, revision_number)`. **Partial unique index:** at most one working revision per variant: `CREATE UNIQUE INDEX content_revisions_working_key ON content_revisions (content_variant_id) WHERE state IN ('draft', 'changes_requested')` (Drizzle cannot express this; hand-written in migration 0006). **Check:** `array_length(related_resource_ids, 1) IS NULL OR array_length(related_resource_ids, 1) <= 3`. **RLS:** None.
 
 ```ts
 export const contentRevisions = pgTable(
@@ -1364,7 +1364,7 @@ export const pollResponses = pgTable(
 | `idempotency_key` | text | yes | | Client-supplied for deduplication |
 | `created_at` | timestamptz(3) | no | `now()` | |
 
-**PK:** `id`. **FKs:** standard references with `ON DELETE RESTRICT` for content FKs and `ON DELETE CASCADE` for membership. **Partial unique index:** `CREATE UNIQUE INDEX editorial_requests_idempotency_key ON editorial_requests (idempotency_key) WHERE idempotency_key IS NOT NULL` (hand-written in migration 0005). **Indexes:** `(org_id, status)`, `(owner_user_id, status)`, `(status, next_action_due_at)`. **RLS:** `tenantPredicate(t.orgId)`.
+**PK:** `id`. **FKs:** standard references with `ON DELETE RESTRICT` for content FKs and `ON DELETE CASCADE` for membership. **Partial unique index:** `CREATE UNIQUE INDEX editorial_requests_idempotency_key ON editorial_requests (idempotency_key) WHERE idempotency_key IS NOT NULL` (hand-written in migration 0008). **Indexes:** `(org_id, status)`, `(owner_user_id, status)`, `(status, next_action_due_at)`. **RLS:** `tenantPredicate(t.orgId)`.
 
 ```ts
 export const editorialRequests = pgTable(
@@ -2125,10 +2125,10 @@ Epic 18.2 defines ten invariants. Each maps to a constraint or service check.
 
 Four migrations span milestones M1 through M4 [Part B].
 
-**Migration `0003_cms_ee_foundation` (M1).** Generated by `drizzle-kit generate` for all M1 tables: `content_resources`, `content_variants`, `content_revisions`, `content_revision_media`, `content_publications`, `content_publication_audiences`, `categories`, `category_labels`, `media_assets`, `media_renditions`, `saved_items`, `playback_states`, `content_preferences`, `org_content_capabilities`, `outbox_events`, `outbox_deliveries`, `notifications`, plus all new enums. Custom SQL part:
+**Migration `0006_cms_ee_foundation` (M1).** Generated by `drizzle-kit generate` for all M1 tables: `content_resources`, `content_variants`, `content_revisions`, `content_revision_media`, `content_publications`, `content_publication_audiences`, `categories`, `category_labels`, `media_assets`, `media_renditions`, `saved_items`, `playback_states`, `content_preferences`, `org_content_capabilities`, `outbox_events`, `outbox_deliveries`, `notifications`, plus all new enums. Custom SQL part:
 
 ```sql
--- 0003_cms_ee_foundation.sql (custom part)
+-- 0006_cms_ee_foundation.sql (custom part)
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS unaccent;
@@ -2172,11 +2172,11 @@ CREATE UNIQUE INDEX content_revisions_working_key
   WHERE state IN ('draft', 'changes_requested');
 ```
 
-**Migration `0004_cms_ee_discovery` (M2).** Tables: `topics`, `topic_labels`, `topic_redirects`, `needs`, `need_labels`, `content_resource_topics`, `content_resource_needs`, `content_resource_categories`, `collection_entries`, `content_revision_reviews`, `content_search_documents`, `search_synonyms`, `home_slots`. Drops `content_items` (the seed no longer writes it after M2). Custom SQL: GIN index on `weighted_tsv`, GiST trigram index on `folded_text`, grants to `nestself_app` for all new tables. No FORCE RLS (no new tenant tables in M2).
+**Migration `0007_cms_ee_discovery` (M2).** Tables: `topics`, `topic_labels`, `topic_redirects`, `needs`, `need_labels`, `content_resource_topics`, `content_resource_needs`, `content_resource_categories`, `collection_entries`, `content_revision_reviews`, `content_search_documents`, `search_synonyms`, `home_slots`. Drops `content_items` (the seed no longer writes it after M2). Custom SQL: GIN index on `weighted_tsv`, GiST trigram index on `folded_text`, grants to `nestself_app` for all new tables. No FORCE RLS (no new tenant tables in M2).
 
-**Migration `0005_cms_ee_engagement_requests` (M3).** Tables: `poll_definitions`, `poll_instances`, `poll_instance_audiences`, `poll_instance_eligibility`, `poll_responses`, `resource_feedback`, `editorial_requests`, `editorial_request_events`, `editorial_briefs`, `editorial_response_templates`, `editorial_tasks`, `business_calendars`, `business_calendar_days`. Custom SQL: partial unique index on `editorial_requests.idempotency_key` where not null, FORCE RLS on `poll_instance_eligibility`, `poll_responses`, `resource_feedback`, `editorial_requests`, `editorial_request_events`, grants to `nestself_app`.
+**Migration `0008_cms_ee_engagement_requests` (M3).** Tables: `poll_definitions`, `poll_instances`, `poll_instance_audiences`, `poll_instance_eligibility`, `poll_responses`, `resource_feedback`, `editorial_requests`, `editorial_request_events`, `editorial_briefs`, `editorial_response_templates`, `editorial_tasks`, `business_calendars`, `business_calendar_days`. Custom SQL: partial unique index on `editorial_requests.idempotency_key` where not null, FORCE RLS on `poll_instance_eligibility`, `poll_responses`, `resource_feedback`, `editorial_requests`, `editorial_request_events`, grants to `nestself_app`.
 
-**Migration `0006_cms_ee_intake_reporting` (M4).** Tables: `intake_queues`, `intake_records`, `intake_messages`, `intake_publication_permissions`, `content_events`, `content_metrics_monthly`. Custom SQL: FORCE RLS on `intake_records`, `intake_messages`, `intake_publication_permissions`, `content_events`, grants to `nestself_app`, partial unique index on `content_events` dedupe key `(actor_key, publication_id, kind, occurred_on)`.
+**Migration `0009_cms_ee_intake_reporting` (M4).** Tables: `intake_queues`, `intake_records`, `intake_messages`, `intake_publication_permissions`, `content_events`, `content_metrics_monthly`. Custom SQL: FORCE RLS on `intake_records`, `intake_messages`, `intake_publication_permissions`, `content_events`, grants to `nestself_app`, partial unique index on `content_events` dedupe key `(actor_key, publication_id, kind, occurred_on)`.
 
 Each migration is generated with `pnpm --filter @nestself/api db:generate`, then a hand-written custom part is appended using `pnpm --filter @nestself/api db:generate --custom --name=<name>`. Migrations are applied by `scripts/migrate.ts` (Drizzle migrator), never `drizzle-kit push`.
 
@@ -2194,7 +2194,7 @@ Each migration is generated with `pnpm --filter @nestself/api db:generate`, then
 - **Intake queues:** Five queues (psychological, legal, financial, general, editorial_notes), initially without owners (intake form shows `intake_unavailable` until a queue has an owner and backup, F-C03).
 - **Retention policies:** New keys added to `apps/api/src/db/seed/retention-policies.ts` as specified in C-25.
 
-**DAT-R-02** The `content_items` table and its fixture `SAMPLE_CONTENT` are retired. The existing `SAMPLE_CONTENT` export in `packages/sample-data` is replaced by `SAMPLE_CONTENT_RESOURCES` with the new shape. Migration `0004` drops `content_items` after the seed no longer writes it.
+**DAT-R-02** The `content_items` table and its fixture `SAMPLE_CONTENT` are retired. The existing `SAMPLE_CONTENT` export in `packages/sample-data` is replaced by `SAMPLE_CONTENT_RESOURCES` with the new shape. Migration `0007` drops `content_items` after the seed no longer writes it.
 
 **DAT-R-03** The templates `content_author`, `content_publisher`, `employee` and `expert` gain the new actions defined in C-08. New templates `content_reviewer`, `editorial_lead`, `intake_professional` and `intake_lead` are added. The seed derives grants from the updated templates.
 
@@ -2214,8 +2214,8 @@ Each migration is generated with `pnpm --filter @nestself/api db:generate`, then
 
 ### Acceptance
 
-- **DAT-A-01** `pnpm --filter @nestself/api db:generate` produces no diff after migration 0006 is applied and all schema files are in place.
-- **DAT-A-02** The schema integration test (`apps/api/test/db/schema.spec.ts`) migrates a fresh database, seeds it with the acceptance dataset and verifies: all RLS policies on new tenant tables, the `content_revisions_working_key` partial unique index (inserting two drafts for the same variant fails), the `poll_responses` unique constraint, the `nestself_unaccent` function, the `content_items` table does not exist after migration 0004.
+- **DAT-A-01** `pnpm --filter @nestself/api db:generate` produces no diff after migration 0009 is applied and all schema files are in place.
+- **DAT-A-02** The schema integration test (`apps/api/test/db/schema.spec.ts`) migrates a fresh database, seeds it with the acceptance dataset and verifies: all RLS policies on new tenant tables, the `content_revisions_working_key` partial unique index (inserting two drafts for the same variant fails), the `poll_responses` unique constraint, the `nestself_unaccent` function, the `content_items` table does not exist after migration 0007.
 - **DAT-A-03** Each of the ten invariants has at least one test case: the approval-hash mismatch returns 409, the availability golden table covers all formula clauses, the cycle check rejects a self-referencing collection entry, cross-org reads return empty under RLS, a duplicate poll response is idempotent, no intake column appears in a CMS DTO, every open request has an owner or fallback, a fulfilled request with an unavailable outcome returns 422, an audience that exceeds the grant scope returns 403, and a replayed idempotency key returns the stored response.
 - **DAT-A-04** The acceptance dataset seeds successfully in both sample mode and test mode, and the 15-step acceptance scenario (epic 23.2) can be exercised against it.
 - **DAT-A-05** The `retention_policies` table contains all keys from C-25 after seeding.
@@ -4082,7 +4082,7 @@ Search uses PostgreSQL full-text search over the denormalized `content_search_do
 
 #### 9.5.2 Fold function
 
-**LIB-R-16** `foldForSearch(text: string, locale: ContentLocale): string` in `packages/content/src/search/fold.ts` normalizes text for indexing and querying. For `sr-Cyrl` input it transliterates Cyrillic to Latin using the same character mapping as `packages/i18n` Cyrillic generation (reversed). It then lowercases the result. Diacritic folding uses the SQL-side `nestself_unaccent()` immutable wrapper over the `unaccent` extension so that index and query fold identically. Extensions `unaccent` and `pg_trgm` are created in migration `0003` [EMP-C03, C-15, X-09].
+**LIB-R-16** `foldForSearch(text: string, locale: ContentLocale): string` in `packages/content/src/search/fold.ts` normalizes text for indexing and querying. For `sr-Cyrl` input it transliterates Cyrillic to Latin using the same character mapping as `packages/i18n` Cyrillic generation (reversed). It then lowercases the result. Diacritic folding uses the SQL-side `nestself_unaccent()` immutable wrapper over the `unaccent` extension so that index and query fold identically. Extensions `unaccent` and `pg_trgm` are created in migration `0006` [EMP-C03, C-15, X-09].
 
 #### 9.5.3 Synonym expansion
 
@@ -4438,7 +4438,7 @@ Usefulness feedback and interest polls are the two lightweight engagement signal
 
 ### 10.1 Usefulness feedback
 
-**POL-R-01** The `resource_feedback` table is a tenant table with RLS (`pgPolicy` with `tenantPredicate(t.orgId)`). Each row records one person's feedback on one resource within one organizational context. The table carries `org_id` and `membership_id` and is listed in the `FORCE ROW LEVEL SECURITY` migration `0004`. All reads and writes run inside `withOrgScope(activeOrgId, fn)` [ENG-01, epic 11.1].
+**POL-R-01** The `resource_feedback` table is a tenant table with RLS (`pgPolicy` with `tenantPredicate(t.orgId)`). Each row records one person's feedback on one resource within one organizational context. The table carries `org_id` and `membership_id` and is listed in the `FORCE ROW LEVEL SECURITY` migration `0007`. All reads and writes run inside `withOrgScope(activeOrgId, fn)` [ENG-01, epic 11.1].
 
 **POL-R-02** The feedback key is pseudonymous per context: `feedback_key = HMAC-SHA256(ENGAGEMENT_PSEUDONYM_KEY, 'feedback:' || userId || ':' || orgId)`, computed in `PseudonymService` (`apps/api/src/engagement/pseudonym.service.ts`). The key prevents direct linkage between feedback rows and user identity outside the engagement module. `ENGAGEMENT_PSEUDONYM_KEY` comes from Secrets Manager in production and from an environment variable in development (C-19) [ENG-01].
 
@@ -4466,7 +4466,7 @@ Usefulness feedback and interest polls are the two lightweight engagement signal
 
 **POL-R-10** When an instance transitions from `draft` to `open`, the system snapshots eligible respondents into `poll_instance_eligibility (poll_instance_id, respondent_key, org_id)`. Eligibility is determined by the instance's audience rules (C-12) intersected with current ACTIVE memberships at snapshot time. For each eligible person, the system computes the respondent key (10.4) and inserts a row. Members who join an organization after the snapshot wait for the next instance (C-19) [ENG-03, epic 11.4].
 
-**POL-R-11** `poll_instance_eligibility` is a tenant table with RLS on `org_id`. Reads and writes run inside `withOrgScope`. The table is included in the `FORCE ROW LEVEL SECURITY` list in migration `0005` [ENG-03].
+**POL-R-11** `poll_instance_eligibility` is a tenant table with RLS on `org_id`. Reads and writes run inside `withOrgScope`. The table is included in the `FORCE ROW LEVEL SECURITY` list in migration `0008` [ENG-03].
 
 ### 10.4 Respondent key
 
@@ -5169,7 +5169,7 @@ Restricted intake is the controlled professional handling of original free text:
 
 ### 12.2 Tables
 
-All tables in this section carry `org_id` with RLS via `pgPolicy` `tenantPredicate(t.orgId)` and are added to the `FORCE ROW LEVEL SECURITY` list in migration `0006_cms_ee_intake_reporting`. Employee reads and writes run inside `withOrgScope(activeOrgId, fn)`.
+All tables in this section carry `org_id` with RLS via `pgPolicy` `tenantPredicate(t.orgId)` and are added to the `FORCE ROW LEVEL SECURITY` list in migration `0009_cms_ee_intake_reporting`. Employee reads and writes run inside `withOrgScope(activeOrgId, fn)`.
 
 **`intake_queues`** Platform configuration table (no `org_id`, no RLS). One row per discipline. Columns: `id`, `discipline` (enum `intake_discipline`: `psychological`, `legal`, `financial`, `general`, `editorial_notes`), `owner_user_id`, `backup_user_id`, `is_active`. A queue is active when both `owner_user_id` and `backup_user_id` are set and the users hold the `intake_professional` template with a QUEUE assignment to this queue (F-C03).
 
@@ -6544,7 +6544,7 @@ The epic is done when its business boundaries hold under test, not when its scre
 1. `pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm build` pass on the branch; `pnpm e2e`, `pnpm e2e:motion` and `pnpm e2e:content` pass with regenerated baselines.
 2. The suites of 17.2 pass, including the golden tables and the DTO leak, RLS, concurrency and logging specs.
 3. The acceptance scenario of 17.3 passes against staging with the repeatable acceptance fixtures, and the job and notification recovery scenario (step 12) is demonstrated there.
-4. API read models and the content schema are documented (`docs/cms-ee/api-read-models.md`, `docs/cms-ee/content-schema.md`); migrations `0003` to `0006` have a written deployment and rollback note; fixtures contain no real person's data.
+4. API read models and the content schema are documented (`docs/cms-ee/api-read-models.md`, `docs/cms-ee/content-schema.md`); migrations `0006` to `0009` have a written deployment and rollback note; fixtures contain no real person's data.
 5. P95 under 500 ms for list and detail endpoints at 100 concurrent sessions on the pilot dataset, and video transfer measured separately (SPIKE-C03); LCP around 2.5 s on the agreed test connection. Results are recorded as measurements, not claims.
 6. Content release thresholds, professional reviews, rights expiry, staffed queues and the retention policy have named owners and completion evidence (epic 20.4, 16).
 7. No open defect of severity critical in access control or privacy.
@@ -6568,7 +6568,7 @@ Exit evidence (epic 22.1): an admin publishes synthetic content; Employee A in o
 | T-C1.01 | ADR for the CMS boundary | `docs/adr/0001-cms-boundary.md` | One page summarizing C-02, C-03, C-07, C-17 with links to this document | none | S | epic 24.3 task 1 |
 | T-C1.02 | Personal context names its organization | `packages/contracts/src/auth.ts`, `apps/api/src/auth/session-endpoints.service.ts`, session record, `apps/api/src/authz/resolvers.ts` (`personalOrgResource`), both web `auth-provider.tsx`, `packages/api-client/src/query-keys.ts` | Auth suite passes; context switch clears queries (CLI-R-08); `invalid_context` when the org has no ACTIVE membership | none | M | EMP-C01, FND-01 |
 | T-C1.03 | Actions, templates, category assignments | `packages/contracts/src/actions.ts`, `templates.ts`, `apps/api/src/authz/golden-table.json`, seed grants and COLLECTION assignments | Golden-table additions of 5 Authorization and availability pass; default-deny test passes; an author cannot publish; a publisher cannot review | T-C1.02 | M | FND-02 |
-| T-C1.04 | M1 schema and migration `0003` | `apps/api/src/db/schema/{cms,taxonomy,media,library,notifications}.ts`, `enums.ts`, `apps/api/drizzle/0003_cms_ee_foundation.sql` | RLS integration test covers the new tenant tables with the app role; invariants of 4 Data model that are constraints have failing-insert tests | T-C1.00 | L | FND-01 |
+| T-C1.04 | M1 schema and migration `0006` | `apps/api/src/db/schema/{cms,taxonomy,media,library,notifications}.ts`, `enums.ts`, `apps/api/drizzle/0006_cms_ee_foundation.sql` | RLS integration test covers the new tenant tables with the app role; invariants of 4 Data model that are constraints have failing-insert tests | T-C1.00 | L | FND-01 |
 | T-C1.05 | Content document schema and validation | `packages/content/src/schema/*` | Zod and ProseMirror validation; canonicalization and `approvalHash` stable across key order; XSS cases of 6 Content format, editor and renderer rejected | T-C1.00 | M | FND-04 |
 | T-C1.06 | Content renderer | `packages/content/src/render/*`, stories | Every block renders; no `dangerouslySetInnerHTML` (lint rule); accessibility tests; Storybook stories | T-C1.05 | M | FND-04, EMP-C04 |
 | T-C1.07 | Idempotency decorator | `apps/api/src/common/idempotency/*` | Replay returns the stored response; a different body returns 409 `idempotency_conflict`; keys expire after 24 h | none | S | REQ-01, ENG-03 (foundation) |
@@ -6592,7 +6592,7 @@ Exit evidence: a published revision stays live while a new revision is reviewed;
 | T-C2.03 | Outbox and dispatcher | `apps/api/src/notifications/outbox/*`, queue `nestself-outbox` | Event written in the state-change transaction; consumer dedupe; retry and failure state | T-C1.04 | M | OPS-C02 (foundation) |
 | T-C2.04 | Taxonomy | `apps/api/src/cms/taxonomy/*`, admin taxonomy screen | Topic merge redirects old slugs; empty categories are not promoted; labels per locale | T-C1.10 | M | EDT-04 |
 | T-C2.05 | Collections and Home slots | `apps/api/src/cms/collections/*`, `home_slots`, admin screens | Cycle rejected; child availability checked; a slot cannot bypass availability or repeat a resource | T-C2.02 | M | EDT-05 |
-| T-C2.06 | Search | migration `0004`, `packages/content/src/search/fold.ts`, `apps/api/src/library/search/*`, queue `nestself-search` | SPIKE-C01 table passes; counts, facets and snippets only over available rows; raw query never logged | T-C2.03 | L | EMP-C03 |
+| T-C2.06 | Search | migration `0007`, `packages/content/src/search/fold.ts`, `apps/api/src/library/search/*`, queue `nestself-search` | SPIKE-C01 table passes; counts, facets and snippets only over available rows; raw query never logged | T-C2.03 | L | EMP-C03 |
 | T-C2.07 | Home composer | `apps/api/src/library/home/*` | Module order and omission rules; fallback order; no repeats; cache invalidated by `availability_version` | T-C2.05 | M | EMP-C01 |
 | T-C2.08 | Explore, category and collection screens | workspace routes, `FilterChips`, `ShowMore`, `CollectionCard` | Filters compose; return from detail keeps selections and position; unavailable items never counted | T-C2.07 | M | EMP-C02 |
 | T-C2.09 | Media M2: audio, video, captions, S3 driver, CDK stack | `apps/api/src/media/processing/*`, `infra/cdk/lib/media-stack.ts`, `AudioPlayer`, `VideoPlayer`, `TranscriptPanel` | ffprobe limits enforced; faststart output; no autoplay with sound; transcript available; SPIKE-C03 measured | T-C1.08 | L | FND-03, EMP-C04 |
@@ -6608,7 +6608,7 @@ Exit evidence: one poll reaches an editorial outcome; one request links an avail
 | Task | Title | Files (main) | Acceptance | Depends on | Size | Epic ids |
 |---|---|---|---|---|---|---|
 | T-C3.01 | Pseudonym service and usefulness feedback | `apps/api/src/engagement/pseudonym.service.ts`, `resource_feedback` | Own feedback changeable; controlled reasons; unavailable resources refuse new feedback | T-C2.11 | S | ENG-01 |
-| T-C3.02 | Polls: definitions, instances, eligibility, responses | migration `0005`, `apps/api/src/engagement/polls/*`, staff poll screens, `PollCard` | Lock at first response; concurrent and retried votes leave one row; new members wait for the next instance; closed poll rejects writes | T-C3.01 | M | ENG-02, ENG-03 |
+| T-C3.02 | Polls: definitions, instances, eligibility, responses | migration `0008`, `apps/api/src/engagement/polls/*`, staff poll screens, `PollCard` | Lock at first response; concurrent and retried votes leave one row; new members wait for the next instance; closed poll rejects writes | T-C3.01 | M | ENG-02, ENG-03 |
 | T-C3.03 | Suppression service and poll results | `apps/api/src/reporting/suppression.service.ts`, poll results, decision flow | k = 9 suppressed, k = 10 shown; complementary totals suppressed; decision links an available resource | T-C3.02 | M | ENG-04 |
 | T-C3.04 | Professional module skeleton and editorial notes | `apps/api/src/professional/*`, ESLint boundary, serialization tests | No CMS or reporting DTO exposes intake fields; an editorial note never reaches CMS tables | T-C2.03 | M | FND-01, REQ-01 |
 | T-C3.05 | Editorial requests | `apps/api/src/editorial/*`, workspace `requests` routes, `StatusTimeline` | Structured input suffices; retry creates one request; summary before submit; own requests only | T-C3.04 | M | REQ-01, REQ-03 |
@@ -6691,6 +6691,7 @@ All five were answered on 2026-10-24 (Appendix B revision 2).
 | X-D03 | T-2.6 step-up enforcement for the `restricted` class | M4 exit | This epic implements the restricted-class branch of T-2.6 to the auth strategy's specification |
 | X-D04 | T-2.4 confidential-domain module | M3 | This epic delivers the intake part (`apps/api/src/professional/`); consultations and conversations stay with the support track |
 | X-D05 | Personal context `orgId` (C-22) | M1 | None; it is part of M1 and tested in the auth suite |
+| X-D07 | The auth track's `0003_professional_domain` (`intake_records`, `conversations`, `conversation_messages`) | M3 | C-17 is revised before T-C3.04 to extend those tables instead of creating parallel ones |
 | X-D06 | Second-factor check when entering the organization context (D-05) | Pilot | The switcher is the only way in; until the auth track adds the check, organization access relies on the grant checks of every route |
 
 
@@ -6804,7 +6805,7 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 
 #### C-15 Search is PostgreSQL full text over a denormalized index table [recommended; M2]
 - Decision: `content_search_documents` holds one row per live publication: `publication_id`, `locale`, `search_config` (`serbian` for `sr-Latn`, `hungarian` for `hu`, `english` for `en`; there are no `sr-Cyrl` documents, C-28), `weighted_tsv` (tsvector: title A, summary and outcome B, body text C, topic labels and synonyms D) and `folded_text` (for trigram). Rows are written by the `content.search.index` job on `publication.started`, deleted on end or withdrawal, and rebuilt by `content.search.rebuild`.
-- Normalization happens in the application through one function `foldForSearch(text, locale)` in `packages/content/src/search/fold.ts`: Serbian Cyrillic is transliterated to Latin with the same mapping as `packages/i18n` Cyrillic generation (reversed), then lowercased; diacritic folding uses the SQL `nestself_unaccent()` immutable wrapper over `unaccent` so index and query fold identically. Extensions `unaccent` and `pg_trgm` are created in migration `0003`.
+- Normalization happens in the application through one function `foldForSearch(text, locale)` in `packages/content/src/search/fold.ts`: Serbian Cyrillic is transliterated to Latin with the same mapping as `packages/i18n` Cyrillic generation (reversed), then lowercased; diacritic folding uses the SQL `nestself_unaccent()` immutable wrapper over `unaccent` so index and query fold identically. Extensions `unaccent` and `pg_trgm` are created in migration `0006`.
 - Query: fold the input, expand terms from `search_synonyms (locale, term, synonyms[])` in the application (RDS cannot load synonym files [X-08]), `websearch_to_tsquery(config, expanded)`, rank with `ts_rank_cd`, restrict to `availablePublications(ctx)` before ranking, counting, facets and `ts_headline` snippets. When no lexical hit exists, fall back to `pg_trgm` `word_similarity` over `folded_text` (threshold 0.4) within the same restriction. Raw query text is never logged, stored or sent to analytics; the employee API records only `search.performed` with `result_count_bucket` (`0`, `1-4`, `5+`).
 - SPIKE-C01 confirms the Serbian stemmer's behaviour on the acceptance phrases in both scripts before M2 closes.
 
@@ -6903,7 +6904,7 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 
 **Packages:** `packages/content` (`@nestself/content`, subpaths `schema`, `editor`, `render`, `search`); DTO schemas in `packages/contracts/src/content/` (`library.ts`, `cms.ts`, `media.ts`, `engagement.ts`, `editorial.ts`, `intake.ts`, `reporting.ts`), re-exported from `packages/contracts/src/index.ts`; fixtures in `packages/sample-data/src/fixtures/content.ts` and `content-acceptance.ts`; query keys in `packages/api-client/src/query-keys.ts`.
 
-**Schema files (apps/api/src/db/schema):** `cms.ts`, `taxonomy.ts`, `media.ts`, `library.ts`, `engagement.ts`, `editorial.ts`, `professional.ts`, `notifications.ts`, `reporting.ts`; enums appended to `enums.ts`. Migration `0003_cms_ee_foundation` (M1 tables and extensions), `0004_cms_ee_discovery` (M2), `0005_cms_ee_engagement_requests` (M3), `0006_cms_ee_intake_reporting` (M4); each generated with `db:generate` plus a hand-written custom part for RLS forcing, extensions, functions and partial indexes.
+**Schema files (apps/api/src/db/schema):** `cms.ts`, `taxonomy.ts`, `media.ts`, `library.ts`, `engagement.ts`, `editorial.ts`, `professional.ts`, `notifications.ts`, `reporting.ts`; enums appended to `enums.ts`. Migrations continue after the authentication track's (`0000` to `0005` at the time of writing, including `0003_professional_domain`): `0006_cms_ee_foundation` (M1 tables and extensions), `0007_cms_ee_discovery` (M2), `0008_cms_ee_engagement_requests` (M3), `0009_cms_ee_intake_reporting` (M4); each generated with `db:generate` plus a hand-written custom part for RLS forcing, extensions, functions and partial indexes.
 
 **Tables:** `content_resources`, `content_variants`, `content_revisions`, `content_revision_media`, `content_revision_reviews`, `content_publications`, `content_publication_audiences`, `collection_entries`, `categories`, `category_labels`, `topics`, `topic_labels`, `topic_redirects`, `needs`, `need_labels`, `content_resource_topics`, `content_resource_needs`, `content_resource_categories` (secondary categories), `home_slots`, `media_assets`, `media_renditions`, `org_content_capabilities`, `saved_items`, `playback_states`, `content_preferences`, `resource_feedback`, `content_search_documents`, `search_synonyms`, `poll_definitions`, `poll_instances`, `poll_instance_audiences` (same shape and matching rules as `content_publication_audiences`, keyed by `poll_instance_id`), `poll_instance_eligibility`, `poll_responses`, `editorial_requests`, `editorial_request_events`, `editorial_briefs`, `editorial_response_templates`, `editorial_tasks`, `business_calendars`, `business_calendar_days`, `intake_queues`, `intake_records`, `intake_messages`, `intake_publication_permissions`, `outbox_events`, `outbox_deliveries`, `notifications`, `content_events`, `content_metrics_monthly`. Legacy `content_items` is dropped in `0004` after the seed no longer writes it; `experts` and `expert_credentials` stay; legacy `polls`, `poll_options`, `poll_votes`, `channels`, `posts` stay untouched until auth T-2.7.
 
@@ -6989,6 +6990,7 @@ Part A lists the decisions. Part B lists the canonical names every section must 
 - X-D01 T-2.0 `operationsOrgResource` for `/api/ops/orgs/:orgId/content-capabilities` (M2). Fallback: seed and CLI until it lands.
 - X-D02 T-2.1 grant administration endpoints before the pilot assigns real editorial staff (M4). Fallback in development: seed grants.
 - X-D03 T-2.6 step-up enforcement for the `restricted` class before M4 exit (C-17). If the auth track has not delivered it by M4, this epic implements the restricted-class branch of T-2.6 to the auth strategy's specification.
+- X-D07 The authentication track's `0003_professional_domain` already created minimal `intake_records` (`case_id`, `employee_user_id`, `body`), `conversations` and `conversation_messages` with RLS. Before T-C3.04 starts, C-17 gets a revision that extends these tables (CMS columns added by migration, `employee_user_id` instead of `sender_user_id`, CASE assignment target = `case_id`, clarifications and replies as `conversation_messages` of a conversation opened at claim) instead of creating parallel tables.
 - X-D04 T-2.4 is partially delivered by this epic (`apps/api/src/professional/`, intake tables, `PROFESSIONAL_CONTENT_BUCKET` not needed in V1 because there are no attachments). Consultations and conversations remain auth/support work.
 - X-D06 Second-factor check when entering the organization context (D-05). The switcher of C-22 is now the only way into that context; the auth track adds the check to `SessionEndpointsService.switchContext`.
 - X-D05 The `ActiveContext` personal `orgId` extension (C-22) is a contract change in `packages/contracts/src/auth.ts` and the session service; it ships in M1 with tests in the auth suite.
