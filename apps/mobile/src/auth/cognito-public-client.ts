@@ -9,6 +9,7 @@
  * @see auth-strategy.md 6.2, Appendix E.3
  */
 
+import type { Locale } from '@nestself/contracts';
 import type { CognitoConfig } from './config';
 
 // ---------------------------------------------------------------------------
@@ -122,9 +123,10 @@ async function callCognito(
 export interface CognitoPublicClient {
   /**
    * Start email-OTP sign-in: `InitiateAuth` with `USER_AUTH` flow
-   * and `PREFERRED_CHALLENGE: EMAIL_OTP`.
+   * and `PREFERRED_CHALLENGE: EMAIL_OTP`. `locale` reaches the CustomMessage
+   * trigger as `ClientMetadata.locale` and picks the email's language.
    */
-  initiateEmailOtp(email: string): Promise<InitiateAuthResult>;
+  initiateEmailOtp(email: string, locale?: Locale): Promise<InitiateAuthResult>;
 
   /**
    * Complete the email-OTP challenge: `RespondToAuthChallenge`.
@@ -158,7 +160,7 @@ export function createCognitoPublicClient(
   const { region, clientId } = config;
 
   return {
-    async initiateEmailOtp(email: string): Promise<InitiateAuthResult> {
+    async initiateEmailOtp(email: string, locale?: Locale): Promise<InitiateAuthResult> {
       const result = await callCognito(
         region,
         'InitiateAuth',
@@ -169,6 +171,7 @@ export function createCognitoPublicClient(
             USERNAME: email,
             PREFERRED_CHALLENGE: 'EMAIL_OTP',
           },
+          ...(locale ? { ClientMetadata: { locale } } : {}),
         },
         fetchFn,
       );

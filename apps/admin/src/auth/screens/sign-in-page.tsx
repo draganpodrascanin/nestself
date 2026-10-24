@@ -10,6 +10,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { createAuthApi, ApiError } from '@nestself/api-client';
+import { negotiateLocale } from '@nestself/i18n';
 import { useAuth } from '../auth-context';
 import { isSampleDataMode } from '../../data-source';
 import { api } from '../../api';
@@ -49,7 +50,7 @@ interface Props {
 }
 
 export function SignInPage({ returnPath }: Props) {
-  const { t } = useTranslation('auth');
+  const { t, i18n } = useTranslation('auth');
   const navigate = useNavigate();
   const { refreshPrincipal, switchContext } = useAuth();
   const authApi = useMemo(
@@ -93,9 +94,7 @@ export function SignInPage({ returnPath }: Props) {
           setError(t('error.invalidCode'));
           return;
         }
-        // The challenge token is single-use and is consumed before the code is
-        // checked, so a wrong digit ends it. Tell the user to ask for a new code
-        // instead of leaking the API's English "Challenge expired or invalid".
+        // The challenge expired or its three attempts are spent: ask for a new code.
         if (err.code === 'invalid_challenge') {
           setError(t('error.challengeExpired'));
           return;
@@ -104,7 +103,12 @@ export function SignInPage({ returnPath }: Props) {
           setError(t('error.invalidCredentials'));
           return;
         }
-        setError(err.message);
+        if (err.code === 'network') {
+          setError(t('error.network'));
+          return;
+        }
+        // Never the API's own message: it is English and written for developers.
+        setError(t('error.unknown'));
         return;
       }
       setError(t('error.unknown'));
@@ -120,7 +124,8 @@ export function SignInPage({ returnPath }: Props) {
         const result = await authApi.discover(email);
         switch (result.method) {
           case 'email_otp': {
-            const otp = await authApi.emailOtpStart(email);
+            const locale = negotiateLocale([i18n.resolvedLanguage ?? i18n.language]);
+            const otp = await authApi.emailOtpStart(email, locale);
             setScreen({
               kind: 'email_otp',
               email,
@@ -142,7 +147,7 @@ export function SignInPage({ returnPath }: Props) {
         handleApiError(err);
       }
     },
-    [authApi, handleApiError],
+    [authApi, handleApiError, i18n],
   );
 
   switch (screen.kind) {

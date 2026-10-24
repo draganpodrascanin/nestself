@@ -5,7 +5,7 @@ import {
   IdentityProviderError,
 } from '../identity/identity-provider.service.js';
  
-import { ChallengeStore } from './challenge-store.js';
+import { ChallengeStore, type ChallengeRecord } from './challenge-store.js';
  
 import { SignInThrottle } from './sign-in-throttle.js';
  
@@ -16,6 +16,7 @@ import {
 import { neutralDelay } from './neutral-delay.js';
 import { ApiHttpException } from '../common/api-error.js';
 import type { AuthOutcome } from '../identity/identity-provider.service.js';
+import type { Locale } from '@nestself/contracts';
 
 function challengeStep(
   challenge: string,
@@ -32,6 +33,29 @@ function challengeStep(
   }
 }
 
+/**
+ * Codes a user may get wrong on one email challenge (sign-in or step-up).
+ * The third wrong code ends the challenge; `SignInThrottle` counts every
+ * failure independently and locks the address after five.
+ */
+export const MAX_EMAIL_OTP_ATTEMPTS = 3;
+
+/**
+ * After a wrong email code, hand the consumed record back under the same
+ * token so the user can retype it, unless this was the last allowed attempt.
+ * The identity provider keeps its own session alive on a mismatch.
+ */
+export async function retainAfterWrongCode(
+  challenges: ChallengeStore,
+  token: string,
+  record: ChallengeRecord,
+): Promise<void> {
+  const attempts = (record.attempts ?? 0) + 1;
+  if (attempts < MAX_EMAIL_OTP_ATTEMPTS) {
+    await challenges.put(token, { ...record, attempts });
+  }
+}
+
 @Injectable()
 export class SignInService {
   constructor(
@@ -41,9 +65,11 @@ export class SignInService {
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
   ) {}
 
+  /** `locale` picks the language of the code email; the pool default otherwise. */
   async emailOtpStart(
     email: string,
     _meta: { ip: string | null; userAgent: string | null },
+    locale?: Locale,
   ): Promise<{ challengeToken: string; codeDeliveryMedium: 'EMAIL' }> {
     const start = Date.now();
 
@@ -55,7 +81,7 @@ export class SignInService {
       });
     }
 
-    const result = await this.idp.startEmailOtp({ email });
+    const result = await this.idp.startEmailOtp(locale ? { email, locale } : { email });
 
     if (!result) {
       await neutralDelay(start);
@@ -95,6 +121,8 @@ export class SignInService {
     }
 
     if (challenge.dummy) {
+      // Same retry budget as a real challenge, so the answers stay identical.
+      await retainAfterWrongCode(this.challengeStore, challengeToken, challenge);
       await this.throttle.recordFailure(challenge.email);
       throw new ApiHttpException({
         status: 401,
@@ -112,6 +140,9 @@ export class SignInService {
       return this.identity.resolveOutcome(outcome, challenge.email, surface, meta, false);
     } catch (err) {
       if (err instanceof IdentityProviderError) {
+        if (err.code === 'invalid_code') {
+          await retainAfterWrongCode(this.challengeStore, challengeToken, challenge);
+        }
         await this.throttle.recordFailure(challenge.email);
         this.identity.auditSignInFailed(challenge.email, meta);
         throw this.identity.mapIdpError(err);

@@ -34,6 +34,7 @@ import { useSsoSignIn } from '@/auth/sso';
 import type { CognitoConfig } from '@/auth/config';
 import { SampleDataBanner } from '@/components/SampleDataBanner';
 import { CognitoError } from '@/auth/cognito-public-client';
+import { resolveDeviceLocale } from '@/lib/locale';
 
 // Needed for expo-auth-session to complete the redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -58,7 +59,7 @@ const OTP_CODE_MIN_LENGTH = EMAIL_OTP_MIN_LENGTH;
 // ---------------------------------------------------------------------------
 
 export default function SignInScreen() {
-  const { t } = useTranslation('auth');
+  const { t, i18n } = useTranslation('auth');
   const { space } = useTheme();
   const auth = useAuth();
 
@@ -160,7 +161,7 @@ export default function SignInScreen() {
 
       switch (result.method) {
         case 'email_otp': {
-          await auth.signInWithEmailOtp.start(trimmed);
+          await auth.signInWithEmailOtp.start(trimmed, resolveDeviceLocale([i18n.language]));
           setStep('otp');
           setResendCountdown(OTP_RESEND_COOLDOWN_SECONDS);
           break;
@@ -210,7 +211,7 @@ export default function SignInScreen() {
     setOtpCode('');
 
     try {
-      await auth.signInWithEmailOtp.start(email.trim().toLowerCase());
+      await auth.signInWithEmailOtp.start(email.trim().toLowerCase(), resolveDeviceLocale([i18n.language]));
       setResendCountdown(OTP_RESEND_COOLDOWN_SECONDS);
     } catch (err) {
       displayError(err);

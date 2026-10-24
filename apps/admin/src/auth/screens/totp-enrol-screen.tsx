@@ -111,7 +111,7 @@ export function TotpEnrolScreen({
   const errors = displayError
     ? [
         {
-          id: 'totp-enrol-code',
+          id: 'totp-enrol-code-input',
           label: t('auth:totpEnrol.codeLabel'),
           message: displayError,
         },

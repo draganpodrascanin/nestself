@@ -69,7 +69,7 @@ export function PasswordScreen({
   const errors = displayError
     ? [
         {
-          id: 'password',
+          id: 'password-input',
           label: t('auth:password.passwordLabel'),
           message: displayError,
         },

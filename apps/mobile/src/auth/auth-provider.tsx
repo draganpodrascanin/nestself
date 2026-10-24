@@ -20,7 +20,7 @@ import {
 } from 'react';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { createApiClient, createAuthApi, ApiError } from '@nestself/api-client';
-import type { DiscoverResponse, Principal } from '@nestself/contracts';
+import type { DiscoverResponse, Locale, Principal } from '@nestself/contracts';
 
 import { getCognitoConfig } from './config';
 import { createCognitoPublicClient } from './cognito-public-client';
@@ -72,7 +72,8 @@ const MIN_TTL_SECONDS = 120;
 
 export interface AuthContextValue extends AuthState {
   signInWithEmailOtp: {
-    start: (email: string) => Promise<void>;
+    /** `locale` picks the language of the code email. */
+    start: (email: string, locale?: Locale) => Promise<void>;
     verify: (code: string) => Promise<void>;
   };
   signInWithSso: (connection: string) => Promise<void>;
@@ -285,10 +286,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Actions
   // ---------------------------------------------------------------------------
 
-  const startEmailOtp = useCallback(async (email: string) => {
+  const startEmailOtp = useCallback(async (email: string, locale?: Locale) => {
     try {
       const cognito = ensureCognito();
-      const result = await cognito.initiateEmailOtp(email);
+      const result = await cognito.initiateEmailOtp(email, locale);
       dispatch({ type: 'OTP_STARTED', session: result.session, email });
     } catch (err) {
       const info = mapCognitoError(err);

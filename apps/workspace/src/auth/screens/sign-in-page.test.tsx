@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
 import i18next from 'i18next';
@@ -14,11 +14,21 @@ import {
 } from '@tanstack/react-router';
 import { resourcesFor } from '@nestself/i18n';
 import type { Resource } from 'i18next';
+import { ApiError } from '@nestself/api-client';
 import type { AuthApi } from '@nestself/api-client';
 
 import { IdentifierScreen } from './identifier-screen';
 import { OtpScreen } from './otp-screen';
 import { PasswordScreen } from './password-screen';
+import { TotpScreen } from './totp-screen';
+import { TotpEnrolScreen } from './totp-enrol-screen';
+import { NewPasswordScreen } from './new-password-screen';
+import { SignInPage } from './sign-in-page';
+
+// SignInPage builds its own AuthApi (the sample one under test); hand it ours.
+const pageApi = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('./sample-auth-api', () => ({ createSampleAuthApi: () => pageApi.current }));
+vi.mock('../auth-context', () => ({ useAuth: () => ({ refreshPrincipal: vi.fn() }) }));
 
 const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({
@@ -511,5 +521,195 @@ describe('locale leak detection', () => {
     expect(text).not.toMatch(/password\.\w/);
     expect(text).not.toMatch(/error\.\w/);
     expect(text).not.toMatch(/common:form\.\w/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* SignInPage: API errors and the code-email locale                    */
+/* ------------------------------------------------------------------ */
+
+describe('SignInPage', () => {
+  const user = userEvent.setup();
+
+  afterEach(async () => {
+    cleanup();
+    vi.restoreAllMocks();
+    await testI18n.changeLanguage('en');
+  });
+
+  async function submitEmail(api: AuthApi) {
+    pageApi.current = api;
+    renderInRouter(<SignInPage />);
+    await user.type(await screen.findByRole('textbox'), 'test@example.com');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+  }
+
+  // CLAUDE.md error-state rule 4: an unknown code renders error.unknown, never the API's English.
+  it('renders error.unknown, not the raw API message, for an unmapped error code', async () => {
+    const discover = vi.fn().mockRejectedValue(
+      new ApiError({ status: 500, code: 'something_new', message: 'Raw developer message', requestId: null }),
+    );
+    await submitEmail(makeAuthApi({ discover }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByText('Something went wrong. Please try again.').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Raw developer message/)).not.toBeInTheDocument();
+  });
+
+  it('asks for the code email in the language the screen is shown in', async () => {
+    await testI18n.changeLanguage('hu');
+    const emailOtpStart = vi.fn().mockResolvedValue({ challengeToken: 'tok', codeDeliveryMedium: 'EMAIL' });
+    pageApi.current = makeAuthApi({
+      discover: vi.fn().mockResolvedValue({ method: 'email_otp', ssoStartUrl: null, connection: null }),
+      emailOtpStart,
+    });
+    renderInRouter(<SignInPage />);
+    await user.type(await screen.findByRole('textbox'), 'test@example.com');
+    await user.click(screen.getByRole('button', { name: testI18n.t('auth:signIn.submit') }));
+
+    await waitFor(() => expect(emailOtpStart).toHaveBeenCalledWith('test@example.com', 'hu'));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* OtpScreen resend                                                    */
+/* ------------------------------------------------------------------ */
+
+describe('OtpScreen resend', () => {
+  afterEach(async () => {
+    cleanup();
+    vi.useRealTimers();
+    await testI18n.changeLanguage('en');
+  });
+
+  it('requests the new code in the current language', async () => {
+    vi.useFakeTimers();
+    await testI18n.changeLanguage('sr-Cyrl');
+    const emailOtpStart = vi.fn().mockResolvedValue({ challengeToken: 'tok_2', codeDeliveryMedium: 'EMAIL' });
+    render(
+      <I18nWrapper>
+        <OtpScreen
+          email="test@example.com"
+          challengeToken="tok_123"
+          authApi={makeAuthApi({ emailOtpStart })}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          onBack={vi.fn()}
+        />
+      </I18nWrapper>,
+    );
+
+    for (let i = 0; i < 60; i++) {
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+    }
+    fireEvent.click(screen.getByRole('button', { name: testI18n.t('auth:otp.resend') }));
+    await act(async () => {});
+
+    expect(emailOtpStart).toHaveBeenCalledWith('test@example.com', 'sr-Cyrl');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Error summary links focus their field                               */
+/* ------------------------------------------------------------------ */
+
+describe('error summary links focus the field they name', () => {
+  const user = userEvent.setup();
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  async function clickSummaryLinkAndExpectFocus(fieldSelector: string) {
+    const alert = await screen.findByRole('alert');
+    const link = alert.querySelector('a')!;
+    await user.click(link);
+    const field = document.querySelector(fieldSelector)!;
+    expect(field).not.toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(field.tagName).toBe('INPUT');
+  }
+
+  it('identifier screen: the link focuses the email input', async () => {
+    render(
+      <I18nWrapper>
+        <IdentifierScreen onSubmit={vi.fn()} error="Broken." />
+      </I18nWrapper>,
+    );
+    await clickSummaryLinkAndExpectFocus('input[name="email"]');
+  });
+
+  it('OTP screen: the link focuses the code input', async () => {
+    render(
+      <I18nWrapper>
+        <OtpScreen
+          email="test@example.com"
+          challengeToken="tok_123"
+          authApi={makeAuthApi()}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          error="Broken."
+          onBack={vi.fn()}
+        />
+      </I18nWrapper>,
+    );
+    await clickSummaryLinkAndExpectFocus('input[autocomplete="one-time-code"]');
+  });
+
+  it('password screen: the link focuses the password input', async () => {
+    renderInRouter(
+      <PasswordScreen
+        email="test@example.com"
+        authApi={makeAuthApi()}
+        onSuccess={vi.fn().mockResolvedValue(undefined)}
+        onChallengeRequired={vi.fn()}
+        onError={vi.fn()}
+        error="Broken."
+        onBack={vi.fn()}
+      />,
+    );
+    await clickSummaryLinkAndExpectFocus('input[name="password"]');
+  });
+
+  it('TOTP screen: the link focuses the code input', async () => {
+    render(
+      <I18nWrapper>
+        <TotpScreen challengeToken="tok" authApi={makeAuthApi()} onSuccess={vi.fn()} onError={vi.fn()} error="Broken." />
+      </I18nWrapper>,
+    );
+    await clickSummaryLinkAndExpectFocus('#totp-code-input');
+  });
+
+  it('authenticator enrolment screen: the link focuses the code input', async () => {
+    render(
+      <I18nWrapper>
+        <TotpEnrolScreen
+          challengeToken="tok"
+          authApi={makeAuthApi({ totpEnrol: vi.fn(() => new Promise(() => {})) } as Partial<AuthApi>)}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          error="Broken."
+        />
+      </I18nWrapper>,
+    );
+    await clickSummaryLinkAndExpectFocus('#enrol-code-input');
+  });
+
+  it('new password screen: the link focuses the new password input', async () => {
+    render(
+      <I18nWrapper>
+        <NewPasswordScreen
+          challengeToken="tok"
+          authApi={makeAuthApi()}
+          onChallengeRequired={vi.fn()}
+          onSuccess={vi.fn()}
+          onError={vi.fn()}
+          error="Broken."
+        />
+      </I18nWrapper>,
+    );
+    await clickSummaryLinkAndExpectFocus('#new-password-input');
   });
 });

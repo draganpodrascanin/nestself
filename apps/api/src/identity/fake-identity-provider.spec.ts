@@ -72,6 +72,19 @@ describe('FakeIdentityProvider', () => {
         }),
       ).rejects.toThrow(IdentityProviderError);
     });
+
+    it('keeps the session after a wrong code, as Cognito does, so the right code still completes', async () => {
+      const start = await provider.startEmailOtp({ email: 'alice@example.com' });
+      const code = provider.sentCodes[0]!.code;
+      const wrong = code === '000000' ? '111111' : '000000';
+
+      await expect(
+        provider.respondEmailOtp({ session: start!.session, username: start!.username, code: wrong }),
+      ).rejects.toMatchObject({ code: 'invalid_code' });
+
+      const result = await provider.respondEmailOtp({ session: start!.session, username: start!.username, code });
+      expect(result.kind).toBe('tokens');
+    });
   });
 
   describe('FAKE_IDP_FIXED_OTP', () => {

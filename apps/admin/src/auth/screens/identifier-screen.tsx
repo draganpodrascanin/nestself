@@ -81,7 +81,6 @@ export function IdentifierScreen({ onSubmit, error }: Props) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          aria-describedby={displayError ? 'email-error' : undefined}
         />
       </Field>
 

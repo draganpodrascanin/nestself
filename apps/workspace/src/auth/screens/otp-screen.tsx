@@ -16,6 +16,7 @@ import {
 import type { FormErrorSummaryHandle } from '@nestself/ui';
 import type { AuthApi } from '@nestself/api-client';
 import { EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@nestself/contracts';
+import { negotiateLocale } from '@nestself/i18n';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -39,7 +40,7 @@ export function OtpScreen({
   error: externalError = null,
   onBack,
 }: Props) {
-  const { t } = useTranslation('auth');
+  const { t, i18n } = useTranslation('auth');
   const [code, setCode] = useState('');
   const [token, setToken] = useState(challengeToken);
   const [submitting, setSubmitting] = useState(false);
@@ -81,7 +82,8 @@ export function OtpScreen({
 
   const handleResend = useCallback(async () => {
     try {
-      const result = await authApi.emailOtpStart(email);
+      const locale = negotiateLocale([i18n.resolvedLanguage ?? i18n.language]);
+      const result = await authApi.emailOtpStart(email, locale);
       setToken(result.challengeToken);
       setCountdown(RESEND_COOLDOWN_SECONDS);
       setCode('');
@@ -89,10 +91,10 @@ export function OtpScreen({
     } catch (err) {
       onError(err);
     }
-  }, [authApi, email, onError]);
+  }, [authApi, email, onError, i18n]);
 
   const errors = displayError
-    ? [{ id: 'otp-code', label: t('otp.codeLabel'), message: displayError }]
+    ? [{ id: 'otp-code-input', label: t('otp.codeLabel'), message: displayError }]
     : [];
 
   return (

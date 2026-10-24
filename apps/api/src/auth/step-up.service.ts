@@ -23,6 +23,7 @@ import {
 } from '../identity/identity-provider.service.js';
 
 import { ChallengeStore, type ChallengeRecord } from './challenge-store.js';
+import { retainAfterWrongCode } from './sign-in.service.js';
 
 import { SessionService } from '../session/session.service.js';
 
@@ -121,7 +122,7 @@ export class StepUpService {
       throw invalidChallenge();
     }
 
-    const refreshToken = await this.reauthenticate(principal, challenge, response, meta);
+    const refreshToken = await this.reauthenticate(principal, challengeToken, challenge, response, meta);
     if (refreshToken) {
       try {
         await this.idp.revokeRefreshToken(refreshToken);
@@ -158,6 +159,7 @@ export class StepUpService {
    */
   private async reauthenticate(
     principal: Principal,
+    challengeToken: string,
     challenge: ChallengeRecord,
     response: string,
     meta: Meta,
@@ -177,6 +179,9 @@ export class StepUpService {
       return outcome.tokens.refreshToken;
     } catch (err) {
       if (err instanceof IdentityProviderError) {
+        if (err.code === 'invalid_code') {
+          await retainAfterWrongCode(this.challenges, challengeToken, challenge);
+        }
         await this.record(principal, 'auth.step_up.failed', meta, {
           method: STEP_UP_METHOD, reason: err.code,
         });

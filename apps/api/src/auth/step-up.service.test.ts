@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { StepUpService } from './step-up.service.js';
+import { MAX_EMAIL_OTP_ATTEMPTS } from './sign-in.service.js';
 import { IdentityProviderError } from '../identity/identity-provider.service.js';
 import { IdentityResolutionService } from './identity-resolution.service.js';
 import type { ChallengeRecord } from './challenge-store.js';
@@ -50,6 +51,7 @@ function createMocks() {
     challenges: {
       create: vi.fn().mockResolvedValue('challenge-token'),
       consume: vi.fn().mockResolvedValue(STEP_UP_CHALLENGE),
+      put: vi.fn().mockResolvedValue(undefined),
     },
     sessions: {
       markStepUp: vi.fn().mockResolvedValue(undefined),
@@ -198,6 +200,34 @@ describe('StepUpService', () => {
         expect(key).not.toMatch(/password|^code$|token|secret/i);
       }
       expect(mocks.sessions.markStepUp).not.toHaveBeenCalled();
+    });
+
+    it('wrong code: hands the challenge back under the same token with one more attempt', async () => {
+      mocks.idp.respondEmailOtp.mockRejectedValue(new IdentityProviderError('bad code', 'invalid_code'));
+
+      await expect(service.verify(SESSION_PRINCIPAL, 'challenge-token', '00000000', META)).rejects.toMatchObject({
+        code: 'invalid_code',
+      });
+      expect(mocks.challenges.put).toHaveBeenCalledWith('challenge-token', { ...STEP_UP_CHALLENGE, attempts: 1 });
+    });
+
+    it(`wrong code on attempt ${MAX_EMAIL_OTP_ATTEMPTS}: the challenge is not handed back`, async () => {
+      mocks.challenges.consume.mockResolvedValue({ ...STEP_UP_CHALLENGE, attempts: MAX_EMAIL_OTP_ATTEMPTS - 1 });
+      mocks.idp.respondEmailOtp.mockRejectedValue(new IdentityProviderError('bad code', 'invalid_code'));
+
+      await expect(service.verify(SESSION_PRINCIPAL, 'challenge-token', '00000000', META)).rejects.toMatchObject({
+        code: 'invalid_code',
+      });
+      expect(mocks.challenges.put).not.toHaveBeenCalled();
+    });
+
+    it('an expired provider session is not handed back', async () => {
+      mocks.idp.respondEmailOtp.mockRejectedValue(new IdentityProviderError('expired', 'expired_session'));
+
+      await expect(service.verify(SESSION_PRINCIPAL, 'challenge-token', '00000000', META)).rejects.toMatchObject({
+        code: 'invalid_challenge',
+      });
+      expect(mocks.challenges.put).not.toHaveBeenCalled();
     });
   });
 });

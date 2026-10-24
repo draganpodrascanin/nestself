@@ -41,6 +41,8 @@ export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
 export const EmailOtpStartRequestSchema = z.object({
   email: emailField,
+  /** Language of the code email (Cognito CustomMessage trigger). Pool default when absent. */
+  locale: LocaleSchema.optional(),
 });
 export type EmailOtpStartRequest = z.infer<typeof EmailOtpStartRequestSchema>;
 

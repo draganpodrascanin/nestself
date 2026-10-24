@@ -139,8 +139,8 @@ export class AuthController {
   @Post('email-otp/start')
   @HttpCode(200)
   async emailOtpStart(@Req() req: HttpReq, @Body() body: unknown) {
-    const { email } = validate(EmailOtpStartRequestSchema, body);
-    return this.signIn.emailOtpStart(email, extractMeta(req));
+    const { email, locale } = validate(EmailOtpStartRequestSchema, body);
+    return this.signIn.emailOtpStart(email, extractMeta(req), locale);
   }
 
   // -----------------------------------------------------------------------

@@ -7,7 +7,7 @@
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -85,6 +85,9 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { email: 'user_stefan@example.com' },
       { email: 'user_ivana@example.com' },
       { email: 'user_nikola@example.com', password: 'TempPassword1!', temporaryPassword: 'TempPassword1!' },
+      // Pool-only users for the retry cases: they never reach a session.
+      { email: 'retry_exhaust@example.com' },
+      { email: 'retry_lock@example.com' },
     ]);
 
     // Link FakeIdentityProvider subs → ExternalIdentity rows.
@@ -127,6 +130,16 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     const match = csrfCookie.match(/nestself_csrf=([^;]+)/);
     if (!match) throw new Error('Could not parse CSRF token');
     return match[1]!;
+  }
+
+  /** The newest code the fake provider sent to an address. */
+  function lastSentCode(email: string): string {
+    return idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+  }
+
+  /** A well-formed code guaranteed to differ from `code`. */
+  function wrongCode(code: string): string {
+    return code === '000000' ? '111111' : '000000';
   }
 
   // -----------------------------------------------------------------------
@@ -453,6 +466,108 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(blockedStart.body).toHaveProperty('code', 'too_many_attempts');
   });
   // -----------------------------------------------------------------------
+  // 10a. Code email locale
+  // -----------------------------------------------------------------------
+
+  it('email-otp/start forwards the requested locale to the identity provider', async () => {
+    const spy = vi.spyOn(idp, 'startEmailOtp');
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email: 'user_ivana@example.com', locale: 'sr-Cyrl' });
+      expect(res.status).toBe(200);
+      expect(spy).toHaveBeenCalledWith({ email: 'user_ivana@example.com', locale: 'sr-Cyrl' });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('email-otp/start refuses a locale outside the supported four', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/email-otp/start')
+      .send({ email: 'user_ivana@example.com', locale: 'de' });
+    expect(res.status).toBe(400);
+  });
+
+  // -----------------------------------------------------------------------
+  // 10b. Bounded retry on a wrong email code (§21)
+  // -----------------------------------------------------------------------
+
+  describe('email code retry', () => {
+    async function start(email: string): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email });
+      expect(res.status).toBe(200);
+      return res.body.challengeToken as string;
+    }
+
+    function verify(challengeToken: string, code: string) {
+      return request(app.getHttpServer())
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken, code });
+    }
+
+    it('a wrong code answers invalid_code and the same token then accepts the right code', async () => {
+      const email = 'user_jovan@example.com';
+      const challengeToken = await start(email);
+      const code = lastSentCode(email);
+
+      const wrong = await verify(challengeToken, wrongCode(code));
+      expect(wrong.status).toBe(401);
+      expect(wrong.body).toHaveProperty('code', 'invalid_code');
+
+      const right = await verify(challengeToken, code);
+      expect(right.status).toBe(200);
+      expect(right.body.principal).toHaveProperty('userId', 'user_jovan');
+    });
+
+    it('after three wrong codes the token is gone and the right code answers invalid_challenge', async () => {
+      const email = 'retry_exhaust@example.com';
+      const challengeToken = await start(email);
+      const code = lastSentCode(email);
+
+      for (let i = 0; i < 3; i++) {
+        const wrong = await verify(challengeToken, wrongCode(code));
+        expect(wrong.status).toBe(401);
+        expect(wrong.body).toHaveProperty('code', 'invalid_code');
+      }
+
+      const right = await verify(challengeToken, code);
+      expect(right.status).toBe(401);
+      expect(right.body).toHaveProperty('code', 'invalid_challenge');
+    });
+
+    it('an unknown address answers a second wrong code on the same token exactly like a known one', async () => {
+      const challengeToken = await start('nobody_here@example.com');
+
+      for (let i = 0; i < 2; i++) {
+        const wrong = await verify(challengeToken, '000000');
+        expect(wrong.status).toBe(401);
+        expect(wrong.body).toHaveProperty('code', 'invalid_code');
+      }
+    });
+
+    it('the sign-in throttle still locks after five wrong codes spread over two challenges', async () => {
+      const email = 'retry_lock@example.com';
+      const first = await start(email);
+      for (let i = 0; i < 3; i++) {
+        expect((await verify(first, wrongCode(lastSentCode(email)))).status).toBe(401);
+      }
+      const second = await start(email);
+      for (let i = 0; i < 2; i++) {
+        expect((await verify(second, wrongCode(lastSentCode(email)))).status).toBe(401);
+      }
+
+      const blocked = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email });
+      expect(blocked.status).toBe(429);
+      expect(blocked.body).toHaveProperty('code', 'too_many_attempts');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // 11. Step-up re-authentication (T-2.6)
   // -----------------------------------------------------------------------
 
@@ -559,6 +674,29 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
         .send({ challengeToken, code: lastCode('user_ivana@example.com') });
       expect(res.status).toBe(401);
       expect(res.body).toHaveProperty('code', 'invalid_challenge');
+    });
+
+    it('a wrong step-up code keeps the challenge; the right code on the same token then succeeds', async () => {
+      const challengeToken = await startStepUp();
+      const code = lastCode('user_ivana@example.com');
+
+      const wrong = await ivanaAgent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ challengeToken, response: wrongCode(code) });
+      expect(wrong.status).toBe(401);
+      expect(wrong.body).toHaveProperty('code', 'invalid_code');
+
+      const right = await ivanaAgent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ challengeToken, response: code });
+      expect(right.status).toBe(204);
+
+      // Put the session back where the next case expects it: stale, needing step-up.
+      ivanaCsrf = extractCsrf(right);
+      ivanaSessionId = extractSessionId(right);
+      await ageSession(ivanaSessionId);
     });
 
     it('step-up verify returns 204 with a new session id and CSRF token; the action then succeeds', async () => {
