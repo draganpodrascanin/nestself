@@ -1,6 +1,6 @@
 /**
  * Media producers for the Chime SDK spikes (SPIKE-CW-03 with --with-browsers,
- * SPIKE-CW-04, SPIKE-CW-05 through SPIKE-CW-08 --device, SPIKE-CW-08).
+ * SPIKE-CW-04, SPIKE-CW-05 through SPIKE-CW-08 --device, SPIKE-CW-06, SPIKE-CW-08).
  *
  * A tiny HTTP server on 127.0.0.1 serves one HTML page and a browser build of
  * amazon-chime-sdk-js. Each participant is a "slot": the page at
@@ -12,8 +12,9 @@
  *
  * The Chime SDK browser build comes from, in order:
  * 1. SPIKE_CHIME_SDK_BUNDLE: a prebuilt single-file build that defines the global `ChimeSDK`;
- * 2. amazon-chime-sdk-js resolved from packages/video (T-CW-1.4), the web apps or the
- *    repository root, bundled once with the workspace app's Vite into the OS temp directory.
+ * 2. amazon-chime-sdk-js resolved from packages/video (its dependency since T-CW-1.4), the web
+ *    apps or the repository root, bundled once with Vite (also resolved from packages/video first)
+ *    into the OS temp directory and reused while the SDK version stays the same.
  * When neither is available the spike prints the exact step and exits before creating any meeting.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -71,6 +72,32 @@ export interface PageState {
   readonly present: Record<string, boolean>;
   readonly audioAutoplayBlocked: boolean;
   readonly error: { name: string; message: string } | null;
+  /** Last time each remote attendee's volume was above zero (epoch ms). */
+  readonly remoteAudioLastAt: Record<string, number>;
+  /** Replica meetings only: currently promoted to the primary meeting (WEB-09). */
+  readonly promoted: boolean;
+  readonly promotions: readonly { action: string; code?: string; ok?: boolean; at: number }[];
+  readonly sampler: SamplerState | null;
+}
+
+/** A stretch of at least STALL_MS (10 s) without the signal named by `kind`. */
+export interface Stall {
+  readonly kind: 'inbound-audio-packets' | 'outbound-audio-packets' | 'watched-attendee-silent';
+  readonly startedAt: number;
+  readonly endedAt: number | null;
+}
+
+/** Audio counters the page samples every 2 s once `startSampling` runs. */
+export interface SamplerState {
+  readonly startedAt: number;
+  readonly sampledAt: number | null;
+  /** Total audio packets received (inbound-rtp) and sent (outbound-rtp) on the meeting's peer connection. */
+  readonly rx: number;
+  readonly tx: number;
+  /** The attendee whose volume is watched (the other side of the floor), or null. */
+  readonly watch: string | null;
+  readonly watchedEverHeard: boolean;
+  readonly stalls: readonly Stall[];
 }
 
 // ── Resolution and bundling ──────────────────────────────────────────────────
@@ -128,12 +155,11 @@ function resolveViteEntry(): string | null {
 
 export const CHIME_SDK_MISSING_INSTRUCTIONS = [
   'amazon-chime-sdk-js is not resolvable from this checkout (searched packages/video, apps/workspace, apps/admin, the repository root and apps/api).',
-  'It is pinned in the catalog (pnpm-workspace.yaml, amazon-chime-sdk-js 3.32.0), but no workspace package depends on it until T-CW-1.4.',
-  'To make it resolvable, either:',
-  '  1. After T-CW-1.4 (packages/video, with "amazon-chime-sdk-js": "catalog:" in its package.json) is merged and `pnpm install` has run',
-  '     at a moment when no parallel work is running, re-run this spike: the harness finds the SDK under packages/video and bundles it',
-  "     with the workspace app's Vite. Nothing else is needed.",
-  '  2. Or, before then, build a single-file browser bundle of amazon-chime-sdk-js 3.32.0 outside this repository (the SDK',
+  'packages/video depends on it ("amazon-chime-sdk-js": "catalog:", 3.32.0), so packages/video/node_modules/amazon-chime-sdk-js is missing:',
+  'the checkout has not been installed since packages/video was added. To make it resolvable, either:',
+  '  1. Run `pnpm install` from the repository root at a moment when no parallel work is running (repository rule), then',
+  '     re-run this spike: the harness finds the SDK under packages/video and bundles it with Vite. Nothing else is needed.',
+  '  2. Or build a single-file browser bundle of amazon-chime-sdk-js 3.32.0 outside this repository (the SDK',
   '     repository\'s demos/singlejs produces one that defines the global ChimeSDK) and point the harness at it:',
   '       SPIKE_CHIME_SDK_BUNDLE=/absolute/path/to/amazon-chime-sdk.min.js AWS_PROFILE=nestself-dev AWS_REGION=eu-central-1 \\',
   '         pnpm --filter @nestself/api exec tsx scripts/spikes/<spike>.ts',
@@ -224,7 +250,8 @@ const PAGE_SCRIPT = String.raw`
   'use strict';
   var params = new URLSearchParams(location.search);
   var slot = params.get('slot') || '';
-  var state = { slot: slot, phase: 'loading', startedAt: null, stoppedCode: null, remoteVideo: {}, remoteAudioMax: {}, present: {}, audioAutoplayBlocked: false, error: null };
+  var STALL_MS = 10000;
+  var state = { slot: slot, phase: 'loading', startedAt: null, stoppedCode: null, remoteVideo: {}, remoteAudioMax: {}, remoteAudioLastAt: {}, present: {}, audioAutoplayBlocked: false, error: null, promoted: false, promotions: [], sampler: null };
   window.__spike = state;
   var statusEl = document.getElementById('status');
   function setPhase(phase) { state.phase = phase; statusEl.textContent = slot + ': ' + phase; }
@@ -267,6 +294,7 @@ const PAGE_SCRIPT = String.raw`
     var session = new C.DefaultMeetingSession(configuration, logger, deviceController);
     var av = session.audioVideo;
     var self = cfg.attendee.AttendeeId;
+    function codeName(code) { return (C.MeetingSessionStatusCode && C.MeetingSessionStatusCode[code]) || String(code); }
     av.addObserver({
       audioVideoDidStart: function () { state.startedAt = Date.now(); setPhase('started'); report('audioVideoDidStart'); },
       audioVideoDidStartConnecting: function (reconnecting) { if (reconnecting) report('reconnecting'); },
@@ -285,13 +313,21 @@ const PAGE_SCRIPT = String.raw`
         av.bindVideoElement(tile.tileId, videoElement('remote', tile.tileId));
       },
       connectionDidBecomePoor: function () { report('connectionDidBecomePoor'); },
+      audioVideoWasDemotedFromPrimaryMeeting: function (status) {
+        var code = codeName(status.statusCode());
+        state.promoted = false;
+        state.promotions.push({ action: 'demoted', code: code, at: Date.now() });
+        report('demotedFromPrimary', { code: code });
+      },
     });
     av.realtimeSubscribeToAttendeeIdPresence(function (attendeeId, present) {
       state.present[attendeeId] = present;
       report(present ? 'attendeePresent' : 'attendeeAbsent', { attendeeId: attendeeId });
       if (!present || attendeeId === self || attendeeId.indexOf('#content') >= 0) return;
       av.realtimeSubscribeToVolumeIndicator(attendeeId, function (id, volume) {
-        if (typeof volume !== 'number' || volume <= (state.remoteAudioMax[id] || 0)) return;
+        if (typeof volume !== 'number' || volume <= 0) return;
+        state.remoteAudioLastAt[id] = Date.now();
+        if (volume <= (state.remoteAudioMax[id] || 0)) return;
         if (!state.remoteAudioMax[id]) report('remoteAudioHeard', { attendeeId: id });
         state.remoteAudioMax[id] = volume;
       });
@@ -327,6 +363,85 @@ const PAGE_SCRIPT = String.raw`
       startContent: async function () { await av.startContentShare(canvasStream(cfg.label + ' CONTENT', 'darkgreen', 5)); report('contentShareStarted'); return true; },
       stopContent: function () { av.stopContentShare(); report('contentShareStopped'); return true; },
       leave: function () { av.stop(); return true; },
+      // Replica floor (WEB-09): the server created an attendee on the PRIMARY meeting for this
+      // participant; the replica client promotes itself with those credentials and unmutes.
+      promote: async function () {
+        var response = await fetch('/credentials/' + encodeURIComponent(slot) + '/floor', { method: 'POST' });
+        if (!response.ok) throw new Error('floor credentials request failed with HTTP ' + response.status);
+        var floor = await response.json();
+        var credentials = new C.MeetingSessionCredentials();
+        credentials.attendeeId = floor.attendeeId;
+        credentials.externalUserId = floor.externalUserId;
+        credentials.joinToken = floor.joinToken;
+        var status = await av.promoteToPrimaryMeeting(credentials);
+        var code = codeName(status.statusCode());
+        var ok = !status.isFailure();
+        if (ok) { state.promoted = true; av.realtimeUnmuteLocalAudio(); }
+        state.promotions.push({ action: 'promote', code: code, ok: ok, at: Date.now() });
+        report(ok ? 'promotedToPrimary' : 'promotionFailed', { code: code });
+        return { ok: ok, code: code };
+      },
+      demote: function () {
+        av.demoteFromPrimaryMeeting();
+        state.promoted = false;
+        state.promotions.push({ action: 'demote', at: Date.now() });
+        report('demoteRequested');
+        return true;
+      },
+      // Every 2 s: audio packets in and out of the peer connection and the watched attendee's
+      // volume. A counter that stops for STALL_MS, once it has moved at least once, opens a stall.
+      startSampling: function (watchAttendeeId) {
+        if (state.sampler) return true;
+        var now = Date.now();
+        var s = { startedAt: now, sampledAt: null, rx: -1, tx: -1, watch: watchAttendeeId || null, watchedEverHeard: false, stalls: [] };
+        var changedAt = { rx: now, tx: now };
+        var armed = { rx: false, tx: false };
+        var open = {};
+        state.sampler = s;
+        function openStall(kind, since) {
+          if (open[kind]) return;
+          open[kind] = { kind: kind, startedAt: since, endedAt: null };
+          s.stalls.push(open[kind]);
+          report('stallStarted', { kind: kind });
+        }
+        function closeStall(kind, at) {
+          var stall = open[kind];
+          if (!stall) return;
+          stall.endedAt = at;
+          delete open[kind];
+          report('stallEnded', { kind: kind, seconds: Math.round((at - stall.startedAt) / 1000) });
+        }
+        function counter(key, value, kind, t) {
+          if (value !== s[key]) {
+            if (s[key] >= 0) armed[key] = true;
+            s[key] = value; changedAt[key] = t; closeStall(kind, t);
+          } else if (armed[key] && t - changedAt[key] >= STALL_MS) {
+            openStall(kind, changedAt[key]);
+          }
+        }
+        function tick() {
+          av.getRTCPeerConnectionStats().then(function (stats) {
+            var rx = 0, tx = 0, t = Date.now();
+            if (stats) stats.forEach(function (entry) {
+              var audio = entry.kind === 'audio' || entry.mediaType === 'audio';
+              if (audio && entry.type === 'inbound-rtp') rx += entry.packetsReceived || 0;
+              if (audio && entry.type === 'outbound-rtp') tx += entry.packetsSent || 0;
+            });
+            counter('rx', rx, 'inbound-audio-packets', t);
+            counter('tx', tx, 'outbound-audio-packets', t);
+            if (s.watch) {
+              var heard = state.remoteAudioLastAt[s.watch];
+              if (heard) s.watchedEverHeard = true;
+              if (heard && t - heard >= STALL_MS) openStall('watched-attendee-silent', heard);
+              else if (heard) closeStall('watched-attendee-silent', t);
+            }
+            s.sampledAt = t;
+          }).catch(function () {});
+        }
+        tick();
+        setInterval(tick, 2000);
+        return true;
+      },
     };
   }
   main().catch(function (err) {
@@ -371,6 +486,8 @@ export interface HarnessServer {
   readonly port: number;
   readonly events: readonly HarnessEvent[];
   urlFor(slot: string): string;
+  /** Primary-meeting credentials a replica slot uses to promote itself (WEB-09); never printed. */
+  setFloor(slot: string, attendee: Attendee): void;
   close(): Promise<void>;
 }
 
@@ -394,6 +511,7 @@ export async function startHarnessServer(
   const bundle = await readFile(options.bundlePath);
   const slots = new Map(options.slots.map((s) => [s.slot, s] as const));
   const claims = new Map<string, number>();
+  const floors = new Map<string, Attendee>();
   const events: HarnessEvent[] = [];
 
   const send = (res: ServerResponse, status: number, type: string, body: string | Buffer): void => {
@@ -406,6 +524,18 @@ export async function startHarnessServer(
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, 'text/html; charset=utf-8', PAGE_HTML);
       if (req.method === 'GET' && url.pathname === '/chime-sdk.js') return send(res, 200, 'text/javascript; charset=utf-8', bundle);
+      const floorRequest = /^\/credentials\/([\w-]+)\/floor$/.exec(url.pathname);
+      if (req.method === 'POST' && floorRequest?.[1]) {
+        const floor = floors.get(floorRequest[1]);
+        if (!floor) return send(res, 404, 'application/json', '{"error":"no floor credentials for this slot"}');
+        ctx.log(`harness: slot "${floorRequest[1]}" fetched its primary-meeting floor credentials (attendee ${floor.AttendeeId})`);
+        return send(
+          res,
+          200,
+          'application/json',
+          JSON.stringify({ attendeeId: floor.AttendeeId, externalUserId: floor.ExternalUserId, joinToken: floor.JoinToken }),
+        );
+      }
       const credentials = /^\/credentials\/([\w-]+)$/.exec(url.pathname);
       if (req.method === 'POST' && credentials?.[1]) {
         const slot = slots.get(credentials[1]);
@@ -466,7 +596,14 @@ export async function startHarnessServer(
       server.close(() => resolve());
     });
   ctx.cleanup.add(`harness:${port}`, { label: `stop harness server on port ${port}`, run: close });
-  return { baseUrl, port, events, urlFor: (slot) => `${baseUrl}/?slot=${encodeURIComponent(slot)}`, close };
+  return {
+    baseUrl,
+    port,
+    events,
+    urlFor: (slot) => `${baseUrl}/?slot=${encodeURIComponent(slot)}`,
+    setFloor: (slot, attendee) => void floors.set(slot, attendee),
+    close,
+  };
 }
 
 // ── Playwright ───────────────────────────────────────────────────────────────
@@ -534,9 +671,15 @@ export async function waitForPhase(
   return state;
 }
 
-/** Calls a control exposed by the page once it has joined: content share on and off, leave. */
-export async function pageControl(opened: OpenSlot, action: 'startContent' | 'stopContent' | 'leave'): Promise<void> {
-  await opened.page.evaluate(`window.__spikeControl && window.__spikeControl.${action}()`);
+export type PageAction = 'startContent' | 'stopContent' | 'leave' | 'promote' | 'demote' | 'startSampling';
+
+/**
+ * Calls a control exposed by the page once it has joined: content share on and off, leave,
+ * promote and demote (replica floor), start sampling (with the attendee id to watch).
+ */
+export async function pageControl(opened: OpenSlot, action: PageAction, arg?: string): Promise<unknown> {
+  const argument = arg === undefined ? '' : JSON.stringify(arg);
+  return opened.page.evaluate(`window.__spikeControl && window.__spikeControl.${action}(${argument})`);
 }
 
 /** A compact, token-free summary of a slot for the JSON result. */

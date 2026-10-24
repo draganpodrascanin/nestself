@@ -632,6 +632,8 @@ export interface CreateSpikeMeetingOptions {
   readonly notifications?: boolean;
   readonly clientRequestToken?: string;
   readonly externalMeetingId?: string;
+  /** Creates a replica of this primary meeting (media replication, WEB-07, CORE-41). */
+  readonly primaryMeetingId?: string;
 }
 
 /**
@@ -650,6 +652,7 @@ export function buildCreateMeetingInput(ctx: SpikeContext, options: CreateSpikeM
     MediaRegion: CHIME_REGION,
     MeetingFeatures: options.maxCount === undefined ? features : { ...features, Attendee: { MaxCount: options.maxCount } },
     ...(notifications ? { NotificationsConfiguration: { SqsQueueArn: ctx.env.queueArn } } : {}),
+    ...(options.primaryMeetingId ? { PrimaryMeetingId: options.primaryMeetingId } : {}),
     TenantIds: ['spike-cw'],
     Tags: [
       { Key: 'stage', Value: 'dev' },
