@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SiteHeader } from './SiteHeader';
 import { expectNoA11yViolations } from '../../../test/axe';
@@ -58,5 +58,27 @@ describe('SiteHeader', () => {
   it('passes axe a11y check', async () => {
     const { container } = render(<SiteHeader {...defaultProps} />);
     await expectNoA11yViolations(container);
+  });
+});
+
+describe('SiteHeader motion', () => {
+  it('collapsed navigation is out of the layout, the tab order and the accessibility tree', () => {
+    render(<SiteHeader {...defaultProps} />);
+    const row = document.getElementById('site-nav')!.parentElement!;
+    expect(row.style.display).toBe('none');
+    expect(row.style.visibility).toBe('hidden');
+  });
+
+  it('expands the navigation row and collapses it again', async () => {
+    const user = userEvent.setup();
+    render(<SiteHeader {...defaultProps} />);
+    const row = document.getElementById('site-nav')!.parentElement!;
+    const toggle = screen.getByRole('button', { name: 'Open menu' });
+    await user.click(toggle);
+    await waitFor(() => expect(row.style.visibility).toBe('visible'));
+    expect(row.style.display).toBe('block');
+    await user.click(screen.getByRole('button', { name: 'Close menu' }));
+    await waitFor(() => expect(row.style.display).toBe('none'));
+    expect(row.style.visibility).toBe('hidden');
   });
 });

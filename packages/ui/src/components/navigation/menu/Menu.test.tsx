@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuLinkItem } from './Menu';
 import { expectNoA11yViolations } from '../../../test/axe';
@@ -105,5 +105,31 @@ describe('MenuLinkItem', () => {
   it('link menu passes axe a11y check', async () => {
     const { container } = render(<LinkMenuFixture />);
     await expectNoA11yViolations(container);
+  });
+});
+
+describe('Menu motion', () => {
+  it('grows out of the trigger and stays mounted until its exit finishes', async () => {
+    const user = userEvent.setup();
+    render(<MenuFixture />);
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    const menu = await screen.findByRole('menu');
+    expect(menu.style.transform).toMatch(/^scale\(/);
+    expect(menu.className).toContain('origin-[var(--transform-origin)]');
+    await user.keyboard('{Escape}');
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  });
+
+  it('opens again after an animated close', async () => {
+    const user = userEvent.setup();
+    render(<MenuFixture />);
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    await user.click(trigger);
+    await screen.findByRole('menu');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    await user.click(trigger);
+    expect(await screen.findByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
   });
 });

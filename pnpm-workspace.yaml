@@ -31,6 +31,8 @@ catalog:
   "@base-ui/react": 1.9.0
   "@phosphor-icons/react": 2.1.10
   clsx: 2.1.1
+  # Motion (formerly Framer Motion); presets in packages/ui/src/motion, rule in CLAUDE.md
+  motion: 14.6.0
   tailwind-merge: 3.7.0
   # i18n
   i18next: 26.5.3

@@ -45,7 +45,7 @@ export function Card({
         toneClasses[tone],
         paddingClasses[padding],
         interactive && [
-          'transition-[border-color,box-shadow] duration-150 ease-standard',
+          'transition-[border-color,box-shadow] duration-[var(--motion-fast)] ease-standard',
           'motion-reduce:transition-none',
           'hover:border-primary hover:shadow-low',
           'focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-focus',

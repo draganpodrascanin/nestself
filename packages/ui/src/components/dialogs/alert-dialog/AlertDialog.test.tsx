@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent } from './AlertDialog';
 import { expectNoA11yViolations } from '../../../test/axe';
@@ -115,5 +115,21 @@ describe('AlertDialog', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Remove via child' }));
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+  });
+});
+
+describe('AlertDialog motion', () => {
+  it('enters through the dialog preset and unmounts after the exit', async () => {
+    const user = userEvent.setup();
+    render(
+      <AlertDialog defaultOpen>
+        <AlertDialogContent title="Delete?" confirmLabel="Delete" cancelLabel="Keep" />
+      </AlertDialog>,
+    );
+    const popup = await screen.findByRole('alertdialog');
+    expect(popup.style.transform).toMatch(/^translate3d\(.+\) scale\(.+\)$/);
+    await user.click(screen.getByRole('button', { name: 'Keep' }));
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
   });
 });

@@ -83,22 +83,28 @@ export function AccordionItem({
             size={16}
             aria-hidden
             className={cn(
-              'shrink-0 text-text-secondary transition-transform duration-200',
+              'shrink-0 text-text-secondary transition-transform duration-[var(--motion-standard)] ease-standard',
               'motion-reduce:transition-none',
               'group-data-panel-open:rotate-180',
             )}
           />
         </BaseAccordion.Trigger>
       </BaseAccordion.Header>
+      {/*
+        Base UI measures the panel into --accordion-panel-height and sequences
+        the open and close around the CSS transition, so the panel animates
+        with tokens here rather than through Motion. Padding lives on the
+        inner element so the panel collapses all the way to zero.
+      */}
       <BaseAccordion.Panel
         className={cn(
           'overflow-hidden type-body text-text-secondary',
-          'pb-4',
-          'transition-[height] duration-200 ease-standard',
+          'h-[var(--accordion-panel-height)] transition-[height,opacity] duration-[var(--motion-standard)] ease-standard',
+          'data-starting-style:h-0 data-starting-style:opacity-0 data-ending-style:h-0 data-ending-style:opacity-0',
           'motion-reduce:transition-none',
         )}
       >
-        {children}
+        <div className="pb-4">{children}</div>
       </BaseAccordion.Panel>
     </BaseAccordion.Item>
   );

@@ -40,7 +40,7 @@ export function ProgressBar({
         <Progress.Indicator
           className={cn(
             'h-full bg-primary rounded-pill',
-            'transition-[width] duration-300 ease-standard',
+            'transition-[width] duration-[var(--motion-slow)] ease-standard',
             'motion-reduce:transition-none',
           )}
         />

@@ -16,7 +16,8 @@
     "storybook:build": "storybook build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "check": "vitest run src/motion/motion-contract.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
@@ -24,6 +25,7 @@
     "@nestself/tokens": "workspace:*",
     "@phosphor-icons/react": "catalog:",
     "clsx": "catalog:",
+    "motion": "catalog:",
     "tailwind-merge": "catalog:"
   },
   "peerDependencies": {

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { List, X } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
+import { m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 export interface SiteHeaderLink {
   label: string;
@@ -39,6 +40,7 @@ export function SiteHeader({
 }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
   const navId = 'site-nav';
+  const navMotion = useMotionPreset('disclosure');
 
   return (
     <header
@@ -72,30 +74,51 @@ export function SiteHeader({
         </button>
       </div>
 
-      <nav
-        id={navId}
-        className={cn(
-          'gap-4 flex items-center ml-auto',
-          '@max-[1000px]:gap-1 @max-[1000px]:pt-4 @max-[1000px]:hidden @max-[1000px]:flex-[0_0_100%] @max-[1000px]:flex-col @max-[1000px]:items-stretch',
-          open && '@max-[1000px]:flex',
-        )}
-      >
-        {links.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            aria-current={link.current ? 'page' : undefined}
+      {/*
+        Below 1000 px the wrapper is the collapsible row that animates open and
+        closed, and ends `display: none` so a closed menu adds no row gap. From
+        1001 px it is `display: contents` (important, so it beats the inline
+        style), and its height, opacity and visibility never reach the inline
+        navigation; the nav re-asserts `visible` because visibility inherits.
+      */}
+      <MotionFeatures>
+        <m.div
+          initial={false}
+          animate={
+            open
+              ? { ...navMotion.animate, display: 'block' }
+              : {
+                  ...navMotion.exit,
+                  transitionEnd: { ...navMotion.exit.transitionEnd, display: 'none' },
+                }
+          }
+          className="overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1001px]:contents!"
+        >
+          <nav
+            id={navId}
             className={cn(
-              'text-[0.9375rem] text-text no-underline hover:text-primary hover:underline',
-              'min-h-11 @max-[1000px]:px-3 @max-[1000px]:min-h-12 flex items-center',
-              'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'gap-4 flex items-center ml-auto @min-[1001px]:visible',
+              '@max-[1000px]:gap-1 @max-[1000px]:pt-4 @max-[1000px]:flex-col @max-[1000px]:items-stretch',
             )}
           >
-            {link.label}
-          </a>
-        ))}
-        {actions}
-      </nav>
+            {links.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                aria-current={link.current ? 'page' : undefined}
+                className={cn(
+                  'text-[0.9375rem] text-text no-underline hover:text-primary hover:underline',
+                  'min-h-11 @max-[1000px]:px-3 @max-[1000px]:min-h-12 flex items-center',
+                  'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+                )}
+              >
+                {link.label}
+              </a>
+            ))}
+            {actions}
+          </nav>
+        </m.div>
+      </MotionFeatures>
     </header>
   );
 }

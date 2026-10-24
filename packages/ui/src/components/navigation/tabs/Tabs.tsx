@@ -33,9 +33,18 @@ export function TabList({ children, label, className }: TabListProps) {
   return (
     <BaseTabs.List
       aria-label={label}
-      className={cn('flex border-b border-border-subtle', className)}
+      className={cn('relative flex border-b border-border-subtle', className)}
     >
       {children}
+      {/* Slides between tabs; Base UI writes the active tab's box into CSS variables. */}
+      <BaseTabs.Indicator
+        renderBeforeHydration
+        className={cn(
+          'bottom-0 left-0 h-0.5 pointer-events-none absolute bg-primary',
+          'w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)]',
+          'transition-[translate,width] duration-[var(--motion-standard)] ease-standard motion-reduce:transition-none',
+        )}
+      />
     </BaseTabs.List>
   );
 }
@@ -52,7 +61,8 @@ export function Tab({ value, children, className }: TabProps) {
       value={value}
       className={cn(
         'min-h-11 px-4 py-2 text-text-secondary cursor-pointer bg-transparent border-b-2 border-transparent',
-        'data-selected:text-primary data-selected:border-primary data-selected:border-b-2',
+        'transition-colors duration-[var(--motion-fast)] ease-standard',
+        'data-selected:text-primary',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
         'pointer-coarse:min-h-12',
         className,
