@@ -1,7 +1,7 @@
 /**
- * RoomEmitter: server-side emits to a Socket.IO room through the
- * `EventsGateway` server, for services that publish real-time events (the
- * calls module emits the `call:{sessionId}` events of `ROOM_EVENTS`).
+ * RoomEmitter: server-side emits to a Socket.IO room, for services that
+ * publish real-time events (the calls module emits the `call:{sessionId}`
+ * events of `ROOM_EVENTS`), from the API and from the worker alike.
  *
  * Every payload is checked before it leaves (CW-R-36): the event must be one
  * `ROOM_EVENTS` lists, the room must be of the event's kind, and the payload
@@ -9,43 +9,54 @@
  * never a name, an email, a location text or a token). A failure is dropped
  * and logged at error level with the event name only: fail closed.
  *
- * Emitting is best effort: before the gateway's server exists (a process
- * without the Socket.IO adapter) a valid event is dropped and logged, never
- * thrown, because the HTTP request that caused it has already succeeded.
+ * A checked event is published as `{ room, event, payload }` on the room
+ * events channel (`ROOM_EVENTS_CHANNEL`) and never emitted locally: the
+ * `RoomEventRelay` of every API task, this one included, emits it to its own
+ * sockets, so a socket on any task receives it exactly once and the worker,
+ * which has no Socket.IO server, can emit too. The emitter depends on the
+ * store only.
+ *
+ * Emitting is best effort: a failed publish is logged at warn with the event
+ * name and never thrown, because the request or job that caused it has
+ * already succeeded.
  *
  * Who may join a room is decided at subscription time (`EventsGateway`,
  * `SubscriptionAuthorizer`, `RoomAccessRegistry`).
  */
-import { Injectable, Logger } from '@nestjs/common';
-import type { Server } from 'socket.io';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { EventsGateway } from './events.gateway.js';
-import { ROOM_EVENTS, parseRoom, type RoomEventName, type RoomEventPayload } from './ws-messages.js';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { ROOM_EVENTS_CHANNEL } from '../redis/redis-keys.js';
+import { checkRoomEvent, type RoomEventEnvelope, type RoomEventName, type RoomEventPayload } from './ws-messages.js';
 
 @Injectable()
 export class RoomEmitter {
   private readonly logger = new Logger(RoomEmitter.name);
 
-  constructor(private readonly gateway: EventsGateway) {}
+  constructor(@Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore) {}
 
   /**
-   * Emits `event` to every socket in `room`. False when the event, the room
-   * or the payload fails its check, or when no Socket.IO server is running.
+   * Publishes `event` for every socket in `room`. False when the event, the
+   * room or the payload fails its check; true once the publish has started.
    */
   emit<E extends RoomEventName>(room: string, event: E, payload: RoomEventPayload<E>): boolean {
-    const spec = Object.hasOwn(ROOM_EVENTS, event) ? ROOM_EVENTS[event] : undefined;
-    const parsed = spec?.schema.safeParse(payload);
-    if (!spec || parseRoom(room)?.kind !== spec.roomKind || !parsed?.success) {
+    const checked = checkRoomEvent(room, event, payload);
+    if (!checked) {
       this.logger.error({ event }, 'Room event failed its schema; not emitted');
       return false;
     }
 
-    const server = this.gateway.server as Server | undefined;
-    if (!server) {
-      this.logger.warn({ room, event }, 'No Socket.IO server; room event dropped');
-      return false;
+    const envelope: RoomEventEnvelope = { room, event, payload: checked };
+    const failed = (error: unknown): void => {
+      this.logger.warn(
+        { event, error: error instanceof Error ? error.name : 'UnknownError' },
+        'Room event publish failed; event dropped',
+      );
+    };
+    try {
+      this.store.publish(ROOM_EVENTS_CHANNEL, JSON.stringify(envelope)).catch(failed);
+    } catch (error) {
+      failed(error);
     }
-    server.to(room).emit(event, parsed.data);
     return true;
   }
 }

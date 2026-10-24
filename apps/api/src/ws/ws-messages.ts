@@ -11,8 +11,9 @@
  *   org:{orgId}:programme             program.overview on the organization (T-1.11)
  *
  * Events: every server-side emit is checked against `ROOM_EVENTS` (its room
- * kind and payload schema, from `@nestself/contracts`) before it leaves
- * (CW-R-36).
+ * kind and payload schema, from `@nestself/contracts`) by `RoomEmitter`
+ * before it is published, and again by `RoomEventRelay` before it reaches a
+ * socket (`checkRoomEvent`, CW-R-36).
  *
  * @see 4.6.7, AUTHZ-R-58, AUTHZ-R-59, D-CW-16, CW-R-36
  */
@@ -171,3 +172,25 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'appointment.follow_up.declined': callRoomEvent('appointment.follow_up.declined'),
   'appointment.times_suggested': callRoomEvent('appointment.times_suggested'),
 };
+
+/**
+ * The checked payload of `event` on `room`, or null when the event is not one
+ * `ROOM_EVENTS` lists, the room is not of the event's kind or the payload
+ * fails the event's strict schema. Run by `RoomEmitter` before it publishes
+ * and by `RoomEventRelay` before it emits.
+ */
+export function checkRoomEvent(room: string, event: string, payload: unknown): Record<string, unknown> | null {
+  if (!Object.hasOwn(ROOM_EVENTS, event)) return null;
+  const spec = ROOM_EVENTS[event as RoomEventName];
+  if (parseRoom(room)?.kind !== spec.roomKind) return null;
+  const parsed = spec.schema.safeParse(payload);
+  return parsed.success ? (parsed.data as Record<string, unknown>) : null;
+}
+
+/** One message on the room events channel (`ROOM_EVENTS_CHANNEL`). */
+export const RoomEventEnvelopeSchema = z.strictObject({
+  room: z.string().min(1).max(256),
+  event: z.string().min(1).max(128),
+  payload: z.record(z.string(), z.unknown()),
+});
+export type RoomEventEnvelope = z.infer<typeof RoomEventEnvelopeSchema>;

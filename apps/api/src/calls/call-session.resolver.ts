@@ -34,6 +34,21 @@ function notFound(): ApiHttpException {
   return new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
 }
 
+/**
+ * The appointment a call session belongs to, or null for a missing session,
+ * one with no appointment (a webinar) or a missing appointment. Shared by
+ * this resolver and the `call:{sessionId}` room resolver of `CallsService`,
+ * so a route and a room subscription derive the same resource.
+ */
+export async function appointmentOfCallSession(
+  sessions: CallSessionLookup,
+  sessionId: string,
+): Promise<AppointmentRecord | null> {
+  const session = await sessions.findSessionById(sessionId);
+  if (!session?.appointmentId) return null;
+  return sessions.findAppointmentById(session.appointmentId);
+}
+
 export const callSessionResource: ResourceResolver = async (
   req: Record<string, unknown>,
   _principal: Principal,
@@ -41,9 +56,7 @@ export const callSessionResource: ResourceResolver = async (
   const sessionId = (req['params'] as Record<string, string | undefined> | undefined)?.['sessionId'];
   if (!sessionId) throw notFound();
   if (!lookup) throw new Error('callSessionResource: CallsModule has not bound the call session lookup');
-  const session = await lookup.findSessionById(sessionId);
-  if (!session?.appointmentId) throw notFound();
-  const appointment = await lookup.findAppointmentById(session.appointmentId);
+  const appointment = await appointmentOfCallSession(lookup, sessionId);
   if (!appointment) throw notFound();
   return appointmentResourceOf(appointment);
 };

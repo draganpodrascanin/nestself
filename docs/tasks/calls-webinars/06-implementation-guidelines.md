@@ -803,7 +803,9 @@ Every mutation in this epic records an audit event through `AuditWriter.record(i
 
 ## 8. Real-time layer (Socket.IO)
 
-New rooms and events are added to the existing `EventsGateway`. Each room subscription is authorised by `SubscriptionAuthorizer.authorizeSubscription(principal, action, resource)`.
+New rooms and events are added to the existing `EventsGateway`. A client sends `subscribe { room }`; `action` and `resource` are optional and ignored. The served room names are the table at the top of `apps/api/src/ws/ws-messages.ts`, and `SubscriptionAuthorizer.authorizeRoom` derives the action and the resource below from the room on the server (the owning module's resolver in `RoomAccessRegistry`) before it calls `authorize()`.
+
+A call room stays subscribable for its participants after the session ends, so the post-call screens receive the follow-up events (D-CW-37); there is no time bound for now.
 
 | Room | Action | Events |
 | --- | --- | --- |

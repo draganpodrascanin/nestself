@@ -349,7 +349,7 @@ Installed in `main.ts` via `app.useWebSocketAdapter(new NestSelfIoAdapter(app))`
 
 | Event | Direction | Payload | Behaviour |
 |-------|-----------|---------|-----------|
-| `subscribe` | client → server | `{ room, action, resource }` (zod-validated) | Runs `authorizeSubscription`; on allow → join room, record in `subscriptions`; on deny → emit `subscribe:denied { room, reason }` (AUTHZ-R-59) |
+| `subscribe` | client → server | `{ room }` (zod-validated; `action` and `resource` optional and ignored) | Accepts only the room names in the table at the top of `ws-messages.ts`; runs `authorizeRoom`, which derives the action and resource from the room on the server; on allow → join room, record in `subscriptions`; on deny → emit `subscribe:denied { room, reason }` (AUTHZ-R-59, T-CW-1.6) |
 | `unsubscribe` | client → server | `{ room }` | Leave room, remove from `subscriptions` |
 | `subscribe:ok` | server → client | `{ room }` | Subscription confirmed |
 | `subscribe:denied` | server → client | `{ room, reason }` | Subscription denied |

@@ -117,6 +117,7 @@ import {
 } from './call-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from './calls.repository.js';
+import { appointmentOfCallSession } from './call-session.resolver.js';
 
 /** A consultation is one expert and one employee (D-CW-02). */
 const CONSULTATION_CAPACITY = 2;
@@ -614,15 +615,26 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
   /**
    * The `call:{sessionId}` subscription target: `consultation.join` on the
    * session's appointment, derived here from the database, never from the
-   * client. Null (read as `not_found`) for an unknown session, one without
-   * an appointment, and anyone who is not the appointment's expert or
-   * employee, whatever their grants. Not bound to the session status: the
-   * post-call screens subscribe after the end for the follow-up events.
+   * client, through the same lookup as `callSessionResource`. Null (read as
+   * `not_found`) for an unknown session, one without an appointment, and
+   * anyone who is not the appointment's expert or employee, whatever their
+   * grants. Not bound to the session status: the post-call screens subscribe
+   * after the end for the follow-up events (D-CW-37).
+   *
+   * Membership is checked at subscription and on every re-authorisation,
+   * which `invalidate { userId }` triggers. Whatever reassigns an
+   * appointment's expert (the booking epic) must therefore publish
+   * `invalidate { userId: <old expert> }`, or the old expert keeps the room
+   * until they resubscribe.
    */
   private async callRoomTarget(sessionId: string, principal: Principal): Promise<RoomTarget | null> {
-    const session = await this.repo.findSessionById(sessionId);
-    if (!session?.appointmentId) return null;
-    const appointment = await this.appointments.findById(session.appointmentId);
+    const appointment = await appointmentOfCallSession(
+      {
+        findSessionById: (id) => this.repo.findSessionById(id),
+        findAppointmentById: (id) => this.appointments.findById(id),
+      },
+      sessionId,
+    );
     if (!appointment) return null;
     if (principal.userId !== appointment.expertUserId && principal.userId !== appointment.employeeUserId) return null;
     return { action: ACTIONS['consultation.join'], resource: appointmentResourceOf(appointment) };

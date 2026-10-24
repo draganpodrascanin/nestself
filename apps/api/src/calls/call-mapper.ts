@@ -11,6 +11,7 @@ import {
   ChimeAttendeeSchema,
   ChimeMeetingSchema,
   DiagnosticsResponseSchema,
+  callRoomName,
   type AppointmentStatus,
   type CallFormat,
   type CallOutcomeStatus,
@@ -59,10 +60,8 @@ export const fromDbOutcomeStatus = (status: DbOutcomeStatus): CallOutcomeStatus 
 // Rules
 // ---------------------------------------------------------------------------
 
-/** The Socket.IO room of a call session (decision record section 7). */
-export function callRoom(sessionId: string): string {
-  return `call:${sessionId}`;
-}
+/** The Socket.IO room of a call session (decision record section 7): the clients' `callRoomName`. */
+export const callRoom: (sessionId: string) => string = callRoomName;
 
 /**
  * Consultation join window (D-CW-07, guidelines 4.3): from 15 minutes before

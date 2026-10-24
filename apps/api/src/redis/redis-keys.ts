@@ -188,3 +188,10 @@ export function callParticipantCredentialsKey(sessionId: string, participantId: 
 
 /** Channel name for cache invalidation messages. */
 export const INVALIDATE_CHANNEL = 'invalidate';
+
+/**
+ * Channel of the Socket.IO room events (T-CW-1.6): `RoomEmitter` publishes
+ * `{ room, event, payload }` from the API and the worker, and the
+ * `RoomEventRelay` of every API task emits it to its own sockets.
+ */
+export const ROOM_EVENTS_CHANNEL = 'room_events';

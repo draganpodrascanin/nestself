@@ -1,7 +1,8 @@
 /**
  * The `call:{sessionId}` room end to end in memory (T-CW-1.6): the real
  * `EventsGateway`, `SubscriptionAuthorizer` (with the `authorize()` engine),
- * `RoomAccessRegistry`, `RoomEmitter` and `CallsService`, over a mocked
+ * `RoomAccessRegistry`, `RoomEmitter`, `RoomEventRelay` (over the in-memory
+ * store's pub/sub, standing in for Redis) and `CallsService`, over a mocked
  * Socket.IO server and in-memory repositories. Only the `ContextLoader` is
  * stubbed, with the grants each person holds.
  *
@@ -34,6 +35,7 @@ import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import { EventsGateway } from '../ws/events.gateway.js';
 import { RoomAccessRegistry } from '../ws/room-access.registry.js';
 import { RoomEmitter } from '../ws/room-emitter.js';
+import { RoomEventRelay } from '../ws/room-event-relay.js';
 import { SubscriptionAuthorizer } from '../ws/subscription-authorizer.js';
 import type { CallParticipantRecord, CallSessionRecord, CallsRepository } from './calls.repository.js';
 import { CallsService } from './calls.service.js';
@@ -335,6 +337,7 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
   let authorizer: SubscriptionAuthorizer;
   let gateway: EventsGateway;
   let rooms: RoomEmitter;
+  let relay: RoomEventRelay;
   let service: CallsService;
   let errors: unknown[][];
 
@@ -357,7 +360,7 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
     return joined.sessionId;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
     errors = [];
@@ -380,7 +383,10 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
     authorizer = new SubscriptionAuthorizer(contextLoader as unknown as ContextLoader, registry);
     gateway = new EventsGateway(authorizer);
     gateway.server = server as never;
-    rooms = new RoomEmitter(gateway);
+    const store = new MemoryKeyValueStore();
+    rooms = new RoomEmitter(store);
+    relay = new RoomEventRelay(store, gateway);
+    await relay.onModuleInit();
 
     const dbs = { withOrgScope: (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(undefined) };
     service = new CallsService(
@@ -388,7 +394,7 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
       appointments as unknown as AppointmentsRepository,
       dbs as unknown as DbService,
       new FakeVideoProvider(),
-      new MemoryKeyValueStore(),
+      store,
       rooms,
       { record: vi.fn(async () => undefined) } as unknown as AuditWriter,
       { get: () => 'none' } as never,
@@ -398,8 +404,9 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
     service.onModuleInit();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     service.onModuleDestroy();
+    await relay.onModuleDestroy();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -496,6 +503,20 @@ describe('call room: Socket.IO subscription and events (T-CW-1.6)', () => {
       expect(unknown).toEqual({ event: 'subscribe:denied', data: { room: 'call:no_such_session', reason: 'not_found' } });
 
       await service.join(APPOINTMENT_ID, theExpert, {});
+      expect(socket.received).toEqual([]);
+    });
+
+    it('still refuses a non-participant as not_found after the session ended', async () => {
+      const sessionId = await startSession();
+      await service.join(APPOINTMENT_ID, theExpert, {});
+      await service.end(APPOINTMENT_ID, theExpert);
+      const socket = socketOf(colleague);
+
+      expect(await subscribe(socket, { room: `call:${sessionId}` })).toEqual({
+        event: 'subscribe:denied',
+        data: { room: `call:${sessionId}`, reason: 'not_found' },
+      });
+      expect(service.emitFollowUpDeclined(sessionId, { appointmentId: APPOINTMENT_ID, followUpId: 'appt_2' })).toBe(true);
       expect(socket.received).toEqual([]);
     });
 
