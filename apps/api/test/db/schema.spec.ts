@@ -10,7 +10,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
+import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { SAMPLE_CATEGORY_IDS, SAMPLE_EDITORIAL_STAFF } from '@nestself/sample-data';
 import {
+  assignments,
   channels,
   conversationMessages,
   conversations,
@@ -353,6 +356,29 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       const counts1 = await seed(owner.db);
       const counts2 = await seed(owner.db);
       expect(counts2).toEqual(counts1);
+    });
+
+    it('gives the editorial staff exactly their template grants and category assignments', async () => {
+      await seed(owner.db);
+      const categoryIds = Object.values(SAMPLE_CATEGORY_IDS).sort();
+      for (const staff of SAMPLE_EDITORIAL_STAFF) {
+        const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === staff.templateKey)!;
+        const rows = await owner.db.select().from(grants).where(eq(grants.subjectUserId, staff.id));
+        expect(rows.map((r) => r.templateKey), staff.id).toEqual([staff.templateKey]);
+        expect(rows[0]!.actions).toEqual([...tmpl.actions]);
+        expect(rows[0]!.scopeType).toBe(tmpl.scopeType);
+        expect(rows[0]!.conditions).toEqual(
+          staff.disciplines.length > 0 ? [{ type: 'categories', allowed: [...staff.disciplines] }] : null,
+        );
+
+        const assigned = await owner.db.select().from(assignments).where(eq(assignments.userId, staff.id));
+        expect(assigned.every((a) => a.kind === 'COLLECTION')).toBe(true);
+        expect(assigned.map((a) => a.targetId).sort()).toEqual(staff.categoryIds.length > 0 ? categoryIds : []);
+      }
+      const reviewerRows = await owner.db.select().from(grants).where(eq(grants.templateKey, 'content_reviewer'));
+      expect(reviewerRows.flatMap((r) => r.actions)).toContain('content.review');
+      const publisherRows = await owner.db.select().from(grants).where(eq(grants.subjectUserId, 'user_milena'));
+      expect(publisherRows[0]!.actions).not.toContain('content.review');
     });
 
     it('removes the over-privileged grants that seeds before the legacy-role fix created', async () => {

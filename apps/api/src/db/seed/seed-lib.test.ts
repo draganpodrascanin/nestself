@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-import { SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { EXTRA_SAMPLE_TEMPLATES, extraSampleGrantIds, templatesForLegacyRoles } from './seed-lib.js';
+import { SAMPLE_CATEGORY_IDS, SAMPLE_EDITORIAL_STAFF, SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
+import { EXTRA_SAMPLE_TEMPLATES, editorialStaffGrantIds, extraSampleGrantIds, templatesForLegacyRoles } from './seed-lib.js';
 
 const keys = (orgRole: string | null, platformRole: string | null) =>
   templatesForLegacyRoles(orgRole, platformRole)
@@ -67,5 +67,41 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     const seeded = [...derived, ...extraSampleGrantIds()].sort();
     expect(seeded).toHaveLength(17);
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
+  });
+});
+
+describe('SAMPLE_EDITORIAL_STAFF', () => {
+  it('covers the four editorial templates once each', () => {
+    expect(SAMPLE_EDITORIAL_STAFF.map((s) => s.templateKey).sort()).toEqual([
+      'content_author',
+      'content_publisher',
+      'content_reviewer',
+      'editorial_lead',
+    ]);
+    expect(editorialStaffGrantIds().sort()).toEqual(
+      SAMPLE_EDITORIAL_STAFF.map((s) => `grant_${s.id}_${s.templateKey}`).sort(),
+    );
+  });
+
+  it('is never derived from a legacy role', () => {
+    const known = new Set<string>(PERMISSION_TEMPLATES.map((tmpl) => tmpl.key));
+    for (const staff of SAMPLE_EDITORIAL_STAFF) {
+      expect(known.has(staff.templateKey)).toBe(true);
+      expect(SAMPLE_PEOPLE.some((p) => (p.id as string) === staff.id)).toBe(false);
+    }
+  });
+
+  it('gives the reviewer the psychological and general disciplines', () => {
+    const reviewer = SAMPLE_EDITORIAL_STAFF.find((s) => s.templateKey === 'content_reviewer')!;
+    expect([...reviewer.disciplines]).toEqual(['psychological', 'general']);
+  });
+
+  it('assigns author, reviewer and publisher to all six categories', () => {
+    const all = Object.values(SAMPLE_CATEGORY_IDS).sort();
+    expect(all).toHaveLength(6);
+    for (const key of ['content_author', 'content_reviewer', 'content_publisher']) {
+      const staff = SAMPLE_EDITORIAL_STAFF.find((s) => s.templateKey === key)!;
+      expect([...staff.categoryIds].sort()).toEqual(all);
+    }
   });
 });

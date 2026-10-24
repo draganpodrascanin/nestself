@@ -1,4 +1,5 @@
 import { SAMPLE_PEOPLE } from './people.ts';
+import { SAMPLE_EDITORIAL_STAFF } from './editorial-staff.ts';
 
 /**
  * Development password for sample staff and experts in the fake identity
@@ -14,13 +15,13 @@ export const SAMPLE_DEV_PASSWORD = 'Nestself-dev-1234!';
  * (auth-strategy.md A.3.3, D-04). Emails follow the seed convention
  * `<id>@example.com`.
  */
-export const SAMPLE_EXTERNAL_IDENTITIES = SAMPLE_PEOPLE.map((p) => ({
+export const SAMPLE_EXTERNAL_IDENTITIES = [...SAMPLE_PEOPLE, ...SAMPLE_EDITORIAL_STAFF].map((p) => ({
   userId: p.id,
   email: `${p.id}@example.com`,
   provider: 'cognito' as const,
   subject: `sample-sub-${p.id}`,
   cognitoUsername: `sample-${p.id}`,
   /** Staff and experts use the password flow; employees use email codes [D-05]. */
-  signIn: p.platformRole ? ('password' as const) : ('email_otp' as const),
+  signIn: !('platformRole' in p) || p.platformRole ? ('password' as const) : ('email_otp' as const),
   sample: true as const,
 }));

@@ -54,6 +54,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -142,6 +144,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -231,6 +235,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -1112,10 +1118,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -1215,10 +1224,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -1840,6 +1852,7 @@
             "content.write",
             "content.submit",
             "content.preview",
+            "media.upload",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -1920,11 +1933,11 @@
           "subjectUserId": "u11",
           "templateKey": "content_publisher",
           "actions": [
-            "content.review",
             "content.publish",
             "content.schedule",
             "content.archive",
             "content.restrict",
+            "content.preview",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -2559,6 +2572,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -2647,6 +2662,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -2718,7 +2735,22 @@
           "subjectUserId": "u20",
           "templateKey": "employee",
           "actions": [
-            "budget.read"
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "organization",
           "scopeOrgId": "o1",
@@ -3270,6 +3302,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -3716,10 +3750,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -3818,10 +3855,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -4484,7 +4524,22 @@
           "subjectUserId": "u21",
           "templateKey": "employee",
           "actions": [
-            "budget.read"
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "organization",
           "scopeOrgId": "o1",
@@ -4560,7 +4615,22 @@
           "subjectUserId": "u22",
           "templateKey": "employee",
           "actions": [
-            "budget.read"
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "organization",
           "scopeOrgId": "o1",
@@ -4626,7 +4696,22 @@
           "subjectUserId": "u23",
           "templateKey": "employee",
           "actions": [
-            "preferences.manage"
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "own",
           "scopeOrgId": null,
@@ -4710,6 +4795,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -4798,6 +4885,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -4886,6 +4975,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -5253,6 +5344,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -5341,6 +5434,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -5429,6 +5524,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -5517,6 +5614,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -5592,10 +5691,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -6024,6 +6126,7 @@
             "content.write",
             "content.submit",
             "content.preview",
+            "media.upload",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -6297,10 +6400,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -6398,10 +6504,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -7416,6 +7525,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -7504,6 +7615,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -7765,10 +7878,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -7873,6 +7989,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -8315,6 +8433,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -8858,10 +8978,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -9807,6 +9930,7 @@
             "content.write",
             "content.submit",
             "content.preview",
+            "media.upload",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -9887,11 +10011,11 @@
           "subjectUserId": "u11",
           "templateKey": "content_publisher",
           "actions": [
-            "content.review",
             "content.publish",
             "content.schedule",
             "content.archive",
             "content.restrict",
+            "content.preview",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -10185,6 +10309,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -10273,6 +10399,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -10361,6 +10489,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -10855,11 +10985,11 @@
           "subjectUserId": "u11",
           "templateKey": "content_publisher",
           "actions": [
-            "content.review",
             "content.publish",
             "content.schedule",
             "content.archive",
             "content.restrict",
+            "content.preview",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -11117,10 +11247,13 @@
             "case.decline",
             "appointment.propose",
             "conversation.participate",
+            "conversation.read.assigned",
             "consultation.join",
             "delivery.record",
             "earnings.read",
             "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
             "preferences.manage",
             "feedback.submit",
             "data.export.own",
@@ -11317,6 +11450,8 @@
             "event.register",
             "consultation.join",
             "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
             "preferences.manage",
             "voucher.activate",
             "feedback.submit",
@@ -12736,7 +12871,22 @@
           "subjectUserId": "u-exp",
           "templateKey": "expert",
           "actions": [
-            "conversation.read.assigned"
+            "availability.manage",
+            "case.accept",
+            "case.decline",
+            "appointment.propose",
+            "conversation.participate",
+            "conversation.read.assigned",
+            "consultation.join",
+            "delivery.record",
+            "earnings.read",
+            "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "assigned_cases",
           "scopeOrgId": null,
@@ -12828,7 +12978,22 @@
           "subjectUserId": "u-emp",
           "templateKey": "employee",
           "actions": [
-            "conversation.participate"
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
           ],
           "scopeType": "own",
           "scopeOrgId": "o1",
@@ -13026,6 +13191,2689 @@
     "expected": {
       "allowed": false,
       "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-01: author writes in assigned category",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_author"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.write",
+    "resource": {
+      "type": "content_resource",
+      "collectionId": "cat-sleep"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_author",
+          "actions": [
+            "content.write",
+            "content.submit",
+            "content.preview",
+            "media.upload",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-02: author writes in unassigned category",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_author"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.write",
+    "resource": {
+      "type": "content_resource",
+      "collectionId": "cat-money"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_author",
+          "actions": [
+            "content.write",
+            "content.submit",
+            "content.preview",
+            "media.upload",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-03: reviewer approves matching discipline",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_reviewer"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.review",
+    "resource": {
+      "type": "content_revision",
+      "collectionId": "cat-sleep",
+      "category": "psychological"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_reviewer",
+          "actions": [
+            "content.review",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-04: reviewer denied on wrong discipline",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_reviewer"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.review",
+    "resource": {
+      "type": "content_revision",
+      "collectionId": "cat-sleep",
+      "category": "legal"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_reviewer",
+          "actions": [
+            "content.review",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-05: publisher no longer reviews",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_publisher"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.review",
+    "resource": {
+      "type": "content_revision",
+      "collectionId": "cat-sleep"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_publisher",
+          "actions": [
+            "content.publish",
+            "content.schedule",
+            "content.archive",
+            "content.restrict",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-06: publisher publishes in scope",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_publisher"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.publish",
+    "resource": {
+      "type": "content_publication",
+      "collectionId": "cat-sleep"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_publisher",
+          "actions": [
+            "content.publish",
+            "content.schedule",
+            "content.archive",
+            "content.restrict",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-07: publisher previews",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_publisher"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.preview",
+    "resource": {
+      "type": "content_resource",
+      "collectionId": "cat-sleep"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_publisher",
+          "actions": [
+            "content.publish",
+            "content.schedule",
+            "content.archive",
+            "content.restrict",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-08: editorial lead manages taxonomy",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "editorial_lead"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "taxonomy.manage",
+    "resource": {
+      "type": "taxonomy"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "editorial_lead",
+          "actions": [
+            "taxonomy.manage",
+            "home.manage",
+            "media.manage",
+            "poll.manage",
+            "poll.results.read",
+            "content.metrics.read",
+            "editorial.request.manage",
+            "editorial.brief.manage",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "platform",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-09: editorial lead manages home",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "editorial_lead"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "home.manage",
+    "resource": {
+      "type": "home_slot"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "editorial_lead",
+          "actions": [
+            "taxonomy.manage",
+            "home.manage",
+            "media.manage",
+            "poll.manage",
+            "poll.results.read",
+            "content.metrics.read",
+            "editorial.request.manage",
+            "editorial.brief.manage",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "platform",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-10: employee reads available content (personal with orgId)",
+    "principal": {
+      "userId": "u1",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.read",
+    "resource": {
+      "type": "library",
+      "ownerId": "u1",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u1",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-11: employee bookmarks",
+    "principal": {
+      "userId": "u1",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.bookmark",
+    "resource": {
+      "type": "saved_item",
+      "ownerId": "u1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u1",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-12: employee responds to poll",
+    "principal": {
+      "userId": "u1",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "poll.respond",
+    "resource": {
+      "type": "poll_instance",
+      "ownerId": "u1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u1",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-13: employee submits editorial request",
+    "principal": {
+      "userId": "u1",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "editorial.request.submit",
+    "resource": {
+      "type": "editorial_request",
+      "ownerId": "u1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u1",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-14: intake professional views queue",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.queue.view",
+    "resource": {
+      "type": "intake_queue",
+      "queueId": "q-psych"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "intake_professional",
+          "actions": [
+            "intake.queue.view",
+            "intake.claim"
+          ],
+          "scopeType": "assigned_queues",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-q",
+          "userId": "u-exp",
+          "kind": "QUEUE",
+          "targetId": "q-psych",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-15: intake professional claims record",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.claim",
+    "resource": {
+      "type": "intake_record",
+      "queueId": "q-psych"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "intake_professional",
+          "actions": [
+            "intake.queue.view",
+            "intake.claim"
+          ],
+          "scopeType": "assigned_queues",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-q",
+          "userId": "u-exp",
+          "kind": "QUEUE",
+          "targetId": "q-psych",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-16: expert responds to claimed intake (confidential)",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.respond",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "expert",
+          "actions": [
+            "availability.manage",
+            "case.accept",
+            "case.decline",
+            "appointment.propose",
+            "conversation.participate",
+            "conversation.read.assigned",
+            "consultation.join",
+            "delivery.record",
+            "earnings.read",
+            "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_cases",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-exp",
+          "kind": "CASE",
+          "targetId": "ir-1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-17: expert responds without CASE assignment",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.respond",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "expert",
+          "actions": [
+            "availability.manage",
+            "case.accept",
+            "case.decline",
+            "appointment.propose",
+            "conversation.participate",
+            "conversation.read.assigned",
+            "consultation.join",
+            "delivery.record",
+            "earnings.read",
+            "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_cases",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-18: platform owner denied on confidential intake",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "platform_owner"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.respond",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "platform_owner",
+          "actions": [
+            "client.create",
+            "client.configure",
+            "access.grant",
+            "access.revoke",
+            "access.preview",
+            "access.emergency.request",
+            "access.emergency.approve",
+            "policy.manage",
+            "service.enable",
+            "audit.read",
+            "platform.configure",
+            "sso.manage",
+            "session.revoke.any",
+            "people.deactivate",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request",
+            "intake.respond"
+          ],
+          "scopeType": "platform",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-19: author uploads media",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_author"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "media.upload",
+    "resource": {
+      "type": "media_asset",
+      "collectionId": "cat-sleep"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_author",
+          "actions": [
+            "content.write",
+            "content.submit",
+            "content.preview",
+            "media.upload",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-20: author denied media.manage",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "content_author"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "media.manage",
+    "resource": {
+      "type": "media_asset"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "content_author",
+          "actions": [
+            "content.write",
+            "content.submit",
+            "content.preview",
+            "media.upload",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_collections",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-sleep",
+          "userId": "u-staff",
+          "kind": "COLLECTION",
+          "targetId": "cat-sleep",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-21: intake lead reassigns",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "intake.reassign",
+    "resource": {
+      "type": "intake_record",
+      "queueId": "q-psych"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "intake_lead",
+          "actions": [
+            "intake.queue.view",
+            "intake.reassign"
+          ],
+          "scopeType": "assigned_queues",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-q",
+          "userId": "u-exp",
+          "kind": "QUEUE",
+          "targetId": "q-psych",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-22: deactivated user denied content.read",
+    "principal": {
+      "userId": "u-deactivated",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.read",
+    "resource": {
+      "type": "library",
+      "ownerId": "u-deactivated"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": true,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-deactivated",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "user_deactivated"
+    }
+  },
+  {
+    "label": "CMSE-23: expired membership denied content.read",
+    "principal": {
+      "userId": "u1",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": "2026-06-01T00:00:00.000Z"
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "content.read",
+    "resource": {
+      "type": "library",
+      "ownerId": "u1",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u1",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "invalid_context"
+    }
+  },
+  {
+    "label": "CMSE-24: HR reads aggregate report",
+    "principal": {
+      "userId": "u-hr",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "reports.aggregate.read",
+    "resource": {
+      "type": "content_summary",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-hr",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-25: assigned expert reads claimed record body",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "expert",
+          "actions": [
+            "availability.manage",
+            "case.accept",
+            "case.decline",
+            "appointment.propose",
+            "conversation.participate",
+            "conversation.read.assigned",
+            "consultation.join",
+            "delivery.record",
+            "earnings.read",
+            "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_cases",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-exp",
+          "kind": "CASE",
+          "targetId": "ir-1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-26: sender reads own intake record",
+    "principal": {
+      "userId": "u-sender",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.participate",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "ownerId": "u-sender",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-sender",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CMSE-27: another employee reads someone else's intake record",
+    "principal": {
+      "userId": "u-other",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "personal",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.participate",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "ownerId": "u-sender",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-other",
+          "templateKey": "employee",
+          "actions": [
+            "content.read",
+            "content.bookmark",
+            "service.request",
+            "service.book",
+            "appointment.cancel",
+            "appointment.reschedule",
+            "event.register",
+            "consultation.join",
+            "conversation.participate",
+            "poll.respond",
+            "editorial.request.submit",
+            "preferences.manage",
+            "voucher.activate",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-28: editorial lead (platform scope) reads intake record body",
+    "principal": {
+      "userId": "u-staff",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "editorial_lead"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-staff",
+          "templateKey": "editorial_lead",
+          "actions": [
+            "taxonomy.manage",
+            "home.manage",
+            "media.manage",
+            "poll.manage",
+            "poll.results.read",
+            "content.metrics.read",
+            "editorial.request.manage",
+            "editorial.brief.manage",
+            "content.preview",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request",
+            "conversation.read.assigned"
+          ],
+          "scopeType": "platform",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-staff",
+          "kind": "CASE",
+          "targetId": "ir-1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-29: HR admin (organization scope) reads intake record",
+    "principal": {
+      "userId": "u-hr",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-hr",
+          "templateKey": "hr_admin",
+          "actions": [
+            "people.invite",
+            "people.import",
+            "people.deactivate",
+            "people.move",
+            "org_units.manage",
+            "program.overview",
+            "reports.aggregate.read",
+            "content.promote",
+            "conversation.read.assigned"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-hr",
+          "kind": "CASE",
+          "targetId": "ir-1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CMSE-30: expert whose CASE assignment ended reads record",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "exp1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "intake_record",
+      "id": "ir-1",
+      "orgId": "o1",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g1",
+          "subjectUserId": "u-exp",
+          "templateKey": "expert",
+          "actions": [
+            "availability.manage",
+            "case.accept",
+            "case.decline",
+            "appointment.propose",
+            "conversation.participate",
+            "conversation.read.assigned",
+            "consultation.join",
+            "delivery.record",
+            "earnings.read",
+            "expert.profile.edit",
+            "intake.respond",
+            "intake.permission.request",
+            "preferences.manage",
+            "feedback.submit",
+            "data.export.own",
+            "data.erasure.request"
+          ],
+          "scopeType": "assigned_cases",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-exp",
+          "kind": "CASE",
+          "targetId": "ir-1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": "2026-09-01T00:00:00.000Z"
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_assignment"
     }
   }
 ]

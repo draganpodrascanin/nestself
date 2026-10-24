@@ -4,12 +4,12 @@ import { isAction } from './actions.ts';
 import { STEP_UP_CLASS_BY_ACTION } from './authorization.ts';
 
 describe('templates', () => {
-  it('TEMPLATE_KEYS has exactly 17 entries', () => {
-    expect(TEMPLATE_KEYS).toHaveLength(17);
+  it('TEMPLATE_KEYS has exactly 21 entries', () => {
+    expect(TEMPLATE_KEYS).toHaveLength(21);
   });
 
-  it('PERMISSION_TEMPLATES has exactly 17 entries', () => {
-    expect(PERMISSION_TEMPLATES).toHaveLength(17);
+  it('PERMISSION_TEMPLATES has exactly 21 entries', () => {
+    expect(PERMISSION_TEMPLATES).toHaveLength(21);
   });
 
   it('every template key in PERMISSION_TEMPLATES is unique', () => {
@@ -104,7 +104,10 @@ describe('templates', () => {
   });
 
   it('templates without required conditions have an empty array', () => {
-    const withRequired = new Set(['expert', 'team_manager', 'approver', 'employer_finance', 'event_supplier']);
+    const withRequired = new Set([
+      'expert', 'team_manager', 'approver', 'employer_finance', 'event_supplier',
+      'content_reviewer', 'intake_professional',
+    ]);
     for (const t of PERMISSION_TEMPLATES) {
       if (!withRequired.has(t.key)) {
         expect(
@@ -113,5 +116,80 @@ describe('templates', () => {
         ).toHaveLength(0);
       }
     }
+  });
+
+  describe('CMS editorial templates (ACC-R-03)', () => {
+    const byKey = (k: string) => PERMISSION_TEMPLATES.find((t) => t.key === k)!;
+    const baseline = ['preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request'];
+
+    it('content_author gains media.upload', () => {
+      expect(byKey('content_author').actions).toContain('media.upload');
+    });
+
+    it('content_publisher cannot review and can preview', () => {
+      const publisher = byKey('content_publisher');
+      expect(publisher.actions).not.toContain('content.review');
+      expect(publisher.actions).toContain('content.preview');
+      expect(publisher.actions).toContain('content.publish');
+    });
+
+    it('an author cannot publish', () => {
+      expect(byKey('content_author').actions).not.toContain('content.publish');
+    });
+
+    it('content_reviewer reviews through assigned categories with a categories condition', () => {
+      const reviewer = byKey('content_reviewer');
+      expect(reviewer.workspace).toBe('operations');
+      expect(reviewer.population).toBe('staff');
+      expect(reviewer.scopeType).toBe('assigned_collections');
+      expect(reviewer.actions).toEqual(['content.review', 'content.preview', ...baseline]);
+      expect([...reviewer.requiredConditionTypes]).toEqual(['categories']);
+      expect(reviewer.legacyRole).toBeNull();
+    });
+
+    it('only the reviewer holds content.review', () => {
+      const holders = PERMISSION_TEMPLATES.filter((t) => t.actions.includes('content.review')).map((t) => t.key);
+      expect(holders).toEqual(['content_reviewer']);
+    });
+
+    it('editorial_lead is platform scoped with the editorial management actions', () => {
+      const lead = byKey('editorial_lead');
+      expect(lead.workspace).toBe('operations');
+      expect(lead.population).toBe('staff');
+      expect(lead.scopeType).toBe('platform');
+      expect(lead.actions).toEqual([
+        'taxonomy.manage', 'home.manage', 'media.manage', 'poll.manage', 'poll.results.read',
+        'content.metrics.read', 'editorial.request.manage', 'editorial.brief.manage',
+        'content.preview', ...baseline,
+      ]);
+      expect(lead.legacyRole).toBeNull();
+    });
+
+    it('intake templates live in the expert workspace on assigned queues', () => {
+      const professional = byKey('intake_professional');
+      const lead = byKey('intake_lead');
+      for (const t of [professional, lead]) {
+        expect(t.workspace).toBe('expert');
+        expect(t.population).toBe('expert');
+        expect(t.scopeType).toBe('assigned_queues');
+        expect(t.legacyRole).toBeNull();
+      }
+      expect(professional.actions).toEqual(['intake.queue.view', 'intake.claim']);
+      expect([...professional.requiredConditionTypes]).toEqual(['categories']);
+      expect(lead.actions).toEqual(['intake.queue.view', 'intake.reassign']);
+    });
+
+    it('employee gains poll.respond and editorial.request.submit', () => {
+      expect(byKey('employee').actions).toEqual(
+        expect.arrayContaining(['poll.respond', 'editorial.request.submit']),
+      );
+    });
+
+    it('expert gains intake.respond and intake.permission.request', () => {
+      expect(byKey('expert').actions).toEqual(
+        expect.arrayContaining(['intake.respond', 'intake.permission.request']),
+      );
+      expect(byKey('expert').scopeType).toBe('assigned_cases');
+    });
   });
 });

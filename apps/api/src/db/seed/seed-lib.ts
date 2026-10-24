@@ -11,6 +11,7 @@ import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
   SAMPLE_PEOPLE,
+  SAMPLE_EDITORIAL_STAFF,
   SAMPLE_CHANNELS,
   SAMPLE_POSTS,
   SAMPLE_POLLS,
@@ -62,6 +63,14 @@ export const extraSampleGrantIds = (): string[] =>
   Object.entries(EXTRA_SAMPLE_TEMPLATES).flatMap(([personId, keys]) =>
     keys.map((key) => `grant_${personId}_${key}`),
   );
+
+/** Ids of the grants created for `SAMPLE_EDITORIAL_STAFF`. */
+export const editorialStaffGrantIds = (): string[] =>
+  SAMPLE_EDITORIAL_STAFF.map((staff) => `grant_${staff.id}_${staff.templateKey}`);
+
+/** Id of the COLLECTION assignment that gives a staff member one category. */
+export const editorialAssignmentId = (userId: string, categoryId: string): string =>
+  `assignment_${userId}_collection_${categoryId}`;
 
 const upperRole = <T extends string>(role: string | null | undefined): T | null =>
   role ? (role.toUpperCase() as T) : null;
@@ -151,6 +160,21 @@ export async function seed(db: Database): Promise<Record<string, number>> {
           set: { status: 'ACTIVE', orgUnitId: defaultTeamId },
         });
     }
+  }
+
+  // ── Editorial staff (CMS epic): operations staff without a legacy role ──
+  for (const staff of SAMPLE_EDITORIAL_STAFF) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: staff.id,
+        email: `${staff.id}@example.com`,
+        displayName: staff.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: staff.displayName },
+    );
   }
 
   // ── External identities (fake pool subjects, D-04) ──
@@ -368,6 +392,48 @@ export async function seed(db: Database): Promise<Record<string, number>> {
           kind: 'CLIENT',
           targetId: SAMPLE_ORG.id,
           assignedByUserId: hrAdmin?.id ?? person.id,
+          startAt: SAMPLE_START_DATE,
+        })
+        .onConflictDoNothing({ target: t.assignments.id });
+    }
+  }
+
+  // ── Editorial staff grants and category assignments (T-C1.03) ──
+  // Granted explicitly from the template (no legacy role). The reviewer's
+  // categories condition holds its review disciplines (ACC-R-07); the
+  // COLLECTION assignments target category ids (C-09, ACC-R-06).
+  for (const staff of SAMPLE_EDITORIAL_STAFF) {
+    const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === staff.templateKey);
+    if (!tmpl) throw new Error(`SAMPLE_EDITORIAL_STAFF names an unknown template: ${staff.templateKey}`);
+    const update = {
+      actions: [...tmpl.actions],
+      scopeType: tmpl.scopeType,
+      ...resolveSampleScope(tmpl.scopeType, null, defaultTeamId),
+      conditions:
+        staff.disciplines.length > 0 ? [{ type: 'categories', allowed: [...staff.disciplines] }] : null,
+    };
+    await db
+      .insert(t.grants)
+      .values({
+        id: `grant_${staff.id}_${tmpl.key}`,
+        subjectUserId: staff.id,
+        templateKey: tmpl.key,
+        grantedByUserId: hrAdmin?.id ?? staff.id,
+        grantedAt: SAMPLE_START_DATE,
+        validFrom: SAMPLE_START_DATE,
+        ...update,
+      })
+      .onConflictDoUpdate({ target: t.grants.id, set: update });
+
+    for (const categoryId of staff.categoryIds) {
+      await db
+        .insert(t.assignments)
+        .values({
+          id: editorialAssignmentId(staff.id, categoryId),
+          userId: staff.id,
+          kind: 'COLLECTION',
+          targetId: categoryId,
+          assignedByUserId: hrAdmin?.id ?? staff.id,
           startAt: SAMPLE_START_DATE,
         })
         .onConflictDoNothing({ target: t.assignments.id });

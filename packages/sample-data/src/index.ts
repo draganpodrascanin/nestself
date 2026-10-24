@@ -17,3 +17,9 @@ export { SAMPLE_GRANTS } from './fixtures/grants.ts';
 export type { SampleGrant } from './fixtures/grants.ts';
 export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';
+export {
+  SAMPLE_CATEGORY_IDS,
+  SAMPLE_CATEGORY_ID_LIST,
+  SAMPLE_EDITORIAL_STAFF,
+} from './fixtures/editorial-staff.ts';
+export type { SampleCategoryId } from './fixtures/editorial-staff.ts';
