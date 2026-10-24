@@ -16,7 +16,7 @@ import * as followUpConfirmed from './follow-up-confirmed.js';
 import * as followUpDeclined from './follow-up-declined.js';
 import * as followUpProposed from './follow-up-proposed.js';
 import * as invitation from './invitation.js';
-import { type RenderedMail } from './shared.js';
+import { type MailEnvelope, type RenderedMail } from './shared.js';
 import * as webinarCanceled from './webinar-canceled.js';
 import * as webinarRecordedNotice from './webinar-recorded-notice.js';
 import * as webinarRegistration from './webinar-registration.js';
@@ -50,12 +50,16 @@ export type MailInput = {
   [T in MailTemplateName]: { to: string; locale: Locale; template: T; data: MailTemplateData<T> };
 }[MailTemplateName];
 
-/** Renders subject, text, HTML and attachments for one email. */
-export function renderMail(input: MailInput): RenderedMail {
+/**
+ * Renders subject, text, HTML and attachments for one email. `sender` is the
+ * From address; calendar files name it as `ORGANIZER` and the recipient as
+ * `ATTENDEE`.
+ */
+export function renderMail(input: MailInput, sender: string): RenderedMail {
   const template = mailTemplates[input.template] as {
-    render: (locale: Locale, data: MailInput['data']) => RenderedMail;
+    render: (locale: Locale, data: MailInput['data'], envelope: MailEnvelope) => RenderedMail;
   };
-  return template.render(input.locale, input.data);
+  return template.render(input.locale, input.data, { from: sender, to: input.to });
 }
 
-export { type MailAttachment, type RenderedMail } from './shared.js';
+export { type MailAttachment, type MailEnvelope, type RenderedMail } from './shared.js';

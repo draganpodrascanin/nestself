@@ -82,8 +82,8 @@
     "unknown": "Нешто је пошло наопако. Покушајте поново."
   },
   "email": {
-    "reminderSubject": "Подсетник: сесија {{date}} у {{time}}",
-    "registrationSubject": "Пријављени сте: {{title}}",
+    "reminderSubject": "Ваша NestSelf сесија",
+    "registrationSubject": "Ваш NestSelf вебинар",
     "followUpProposedSubject": "Предложена је наредна сесија"
   }
 }

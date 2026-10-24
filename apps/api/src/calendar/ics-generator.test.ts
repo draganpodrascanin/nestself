@@ -72,6 +72,8 @@ function event(overrides: Partial<IcsEvent> = {}): IcsEvent {
     dtend: new Date('2026-11-02T09:50:00Z'),
     timeZone: 'Europe/Belgrade',
     dtstamp: new Date('2026-10-24T10:15:30.456Z'),
+    organizer: 'no-reply@nestself.example',
+    attendee: 'mila@example.test',
     ...overrides,
   };
 }
@@ -235,6 +237,41 @@ describe('generateIcs', () => {
     expect(vevent).toContain('CLASS:PRIVATE');
   });
 
+  it.each(['REQUEST', 'CANCEL'] as const)(
+    'names the sender as ORGANIZER exactly once and the recipient as ATTENDEE for %s (RFC 5546 3.2.2, 3.2.5)',
+    (method) => {
+      const vevent = component(generateIcs(event({ method, sequence: method === 'CANCEL' ? 1 : 0 })), 'VEVENT');
+      expect(vevent.filter((line) => line.startsWith('ORGANIZER'))).toEqual([
+        'ORGANIZER;CN=NestSelf:mailto:no-reply@nestself.example',
+      ]);
+      const attendees = vevent.filter((line) => line.startsWith('ATTENDEE'));
+      expect(attendees.length).toBeGreaterThanOrEqual(1);
+      expect(attendees).toEqual([
+        'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:mila@example.test',
+      ]);
+    },
+  );
+
+  it('gives the attendee no name, so the file does not carry one', () => {
+    const attendee = component(generateIcs(event()), 'VEVENT').find((line) => line.startsWith('ATTENDEE'))!;
+    expect(attendee).not.toContain('CN=');
+  });
+
+  it('folds the long ATTENDEE line within 75 octets', () => {
+    const ics = generateIcs(event({ attendee: `${'a'.repeat(40)}@client.example` }));
+    for (const line of physicalLines(ics)) expect(octets(line)).toBeLessThanOrEqual(75);
+    expect(component(ics, 'VEVENT').some((line) => line.endsWith(`mailto:${'a'.repeat(40)}@client.example`))).toBe(true);
+  });
+
+  it.each([
+    ['organizer', { organizer: 'no-reply@nestself.example\r\nX-EVIL:1' }],
+    ['organizer', { organizer: 'not-an-address' }],
+    ['attendee', { attendee: 'a@example.test,b@example.test' }],
+    ['attendee', { attendee: 'a@example.test;X=1' }],
+  ] as const)('refuses an invalid %s address', (_role, overrides) => {
+    expect(() => generateIcs(event(overrides))).toThrow(RangeError);
+  });
+
   it('refuses an end that is not after the start', () => {
     expect(() => generateIcs(event({ dtend: new Date('2026-11-02T09:00:00Z') }))).toThrow(RangeError);
   });
@@ -251,18 +288,21 @@ describe('generateIcs', () => {
 });
 
 describe('generateIcs time zones', () => {
-  it('writes local wall-clock DTSTART and DTEND with TZID in winter (CET, +01:00)', () => {
-    const ics = generateIcs(event());
-    expect(property(ics, 'DTSTART')).toBe('DTSTART;TZID=Europe/Belgrade:20261102T100000');
-    expect(property(ics, 'DTEND')).toBe('DTEND;TZID=Europe/Belgrade:20261102T105000');
-  });
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])(
+    'writes local wall-clock DTSTART and DTEND with TZID in winter (CET, +01:00) in %s',
+    (timeZone) => {
+      const ics = generateIcs(event({ timeZone }));
+      expect(property(ics, 'DTSTART')).toBe(`DTSTART;TZID=${timeZone}:20261102T100000`);
+      expect(property(ics, 'DTEND')).toBe(`DTEND;TZID=${timeZone}:20261102T105000`);
+    },
+  );
 
-  it('writes local wall-clock time in summer (CEST, +02:00)', () => {
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])('writes local wall-clock time in summer (CEST, +02:00) in %s', (timeZone) => {
     const ics = generateIcs(
-      event({ dtstart: new Date('2026-07-01T08:00:00Z'), dtend: new Date('2026-07-01T09:00:00Z') }),
+      event({ timeZone, dtstart: new Date('2026-07-01T08:00:00Z'), dtend: new Date('2026-07-01T09:00:00Z') }),
     );
-    expect(property(ics, 'DTSTART')).toBe('DTSTART;TZID=Europe/Belgrade:20260701T100000');
-    expect(property(ics, 'DTEND')).toBe('DTEND;TZID=Europe/Belgrade:20260701T110000');
+    expect(property(ics, 'DTSTART')).toBe(`DTSTART;TZID=${timeZone}:20260701T100000`);
+    expect(property(ics, 'DTEND')).toBe(`DTEND;TZID=${timeZone}:20260701T110000`);
   });
 
   it.each([
@@ -277,21 +317,24 @@ describe('generateIcs time zones', () => {
     expect(component(ics, 'VTIMEZONE')[0]).toBe(`TZID:${timeZone}`);
   });
 
-  it('describes the Belgrade daylight saving transitions around the event in VTIMEZONE', () => {
-    const ics = generateIcs(event());
-    expect(component(ics, 'VTIMEZONE')[0]).toBe('TZID:Europe/Belgrade');
-    const found = observances(ics);
-    const daylight = found.find((o) => o.lines.includes('DTSTART:20260329T020000'));
-    const standard = found.find((o) => o.lines.includes('DTSTART:20261025T030000'));
-    expect(daylight).toEqual({
-      kind: 'DAYLIGHT',
-      lines: ['DTSTART:20260329T020000', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200'],
-    });
-    expect(standard).toEqual({
-      kind: 'STANDARD',
-      lines: ['DTSTART:20261025T030000', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100'],
-    });
-  });
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])(
+    'describes both 2026 daylight saving transitions of %s in VTIMEZONE',
+    (timeZone) => {
+      const ics = generateIcs(event({ timeZone }));
+      expect(component(ics, 'VTIMEZONE')[0]).toBe(`TZID:${timeZone}`);
+      const found = observances(ics);
+      const daylight = found.find((o) => o.lines.includes('DTSTART:20260329T020000'));
+      const standard = found.find((o) => o.lines.includes('DTSTART:20261025T030000'));
+      expect(daylight).toEqual({
+        kind: 'DAYLIGHT',
+        lines: ['DTSTART:20260329T020000', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200'],
+      });
+      expect(standard).toEqual({
+        kind: 'STANDARD',
+        lines: ['DTSTART:20261025T030000', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100'],
+      });
+    },
+  );
 
   it('covers the event start: the latest observance onset is not after DTSTART', () => {
     const ics = generateIcs(
@@ -328,28 +371,34 @@ describe('generateIcs time zones', () => {
     expect(lines).toContain('TZOFFSETTO:-0400');
   });
 
-  it('handles an event spanning the autumn change (CEST start, CET end)', () => {
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])('handles an event spanning the autumn change in %s (CEST start, CET end)', (timeZone) => {
     const ics = generateIcs(
-      event({ dtstart: new Date('2026-10-25T00:30:00Z'), dtend: new Date('2026-10-25T02:30:00Z') }),
+      event({ timeZone, dtstart: new Date('2026-10-25T00:30:00Z'), dtend: new Date('2026-10-25T02:30:00Z') }),
     );
-    expect(property(ics, 'DTSTART')).toBe('DTSTART;TZID=Europe/Belgrade:20261025T023000');
-    expect(property(ics, 'DTEND')).toBe('DTEND;TZID=Europe/Belgrade:20261025T033000');
+    expect(property(ics, 'DTSTART')).toBe(`DTSTART;TZID=${timeZone}:20261025T023000`);
+    expect(property(ics, 'DTEND')).toBe(`DTEND;TZID=${timeZone}:20261025T033000`);
   });
 
-  it('writes UTC for the second occurrence of a repeated local hour, which TZID cannot express', () => {
-    // 01:30Z is 02:30 CET, the repeated hour; with TZID it would read as 02:30 CEST (00:30Z).
-    const ics = generateIcs(
-      event({ dtstart: new Date('2026-10-25T01:30:00Z'), dtend: new Date('2026-10-25T02:30:00Z') }),
-    );
-    expect(property(ics, 'DTSTART')).toBe('DTSTART:20261025T013000Z');
-    expect(property(ics, 'DTEND')).toBe('DTEND;TZID=Europe/Belgrade:20261025T033000');
-  });
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])(
+    'writes UTC for the second occurrence of the repeated local hour in %s, which TZID cannot express',
+    (timeZone) => {
+      // 01:30Z is 02:30 CET, the repeated hour; with TZID it would read as 02:30 CEST (00:30Z).
+      const ics = generateIcs(
+        event({ timeZone, dtstart: new Date('2026-10-25T01:30:00Z'), dtend: new Date('2026-10-25T02:30:00Z') }),
+      );
+      expect(property(ics, 'DTSTART')).toBe('DTSTART:20261025T013000Z');
+      expect(property(ics, 'DTEND')).toBe(`DTEND;TZID=${timeZone}:20261025T033000`);
+    },
+  );
 
-  it('handles an event across the spring change (the skipped hour never appears)', () => {
-    const ics = generateIcs(
-      event({ dtstart: new Date('2026-03-29T00:30:00Z'), dtend: new Date('2026-03-29T01:30:00Z') }),
-    );
-    expect(property(ics, 'DTSTART')).toBe('DTSTART;TZID=Europe/Belgrade:20260329T013000');
-    expect(property(ics, 'DTEND')).toBe('DTEND;TZID=Europe/Belgrade:20260329T033000');
-  });
+  it.each(['Europe/Belgrade', 'Europe/Budapest'])(
+    'handles an event across the spring change in %s (the skipped hour never appears)',
+    (timeZone) => {
+      const ics = generateIcs(
+        event({ timeZone, dtstart: new Date('2026-03-29T00:30:00Z'), dtend: new Date('2026-03-29T01:30:00Z') }),
+      );
+      expect(property(ics, 'DTSTART')).toBe(`DTSTART;TZID=${timeZone}:20260329T013000`);
+      expect(property(ics, 'DTEND')).toBe(`DTEND;TZID=${timeZone}:20260329T033000`);
+    },
+  );
 });

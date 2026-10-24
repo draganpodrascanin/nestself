@@ -9,11 +9,14 @@
 import { Logger } from '@nestjs/common';
 import { Mailer, recipientDomain, renderMail, type MailInput } from './mailer.js';
 
+/** Placeholder From address for rendering (the calendar ORGANIZER); nothing is sent. */
+export const LOGGING_MAILER_SENDER = 'no-reply@nestself.example';
+
 export class LoggingMailer extends Mailer {
   private readonly logger = new Logger(LoggingMailer.name);
 
   async send(input: MailInput): Promise<void> {
-    const mail = renderMail(input);
+    const mail = renderMail(input, LOGGING_MAILER_SENDER);
     this.logger.log(
       `Email ${input.template} (${input.locale}) not sent, SES is not configured: recipient at ${recipientDomain(input.to)}, subject "${mail.subject}"`,
     );

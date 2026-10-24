@@ -29,7 +29,7 @@ export class SesMailer extends Mailer {
 
   async send(input: MailInput): Promise<void> {
     if (!isSingleAddress(input.to)) throw new Error('Invalid recipient address');
-    const mail = renderMail(input);
+    const mail = renderMail(input, this.options.fromEmail);
     const raw = buildRawMessage({ from: this.options.fromEmail, to: input.to, ...mail });
     await this.client.send(
       new SendRawEmailCommand({

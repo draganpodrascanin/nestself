@@ -10,7 +10,7 @@ import { mockClient } from 'aws-sdk-client-mock';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ICS_UID_DOMAIN } from '../calendar/ics-generator.js';
 import { LoggingMailer } from './logging-mailer.js';
-import { renderMail, type MailInput } from './mailer.js';
+import { renderMail, type MailInput, type RenderedMail } from './mailer.js';
 import { createMailer, sesMailerOptions } from './mailer.module.js';
 import { SesMailer } from './ses-mailer.js';
 import { sharedMessages } from './templates/shared.js';
@@ -91,6 +91,13 @@ const samples: { [T in MailTemplateName]: MailTemplateData<T> } = {
   },
 };
 
+/** The sender the tests render with: ORGANIZER of every calendar file. */
+const SENDER = 'no-reply@nestself.example';
+
+function render(mail: MailInput): RenderedMail {
+  return renderMail(mail, SENDER);
+}
+
 function input<T extends MailTemplateName>(template: T, locale: Locale = 'en', to = 'mila@example.test'): MailInput {
   return { to, locale, template, data: samples[template] } as MailInput;
 }
@@ -155,7 +162,7 @@ describe('mail templates', () => {
   });
 
   it.each(cases)('%s renders subject, text and HTML in %s', (template, locale) => {
-    const mail = renderMail(input(template, locale));
+    const mail = render(input(template, locale));
     expect(mail.subject.trim()).not.toBe('');
     expect(mail.subject).not.toMatch(/[\r\n]/);
     expect(mail.subject).not.toMatch(/\{\{|\}\}/);
@@ -165,7 +172,7 @@ describe('mail templates', () => {
   });
 
   it.each(cases)('%s in %s names no service category, specialty or wellbeing topic (D-CW-26)', (template, locale) => {
-    const mail = renderMail(input(template, locale));
+    const mail = render(input(template, locale));
     const everything = [mail.subject, mail.text, mail.html, ...(mail.attachments ?? []).map((a) => a.content)]
       .join('\n')
       .toLowerCase();
@@ -185,9 +192,9 @@ describe('mail templates', () => {
 
 describe('subjects', () => {
   it('uses the neutral session and webinar subjects (CW-R-43)', () => {
-    expect(renderMail(input('appointment.reminder')).subject).toBe('Your NestSelf session');
-    expect(renderMail(input('webinar.reminder')).subject).toBe('Your NestSelf webinar');
-    expect(renderMail(input('webinar.registration')).subject).toBe('Your NestSelf webinar');
+    expect(render(input('appointment.reminder')).subject).toBe('Your NestSelf session');
+    expect(render(input('webinar.reminder')).subject).toBe('Your NestSelf webinar');
+    expect(render(input('webinar.registration')).subject).toBe('Your NestSelf webinar');
   });
 
   it.each([
@@ -196,7 +203,7 @@ describe('subjects', () => {
     ['sr-Cyrl', 'Предложена је наредна сесија'],
     ['hu', 'Következő alkalmat javasoltak'],
   ] as const)('sends the follow-up proposal with the calls.json subject in %s (D-CW-37)', (locale, subject) => {
-    expect(renderMail(input('appointment.follow_up.proposed', locale)).subject).toBe(subject);
+    expect(render(input('appointment.follow_up.proposed', locale)).subject).toBe(subject);
   });
 
   it.each([
@@ -207,7 +214,7 @@ describe('subjects', () => {
     ['appointment.approval.decided', 'Your session approval has a decision'],
     ['webinar.recorded_notice', 'Your webinar recording is ready for review'],
   ] as const)('%s has the section 10.5 subject', (template, subject) => {
-    expect(renderMail(input(template)).subject).toBe(subject);
+    expect(render(input(template)).subject).toBe(subject);
   });
 });
 
@@ -218,14 +225,14 @@ describe('dates and times', () => {
     ['sr-Cyrl', 'понедељак, 2. новембар 2026.', '10:00'],
     ['hu', '2026. november 2., hétfő', '10:00'],
   ] as const)('formats the date and time in %s with Intl in the appointment time zone', (locale, date, time) => {
-    const mail = renderMail(input('appointment.reminder', locale));
+    const mail = render(input('appointment.reminder', locale));
     expect(mail.text).toContain(date);
     expect(mail.text).toContain(time);
     expect(mail.html).toContain(date);
   });
 
   it('follows the appointment time zone, not the server zone', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'appointment.reminder',
@@ -237,12 +244,12 @@ describe('dates and times', () => {
   });
 
   it('shows the zone abbreviation next to the time', () => {
-    expect(renderMail(input('appointment.reminder')).text).toContain('10:00 CET');
+    expect(render(input('appointment.reminder')).text).toContain('10:00 CET');
   });
 
   it('refuses an invalid instant instead of sending "Invalid Date"', () => {
     expect(() =>
-      renderMail({
+      render({
         to: 'a@example.test',
         locale: 'en',
         template: 'appointment.reminder',
@@ -254,14 +261,14 @@ describe('dates and times', () => {
 
 describe('bodies', () => {
   it('reminds of the session with the join link in text and HTML', () => {
-    const mail = renderMail(input('appointment.reminder'));
+    const mail = render(input('appointment.reminder'));
     expect(mail.text).toContain('Reminder: session on Monday, 2 November 2026 at 10:00 CET.');
     expect(mail.text).toContain(`Open NestSelf to join: ${JOIN_URL}`);
     expect(mail.html).toContain(`<a href="${JOIN_URL}">Open NestSelf to join</a>`);
   });
 
   it('sends the follow-up proposal body from calls.json without an ICS', () => {
-    const mail = renderMail(input('appointment.follow_up.proposed'));
+    const mail = render(input('appointment.follow_up.proposed'));
     expect(mail.text).toContain(
       'A follow-up session was proposed for Monday, 2 November 2026 at 10:00 CET. Open NestSelf to confirm it, suggest other times or decline.',
     );
@@ -275,12 +282,12 @@ describe('bodies', () => {
     ['sr-Cyrl', 'Овај вебинар се снима. На снимку су само предавачи.'],
     ['hu', 'Ez a webinár felvételre kerül. A felvételen csak az előadók szerepelnek.'],
   ] as const)('states the recording notice in the webinar confirmation and reminder in %s (WBN-04)', (locale, notice) => {
-    expect(renderMail(input('webinar.registration', locale)).text).toContain(notice);
-    expect(renderMail(input('webinar.reminder', locale)).text).toContain(notice);
+    expect(render(input('webinar.registration', locale)).text).toContain(notice);
+    expect(render(input('webinar.reminder', locale)).text).toContain(notice);
   });
 
   it('shows the approver only the name, the neutral label, the date and the duration (CW-R-123)', () => {
-    const mail = renderMail(input('appointment.approval.requested'));
+    const mail = render(input('appointment.approval.requested'));
     expect(mail.text).toContain(
       'Mila Sample has a follow-up session with a NestSelf expert on Monday, 2 November 2026 at 10:00 CET (50 minutes).',
     );
@@ -290,7 +297,7 @@ describe('bodies', () => {
   });
 
   it('escapes interpolated values in HTML but keeps them raw in text and subject', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'invitation',
@@ -303,7 +310,7 @@ describe('bodies', () => {
   });
 
   it('strips line breaks from interpolated values in the subject', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'invitation',
@@ -314,7 +321,7 @@ describe('bodies', () => {
 
   it('refuses a link that is not http or https', () => {
     expect(() =>
-      renderMail({
+      render({
         to: 'a@example.test',
         locale: 'en',
         template: 'appointment.reminder',
@@ -324,7 +331,7 @@ describe('bodies', () => {
   });
 
   it('renders the rejected approval with the safe reason and no calendar file', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'sr-Latn',
       template: 'appointment.approval.decided',
@@ -337,7 +344,7 @@ describe('bodies', () => {
   });
 
   it('omits the reason line when the approver gave none', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'appointment.approval.decided',
@@ -347,7 +354,7 @@ describe('bodies', () => {
   });
 
   it('omits the booking link of the no-show follow-up until a booking URL exists', () => {
-    const mail = renderMail({
+    const mail = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'appointment.no_show_followup',
@@ -376,7 +383,7 @@ describe('calendar attachments', () => {
     ['webinar.reminder', 'REQUEST', `webinar-registration-reg-1@${ICS_UID_DOMAIN}`, 'NestSelf webinar'],
     ['webinar.canceled', 'CANCEL', `webinar-registration-reg-1@${ICS_UID_DOMAIN}`, 'NestSelf webinar'],
   ] as const)('%s attaches a %s text/calendar part', (template, method, uid, summary) => {
-    const attachments = renderMail(input(template)).attachments ?? [];
+    const attachments = render(input(template)).attachments ?? [];
     expect(attachments).toHaveLength(1);
     const [ics] = attachments;
     expect(ics!.contentType).toBe(`text/calendar; charset=UTF-8; method=${method}`);
@@ -389,6 +396,15 @@ describe('calendar attachments', () => {
     expect(lines).toContain('X-MICROSOFT-CDO-BUSYSTATUS:BUSY');
     expect(lines.some((l) => l.startsWith('DTSTART;TZID=Europe/Belgrade:'))).toBe(true);
     expect(lines).toContain(method === 'CANCEL' ? 'SEQUENCE:1' : 'SEQUENCE:0');
+    expect(lines.filter((l) => l.startsWith('ORGANIZER'))).toEqual([`ORGANIZER;CN=NestSelf:mailto:${SENDER}`]);
+    expect(lines.filter((l) => l.startsWith('ATTENDEE'))).toEqual([
+      'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:mila@example.test',
+    ]);
+  });
+
+  it('takes the ORGANIZER from the sender the mailer passes', () => {
+    const [ics] = renderMail(input('appointment.reminder'), 'sessions@nestself.example').attachments!;
+    expect(unfoldIcs(ics!.content)).toContain('ORGANIZER;CN=NestSelf:mailto:sessions@nestself.example');
   });
 
   it.each([
@@ -400,23 +416,23 @@ describe('calendar attachments', () => {
     'webinar.recorded_notice',
     'invitation',
   ] as const)('%s has no calendar file', (template) => {
-    expect(renderMail(input(template)).attachments ?? []).toEqual([]);
+    expect(render(input(template)).attachments ?? []).toEqual([]);
   });
 
   it('puts the authenticated join link in DESCRIPTION', () => {
-    const [ics] = renderMail(input('appointment.reminder')).attachments!;
+    const [ics] = render(input('appointment.reminder')).attachments!;
     expect(unfoldIcs(ics!.content)).toContain(`DESCRIPTION:Sign in to NestSelf to join: ${JOIN_URL}`);
   });
 
   it('localises the neutral SUMMARY', () => {
-    const [ics] = renderMail(input('appointment.reminder', 'sr-Cyrl')).attachments!;
+    const [ics] = render(input('appointment.reminder', 'sr-Cyrl')).attachments!;
     expect(unfoldIcs(ics!.content)).toContain('SUMMARY:NestSelf сесија');
-    const [webinarIcs] = renderMail(input('webinar.registration', 'hu')).attachments!;
+    const [webinarIcs] = render(input('webinar.registration', 'hu')).attachments!;
     expect(unfoldIcs(webinarIcs!.content)).toContain('SUMMARY:NestSelf webinár');
   });
 
   it('carries a caller-provided SEQUENCE for updates', () => {
-    const [ics] = renderMail({
+    const [ics] = render({
       to: 'a@example.test',
       locale: 'en',
       template: 'appointment.reminder',
@@ -519,11 +535,12 @@ describe('SesMailer', () => {
     expect(raw).toMatch(/^[\x20-\x7e\r\n]*$/);
   });
 
-  it('builds multipart/mixed with text and HTML alternatives and the text/calendar part', async () => {
+  it('builds multipart/mixed: text, HTML and the calendar as alternatives, plus the .ics attachment', async () => {
     const mail = input('appointment.reminder', 'hu');
-    const rendered = renderMail(mail);
+    const rendered = renderMail(mail, 'no-reply@nestself.example');
     const { raw } = await sendAndCapture(mail);
     const root = parseMime(raw);
+    const withoutStamp = (value: string): string => value.replace(/DTSTAMP:\d{8}T\d{6}Z/, 'DTSTAMP');
 
     expect(root.headers.get('mime-version')).toBe('1.0');
     expect(root.headers.get('from')).toBe('no-reply@nestself.example');
@@ -533,23 +550,46 @@ describe('SesMailer', () => {
     expect(root.headers.get('content-type')).toMatch(/^multipart\/mixed; boundary="/);
     expect(root.parts).toHaveLength(2);
 
-    const [alternative, calendar] = root.parts;
+    const [alternative, attachment] = root.parts;
     expect(alternative!.headers.get('content-type')).toMatch(/^multipart\/alternative; boundary="/);
-    expect(alternative!.parts).toHaveLength(2);
-    const [text, html] = alternative!.parts;
+    expect(alternative!.parts).toHaveLength(3);
+    const [text, html, inlineCalendar] = alternative!.parts;
     expect(text!.headers.get('content-type')).toBe('text/plain; charset=UTF-8');
     expect(decodeBase64Body(text!)).toBe(toCrlf(rendered.text));
     expect(html!.headers.get('content-type')).toBe('text/html; charset=UTF-8');
     expect(decodeBase64Body(html!)).toBe(toCrlf(rendered.html));
 
-    expect(calendar!.headers.get('content-type')).toBe(
+    // Third alternative: what calendar clients render as an invitation.
+    expect(inlineCalendar!.headers.get('content-type')).toBe('text/calendar; charset=UTF-8; method=REQUEST');
+    expect(inlineCalendar!.headers.has('content-disposition')).toBe(false);
+    const inlineIcs = decodeBase64Body(inlineCalendar!);
+    expect(withoutStamp(inlineIcs)).toBe(withoutStamp(rendered.attachments![0]!.content));
+    expect(inlineIcs).toContain('METHOD:REQUEST');
+    expect(inlineIcs).toContain('ORGANIZER;CN=NestSelf:mailto:no-reply@nestself.example');
+
+    // The same file as a named attachment in multipart/mixed.
+    expect(attachment!.headers.get('content-type')).toBe(
       'text/calendar; charset=UTF-8; method=REQUEST; name="nestself-session.ics"',
     );
-    expect(calendar!.headers.get('content-disposition')).toBe('attachment; filename="nestself-session.ics"');
-    const ics = decodeBase64Body(calendar!);
-    const withoutStamp = (value: string): string => value.replace(/DTSTAMP:\d{8}T\d{6}Z/, 'DTSTAMP');
-    expect(withoutStamp(ics)).toBe(withoutStamp(rendered.attachments![0]!.content));
-    expect(ics).toContain('METHOD:REQUEST');
+    expect(attachment!.headers.get('content-disposition')).toBe('attachment; filename="nestself-session.ics"');
+    expect(decodeBase64Body(attachment!)).toBe(inlineIcs);
+  });
+
+  it('puts the CANCEL calendar inline and attached for a cancellation', async () => {
+    const { raw } = await sendAndCapture(input('appointment.canceled'));
+    const [alternative, attachment] = parseMime(raw).parts;
+    expect(alternative!.parts[2]!.headers.get('content-type')).toBe('text/calendar; charset=UTF-8; method=CANCEL');
+    expect(attachment!.headers.get('content-type')).toMatch(/^text\/calendar; charset=UTF-8; method=CANCEL; name="/);
+  });
+
+  it('sets a unique Message-ID on the sender domain', async () => {
+    const first = parseMime((await sendAndCapture(input('appointment.reminder'))).raw);
+    ses.resetHistory();
+    const second = parseMime((await sendAndCapture(input('appointment.reminder'))).raw);
+    const pattern = /^<[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@nestself\.example>$/;
+    expect(first.headers.get('message-id')).toMatch(pattern);
+    expect(second.headers.get('message-id')).toMatch(pattern);
+    expect(first.headers.get('message-id')).not.toBe(second.headers.get('message-id'));
   });
 
   it('sends multipart/alternative alone when there is no attachment', async () => {

@@ -33,6 +33,15 @@ export interface RenderedMail {
   attachments?: MailAttachment[];
 }
 
+/**
+ * Sender and recipient of the email being rendered. The calendar file names
+ * the sender as `ORGANIZER` and the recipient as the `ATTENDEE` (RFC 5546).
+ */
+export interface MailEnvelope {
+  from: string;
+  to: string;
+}
+
 /** Copy of one template: the same keys in every locale (checked by the tests). */
 export type Messages<K extends string> = Record<Locale, Record<K, string>>;
 
@@ -210,12 +219,14 @@ export function composeMail(
 }
 
 /**
- * The calendar file of D-CW-26 as a `text/calendar` part. `REQUEST` defaults
- * to `SEQUENCE:0`; `CANCEL` defaults to 1 so it supersedes the request.
+ * The calendar file of D-CW-26 as a `text/calendar` part, organised by the
+ * sender for the recipient. `REQUEST` defaults to `SEQUENCE:0`; `CANCEL`
+ * defaults to 1 so it supersedes the request.
  */
 export function calendarAttachment(
   filename: string,
-  event: Omit<IcsEvent, 'dtstart' | 'dtend' | 'method'> & {
+  envelope: MailEnvelope,
+  event: Omit<IcsEvent, 'dtstart' | 'dtend' | 'method' | 'organizer' | 'attendee'> & {
     method: IcsMethod;
     startsAt: string;
     endsAt: string;
@@ -224,6 +235,8 @@ export function calendarAttachment(
   const { startsAt, endsAt, method, sequence, ...rest } = event;
   const content = generateIcs({
     ...rest,
+    organizer: envelope.from,
+    attendee: envelope.to,
     method,
     sequence: sequence ?? (method === 'CANCEL' ? 1 : 0),
     dtstart: instant(startsAt),

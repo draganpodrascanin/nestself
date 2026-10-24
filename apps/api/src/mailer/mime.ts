@@ -1,15 +1,18 @@
 /**
  * Raw MIME message for SES `SendRawEmail`, built by hand (no dependency).
  *
- * Structure: `multipart/mixed` holding a `multipart/alternative` (text, then
- * HTML) and one part per attachment, for example
- * `text/calendar; charset=UTF-8; method=REQUEST`. Without attachments the
- * `multipart/alternative` is the whole message. Every body part is base64
+ * Structure: `multipart/mixed` holding a `multipart/alternative` (text, HTML
+ * and, for a calendar email, the `text/calendar; method=...` part without a
+ * Content-Disposition, which is what Outlook and Gmail render as an
+ * invitation) and one named part per attachment (the same `.ics` again, for
+ * clients that only offer attachments). Without attachments the
+ * `multipart/alternative` is the whole message. `Message-ID` is a random
+ * UUID on the sender's domain. Every body part is base64
  * with 76-character lines, the subject is an RFC 2047 encoded word, so the
  * message is 7-bit clean; every line ends with CRLF and stays within 78
  * characters (RFC 5322 section 2.1.1).
  */
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { type MailAttachment } from './templates/index.js';
 
 export interface RawMessageInput {
@@ -99,12 +102,16 @@ export function buildRawMessage(input: RawMessageInput): string {
   if (!isSingleAddress(input.from)) throw new Error('Invalid sender address');
   if (!isSingleAddress(input.to)) throw new Error('Invalid recipient address');
 
+  const attachments = input.attachments ?? [];
+  const calendar = attachments.find((attachment) => attachment.contentType.startsWith('text/calendar'));
   const alternative = multipart('multipart/alternative', [
     part(['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'], base64Lines(toCrlf(input.text))),
     part(['Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64'], base64Lines(toCrlf(input.html))),
+    ...(calendar
+      ? [part([header('Content-Type', calendar.contentType), 'Content-Transfer-Encoding: base64'], base64Lines(calendar.content))]
+      : []),
   ]);
 
-  const attachments = input.attachments ?? [];
   const root =
     attachments.length === 0
       ? alternative
@@ -129,6 +136,7 @@ export function buildRawMessage(input: RawMessageInput): string {
       `To: ${input.to}`,
       `Subject: ${encodeSubject(input.subject.replace(/[\r\n]+/g, ' '))}`,
       `Date: ${rfc5322Date(input.date ?? new Date())}`,
+      `Message-ID: <${randomUUID()}@${input.from.slice(input.from.lastIndexOf('@') + 1)}>`,
       'MIME-Version: 1.0',
       header('Content-Type', root.contentType),
       '',

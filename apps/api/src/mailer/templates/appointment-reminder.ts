@@ -13,6 +13,7 @@ import {
   sharedMessages,
   whenValues,
   type AppointmentWindow,
+  type MailEnvelope,
   type MailLocale,
   type Messages,
   type RenderedMail,
@@ -33,7 +34,7 @@ export const messages: Messages<'subject' | 'body'> = {
   hu: { subject: 'Az Ön NestSelf alkalma', body: 'Emlékeztető: alkalom {{date}}, {{time}}.' },
 };
 
-export function render(locale: MailLocale, data: AppointmentReminderData): RenderedMail {
+export function render(locale: MailLocale, data: AppointmentReminderData, envelope: MailEnvelope): RenderedMail {
   const copy = messages[locale];
   const shared = sharedMessages[locale];
   const { appointment } = data;
@@ -42,7 +43,7 @@ export function render(locale: MailLocale, data: AppointmentReminderData): Rende
     copy.subject,
     [paragraph(interpolate(copy.body, whenValues(locale, appointment))), link(shared.joinAction, data.joinUrl)],
     [
-      calendarAttachment('nestself-session.ics', {
+      calendarAttachment('nestself-session.ics', envelope, {
         method: 'REQUEST',
         uid: icsUid('appointment', appointment.id),
         summary: shared.sessionSummary,

@@ -82,8 +82,8 @@
     "unknown": "Hiba történt. Kérjük, próbálja újra."
   },
   "email": {
-    "reminderSubject": "Emlékeztető: alkalom {{date}}, {{time}}",
-    "registrationSubject": "Sikeres regisztráció: {{title}}",
+    "reminderSubject": "Az Ön NestSelf alkalma",
+    "registrationSubject": "Az Ön NestSelf webinárja",
     "followUpProposedSubject": "Következő alkalmat javasoltak"
   }
 }

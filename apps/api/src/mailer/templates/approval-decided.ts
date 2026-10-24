@@ -15,6 +15,7 @@ import {
   whenValues,
   type AppointmentWindow,
   type MailBlock,
+  type MailEnvelope,
   type MailLocale,
   type Messages,
   type RenderedMail,
@@ -63,7 +64,7 @@ export const messages: Messages<'subject' | 'approved' | 'rejected' | 'reason'> 
   },
 };
 
-export function render(locale: MailLocale, data: ApprovalDecidedData): RenderedMail {
+export function render(locale: MailLocale, data: ApprovalDecidedData, envelope: MailEnvelope): RenderedMail {
   const copy = messages[locale];
   const shared = sharedMessages[locale];
   const { appointment } = data;
@@ -75,7 +76,7 @@ export function render(locale: MailLocale, data: ApprovalDecidedData): RenderedM
       copy.subject,
       [paragraph(interpolate(copy.approved, when)), link(shared.joinAction, data.joinUrl)],
       [
-        calendarAttachment('nestself-session.ics', {
+        calendarAttachment('nestself-session.ics', envelope, {
           method: 'REQUEST',
           uid: icsUid('appointment', appointment.id),
           summary: shared.sessionSummary,

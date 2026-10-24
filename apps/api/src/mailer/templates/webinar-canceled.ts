@@ -12,6 +12,7 @@ import {
   paragraph,
   sharedMessages,
   whenValues,
+  type MailEnvelope,
   type MailLocale,
   type Messages,
   type RenderedMail,
@@ -43,7 +44,7 @@ export const messages: Messages<'subject' | 'body'> = {
   },
 };
 
-export function render(locale: MailLocale, data: WebinarCanceledData): RenderedMail {
+export function render(locale: MailLocale, data: WebinarCanceledData, envelope: MailEnvelope): RenderedMail {
   const copy = messages[locale];
   const shared = sharedMessages[locale];
   const { webinar } = data;
@@ -53,7 +54,7 @@ export function render(locale: MailLocale, data: WebinarCanceledData): RenderedM
     copy.subject,
     [paragraph(body), link(shared.openAction, data.webinarsUrl)],
     [
-      calendarAttachment('nestself-webinar.ics', {
+      calendarAttachment('nestself-webinar.ics', envelope, {
         method: 'CANCEL',
         uid: icsUid('webinar-registration', data.registrationId),
         summary: shared.webinarSummary,

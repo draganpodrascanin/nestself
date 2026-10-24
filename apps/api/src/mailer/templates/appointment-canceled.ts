@@ -13,6 +13,7 @@ import {
   sharedMessages,
   whenValues,
   type AppointmentWindow,
+  type MailEnvelope,
   type MailLocale,
   type Messages,
   type RenderedMail,
@@ -42,7 +43,7 @@ export const messages: Messages<'subject' | 'body'> = {
   },
 };
 
-export function render(locale: MailLocale, data: AppointmentCanceledData): RenderedMail {
+export function render(locale: MailLocale, data: AppointmentCanceledData, envelope: MailEnvelope): RenderedMail {
   const copy = messages[locale];
   const shared = sharedMessages[locale];
   const { appointment } = data;
@@ -52,7 +53,7 @@ export function render(locale: MailLocale, data: AppointmentCanceledData): Rende
     copy.subject,
     [paragraph(body), link(shared.openAction, data.appointmentUrl)],
     [
-      calendarAttachment('nestself-session.ics', {
+      calendarAttachment('nestself-session.ics', envelope, {
         method: 'CANCEL',
         uid: icsUid('appointment', appointment.id),
         summary: shared.sessionSummary,

@@ -82,8 +82,8 @@
     "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
   },
   "email": {
-    "reminderSubject": "Podsetnik: sesija {{date}} u {{time}}",
-    "registrationSubject": "Prijavljeni ste: {{title}}",
+    "reminderSubject": "Vaša NestSelf sesija",
+    "registrationSubject": "Vaš NestSelf vebinar",
     "followUpProposedSubject": "Predložena je naredna sesija"
   }
 }

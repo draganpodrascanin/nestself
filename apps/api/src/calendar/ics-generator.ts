@@ -15,6 +15,12 @@
  * autumn change) cannot be written with `TZID`, which always means the first
  * occurrence, so that instant is written in UTC instead.
  *
+ * `METHOD:REQUEST` and `METHOD:CANCEL` carry exactly one `ORGANIZER` (the
+ * sending address, named "NestSelf") and one `ATTENDEE` (the recipient, with
+ * no name, already accepted, no reply requested), as RFC 5546 sections 3.2.2
+ * and 3.2.5 require; without them clients show a plain attachment instead of
+ * a calendar invitation.
+ *
  * Lines are folded at 75 octets (not characters) without splitting a UTF-8
  * sequence, TEXT values escape `\ ; ,` and line breaks, and every line ends
  * with CRLF (RFC 5545 sections 3.1 and 3.3.11).
@@ -35,6 +41,10 @@ export interface IcsEvent {
   dtend: Date;
   /** IANA zone of the appointment or webinar, for example `Europe/Belgrade`. */
   timeZone: string;
+  /** Sending address, written as `ORGANIZER;CN=NestSelf:mailto:<address>`. */
+  organizer: string;
+  /** Recipient address, written as the one `ATTENDEE`, without a name. */
+  attendee: string;
   /** `REQUEST` (default) adds or updates the event; `CANCEL` removes it. */
   method?: IcsMethod;
   /** Incremented by the caller on every update and on cancellation. */
@@ -275,6 +285,14 @@ function vtimezone(timeZone: string, dtstart: number, dtend: number): string[] {
   return lines;
 }
 
+/** One bare address, safe after `mailto:` in a CAL-ADDRESS value. */
+const CAL_ADDRESS = /^[^\s@,;:<>()[\]"\\]+@[^\s@,;:<>()[\]"\\]+\.[^\s@,;:<>()[\]"\\]+$/;
+
+function calAddress(role: 'organizer' | 'attendee', address: string): string {
+  if (!CAL_ADDRESS.test(address)) throw new RangeError(`Invalid ${role} address`);
+  return `mailto:${address}`;
+}
+
 function assertTimeZone(timeZone: string): void {
   // TZID is written unquoted, so only IANA name characters are accepted.
   if (!/^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*$/.test(timeZone)) {
@@ -296,6 +314,8 @@ export function generateIcs(event: IcsEvent): string {
     throw new RangeError('sequence must be a non-negative integer');
   }
   assertTimeZone(event.timeZone);
+  const organizer = calAddress('organizer', event.organizer);
+  const attendee = calAddress('attendee', event.attendee);
   const method = event.method ?? 'REQUEST';
 
   const lines = [
@@ -313,6 +333,8 @@ export function generateIcs(event: IcsEvent): string {
     dateTimeProperty('DTEND', event.timeZone, end),
     `SUMMARY:${escapeText(event.summary)}`,
     `DESCRIPTION:${escapeText(event.description)}`,
+    `ORGANIZER;CN=NestSelf:${organizer}`,
+    `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:${attendee}`,
     `CLASS:${event.classification ?? 'PRIVATE'}`,
     `STATUS:${method === 'CANCEL' ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:OPAQUE',

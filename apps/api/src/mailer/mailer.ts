@@ -23,6 +23,7 @@ export {
   MAIL_TEMPLATE_NAMES,
   renderMail,
   type MailAttachment,
+  type MailEnvelope,
   type MailInput,
   type MailTemplateData,
   type MailTemplateName,

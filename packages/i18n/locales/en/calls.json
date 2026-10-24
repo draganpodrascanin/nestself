@@ -82,8 +82,8 @@
     "unknown": "Something went wrong. Please try again."
   },
   "email": {
-    "reminderSubject": "Reminder: session on {{date}} at {{time}}",
-    "registrationSubject": "You are registered: {{title}}",
+    "reminderSubject": "Your NestSelf session",
+    "registrationSubject": "Your NestSelf webinar",
     "followUpProposedSubject": "A follow-up was proposed"
   }
 }
