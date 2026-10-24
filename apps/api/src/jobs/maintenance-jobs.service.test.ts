@@ -51,7 +51,7 @@ describe('MaintenanceJobsService', () => {
   };
   let auditRepo: { ensurePartitions: ReturnType<typeof vi.fn> };
   let audit: { record: ReturnType<typeof vi.fn> };
-  let principals: { invalidateUser: ReturnType<typeof vi.fn> };
+  let principals: { invalidateUser: ReturnType<typeof vi.fn>; invalidateDelegatees: ReturnType<typeof vi.fn> };
   let store: MemoryKeyValueStore;
   let idp: { revokeRefreshToken: ReturnType<typeof vi.fn> };
   let service: MaintenanceJobsService;
@@ -67,7 +67,7 @@ describe('MaintenanceJobsService', () => {
     };
     auditRepo = { ensurePartitions: vi.fn().mockResolvedValue(['audit_events_y2026m10', 'audit_events_y2026m11']) };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
-    principals = { invalidateUser: vi.fn().mockResolvedValue(undefined) };
+    principals = { invalidateUser: vi.fn().mockResolvedValue(undefined), invalidateDelegatees: vi.fn().mockResolvedValue([]) };
     store = new MemoryKeyValueStore();
     idp = { revokeRefreshToken: vi.fn().mockResolvedValue(undefined) };
     const cipher = {
@@ -136,6 +136,9 @@ describe('MaintenanceJobsService', () => {
       expect(actions).toEqual(['grant.delegation_revoked', 'grant.revoked']);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_b', ['org_1']);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_c', ['org_2']);
+      // g_left is closed without its tree: its delegatees hold cached copies.
+      expect(principals.invalidateDelegatees).toHaveBeenCalledWith(['g_child']);
+      expect(principals.invalidateDelegatees).toHaveBeenCalledWith(['g_left']);
     });
 
     it('invalidates each subject once with every affected organization', async () => {

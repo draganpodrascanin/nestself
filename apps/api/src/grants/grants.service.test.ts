@@ -110,6 +110,7 @@ function createMocks() {
       populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
     })),
     invalidateUser: vi.fn(async () => {}),
+    invalidateDelegatees: vi.fn(async (_grantIds: string[]): Promise<string[]> => []),
     loadAssignments: vi.fn(async () => [
       { id: 'asg_client', userId: 'user_ana', kind: 'CLIENT', targetId: 'org_client', startAt: NOW, endAt: null },
     ]),
@@ -322,18 +323,9 @@ describe('GrantsService', () => {
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
     });
 
-    it('invalidates every delegatee below the adjusted grant (their cached ancestor copy)', async () => {
-      m.authzRepo.findActiveChildGrants.mockImplementation(async (parentIds: string[]) => {
-        if (parentIds.includes('grant_1')) return [row({ id: 'grant_child', subjectUserId: 'user_stefan', parentGrantId: 'grant_1' })];
-        if (parentIds.includes('grant_child')) {
-          return [row({ id: 'grant_grandchild', subjectUserId: 'user_jovan', parentGrantId: 'grant_child' })];
-        }
-        return [];
-      });
+    it('invalidates the delegatees below the adjusted grant (their cached ancestor copy)', async () => {
       await svc.update(ORG, 'grant_1', { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR);
-      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
-      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
-      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_jovan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
     });
 
     it('rejects conditions missing a required type of the template', async () => {
@@ -408,7 +400,7 @@ describe('GrantsService', () => {
     it('invalidates every subject in the revoked tree', async () => {
       await svc.revoke(ORG, 'grant_1', { reason: 'role ended' }, ACTOR);
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
-      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
     });
 
     it('returns 409 for an already revoked grant and 404 for an unknown one', async () => {

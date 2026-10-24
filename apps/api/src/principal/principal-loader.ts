@@ -5,8 +5,9 @@
  * Grants at `grants:{userId}:{orgId}` for 60 s +/- 10 s jitter. The entry
  * holds the subject's grants plus the delegation ancestors of its delegated
  * grants, so a change to an ancestor (held by another user) reaches it only
- * through the delegatee's own `invalidateUser` call: `GrantsService.revoke`
- * and `update` invalidate every subject in the affected delegation tree.
+ * through the delegatee's own `invalidateUser` call: every path that revokes
+ * or adjusts a grant calls `invalidateDelegatees` (GrantsService revoke and
+ * update, MembersService.endMembership, the grants reconciliation job).
  * Assignments at `assignments:{userId}` for 60 s +/- 10 s jitter.
  * Org tree at `org_tree:{orgId}` for 5 min +/- 30 s jitter.
  *
@@ -296,6 +297,29 @@ export class PrincipalLoader {
     const ttl = jitter(ORG_TREE_TTL, 30);
     await this.cache.set(cacheKey, JSON.stringify(entry), ttl);
     return entry;
+  }
+
+  /**
+   * Invalidate every delegatee below the given grants: the subjects of all
+   * grants delegated from them, directly or not, once each, for the
+   * organization of their grants (`platform` for grants without one).
+   * Their cached grants entry holds copies of these grants as delegation
+   * ancestors, so any revocation or adjustment of a grant with delegations
+   * calls this after its transaction commits. Reads in the system context.
+   * Returns the invalidated user ids.
+   */
+  async invalidateDelegatees(grantIds: string[]): Promise<string[]> {
+    const descendants = await this.authzRepo.findDelegationDescendants(grantIds);
+    const orgsBySubject = new Map<string, Set<string>>();
+    for (const g of descendants) {
+      const orgs = orgsBySubject.get(g.subjectUserId) ?? new Set<string>();
+      orgs.add(g.scopeOrgId ?? 'platform');
+      orgsBySubject.set(g.subjectUserId, orgs);
+    }
+    for (const [userId, orgs] of orgsBySubject) {
+      await this.invalidateUser(userId, [...orgs]);
+    }
+    return [...orgsBySubject.keys()];
   }
 
   /**

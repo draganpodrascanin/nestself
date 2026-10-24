@@ -175,6 +175,9 @@ export class MaintenanceJobsService {
     for (const [userId, orgs] of bySubject) {
       await this.principals.invalidateUser(userId, [...orgs]);
     }
+    // Delegatees of the closed grants cache them as ancestors (a grant closed
+    // without its tree, e.g. without membership, leaves active children).
+    await this.principals.invalidateDelegatees(rows.map((g) => g.id));
   }
 
   /**

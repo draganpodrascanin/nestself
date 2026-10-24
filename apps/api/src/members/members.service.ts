@@ -13,6 +13,7 @@ import { MembershipsRepository } from '../db/repositories/memberships.repository
 import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { AccessRevocationService } from '../auth/access-revocation.service.js';
+import { PrincipalLoader } from '../principal/principal-loader.js';
 
 @Injectable()
 export class MembersService {
@@ -24,6 +25,7 @@ export class MembersService {
     @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => AccessRevocationService)) private readonly revocation: AccessRevocationService,
+    @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
   ) {}
 
   /**
@@ -140,6 +142,8 @@ export class MembersService {
         sessionsForOrgId: orgId,
         orgIds: [orgId],
       });
+      // Delegatees of the revoked grants cache them as ancestors.
+      await this.principalLoader.invalidateDelegatees(result.revokedGrantIds);
     }
 
     const elapsed = performance.now() - start;

@@ -82,6 +82,7 @@ describe('MembersService', () => {
   let authz: ReturnType<typeof createMockAuthzRepo>;
   let audit: ReturnType<typeof createMockAudit>;
   let revocation: ReturnType<typeof createMockRevocation>;
+  let principalLoader: { invalidateDelegatees: ReturnType<typeof vi.fn> };
   let service: MembersService;
 
   beforeEach(() => {
@@ -90,12 +91,14 @@ describe('MembersService', () => {
     authz = createMockAuthzRepo();
     audit = createMockAudit();
     revocation = createMockRevocation();
+    principalLoader = { invalidateDelegatees: vi.fn().mockResolvedValue([]) };
     service = new MembersService(
       dbs as never,
       memberships as never,
       authz as never,
       audit as never,
       revocation as never,
+      principalLoader as never,
     );
   });
 
@@ -123,6 +126,7 @@ describe('MembersService', () => {
     expect(result.revokedGrantIds).toEqual([]);
     expect(memberships.endMembership).not.toHaveBeenCalled();
     expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    expect(principalLoader.invalidateDelegatees).not.toHaveBeenCalled();
   });
 
   // ── Successful end with grants ────────────────────────────────────────
@@ -185,6 +189,8 @@ describe('MembersService', () => {
     );
 
     expect(result.revokedGrantIds).toEqual(['g-parent', 'g-received', 'g-child', 'g-grandchild']);
+    // The delegatees of the revoked trees cache them as ancestors.
+    expect(principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['g-parent', 'g-received', 'g-child', 'g-grandchild']);
     expect(authz.revokeGrantTree).toHaveBeenCalledOnce();
     expect(authz.revokeGrantTree).toHaveBeenCalledWith(
       ['g-parent', 'g-received'],

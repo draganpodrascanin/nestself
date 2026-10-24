@@ -16,6 +16,7 @@ function createMockAuthz() {
     findActiveGrantTemplateKeys: vi.fn().mockResolvedValue([]),
     findGrantsForOrg: vi.fn().mockResolvedValue([]),
     findDelegationAncestors: vi.fn().mockResolvedValue([]),
+    findDelegationDescendants: vi.fn().mockResolvedValue([]),
     findActiveAssignments: vi.fn().mockResolvedValue([]),
     findOrgSettings: vi.fn(),
     findClosureForOrg: vi.fn().mockResolvedValue([]),
@@ -297,6 +298,31 @@ describe('PrincipalLoader', () => {
   });
 
   // ── invalidateUser() ───────────────────────────────────────────────────
+
+  describe('invalidateDelegatees()', () => {
+    it('invalidates every descendant subject once, per organization of their grants', async () => {
+      authz.findDelegationDescendants.mockResolvedValue([
+        { id: 'g-child', subjectUserId: 'user-2', scopeOrgId: 'org-1' },
+        { id: 'g-grandchild', subjectUserId: 'user-3', scopeOrgId: 'org-1' },
+        { id: 'g-other', subjectUserId: 'user-2', scopeOrgId: null },
+      ]);
+      const spy = vi.spyOn(loader, 'invalidateUser');
+
+      const invalidated = await loader.invalidateDelegatees(['g-root']);
+
+      expect(authz.findDelegationDescendants).toHaveBeenCalledWith(['g-root']);
+      expect(invalidated).toEqual(['user-2', 'user-3']);
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledWith('user-2', ['org-1', 'platform']);
+      expect(spy).toHaveBeenCalledWith('user-3', ['org-1']);
+    });
+
+    it('does nothing without delegations', async () => {
+      const spy = vi.spyOn(loader, 'invalidateUser');
+      expect(await loader.invalidateDelegatees(['g-root'])).toEqual([]);
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
 
   describe('invalidateUser()', () => {
     it('deletes cache keys and publishes invalidation', async () => {

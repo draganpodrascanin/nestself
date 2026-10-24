@@ -277,6 +277,31 @@ export class AuthorizationRepository {
     return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
   }
 
+  /**
+   * Every grant delegated, directly or not, from the given grants, revoked
+   * or not (a tree revoked a moment ago still names its delegatees). A given
+   * grant is included only when it descends from another given grant (callers
+   * pass a whole revoked tree). A child hidden by the tenant scope ends its
+   * branch; the system context sees every branch.
+   */
+  async findDelegationDescendants(grantIds: string[], tx?: DbExecutor): Promise<GrantRow[]> {
+    if (grantIds.length === 0) return [];
+    const seeds = sql.join(grantIds.map((id) => sql`${id}`), sql`, `);
+    const result = await this.exec(tx).execute<{ id: string }>(sql`
+      with recursive tree(id, hops) as (
+        select g.id, 1 from ${grants} as g where g.parent_grant_id in (${seeds})
+        union all
+        select g.id, tree.hops + 1
+        from ${grants} as g join tree on g.parent_grant_id = tree.id
+        where tree.hops < 64
+      )
+      select distinct id from tree
+    `);
+    const ids = result.rows.map((r) => r.id);
+    if (ids.length === 0) return [];
+    return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
+  }
+
   /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
   async findActiveMembership(
     userId: string,
