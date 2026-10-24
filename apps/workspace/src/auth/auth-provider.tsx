@@ -4,14 +4,17 @@
  *
  * On mount and on window focus calls `GET /auth/me`.
  * 200 -> authenticated; 401 -> unauthenticated; other -> keep previous, expose error.
+ *
+ * `stepUp()` opens the step-up dialog rendered here, so every screen gets it.
  */
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Principal, ActiveContext } from '@nestself/contracts';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { AuthContext } from './auth-context';
+import { StepUpDialog } from './step-up-dialog';
 import type { AuthStatus } from './types';
 
 interface Props {
@@ -91,10 +94,29 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     [authApi, applyMe],
   );
 
+  const [pendingStepUp, setPendingStepUp] = useState<{ resolve: (ok: boolean) => void } | null>(
+    null,
+  );
+  /** Shared by concurrent callers so two failing requests open one dialog. */
+  const pendingPromiseRef = useRef<Promise<boolean> | null>(null);
+
   const stepUp = useCallback(() => {
-    // Phase 2: show step-up dialog. For now this is a no-op;
-    // the handleApiError function routes step_up_required to /sign-in.
+    if (!pendingPromiseRef.current) {
+      pendingPromiseRef.current = new Promise<boolean>((resolve) => {
+        setPendingStepUp({ resolve });
+      });
+    }
+    return pendingPromiseRef.current;
   }, []);
+
+  const finishStepUp = useCallback(
+    (verified: boolean) => {
+      pendingStepUp?.resolve(verified);
+      pendingPromiseRef.current = null;
+      setPendingStepUp(null);
+    },
+    [pendingStepUp],
+  );
 
   const value = useMemo(
     () => ({
@@ -110,5 +132,17 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     [status, principal, effectiveActions, signOut, switchContext, stepUp, refreshPrincipal, error],
   );
 
-  return <AuthContext value={value}>{children}</AuthContext>;
+  return (
+    <AuthContext value={value}>
+      {children}
+      {pendingStepUp ? (
+        <StepUpDialog
+          open
+          authApi={authApi}
+          onVerified={() => finishStepUp(true)}
+          onCancel={() => finishStepUp(false)}
+        />
+      ) : null}
+    </AuthContext>
+  );
 }

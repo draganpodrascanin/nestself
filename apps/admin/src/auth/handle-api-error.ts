@@ -1,5 +1,8 @@
 /**
  * Shared API error handler for the admin app (6.1.5).
+ *
+ * 403 step_up_required -> open the step-up dialog (`stepUp()`); wrap the call in
+ *   `withStepUp` to retry it after verification.
  */
 import type { NavigateFn } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
@@ -11,6 +14,7 @@ interface ErrorHandlerDeps {
   queryClient: QueryClient;
   refreshPrincipal: () => Promise<void>;
   switchContext: (ctx: ActiveContext) => Promise<void>;
+  stepUp: () => Promise<boolean>;
   showToast?: (message: string) => void;
 }
 
@@ -29,11 +33,7 @@ export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
   }
 
   if (error.status === 403 && error.code === 'step_up_required') {
-    // Phase 2: step-up dialog. For now, redirect to sign-in.
-    void navigate({
-      to: '/sign-in',
-      search: { return: window.location.pathname },
-    });
+    void deps.stepUp();
     return;
   }
 

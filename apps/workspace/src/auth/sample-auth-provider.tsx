@@ -69,8 +69,9 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
     // In sample mode, context switch is a no-op.
   }, []);
 
-  const stepUp = useCallback(() => {
-    // No-op in sample mode.
+  const stepUp = useCallback(async () => {
+    // Sample mode has no session to re-authenticate; treat it as verified.
+    return true;
   }, []);
 
   const refreshPrincipal = useCallback(async () => {

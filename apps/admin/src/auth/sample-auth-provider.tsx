@@ -71,8 +71,9 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
     // No-op in sample mode
   }, []);
 
-  const stepUp = useCallback(() => {
-    // No-op in sample mode
+  const stepUp = useCallback(async () => {
+    // Sample mode has no session to re-authenticate; treat it as verified.
+    return true;
   }, []);
 
   const refreshPrincipal = useCallback(async () => {

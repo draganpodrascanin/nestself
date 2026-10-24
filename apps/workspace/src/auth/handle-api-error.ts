@@ -2,7 +2,8 @@
  * Shared API error handler for the workspace app (section 6.1.5).
  *
  * 401 -> clear principal, cancel queries, navigate to /sign-in.
- * 403 step_up_required -> redirect to /sign-in (phase 2: step-up dialog).
+ * 403 step_up_required -> open the step-up dialog (`stepUp()`); wrap the call in
+ *   `withStepUp` to retry it after verification.
  * 403 org_context_expired -> switch to personal context and toast.
  * 429 -> caller shows lockout copy from `details.retryAfter`.
  */
@@ -16,6 +17,7 @@ interface ErrorHandlerDeps {
   queryClient: QueryClient;
   refreshPrincipal: () => Promise<void>;
   switchContext: (ctx: ActiveContext) => Promise<void>;
+  stepUp: () => Promise<boolean>;
   showToast?: (message: string) => void;
 }
 
@@ -34,11 +36,7 @@ export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
   }
 
   if (error.status === 403 && error.code === 'step_up_required') {
-    // Phase 2: show a step-up dialog. For now redirect to sign-in.
-    void navigate({
-      to: '/sign-in',
-      search: { return: window.location.pathname },
-    });
+    void deps.stepUp();
     return;
   }
 
