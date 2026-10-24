@@ -93,3 +93,55 @@ export { formatInZone, zonedDateTimeToIso } from './time-zone';
 // Fake controller for stories, tests and sample mode
 export { FakeCallSessionController } from './testing/fake-controller';
 export type { FakeCallSessionControllerOptions } from './testing/fake-controller';
+
+// Webinar client (T-CW-2.3): state, transport contract and coded errors
+export { WebinarClient } from './webinar/client';
+export type { WebinarClientOptions } from './webinar/client';
+export { WebinarActionError, toWebinarActionError, webinarErrorMessage } from './webinar/errors';
+export { WEBINAR_ACTIONS, WEBINAR_ACTION_ROUTES } from './webinar/types';
+export type {
+  WebinarAction,
+  WebinarActionArea,
+  WebinarActionErrorLike,
+  WebinarActionInputs,
+  WebinarAudioControl,
+  WebinarClientApi,
+  WebinarFloorState,
+  WebinarHand,
+  WebinarHandState,
+  WebinarInitialState,
+  WebinarPollsState,
+  WebinarRoomHandler,
+  WebinarSnapshot,
+  WebinarSpeaker,
+  WebinarTransport,
+  WebinarViewerRole,
+} from './webinar/types';
+export { useWebinarStage } from './hooks/useWebinarStage';
+export type { UseWebinarStageResult } from './hooks/useWebinarStage';
+
+// Webinar components
+export { WebinarStage } from './components/WebinarStage';
+export type { WebinarStageProps } from './components/WebinarStage';
+export { ChatPanel } from './components/ChatPanel';
+export type { ChatPanelProps } from './components/ChatPanel';
+export { PollPanel } from './components/PollPanel';
+export type { PollPanelProps } from './components/PollPanel';
+export { ModeratorQueue } from './components/ModeratorQueue';
+export type { ModeratorQueueProps } from './components/ModeratorQueue';
+export { HandRaiseButton } from './components/HandRaiseButton';
+export type { HandRaiseButtonProps } from './components/HandRaiseButton';
+export { FloorGrantedDialog, FloorTakenNotice } from './components/FloorGrantedDialog';
+export type { FloorGrantedDialogProps, FloorTakenNoticeProps } from './components/FloorGrantedDialog';
+
+// Fake webinar for stories, tests and sample mode
+export { FakeWebinarClient, FakeWebinarServer } from './testing/fake-webinar';
+export type {
+  FakeWebinarClientOptions,
+  FakeWebinarEmission,
+  FakeWebinarIdentity,
+  FakeWebinarRequest,
+  FakeWebinarServerOptions,
+} from './testing/fake-webinar';
+export { FAKE_WEBINAR_SAMPLE_PEOPLE, FAKE_WEBINAR_SAMPLE_POLL, createSampleWebinarServer } from './testing/fake-webinar-sample';
+export type { FakeWebinarSampleOptions } from './testing/fake-webinar-sample';
