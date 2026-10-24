@@ -126,6 +126,20 @@ describe('Select motion', () => {
     { value: 'b', label: 'Beta' },
   ];
 
+  it('typing on the closed, focused trigger still picks an option', async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(
+      <Field label="Choice">
+        <Select options={choices} placeholder="Pick one" onValueChange={handleChange} />
+      </Field>,
+    );
+    screen.getByRole('combobox').focus();
+    await user.keyboard('B');
+    await waitFor(() => expect(handleChange).toHaveBeenCalledWith('b', expect.anything()));
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('animates the listbox open, hides it after closing and reopens it', async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

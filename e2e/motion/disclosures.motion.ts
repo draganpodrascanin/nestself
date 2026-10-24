@@ -88,6 +88,19 @@ test.describe('site header navigation (compact)', () => {
     expect(await page.locator('header').evaluate((header) => header.getBoundingClientRect().height)).toBe(headerHeight);
   });
 
+  test('at exactly 1000 px the inline navigation shows (the compact and wide rules meet)', async ({ page }) => {
+    await gotoStory(page, 'navigation-siteheader--states');
+    for (const width of [999, 1000, 1000.5]) {
+      await page.locator('header').evaluate((header, w) => {
+        Object.assign((header as HTMLElement).style, { width: `${w}px`, paddingInline: '0', boxSizing: 'content-box' });
+      }, width);
+      const toggleShown = await page.locator('button[aria-controls="site-nav"]').isVisible();
+      const linkShown = await page.locator('#site-nav a').first().isVisible();
+      expect(toggleShown || linkShown, `navigation reachable at ${width} px`).toBe(true);
+      expect(toggleShown, `compact toggle only below 1000 px (at ${width} px)`).toBe(width < 1000);
+    }
+  });
+
   test('the desktop navigation is not affected by the compact row', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoStory(page, 'navigation-siteheader--states');

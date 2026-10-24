@@ -6,4 +6,5 @@ export * from './components/navigation';
 export * from './components/dialogs';
 export * from './components/tables';
 export * from './components/patterns';
+export * from './motion';
 export { cn } from './lib/cn';

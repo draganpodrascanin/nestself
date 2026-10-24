@@ -34,7 +34,11 @@ const POPUP_MODULES = new Set([
 const ANIMATED_PARTS = new Set(['Popup', 'Backdrop']);
 const COLLAPSIBLE_MODULES = new Set(['accordion', 'collapsible']);
 const MOTION_PROPS = new Set(['transition', 'animate', 'exit', 'initial', 'whileHover', 'whileTap', 'whileFocus']);
-const LITERAL_TIMING = /(?:^|[\s'"`])(?:[\w-]+:)*(?:duration|delay)-(?:\d|\[\d)|(?:^|[\s'"`])(?:[\w-]+:)*ease-\[/;
+/** A Tailwind class with literal timing, behind any variants (`md:`, `@max-[1000px]:`) or `!`. */
+const LITERAL_TIMING =
+  /(?:^|[\s'"`])(?:[^\s'"`]*:)?!?(?:(?:duration|delay)-(?:\d|\[\d)|ease-(?:\[|(?:in|out|in-out|linear)\b))/;
+const STYLE_TIMING_PROPS = new Set(['transition', 'transitionDuration', 'transitionDelay', 'animation', 'animationDuration']);
+const LITERAL_TIME = /\d(?:\.\d+)?m?s\b/;
 
 interface Violation {
   file: string;
@@ -42,18 +46,35 @@ interface Violation {
   rule: string;
 }
 
-function collectSources(dir: string): string[] {
+function collectSources(dir: string, pattern = /\.(ts|tsx)$/): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'generated') out.push(...collectSources(full));
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|stories|gen)\.(ts|tsx)$/.test(entry.name)) {
+      if (entry.name !== 'node_modules' && entry.name !== 'generated') out.push(...collectSources(full, pattern));
+    } else if (pattern.test(entry.name) && !/\.(test|stories|gen)\.(ts|tsx)$/.test(entry.name)) {
       out.push(full);
     }
   }
   return out;
+}
+
+/**
+ * CSS may only set timing through the motion tokens. Literal times are
+ * allowed inside `prefers-reduced-motion: reduce`, where they switch motion off.
+ */
+export function checkCss(file: string, text: string): Violation[] {
+  const withoutReduced = text.replace(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, (block) =>
+    block.replace(/[^\n]/g, ' '),
+  );
+  const violations: Violation[] = [];
+  withoutReduced.split('\n').forEach((line, index) => {
+    if (/(?:transition|animation)(?:-duration|-delay)?\s*:/.test(line) && LITERAL_TIME.test(line.replace(/var\([^)]*\)/g, ''))) {
+      violations.push({ file: relative(REPO_ROOT, file), line: index + 1, rule: 'CSS timing must use var(--motion-*)' });
+    }
+  });
+  return violations;
 }
 
 function kebab(name: string): string {
@@ -110,6 +131,25 @@ export function checkSource(file: string, text: string): Violation[] {
   }
 
   const ancestors: string[] = [];
+  /** For each open Base UI portal: does a Motion presence (AnimatePresence) control its mounting? */
+  const portals: Array<{ presence: boolean }> = [];
+
+  /** `render={<m.div … />}`, a render function returning one, or a variable holding one. */
+  function motionRender(attribute: ts.JsxAttribute | undefined): 'element' | 'function' | 'variable' | null {
+    const initializer = attribute?.initializer;
+    if (!initializer || !ts.isJsxExpression(initializer) || !initializer.expression) return null;
+    const expression = initializer.expression;
+    if (ts.isIdentifier(expression)) return importsMotionElements ? 'variable' : null;
+    const isMotionTag = (text: string) => /^m\.[a-z]/.test(text);
+    if ((ts.isJsxSelfClosingElement(expression) || ts.isJsxElement(expression)) && importsMotionElements) {
+      const tag = ts.isJsxElement(expression) ? expression.openingElement.tagName : expression.tagName;
+      return isMotionTag(tag.getText()) ? 'element' : null;
+    }
+    if ((ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) && importsMotionElements) {
+      return /<m\.[a-z]/.test(expression.getText()) ? 'function' : null;
+    }
+    return null;
+  }
 
   function visitElement(node: ts.JsxOpeningLikeElement) {
     const name = tagName(node);
@@ -119,20 +159,24 @@ export function checkSource(file: string, text: string): Violation[] {
     const attrs = jsxAttributes(node);
 
     if (POPUP_MODULES.has(module) && ANIMATED_PARTS.has(part)) {
-      if (!attrs.has('render') || !importsMotionElements) {
+      const render = motionRender(attrs.get('render'));
+      const portal = portals.at(-1);
+      if (!render) {
         report(node, `${name} must be rendered as a Motion element: render={<m.div {...useMotionPreset('…')} />}`);
+      } else if (portal && !portal.presence && module !== 'select' && render === 'element') {
+        report(node, `${name} in a keepMounted portal outside <AnimatePresence> must animate by state: render={(props, state) => <m.div {...props} animate={state.open ? … : …} />}`);
       }
     }
     if (POPUP_MODULES.has(module) && part === 'Portal') {
       const presence = ancestors.includes('AnimatePresence');
-      if (!presence && !attrs.has('keepMounted')) {
+      if (!presence && !attrs.has('keepMounted') && module !== 'select') {
         report(node, `${name} must sit inside <AnimatePresence> (with keepMounted) so its exit animation can play`);
       }
       if (presence && module !== 'select' && !attrs.has('keepMounted')) {
         report(node, `${name} inside <AnimatePresence> needs keepMounted, or Base UI unmounts it before the exit plays`);
       }
     }
-    if (module === 'toast' && part === 'Root' && (!attrs.has('render') || !importsMotionElements)) {
+    if (module === 'toast' && part === 'Root' && !motionRender(attrs.get('render'))) {
       report(node, `${name} must be rendered as a Motion element so toasts animate in and out`);
     }
     if (COLLAPSIBLE_MODULES.has(module) && part === 'Panel') {
@@ -155,6 +199,19 @@ export function checkSource(file: string, text: string): Violation[] {
       if (ts.isStringLiteralLike(node) && LITERAL_TIMING.test(node.text)) {
         report(node, 'use duration-[var(--motion-fast|standard|slow)] and ease-standard instead of literal timing');
       }
+      if (ts.isJsxAttribute(node) && node.name.getText() === 'style') {
+        node.forEachChild(function findStyleTiming(child: ts.Node) {
+          if (
+            ts.isPropertyAssignment(child) &&
+            STYLE_TIMING_PROPS.has(child.name.getText()) &&
+            ts.isStringLiteralLike(child.initializer) &&
+            LITERAL_TIME.test(child.initializer.text)
+          ) {
+            report(child, 'inline transition / animation timing must use var(--motion-*)');
+          }
+          child.forEachChild(findStyleTiming);
+        });
+      }
       if (ts.isJsxAttribute(node) && MOTION_PROPS.has(node.name.getText())) {
         node.forEachChild(function findLiteral(child: ts.Node) {
           if (
@@ -171,9 +228,15 @@ export function checkSource(file: string, text: string): Violation[] {
     }
 
     if (ts.isJsxElement(node)) {
-      ancestors.push(node.openingElement.tagName.getText());
+      const tag = node.openingElement.tagName.getText();
+      const [namespace, part] = tag.split('.');
+      const module = namespace ? baseUiNamespaces.get(namespace) : undefined;
+      const isPortal = !!module && POPUP_MODULES.has(module) && part === 'Portal';
+      if (isPortal) portals.push({ presence: ancestors.includes('AnimatePresence') });
+      ancestors.push(tag);
       node.forEachChild(visit);
       ancestors.pop();
+      if (isPortal) portals.pop();
       return;
     }
     node.forEachChild(visit);
@@ -184,9 +247,13 @@ export function checkSource(file: string, text: string): Violation[] {
 
 describe('motion contract', () => {
   it('every popout, overlay, toast and collapsible in packages/ui and the web apps is animated on tokens', () => {
-    const files = SCANNED_DIRS.flatMap(collectSources);
+    const files = SCANNED_DIRS.flatMap((dir) => collectSources(dir));
     expect(files.length).toBeGreaterThan(50);
-    const violations = files.flatMap((file) => checkSource(file, readFileSync(file, 'utf-8')));
+    const cssFiles = SCANNED_DIRS.flatMap((dir) => collectSources(dir, /\.css$/));
+    const violations = [
+      ...files.flatMap((file) => checkSource(file, readFileSync(file, 'utf-8'))),
+      ...cssFiles.flatMap((file) => checkCss(file, readFileSync(file, 'utf-8'))),
+    ];
     expect(violations.map((v) => `${v.file}:${v.line} ${v.rule}`)).toEqual([]);
   });
 
@@ -250,6 +317,50 @@ describe('motion contract', () => {
         expect.stringMatching(/literal timing/),
         expect.stringMatching(/not inline literals/),
       ]);
+    });
+
+    it('literal timing behind container variants, important, built-in easings and inline styles', () => {
+      const rules = checkSource(
+        file,
+        `export const X = () => (
+           <>
+             <div className="@max-[1000px]:duration-300" />
+             <div className="!duration-300 ease-in-out" />
+             <div style={{ transition: 'opacity 150ms ease' }} />
+           </>
+         );`,
+      ).map((v) => v.rule);
+      expect(rules).toEqual([
+        expect.stringMatching(/literal timing/),
+        expect.stringMatching(/literal timing/),
+        expect.stringMatching(/inline transition/),
+      ]);
+    });
+
+    it('a keepMounted popup outside AnimatePresence that cannot animate by state, or a plain render element', () => {
+      const rules = checkSource(
+        file,
+        `import { Popover } from '@base-ui/react/popover';
+         import { Tooltip } from '@base-ui/react/tooltip';
+         import { m } from '@nestself/ui';
+         export const X = () => (
+           <>
+             <Popover.Portal keepMounted><Popover.Popup render={<m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} />} /></Popover.Portal>
+             <Tooltip.Portal keepMounted><Tooltip.Popup render={<div />} /></Tooltip.Portal>
+           </>
+         );`,
+      ).map((v) => v.rule);
+      expect(rules).toEqual([
+        expect.stringMatching(/must animate by state/),
+        expect.stringMatching(/Tooltip\.Popup must be rendered as a Motion element/),
+      ]);
+    });
+
+    it('literal CSS timing outside a reduced-motion block', () => {
+      const css = `.a { transition: opacity 150ms ease; }
+.b { transition-duration: var(--motion-fast); }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0ms !important; } }`;
+      expect(checkCss(join(UI_SRC, 'x.css'), css).map((v) => v.line)).toEqual([1]);
     });
 
     it('accepts the compliant patterns', () => {

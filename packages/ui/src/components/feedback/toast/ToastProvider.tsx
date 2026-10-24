@@ -5,7 +5,8 @@ import { Toast as BaseToast } from '@base-ui/react/toast';
 import type { HTMLMotionProps } from 'motion/react';
 import { useReducedMotion } from 'motion/react';
 import { cn } from '../../../lib/cn';
-import { m, MotionFeatures, useMotionPreset } from '../../../motion';
+import { m, useMotionPreset } from '../../../motion';
+import { MotionLayoutFeatures } from '../../../motion/MotionLayoutFeatures';
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger';
 
@@ -32,7 +33,7 @@ function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
   const toastMotion = useMotionPreset('toast');
   const reduceMotion = useReducedMotion();
   return (
-    <MotionFeatures layout>
+    <MotionLayoutFeatures>
       <BaseToast.Viewport className="bottom-6 gap-2 fixed left-1/2 z-[var(--z-toast)] flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col">
         {manager.toasts.map((toast) => (
           <BaseToast.Root
@@ -76,6 +77,6 @@ function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
           </BaseToast.Root>
         ))}
       </BaseToast.Viewport>
-    </MotionFeatures>
+    </MotionLayoutFeatures>
   );
 }

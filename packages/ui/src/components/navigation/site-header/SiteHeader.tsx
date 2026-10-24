@@ -59,7 +59,7 @@ export function SiteHeader({
         {brand.label}
       </a>
 
-      <div className="ml-auto flex items-center gap-1 @min-[1001px]:order-1">
+      <div className="ml-auto flex items-center gap-1 @min-[1000px]:order-1">
         {utilities}
         <button
           type="button"
@@ -83,9 +83,10 @@ export function SiteHeader({
         Below 1000 px the wrapper is the collapsible row that animates open and
         closed; once collapsed it is `display: none`, so a closed menu adds no
         row gap. That class is lifted before the row expands, so Motion measures
-        the real `auto` height. From 1001 px the wrapper is `display: contents`:
-        its height, opacity and visibility never reach the inline navigation
-        (the nav re-asserts `visible` because visibility inherits).
+        the real `auto` height. From 1000 px (`@min-[1000px]` meets
+        `@max-[1000px]`, which means below 1000 px) the wrapper is
+        `display: contents`: its height, opacity and visibility never reach the
+        inline navigation (the nav re-asserts `visible`, which inherits).
       */}
       <MotionFeatures>
         <m.div
@@ -95,14 +96,14 @@ export function SiteHeader({
             if (!open) setCollapsed(true);
           }}
           className={cn(
-            'overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1001px]:contents',
+            'overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1000px]:contents',
             collapsed && '@max-[1000px]:hidden',
           )}
         >
           <nav
             id={navId}
             className={cn(
-              'gap-4 flex items-center ml-auto @min-[1001px]:visible',
+              'gap-4 flex items-center ml-auto @min-[1000px]:visible',
               '@max-[1000px]:gap-1 @max-[1000px]:pt-4 @max-[1000px]:flex-col @max-[1000px]:items-stretch',
             )}
           >

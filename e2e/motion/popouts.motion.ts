@@ -194,3 +194,13 @@ test('a menu closed mid-entry turns around from where it was, then reopens', asy
   await trigger.click();
   await expect(page.getByRole('menuitem').first()).toBeVisible();
 });
+
+test('a closed select still answers typeahead (its popup is mounted early, hidden)', async ({ page }) => {
+  await gotoStory(page, 'fields-field--select-default');
+  const trigger = page.getByRole('combobox');
+  await trigger.focus();
+  await page.keyboard.type('F');
+  await expect(trigger).toHaveText(/Financial/);
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('listbox')).toBeHidden();
+});

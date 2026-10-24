@@ -3,10 +3,10 @@
 import { Field as BaseField } from '@base-ui/react/field';
 import { Select as BaseSelect } from '@base-ui/react/select';
 import { CaretDown, Check } from '@phosphor-icons/react/dist/ssr';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
-import { AnimatePresence, m, MotionFeatures, useMotionPreset } from '../../../motion';
+import { m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 export interface FieldProps {
   label: string;
@@ -153,20 +153,18 @@ export function Select({
   className,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
-  /*
-   * Base UI renders the select popup on first open and keeps it in the DOM
-   * afterwards (typeahead needs the items). Until then the popup mounts and
-   * unmounts through AnimatePresence; once mounted it animates by `open`.
-   */
-  const [mounted, setMounted] = useState(false);
-  const positionerRef = useCallback((node: HTMLDivElement | null) => {
-    if (node) setMounted(true);
-  }, []);
   const popupMotion = useMotionPreset('popover');
-  const motionElement = mounted ? (
-    <m.div initial={false} animate={open ? popupMotion.animate : popupMotion.exit} />
-  ) : (
-    <m.div {...popupMotion} />
+  /*
+   * The portal is always rendered: Base UI mounts the closed popup early (on
+   * focus) so typing on the closed trigger can pick an option, and keeps it
+   * mounted after closing. The popup therefore animates by `open` instead of
+   * through AnimatePresence; one that mounts closed starts at its exit state.
+   */
+  const motionElement = (
+    <m.div
+      initial={open ? popupMotion.initial : false}
+      animate={open ? popupMotion.animate : popupMotion.exit}
+    />
   );
 
   return (
@@ -201,36 +199,32 @@ export function Select({
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <MotionFeatures>
-        <AnimatePresence>
-          {open || mounted ? (
-            <BaseSelect.Portal>
-              <BaseSelect.Positioner ref={positionerRef} className="z-[var(--z-dropdown)]">
-                <BaseSelect.Popup
-                  render={motionElement}
-                  className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu origin-[var(--transform-origin)]"
+        <BaseSelect.Portal>
+          <BaseSelect.Positioner className="z-[var(--z-dropdown)]">
+            <BaseSelect.Popup
+              render={motionElement}
+              className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu origin-[var(--transform-origin)]"
+            >
+              {options.map((opt) => (
+                <BaseSelect.Item
+                  key={opt.value}
+                  value={opt.value}
+                  label={opt.label}
+                  className={cn(
+                    'px-3 py-2 flex cursor-pointer items-center',
+                    'data-highlighted:bg-tint',
+                    'data-selected:font-[var(--font-weight-label)]',
+                  )}
                 >
-                  {options.map((opt) => (
-                    <BaseSelect.Item
-                      key={opt.value}
-                      value={opt.value}
-                      label={opt.label}
-                      className={cn(
-                        'px-3 py-2 flex cursor-pointer items-center',
-                        'data-highlighted:bg-tint',
-                        'data-selected:font-[var(--font-weight-label)]',
-                      )}
-                    >
-                      <BaseSelect.ItemText>{opt.label}</BaseSelect.ItemText>
-                      <BaseSelect.ItemIndicator className="ml-auto">
-                        <Check size={16} aria-hidden="true" />
-                      </BaseSelect.ItemIndicator>
-                    </BaseSelect.Item>
-                  ))}
-                </BaseSelect.Popup>
-              </BaseSelect.Positioner>
-            </BaseSelect.Portal>
-          ) : null}
-        </AnimatePresence>
+                  <BaseSelect.ItemText>{opt.label}</BaseSelect.ItemText>
+                  <BaseSelect.ItemIndicator className="ml-auto">
+                    <Check size={16} aria-hidden="true" />
+                  </BaseSelect.ItemIndicator>
+                </BaseSelect.Item>
+              ))}
+            </BaseSelect.Popup>
+          </BaseSelect.Positioner>
+        </BaseSelect.Portal>
       </MotionFeatures>
     </BaseSelect.Root>
   );
