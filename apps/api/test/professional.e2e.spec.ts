@@ -20,7 +20,7 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, grants } from '../src/db/schema/index.js';
+import { auditEvents, conversations, grants } from '../src/db/schema/index.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
@@ -305,7 +305,7 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
       const milica = await signInStaff('user_milica', { kind: 'expert' });
       const res = await milica.get(ASSIGNED_LIST);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ items: [expectedSummary] });
+      expect(res.body).toEqual({ items: [expectedSummary], nextCursor: null });
       expect(JSON.stringify(res.body)).not.toContain(SAMPLE_CASE.conversation.messages[0]!.body);
     });
 
@@ -330,25 +330,70 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
       const jovan = await signInMember('user_jovan');
       const own = await jovan.get(MY_LIST);
       expect(own.status).toBe(200);
-      expect(own.body).toEqual({ items: [expectedSummary] });
+      expect(own.body).toEqual({ items: [expectedSummary], nextCursor: null });
 
       const assigned = await jovan.get(ASSIGNED_LIST);
       expect(assigned.status).toBe(200);
-      expect(assigned.body).toEqual({ items: [] });
+      expect(assigned.body).toEqual({ items: [], nextCursor: null });
     });
 
     it('an hr_admin and platform staff list nothing, and listing writes no access.denied audit', async () => {
       const ivana = await signInMember('user_ivana');
-      expect((await ivana.get(ASSIGNED_LIST)).body).toEqual({ items: [] });
-      expect((await ivana.get(MY_LIST)).body).toEqual({ items: [] });
+      expect((await ivana.get(ASSIGNED_LIST)).body).toEqual({ items: [], nextCursor: null });
+      expect((await ivana.get(MY_LIST)).body).toEqual({ items: [], nextCursor: null });
 
       const nikola = await signInStaff('user_nikola', { kind: 'operations' });
       const before = await testDb.db.select().from(auditEvents).where(eq(auditEvents.actorUserId, 'user_nikola'));
-      expect((await nikola.get(ASSIGNED_LIST)).body).toEqual({ items: [] });
+      expect((await nikola.get(ASSIGNED_LIST)).body).toEqual({ items: [], nextCursor: null });
       const after = await testDb.db.select().from(auditEvents).where(eq(auditEvents.actorUserId, 'user_nikola'));
       expect(after.filter((e) => e.action === 'access.denied')).toHaveLength(
         before.filter((e) => e.action === 'access.denied').length,
       );
+    });
+
+    it('pages the participant list by cursor, newest first, through exactly the full list', async () => {
+      await testDb.db.insert(conversations).values(
+        [1, 2, 3].map((n) => ({
+          id: `conv_test_page_${n}`,
+          orgId: ORG,
+          caseId: `case_test_page_${n}`,
+          employeeUserId: 'user_jovan',
+          expertUserId: 'user_milica',
+          createdAt: new Date(Date.now() + n * 1000),
+        })),
+      );
+      const jovan = await signInMember('user_jovan');
+
+      const full = await jovan.get(MY_LIST).query({ limit: 100 });
+      expect(full.status).toBe(200);
+      expect(full.body.nextCursor).toBeNull();
+      const all = (full.body.items as Array<{ id: string; messageCount: number }>).map((i) => i.id);
+      expect(all.slice(0, 3)).toEqual(['conv_test_page_3', 'conv_test_page_2', 'conv_test_page_1']);
+      expect(all).toContain(SAMPLE_CASE.conversation.id);
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: request.Response = await jovan.get(MY_LIST).query(cursor ? { limit: 1, cursor } : { limit: 1 });
+        expect(page.status).toBe(200);
+        expect(page.body.items.length).toBeLessThanOrEqual(1);
+        seen.push(...(page.body.items as Array<{ id: string }>).map((i) => i.id));
+        cursor = page.body.nextCursor as string | null;
+      } while (cursor);
+      expect(seen).toEqual(all);
+
+      // The extra cases are not assigned to milica, so her list is unchanged.
+      const milica = await signInStaff('user_milica', { kind: 'expert' });
+      expect((await milica.get(ASSIGNED_LIST)).body).toEqual({ items: [expectedSummary], nextCursor: null });
+    });
+
+    it('rejects a limit outside 1..100 with 400 and answers an unknown cursor with an empty page', async () => {
+      const jovan = await signInMember('user_jovan');
+      expect((await jovan.get(MY_LIST).query({ limit: 0 })).status).toBe(400);
+      expect((await jovan.get(MY_LIST).query({ limit: 101 })).status).toBe(400);
+      const unknown = await jovan.get(MY_LIST).query({ cursor: 'conv_missing' });
+      expect(unknown.status).toBe(200);
+      expect(unknown.body).toEqual({ items: [], nextCursor: null });
     });
 
     it('the list routes require a session: 401 without one', async () => {
@@ -373,6 +418,6 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     // The CASE assignment remains, but the list applies the same engine check.
     const list = await milica.get(ASSIGNED_LIST);
     expect(list.status).toBe(200);
-    expect(list.body).toEqual({ items: [] });
+    expect(list.body).toEqual({ items: [], nextCursor: null });
   });
 });

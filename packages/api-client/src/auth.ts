@@ -14,6 +14,7 @@ import {
   PasswordResponseSchema,
   SessionListResponseSchema,
   TotpEnrolResponseSchema,
+  TotpConfirmResponseSchema,
   StepUpStartResponseSchema,
   InvitationPreviewResponseSchema,
   InvitationAcceptResponseSchema,
@@ -122,20 +123,22 @@ export function createAuthApi(client: ApiClient) {
       }),
 
     /**
-     * POST /auth/totp/enrol — start TOTP enrolment (returns secretUri).
-     * During sign-in pass the `totp_enrol` challengeToken; the response carries
-     * a fresh challengeToken to use with `challenge()` and the authenticator code.
+     * POST /auth/totp/enrol — sign-in TOTP enrolment (MFA_SETUP step). Pass the
+     * `totp_enrol` challengeToken; the response carries a fresh challengeToken
+     * to use with `challenge()` and the authenticator code. Signed-in users
+     * call `totpEnrolSignedIn()` instead.
      */
-    totpEnrol: (challengeToken?: string) =>
+    totpEnrol: (challengeToken: string) =>
       client.request('/api/auth/totp/enrol', {
-        ...jsonPost(challengeToken ? { challengeToken } : {}),
+        ...jsonPost({ challengeToken }),
         schema: TotpEnrolResponseSchema,
       }),
 
     /**
      * POST /auth/me/totp/enrol — start authenticator enrolment for the
      * signed-in user (session token, no challenge). `challengeToken` is null;
-     * finish with `totpConfirm(code)`.
+     * finish with `totpConfirm(code)`. 409 `totp_already_enrolled` when the
+     * account already has an authenticator.
      */
     totpEnrolSignedIn: () =>
       client.request('/api/auth/me/totp/enrol', {
@@ -157,12 +160,11 @@ export function createAuthApi(client: ApiClient) {
         schema: MeResponseSchema,
       }),
 
-    /** POST /auth/totp/confirm — confirm TOTP enrolment with a code (the body is ignored). */
+    /** POST /auth/totp/confirm — confirm signed-in enrolment with a code; answers `{ enrolled: true }`. */
     totpConfirm: (code: string) =>
       client.request('/api/auth/totp/confirm', {
         ...jsonPost({ code }),
-        schema: z.undefined(),
-        expectBody: false,
+        schema: TotpConfirmResponseSchema,
       }),
 
     /** POST /auth/step-up/start — initiate a step-up challenge. */

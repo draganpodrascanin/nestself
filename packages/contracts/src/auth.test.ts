@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TotpConfirmResponseSchema,
+  TotpEnrolRequestSchema,
   DiscoverRequestSchema,
   PrincipalSchema,
   ActiveContextSchema,
@@ -253,5 +255,20 @@ describe('MeResponseSchema', () => {
       effectiveActions: ['preferences.manage', 'feedback.submit'],
     });
     expect(result.effectiveActions).toHaveLength(2);
+  });
+});
+
+describe('TotpEnrolRequestSchema', () => {
+  it('requires the sign-in challengeToken', () => {
+    expect(TotpEnrolRequestSchema.parse({ challengeToken: 'tok' })).toEqual({ challengeToken: 'tok' });
+    expect(TotpEnrolRequestSchema.safeParse({}).success).toBe(false);
+    expect(TotpEnrolRequestSchema.safeParse({ challengeToken: '' }).success).toBe(false);
+  });
+});
+
+describe('TotpConfirmResponseSchema', () => {
+  it('accepts { enrolled: true } only', () => {
+    expect(TotpConfirmResponseSchema.parse({ enrolled: true })).toEqual({ enrolled: true });
+    expect(TotpConfirmResponseSchema.safeParse({ enrolled: false }).success).toBe(false);
   });
 });

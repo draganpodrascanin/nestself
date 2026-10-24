@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -230,16 +231,10 @@ export class AuthController {
   @Public()
   @Post('totp/enrol')
   @HttpCode(200)
-  async totpEnrol(
-    @Req() req: HttpReq,
-    @Body() body: unknown,
-  ) {
-    const parsed = validate(TotpEnrolRequestSchema, body);
-    // Public route: req.session is only present when the AuthenticationGuard ran
-    // (it does not for @Public), so a signed-in caller uses POST
-    // /auth/me/totp/enrol below instead of omitting the challengeToken here.
-    const accessToken = req.session?.cognito?.accessToken;
-    return this.totp.totpEnrol(parsed.challengeToken, accessToken);
+  @Header('Cache-Control', 'no-store')
+  async totpEnrol(@Body() body: unknown) {
+    const { challengeToken } = validate(TotpEnrolRequestSchema, body);
+    return this.totp.totpEnrol(challengeToken);
   }
 
   // -----------------------------------------------------------------------
@@ -249,13 +244,15 @@ export class AuthController {
   /**
    * Starts enrolment with the session's identity-provider access token and
    * returns `{ secretUri, challengeToken: null }`; the caller confirms with
-   * POST /auth/totp/confirm.
+   * POST /auth/totp/confirm. 409 `totp_already_enrolled` when the user
+   * already has an authenticator. The secret is never cached.
    */
   @Authenticated()
   @Post('me/totp/enrol')
   @HttpCode(200)
-  async totpEnrolSignedIn(@Req() req: HttpReq) {
-    return this.totp.totpEnrol(undefined, req.session?.cognito?.accessToken);
+  @Header('Cache-Control', 'no-store')
+  async totpEnrolSignedIn(@CurrentPrincipal() principal: Principal, @Req() req: HttpReq) {
+    return this.totp.totpEnrolSignedIn(principal, req.session?.cognito?.accessToken);
   }
 
   // -----------------------------------------------------------------------

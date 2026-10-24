@@ -236,6 +236,12 @@ export const TotpConfirmRequestSchema = z.object({
 });
 export type TotpConfirmRequest = z.infer<typeof TotpConfirmRequestSchema>;
 
+/** `POST /auth/totp/confirm` (200). */
+export const TotpConfirmResponseSchema = z.object({
+  enrolled: z.literal(true),
+});
+export type TotpConfirmResponse = z.infer<typeof TotpConfirmResponseSchema>;
+
 // --- Profile (PATCH /auth/me/locale, PATCH /auth/me/display-name) ---
 export const ProfileLocaleRequestSchema = z.object({
   locale: LocaleSchema,
@@ -306,7 +312,12 @@ export const AUTH_ERROR_CODES = [
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
+/**
+ * `POST /auth/totp/enrol` (sign-in MFA_SETUP step): the `totp_enrol`
+ * challengeToken is required. Signed-in users enrol through
+ * `POST /auth/me/totp/enrol` instead.
+ */
 export const TotpEnrolRequestSchema = z.object({
-  challengeToken: z.string().min(1).optional(),
+  challengeToken: z.string().min(1),
 });
 export type TotpEnrolRequest = z.infer<typeof TotpEnrolRequestSchema>;

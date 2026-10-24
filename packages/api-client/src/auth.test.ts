@@ -115,4 +115,23 @@ describe('createAuthApi() account methods', () => {
     const { auth } = setup({ challengeToken: null });
     await expect(auth.totpEnrolSignedIn()).rejects.toMatchObject({ code: 'invalid_response' });
   });
+
+  it('totpEnrol sends the sign-in challengeToken', async () => {
+    const { auth, last } = setup({ secretUri: 'otpauth://totp/NestSelf?secret=ABC', challengeToken: 'next' });
+    const res = await auth.totpEnrol('tok-1');
+    expect(res.challengeToken).toBe('next');
+    expect(last()).toEqual({ url: 'http://x/api/auth/totp/enrol', method: 'POST', csrf: 'tok', body: { challengeToken: 'tok-1' } });
+  });
+
+  it('totpConfirm posts the code and parses { enrolled: true }', async () => {
+    const { auth, last } = setup({ enrolled: true });
+    await expect(auth.totpConfirm('123456')).resolves.toEqual({ enrolled: true });
+    expect(last()).toEqual({ url: 'http://x/api/auth/totp/confirm', method: 'POST', csrf: 'tok', body: { code: '123456' } });
+  });
+
+  it('totpConfirm rejects a response that is not { enrolled: true }', async () => {
+    const { auth } = setup({ enrolled: false });
+    await expect(auth.totpConfirm('123456')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
 });
+

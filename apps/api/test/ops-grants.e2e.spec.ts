@@ -12,6 +12,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
+import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { CONFIDENTIAL_ACTIONS, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
@@ -430,6 +431,30 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
 
     it('unauthenticated requests are 401', async () => {
       expect((await request(app.getHttpServer()).get('/api/ops/organizations')).status).toBe(401);
+    });
+
+    it('client_operations alone (no platform grant): 200 on the assigned client, 403 on another client and on the list', async () => {
+      const PLATFORM = 'grant_test_nikola_platform_owner';
+      const loader = app.get(PrincipalLoader);
+      await testDb.db.update(grants).set({ revokedAt: new Date(), revokedReason: 'test_fixture' }).where(eq(grants.id, PLATFORM));
+      await loader.invalidateUser('user_nikola', [ORG, 'org_test_alpha', 'platform']);
+      try {
+        const assigned = await nikola.agent.get(`/api/ops/organizations/${ORG}`);
+        expect(assigned.status).toBe(200);
+        expect(assigned.body.id).toBe(ORG);
+
+        const unassigned = await nikola.agent.get('/api/ops/organizations/org_test_alpha');
+        expect(unassigned.status).toBe(403);
+        expect(unassigned.body).not.toHaveProperty('name');
+
+        const list = await nikola.agent.get('/api/ops/organizations');
+        expect(list.status).toBe(403);
+        expect(list.body).not.toHaveProperty('items');
+      } finally {
+        await testDb.db.update(grants).set({ revokedAt: null, revokedReason: null }).where(eq(grants.id, PLATFORM));
+        await loader.invalidateUser('user_nikola', [ORG, 'org_test_alpha', 'platform']);
+      }
+      expect((await nikola.agent.get('/api/ops/organizations')).status).toBe(200);
     });
   });
 

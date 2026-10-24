@@ -19,9 +19,21 @@ export const ConversationSummarySchema = z.object({
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 
-/** `GET /professional/conversations` (assigned) and `GET /professional/me/conversations` (participant), newest first. */
+/** Query of both conversation lists: keyset paging on `(createdAt desc, id desc)`. */
+export const ConversationListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ConversationListQuery = z.infer<typeof ConversationListQuerySchema>;
+
+/**
+ * `GET /professional/conversations` (assigned) and `GET /professional/me/conversations`
+ * (participant), newest first. A page may hold fewer than `limit` items when
+ * rows are filtered out by authorization; keep paging while `nextCursor` is set.
+ */
 export const ConversationListResponseSchema = z.object({
   items: z.array(ConversationSummarySchema),
+  nextCursor: z.string().nullable(),
 });
 export type ConversationListResponse = z.infer<typeof ConversationListResponseSchema>;
 

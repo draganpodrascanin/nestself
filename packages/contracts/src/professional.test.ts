@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ConversationListQuerySchema,
   ConversationListResponseSchema,
   ConversationResponseSchema,
   ConversationSummarySchema,
@@ -28,8 +29,16 @@ describe('professional schemas', () => {
     expect(ConversationSummarySchema.safeParse({ ...SUMMARY, messageCount: 1.5 }).success).toBe(false);
   });
 
-  it('ConversationListResponseSchema accepts an empty list', () => {
-    expect(ConversationListResponseSchema.parse({ items: [] })).toEqual({ items: [] });
+  it('ConversationListResponseSchema accepts an empty last page and requires nextCursor', () => {
+    expect(ConversationListResponseSchema.parse({ items: [], nextCursor: null })).toEqual({ items: [], nextCursor: null });
+    expect(ConversationListResponseSchema.safeParse({ items: [] }).success).toBe(false);
+  });
+
+  it('ConversationListQuerySchema defaults limit to 25, coerces it and caps it at 100', () => {
+    expect(ConversationListQuerySchema.parse({})).toEqual({ limit: 25 });
+    expect(ConversationListQuerySchema.parse({ limit: '2', cursor: 'conv_1' })).toEqual({ limit: 2, cursor: 'conv_1' });
+    expect(ConversationListQuerySchema.safeParse({ limit: '101' }).success).toBe(false);
+    expect(ConversationListQuerySchema.safeParse({ limit: '0' }).success).toBe(false);
   });
 
   it('ConversationResponseSchema accepts messages and rejects a non-ISO createdAt', () => {

@@ -67,7 +67,7 @@ export function createSampleAuthApi(): AuthApi {
           'otpauth://totp/NestSelf:sample@example.com?secret=JBSWY3DPEHPK3PXP&issuer=NestSelf',
       }) as unknown as Resolved<'totpEnrol'>,
 
-    totpConfirm: async () => undefined as unknown as Resolved<'totpConfirm'>,
+    totpConfirm: async () => ({ enrolled: true as const }),
 
     // Account settings in sample mode: nothing is stored.
     totpEnrolSignedIn: async () => ({

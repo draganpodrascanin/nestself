@@ -16,6 +16,6 @@ export type {
   EmergencyAccessRequestBody,
 } from './org-admin';
 export { createProfessionalApi } from './professional';
-export type { ProfessionalApi } from './professional';
+export type { ProfessionalApi, ConversationListParams } from './professional';
 export { healthQueryOptions } from './queries/health';
 export { meQueryOptions } from './queries/auth';

@@ -12,12 +12,20 @@
  * row is then kept only when `authorize()` allows the same action the
  * single-record read requires, so a revoked grant empties the list too.
  * List filtering is neither audited nor step-up gated: it reveals no content.
+ * Lists are keyset-paged; `nextCursor` comes from the last fetched row, so a
+ * page thinned by authorization still pages on.
  *
  * Emergency reads (`records.read.emergency`) live in the emergency module
  * and share `professional-records.ts`.
  */
 import { Injectable } from '@nestjs/common';
-import type { Action, ConversationListResponse, ConversationSummary, Principal } from '@nestself/contracts';
+import type {
+  Action,
+  ConversationListQuery,
+  ConversationListResponse,
+  ConversationSummary,
+  Principal,
+} from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import {
   ProfessionalRepository,
@@ -66,19 +74,25 @@ export class ProfessionalService {
   ) {}
 
   /** Conversations of the cases the caller is currently assigned to (metadata only). */
-  async listAssignedConversations(principal: Principal): Promise<ConversationListResponse> {
+  async listAssignedConversations(
+    principal: Principal,
+    query: ConversationListQuery,
+  ): Promise<ConversationListResponse> {
     const assignments = await this.authzRepo.findActiveAssignments(principal.userId, new Date());
     const caseIds = [
       ...new Set(assignments.filter((a) => CASE_ASSIGNMENT_KINDS.has(a.kind)).map((a) => a.targetId)),
     ];
-    const rows = await this.repo.listConversationsByCaseIds(caseIds);
-    return { items: await this.keepAllowed(principal, 'conversation.read.assigned', rows) };
+    const rows = await this.repo.listConversationsByCaseIds(caseIds, { limit: query.limit, cursor: query.cursor });
+    return this.page(principal, 'conversation.read.assigned', rows, query.limit);
   }
 
   /** Conversations in which the caller is the employee participant (metadata only). */
-  async listOwnConversations(principal: Principal): Promise<ConversationListResponse> {
-    const rows = await this.repo.listConversationsByEmployee(principal.userId);
-    return { items: await this.keepAllowed(principal, 'conversation.participate', rows) };
+  async listOwnConversations(principal: Principal, query: ConversationListQuery): Promise<ConversationListResponse> {
+    const rows = await this.repo.listConversationsByEmployee(principal.userId, {
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+    return this.page(principal, 'conversation.participate', rows, query.limit);
   }
 
   /** Assigned-expert path: a current CASE assignment on the conversation's case. */
@@ -99,15 +113,31 @@ export class ProfessionalService {
     return toIntakeView(row);
   }
 
-  private async keepAllowed(
+  /**
+   * Cut the `limit + 1` fetch to one page, then keep the rows `authorize()`
+   * allows. Rows are evaluated one after another, and once per distinct
+   * resource, so a page never fans out into parallel context loads.
+   */
+  private async page(
     principal: Principal,
     action: Action,
     rows: ConversationSummaryRow[],
-  ): Promise<ConversationSummary[]> {
-    const allowed = await Promise.all(
-      rows.map((row) => this.authz.allows(principal, action, confidentialResource('conversation', row))),
-    );
-    return rows.filter((_, i) => allowed[i]).map(toSummary);
+    limit: number,
+  ): Promise<ConversationListResponse> {
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const decisions = new Map<string, boolean>();
+    const items: ConversationSummary[] = [];
+    for (const row of pageRows) {
+      const key = JSON.stringify([row.orgId, row.caseId, row.employeeUserId]);
+      let allowed = decisions.get(key);
+      if (allowed === undefined) {
+        allowed = await this.authz.allows(principal, action, confidentialResource('conversation', row));
+        decisions.set(key, allowed);
+      }
+      if (allowed) items.push(toSummary(row));
+    }
+    return { items, nextCursor: hasMore ? pageRows[pageRows.length - 1]!.id : null };
   }
 
   private async readConversation(principal: Principal, id: string, action: Action): Promise<ConversationView> {

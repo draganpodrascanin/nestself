@@ -36,19 +36,37 @@ const CONVERSATION = {
 
 describe('createProfessionalApi', () => {
   it('lists my conversations', async () => {
-    const { api, last } = setup({ items: [SUMMARY] });
-    await expect(api.listMyConversations()).resolves.toEqual({ items: [SUMMARY] });
+    const { api, last } = setup({ items: [SUMMARY], nextCursor: null });
+    await expect(api.listMyConversations()).resolves.toEqual({ items: [SUMMARY], nextCursor: null });
     expect(last()).toEqual({ url: 'http://x/api/professional/me/conversations', method: 'GET' });
   });
 
+  it('lists my conversations with cursor and limit', async () => {
+    const { api, last } = setup({ items: [SUMMARY], nextCursor: 'conv_1' });
+    const res = await api.listMyConversations({ cursor: 'conv_0', limit: 1 });
+    expect(res.nextCursor).toBe('conv_1');
+    expect(last().url).toBe('http://x/api/professional/me/conversations?cursor=conv_0&limit=1');
+  });
+
   it('lists assigned conversations', async () => {
-    const { api, last } = setup({ items: [] });
-    await expect(api.listAssignedConversations()).resolves.toEqual({ items: [] });
+    const { api, last } = setup({ items: [], nextCursor: null });
+    await expect(api.listAssignedConversations()).resolves.toEqual({ items: [], nextCursor: null });
     expect(last()).toEqual({ url: 'http://x/api/professional/conversations', method: 'GET' });
   });
 
+  it('lists assigned conversations with a limit only', async () => {
+    const { api, last } = setup({ items: [], nextCursor: null });
+    await api.listAssignedConversations({ limit: 50 });
+    expect(last().url).toBe('http://x/api/professional/conversations?limit=50');
+  });
+
+  it('rejects a list without nextCursor', async () => {
+    const { api } = setup({ items: [] });
+    await expect(api.listAssignedConversations()).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
   it('strips any body a list row might carry', async () => {
-    const { api } = setup({ items: [{ ...SUMMARY, messages: CONVERSATION.messages }] });
+    const { api } = setup({ items: [{ ...SUMMARY, messages: CONVERSATION.messages }], nextCursor: null });
     const res = await api.listAssignedConversations();
     expect(res.items[0]).not.toHaveProperty('messages');
   });
@@ -74,7 +92,7 @@ describe('createProfessionalApi', () => {
 
   it('rejects a list row without messageCount', async () => {
     const { messageCount: _omit, ...withoutCount } = SUMMARY;
-    const { api } = setup({ items: [withoutCount] });
+    const { api } = setup({ items: [withoutCount], nextCursor: null });
     await expect(api.listMyConversations()).rejects.toMatchObject({ code: 'invalid_response' });
   });
 

@@ -793,6 +793,12 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   });
 
   describe('authenticator enrolment for a signed-in user', () => {
+    it('the public sign-in enrol route requires a challengeToken: 400 validation without one', async () => {
+      const res = await request(app.getHttpServer()).post('/api/auth/totp/enrol').send({});
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
+    });
+
     it('POST /api/auth/me/totp/enrol without a session is 401', async () => {
       const res = await request(app.getHttpServer()).post('/api/auth/me/totp/enrol').send({});
       expect(res.status).toBe(401);
@@ -811,6 +817,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
 
       const enrol = await ivana.post('/api/auth/me/totp/enrol').set('X-CSRF-Token', csrf).send({});
       expect(enrol.status).toBe(200);
+      expect(enrol.headers['cache-control']).toBe('no-store');
       expect(enrol.body.challengeToken).toBeNull();
       const secret = (enrol.body.secretUri as string).match(/secret=([A-Z2-7]+)/)?.[1];
       expect(secret).toBeTruthy();
@@ -821,6 +828,12 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
         .send({ code: computeTotp(secret!) });
       expect(confirm.status).toBe(200);
       expect(confirm.body).toEqual({ enrolled: true });
+
+      // A session cookie alone must not replace the authenticator.
+      const again = await ivana.post('/api/auth/me/totp/enrol').set('X-CSRF-Token', csrf).send({});
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('totp_already_enrolled');
+      expect(again.body).not.toHaveProperty('secretUri');
       await ivana.post('/api/auth/sign-out').set('X-CSRF-Token', csrf);
     });
   });

@@ -135,6 +135,7 @@ describe('ProfessionalService', () => {
     const SUMMARY_ROW = { ...CONVERSATION, messageCount: 3 };
     const OTHER_ROW = { ...CONVERSATION, id: 'conv_2', caseId: 'case_2', messageCount: 0 };
     const assignment = (kind: string, targetId: string) => ({ id: `a_${kind}_${targetId}`, kind, targetId });
+    const Q = { limit: 25 };
 
     it('listAssignedConversations reads only CASE and SUPPORT_CASE targets, de-duplicated', async () => {
       ctx.authzRepo.findActiveAssignments.mockResolvedValue([
@@ -146,30 +147,33 @@ describe('ProfessionalService', () => {
       ]);
       ctx.repo.listConversationsByCaseIds.mockResolvedValue([SUMMARY_ROW, OTHER_ROW]);
 
-      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL, { limit: 25, cursor: 'conv_0' });
 
       expect(ctx.authzRepo.findActiveAssignments).toHaveBeenCalledWith('user_milica', expect.any(Date));
-      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith(['case_1', 'case_2']);
-      expect(res.items).toEqual([
-        {
-          id: 'conv_1',
-          caseId: 'case_1',
-          orgId: 'org_1',
-          employeeUserId: 'user_jovan',
-          expertUserId: 'user_milica',
-          createdAt: CREATED.toISOString(),
-          messageCount: 3,
-        },
-        expect.objectContaining({ id: 'conv_2', messageCount: 0 }),
-      ]);
+      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith(['case_1', 'case_2'], { limit: 25, cursor: 'conv_0' });
+      expect(res).toEqual({
+        items: [
+          {
+            id: 'conv_1',
+            caseId: 'case_1',
+            orgId: 'org_1',
+            employeeUserId: 'user_jovan',
+            expertUserId: 'user_milica',
+            createdAt: CREATED.toISOString(),
+            messageCount: 3,
+          },
+          expect.objectContaining({ id: 'conv_2', messageCount: 0 }),
+        ],
+        nextCursor: null,
+      });
     });
 
-    it('listAssignedConversations drops rows the engine denies and never calls require (no audit, no step-up)', async () => {
+    it('drops rows the engine denies and never calls require (no audit, no step-up)', async () => {
       ctx.authzRepo.findActiveAssignments.mockResolvedValue([assignment('CASE', 'case_1'), assignment('CASE', 'case_2')]);
       ctx.repo.listConversationsByCaseIds.mockResolvedValue([SUMMARY_ROW, OTHER_ROW]);
       ctx.authz.allows.mockImplementation(async (_p: unknown, _a: unknown, r: { id: string }) => r.id === 'case_2');
 
-      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL, Q);
 
       expect(res.items.map((i) => i.id)).toEqual(['conv_2']);
       expect(ctx.authz.allows).toHaveBeenCalledWith(PRINCIPAL, 'conversation.read.assigned', {
@@ -182,19 +186,52 @@ describe('ProfessionalService', () => {
       expect(ctx.authz.require).not.toHaveBeenCalled();
     });
 
-    it('listAssignedConversations returns an empty list without assignments', async () => {
-      const res = await ctx.service.listAssignedConversations(PRINCIPAL);
-      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith([]);
-      expect(res).toEqual({ items: [] });
+    it('cuts the limit + 1 fetch and takes nextCursor from the last fetched page row even when it is filtered out', async () => {
+      const rows = ['conv_a', 'conv_b', 'conv_c'].map((id, i) => ({ ...CONVERSATION, id, caseId: `case_${i}`, messageCount: 1 }));
+      ctx.authzRepo.findActiveAssignments.mockResolvedValue(rows.map((r) => assignment('CASE', r.caseId)));
+      ctx.repo.listConversationsByCaseIds.mockResolvedValue(rows);
+      ctx.authz.allows.mockImplementation(async (_p: unknown, _a: unknown, r: { id: string }) => r.id !== 'case_1');
+
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL, { limit: 2 });
+
+      expect(res.items.map((i) => i.id)).toEqual(['conv_a']);
+      expect(res.nextCursor).toBe('conv_b');
+      expect(ctx.authz.allows).toHaveBeenCalledTimes(2);
+    });
+
+    it('evaluates rows one at a time and once per distinct resource', async () => {
+      const same = ['conv_x', 'conv_y'].map((id) => ({ ...CONVERSATION, id, messageCount: 1 }));
+      ctx.repo.listConversationsByEmployee.mockResolvedValue(same);
+      let inFlight = 0;
+      let maxInFlight = 0;
+      ctx.authz.allows.mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await Promise.resolve();
+        inFlight -= 1;
+        return true;
+      });
+
+      const res = await ctx.service.listOwnConversations({ userId: 'user_jovan' } as Principal, Q);
+
+      expect(res.items).toHaveLength(2);
+      expect(ctx.authz.allows).toHaveBeenCalledTimes(1);
+      expect(maxInFlight).toBe(1);
+    });
+
+    it('listAssignedConversations returns an empty last page without assignments', async () => {
+      const res = await ctx.service.listAssignedConversations(PRINCIPAL, Q);
+      expect(ctx.repo.listConversationsByCaseIds).toHaveBeenCalledWith([], { limit: 25, cursor: undefined });
+      expect(res).toEqual({ items: [], nextCursor: null });
     });
 
     it('listOwnConversations reads by employee and filters with conversation.participate', async () => {
       const jovan = { userId: 'user_jovan' } as Principal;
       ctx.repo.listConversationsByEmployee.mockResolvedValue([SUMMARY_ROW]);
 
-      const res = await ctx.service.listOwnConversations(jovan);
+      const res = await ctx.service.listOwnConversations(jovan, { limit: 10, cursor: 'conv_9' });
 
-      expect(ctx.repo.listConversationsByEmployee).toHaveBeenCalledWith('user_jovan');
+      expect(ctx.repo.listConversationsByEmployee).toHaveBeenCalledWith('user_jovan', { limit: 10, cursor: 'conv_9' });
       expect(ctx.authz.allows).toHaveBeenCalledWith(jovan, 'conversation.participate', expect.objectContaining({ ownerId: 'user_jovan' }));
       expect(res.items).toHaveLength(1);
       expect(res.items[0]).not.toHaveProperty('messages');
@@ -204,7 +241,7 @@ describe('ProfessionalService', () => {
     it('listOwnConversations returns nothing when the engine denies (for example a personal context)', async () => {
       ctx.repo.listConversationsByEmployee.mockResolvedValue([SUMMARY_ROW]);
       ctx.authz.allows.mockResolvedValue(false);
-      await expect(ctx.service.listOwnConversations(PRINCIPAL)).resolves.toEqual({ items: [] });
+      await expect(ctx.service.listOwnConversations(PRINCIPAL, Q)).resolves.toEqual({ items: [], nextCursor: null });
     });
   });
 });

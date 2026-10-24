@@ -44,6 +44,8 @@ export class OrganizationsService {
   async get(orgId: string): Promise<OrganizationResponse> {
     const row = await this.repo.findById(orgId);
     if (!row) {
+      // 404, not 403: the guard already allowed client.configure on this id, so only platform staff
+      // or staff assigned to this id get here, and telling them the id does not exist reveals nothing.
       throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Organization not found' });
     }
     return toOrganizationResponse(row);
