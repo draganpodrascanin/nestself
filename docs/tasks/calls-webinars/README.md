@@ -15,7 +15,7 @@ Status: ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 o
 | `05-tasks.md` | The development backlog: tasks `T-CW-<milestone>.<n>` with files, steps, tests, gates and estimates, grouped in lanes | Starting an engineering session |
 | `06-implementation-guidelines.md` | The technical reference with requirements `CW-R-nn`: adapter contract, Chime calls, lifecycle, schema and RLS, contracts, routes, real-time, worker, notifications, client package, mobile, infrastructure, security, observability, testing | Before touching the code |
 | `research/01` to `06` | The research grounding with fact ids (`CORE-`, `WEB-`, `LAW-`, `COST-`, `UX-`, `OPS-`) and the codebase survey; each fact has a source and a date | When a decision's evidence is questioned |
-| `research/07-spikes.md` | Written during M0 by the spike tasks | After the spikes run |
+| `research/07-spikes.md` | The eight spikes (SPIKE-CW-01 to SPIKE-CW-08) with method, prerequisites, result tables and the binding change per outcome; scripts written in T-CW-0.4; results pending the founder's run against the dev account | Before running a spike; after the spikes run |
 | `sources/` | The product flows and user stories v0.1 and the CMS epic v1.0 this package builds on | For context |
 
 ## How this package relates to the rest of the repository
