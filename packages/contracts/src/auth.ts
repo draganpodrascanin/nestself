@@ -298,6 +298,8 @@ export const AUTH_ERROR_CODES = [
   'rate_limited',
   'csrf_rejected',
   'session_expired',
+  /** The identity provider failed for a reason the caller did not cause (503). */
+  'unavailable',
   'context_mismatch',
   'delegation_exceeds_boundary',
   'conflict',

@@ -278,6 +278,11 @@ export class IdentityResolutionService {
           status: 409, code: 'totp_already_enrolled',
           message: 'TOTP is already enrolled',
         });
+      case 'unavailable':
+        return new ApiHttpException({
+          status: 503, code: 'unavailable',
+          message: 'The identity provider is unavailable. Try again later.',
+        });
       default:
         return new ApiHttpException({
           status: 500, code: 'unauthenticated', message: err.message,

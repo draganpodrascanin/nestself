@@ -18,8 +18,11 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 
 import {
+  IdentityProviderError,
   IdentityProviderService,
+  type IdpUser,
 } from '../identity/identity-provider.service.js';
+import { IdentityResolutionService } from './identity-resolution.service.js';
 
 import { ChallengeStore } from './challenge-store.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
@@ -40,6 +43,7 @@ export class TotpService {
     @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
     @Inject(forwardRef(() => ChallengeStore)) private readonly challengeStore: ChallengeStore,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
+    @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
   ) {}
 
   /** Sign-in path: consume the `totp_enrol` challenge and associate a software token. */
@@ -88,7 +92,16 @@ export class TotpService {
     }
 
     const user = await this.identities.findUserById(principal.userId);
-    const idpUser = user ? await this.idp.findUserByEmail(user.email) : null;
+    let idpUser: IdpUser | null = null;
+    if (user) {
+      try {
+        idpUser = await this.idp.findUserByEmail(user.email);
+      } catch (err) {
+        // Throttling -> 429, provider outage -> 503; never a 500, never a silent pass.
+        if (err instanceof IdentityProviderError) throw this.identity.mapIdpError(err);
+        throw err;
+      }
+    }
     if (principal.auth.secondFactor || idpUser?.mfaEnrolled === true) {
       throw new ApiHttpException({
         status: 409,

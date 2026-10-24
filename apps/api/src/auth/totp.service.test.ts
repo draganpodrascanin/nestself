@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { ApiHttpException } from '../common/api-error.js';
+import { IdentityProviderError } from '../identity/identity-provider.service.js';
+import { IdentityResolutionService } from './identity-resolution.service.js';
 import { TotpService } from './totp.service.js';
 
 function setup(opts: { mfaEnrolled?: boolean | null; challenge?: unknown } = {}) {
@@ -16,7 +18,8 @@ function setup(opts: { mfaEnrolled?: boolean | null; challenge?: unknown } = {})
     create: vi.fn().mockResolvedValue('next-token'),
   };
   const identities = { findUserById: vi.fn().mockResolvedValue({ id: 'user_a', email: 'a@example.com' }) };
-  const service = new TotpService(idp as never, challengeStore as never, identities as never);
+  const identity = Object.create(IdentityResolutionService.prototype) as IdentityResolutionService;
+  const service = new TotpService(idp as never, challengeStore as never, identities as never, identity);
   return { idp, challengeStore, identities, service };
 }
 
@@ -72,4 +75,23 @@ describe('TotpService', () => {
     const err = await error(ctx.service.totpEnrolSignedIn(PRINCIPAL, undefined));
     expect(err.getStatus()).toBe(401);
   });
+
+  it('totpEnrolSignedIn maps a throttled provider lookup to 429 too_many_attempts', async () => {
+    const ctx = setup();
+    ctx.idp.findUserByEmail.mockRejectedValue(new IdentityProviderError('slow', 'too_many_attempts', true));
+    const err = await error(ctx.service.totpEnrolSignedIn(PRINCIPAL, 'access'));
+    expect(err.getStatus()).toBe(429);
+    expect(err.code).toBe('too_many_attempts');
+    expect(ctx.idp.associateSoftwareToken).not.toHaveBeenCalled();
+  });
+
+  it('totpEnrolSignedIn maps an unavailable provider to 503 unavailable', async () => {
+    const ctx = setup();
+    ctx.idp.findUserByEmail.mockRejectedValue(new IdentityProviderError('down', 'unavailable', true));
+    const err = await error(ctx.service.totpEnrolSignedIn(PRINCIPAL, 'access'));
+    expect(err.getStatus()).toBe(503);
+    expect(err.code).toBe('unavailable');
+    expect(ctx.idp.associateSoftwareToken).not.toHaveBeenCalled();
+  });
 });
+

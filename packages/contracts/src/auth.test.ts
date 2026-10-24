@@ -151,6 +151,7 @@ describe('AUTH_ERROR_CODES', () => {
     'rate_limited',
     'csrf_rejected',
     'session_expired',
+    'unavailable',
   ];
 
   it('contains all required error codes', () => {
