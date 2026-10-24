@@ -6,6 +6,7 @@
  * PATCH /orgs/:orgId/grants/:grantId          — adjust conditions/validity (access.grant)
  * POST  /orgs/:orgId/grants/:grantId/revoke   — revoke with descendants (access.revoke)
  * POST  /orgs/:orgId/grants/delegate          — delegate from an own grant (access.delegate)
+ * POST  /orgs/:orgId/grants/transfer-ownership — current owner hands over employer_owner (access.grant)
  * GET   /orgs/:orgId/grants/preview?userId=   — effective access preview (access.preview)
  *
  * Writes are throttled to 10 per minute per route.
@@ -20,6 +21,7 @@ import {
   GrantPreviewQuerySchema,
   GrantRevokeRequestSchema,
   GrantUpdateRequestSchema,
+  OwnershipTransferRequestSchema,
   type GrantCreateRequest,
   type GrantDelegateRequest,
   type GrantListResponse,
@@ -28,6 +30,8 @@ import {
   type GrantResponse,
   type GrantRevokeRequest,
   type GrantUpdateRequest,
+  type OwnershipTransferRequest,
+  type OwnershipTransferResponse,
   type Principal,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
@@ -87,6 +91,19 @@ export class GrantsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<GrantResponse> {
     return this.grants.delegate(orgId, body, principal);
+  }
+
+  /** The caller must hold the current owner grant (403 otherwise); step-up via access.grant. */
+  @Post('transfer-ownership')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['access.grant'], orgResourceFromContext('grant'))
+  async transferOwnership(
+    @Param('orgId') orgId: string,
+    @Body(new ZodValidationPipe(OwnershipTransferRequestSchema)) body: OwnershipTransferRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<OwnershipTransferResponse> {
+    return this.grants.transferOwnership(orgId, body, principal);
   }
 
   @Patch(':grantId')

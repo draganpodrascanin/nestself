@@ -13487,5 +13487,169 @@
       "allowed": false,
       "denialReason": "delegation_depth_exceeded"
     }
+  },
+  {
+    "label": "OWNER-ALLOW-01: employer_owner access.grant in its own organization",
+    "principal": {
+      "userId": "u15",
+      "displayName": "Employer Owner",
+      "initials": "EO",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m15",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "sso",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": "2026-10-22T09:00:00.000Z"
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "access.grant",
+    "resource": {
+      "type": "Grant",
+      "orgId": "o1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-own",
+          "subjectUserId": "u15",
+          "templateKey": "employer_owner",
+          "actions": [
+            "access.grant",
+            "access.revoke",
+            "access.delegate",
+            "access.preview",
+            "policy.manage",
+            "service.configure",
+            "org.settings"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "OWNER-DENY-01: employer_owner access.grant in another organization",
+    "principal": {
+      "userId": "u15",
+      "displayName": "Employer Owner",
+      "initials": "EO",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m15",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "sso",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": "2026-10-22T09:00:00.000Z"
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "access.grant",
+    "resource": {
+      "type": "Grant",
+      "orgId": "o2"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-own",
+          "subjectUserId": "u15",
+          "templateKey": "employer_owner",
+          "actions": [
+            "access.grant",
+            "access.revoke",
+            "access.delegate",
+            "access.preview",
+            "policy.manage",
+            "service.configure",
+            "org.settings"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
   }
 ]

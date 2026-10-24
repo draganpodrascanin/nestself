@@ -156,6 +156,31 @@ function categoriesWithinParent(
   );
 }
 
+// ── Organization owner (owner model, 2026-10-24) ──────────────────────
+
+/**
+ * The template of an organization's single superadmin: at most one active
+ * grant from it per organization (`scopeOrgId`).
+ */
+export const OWNER_TEMPLATE_KEY = 'employer_owner';
+
+/** Revocation reason written to the previous owner's grant on a transfer. */
+export const OWNERSHIP_TRANSFERRED_REASON = 'ownership_transferred';
+
+/** True when the owner grant's window has started at `now` (expiry is filtered by the query). */
+export function hasStarted(grant: { validFrom: Date }, now: Date): boolean {
+  return grant.validFrom <= now;
+}
+
+export function ownerExists(currentOwnerUserId: string): ApiHttpException {
+  return new ApiHttpException({
+    status: 409,
+    code: 'owner_exists',
+    message: 'The organization already has an owner',
+    details: { currentOwnerUserId },
+  });
+}
+
 // ── Validation errors ───────────────────────────────────────────────────
 
 export function validation(message: string): ApiHttpException {

@@ -302,6 +302,30 @@ export class AuthorizationRepository {
     return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
   }
 
+  /**
+   * Unrevoked `employer_owner` grants of the organization that have not
+   * expired at `now` (including ones that start later), oldest first. Takes
+   * a transaction-scoped advisory lock on the organization's ownership
+   * first, so concurrent owner writes for one organization serialise until
+   * the caller's transaction ends. Run inside `withOrgScope(orgId)`.
+   */
+  async findActiveOwnerGrants(orgId: string, now: Date, tx?: DbExecutor): Promise<GrantRow[]> {
+    const exec = this.exec(tx);
+    await exec.execute(sql`select pg_advisory_xact_lock(hashtext(${`employer_owner:${orgId}`}))`);
+    return exec
+      .select()
+      .from(grants)
+      .where(
+        and(
+          eq(grants.scopeOrgId, orgId),
+          eq(grants.templateKey, 'employer_owner'),
+          isNull(grants.revokedAt),
+          or(isNull(grants.validUntil), gt(grants.validUntil, now)),
+        ),
+      )
+      .orderBy(grants.grantedAt, grants.id);
+  }
+
   /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
   async findActiveMembership(
     userId: string,

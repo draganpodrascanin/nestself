@@ -28,7 +28,7 @@ paths, self-approval, emergency access lifecycle, confidential-domain
 isolation, membership edge cases, and user-state denials.
 
 Labels use prefixes: EMP, MGR, ORG, PLAT, EXP, FIN, CLFIN, COORD, CMS,
-LEAD, OPS, EVT, SYS, CONF-DENY, DELEG.
+LEAD, OPS, EVT, SYS, CONF-DENY, DELEG, OWNER.
 
 CONF-DENY rows use the professional module's resource shape (`id` = case
 id, `ownerId` = employee, `isConfidential: true`) on
@@ -58,6 +58,17 @@ grant; delegatee `u50` holds a child listing `people.invite` only.
 
 SYS-11 evaluates as `u1`, the holder of the depth-4 grant, since another
 user's grant in `ctx.grants` no longer matches.
+
+OWNER rows cover the owner model (2026-10-24): `employer_owner` holds
+`access.grant` and `access.revoke` (step-up `administration`, satisfied by the
+row's recent step-up).
+
+- OWNER-ALLOW-01: `employer_owner` grant in `o1`, `access.grant` on a `Grant` in `o1`: allowed.
+- OWNER-DENY-01: the same grant, `access.grant` on a `Grant` in `o2`: denied `no_matching_grant`.
+
+The single-owner rule (one active `employer_owner` grant per organization) is
+a write-time rule in `GrantsService`, not an engine decision, so no row
+covers it.
 
 No DELEG row covers a child condition (e.g. `spending_ceiling`) that exceeds
 its ancestor's: at runtime `validateDelegation` checks ancestors only for

@@ -269,4 +269,76 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
     expect(orgGrant).toBeDefined();
     expect(orgGrant!.revokedAt).toBeNull();
   });
+
+  // ── Owner model (2026-10-24) ────────────────────────────────────────
+
+  describe('organization owner (staff)', () => {
+    const TRANSFER = `/api/ops/orgs/${ORG}/grants/transfer-ownership`;
+    const IVANA_OWNER = 'grant_user_ivana_employer_owner';
+
+    it('rejects a second employer_owner through /ops/orgs/:orgId/grants: 409 owner_exists', async () => {
+      const res = await nikola.agent
+        .post(`/api/ops/orgs/${ORG}/grants`)
+        .set('X-CSRF-Token', nikola.csrf)
+        .send({ templateKey: 'employer_owner', subjectUserId: 'user_stefan', scopeType: 'organization' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('owner_exists');
+      expect(res.body.details).toEqual({ currentOwnerUserId: 'user_ivana' });
+    });
+
+    it('rejects a staff transfer to a user outside the organization: 409 subject_not_member', async () => {
+      const res = await nikola.agent.post(TRANSFER).set('X-CSRF-Token', nikola.csrf).send({ newOwnerUserId: 'user_nikola' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('subject_not_member');
+    });
+
+    it('staff transfers ownership to stefan without holding the owner grant: 200, audited byStaff', async () => {
+      const res = await nikola.agent.post(TRANSFER).set('X-CSRF-Token', nikola.csrf).send({ newOwnerUserId: 'user_stefan' });
+      expect(res.status).toBe(200);
+      expect(res.body.revokedGrantId).toBe(IVANA_OWNER);
+      expect(res.body.createdGrant).toMatchObject({ subjectUserId: 'user_stefan', templateKey: 'employer_owner', grantedByUserId: 'user_nikola' });
+
+      const [old] = await testDb.db.select().from(grants).where(eq(grants.id, IVANA_OWNER));
+      expect(old!.revokedReason).toBe('ownership_transferred');
+      expect(old!.revokedByUserId).toBe('user_nikola');
+
+      const created = await testDb.db.select().from(auditEvents).where(eq(auditEvents.recordId, res.body.createdGrant.id as string));
+      expect(created.find((e) => e.action === 'grant.created')).toMatchObject({
+        actorUserId: 'user_nikola',
+        orgId: ORG,
+        details: expect.objectContaining({ transfer: true, byStaff: true, previousOwnerUserId: 'user_ivana' }),
+      });
+      const revoked = await testDb.db.select().from(auditEvents).where(eq(auditEvents.recordId, IVANA_OWNER));
+      expect(revoked.find((e) => e.action === 'grant.revoked')).toMatchObject({
+        details: expect.objectContaining({ reason: 'ownership_transferred', transfer: true, byStaff: true }),
+      });
+    });
+
+    it('staff transfers ownership of org_sample back to ivana: 200, one active owner', async () => {
+      const res = await nikola.agent.post(TRANSFER).set('X-CSRF-Token', nikola.csrf).send({ newOwnerUserId: 'user_ivana' });
+      expect(res.status).toBe(200);
+      expect(res.body.createdGrant).toMatchObject({ subjectUserId: 'user_ivana', templateKey: 'employer_owner' });
+
+      const active = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants`);
+      const owners = (active.body.items as Array<{ templateKey: string | null; subjectUserId: string }>).filter(
+        (g) => g.templateKey === 'employer_owner',
+      );
+      expect(owners.map((g) => g.subjectUserId)).toEqual(['user_ivana']);
+    });
+
+    it('creates the first owner when the organization has none: revokedGrantId null', async () => {
+      const list = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants`);
+      const current = (list.body.items as Array<{ id: string; templateKey: string | null }>).find((g) => g.templateKey === 'employer_owner')!;
+      const revoke = await nikola.agent
+        .post(`/api/ops/orgs/${ORG}/grants/${current.id}/revoke`)
+        .set('X-CSRF-Token', nikola.csrf)
+        .send({ reason: 'owner left the company' });
+      expect(revoke.status).toBe(200);
+
+      const res = await nikola.agent.post(TRANSFER).set('X-CSRF-Token', nikola.csrf).send({ newOwnerUserId: 'user_ivana' });
+      expect(res.status).toBe(200);
+      expect(res.body.revokedGrantId).toBeNull();
+      expect(res.body.createdGrant).toMatchObject({ subjectUserId: 'user_ivana', templateKey: 'employer_owner' });
+    });
+  });
 });

@@ -77,6 +77,7 @@ function createMockMemberships() {
 function createMockAuthz() {
   return {
     createGrant: vi.fn().mockResolvedValue(undefined),
+    findActiveOwnerGrants: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -280,6 +281,42 @@ describe('InvitationActivationService', () => {
         expect.objectContaining({ templateKey: 'hr_admin', scopeType: 'organization', scopeOrgId: 'org_sample' }),
         expect.anything(),
       );
+    });
+
+    it('refuses an employer_owner invitation with 409 owner_exists while the organization has an owner', async () => {
+      const inv = validInvitation({ templateKey: 'employer_owner' });
+      const { service, invitations, authzRepo, idp } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([{ id: 'grant_owner', subjectUserId: 'user_ivana' }]);
+
+      await expect(service.accept(token, surface, meta)).rejects.toThrow(
+        expect.objectContaining({ code: 'owner_exists', details: { currentOwnerUserId: 'user_ivana' } }),
+      );
+      expect(authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith('org_sample', expect.any(Date), expect.anything());
+      expect(authzRepo.createGrant).not.toHaveBeenCalled();
+      expect(idp.createUser).not.toHaveBeenCalled();
+      expect(invitations.accept).not.toHaveBeenCalled();
+    });
+
+    it('accepts an employer_owner invitation for an organization without an owner', async () => {
+      const inv = validInvitation({ templateKey: 'employer_owner' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+
+      await service.accept(token, surface, meta);
+
+      expect(authzRepo.createGrant).toHaveBeenCalledWith(
+        expect.objectContaining({ templateKey: 'employer_owner', scopeOrgId: 'org_sample' }),
+        expect.anything(),
+      );
+    });
+
+    it('does not look up owners for other templates', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      await service.accept(token, surface, meta);
+      expect(authzRepo.findActiveOwnerGrants).not.toHaveBeenCalled();
     });
 
     it('rejects a revoked invitation with 401', async () => {

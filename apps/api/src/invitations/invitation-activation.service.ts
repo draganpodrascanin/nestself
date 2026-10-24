@@ -27,7 +27,7 @@ import { ApiHttpException } from '../common/api-error.js';
 import { hashToken, constantTimeHashCompare } from './invitation-token.js';
 import { memberships, organizations } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { isInvitableTemplate } from '../grants/grant-rules.js';
+import { OWNER_TEMPLATE_KEY, isInvitableTemplate, ownerExists } from '../grants/grant-rules.js';
 import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
 
@@ -162,6 +162,13 @@ export class InvitationActivationService {
     const { userId } = await this.dbs.withOrgScope(
       invitation.orgId,
       async (tx) => {
+        // 0. Owner model (2026-10-24): one active employer_owner per
+        //    organization. Checked before any write or IdP side effect.
+        if (template.key === OWNER_TEMPLATE_KEY) {
+          const [current] = await this.authzRepo.findActiveOwnerGrants(invitation.orgId, now, tx);
+          if (current) throw ownerExists(current.subjectUserId);
+        }
+
         // 1. Resolve or create the user.
         const { userId, created: userCreated } = await this.resolveOrCreateUser(
           invitation.email,
