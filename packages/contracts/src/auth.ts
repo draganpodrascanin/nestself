@@ -294,6 +294,9 @@ export const AUTH_ERROR_CODES = [
   'delegation_exceeds_boundary',
   'conflict',
   'locked',
+  'subject_not_member',
+  'template_inactive',
+  'missing_conditions',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

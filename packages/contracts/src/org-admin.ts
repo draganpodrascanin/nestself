@@ -193,6 +193,16 @@ export const GrantResponseSchema = z.object({
 });
 export type GrantResponse = z.infer<typeof GrantResponseSchema>;
 
+export const GrantRevokeRequestSchema = z.object({
+  reason: z.string().min(3).max(500),
+});
+export type GrantRevokeRequest = z.infer<typeof GrantRevokeRequestSchema>;
+
+export const GrantListResponseSchema = z.object({
+  items: z.array(GrantResponseSchema),
+});
+export type GrantListResponse = z.infer<typeof GrantListResponseSchema>;
+
 export const GrantPreviewResponseSchema = z.object({
   userId: z.string().min(1),
   orgId: z.string().min(1),
