@@ -1,0 +1,89 @@
+{
+  "_comment": "Nacrt prevoda na srpski (latinica). Čeka pregled izvornog govornika.",
+  "consultation": {
+    "join": "Pridruži se konsultaciji",
+    "leave": "Napusti",
+    "end": "Završi konsultaciju",
+    "waiting": "Čeka se da se drugi učesnik pridruži.",
+    "reconnecting": "Ponovno povezivanje…",
+    "connectionLost": "Veza je prekinuta. Proverite internet vezu i ponovo se pridružite.",
+    "sessionEnded": "Konsultacija je završena.",
+    "fiveMinutesRemaining": "Preostalo je još pet minuta."
+  },
+  "followUp": {
+    "proposed": "Predložena naredna sesija",
+    "confirm": "Potvrdi",
+    "suggestTimes": "Predloži druge termine",
+    "decline": "Odbij",
+    "schedule": "Zakaži",
+    "awaitingApproval": "Čeka odobrenje",
+    "approved": "Naredna sesija je odobrena",
+    "rejected": "Naredna sesija nije odobrena",
+    "reminderSubject": "Podsetnik: naredna sesija {{date}} u {{time}}",
+    "proposedEmailSubject": "Predložena je naredna sesija",
+    "proposedEmailBody": "Predložena je naredna sesija za {{date}} u {{time}}. Otvorite NestSelf da biste je potvrdili, predložili druge termine ili je odbili."
+  },
+  "approval": {
+    "pending": "Čeka odluku",
+    "approved": "Odobreno",
+    "rejected": "Nije odobreno",
+    "expired": "Isteklo",
+    "decide": "Odluči",
+    "reason": "Razlog",
+    "missingApprover": "Za ovaj zahtev nije određen odobravalac.",
+    "remind": "Pošalji podsetnik",
+    "policyAutomatic": "Naredne sesije se potvrđuju bez odobrenja",
+    "policyManagerApproval": "Za naredne sesije potrebno je odobrenje rukovodioca"
+  },
+  "webinar": {
+    "register": "Registruj se",
+    "unregister": "Otkaži prijavu",
+    "join": "Pridruži se vebinaru",
+    "lobby": "Vaša kamera ostaje isključena. Možete pisati voditeljima i podići ruku da zatražite reč.",
+    "started": "Vebinar je počeo.",
+    "ended": "Vebinar je završen.",
+    "recording": "Snimanje",
+    "recordingNotice": "Ovaj vebinar se snima. Na snimku su samo predavači.",
+    "recordingNoticeFloor": "Vaš glas je deo snimka. Kamera ostaje isključena.",
+    "messageSubmitted": "Vaša poruka je poslata voditeljima. U četu se pojavljuje samo ako je neki voditelj objavi.",
+    "messagePublished": "Voditelj je objavio vašu poruku.",
+    "floorGiven": "Voditelj vam je dao reč.",
+    "floorTaken": "Voditelj vam je oduzeo reč. Mikrofon vam je ponovo isključen.",
+    "youCanSpeakNow": "Sada možete da govorite. Uključite mikrofon da biste govorili.",
+    "capacityAboveLimit": "Kapacitet može biti najviše {{limit}} učesnika dok veći vebinari ne budu podržani u fazi M3."
+  },
+  "workshop": {
+    "join": "Pridruži se radionici",
+    "leave": "Napusti radionicu"
+  },
+  "prejoin": {
+    "checkingDevices": "Proveravamo kameru, mikrofon i vezu…",
+    "cameraOff": "Pridruži se sa isključenom kamerom",
+    "joinNow": "Pridruži se sada",
+    "permissionHelp": "Ako je pregledač blokirao kameru ili mikrofon, dozvolite pristup u podešavanjima sajta pored adresne trake i ponovo učitajte stranicu."
+  },
+  "errors": {
+    "joinWindowClosed": "Ovoj sesiji sada nije moguće pristupiti. Pristup se otvara malo pre početka i zatvara se posle zakazanog kraja.",
+    "appointmentNotJoinable": "Ovom terminu nije moguće pristupiti niti ga menjati u trenutnom statusu.",
+    "appointmentNotProposed": "Ovaj predlog više ne čeka vaš odgovor.",
+    "followUpNotAllowed": "Narednu sesiju je moguće predložiti tek posle završene sesije.",
+    "approvalNotPending": "O ovom zahtevu je već odlučeno ili je istekao.",
+    "approverMissing": "Vaša organizacija još nije odredila ko odobrava naredne sesije. Obratite se HR timu.",
+    "videoProviderUnavailable": "Video trenutno nije dostupan. Pokušajte ponovo kasnije.",
+    "webinarFull": "Ovaj vebinar je popunjen.",
+    "webinarNotOpen": "Ovom vebinaru trenutno nije moguće pristupiti.",
+    "registrationClosed": "Prijave za ovaj vebinar su zatvorene.",
+    "alreadyRegistered": "Već ste prijavljeni za ovaj vebinar.",
+    "notEligible": "Ovaj vebinar vam nije dostupan.",
+    "floorNotAvailable": "Ovom učesniku trenutno nije moguće dati reč.",
+    "recordingNotAllowed": "Ova radnja sa snimkom nije dozvoljena.",
+    "capacityAboveLimit": "Ovaj kapacitet je veći od onoga što jedan vebinar trenutno podržava.",
+    "invalidTicket": "Ovaj link je istekao ili je već iskorišćen. Ponovo otvorite termin da biste dobili novi.",
+    "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
+  },
+  "email": {
+    "reminderSubject": "Podsetnik: sesija {{date}} u {{time}}",
+    "registrationSubject": "Prijavljeni ste: {{title}}",
+    "followUpProposedSubject": "Predložena je naredna sesija"
+  }
+}

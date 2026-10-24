@@ -1,0 +1,89 @@
+{
+  "_comment": "Calls namespace: consultations, follow-ups, approvals, webinars and workshops. Serbian and Hungarian are drafts pending native speaker review.",
+  "consultation": {
+    "join": "Join consultation",
+    "leave": "Leave",
+    "end": "End consultation",
+    "waiting": "Waiting for the other participant to join.",
+    "reconnecting": "Reconnecting…",
+    "connectionLost": "The connection was lost. Check your internet connection and join again.",
+    "sessionEnded": "The consultation has ended.",
+    "fiveMinutesRemaining": "Five minutes left."
+  },
+  "followUp": {
+    "proposed": "Follow-up proposed",
+    "confirm": "Confirm",
+    "suggestTimes": "Suggest other times",
+    "decline": "Decline",
+    "schedule": "Schedule",
+    "awaitingApproval": "Waiting for approval",
+    "approved": "Follow-up approved",
+    "rejected": "Follow-up not approved",
+    "reminderSubject": "Reminder: follow-up session on {{date}} at {{time}}",
+    "proposedEmailSubject": "A follow-up was proposed",
+    "proposedEmailBody": "A follow-up session was proposed for {{date}} at {{time}}. Open NestSelf to confirm it, suggest other times or decline."
+  },
+  "approval": {
+    "pending": "Waiting for a decision",
+    "approved": "Approved",
+    "rejected": "Not approved",
+    "expired": "Expired",
+    "decide": "Decide",
+    "reason": "Reason",
+    "missingApprover": "No approver is assigned to this request.",
+    "remind": "Send a reminder",
+    "policyAutomatic": "Follow-ups are confirmed without approval",
+    "policyManagerApproval": "Follow-ups need manager approval"
+  },
+  "webinar": {
+    "register": "Register",
+    "unregister": "Cancel registration",
+    "join": "Join webinar",
+    "lobby": "Your camera stays off. You can write to the hosts and raise your hand to ask for the floor.",
+    "started": "The webinar has started.",
+    "ended": "The webinar has ended.",
+    "recording": "Recording",
+    "recordingNotice": "This webinar is recorded. Only the presenters are on the recording.",
+    "recordingNoticeFloor": "Your voice is part of the recording. Your camera stays off.",
+    "messageSubmitted": "Your message was sent to the hosts. It appears in the chat only if a host publishes it.",
+    "messagePublished": "A host published your message.",
+    "floorGiven": "A host gave you the floor.",
+    "floorTaken": "The host took the floor back. Your microphone is off again.",
+    "youCanSpeakNow": "You can speak now. Unmute to talk.",
+    "capacityAboveLimit": "Capacity can be at most {{limit}} attendees until larger webinars are supported in milestone M3."
+  },
+  "workshop": {
+    "join": "Join workshop",
+    "leave": "Leave workshop"
+  },
+  "prejoin": {
+    "checkingDevices": "Checking your camera, microphone and connection…",
+    "cameraOff": "Join with camera off",
+    "joinNow": "Join now",
+    "permissionHelp": "If your browser blocked the camera or microphone, allow access in the site settings next to the address bar and reload the page."
+  },
+  "errors": {
+    "joinWindowClosed": "This session cannot be joined right now. Joining opens shortly before the start and closes after the scheduled end.",
+    "appointmentNotJoinable": "This appointment cannot be joined or changed in its current status.",
+    "appointmentNotProposed": "This proposal is no longer waiting for your answer.",
+    "followUpNotAllowed": "A follow-up can only be proposed after a completed session.",
+    "approvalNotPending": "This request has already been decided or has expired.",
+    "approverMissing": "Your organisation has not assigned anyone to approve follow-ups yet. Contact your HR team.",
+    "videoProviderUnavailable": "Video is not available right now. Please try again later.",
+    "webinarFull": "This webinar is full.",
+    "webinarNotOpen": "This webinar cannot be joined right now.",
+    "registrationClosed": "Registration for this webinar is closed.",
+    "alreadyRegistered": "You are already registered for this webinar.",
+    "notEligible": "This webinar is not available to you.",
+    "floorNotAvailable": "The floor cannot be given to this participant right now.",
+    "recordingNotAllowed": "This recording action is not allowed.",
+    "capacityAboveLimit": "This capacity is above what a single webinar supports for now.",
+    "invalidTicket": "This link has expired or was already used. Open the appointment again to get a new one.",
+    "unknown": "Something went wrong. Please try again."
+  },
+  "email": {
+    "reminderSubject": "Reminder: session on {{date}} at {{time}}",
+    "registrationSubject": "You are registered: {{title}}",
+    "followUpProposedSubject": "A follow-up was proposed"
+  }
+}

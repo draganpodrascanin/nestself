@@ -21,6 +21,14 @@ import {
   SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_CASE,
 } from '@nestself/sample-data';
+// Calls and webinars fixtures are not seeded yet because their tables do not
+// exist. The tasks that create the tables import and upsert them here:
+// SAMPLE_APPOINTMENTS in T-CW-0.6 (appointments), SAMPLE_CALL_SESSIONS in
+// T-CW-1.1 (call_sessions, call_participants, call_outcomes, call_feedback;
+// the consultation session), SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES and
+// SAMPLE_WEBINAR_POLLS in T-CW-2.1 (webinars, webinar_hosts, webinar_messages,
+// webinar_polls with options and results, and the webinar session of
+// SAMPLE_CALL_SESSIONS, which points at a sample webinar).
 import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
 import { buildClosureRows } from '../../org-units/closure.js';

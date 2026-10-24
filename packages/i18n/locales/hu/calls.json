@@ -1,0 +1,89 @@
+{
+  "_comment": "Magyar fordítási vázlat. Anyanyelvi lektorálásra vár.",
+  "consultation": {
+    "join": "Csatlakozás a konzultációhoz",
+    "leave": "Kilépés",
+    "end": "Konzultáció befejezése",
+    "waiting": "Várakozás a másik résztvevő csatlakozására.",
+    "reconnecting": "Újracsatlakozás…",
+    "connectionLost": "Megszakadt a kapcsolat. Ellenőrizze az internetkapcsolatát, és csatlakozzon újra.",
+    "sessionEnded": "A konzultáció véget ért.",
+    "fiveMinutesRemaining": "Még öt perc van hátra."
+  },
+  "followUp": {
+    "proposed": "Következő alkalom javasolva",
+    "confirm": "Megerősítés",
+    "suggestTimes": "Más időpontok javaslása",
+    "decline": "Elutasítás",
+    "schedule": "Időpont rögzítése",
+    "awaitingApproval": "Jóváhagyásra vár",
+    "approved": "A következő alkalmat jóváhagyták",
+    "rejected": "A következő alkalmat nem hagyták jóvá",
+    "reminderSubject": "Emlékeztető: következő alkalom {{date}}, {{time}}",
+    "proposedEmailSubject": "Következő alkalmat javasoltak",
+    "proposedEmailBody": "Következő alkalmat javasoltak erre az időpontra: {{date}}, {{time}}. Nyissa meg a NestSelf alkalmazást a megerősítéshez, más időpontok javaslásához vagy az elutasításhoz."
+  },
+  "approval": {
+    "pending": "Döntésre vár",
+    "approved": "Jóváhagyva",
+    "rejected": "Nincs jóváhagyva",
+    "expired": "Lejárt",
+    "decide": "Döntés",
+    "reason": "Indoklás",
+    "missingApprover": "Ehhez a kérelemhez nincs jóváhagyó kijelölve.",
+    "remind": "Emlékeztető küldése",
+    "policyAutomatic": "A következő alkalmakhoz nem kell jóváhagyás",
+    "policyManagerApproval": "A következő alkalmakhoz vezetői jóváhagyás szükséges"
+  },
+  "webinar": {
+    "register": "Regisztráció",
+    "unregister": "Regisztráció lemondása",
+    "join": "Csatlakozás a webinárhoz",
+    "lobby": "A kamerája kikapcsolva marad. Írhat a házigazdáknak, és kézfeltartással kérhet szót.",
+    "started": "A webinár elkezdődött.",
+    "ended": "A webinár véget ért.",
+    "recording": "Felvétel",
+    "recordingNotice": "Ez a webinár felvételre kerül. A felvételen csak az előadók szerepelnek.",
+    "recordingNoticeFloor": "Az Ön hangja a felvétel része. A kamerája kikapcsolva marad.",
+    "messageSubmitted": "Üzenetét elküldtük a házigazdáknak. A csevegésben csak akkor jelenik meg, ha egy házigazda közzéteszi.",
+    "messagePublished": "Egy házigazda közzétette az üzenetét.",
+    "floorGiven": "Egy házigazda szót adott Önnek.",
+    "floorTaken": "A házigazda visszavette a szót. A mikrofonja ismét ki van kapcsolva.",
+    "youCanSpeakNow": "Most beszélhet. Kapcsolja be a mikrofonját a beszédhez.",
+    "capacityAboveLimit": "A létszám legfeljebb {{limit}} résztvevő lehet, amíg a nagyobb webinárok támogatása meg nem érkezik az M3 szakaszban."
+  },
+  "workshop": {
+    "join": "Csatlakozás a workshophoz",
+    "leave": "Kilépés a workshopból"
+  },
+  "prejoin": {
+    "checkingDevices": "A kamera, a mikrofon és a kapcsolat ellenőrzése…",
+    "cameraOff": "Csatlakozás kikapcsolt kamerával",
+    "joinNow": "Csatlakozás most",
+    "permissionHelp": "Ha a böngésző letiltotta a kamerát vagy a mikrofont, engedélyezze a hozzáférést a címsor melletti webhelybeállításokban, majd töltse újra az oldalt."
+  },
+  "errors": {
+    "joinWindowClosed": "Ehhez az alkalomhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik meg, és a tervezett befejezés után zárul.",
+    "appointmentNotJoinable": "Ehhez az időponthoz a jelenlegi állapotában nem lehet csatlakozni, és nem is módosítható.",
+    "appointmentNotProposed": "Ez a javaslat már nem vár az Ön válaszára.",
+    "followUpNotAllowed": "Következő alkalmat csak egy befejezett alkalom után lehet javasolni.",
+    "approvalNotPending": "Erről a kérelemről már döntöttek, vagy lejárt.",
+    "approverMissing": "A szervezete még nem jelölte ki, ki hagyja jóvá a következő alkalmakat. Forduljon a HR-csapathoz.",
+    "videoProviderUnavailable": "A videó jelenleg nem érhető el. Kérjük, próbálja újra később.",
+    "webinarFull": "Ez a webinár betelt.",
+    "webinarNotOpen": "Ehhez a webinárhoz most nem lehet csatlakozni.",
+    "registrationClosed": "A regisztráció erre a webinárra lezárult.",
+    "alreadyRegistered": "Ön már regisztrált erre a webinárra.",
+    "notEligible": "Ez a webinár az Ön számára nem érhető el.",
+    "floorNotAvailable": "Ennek a résztvevőnek most nem lehet szót adni.",
+    "recordingNotAllowed": "Ez a felvétellel kapcsolatos művelet nem engedélyezett.",
+    "capacityAboveLimit": "Ez a létszám meghaladja azt, amit egy webinár jelenleg támogat.",
+    "invalidTicket": "Ez a hivatkozás lejárt, vagy már felhasználták. Nyissa meg újra az időpontot egy új hivatkozásért.",
+    "unknown": "Hiba történt. Kérjük, próbálja újra."
+  },
+  "email": {
+    "reminderSubject": "Emlékeztető: alkalom {{date}}, {{time}}",
+    "registrationSubject": "Sikeres regisztráció: {{title}}",
+    "followUpProposedSubject": "Következő alkalmat javasoltak"
+  }
+}

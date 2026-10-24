@@ -16,4 +16,22 @@ export { SAMPLE_PRINCIPALS } from './fixtures/principals.ts';
 export { SAMPLE_GRANTS } from './fixtures/grants.ts';
 export type { SampleGrant } from './fixtures/grants.ts';
 export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
+export { SAMPLE_APPOINTMENTS, SAMPLE_CALL_SESSIONS } from './fixtures/appointments.ts';
+export type {
+  SampleAppointment,
+  SampleCallSession,
+  SampleCallParticipant,
+  SampleCallOutcome,
+  SampleCallFeedback,
+} from './fixtures/appointments.ts';
+export { SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES, SAMPLE_WEBINAR_POLLS } from './fixtures/webinars.ts';
+export type {
+  SampleWebinar,
+  SampleWebinarHost,
+  SampleWebinarStatus,
+  SampleWebinarMessage,
+  SampleWebinarPoll,
+  SampleWebinarPollOption,
+  SampleWebinarPollResult,
+} from './fixtures/webinars.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';
