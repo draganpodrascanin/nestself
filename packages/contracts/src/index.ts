@@ -207,3 +207,4 @@ export * from './ops-admin.ts';
 
 export * from './appointments.ts';
 export * from './calls.ts';
+export * from './webinars.ts';
