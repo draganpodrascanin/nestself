@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ArgumentsHost } from '@nestjs/common';
 import { ApiHttpException } from '../common/api-error.js';
-import { AppointmentNonDisclosureFilter } from './appointment-non-disclosure.filter.js';
+import { AppointmentNonDisclosureFilter, ParticipantForbiddenException } from './appointment-non-disclosure.filter.js';
 
 function respond(exception: ApiHttpException): { status: number; body: Record<string, unknown> } {
   const sent: { status: number; body: Record<string, unknown> } = { status: 0, body: {} };
@@ -32,10 +32,17 @@ describe('AppointmentNonDisclosureFilter', () => {
     }
   });
 
+  it('keeps a participant denial raised by a service as a 403 (T-CW-1.1)', () => {
+    const sent = respond(new ParticipantForbiddenException('Only the expert can end the session'));
+    expect(sent.status).toBe(403);
+    expect(sent.body).toMatchObject({ status: 403, code: 'forbidden', message: 'Only the expert can end the session' });
+  });
+
   it('keeps every other error as it is', () => {
     for (const [status, code] of [
       [403, 'session_required'],
       [403, 'step_up_required'],
+      [403, 'join_window_closed'],
       [409, 'appointment_not_joinable'],
       [400, 'validation'],
     ] as const) {

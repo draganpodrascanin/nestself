@@ -1,0 +1,404 @@
+/**
+ * CallsRepository: call sessions, participants, client telemetry, outcomes
+ * and feedback (T-CW-1.1). Every method returns contract spellings; the
+ * UPPER_CASE enums are mapped in `call-mapper.ts` (CW-R-19a).
+ *
+ * Reads without a `tx` run in system context: the resolver and the join path
+ * look a session up before they know its organization, and the caller is
+ * authorized on the appointment first. Writes run inside
+ * `DbService.withOrgScope` (RLS). No method reads or writes a join token: the
+ * credentials live in Redis only (D-CW-08, CW-R-13).
+ */
+import { Injectable } from '@nestjs/common';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
+import {
+  CLIENT_EVENT_NAMES,
+  type CallFormat,
+  type CallOutcomeStatus,
+  type CallParticipantRole,
+  type CallQualityMetrics,
+  type CallSessionStatus,
+  type ClientEventName,
+} from '@nestself/contracts';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { DbService, type DbExecutor } from '../db/db.service.js';
+import {
+  callClientEvents,
+  callEvents,
+  callFeedback,
+  callOutcomes,
+  callParticipants,
+  callSessions,
+} from '../db/schema/index.js';
+import type { AppointmentRecord } from '../appointments/appointments.repository.js';
+import {
+  fromDbFormat,
+  fromDbParticipantRole,
+  fromDbSessionStatus,
+  toDbFormat,
+  toDbOutcomeStatus,
+  toDbParticipantRole,
+  toDbSessionStatus,
+} from './call-mapper.js';
+
+type SessionRow = typeof callSessions.$inferSelect;
+type ParticipantRow = typeof callParticipants.$inferSelect;
+
+/** A `call_sessions` row in contract spelling. `locationText` never leaves the module. */
+export interface CallSessionRecord {
+  id: string;
+  appointmentId: string | null;
+  webinarId: string | null;
+  orgId: string | null;
+  format: CallFormat;
+  providerMeetingId: string | null;
+  status: CallSessionStatus;
+  startsAt: Date;
+  endsAt: Date;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  locationText: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A `call_participants` row in contract spelling. */
+export interface CallParticipantRecord {
+  id: string;
+  sessionId: string;
+  orgId: string | null;
+  userId: string;
+  role: CallParticipantRole;
+  providerAttendeeId: string | null;
+  firstJoinedAt: Date | null;
+  lastLeftAt: Date | null;
+  reconnectCount: number;
+  createdAt: Date;
+}
+
+export interface NewCallParticipant {
+  sessionId: string;
+  orgId: string | null;
+  userId: string;
+  role: CallParticipantRole;
+}
+
+/** Fields a session transition may set besides the status. */
+export type CallSessionTransitionFields = Partial<
+  Pick<CallSessionRecord, 'providerMeetingId' | 'startedAt' | 'endedAt' | 'locationText'>
+>;
+
+export interface NewCallClientEvent {
+  sessionId: string;
+  orgId: string | null;
+  participantId: string;
+  eventName: ClientEventName;
+  durationMs: number | null;
+  metrics: CallQualityMetrics | null;
+  deviceError: string | null;
+  browser: string | null;
+  os: string | null;
+}
+
+/**
+ * Connection metadata attached to an outcome (CALL-23 criterion 4): the
+ * session duration, the client-reported reconnects and the average quality.
+ */
+export type CallConnectionMetrics = CallQualityMetrics & {
+  durationSeconds?: number;
+  reconnectCount: number;
+};
+
+export interface NewCallOutcome {
+  sessionId: string;
+  orgId: string | null;
+  status: CallOutcomeStatus;
+  recordedByUserId: string;
+  connectionMetrics: CallConnectionMetrics;
+}
+
+export interface NewCallFeedback {
+  sessionId: string;
+  orgId: string | null;
+  userId: string;
+  score: number;
+  comment: string | null;
+}
+
+/** One participant's client telemetry, summarised for diagnostics. */
+export interface ClientEventSummary {
+  qualityMetrics: CallQualityMetrics | null;
+  /** Failure event names and device error names, codes only. */
+  errorCodes: string[];
+  reconnectCount: number;
+  browser: string | null;
+  os: string | null;
+}
+
+/** Client events that report a failure; their names are diagnostic error codes. */
+const FAILURE_EVENT_NAMES: readonly ClientEventName[] = CLIENT_EVENT_NAMES.filter(
+  (name) => name !== 'meetingStartSucceeded' && name !== 'meetingReconnected' && name !== 'connectionStats',
+);
+
+/** Provider events that report a failure for an attendee (D-CW-12). */
+const PROVIDER_FAILURE_EVENTS = ['AttendeeDropped'] as const;
+
+function toSessionRecord(row: SessionRow): CallSessionRecord {
+  return { ...row, format: fromDbFormat(row.format), status: fromDbSessionStatus(row.status) };
+}
+
+function toParticipantRecord(row: ParticipantRow): CallParticipantRecord {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    orgId: row.orgId,
+    userId: row.userId,
+    role: fromDbParticipantRole(row.role),
+    providerAttendeeId: row.providerAttendeeId,
+    firstJoinedAt: row.firstJoinedAt,
+    lastLeftAt: row.lastLeftAt,
+    reconnectCount: row.reconnectCount,
+    createdAt: row.createdAt,
+  };
+}
+
+/** Average of one metric over the `connectionStats` events, as a float or null. */
+function avgMetric(name: keyof CallQualityMetrics) {
+  return sql<number | null>`avg((${callClientEvents.metrics} ->> ${name})::float8) filter (where ${callClientEvents.eventName} = 'connectionStats')`;
+}
+
+function qualityFrom(row: {
+  rtt: number | null;
+  jitter: number | null;
+  packetLoss: number | null;
+  outgoingBitrate: number | null;
+}): CallQualityMetrics | null {
+  const metrics: CallQualityMetrics = {};
+  for (const key of ['rtt', 'jitter', 'packetLoss', 'outgoingBitrate'] as const) {
+    const value = row[key];
+    if (value !== null && value !== undefined) metrics[key] = Number(value);
+  }
+  return Object.keys(metrics).length > 0 ? metrics : null;
+}
+
+@Injectable()
+export class CallsRepository {
+  constructor(private readonly dbs: DbService) {}
+
+  private exec(tx?: DbExecutor): DbExecutor {
+    return tx ?? this.dbs.db;
+  }
+
+  // ── Sessions ──────────────────────────────────────────────────────────────
+
+  async findSessionById(id: string, tx?: DbExecutor): Promise<CallSessionRecord | null> {
+    const [row] = await this.exec(tx).select().from(callSessions).where(eq(callSessions.id, id));
+    return row ? toSessionRecord(row) : null;
+  }
+
+  /** The appointment's session that has not failed (at most one, by the partial unique index). */
+  async findLiveSessionByAppointment(appointmentId: string, tx?: DbExecutor): Promise<CallSessionRecord | null> {
+    const [row] = await this.exec(tx)
+      .select()
+      .from(callSessions)
+      .where(and(eq(callSessions.appointmentId, appointmentId), ne(callSessions.status, 'FAILED')));
+    return row ? toSessionRecord(row) : null;
+  }
+
+  /**
+   * The appointment's live session, created PENDING with its scheduled window
+   * when there is none. Concurrent callers converge on one row: the insert
+   * yields to the partial unique index and the select reads the winner.
+   */
+  async createSessionForAppointment(appointment: AppointmentRecord, tx?: DbExecutor): Promise<CallSessionRecord> {
+    const [inserted] = await this.exec(tx)
+      .insert(callSessions)
+      .values({
+        appointmentId: appointment.id,
+        orgId: appointment.orgId,
+        format: toDbFormat('consultation'),
+        status: toDbSessionStatus('pending'),
+        startsAt: appointment.startsAt,
+        endsAt: appointment.endsAt,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (inserted) return toSessionRecord(inserted);
+    const live = await this.findLiveSessionByAppointment(appointment.id, tx);
+    if (!live) throw new Error(`call session for appointment ${appointment.id} vanished during creation`);
+    return live;
+  }
+
+  /**
+   * Moves the session to `to` when its status is one of `from` (guidelines
+   * 4.9, CW-R-18), setting `fields` in the same statement. Null when the row
+   * is missing or another request moved it first.
+   */
+  async transitionSession(
+    id: string,
+    from: readonly CallSessionStatus[],
+    to: CallSessionStatus,
+    fields: CallSessionTransitionFields = {},
+    tx?: DbExecutor,
+  ): Promise<CallSessionRecord | null> {
+    const [row] = await this.exec(tx)
+      .update(callSessions)
+      .set({ ...fields, status: toDbSessionStatus(to) })
+      .where(and(eq(callSessions.id, id), inArray(callSessions.status, from.map(toDbSessionStatus))))
+      .returning();
+    return row ? toSessionRecord(row) : null;
+  }
+
+  async setLocationText(id: string, locationText: string | null, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx).update(callSessions).set({ locationText }).where(eq(callSessions.id, id));
+  }
+
+  // ── Participants ──────────────────────────────────────────────────────────
+
+  async findParticipant(sessionId: string, userId: string, tx?: DbExecutor): Promise<CallParticipantRecord | null> {
+    const [row] = await this.exec(tx)
+      .select()
+      .from(callParticipants)
+      .where(and(eq(callParticipants.sessionId, sessionId), eq(callParticipants.userId, userId)));
+    return row ? toParticipantRecord(row) : null;
+  }
+
+  /** The person's participant row in the session, created with a fresh random id on first use (D-CW-11). */
+  async ensureParticipant(input: NewCallParticipant, tx?: DbExecutor): Promise<CallParticipantRecord> {
+    const [inserted] = await this.exec(tx)
+      .insert(callParticipants)
+      .values({ ...input, role: toDbParticipantRole(input.role) })
+      .onConflictDoNothing()
+      .returning();
+    if (inserted) return toParticipantRecord(inserted);
+    const existing = await this.findParticipant(input.sessionId, input.userId, tx);
+    if (!existing) throw new Error(`call participant of session ${input.sessionId} vanished during creation`);
+    return existing;
+  }
+
+  async setProviderAttendee(participantId: string, providerAttendeeId: string, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx)
+      .update(callParticipants)
+      .set({ providerAttendeeId })
+      .where(eq(callParticipants.id, participantId));
+  }
+
+  async listParticipants(sessionId: string, tx?: DbExecutor): Promise<CallParticipantRecord[]> {
+    const rows = await this.exec(tx)
+      .select()
+      .from(callParticipants)
+      .where(eq(callParticipants.sessionId, sessionId))
+      .orderBy(asc(callParticipants.createdAt), asc(callParticipants.id));
+    return rows.map(toParticipantRecord);
+  }
+
+  // ── Client telemetry (D-CW-13) ────────────────────────────────────────────
+
+  async insertClientEvents(rows: readonly NewCallClientEvent[], tx?: DbExecutor): Promise<void> {
+    if (rows.length === 0) return;
+    await this.exec(tx).insert(callClientEvents).values([...rows]);
+  }
+
+  /** Outcome metadata: duration from the session, reconnects and average quality from the client events. */
+  async connectionMetrics(session: CallSessionRecord, now: Date, tx?: DbExecutor): Promise<CallConnectionMetrics> {
+    const [row] = await this.exec(tx)
+      .select({
+        reconnectCount: sql<number>`count(*) filter (where ${callClientEvents.eventName} = 'meetingReconnected')`.mapWith(
+          Number,
+        ),
+        rtt: avgMetric('rtt'),
+        jitter: avgMetric('jitter'),
+        packetLoss: avgMetric('packetLoss'),
+        outgoingBitrate: avgMetric('outgoingBitrate'),
+      })
+      .from(callClientEvents)
+      .where(eq(callClientEvents.sessionId, session.id));
+    const metrics: CallConnectionMetrics = {
+      ...(row ? qualityFrom(row) : null),
+      reconnectCount: row?.reconnectCount ?? 0,
+    };
+    if (session.startedAt) {
+      const end = session.endedAt ?? now;
+      metrics.durationSeconds = Math.max(0, Math.round((end.getTime() - session.startedAt.getTime()) / 1000));
+    }
+    return metrics;
+  }
+
+  /** Per participant id: average quality, failure codes, reconnects and the latest browser and OS. */
+  async clientEventSummaries(sessionId: string, tx?: DbExecutor): Promise<Map<string, ClientEventSummary>> {
+    const failures = sql.join(
+      FAILURE_EVENT_NAMES.map((name) => sql`${name}`),
+      sql`, `,
+    );
+    const rows = await this.exec(tx)
+      .select({
+        participantId: callClientEvents.participantId,
+        rtt: avgMetric('rtt'),
+        jitter: avgMetric('jitter'),
+        packetLoss: avgMetric('packetLoss'),
+        outgoingBitrate: avgMetric('outgoingBitrate'),
+        failures: sql<
+          string[] | null
+        >`array_agg(distinct ${callClientEvents.eventName}) filter (where ${callClientEvents.eventName} in (${failures}))`,
+        deviceErrors: sql<
+          string[] | null
+        >`array_agg(distinct ${callClientEvents.deviceError}) filter (where ${callClientEvents.deviceError} is not null)`,
+        reconnectCount: sql<number>`count(*) filter (where ${callClientEvents.eventName} = 'meetingReconnected')`.mapWith(
+          Number,
+        ),
+        browser: sql<
+          string | null
+        >`(array_agg(${callClientEvents.browser} order by ${callClientEvents.createdAt} desc) filter (where ${callClientEvents.browser} is not null))[1]`,
+        os: sql<
+          string | null
+        >`(array_agg(${callClientEvents.os} order by ${callClientEvents.createdAt} desc) filter (where ${callClientEvents.os} is not null))[1]`,
+      })
+      .from(callClientEvents)
+      .where(eq(callClientEvents.sessionId, sessionId))
+      .groupBy(callClientEvents.participantId);
+    return new Map(
+      rows.map((row) => [
+        row.participantId,
+        {
+          qualityMetrics: qualityFrom(row),
+          errorCodes: [...(row.failures ?? []), ...(row.deviceErrors ?? [])],
+          reconnectCount: row.reconnectCount,
+          browser: row.browser,
+          os: row.os,
+        },
+      ]),
+    );
+  }
+
+  /** Per provider attendee id: the provider failure events it had (D-CW-12; written by T-CW-1.2). */
+  async providerErrorCodes(sessionId: string, tx?: DbExecutor): Promise<Map<string, string[]>> {
+    const rows = await this.exec(tx)
+      .selectDistinct({ attendeeId: callEvents.providerAttendeeId, eventType: callEvents.eventType })
+      .from(callEvents)
+      .where(and(eq(callEvents.sessionId, sessionId), inArray(callEvents.eventType, [...PROVIDER_FAILURE_EVENTS])));
+    const codes = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.attendeeId) continue;
+      codes.set(row.attendeeId, [...(codes.get(row.attendeeId) ?? []), row.eventType]);
+    }
+    return codes;
+  }
+
+  // ── Outcome and feedback ──────────────────────────────────────────────────
+
+  async insertOutcome(values: NewCallOutcome, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx)
+      .insert(callOutcomes)
+      .values({ ...values, status: toDbOutcomeStatus(values.status) });
+  }
+
+  /** False when this person already gave feedback on the session. */
+  async insertFeedback(values: NewCallFeedback, tx?: DbExecutor): Promise<boolean> {
+    const inserted = await this.exec(tx)
+      .insert(callFeedback)
+      .values(values)
+      .onConflictDoNothing()
+      .returning({ id: callFeedback.id });
+    return inserted.length > 0;
+  }
+}

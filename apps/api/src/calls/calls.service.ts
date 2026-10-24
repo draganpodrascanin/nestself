@@ -1,0 +1,602 @@
+/**
+ * CallsService: the consultation call session (T-CW-1.1, NS-CALLS-01).
+ *
+ * - Join (`POST /appointments/:id/join`, D-CW-07, D-CW-08, guidelines 4.1 to
+ *   4.3): the caller must be the appointment's expert or employee (404
+ *   otherwise, D-CW-30), the appointment `confirmed` (409
+ *   `appointment_not_joinable`) and the time inside the window (403
+ *   `join_window_closed`). The session row is created PENDING on first use.
+ *   The first joiner takes the `call:{sessionId}:create` lock, moves the
+ *   session to CREATING, calls `createSession` (meeting plus attendee) and
+ *   moves it to ACTIVE; a concurrent joiner polls for the meeting id for up
+ *   to 3 seconds and then adds its attendee. Credentials are cached under
+ *   `call:{sessionId}:participant:{participantId}` until the room closes, so
+ *   a rejoin returns the same ones; after a cache loss on an active session a
+ *   new attendee is issued for the same participant. `call.joined` is
+ *   audited on every join, `call.session.created` once.
+ * - End (`POST /appointments/:id/end`, D-CW-09): the expert only; deletes
+ *   the meeting, closes the session, drops every cached credential and the
+ *   location text, emits `call.session.ended`, audits `call.ended`.
+ * - Outcome (`POST /appointments/:id/outcome`, CALL-23): the expert records
+ *   the delivery status with connection metadata; the appointment moves out
+ *   of `confirmed` in the same transaction.
+ * - Feedback (`POST /appointments/:id/feedback`, CALL-15): the employee who
+ *   joined, once per session; never readable by the employer or the expert.
+ * - Signal (`POST /appointments/:id/signal`, D-CW-27): emitted as
+ *   `call.signal` on `call:{sessionId}`, never persisted.
+ * - Client events (`POST /calls/:sessionId/client-events`, D-CW-13).
+ * - Diagnostics (`GET /ops/calls/:sessionId/diagnostics`, D-CW-28).
+ *
+ * A join token never reaches PostgreSQL, a log line, an audit `details`
+ * object or a room event (CW-R-13, CW-R-69). Logs carry the session id,
+ * participant id, operation and latency (guidelines 16.1).
+ */
+import { Inject, Injectable, Logger } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ConfigService } from '@nestjs/config';
+import {
+  CALL_TICKET_TTL_SECONDS,
+  CallJoinResponseSchema,
+  CallSignalPayloadSchema,
+  VideoProviderNameSchema,
+  canTransitionAppointment,
+  type ApiErrorCode,
+  type AppointmentResponse,
+  type CallFeedbackRequest,
+  type CallJoinRequest,
+  type CallJoinResponse,
+  type CallOutcomeRequest,
+  type CallParticipantRole,
+  type CallSignalRequest,
+  type ClientEventBatchRequest,
+  type DiagnosticsResponse,
+  type Principal,
+} from '@nestself/contracts';
+import { ApiHttpException } from '../common/api-error.js';
+import { ParticipantForbiddenException } from '../appointments/appointment-non-disclosure.filter.js';
+import { toAppointmentResponse } from '../appointments/appointment-mapper.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AppointmentsRepository, type AppointmentRecord } from '../appointments/appointments.repository.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { DbService, type DbExecutor } from '../db/db.service.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis-keys.js';
+import {
+  VIDEO_PROVIDER,
+  videoProviderUnavailable,
+  type ProviderSession,
+  type VideoProvider,
+} from '../video/video-provider.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { RoomEmitter } from '../ws/room-emitter.js';
+import {
+  APPOINTMENT_STATUS_FOR_OUTCOME,
+  callRoom,
+  credentialsTtlSeconds,
+  isWithinJoinWindow,
+  parseCachedCredentials,
+  serialiseCredentials,
+  toDiagnosticsResponse,
+  type CachedCredentials,
+} from './call-mapper.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from './calls.repository.js';
+
+/** A consultation is one expert and one employee (D-CW-02). */
+const CONSULTATION_CAPACITY = 2;
+/** The category whose employee may share a location before joining (CALL-34). */
+const PSYCHOLOGICAL_CATEGORY = 'psychological';
+/** CW-R-12: the creation lock lives as long as a call ticket, 30 seconds. */
+const CREATE_LOCK_TTL_SECONDS = CALL_TICKET_TTL_SECONDS;
+
+type ConsultationRole = Extract<CallParticipantRole, 'expert' | 'employee'>;
+
+interface Participation {
+  appointment: AppointmentRecord;
+  role: ConsultationRole;
+}
+
+function apiError(
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+  details?: Record<string, unknown>,
+): ApiHttpException {
+  return new ApiHttpException({ status, code, message, details });
+}
+
+function notFound(): ApiHttpException {
+  return apiError(404, 'not_found', 'Resource not found');
+}
+
+function notJoinable(): ApiHttpException {
+  return apiError(409, 'appointment_not_joinable', 'The appointment does not allow this in its current status');
+}
+
+function windowClosed(): ApiHttpException {
+  return apiError(403, 'join_window_closed', 'The join window for this session is not open');
+}
+
+function errorName(error: unknown): string {
+  if (error instanceof ApiHttpException) return error.code;
+  return error instanceof Error ? error.name : 'UnknownError';
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+@Injectable()
+export class CallsService {
+  private readonly logger = new Logger(CallsService.name);
+
+  /** Interval and limit of the lock loser's wait for the meeting id (guidelines 4.1). Tests shorten them. */
+  pollIntervalMs = 200;
+  pollTimeoutMs = 3_000;
+
+  constructor(
+    private readonly repo: CallsRepository,
+    private readonly appointments: AppointmentsRepository,
+    private readonly dbs: DbService,
+    @Inject(VIDEO_PROVIDER) private readonly video: VideoProvider,
+    @Inject(KEY_VALUE_STORE) private readonly kv: KeyValueStore,
+    private readonly rooms: RoomEmitter,
+    private readonly audit: AuditWriter,
+    private readonly config: ConfigService,
+  ) {}
+
+  // ── Join ──────────────────────────────────────────────────────────────────
+
+  async join(appointmentId: string, principal: Principal, body: CallJoinRequest): Promise<CallJoinResponse> {
+    const started = Date.now();
+    const { appointment, role } = await this.participation(appointmentId, principal);
+    this.assertJoinable(appointment);
+    if (body.locationText !== undefined && !(role === 'employee' && appointment.serviceCategory === PSYCHOLOGICAL_CATEGORY)) {
+      throw apiError(400, 'validation', 'Only the employee of a psychological consultation can share a location', {
+        field: 'locationText',
+      });
+    }
+
+    const session = await this.ensureSession(appointment);
+    if (session.status === 'ended') throw notJoinable();
+    const participant = await this.scoped(appointment.orgId, (tx) =>
+      this.repo.ensureParticipant({ sessionId: session.id, orgId: appointment.orgId, userId: principal.userId, role }, tx),
+    );
+    if (body.locationText !== undefined) {
+      const locationText = body.locationText;
+      await this.scoped(appointment.orgId, (tx) => this.repo.setLocationText(session.id, locationText, tx));
+    }
+
+    let path: 'cached' | 'attendee' | 'meeting';
+    let credentials: CachedCredentials;
+    if (session.status === 'active') {
+      const cached = parseCachedCredentials(await this.kv.get(callParticipantCredentialsKey(session.id, participant.id)));
+      if (cached) {
+        path = 'cached';
+        credentials = cached;
+      } else {
+        path = 'attendee';
+        credentials = await this.addAttendee(session, participant);
+      }
+    } else {
+      ({ path, credentials } = await this.createOrWait(session, participant, appointment));
+    }
+
+    await this.record(principal.userId, appointment.orgId, session.id, 'call.joined', {
+      sessionId: session.id,
+      participantId: participant.id,
+      role,
+    });
+    this.rooms.emit(callRoom(session.id), 'call.participant.joined', { participantId: participant.id, role });
+    this.logger.log(
+      { sessionId: session.id, participantId: participant.id, operation: 'join', path, latencyMs: Date.now() - started },
+      'Call joined',
+    );
+
+    return CallJoinResponseSchema.parse({
+      sessionId: session.id,
+      participantId: participant.id,
+      role,
+      format: session.format,
+      startsAt: session.startsAt.toISOString(),
+      endsAt: session.endsAt.toISOString(),
+      meeting: credentials.meeting,
+      attendee: credentials.attendee,
+    });
+  }
+
+  /**
+   * First-join creation under the `call:{sessionId}:create` lock (D-CW-07). The
+   * winner creates the meeting; a loser waits for the winner's meeting id and
+   * adds its attendee. The winner re-reads the session first, because a
+   * previous winner may have finished between this caller's read and its lock.
+   */
+  private async createOrWait(
+    session: CallSessionRecord,
+    participant: CallParticipantRecord,
+    appointment: AppointmentRecord,
+  ): Promise<{ path: 'attendee' | 'meeting'; credentials: CachedCredentials }> {
+    const lockKey = callCreateLockKey(session.id);
+    const won = await this.kv.set(lockKey, participant.id, { onlyIfAbsent: true, ttlSeconds: CREATE_LOCK_TTL_SECONDS });
+    if (!won) {
+      const active = await this.waitForMeeting(session.id);
+      return { path: 'attendee', credentials: await this.addAttendee(active, participant) };
+    }
+    try {
+      const current = await this.repo.findSessionById(session.id);
+      if (current?.status === 'active') {
+        return { path: 'attendee', credentials: await this.addAttendee(current, participant) };
+      }
+      if (!current || current.status === 'ended') throw notJoinable();
+      if (current.status === 'failed') throw videoProviderUnavailable();
+      return { path: 'meeting', credentials: await this.createMeeting(current, participant, appointment) };
+    } finally {
+      // The lock expires on its own if this fails; the meeting id is already the signal for waiters.
+      await this.kv.del(lockKey).catch(() => 0);
+    }
+  }
+
+  /** PENDING or a stale CREATING to CREATING, `createSession`, then ACTIVE with the meeting id. */
+  private async createMeeting(
+    session: CallSessionRecord,
+    participant: CallParticipantRecord,
+    appointment: AppointmentRecord,
+  ): Promise<CachedCredentials> {
+    const orgId = appointment.orgId;
+    const creating = await this.scoped(orgId, (tx) =>
+      this.repo.transitionSession(session.id, ['pending', 'creating'], 'creating', {}, tx),
+    );
+    if (!creating) throw videoProviderUnavailable();
+
+    const started = Date.now();
+    let created: ProviderSession;
+    try {
+      created = await this.video.createSession({
+        sessionId: session.id,
+        format: 'consultation',
+        capacity: CONSULTATION_CAPACITY,
+        orgId,
+        webinarId: null,
+        participant: { participantId: participant.id, role: participant.role },
+      });
+    } catch (error) {
+      await this.scoped(orgId, (tx) => this.repo.transitionSession(session.id, ['creating'], 'failed', {}, tx));
+      this.logger.error(
+        {
+          sessionId: session.id,
+          participantId: participant.id,
+          operation: 'createSession',
+          latencyMs: Date.now() - started,
+          error: errorName(error),
+        },
+        'Call session creation failed',
+      );
+      throw error;
+    }
+
+    const active = await this.scoped(orgId, async (tx) => {
+      const moved = await this.repo.transitionSession(
+        session.id,
+        ['creating'],
+        'active',
+        { providerMeetingId: created.providerMeetingId, startedAt: new Date() },
+        tx,
+      );
+      if (moved) await this.repo.setProviderAttendee(participant.id, created.participant.providerAttendeeId, tx);
+      return moved;
+    });
+    if (!active) {
+      // The lock expired while the provider was slow and another joiner finished first (CW-R-12).
+      const current = await this.repo.findSessionById(session.id);
+      if (current?.status !== 'active' || !current.providerMeetingId) throw videoProviderUnavailable();
+      if (current.providerMeetingId !== created.providerMeetingId) {
+        await this.video.endSession({ providerMeetingId: created.providerMeetingId });
+      }
+      return this.addAttendee(current, participant);
+    }
+
+    // The first joiner's request created it.
+    await this.record(participant.userId, orgId, session.id, 'call.session.created', {
+      sessionId: session.id,
+      appointmentId: appointment.id,
+      format: active.format,
+    });
+    const credentials = serialiseCredentials({ meeting: created.meeting, attendee: created.participant.attendee });
+    await this.cacheCredentials(active, participant, credentials);
+    return credentials;
+  }
+
+  /** The lock loser's wait: the session's meeting id, polled for up to `pollTimeoutMs` (guidelines 4.1). */
+  private async waitForMeeting(sessionId: string): Promise<CallSessionRecord> {
+    const attempts = Math.max(1, Math.ceil(this.pollTimeoutMs / this.pollIntervalMs));
+    for (let attempt = 0; attempt <= attempts; attempt += 1) {
+      const current = await this.repo.findSessionById(sessionId);
+      if (current?.status === 'active' && current.providerMeetingId) return current;
+      if (!current || current.status === 'failed') throw videoProviderUnavailable();
+      if (current.status === 'ended') throw notJoinable();
+      if (attempt < attempts) await sleep(this.pollIntervalMs);
+    }
+    this.logger.warn({ sessionId, operation: 'waitForMeeting', latencyMs: this.pollTimeoutMs }, 'No meeting in time');
+    throw videoProviderUnavailable();
+  }
+
+  /** A new attendee in the session's meeting for this participant, cached (`CreateAttendee`). */
+  private async addAttendee(session: CallSessionRecord, participant: CallParticipantRecord): Promise<CachedCredentials> {
+    const providerMeetingId = session.providerMeetingId;
+    if (!providerMeetingId) throw videoProviderUnavailable();
+    const info = await this.video.describeSession({ providerMeetingId });
+    if (!info) throw notJoinable();
+    const added = await this.video.createParticipant({
+      providerMeetingId,
+      participantId: participant.id,
+      role: participant.role,
+    });
+    await this.scoped(session.orgId, (tx) =>
+      this.repo.setProviderAttendee(participant.id, added.providerAttendeeId, tx),
+    );
+    const credentials = serialiseCredentials({ meeting: info.meeting, attendee: added.attendee });
+    await this.cacheCredentials(session, participant, credentials);
+    return credentials;
+  }
+
+  private async cacheCredentials(
+    session: CallSessionRecord,
+    participant: CallParticipantRecord,
+    credentials: CachedCredentials,
+  ): Promise<void> {
+    await this.kv.set(callParticipantCredentialsKey(session.id, participant.id), JSON.stringify(credentials), {
+      ttlSeconds: credentialsTtlSeconds(session.endsAt, new Date()),
+    });
+  }
+
+  // ── End (D-CW-09) ─────────────────────────────────────────────────────────
+
+  async end(appointmentId: string, principal: Principal): Promise<void> {
+    const { appointment, role } = await this.participation(appointmentId, principal);
+    if (role !== 'expert') throw new ParticipantForbiddenException('Only the expert can end the session for everyone');
+
+    const session = await this.repo.findLiveSessionByAppointment(appointment.id);
+    if (session?.status === 'ended') return;
+    if (session?.status !== 'active' || !session.providerMeetingId) throw notJoinable();
+
+    const started = Date.now();
+    await this.video.endSession({ providerMeetingId: session.providerMeetingId });
+    const endedAt = new Date();
+    const ended = await this.scoped(appointment.orgId, (tx) =>
+      this.repo.transitionSession(session.id, ['active'], 'ended', { endedAt, locationText: null }, tx),
+    );
+    // Another request (or the provider's MeetingEnded event) closed it first.
+    if (!ended) return;
+
+    const participants = await this.repo.listParticipants(session.id);
+    if (participants.length > 0) {
+      await this.kv.del(...participants.map((p) => callParticipantCredentialsKey(session.id, p.id)));
+    }
+    this.rooms.emit(callRoom(session.id), 'call.session.ended', {
+      sessionId: session.id,
+      endedAt: endedAt.toISOString(),
+    });
+    await this.record(principal.userId, appointment.orgId, session.id, 'call.ended', {
+      sessionId: session.id,
+      endedByUserId: principal.userId,
+    });
+    this.logger.log({ sessionId: session.id, operation: 'end', latencyMs: Date.now() - started }, 'Call ended');
+  }
+
+  /**
+   * Tells the call room a participant left. The provider's `AttendeeLeft`
+   * and `AttendeeDropped` events reach it through the event applier
+   * (T-CW-1.2); there is no leave route.
+   */
+  notifyParticipantLeft(sessionId: string, participant: Pick<CallParticipantRecord, 'id' | 'role'>): void {
+    this.rooms.emit(callRoom(sessionId), 'call.participant.left', {
+      participantId: participant.id,
+      role: participant.role,
+    });
+  }
+
+  // ── Outcome (CALL-23, CALL-24) ────────────────────────────────────────────
+
+  async recordOutcome(appointmentId: string, principal: Principal, body: CallOutcomeRequest): Promise<AppointmentResponse> {
+    const { appointment, role } = await this.participation(appointmentId, principal);
+    if (role !== 'expert') throw new ParticipantForbiddenException('Only the expert records the outcome');
+    const target = APPOINTMENT_STATUS_FOR_OUTCOME[body.status];
+    if (!canTransitionAppointment(appointment.status, target)) throw notJoinable();
+
+    // An outcome needs a session row even when nobody joined (a no-show).
+    const session = await this.ensureSession(appointment);
+    const connectionMetrics = await this.repo.connectionMetrics(session, new Date());
+    const updated = await this.dbs.withOrgScope(appointment.orgId, async (tx) => {
+      const moved = await this.appointments.transitionStatus(appointment.id, target, tx);
+      if (!moved) return null;
+      await this.repo.insertOutcome(
+        {
+          sessionId: session.id,
+          orgId: appointment.orgId,
+          status: body.status,
+          recordedByUserId: principal.userId,
+          connectionMetrics,
+        },
+        tx,
+      );
+      return moved;
+    });
+    // Another request moved the appointment first.
+    if (!updated) throw notJoinable();
+
+    await this.record(principal.userId, appointment.orgId, session.id, 'call.outcome.recorded', {
+      sessionId: session.id,
+      outcomeStatus: body.status,
+    });
+    await this.recordAppointmentTransition(principal, updated, body);
+    return toAppointmentResponse(updated);
+  }
+
+  private async recordAppointmentTransition(
+    principal: Principal,
+    appointment: AppointmentRecord,
+    body: CallOutcomeRequest,
+  ): Promise<void> {
+    const base = {
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      orgId: appointment.orgId,
+      recordType: 'appointment',
+      recordId: appointment.id,
+      result: 'ALLOWED',
+    } as const;
+    switch (appointment.status) {
+      case 'completed':
+        await this.audit.record({ ...base, action: 'appointment.completed', details: { appointmentId: appointment.id } });
+        return;
+      case 'no_show':
+        await this.audit.record({
+          ...base,
+          action: 'appointment.no_show',
+          details: { appointmentId: appointment.id, status: body.status },
+        });
+        return;
+      case 'canceled':
+        await this.audit.record({
+          ...base,
+          action: 'appointment.canceled',
+          details: { appointmentId: appointment.id, canceledByUserId: principal.userId },
+        });
+        return;
+      default:
+        return;
+    }
+  }
+
+  // ── Feedback (CALL-15) ────────────────────────────────────────────────────
+
+  async submitFeedback(appointmentId: string, principal: Principal, body: CallFeedbackRequest): Promise<void> {
+    const { appointment, role } = await this.participation(appointmentId, principal);
+    if (role !== 'employee') throw new ParticipantForbiddenException('Only the employee gives feedback');
+
+    const session = await this.repo.findLiveSessionByAppointment(appointment.id);
+    const participant = session ? await this.repo.findParticipant(session.id, principal.userId) : null;
+    // Nothing to give feedback on before the employee has joined.
+    if (!session || !participant) throw notJoinable();
+
+    const comment = body.comment ? body.comment : null;
+    const inserted = await this.scoped(appointment.orgId, (tx) =>
+      this.repo.insertFeedback(
+        { sessionId: session.id, orgId: appointment.orgId, userId: principal.userId, score: body.score, comment },
+        tx,
+      ),
+    );
+    if (!inserted) throw apiError(409, 'conflict', 'Feedback for this session was already submitted');
+
+    await this.record(principal.userId, appointment.orgId, session.id, 'call.feedback.submitted', {
+      sessionId: session.id,
+    });
+  }
+
+  // ── Signal (D-CW-27, CW-R-35) ─────────────────────────────────────────────
+
+  async signal(appointmentId: string, principal: Principal, body: CallSignalRequest): Promise<void> {
+    const { appointment, role } = await this.participation(appointmentId, principal);
+    if (body.type === 'running_late' && role !== 'expert') {
+      throw new ParticipantForbiddenException('Only the expert sends a running-late signal');
+    }
+    this.assertJoinable(appointment);
+
+    // The room is the session's: a running-late signal can precede every join.
+    const session = await this.ensureSession(appointment);
+    if (session.status === 'ended') throw notJoinable();
+    const payload = CallSignalPayloadSchema.parse({ type: body.type, etaMinutes: body.etaMinutes, fromRole: role });
+    this.rooms.emit(callRoom(session.id), 'call.signal', payload);
+    this.logger.log({ sessionId: session.id, operation: 'signal', signal: body.type }, 'Call signal sent');
+  }
+
+  // ── Client events (D-CW-13) ───────────────────────────────────────────────
+
+  async recordClientEvents(sessionId: string, principal: Principal, body: ClientEventBatchRequest): Promise<void> {
+    const session = await this.repo.findSessionById(sessionId);
+    const participant = session ? await this.repo.findParticipant(session.id, principal.userId) : null;
+    if (!session || !participant) throw notFound();
+
+    const rows = body.events.map((event) => ({
+      sessionId: session.id,
+      orgId: session.orgId,
+      participantId: participant.id,
+      eventName: event.eventName,
+      durationMs: event.durationMs ?? null,
+      metrics: event.metrics ?? null,
+      deviceError: event.deviceError ?? null,
+      browser: event.browser ?? null,
+      os: event.os ?? null,
+    }));
+    await this.scoped(session.orgId, (tx) => this.repo.insertClientEvents(rows, tx));
+  }
+
+  // ── Diagnostics (D-CW-28) ─────────────────────────────────────────────────
+
+  async diagnostics(sessionId: string, principal: Principal): Promise<DiagnosticsResponse> {
+    const session = await this.repo.findSessionById(sessionId);
+    if (!session) throw notFound();
+    const [participants, clientSummaries, providerCodes] = await Promise.all([
+      this.repo.listParticipants(session.id),
+      this.repo.clientEventSummaries(session.id),
+      this.repo.providerErrorCodes(session.id),
+    ]);
+    const provider = VideoProviderNameSchema.catch('none').parse(this.config.get('VIDEO_PROVIDER'));
+    const response = toDiagnosticsResponse(session, participants, clientSummaries, providerCodes, provider);
+
+    await this.record(principal.userId, session.orgId, session.id, 'call.diagnostics.viewed', {
+      sessionId: session.id,
+      viewedByUserId: principal.userId,
+    });
+    return response;
+  }
+
+  // ── Shared ────────────────────────────────────────────────────────────────
+
+  /** The caller's role on the appointment; 404 for anyone else, as for a missing appointment (D-CW-30). */
+  private async participation(appointmentId: string, principal: Principal): Promise<Participation> {
+    const appointment = await this.appointments.findById(appointmentId);
+    if (!appointment) throw notFound();
+    if (appointment.expertUserId === principal.userId) return { appointment, role: 'expert' };
+    if (appointment.employeeUserId === principal.userId) return { appointment, role: 'employee' };
+    throw notFound();
+  }
+
+  /** 409 unless `confirmed` (CALL-20), then 403 outside the window (CALL-07). */
+  private assertJoinable(appointment: AppointmentRecord): void {
+    if (appointment.status !== 'confirmed') throw notJoinable();
+    if (!isWithinJoinWindow(appointment, new Date())) throw windowClosed();
+  }
+
+  /** The appointment's live session, created PENDING on first use. */
+  private async ensureSession(appointment: AppointmentRecord): Promise<CallSessionRecord> {
+    const existing = await this.repo.findLiveSessionByAppointment(appointment.id);
+    if (existing) return existing;
+    return this.dbs.withOrgScope(appointment.orgId, (tx) => this.repo.createSessionForAppointment(appointment, tx));
+  }
+
+  /** A write in the organization's RLS scope; system context for a session without one (webinars open to all). */
+  private scoped<T>(orgId: string | null, fn: (tx: DbExecutor | undefined) => Promise<T>): Promise<T> {
+    return orgId ? this.dbs.withOrgScope(orgId, fn) : fn(undefined);
+  }
+
+  /** A call audit event; `details` carries identifiers only (CW-R-33a). */
+  private record(
+    actorUserId: string,
+    orgId: string | null,
+    sessionId: string,
+    action: AuditEventInput['action'],
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    return this.audit.record({
+      action,
+      actorUserId,
+      actorKind: 'USER',
+      orgId,
+      recordType: 'call_session',
+      recordId: sessionId,
+      result: 'ALLOWED',
+      details,
+    });
+  }
+}

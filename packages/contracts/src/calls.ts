@@ -185,6 +185,20 @@ export const ChimeAttendeeSchema = z.object({
 });
 export type ChimeAttendee = z.infer<typeof ChimeAttendeeSchema>;
 
+/** Longest location text the employee may share before a psychological consultation (CALL-34). */
+export const CALL_LOCATION_TEXT_MAX_LENGTH = 300;
+
+/**
+ * `POST /appointments/:id/join` body. Empty for everyone, except that the
+ * employee of a psychological consultation may share a free-text location
+ * for crisis readiness (CALL-34, F-CW-04). The text lives on the session
+ * until it ends and never reaches audit details, logs or diagnostics.
+ */
+export const CallJoinRequestSchema = z.strictObject({
+  locationText: z.string().trim().min(1).max(CALL_LOCATION_TEXT_MAX_LENGTH).optional(),
+});
+export type CallJoinRequest = z.infer<typeof CallJoinRequestSchema>;
+
 /** Served with `Cache-Control: no-store` (CW-R-70). */
 export const CallJoinResponseSchema = z.object({
   sessionId: z.string().min(1),
@@ -215,6 +229,49 @@ export const CallFeedbackRequestSchema = z.object({
   comment: z.string().trim().max(CALL_FEEDBACK_COMMENT_MAX_LENGTH).nullish(),
 });
 export type CallFeedbackRequest = z.infer<typeof CallFeedbackRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// Quick signals (POST /appointments/:id/signal, D-CW-27)
+// ---------------------------------------------------------------------------
+
+/**
+ * The consultation's only in-call messages: the expert's "running late" and
+ * either party's "I cannot hear you" or "I cannot see you". Delivered over
+ * Socket.IO as `call.signal` and never persisted (CW-R-35).
+ */
+export const CALL_SIGNAL_TYPES = ['running_late', 'cannot_hear', 'cannot_see'] as const;
+export const CallSignalTypeSchema = z.enum(CALL_SIGNAL_TYPES);
+export type CallSignalType = z.infer<typeof CallSignalTypeSchema>;
+
+/** Largest "running late" estimate, in minutes: the join window stays open 10 minutes after the end. */
+export const CALL_SIGNAL_ETA_MAX_MINUTES = 60;
+
+const etaMinutesField = z.number().int().min(1).max(CALL_SIGNAL_ETA_MAX_MINUTES);
+
+/** No free text: a signal is its type, plus an ETA for "running late". */
+export const CallSignalRequestSchema = z
+  .strictObject({
+    type: CallSignalTypeSchema,
+    etaMinutes: etaMinutesField.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.etaMinutes !== undefined && value.type !== 'running_late') {
+      ctx.addIssue({ code: 'custom', path: ['etaMinutes'], message: 'Only a running-late signal carries an ETA' });
+    }
+  });
+export type CallSignalRequest = z.infer<typeof CallSignalRequestSchema>;
+
+/**
+ * The `call.signal` event on the `call:{sessionId}` room: the type, the ETA
+ * and the sender's role, so each client can tell its own signal from the
+ * other party's. No name and no user id (CW-R-35).
+ */
+export const CallSignalPayloadSchema = z.strictObject({
+  type: CallSignalTypeSchema,
+  etaMinutes: etaMinutesField.optional(),
+  fromRole: CallParticipantRoleSchema,
+});
+export type CallSignalPayload = z.infer<typeof CallSignalPayloadSchema>;
 
 // ---------------------------------------------------------------------------
 // Client telemetry (POST /calls/:sessionId/client-events, D-CW-13)
@@ -268,6 +325,15 @@ export const ClientEventRequestSchema = z.strictObject({
   os: z.string().min(1).max(64).optional(),
 });
 export type ClientEventRequest = z.infer<typeof ClientEventRequestSchema>;
+
+/** Most client events one request may carry (a 30-second aggregate plus the events in between). */
+export const CLIENT_EVENT_BATCH_MAX = 50;
+
+/** `POST /calls/:sessionId/client-events` body: a bounded batch of strict events. */
+export const ClientEventBatchRequestSchema = z.strictObject({
+  events: z.array(ClientEventRequestSchema).min(1).max(CLIENT_EVENT_BATCH_MAX),
+});
+export type ClientEventBatchRequest = z.infer<typeof ClientEventBatchRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Support diagnostics (GET /ops/calls/:sessionId/diagnostics, D-CW-28)

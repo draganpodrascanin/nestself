@@ -134,4 +134,34 @@ describe('pino-redaction', () => {
     expect(output).not.toContain('hidden-note');
     expect(output).toContain('visible');
   });
+
+  it('redacts Chime join tokens at any depth up to the join response body (CW-R-69, T-CW-1.1)', () => {
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          JoinToken: 'jt-top',
+          joinToken: 'jt-top-lower',
+          attendee: { JoinToken: 'jt-attendee', AttendeeId: 'attendee-visible' },
+          credentials: { attendee: { JoinToken: 'jt-credentials' } },
+          res: { body: { attendee: { JoinToken: 'jt-response', joinToken: 'jt-response-lower' } } },
+          nested: { joinToken: 'jt-nested' },
+        },
+        'join',
+      );
+    });
+
+    for (const token of ['jt-top', 'jt-attendee', 'jt-credentials', 'jt-response', 'jt-nested']) {
+      expect(output).not.toContain(token);
+    }
+    expect(output).toContain('attendee-visible');
+    expect(output).toContain('[redacted]');
+  });
+
+  it('redacts the location text an employee shares before a consultation (CALL-34)', () => {
+    const output = captureLog((logger) => {
+      logger.info({ req: { body: { locationText: 'Novi Sad, at home' } }, session: { locationText: 'Subotica' } }, 'join');
+    });
+    expect(output).not.toContain('Novi Sad');
+    expect(output).not.toContain('Subotica');
+  });
 });

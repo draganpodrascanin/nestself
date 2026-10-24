@@ -145,6 +145,47 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     });
   });
 
+  it('covers the calls controller: every route is @Authorize() with its canonical action (T-CW-1.1, CW-R-87)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const wrapper = discovery.getControllers().find((w) => w.instance?.constructor.name === 'CallsController');
+    expect(wrapper, 'CallsController is registered').toBeDefined();
+
+    const instance = wrapper!.instance as object;
+    const prototype = Object.getPrototypeOf(instance) as object;
+    const policies: Record<string, string> = {};
+    for (const methodName of scanner.getAllMethodNames(prototype)) {
+      const handler = (prototype as Record<string, unknown>)[methodName];
+      if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+      const targets = [handler, instance.constructor];
+      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+      const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+      policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+    }
+
+    expect(policies).toEqual({
+      join: 'consultation.join',
+      end: 'consultation.join',
+      outcome: 'delivery.record',
+      feedback: 'consultation.join',
+      signal: 'consultation.join',
+      clientEvents: 'consultation.join',
+      diagnostics: 'diagnostic.read',
+    });
+  });
+
   it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {
     if (!module) {
       module = await Test.createTestingModule({

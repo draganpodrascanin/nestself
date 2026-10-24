@@ -13,8 +13,16 @@ import {
   CALL_ROOM_CLOSE_AFTER_MINUTES,
   CALL_SESSION_STATUSES,
   CALL_TICKET_TTL_SECONDS,
+  CALL_SIGNAL_ETA_MAX_MINUTES,
+  CALL_SIGNAL_TYPES,
+  CLIENT_EVENT_BATCH_MAX,
   CLIENT_EVENT_NAMES,
+  CALL_LOCATION_TEXT_MAX_LENGTH,
   CallFeedbackRequestSchema,
+  CallJoinRequestSchema,
+  CallSignalPayloadSchema,
+  CallSignalRequestSchema,
+  ClientEventBatchRequestSchema,
   CallFormatSchema,
   CallJoinResponseSchema,
   CallOutcomeRequestSchema,
@@ -307,6 +315,75 @@ describe('ClientEventRequestSchema (D-CW-13)', () => {
     expect(issuePaths(ClientEventRequestSchema.safeParse({ eventName: 'meetingStartSucceeded', durationMs: -5 }))).toEqual([
       'durationMs',
     ]);
+  });
+});
+
+describe('ClientEventBatchRequestSchema (D-CW-13, CW-R-80)', () => {
+  it('accepts a bounded batch of client events', () => {
+    const batch = { events: [{ eventName: 'meetingStartSucceeded', durationMs: 1800 }, { eventName: 'signalingDropped' }] };
+    expect(ClientEventBatchRequestSchema.parse(batch)).toEqual(batch);
+  });
+
+  it('rejects an empty batch, an oversized batch and any field beside the events', () => {
+    expect(issuePaths(ClientEventBatchRequestSchema.safeParse({ events: [] }))).toEqual(['events']);
+    const many = Array.from({ length: CLIENT_EVENT_BATCH_MAX + 1 }, () => ({ eventName: 'connectionStats' }));
+    expect(issuePaths(ClientEventBatchRequestSchema.safeParse({ events: many }))).toEqual(['events']);
+    expect(ClientEventBatchRequestSchema.safeParse({ events: [{ eventName: 'meetingFailed' }], userName: 'Ana' }).success).toBe(
+      false,
+    );
+    expect(
+      issuePaths(ClientEventBatchRequestSchema.safeParse({ events: [{ eventName: 'meetingFailed', deviceLabel: 'Mic' }] })),
+    ).toEqual(['events.0']);
+  });
+});
+
+describe('CallSignalRequestSchema and CallSignalPayloadSchema (D-CW-27, CW-R-35)', () => {
+  it('names the three quick signals', () => {
+    expect(CALL_SIGNAL_TYPES).toEqual(['running_late', 'cannot_hear', 'cannot_see']);
+  });
+
+  it('accepts each signal, with an ETA only for running late', () => {
+    expect(CallSignalRequestSchema.parse({ type: 'cannot_hear' })).toEqual({ type: 'cannot_hear' });
+    expect(CallSignalRequestSchema.parse({ type: 'cannot_see' })).toEqual({ type: 'cannot_see' });
+    expect(CallSignalRequestSchema.parse({ type: 'running_late', etaMinutes: 5 })).toEqual({
+      type: 'running_late',
+      etaMinutes: 5,
+    });
+    expect(CallSignalRequestSchema.parse({ type: 'running_late' })).toEqual({ type: 'running_late' });
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'cannot_hear', etaMinutes: 5 }))).toEqual(['etaMinutes']);
+  });
+
+  it('rejects an unknown signal, a free-text message and an ETA out of range', () => {
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'chat' }))).toEqual(['type']);
+    expect(CallSignalRequestSchema.safeParse({ type: 'cannot_hear', message: 'hello' }).success).toBe(false);
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'running_late', etaMinutes: 0 }))).toEqual(['etaMinutes']);
+    expect(
+      issuePaths(CallSignalRequestSchema.safeParse({ type: 'running_late', etaMinutes: CALL_SIGNAL_ETA_MAX_MINUTES + 1 })),
+    ).toEqual(['etaMinutes']);
+  });
+
+  it('emits only the signal type, the ETA and the sender role: no name, no user id', () => {
+    const payload = { type: 'running_late', etaMinutes: 5, fromRole: 'expert' };
+    expect(CallSignalPayloadSchema.parse(payload)).toEqual(payload);
+    expect(CallSignalPayloadSchema.safeParse({ ...payload, userId: 'user_milica' }).success).toBe(false);
+    expect(CallSignalPayloadSchema.safeParse({ ...payload, displayName: 'Milica' }).success).toBe(false);
+  });
+});
+
+describe('CallJoinRequestSchema (CALL-34)', () => {
+  it('accepts an empty body and an optional location text', () => {
+    expect(CallJoinRequestSchema.parse({})).toEqual({});
+    expect(CallJoinRequestSchema.parse({ locationText: '  Novi Sad, at home  ' })).toEqual({
+      locationText: 'Novi Sad, at home',
+    });
+  });
+
+  it('rejects an empty or overlong location text and unknown fields', () => {
+    expect(issuePaths(CallJoinRequestSchema.safeParse({ locationText: '   ' }))).toEqual(['locationText']);
+    expect(
+      issuePaths(CallJoinRequestSchema.safeParse({ locationText: 'a'.repeat(CALL_LOCATION_TEXT_MAX_LENGTH + 1) })),
+    ).toEqual(['locationText']);
+    expect(CallJoinRequestSchema.safeParse({ deviceLabel: 'Mic' }).success).toBe(false);
   });
 });
 

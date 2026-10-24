@@ -7,6 +7,7 @@
  *   - WsInvalidationService: real-time revocation via invalidate channel
  *   - WsConnectionRegistry: userId → socket set
  *   - EventsGateway: subscribe/unsubscribe event handlers
+ *   - RoomEmitter: server-side emits to a room (exported for the calls module)
  *
  * The NestSelfIoAdapter is installed in main.ts, not here.
  */
@@ -18,6 +19,7 @@ import { SubscriptionAuthorizer } from './subscription-authorizer.js';
 import { WsInvalidationService } from './ws-invalidation.service.js';
 import { WsConnectionRegistry } from './ws-connection-registry.js';
 import { EventsGateway } from './events.gateway.js';
+import { RoomEmitter } from './room-emitter.js';
 
 @Module({
   imports: [AuthModule, SessionModule],
@@ -27,7 +29,8 @@ import { EventsGateway } from './events.gateway.js';
     WsInvalidationService,
     WsConnectionRegistry,
     EventsGateway,
+    RoomEmitter,
   ],
-  exports: [WsAuthService, WsConnectionRegistry],
+  exports: [WsAuthService, WsConnectionRegistry, RoomEmitter],
 })
 export class WsModule {}
