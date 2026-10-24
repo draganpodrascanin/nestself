@@ -32,6 +32,8 @@ const CALLS_WEBINARS_AUDIT_CATEGORIES: ReadonlyArray<readonly [AuditAction, Audi
   ['call.feedback.submitted', 'ADMIN'],
   ['call.diagnostics.viewed', 'CONTENT_ACCESS'],
   ['call.ticket.issued', 'SECURITY'],
+  // CALL-16: a participant's technical problem report, read by support with the diagnostics.
+  ['call.problem.reported', 'CONTENT_ACCESS'],
   ['webinar.created', 'ADMIN'],
   ['webinar.published', 'ADMIN'],
   ['webinar.canceled', 'ADMIN'],
@@ -56,8 +58,8 @@ const CALLS_WEBINARS_AUDIT_CATEGORIES: ReadonlyArray<readonly [AuditAction, Audi
 ];
 
 describe('calls and webinars audit events', () => {
-  it('catalogues all 42 canonical events exactly once', () => {
-    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(42);
+  it('catalogues all 43 canonical events exactly once', () => {
+    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(43);
     for (const [action] of CALLS_WEBINARS_AUDIT_CATEGORIES) {
       expect(AUDIT_ACTIONS.filter((a) => a === action), action).toHaveLength(1);
     }

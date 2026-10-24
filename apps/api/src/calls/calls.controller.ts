@@ -9,7 +9,8 @@
  * POST /appointments/:id/signal            consultation.join  appointmentResource    30/60 s
  * GET  /appointments/:id/location          consultation.join  appointmentResource             expert only (service), Cache-Control: no-store
  * POST /calls/:sessionId/client-events     consultation.join  callSessionResource    60/60 s
- * GET  /ops/calls/:sessionId/diagnostics   diagnostic.read    operationsResource('call')
+ * POST /calls/:sessionId/problem-report    consultation.join  callSessionResource     5/60 s  participants only (service), CALL-16
+ * GET  /ops/calls/:sessionId/diagnostics   diagnostic.read    operationsResource('call')            with the problem reports
  *
  * Every authorization denial and context mismatch answers 404, as on the
  * appointment routes (CALL-17, D-CW-30, `AppointmentNonDisclosureFilter`):
@@ -28,6 +29,7 @@ import {
   CallJoinRequestSchema,
   CallOutcomeRequestSchema,
   CallSignalRequestSchema,
+  CallProblemReportRequestSchema,
   ClientEventBatchRequestSchema,
   type AppointmentResponse,
   type CallFeedbackRequest,
@@ -35,6 +37,7 @@ import {
   type CallJoinResponse,
   type CallLocationResponse,
   type CallOutcomeRequest,
+  type CallProblemReportRequest,
   type CallSignalRequest,
   type ClientEventBatchRequest,
   type DiagnosticsResponse,
@@ -49,6 +52,8 @@ import { AppointmentNonDisclosureFilter } from '../appointments/appointment-non-
 import { callSessionResource } from './call-session.resolver.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsService } from './calls.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ProblemReportsService } from './problem-reports.service.js';
 
 const perMinute = (limit: number) => ({ default: { limit, ttl: 60_000 } });
 
@@ -61,7 +66,10 @@ const sessionIdOf = (req: Record<string, unknown>): string | undefined =>
 @Controller()
 @UseFilters(AppointmentNonDisclosureFilter)
 export class CallsController {
-  constructor(private readonly calls: CallsService) {}
+  constructor(
+    private readonly calls: CallsService,
+    private readonly problemReports: ProblemReportsService,
+  ) {}
 
   @Post('appointments/:id/join')
   @HttpCode(200)
@@ -140,9 +148,22 @@ export class CallsController {
     return this.calls.recordClientEvents(sessionId, principal, body);
   }
 
+  /** CALL-16: a fixed category and the connection summary; a note or any other text is refused (400). */
+  @Post('calls/:sessionId/problem-report')
+  @HttpCode(204)
+  @Throttle(perMinute(5))
+  @Authorize(ACTIONS['consultation.join'], callSessionResource)
+  problemReport(
+    @Param('sessionId') sessionId: string,
+    @Body(new ZodValidationPipe(CallProblemReportRequestSchema)) body: CallProblemReportRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<void> {
+    return this.problemReports.report(sessionId, principal, body);
+  }
+
   @Get('ops/calls/:sessionId/diagnostics')
   @Authorize(ACTIONS['diagnostic.read'], operationsResource('call', sessionIdOf))
   diagnostics(@Param('sessionId') sessionId: string, @CurrentPrincipal() principal: Principal): Promise<DiagnosticsResponse> {
-    return this.calls.diagnostics(sessionId, principal);
+    return this.problemReports.diagnostics(sessionId, principal);
   }
 }

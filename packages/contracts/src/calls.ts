@@ -482,6 +482,37 @@ export const ClientEventBatchRequestSchema = z.strictObject({
 export type ClientEventBatchRequest = z.infer<typeof ClientEventBatchRequestSchema>;
 
 // ---------------------------------------------------------------------------
+// Technical problem reports (POST /calls/:sessionId/problem-report, CALL-16)
+// ---------------------------------------------------------------------------
+
+/** What a participant reports; a fixed category, never free text (D-CW-04, CALL-16). */
+export const CALL_PROBLEM_CATEGORIES = ['audio', 'video', 'connection', 'other'] as const;
+export const CallProblemCategorySchema = z.enum(CALL_PROBLEM_CATEGORIES);
+export type CallProblemCategory = z.infer<typeof CallProblemCategorySchema>;
+
+/**
+ * The connection metadata the client attaches from its event log (CALL-16
+ * criterion 3), with the field shapes of {@link ClientEventRequestSchema}:
+ * the call's duration, its reconnects, the average quality, browser and OS.
+ * Strict, so no device label, name or content can ride along.
+ */
+export const CallProblemSummarySchema = z.strictObject({
+  durationMs: z.number().int().nonnegative().optional(),
+  reconnectCount: z.number().int().nonnegative().optional(),
+  metrics: CallQualityMetricsSchema.optional(),
+  browser: z.string().min(1).max(64).optional(),
+  os: z.string().min(1).max(64).optional(),
+});
+export type CallProblemSummary = z.infer<typeof CallProblemSummarySchema>;
+
+/** `POST /calls/:sessionId/problem-report` body. Strict: a `note` or any other text is refused. */
+export const CallProblemReportRequestSchema = z.strictObject({
+  category: CallProblemCategorySchema,
+  summary: CallProblemSummarySchema,
+});
+export type CallProblemReportRequest = z.infer<typeof CallProblemReportRequestSchema>;
+
+// ---------------------------------------------------------------------------
 // Support diagnostics (GET /ops/calls/:sessionId/diagnostics, D-CW-28)
 // ---------------------------------------------------------------------------
 
@@ -496,7 +527,11 @@ export const DIAGNOSTICS_RESPONSE_FIELDS = [
   'provider',
   'providerMeetingId',
   'participants',
+  'problemReports',
 ] as const;
+
+/** Frozen allowlist of one diagnostics problem report entry (CALL-16 criterion 5). */
+export const DIAGNOSTICS_PROBLEM_REPORT_FIELDS = ['category', 'reportedAt', 'role'] as const;
 
 /** Frozen allowlist of one diagnostics participant entry (CW-R-86). */
 export const DIAGNOSTICS_PARTICIPANT_FIELDS = [
@@ -523,6 +558,14 @@ export const DiagnosticsParticipantSchema = z.strictObject({
 });
 export type DiagnosticsParticipant = z.infer<typeof DiagnosticsParticipantSchema>;
 
+/** A problem report as support sees it: the category, when, and the reporter's role only. */
+export const DiagnosticsProblemReportSchema = z.strictObject({
+  category: CallProblemCategorySchema,
+  reportedAt: z.string().datetime(),
+  role: CallParticipantRoleSchema,
+});
+export type DiagnosticsProblemReport = z.infer<typeof DiagnosticsProblemReportSchema>;
+
 /**
  * Strict at both levels: a field outside the 4.7.5 set fails the parse, so
  * no content, category or identity can leak through (CONF-R-07, CW-R-73).
@@ -537,5 +580,11 @@ export const DiagnosticsResponseSchema = z.strictObject({
   provider: VideoProviderNameSchema,
   providerMeetingId: z.string().min(1).nullable(),
   participants: z.array(DiagnosticsParticipantSchema),
+  /**
+   * The participants' technical problem reports (CALL-16), oldest first.
+   * Defaults to none, so the base DTO built from the session alone parses;
+   * the diagnostics route always fills it.
+   */
+  problemReports: z.array(DiagnosticsProblemReportSchema).default([]),
 });
 export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;

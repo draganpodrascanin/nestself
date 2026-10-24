@@ -83,6 +83,7 @@ export const AUDIT_ACTIONS = [
   'call.feedback.submitted',
   'call.diagnostics.viewed',
   'call.ticket.issued',
+  'call.problem.reported',
   'webinar.created',
   'webinar.published',
   'webinar.canceled',
@@ -144,7 +145,7 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action === 'org.follow_up_policy.changed') return 'ADMIN';
   if (action === 'call.outcome.recorded') return 'FINANCIAL';
   if (action === 'call.joined' || action === 'call.ticket.issued') return 'SECURITY';
-  if (action === 'call.diagnostics.viewed') return 'CONTENT_ACCESS';
+  if (action === 'call.diagnostics.viewed' || action === 'call.problem.reported') return 'CONTENT_ACCESS';
   if (action.startsWith('call.')) return 'ADMIN';
   if (action === 'webinar.joined') return 'SECURITY';
   if (

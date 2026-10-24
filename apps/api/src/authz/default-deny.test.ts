@@ -183,6 +183,7 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       signal: 'consultation.join',
       location: 'consultation.join',
       clientEvents: 'consultation.join',
+      problemReport: 'consultation.join',
       diagnostics: 'diagnostic.read',
     });
   });

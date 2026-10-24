@@ -38,6 +38,7 @@ import { CallsController } from './calls.controller.js';
 import { CallsRepository } from './calls.repository.js';
 import { CallsService } from './calls.service.js';
 import { ChimeEventsConsumer } from './chime-event-consumer.js';
+import { ProblemReportsService } from './problem-reports.service.js';
 import { VideoMetrics } from './video-metrics.js';
 
 /** Set to `false` to keep the API process from applying the fake provider's events. */
@@ -52,7 +53,7 @@ export function shouldApplyFakeEventsInApi(config: Pick<ConfigService, 'get'>): 
 @Module({
   imports: [AuthModule, AppointmentsModule, VideoModule, WsModule, CallsSchedulerModule],
   controllers: [CallsController],
-  providers: [CallsRepository, CallsService, VideoMetrics],
+  providers: [CallsRepository, CallsService, VideoMetrics, ProblemReportsService],
   exports: [CallsRepository, CallsService, VideoMetrics],
 })
 export class CallsModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap {

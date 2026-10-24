@@ -33,6 +33,7 @@ import {
   CallJoinResponseSchema,
   CallLocationResponseSchema,
   DIAGNOSTICS_PARTICIPANT_FIELDS,
+  DIAGNOSTICS_PROBLEM_REPORT_FIELDS,
   DIAGNOSTICS_RESPONSE_FIELDS,
   DiagnosticsResponseSchema,
   type CallJoinResponse,
@@ -96,6 +97,7 @@ const CALL_AUDIT_DETAIL_KEYS: Record<string, string[][]> = {
   'call.outcome.recorded': [['outcomeStatus', 'sessionId']],
   'call.feedback.submitted': [['sessionId']],
   'call.diagnostics.viewed': [['sessionId', 'viewedByUserId']],
+  'call.problem.reported': [['category', 'sessionId']],
 };
 
 interface SignedIn {
@@ -434,6 +436,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       post(who, `/calls/${sessionId}/client-events`, { events: [{ eventName: 'meetingFailed' }] }),
       diagnostics(who, sessionId),
       location(who),
+      post(who, `/calls/${sessionId}/problem-report`, { category: 'audio', summary: {} }),
     ];
     for (const who of [ivana, stefan]) {
       for (const res of await Promise.all(routes(who))) expectNotFound(res);
@@ -498,6 +501,54 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     expect(await testDb.db.select().from(callClientEvents).where(eq(callClientEvents.sessionId, sessionId))).toHaveLength(5);
   });
 
+  // ── Technical problem reports (CALL-16) ─────────────────────────────────────
+
+  it('both participants report a technical problem; a note is refused and anyone else gets 404', async () => {
+    const summary = {
+      durationMs: 600_000,
+      reconnectCount: 1,
+      metrics: { rtt: 220, jitter: 31, packetLoss: 0.03, outgoingBitrate: 300_000 },
+      browser: 'Chrome 130',
+      os: 'macOS 15',
+    };
+    const byEmployee = await post(jovan, `/calls/${sessionId}/problem-report`, { category: 'audio', summary });
+    expect(byEmployee.status).toBe(204);
+    const byExpert = await post(milica, `/calls/${sessionId}/problem-report`, { category: 'connection', summary: {} });
+    expect(byExpert.status).toBe(204);
+
+    const note = await post(jovan, `/calls/${sessionId}/problem-report`, { category: 'video', summary, note: 'It froze' });
+    expect(note.status).toBe(400);
+    for (const who of [ivana, stefan, ana]) {
+      expectNotFound(await post(who, `/calls/${sessionId}/problem-report`, { category: 'other', summary: {} }));
+    }
+
+    // Stored as client-event rows of their own kind, apart from telemetry.
+    const rows = await testDb.db
+      .select()
+      .from(callClientEvents)
+      .where(and(eq(callClientEvents.sessionId, sessionId), like(callClientEvents.eventName, 'problem_report:%')));
+    expect(rows.map((r) => [r.eventName, r.participantId]).sort()).toEqual(
+      [
+        ['problem_report:audio', employeeJoin.participantId],
+        ['problem_report:connection', expertJoin.participantId],
+      ].sort(),
+    );
+    const audioRow = rows.find((r) => r.eventName === 'problem_report:audio')!;
+    expect(audioRow).toMatchObject({ durationMs: 600_000, deviceError: null, browser: 'Chrome 130', os: 'macOS 15' });
+    expect(audioRow.metrics).toEqual({ ...summary.metrics, reconnectCount: 1 });
+
+    const reported = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'call.problem.reported'), eq(auditEvents.recordId, sessionId)));
+    expect(reported.map((e) => [e.actorUserId, e.category, e.details]).sort()).toEqual(
+      [
+        ['user_jovan', 'CONTENT_ACCESS', { sessionId, category: 'audio' }],
+        ['user_milica', 'CONTENT_ACCESS', { sessionId, category: 'connection' }],
+      ].sort(),
+    );
+  });
+
   // ── Diagnostics (PLT-05, D-CW-28, CW-R-73, CW-R-86) ─────────────────────────
 
   it('diagnostics need a support case for the session and return exactly the 4.7.5 fields', async () => {
@@ -537,6 +588,14 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       browser: 'Chrome 130',
       os: 'macOS 15',
     });
+    // CALL-16: the problem reports, as category, time and role only; telemetry aggregates above ignore them.
+    expect(body.problemReports.map((r) => [r.category, r.role])).toEqual([
+      ['audio', 'employee'],
+      ['connection', 'expert'],
+    ]);
+    for (const report of res.body.problemReports as Record<string, unknown>[]) {
+      expect(Object.keys(report).sort()).toEqual([...DIAGNOSTICS_PROBLEM_REPORT_FIELDS].sort());
+    }
     const text = JSON.stringify(res.body);
     for (const leak of ['user_jovan', 'user_milica', employeeJoin.participantId, 'psychological', 'fake-token-']) {
       expect(text).not.toContain(leak);

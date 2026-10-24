@@ -18,6 +18,9 @@ import {
   CLIENT_EVENT_BATCH_MAX,
   CLIENT_EVENT_NAMES,
   CALL_LOCATION_TEXT_MAX_LENGTH,
+  CALL_PROBLEM_CATEGORIES,
+  CallProblemReportRequestSchema,
+  DIAGNOSTICS_PROBLEM_REPORT_FIELDS,
   CallFeedbackRequestSchema,
   CallJoinRequestSchema,
   CallLocationResponseSchema,
@@ -565,9 +568,10 @@ describe('DiagnosticsResponseSchema (D-CW-28, CW-R-86)', () => {
     provider: 'chime',
     providerMeetingId: 'meeting-1',
     participants: [participant],
+    problemReports: [{ category: 'audio', reportedAt: '2026-11-03T09:52:00.000Z', role: 'employee' }],
   };
 
-  it('allowlists exactly the 4.7.5 fields', () => {
+  it('allowlists exactly the 4.7.5 fields and the CALL-16 problem reports', () => {
     expect(DIAGNOSTICS_RESPONSE_FIELDS).toEqual([
       'sessionId',
       'appointmentId',
@@ -578,7 +582,9 @@ describe('DiagnosticsResponseSchema (D-CW-28, CW-R-86)', () => {
       'provider',
       'providerMeetingId',
       'participants',
+      'problemReports',
     ]);
+    expect(DIAGNOSTICS_PROBLEM_REPORT_FIELDS).toEqual(['category', 'reportedAt', 'role']);
     expect(DIAGNOSTICS_PARTICIPANT_FIELDS).toEqual([
       'role',
       'joinedAt',
@@ -607,8 +613,13 @@ describe('DiagnosticsResponseSchema (D-CW-28, CW-R-86)', () => {
     expect(DiagnosticsResponseSchema.parse(pending)).toEqual(pending);
   });
 
+  it('lists no problem report when none was given (the base DTO omits the field)', () => {
+    const { problemReports: _omitted, ...base } = valid;
+    expect(DiagnosticsResponseSchema.parse(base)).toEqual({ ...base, problemReports: [] });
+  });
+
   it('rejects each missing field', () => {
-    for (const field of DIAGNOSTICS_RESPONSE_FIELDS) {
+    for (const field of DIAGNOSTICS_RESPONSE_FIELDS.filter((f) => f !== 'problemReports')) {
       const input: Record<string, unknown> = { ...valid };
       delete input[field];
       expect(issuePaths(DiagnosticsResponseSchema.safeParse(input)), field).toEqual([field]);
@@ -632,6 +643,51 @@ describe('DiagnosticsResponseSchema (D-CW-28, CW-R-86)', () => {
         extra,
       ).toBe(false);
     }
+    for (const extra of ['note', 'userId', 'summary', 'browser']) {
+      expect(
+        DiagnosticsResponseSchema.safeParse({ ...valid, problemReports: [{ ...valid.problemReports[0], [extra]: 'x' }] })
+          .success,
+        extra,
+      ).toBe(false);
+    }
+  });
+});
+
+describe('CallProblemReportRequestSchema (CALL-16, D-CW-04)', () => {
+  const summary = {
+    durationMs: 1_800_000,
+    reconnectCount: 2,
+    metrics: { rtt: 120, jitter: 25, packetLoss: 0.04, outgoingBitrate: 400_000 },
+    browser: 'Chrome 130',
+    os: 'macOS 15',
+  };
+
+  it('names the four fixed categories', () => {
+    expect(CALL_PROBLEM_CATEGORIES).toEqual(['audio', 'video', 'connection', 'other']);
+  });
+
+  it('accepts a category with the connection summary, or with an empty summary', () => {
+    const report = { category: 'audio', summary };
+    expect(CallProblemReportRequestSchema.parse(report)).toEqual(report);
+    expect(CallProblemReportRequestSchema.parse({ category: 'other', summary: {} })).toEqual({
+      category: 'other',
+      summary: {},
+    });
+  });
+
+  it('rejects a free-text note, an unknown category and anything in the summary beyond the metadata', () => {
+    expect(CallProblemReportRequestSchema.safeParse({ category: 'audio', summary, note: 'It echoed' }).success).toBe(false);
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ category: 'echo', summary }))).toEqual(['category']);
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ summary }))).toEqual(['category']);
+    for (const extra of ['deviceLabel', 'displayName', 'message']) {
+      expect(
+        CallProblemReportRequestSchema.safeParse({ category: 'video', summary: { ...summary, [extra]: 'x' } }).success,
+        extra,
+      ).toBe(false);
+    }
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ category: 'video', summary: { reconnectCount: -1 } }))).toEqual([
+      'summary.reconnectCount',
+    ]);
   });
 });
 
