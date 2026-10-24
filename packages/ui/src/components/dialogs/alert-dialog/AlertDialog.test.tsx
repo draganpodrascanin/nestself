@@ -64,6 +64,27 @@ describe('AlertDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('confirmPending disables the confirm button and marks it busy', async () => {
+    const onConfirm = vi.fn();
+    render(
+      <AlertDialog defaultOpen>
+        <AlertDialogContent
+          title="Revoke?"
+          confirmLabel="Revoke"
+          cancelLabel="Keep"
+          onConfirm={onConfirm}
+          confirmPending
+        />
+      </AlertDialog>,
+    );
+    const confirm = await screen.findByRole('button', { name: 'Revoke' });
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAttribute('aria-busy', 'true');
+    await userEvent.setup().click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
   it('passes axe a11y check when open', async () => {
     const user = userEvent.setup();
     const { container } = render(

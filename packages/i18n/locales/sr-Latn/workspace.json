@@ -119,6 +119,136 @@
     "connected": "API je povezan",
     "sampleMode": "API nije povezan (probni podaci)"
   },
+  "access": {
+    "nav": "Pristup",
+    "title": "Upravljanje pristupom",
+    "lead": "Ko ima koji šablon dozvola u tvojoj organizaciji i šta mu svaki šablon omogućava.",
+    "sampleNote": "Primer podataka: dodela, delegiranje i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "loading": "Učitavanje pristupa",
+    "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
+    "noOrganization": "Za upravljanje pristupom tvoj nalog mora imati tačno jedno aktivno članstvo u organizaciji.",
+    "tableCaption": "Dozvole u tvojoj organizaciji",
+    "columns": {
+      "template": "Šablon",
+      "subject": "Osoba",
+      "scope": "Obuhvat",
+      "validity": "Važenje",
+      "status": "Status",
+      "actions": "Radnje"
+    },
+    "status": {
+      "active": "Aktivna",
+      "revoked": "Opozvana",
+      "expired": "Istekla",
+      "scheduled": "Zakazana"
+    },
+    "templates": {
+      "employer_owner": "Vlasnik poslodavca",
+      "hr_admin": "HR administrator",
+      "team_manager": "Menadžer tima",
+      "approver": "Odobravalac",
+      "employer_finance": "Finansije poslodavca",
+      "reporting_user": "Korisnik izveštaja",
+      "employee": "Zaposleni",
+      "event_supplier": "Dobavljač za događaje",
+      "delegated": "Delegirani pristup"
+    },
+    "scope": {
+      "label": "Obuhvat",
+      "organization": "Cela organizacija",
+      "orgUnit": "Jedna organizaciona jedinica",
+      "unit": "{{name}}",
+      "unitWithDescendants": "{{name}} i jedinice ispod nje",
+      "unitLabel": "Organizaciona jedinica",
+      "includeDescendants": "Uključi i jedinice ispod nje",
+      "unknownUnit": "Nepoznata organizaciona jedinica"
+    },
+    "validity": {
+      "noEnd": "Bez datuma isteka",
+      "from": "Od {{date}}",
+      "until": "Do {{date}}",
+      "range": "{{from}} – {{until}}",
+      "validUntil": "Važi do"
+    },
+    "conditions": {
+      "spendingCeiling": "Limit potrošnje",
+      "amount": "Iznos",
+      "currency": "Valuta",
+      "categories": "Kategorije",
+      "categoriesHint": "Kategorije razdvoji zarezima.",
+      "timeWindow": "Vremenski okvir",
+      "days": "Dani",
+      "from": "Od",
+      "to": "Do",
+      "day": {
+        "0": "Ned",
+        "1": "Pon",
+        "2": "Uto",
+        "3": "Sre",
+        "4": "Čet",
+        "5": "Pet",
+        "6": "Sub"
+      }
+    },
+    "assign": {
+      "open": "Dodeli šablon",
+      "title": "Dodela šablona dozvola",
+      "member": "Član",
+      "template": "Šablon",
+      "choose": "Izaberi",
+      "submit": "Dodeli",
+      "cancel": "Otkaži",
+      "success": "Šablon je dodeljen."
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "openFor": "Opozovi {{template}} za osobu {{subject}}",
+      "title": "Opozvati ovu dozvolu?",
+      "description": "{{subject}} odmah gubi dozvole šablona {{template}}.",
+      "confirm": "Opozovi dozvolu",
+      "cancel": "Zadrži dozvolu",
+      "success": "Dozvola je opozvana."
+    },
+    "reason": {
+      "label": "Razlog",
+      "hint": "Od 3 do 500 znakova. Razlog se čuva u evidenciji revizije."
+    },
+    "delegate": {
+      "open": "Delegiraj",
+      "openFor": "Delegiraj deo šablona {{template}}",
+      "title": "Delegiranje dela tvog pristupa",
+      "description": "Osoba dobija samo radnje koje izabereš, u okviru obuhvata tvoje dozvole.",
+      "member": "Član",
+      "actions": "Radnje za delegiranje",
+      "submit": "Delegiraj",
+      "cancel": "Otkaži",
+      "success": "Pristup je delegiran."
+    },
+    "preview": {
+      "title": "Stvarni pristup",
+      "lead": "Izaberi člana da vidiš sve radnje koje mu njegove dozvole daju u ovoj organizaciji.",
+      "member": "Član",
+      "empty": "Ovaj član nema nijednu radnju u ovoj organizaciji.",
+      "loading": "Učitavanje stvarnog pristupa"
+    },
+    "errors": {
+      "loadTitle": "Pristup nije moguće učitati",
+      "membersLoadTitle": "Članove nije moguće učitati",
+      "orgUnitsLoadTitle": "Organizacione jedinice nije moguće učitati",
+      "missingConditions": "Ovaj šablon zahteva da popuniš sve obavezne uslove.",
+      "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
+      "templateInactive": "Ovaj šablon više nije dostupan.",
+      "delegationExceedsBoundary": "Možeš delegirati samo radnje i obuhvat koje i sam imaš.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "conflict": "Ova dozvola je u međuvremenu promenjena. Osveži listu i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "memberRequired": "Izaberi člana.",
+      "templateRequired": "Izaberi šablon.",
+      "orgUnitRequired": "Izaberi organizacionu jedinicu.",
+      "reasonLength": "Unesi razlog dužine od 3 do 500 znakova.",
+      "actionsRequired": "Izaberi bar jednu radnju."
+    }
+  },
   "contextSwitcher": {
     "label": "Promeni radni prostor",
     "personal": "Moj prostor",

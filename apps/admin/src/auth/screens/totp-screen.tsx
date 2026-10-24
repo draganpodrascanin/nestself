@@ -58,7 +58,7 @@ export function TotpScreen({
   };
 
   const errors = displayError
-    ? [{ id: 'totp-code', label: t('auth:totp.codeLabel'), message: displayError }]
+    ? [{ id: 'totp-code-input', label: t('auth:totp.codeLabel'), message: displayError }]
     : [];
 
   return (

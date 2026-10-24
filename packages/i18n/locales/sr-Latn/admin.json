@@ -5,7 +5,8 @@
     "organizations": "Organizacije",
     "content": "Sadržaj",
     "eventRequests": "Zahtevi za događaje",
-    "settings": "Podešavanja"
+    "settings": "Podešavanja",
+    "access": "Pristup"
   },
   "experts": {
     "title": "Stručnjaci",
@@ -35,7 +36,12 @@
     "teams": "Timovi",
     "members": "Članovi",
     "detail": "Detalji organizacije",
-    "programme": "Program"
+    "programme": "Program",
+    "tabsLabel": "Delovi organizacije",
+    "tabs": {
+      "overview": "Pregled",
+      "access": "Pristup"
+    }
   },
   "tables": {
     "id": "ID",
@@ -87,6 +93,150 @@
   "api": {
     "connected": "API povezan",
     "notConnected": "API nije povezan (režim uzorka)"
+  },
+  "access": {
+    "sampleNote": "Primer podataka: dodela i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "loading": "Učitavanje pristupa",
+    "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
+    "org": {
+      "title": "Upravljanje pristupom",
+      "lead": "Ko ima koji šablon dozvola u ovoj organizaciji i šta svaka osoba može da radi.",
+      "tableCaption": "Dozvole u ovoj organizaciji",
+      "scopeNote": "Šablon važi za celu organizaciju. HR administratori ograničavaju šablone na organizacione jedinice u radnom prostoru."
+    },
+    "platform": {
+      "title": "Pristup platformi",
+      "lead": "Šabloni osoblja van bilo koje organizacije, u obuhvatu koji svaki šablon određuje.",
+      "tableCaption": "Dozvole na platformi",
+      "empty": "Još nema dozvola na platformi.",
+      "readOnlyNote": "Dozvole na platformi za sada nije moguće opozvati sa ovog ekrana: operativni API nema rutu za njihov opoziv.",
+      "scopeOf": "Obuhvat: {{scope}}"
+    },
+    "columns": {
+      "template": "Šablon",
+      "subject": "Osoba",
+      "scope": "Obuhvat",
+      "validity": "Važenje",
+      "status": "Status",
+      "actions": "Radnje"
+    },
+    "status": {
+      "active": "Aktivna",
+      "revoked": "Opozvana",
+      "expired": "Istekla",
+      "scheduled": "Zakazana"
+    },
+    "templates": {
+      "platform_owner": "Vlasnik platforme",
+      "client_operations": "Operacije za klijente",
+      "content_author": "Autor sadržaja",
+      "content_publisher": "Izdavač sadržaja",
+      "service_coordinator": "Koordinator usluga",
+      "support_operator": "Operater podrške",
+      "nestself_finance": "NestSelf finansije",
+      "expert": "Stručnjak",
+      "expert_lead": "Vodeći stručnjak",
+      "employer_owner": "Vlasnik poslodavca",
+      "hr_admin": "HR administrator",
+      "team_manager": "Menadžer tima",
+      "approver": "Odobravalac",
+      "employer_finance": "Finansije poslodavca",
+      "reporting_user": "Korisnik izveštaja",
+      "employee": "Zaposleni",
+      "event_supplier": "Dobavljač za događaje",
+      "delegated": "Delegirani pristup"
+    },
+    "scope": {
+      "platform": "Cela platforma",
+      "organization": "Cela organizacija",
+      "org_unit": "Jedna organizaciona jedinica",
+      "assigned_clients": "Dodeljeni klijenti",
+      "assigned_queues": "Dodeljeni redovi",
+      "assigned_cases": "Dodeljeni slučajevi",
+      "assigned_practice": "Dodeljena praksa",
+      "assigned_collections": "Dodeljene kolekcije",
+      "own": "Sopstveni podaci"
+    },
+    "validity": {
+      "noEnd": "Bez datuma isteka",
+      "from": "Od {{date}}",
+      "until": "Do {{date}}",
+      "range": "{{from}} – {{until}}",
+      "validUntil": "Važi do"
+    },
+    "conditions": {
+      "spendingCeiling": "Limit potrošnje",
+      "amount": "Iznos",
+      "currency": "Valuta",
+      "categories": "Kategorije",
+      "categoriesHint": "Kategorije razdvoji zarezima.",
+      "timeWindow": "Vremenski okvir",
+      "days": "Dani",
+      "from": "Od",
+      "to": "Do",
+      "day": {
+        "0": "Ned",
+        "1": "Pon",
+        "2": "Uto",
+        "3": "Sre",
+        "4": "Čet",
+        "5": "Pet",
+        "6": "Sub"
+      }
+    },
+    "assign": {
+      "open": "Dodeli šablon",
+      "title": "Dodela šablona dozvola",
+      "member": "Član",
+      "template": "Šablon",
+      "choose": "Izaberi",
+      "submit": "Dodeli",
+      "cancel": "Otkaži",
+      "success": "Šablon je dodeljen.",
+      "userId": "ID korisnika",
+      "userIdHint": "ID člana osoblja koji dobija šablon."
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "openFor": "Opozovi {{template}} za osobu {{subject}}",
+      "title": "Opozvati ovu dozvolu?",
+      "description": "{{subject}} odmah gubi dozvole šablona {{template}}.",
+      "confirm": "Opozovi dozvolu",
+      "cancel": "Zadrži dozvolu",
+      "success": "Dozvola je opozvana."
+    },
+    "reason": {
+      "label": "Razlog",
+      "hint": "Od 3 do 500 znakova. Razlog se čuva u evidenciji revizije."
+    },
+    "lookup": {
+      "title": "Pristup korisnika",
+      "lead": "Unesi ID korisnika da vidiš sve radnje koje ima, po organizaciji i na platformi.",
+      "userId": "ID korisnika",
+      "submit": "Pronađi",
+      "loading": "Učitavanje pristupa korisnika",
+      "platform": "Platforma",
+      "organization": "Organizacija {{orgId}}",
+      "empty": "Ovaj korisnik nema nijednu radnju ni u jednom kontekstu.",
+      "noActions": "Nema radnji u ovom kontekstu."
+    },
+    "errors": {
+      "loadTitle": "Pristup nije moguće učitati",
+      "membersLoadTitle": "Članove nije moguće učitati",
+      "missingConditions": "Ovaj šablon zahteva da popuniš sve obavezne uslove.",
+      "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
+      "templateInactive": "Ovaj šablon više nije dostupan.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "conflict": "Ova dozvola je u međuvremenu promenjena. Osveži listu i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "memberRequired": "Izaberi člana.",
+      "templateRequired": "Izaberi šablon.",
+      "reasonLength": "Unesi razlog dužine od 3 do 500 znakova.",
+      "notFound": "Ova stavka više ne postoji. Osveži listu i pokušaj ponovo.",
+      "userNotFound": "Ne postoji korisnik sa ovim ID-jem.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo.",
+      "userIdRequired": "Unesi ID korisnika."
+    }
   },
   "contextSwitcher": {
     "error": {

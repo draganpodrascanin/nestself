@@ -167,6 +167,7 @@ export class FakeIdentityProvider extends IdentityProviderService {
       (otp && otp.expiresAt >= Date.now() && codesEqual(otp.code, input.code));
 
     if (!codeMatches) {
+      // The session survives a mismatch, as Cognito's does (CodeMismatchException).
       throw new IdentityProviderError('Invalid code', 'invalid_code');
     }
 

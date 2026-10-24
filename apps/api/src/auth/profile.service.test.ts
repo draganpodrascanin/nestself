@@ -50,6 +50,9 @@ function createMocks() {
       }),
     },
     audit: { record: vi.fn().mockResolvedValue(undefined) },
+    meResponse: {
+      build: vi.fn((principal: unknown) => Promise.resolve({ principal, effectiveActions: ['content.read'] })),
+    },
   };
 }
 
@@ -62,8 +65,8 @@ describe('ProfileService', () => {
     service = new ProfileService(
       mocks.identities as never,
       mocks.principalLoader as never,
-      mocks.contextLoader as never,
       mocks.audit as never,
+      mocks.meResponse as never,
     );
   });
 
@@ -76,6 +79,7 @@ describe('ProfileService', () => {
       expect.objectContaining({ action: 'user.updated', actorUserId: 'user-1', details: { fields: ['locale'] } }),
     );
     expect(mocks.principalLoader.invalidateUser).toHaveBeenCalledWith('user-1');
+    expect(result.effectiveActions).toEqual(['content.read']);
   });
 
   it('updates the display name and recomputes the initials', async () => {

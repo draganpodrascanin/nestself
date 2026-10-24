@@ -10,8 +10,8 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import type { Principal, MeResponse, PasswordResponse } from '@nestself/contracts';
-import type { SessionRecord } from '../session/session.types.js';
+import { Throttle } from '@nestjs/throttler';
+import type { Principal, MeResponse, PasswordResponse } from '@nestself/contracts';import type { SessionRecord } from '../session/session.types.js';
 
 interface HttpReq {
   headers: Record<string, string | string[] | undefined>;
@@ -48,6 +48,8 @@ import { SessionEndpointsService } from './session-endpoints.service.js';
 import { SessionCookies } from '../session/session-cookie.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ProfileService } from './profile.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { StepUpService } from './step-up.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 import {
   DiscoverRequestSchema,
@@ -62,6 +64,7 @@ import {
   ContextSwitchRequestSchema,
   ProfileLocaleRequestSchema,
   ProfileDisplayNameRequestSchema,
+  StepUpVerifyRequestSchema,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -112,6 +115,7 @@ export class AuthController {
     private readonly sessionEndpoints: SessionEndpointsService,
     private readonly cookies: SessionCookies,
     private readonly profile: ProfileService,
+    private readonly stepUp: StepUpService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -134,8 +138,8 @@ export class AuthController {
   @Post('email-otp/start')
   @HttpCode(200)
   async emailOtpStart(@Req() req: HttpReq, @Body() body: unknown) {
-    const { email } = validate(EmailOtpStartRequestSchema, body);
-    return this.signIn.emailOtpStart(email, extractMeta(req));
+    const { email, locale } = validate(EmailOtpStartRequestSchema, body);
+    return this.signIn.emailOtpStart(email, extractMeta(req), locale);
   }
 
   // -----------------------------------------------------------------------
@@ -308,6 +312,43 @@ export class AuthController {
       context,
       session.lastPersonalOrgId,
     );
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/step-up/start
+  // -----------------------------------------------------------------------
+
+  @Authenticated()
+  @Post('step-up/start')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async stepUpStart(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+  ) {
+    return this.stepUp.start(principal, extractMeta(req), req.session?.surface ?? extractSurface(req));
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/step-up/verify
+  // -----------------------------------------------------------------------
+
+  @Authenticated()
+  @Post('step-up/verify')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async stepUpVerify(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+    @Res({ passthrough: true }) res: HttpRes,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const { challengeToken, response } = validate(StepUpVerifyRequestSchema, body);
+    const result = await this.stepUp.verify(principal, challengeToken, response, extractMeta(req));
+    if (result.session) {
+      const { sessionId, csrfToken, absoluteExpiresAt } = result.session;
+      this.setSessionCookies(res, sessionId, csrfToken, absoluteExpiresAt);
+    }
   }
 
   // -----------------------------------------------------------------------

@@ -5,7 +5,8 @@
     "organizations": "Szervezetek",
     "content": "Tartalom",
     "eventRequests": "Eseményigények",
-    "settings": "Beállítások"
+    "settings": "Beállítások",
+    "access": "Hozzáférés"
   },
   "experts": {
     "title": "Szakértők",
@@ -35,7 +36,12 @@
     "teams": "Csapatok",
     "members": "Tagok",
     "detail": "Szervezet részletei",
-    "programme": "Program"
+    "programme": "Program",
+    "tabsLabel": "A szervezet részei",
+    "tabs": {
+      "overview": "Áttekintés",
+      "access": "Hozzáférés"
+    }
   },
   "tables": {
     "id": "Azonosító",
@@ -87,6 +93,150 @@
   "api": {
     "connected": "API csatlakoztatva",
     "notConnected": "API nincs csatlakoztatva (mintaadatok mód)"
+  },
+  "access": {
+    "sampleNote": "Mintaadatok: a kiosztás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
+    "loading": "Hozzáférés betöltése",
+    "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
+    "org": {
+      "title": "Hozzáférés-kezelés",
+      "lead": "Ki melyik jogosultságsablonnal rendelkezik ebben a szervezetben, és mit tehet az egyes személy.",
+      "tableCaption": "Jogosultságok ebben a szervezetben",
+      "scopeNote": "A sablon a teljes szervezetre vonatkozik. A HR-adminisztrátorok a munkaterületen szűkíthetik a sablonokat szervezeti egységekre."
+    },
+    "platform": {
+      "title": "Platformhozzáférés",
+      "lead": "Szervezeten kívüli munkatársi sablonok, az egyes sablonok által meghatározott hatókörben.",
+      "tableCaption": "Platformjogosultságok",
+      "empty": "Még nincs platformjogosultság.",
+      "readOnlyNote": "A platformjogosultságok egyelőre nem vonhatók vissza erről a képernyőről: az üzemeltetési API-ban nincs ehhez útvonal.",
+      "scopeOf": "Hatókör: {{scope}}"
+    },
+    "columns": {
+      "template": "Sablon",
+      "subject": "Személy",
+      "scope": "Hatókör",
+      "validity": "Érvényesség",
+      "status": "Állapot",
+      "actions": "Műveletek"
+    },
+    "status": {
+      "active": "Aktív",
+      "revoked": "Visszavonva",
+      "expired": "Lejárt",
+      "scheduled": "Ütemezett"
+    },
+    "templates": {
+      "platform_owner": "Platformtulajdonos",
+      "client_operations": "Ügyfélműveletek",
+      "content_author": "Tartalomszerző",
+      "content_publisher": "Tartalomkiadó",
+      "service_coordinator": "Szolgáltatáskoordinátor",
+      "support_operator": "Ügyfélszolgálati operátor",
+      "nestself_finance": "NestSelf pénzügy",
+      "expert": "Szakértő",
+      "expert_lead": "Vezető szakértő",
+      "employer_owner": "Munkáltatói tulajdonos",
+      "hr_admin": "HR-adminisztrátor",
+      "team_manager": "Csapatvezető",
+      "approver": "Jóváhagyó",
+      "employer_finance": "Munkáltatói pénzügy",
+      "reporting_user": "Riportfelhasználó",
+      "employee": "Munkavállaló",
+      "event_supplier": "Rendezvénybeszállító",
+      "delegated": "Delegált hozzáférés"
+    },
+    "scope": {
+      "platform": "Teljes platform",
+      "organization": "Teljes szervezet",
+      "org_unit": "Egy szervezeti egység",
+      "assigned_clients": "Hozzárendelt ügyfelek",
+      "assigned_queues": "Hozzárendelt sorok",
+      "assigned_cases": "Hozzárendelt ügyek",
+      "assigned_practice": "Hozzárendelt praxis",
+      "assigned_collections": "Hozzárendelt gyűjtemények",
+      "own": "Saját adatok"
+    },
+    "validity": {
+      "noEnd": "Nincs lejárati dátum",
+      "from": "{{date}} óta",
+      "until": "{{date}}-ig",
+      "range": "{{from}} – {{until}}",
+      "validUntil": "Érvényes eddig"
+    },
+    "conditions": {
+      "spendingCeiling": "Költési limit",
+      "amount": "Összeg",
+      "currency": "Pénznem",
+      "categories": "Kategóriák",
+      "categoriesHint": "A kategóriákat vesszővel válaszd el.",
+      "timeWindow": "Időablak",
+      "days": "Napok",
+      "from": "Ettől",
+      "to": "Eddig",
+      "day": {
+        "0": "V",
+        "1": "H",
+        "2": "K",
+        "3": "Sze",
+        "4": "Cs",
+        "5": "P",
+        "6": "Szo"
+      }
+    },
+    "assign": {
+      "open": "Sablon kiosztása",
+      "title": "Jogosultságsablon kiosztása",
+      "member": "Tag",
+      "template": "Sablon",
+      "choose": "Válassz",
+      "submit": "Kiosztás",
+      "cancel": "Mégse",
+      "success": "A sablon kiosztva.",
+      "userId": "Felhasználói azonosító",
+      "userIdHint": "Annak a munkatársnak az azonosítója, aki a sablont kapja."
+    },
+    "revoke": {
+      "open": "Visszavonás",
+      "openFor": "{{template}} visszavonása tőle: {{subject}}",
+      "title": "Visszavonod ezt a jogosultságot?",
+      "description": "{{subject}} azonnal elveszíti a(z) {{template}} jogosultságait.",
+      "confirm": "Jogosultság visszavonása",
+      "cancel": "Megtartás",
+      "success": "A jogosultság visszavonva."
+    },
+    "reason": {
+      "label": "Indoklás",
+      "hint": "3–500 karakter. Az indoklás bekerül az auditnaplóba."
+    },
+    "lookup": {
+      "title": "Felhasználói hozzáférés",
+      "lead": "Adj meg egy felhasználói azonosítót, hogy lásd a felhasználó összes műveletét szervezetenként és a platformon.",
+      "userId": "Felhasználói azonosító",
+      "submit": "Keresés",
+      "loading": "Felhasználói hozzáférés betöltése",
+      "platform": "Platform",
+      "organization": "Szervezet: {{orgId}}",
+      "empty": "Ennek a felhasználónak egyik környezetben sincs művelete.",
+      "noActions": "Ebben a környezetben nincs művelet."
+    },
+    "errors": {
+      "loadTitle": "A hozzáférés nem tölthető be",
+      "membersLoadTitle": "A tagok nem tölthetők be",
+      "missingConditions": "Ehhez a sablonhoz minden kötelező feltételt ki kell töltened.",
+      "subjectNotMember": "Ez a személy nem aktív tagja a szervezetnek.",
+      "templateInactive": "Ez a sablon már nem érhető el.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "conflict": "Ez a jogosultság időközben megváltozott. Frissítsd a listát, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra.",
+      "memberRequired": "Válassz tagot.",
+      "templateRequired": "Válassz sablont.",
+      "reasonLength": "Adj meg 3–500 karakter hosszú indoklást.",
+      "notFound": "Ez az elem már nem létezik. Frissítsd a listát, és próbáld újra.",
+      "userNotFound": "Nincs ilyen azonosítójú felhasználó.",
+      "forbidden": "A fiókod ehhez nem jogosult.",
+      "userIdRequired": "Adj meg egy felhasználói azonosítót."
+    }
   },
   "contextSwitcher": {
     "error": {

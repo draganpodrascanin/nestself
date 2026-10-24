@@ -13,7 +13,9 @@ import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import { Heading, Text } from '@nestself/ui';
+import { negotiateLocale } from '@nestself/i18n';
 import { useAuth } from '../auth-context';
+import { mapAuthError } from '../map-auth-error';
 import { isSampleDataMode } from '../../data-source';
 import { api } from '../../api';
 import { createSampleAuthApi } from './sample-auth-api';
@@ -52,7 +54,7 @@ interface Props {
 }
 
 export function SignInPage({ returnPath }: Props) {
-  const { t } = useTranslation('auth');
+  const { t, i18n } = useTranslation('auth');
   const navigate = useNavigate();
   const { refreshPrincipal } = useAuth();
   const authApi = useMemo(
@@ -70,35 +72,12 @@ export function SignInPage({ returnPath }: Props) {
 
   const handleApiError = useCallback(
     (err: unknown) => {
-      if (err instanceof ApiError) {
-        if (err.status === 429) {
-          const retryAfter = err.details?.retryAfter as number | undefined;
-          setScreen({ kind: 'lockout', retryAfter });
-          return;
-        }
-        if (err.code === 'invalid_code' || err.code === 'expired_code') {
-          setError(t('error.invalidCode'));
-          return;
-        }
-        // The challenge token is single-use and is consumed before the code is
-        // checked, so a wrong digit ends it. Tell the user to ask for a new code
-        // instead of leaking the API's English "Challenge expired or invalid".
-        if (err.code === 'invalid_challenge') {
-          setError(t('error.challengeExpired'));
-          return;
-        }
-        if (err.code === 'invalid_credentials') {
-          setError(t('error.invalidCredentials'));
-          return;
-        }
-        if (err.code === 'network') {
-          setError(t('error.network'));
-          return;
-        }
-        setError(err.message);
+      if (err instanceof ApiError && err.status === 429) {
+        const retryAfter = err.details?.retryAfter as number | undefined;
+        setScreen({ kind: 'lockout', retryAfter });
         return;
       }
-      setError(t('error.unknown'));
+      setError(mapAuthError(err, t).message);
     },
     [t],
   );
@@ -111,7 +90,8 @@ export function SignInPage({ returnPath }: Props) {
         const result = await authApi.discover(email);
         switch (result.method) {
           case 'email_otp': {
-            const otp = await authApi.emailOtpStart(email);
+            const locale = negotiateLocale([i18n.resolvedLanguage ?? i18n.language]);
+            const otp = await authApi.emailOtpStart(email, locale);
             setScreen({
               kind: 'email_otp',
               email,
@@ -133,7 +113,7 @@ export function SignInPage({ returnPath }: Props) {
         handleApiError(err);
       }
     },
-    [authApi, handleApiError],
+    [authApi, handleApiError, i18n],
   );
 
   const handleChallengeRequired = useCallback(

@@ -5,7 +5,8 @@
     "organizations": "Organisations",
     "content": "Content",
     "eventRequests": "Event requests",
-    "settings": "Settings"
+    "settings": "Settings",
+    "access": "Access"
   },
   "experts": {
     "title": "Experts",
@@ -35,7 +36,12 @@
     "teams": "Teams",
     "members": "Members",
     "detail": "Organisation detail",
-    "programme": "Programme"
+    "programme": "Programme",
+    "tabsLabel": "Organisation sections",
+    "tabs": {
+      "overview": "Overview",
+      "access": "Access"
+    }
   },
   "tables": {
     "id": "ID",
@@ -87,6 +93,150 @@
   "api": {
     "connected": "API connected",
     "notConnected": "API not connected (sample mode)"
+  },
+  "access": {
+    "sampleNote": "Sample mode: assigning and revoking are turned off. Nothing is created, changed or revoked.",
+    "loading": "Loading access",
+    "empty": "No grants in this organisation yet.",
+    "org": {
+      "title": "Access management",
+      "lead": "Who holds which permission template in this organisation, and what each person can do.",
+      "tableCaption": "Grants in this organisation",
+      "scopeNote": "The template applies to the whole organisation. HR administrators scope templates to org units in the workspace."
+    },
+    "platform": {
+      "title": "Platform access",
+      "lead": "Staff templates held outside any organisation, at the scope each template defines.",
+      "tableCaption": "Platform grants",
+      "empty": "No platform grants yet.",
+      "readOnlyNote": "Platform grants cannot be revoked from this screen yet: the operations API has no revoke route for them.",
+      "scopeOf": "Scope: {{scope}}"
+    },
+    "columns": {
+      "template": "Template",
+      "subject": "Person",
+      "scope": "Scope",
+      "validity": "Validity",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "scheduled": "Scheduled"
+    },
+    "templates": {
+      "platform_owner": "Platform owner",
+      "client_operations": "Client operations",
+      "content_author": "Content author",
+      "content_publisher": "Content publisher",
+      "service_coordinator": "Service coordinator",
+      "support_operator": "Support operator",
+      "nestself_finance": "NestSelf finance",
+      "expert": "Expert",
+      "expert_lead": "Expert lead",
+      "employer_owner": "Employer owner",
+      "hr_admin": "HR administrator",
+      "team_manager": "Team manager",
+      "approver": "Approver",
+      "employer_finance": "Employer finance",
+      "reporting_user": "Reporting user",
+      "employee": "Employee",
+      "event_supplier": "Event supplier",
+      "delegated": "Delegated access"
+    },
+    "scope": {
+      "platform": "Whole platform",
+      "organization": "Whole organisation",
+      "org_unit": "One org unit",
+      "assigned_clients": "Assigned clients",
+      "assigned_queues": "Assigned queues",
+      "assigned_cases": "Assigned cases",
+      "assigned_practice": "Assigned practice",
+      "assigned_collections": "Assigned collections",
+      "own": "Own records"
+    },
+    "validity": {
+      "noEnd": "No end date",
+      "from": "From {{date}}",
+      "until": "Until {{date}}",
+      "range": "{{from}} to {{until}}",
+      "validUntil": "Valid until"
+    },
+    "conditions": {
+      "spendingCeiling": "Spending ceiling",
+      "amount": "Amount",
+      "currency": "Currency",
+      "categories": "Categories",
+      "categoriesHint": "Separate categories with commas.",
+      "timeWindow": "Time window",
+      "days": "Days",
+      "from": "From",
+      "to": "To",
+      "day": {
+        "0": "Sun",
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat"
+      }
+    },
+    "assign": {
+      "open": "Assign template",
+      "title": "Assign a permission template",
+      "member": "Member",
+      "template": "Template",
+      "choose": "Choose",
+      "submit": "Assign",
+      "cancel": "Cancel",
+      "success": "Template assigned.",
+      "userId": "User ID",
+      "userIdHint": "The ID of the staff member who receives the template."
+    },
+    "revoke": {
+      "open": "Revoke",
+      "openFor": "Revoke {{template}} from {{subject}}",
+      "title": "Revoke this grant?",
+      "description": "{{subject}} loses the {{template}} permissions straight away.",
+      "confirm": "Revoke grant",
+      "cancel": "Keep grant",
+      "success": "Grant revoked."
+    },
+    "reason": {
+      "label": "Reason",
+      "hint": "Between 3 and 500 characters. The reason is kept in the audit log."
+    },
+    "lookup": {
+      "title": "User access",
+      "lead": "Enter a user ID to see every action that user holds, per organisation and on the platform.",
+      "userId": "User ID",
+      "submit": "Look up",
+      "loading": "Loading user access",
+      "platform": "Platform",
+      "organization": "Organisation {{orgId}}",
+      "empty": "This user holds no actions in any context.",
+      "noActions": "No actions in this context."
+    },
+    "errors": {
+      "loadTitle": "Access could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "missingConditions": "This template needs every required condition filled in.",
+      "subjectNotMember": "This person is not an active member of the organization.",
+      "templateInactive": "This template is no longer available.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "conflict": "This grant has already changed. Refresh the list and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "memberRequired": "Choose a member.",
+      "templateRequired": "Choose a template.",
+      "reasonLength": "Enter a reason between 3 and 500 characters.",
+      "notFound": "This item no longer exists. Refresh the list and try again.",
+      "userNotFound": "No user with this ID exists.",
+      "forbidden": "Your account is not allowed to do this.",
+      "userIdRequired": "Enter a user ID."
+    }
   },
   "contextSwitcher": {
     "error": {

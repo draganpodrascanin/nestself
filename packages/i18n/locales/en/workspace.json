@@ -119,6 +119,136 @@
     "connected": "API connected",
     "sampleMode": "API not connected (sample mode)"
   },
+  "access": {
+    "nav": "Access",
+    "title": "Access management",
+    "lead": "Who holds which permission template in your organization, and what each template lets them do.",
+    "sampleNote": "Sample mode: assigning, delegating and revoking are turned off. Nothing is created, changed or revoked.",
+    "loading": "Loading access",
+    "empty": "No grants in this organization yet.",
+    "noOrganization": "Access management needs exactly one active organization membership on your account.",
+    "tableCaption": "Grants in your organization",
+    "columns": {
+      "template": "Template",
+      "subject": "Person",
+      "scope": "Scope",
+      "validity": "Validity",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "scheduled": "Scheduled"
+    },
+    "templates": {
+      "employer_owner": "Employer owner",
+      "hr_admin": "HR administrator",
+      "team_manager": "Team manager",
+      "approver": "Approver",
+      "employer_finance": "Employer finance",
+      "reporting_user": "Reporting user",
+      "employee": "Employee",
+      "event_supplier": "Event supplier",
+      "delegated": "Delegated access"
+    },
+    "scope": {
+      "label": "Scope",
+      "organization": "Whole organization",
+      "orgUnit": "One org unit",
+      "unit": "{{name}}",
+      "unitWithDescendants": "{{name}} and the units below it",
+      "unitLabel": "Org unit",
+      "includeDescendants": "Include the units below it",
+      "unknownUnit": "Unknown org unit"
+    },
+    "validity": {
+      "noEnd": "No end date",
+      "from": "From {{date}}",
+      "until": "Until {{date}}",
+      "range": "{{from}} to {{until}}",
+      "validUntil": "Valid until"
+    },
+    "conditions": {
+      "spendingCeiling": "Spending ceiling",
+      "amount": "Amount",
+      "currency": "Currency",
+      "categories": "Categories",
+      "categoriesHint": "Separate categories with commas.",
+      "timeWindow": "Time window",
+      "days": "Days",
+      "from": "From",
+      "to": "To",
+      "day": {
+        "0": "Sun",
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat"
+      }
+    },
+    "assign": {
+      "open": "Assign template",
+      "title": "Assign a permission template",
+      "member": "Member",
+      "template": "Template",
+      "choose": "Choose",
+      "submit": "Assign",
+      "cancel": "Cancel",
+      "success": "Template assigned."
+    },
+    "revoke": {
+      "open": "Revoke",
+      "openFor": "Revoke {{template}} from {{subject}}",
+      "title": "Revoke this grant?",
+      "description": "{{subject}} loses the {{template}} permissions straight away.",
+      "confirm": "Revoke grant",
+      "cancel": "Keep grant",
+      "success": "Grant revoked."
+    },
+    "reason": {
+      "label": "Reason",
+      "hint": "Between 3 and 500 characters. The reason is kept in the audit log."
+    },
+    "delegate": {
+      "open": "Delegate",
+      "openFor": "Delegate part of {{template}}",
+      "title": "Delegate part of your access",
+      "description": "The person receives only the actions you choose, within the scope of your own grant.",
+      "member": "Member",
+      "actions": "Actions to delegate",
+      "submit": "Delegate",
+      "cancel": "Cancel",
+      "success": "Access delegated."
+    },
+    "preview": {
+      "title": "Effective access",
+      "lead": "Choose a member to see every action their grants give them in this organization.",
+      "member": "Member",
+      "empty": "This member has no actions in this organization.",
+      "loading": "Loading effective access"
+    },
+    "errors": {
+      "loadTitle": "Access could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "orgUnitsLoadTitle": "Org units could not be loaded",
+      "missingConditions": "This template needs every required condition filled in.",
+      "subjectNotMember": "This person is not an active member of the organization.",
+      "templateInactive": "This template is no longer available.",
+      "delegationExceedsBoundary": "You can only delegate actions and scope that you hold yourself.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "conflict": "This grant has already changed. Refresh the list and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "memberRequired": "Choose a member.",
+      "templateRequired": "Choose a template.",
+      "orgUnitRequired": "Choose an org unit.",
+      "reasonLength": "Enter a reason between 3 and 500 characters.",
+      "actionsRequired": "Choose at least one action."
+    }
+  },
   "contextSwitcher": {
     "label": "Switch workspace",
     "personal": "My space",

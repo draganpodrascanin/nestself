@@ -25,11 +25,13 @@ import {
 
 export const MAINTENANCE_QUEUE = 'nestself-maintenance';
 
-/** Default cron patterns (local night, low traffic). */
+/** Default cron patterns: nightly jobs at local night, the emergency sweeper every 15 minutes (4.7). */
 export const MAINTENANCE_SCHEDULES: Record<MaintenanceJobName, string> = {
   'audit.ensure-partitions': '0 1 * * *',
   'grants.reconcile': '15 2 * * *',
   'mobile.prune-stale-families': '30 2 * * *',
+  'emergency.sweep-expired': '*/15 * * * *',
+  'sessions.reconcile-ttl': '45 2 * * *',
 };
 
 @Injectable()

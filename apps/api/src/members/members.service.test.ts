@@ -28,8 +28,7 @@ function createMockMembershipsRepo() {
 function createMockAuthzRepo() {
   return {
     findActiveGrantsScopedToOrg: vi.fn().mockResolvedValue([]),
-    findActiveChildGrants: vi.fn().mockResolvedValue([]),
-    revokeGrants: vi.fn().mockResolvedValue(undefined),
+    revokeGrantTree: vi.fn().mockResolvedValue({ roots: [], children: [] }),
   };
 }
 
@@ -61,7 +60,6 @@ const ACTIVE_MEMBERSHIP = {
   orgUnitId: null,
   costCenterUnitId: null,
   lineManagerUserId: null,
-  role: 'EMPLOYEE',
   teamId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -141,6 +139,7 @@ describe('MembersService', () => {
       revokedAt: null,
     };
     authz.findActiveGrantsScopedToOrg.mockResolvedValue([directGrant]);
+    authz.revokeGrantTree.mockResolvedValue({ roots: ['g-1'], children: [] });
 
     const result = await service.endMembership(
       'org-1', 'mem-1', { reason: 'DEACTIVATED_BY_HR' }, 'actor-1',
@@ -149,7 +148,7 @@ describe('MembersService', () => {
     expect(result.status).toBe('ENDED');
     expect(result.revokedGrantIds).toContain('g-1');
     expect(memberships.endMembership).toHaveBeenCalledOnce();
-    expect(authz.revokeGrants).toHaveBeenCalledWith(
+    expect(authz.revokeGrantTree).toHaveBeenCalledWith(
       ['g-1'],
       expect.objectContaining({ reason: 'membership_ended' }),
       'tx',
@@ -162,7 +161,7 @@ describe('MembersService', () => {
 
   // ── Grant cascade: parent → child → grandchild ────────────────────────
 
-  it('cascade-revokes parent → child → grandchild grants (depth ≤ 3)', async () => {
+  it('revokes the grant tree and audits roots and delegations', async () => {
     memberships.findByIdAndOrg.mockResolvedValue(ACTIVE_MEMBERSHIP);
     memberships.endMembership.mockResolvedValue({ ...ACTIVE_MEMBERSHIP, status: 'ENDED' });
 
@@ -170,44 +169,39 @@ describe('MembersService', () => {
       id: 'g-parent', subjectUserId: 'user-target',
       scopeOrgId: 'org-1', parentGrantId: null, revokedAt: null,
     };
-    const childGrant = {
-      id: 'g-child', subjectUserId: 'user-child',
-      scopeOrgId: 'org-1', parentGrantId: 'g-parent', revokedAt: null,
-    };
-    const grandchildGrant = {
-      id: 'g-grandchild', subjectUserId: 'user-gc',
-      scopeOrgId: 'org-1', parentGrantId: 'g-child', revokedAt: null,
+    const delegatedToTarget = {
+      id: 'g-received', subjectUserId: 'user-target',
+      scopeOrgId: 'org-1', parentGrantId: 'g-other', revokedAt: null,
     };
 
-    authz.findActiveGrantsScopedToOrg.mockResolvedValue([parentGrant]);
-    authz.findActiveChildGrants
-      .mockResolvedValueOnce([childGrant])   // children of g-parent
-      .mockResolvedValueOnce([grandchildGrant]) // children of g-child
-      .mockResolvedValueOnce([]);             // children of g-grandchild
+    authz.findActiveGrantsScopedToOrg.mockResolvedValue([parentGrant, delegatedToTarget]);
+    authz.revokeGrantTree.mockResolvedValue({
+      roots: ['g-parent', 'g-received'],
+      children: ['g-child', 'g-grandchild'],
+    });
 
     const result = await service.endMembership(
       'org-1', 'mem-1', { reason: 'DEACTIVATED_BY_HR' }, 'actor-1',
     );
 
-    expect(result.revokedGrantIds).toEqual(['g-parent', 'g-child', 'g-grandchild']);
-    expect(authz.revokeGrants).toHaveBeenCalledTimes(3);
+    expect(result.revokedGrantIds).toEqual(['g-parent', 'g-received', 'g-child', 'g-grandchild']);
+    expect(authz.revokeGrantTree).toHaveBeenCalledOnce();
+    expect(authz.revokeGrantTree).toHaveBeenCalledWith(
+      ['g-parent', 'g-received'],
+      expect.objectContaining({ byUserId: 'actor-1', reason: 'membership_ended' }),
+      'tx',
+    );
 
-    // Verify cascade calls in order.
-    expect(authz.revokeGrants).toHaveBeenNthCalledWith(1,
-      ['g-parent'],
-      expect.objectContaining({ reason: 'membership_ended' }),
-      'tx',
-    );
-    expect(authz.revokeGrants).toHaveBeenNthCalledWith(2,
-      ['g-child'],
-      expect.objectContaining({ reason: 'parent_revoked' }),
-      'tx',
-    );
-    expect(authz.revokeGrants).toHaveBeenNthCalledWith(3,
-      ['g-grandchild'],
-      expect.objectContaining({ reason: 'parent_revoked' }),
-      'tx',
-    );
+    const grantEvents = audit.record.mock.calls
+      .map(([e]) => e as { action: string; recordId: string; details: { reason: string } })
+      .filter((e) => e.action.startsWith('grant.'))
+      .map((e) => [e.action, e.recordId, e.details.reason]);
+    expect(grantEvents).toEqual([
+      ['grant.revoked', 'g-parent', 'membership_ended'],
+      ['grant.delegation_revoked', 'g-received', 'membership_ended'],
+      ['grant.delegation_revoked', 'g-child', 'parent_revoked'],
+      ['grant.delegation_revoked', 'g-grandchild', 'parent_revoked'],
+    ]);
   });
 
   // ── Audit recorded before revocation ──────────────────────────────────

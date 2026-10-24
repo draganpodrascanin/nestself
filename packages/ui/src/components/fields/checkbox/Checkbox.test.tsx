@@ -44,4 +44,18 @@ describe('CheckboxGroup', () => {
     const group = screen.getByRole('group', { name: 'Preferences' });
     expect(group).toBeInTheDocument();
   });
+
+  it('passes aria-describedby to the group so an error is announced with it', () => {
+    render(
+      <>
+        <CheckboxGroup legend="Actions" aria-describedby="actions-error">
+          <Checkbox>Read</Checkbox>
+        </CheckboxGroup>
+        <p id="actions-error">Choose at least one action.</p>
+      </>,
+    );
+    expect(screen.getByRole('group', { name: 'Actions' })).toHaveAccessibleDescription(
+      'Choose at least one action.',
+    );
+  });
 });

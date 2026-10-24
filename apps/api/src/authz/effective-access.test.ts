@@ -1,159 +1,95 @@
-/**
- * Unit tests for contextScopedEffectiveActions (Defect 2, T-C1.02).
- *
- * Verifies that effective actions are filtered by the principal's active
- * context workspace.
- */
-import { describe, it, expect } from 'vitest';
-import { contextScopedEffectiveActions } from './effective-access.js';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-import type {
-  Principal,
-  AuthorizationContext,
-  GrantInput,
-  Action,
-} from '@nestself/contracts';
+import { describe, expect, it } from 'vitest';
+import type { AuthorizationContext, GrantInput, Principal } from '@nestself/contracts';
+import { effectiveActions } from './effective-access.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makePrincipal(overrides: Partial<Principal> = {}): Principal {
-  return {
-    userId: 'user_test',
-    displayName: 'Test User',
-    initials: 'TU',
-    locale: 'en',
-    memberships: [
-      {
-        membershipId: 'mem_1',
-        orgId: 'org_sample',
-        orgUnitId: null,
-        status: 'ACTIVE',
-        startDate: '2026-01-01T00:00:00Z',
-        endDate: null,
-      },
-    ],
-    staffTemplates: [],
-    expert: null,
-    context: { kind: 'personal', orgId: 'org_sample' },
-    auth: {
-      method: 'email_otp',
-      time: '2026-10-24T12:00:00Z',
-      secondFactor: false,
-      lastStepUpAt: null,
+const principal: Principal = {
+  userId: 'u1',
+  displayName: 'Test User',
+  initials: 'TU',
+  locale: 'en',
+  memberships: [
+    {
+      membershipId: 'm1',
+      orgId: 'o1',
+      orgUnitId: 'ou1',
+      status: 'ACTIVE',
+      startDate: '2026-01-01T00:00:00.000Z',
+      endDate: null,
     },
-    sessionId: 'sess_test',
-    tokenFamily: null,
-    ...overrides,
-  };
-}
+  ],
+  staffTemplates: [],
+  expert: null,
+  context: { kind: 'organization', orgId: 'o1' },
+  auth: { method: 'email_otp', time: '2026-10-22T09:00:00.000Z', secondFactor: false, lastStepUpAt: null },
+  sessionId: 's1',
+  tokenFamily: null,
+};
 
-function grantFromTemplate(templateKey: string, userId = 'user_test'): GrantInput {
-  const tmpl = PERMISSION_TEMPLATES.find((t) => t.key === templateKey);
-  if (!tmpl) throw new Error(`Unknown template: ${templateKey}`);
-  return {
-    id: `grant_${userId}_${templateKey}`,
-    subjectUserId: userId,
-    templateKey: tmpl.key,
-    actions: [...tmpl.actions] as Action[],
-    scopeType: tmpl.scopeType,
-    scopeOrgId: tmpl.scopeType === 'platform' ? null : 'org_sample',
-    scopeOrgUnitId: tmpl.scopeType === 'org_unit' ? 'ou_team_1' : null,
-    includeDescendants: tmpl.scopeType === 'org_unit',
-    scopeRefKind: null,
-    scopeRefId: null,
-    conditions: [],
-    validFrom: new Date('2026-01-01'),
-    validUntil: null,
-    delegationEnvelope: null,
-    parentGrantId: null,
-    revokedAt: null,
-  };
-}
+const grant = (overrides: Partial<GrantInput>): GrantInput => ({
+  id: 'g1',
+  subjectUserId: 'u1',
+  templateKey: 'hr_admin',
+  actions: ['people.invite'],
+  scopeType: 'organization',
+  scopeOrgId: 'o1',
+  scopeOrgUnitId: null,
+  includeDescendants: false,
+  scopeRefKind: null,
+  scopeRefId: null,
+  conditions: [],
+  validFrom: null,
+  validUntil: null,
+  delegationEnvelope: null,
+  parentGrantId: null,
+  revokedAt: null,
+  ...overrides,
+});
 
-function makeCtx(grantKeys: string[], userId = 'user_test'): AuthorizationContext {
-  return {
-    now: new Date('2026-10-24T12:00:00Z'),
-    isDeactivated: false,
-    isSuspended: false,
-    grants: grantKeys.map((k) => grantFromTemplate(k, userId)),
-    assignments: [],
-    // Include the org unit as its own ancestor so org_unit scope resolves.
-    ancestorIds: ['ou_team_1'],
-    orgSelfApprovalAllowed: false,
-    organizationTimezone: 'Europe/Belgrade',
-  };
-}
+const ctx = (grants: GrantInput[]): AuthorizationContext => ({
+  now: new Date('2026-10-22T10:00:00.000Z'),
+  isDeactivated: false,
+  isSuspended: false,
+  grants,
+  assignments: [],
+  // As GET /auth/me builds it: no real resource, so no ancestors loaded.
+  ancestorIds: [],
+  orgSelfApprovalAllowed: false,
+  organizationTimezone: 'Europe/Belgrade',
+});
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describe('contextScopedEffectiveActions', () => {
-  // HR admin has employee + hr_admin grants
-  const HR_GRANTS = ['employee', 'hr_admin'];
-
-  it('HR admin personal context: no program.overview (organization workspace excluded)', () => {
-    const principal = makePrincipal({
-      userId: 'user_ivana',
-      context: { kind: 'personal', orgId: 'org_sample' },
-    });
-    const ctx = makeCtx(HR_GRANTS, 'user_ivana');
-    const actions = contextScopedEffectiveActions(principal, ctx);
-
-    expect(actions).not.toContain('program.overview');
-    // Employee-workspace actions still present
-    expect(actions).toContain('content.read');
+describe('effectiveActions', () => {
+  it('lists the actions of an organization-scoped grant', () => {
+    const actions = effectiveActions(principal, ctx([grant({ actions: ['people.invite', 'program.overview'] })]));
+    expect(actions.sort()).toEqual(['people.invite', 'program.overview']);
   });
 
-  it('HR admin organization context: program.overview present', () => {
-    const principal = makePrincipal({
-      userId: 'user_ivana',
-      context: { kind: 'organization', orgId: 'org_sample' },
+  it('includes a descendant-scoped org-unit grant although the context has no ancestors', () => {
+    const unitGrant = grant({
+      scopeType: 'org_unit',
+      scopeOrgUnitId: 'ou1',
+      includeDescendants: true,
+      actions: ['budget.read'],
     });
-    const ctx = makeCtx(HR_GRANTS, 'user_ivana');
-    const actions = contextScopedEffectiveActions(principal, ctx);
-
-    expect(actions).toContain('program.overview');
-    // Employee-workspace actions also present in organization context
-    expect(actions).toContain('content.read');
+    expect(effectiveActions(principal, ctx([unitGrant]))).toEqual(['budget.read']);
   });
 
-  it('employee personal context: content.read present', () => {
-    const principal = makePrincipal({
-      userId: 'user_jovan',
-      context: { kind: 'personal', orgId: 'org_sample' },
-    });
-    const ctx = makeCtx(['employee'], 'user_jovan');
-    const actions = contextScopedEffectiveActions(principal, ctx);
-
-    expect(actions).toContain('content.read');
-    expect(actions).toContain('content.bookmark');
-    expect(actions).toContain('service.request');
+  it('keeps an action when the first grant holding it is not current but a later one is', () => {
+    const expired = grant({ id: 'g_old', validUntil: new Date('2026-01-01T00:00:00.000Z') });
+    const otherOrg = grant({ id: 'g_other', scopeOrgId: 'o2' });
+    const current = grant({ id: 'g_now' });
+    expect(effectiveActions(principal, ctx([expired, otherOrg, current]))).toEqual(['people.invite']);
   });
 
-  it('manager organization context: events.request present', () => {
-    const principal = makePrincipal({
-      userId: 'user_stefan',
-      context: { kind: 'organization', orgId: 'org_sample' },
-    });
-    const ctx = makeCtx(['employee', 'team_manager'], 'user_stefan');
-    const actions = contextScopedEffectiveActions(principal, ctx);
-
-    expect(actions).toContain('events.request');
+  it('leaves out revoked, expired and future grants', () => {
+    const grants = [
+      grant({ id: 'r', revokedAt: new Date('2026-10-01T00:00:00.000Z') }),
+      grant({ id: 'e', validUntil: new Date('2026-10-01T00:00:00.000Z') }),
+      grant({ id: 'f', validFrom: new Date('2027-01-01T00:00:00.000Z') }),
+    ];
+    expect(effectiveActions(principal, ctx(grants))).toEqual([]);
   });
 
-  it('manager personal context: events.request excluded (organization workspace)', () => {
-    const principal = makePrincipal({
-      userId: 'user_stefan',
-      context: { kind: 'personal', orgId: 'org_sample' },
-    });
-    const ctx = makeCtx(['employee', 'team_manager'], 'user_stefan');
-    const actions = contextScopedEffectiveActions(principal, ctx);
-
-    expect(actions).not.toContain('events.request');
-    // Employee actions still present
-    expect(actions).toContain('content.read');
+  it('is empty for a deactivated user', () => {
+    expect(effectiveActions(principal, { ...ctx([grant({})]), isDeactivated: true })).toEqual([]);
   });
 });

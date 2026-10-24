@@ -10,6 +10,7 @@ import {
   Gear,
   Users,
   Buildings,
+  ShieldCheck,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/_authenticated')({
 });
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'workspace']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
 
@@ -57,11 +58,19 @@ function AuthenticatedLayout() {
     ? [{ to: '/manage' as const, icon: Users, label: t('nav.manage') }]
     : [];
 
+  // `/hr/access` sits under the `_hr` gate, so it needs `program.overview` too.
+  const showAccess =
+    showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
+
   const hrNav = showHr
     ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...hrNav];
+  const accessNav = showAccess
+    ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
+    : [];
+
+  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...accessNav];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [

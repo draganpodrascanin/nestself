@@ -7,10 +7,11 @@ import { MembersController } from './members.controller.js';
 import { MembersService } from './members.service.js';
 import { MembersAdminController } from './members-admin.controller.js';
 import { MembersAdminService } from './members-admin.service.js';
+import { OpsMembersController } from './ops-members.controller.js';
 
 @Module({
   imports: [AuthModule],
-  controllers: [MembersController, MembersAdminController],
+  controllers: [MembersController, MembersAdminController, OpsMembersController],
   providers: [MembersService, MembersAdminService],
 })
 export class MembersModule {}

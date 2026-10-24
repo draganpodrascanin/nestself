@@ -41,6 +41,8 @@ export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
 export const EmailOtpStartRequestSchema = z.object({
   email: emailField,
+  /** Language of the code email (Cognito CustomMessage trigger). Pool default when absent. */
+  locale: LocaleSchema.optional(),
 });
 export type EmailOtpStartRequest = z.infer<typeof EmailOtpStartRequestSchema>;
 
@@ -303,6 +305,11 @@ export const AUTH_ERROR_CODES = [
   'delegation_exceeds_boundary',
   'conflict',
   'locked',
+  'subject_not_member',
+  'template_inactive',
+  'missing_conditions',
+  'self_approval_denied',
+  'emergency_not_active',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

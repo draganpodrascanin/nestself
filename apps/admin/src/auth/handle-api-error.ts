@@ -3,23 +3,31 @@
  *
  * Wired through QueryClient cache onError so it fires on every failed
  * query and mutation (ruling 6, T-C1.02).
+ *
+ * 403 step_up_required -> open the step-up dialog (`stepUp()`); wrap the call in
+ *   `withStepUp` to retry it after verification. `StepUpCancelledError` (the
+ *   user cancelled) is ignored.
  */
 import type { NavigateFn } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { ApiError } from '@nestself/api-client';
 import type { ActiveContext } from '@nestself/contracts';
+import { StepUpCancelledError } from './with-step-up';
 
 export interface ErrorHandlerDeps {
   navigate: NavigateFn;
   queryClient: QueryClient;
   refreshPrincipal: () => Promise<void>;
   switchContext: (ctx: ActiveContext) => Promise<void>;
+  stepUp: () => Promise<boolean>;
   showToast?: (message: string) => void;
   /** i18n translation function. */
   t?: (key: string) => string;
 }
 
 export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
+  // The user cancelled the step-up dialog: already handled, do not re-prompt.
+  if (error instanceof StepUpCancelledError) return;
   if (!(error instanceof ApiError)) return;
 
   const { navigate, queryClient } = deps;
@@ -34,11 +42,7 @@ export function handleApiError(error: unknown, deps: ErrorHandlerDeps): void {
   }
 
   if (error.status === 403 && error.code === 'step_up_required') {
-    // Phase 2: step-up dialog. For now, redirect to sign-in.
-    void navigate({
-      to: '/sign-in',
-      search: { return: window.location.pathname },
-    });
+    void deps.stepUp();
     return;
   }
 

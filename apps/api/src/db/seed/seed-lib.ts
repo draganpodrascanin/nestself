@@ -6,7 +6,7 @@
  * `@nestself/sample-data` (sample-data rule). Runs in system context (no RLS
  * tenant setting), as the migration/owner role.
  */
-import { count, eq } from 'drizzle-orm';
+import { count, eq, inArray } from 'drizzle-orm';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -19,8 +19,9 @@ import {
   SAMPLE_ORG_UNITS,
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_EXTERNAL_IDENTITIES,
+  SAMPLE_CASE,
 } from '@nestself/sample-data';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
 import { buildClosureRows } from '../../org-units/closure.js';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
@@ -44,6 +45,23 @@ async function upsertById<TTable extends TableWithId>(
     .values(values)
     .onConflictDoUpdate({ target: table.id, set: update as never });
 }
+
+/**
+ * Templates granted explicitly on top of the legacy-role mapping, keyed by
+ * person id. The sample HR admin doubles as the employer administrator, so
+ * she also holds the employer owner template (mirrors
+ * `SAMPLE_PRINCIPALS.hr_admin` and `grant_user_ivana_employer_owner` in
+ * `@nestself/sample-data`). The backfill never derives these.
+ */
+export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>> = {
+  user_ivana: ['employer_owner'],
+};
+
+/** Ids of the grants created from `EXTRA_SAMPLE_TEMPLATES`. */
+export const extraSampleGrantIds = (): string[] =>
+  Object.entries(EXTRA_SAMPLE_TEMPLATES).flatMap(([personId, keys]) =>
+    keys.map((key) => `grant_${personId}_${key}`),
+  );
 
 const upperRole = <T extends string>(role: string | null | undefined): T | null =>
   role ? (role.toUpperCase() as T) : null;
@@ -104,7 +122,6 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   const hrAdmin = SAMPLE_PEOPLE.find((p) => p.orgRole === 'hr_admin');
 
   for (const person of SAMPLE_PEOPLE) {
-    const platformRole = upperRole<'EXPERT' | 'OPERATIONS' | 'ADMIN'>(person.platformRole);
     await upsertById(
       db,
       t.users,
@@ -113,19 +130,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         email: `${person.id}@example.com`,
         displayName: person.displayName,
         locale: 'sr-Latn',
-        platformRole,
       },
-      { displayName: person.displayName, platformRole },
+      { displayName: person.displayName },
     );
 
+    // The org role is no longer stored: it only selects the templates below.
     if (person.orgId && person.orgRole) {
-      const role = upperRole<'EMPLOYEE' | 'MANAGER' | 'HR_ADMIN'>(person.orgRole)!;
       await db
         .insert(t.memberships)
         .values({
           userId: person.id,
           orgId: person.orgId,
-          role,
           status: 'ACTIVE',
           startDate: SAMPLE_START_DATE,
           orgUnitId: defaultTeamId,
@@ -133,7 +148,7 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         })
         .onConflictDoUpdate({
           target: [t.memberships.userId, t.memberships.orgId, t.memberships.startDate],
-          set: { role, status: 'ACTIVE', orgUnitId: defaultTeamId },
+          set: { status: 'ACTIVE', orgUnitId: defaultTeamId },
         });
     }
   }
@@ -290,6 +305,23 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       .onConflictDoUpdate({ target: t.permissionTemplates.key, set: values });
   }
 
+  // Seeds before the legacy-role fix (57bfd4f) also granted every sample person
+  // the templates without a legacy role (employer_owner, approver, ...). Remove
+  // those derived rows from databases seeded back then; explicitly created
+  // grants have other ids and stay.
+  const unmappedTemplateKeys = PERMISSION_TEMPLATES.filter((tmpl) => tmpl.legacyRole == null).map(
+    (tmpl) => tmpl.key,
+  );
+  const extraGrantIds = new Set(extraSampleGrantIds());
+  await db.delete(t.grants).where(
+    inArray(
+      t.grants.id,
+      SAMPLE_PEOPLE.flatMap((p) => unmappedTemplateKeys.map((key) => `grant_${p.id}_${key}`)).filter(
+        (id) => !extraGrantIds.has(id),
+      ),
+    ),
+  );
+
   // ── Grants derived from the legacy roles ──
   for (const person of SAMPLE_PEOPLE) {
     const legacyRole = upperRole<string>(person.orgRole);
@@ -298,35 +330,19 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     // grants from their staff or expert template.
     if (!person.orgId && !platformRole) continue;
 
-    // Templates with legacyRole: null are assigned explicitly, never derived.
-    const matching = PERMISSION_TEMPLATES.filter(
-      (tmpl) =>
-        tmpl.legacyRole != null &&
-        (tmpl.legacyRole === legacyRole || tmpl.legacyRole === platformRole),
-    );
-    // Every org member also receives the employee template.
-    if (legacyRole && !matching.some((tmpl) => tmpl.key === 'employee')) {
-      const employee = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
-      if (employee) matching.push(employee);
-    }
+    const extraTemplates = (EXTRA_SAMPLE_TEMPLATES[person.id] ?? []).map((key) => {
+      const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === key);
+      if (!tmpl) throw new Error(`EXTRA_SAMPLE_TEMPLATES names an unknown template: ${key}`);
+      return tmpl;
+    });
 
-    for (const tmpl of matching) {
+    for (const tmpl of [...templatesForLegacyRoles(legacyRole, platformRole), ...extraTemplates]) {
       const scope = resolveSampleScope(tmpl.scopeType, person.orgId ?? null, defaultTeamId);
-      const conditions: unknown[] = [];
-      if (tmpl.scopeType === 'assigned_cases' && tmpl.key === 'expert') {
-        const expert = await db.query.experts.findFirst({
-          where: eq(t.experts.userId, person.id),
-          with: { credentials: { where: eq(t.expertCredentials.status, 'APPROVED') } },
-        });
-        const categories = expert?.credentials.map((c) => c.serviceCategory) ?? [];
-        if (categories.length > 0) conditions.push({ type: 'categories', allowed: categories });
-      }
-
       const update = {
         actions: [...tmpl.actions],
         scopeType: tmpl.scopeType,
         ...scope,
-        conditions: conditions.length > 0 ? conditions : null,
+        conditions: await derivedGrantConditions(db, tmpl, person.id),
       };
       await db
         .insert(t.grants)
@@ -358,10 +374,101 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     }
   }
 
+  // ── Confidential professional domain: one case (T-2.4) ──
+  // The expert reaches the case through a CASE assignment targeting its id.
+  await db
+    .insert(t.assignments)
+    .values({
+      id: `assignment_${SAMPLE_CASE.expertUserId}_case_${SAMPLE_CASE.id}`,
+      userId: SAMPLE_CASE.expertUserId,
+      kind: 'CASE',
+      targetId: SAMPLE_CASE.id,
+      assignedByUserId: hrAdmin?.id ?? SAMPLE_CASE.expertUserId,
+      startAt: SAMPLE_START_DATE,
+    })
+    .onConflictDoNothing({ target: t.assignments.id });
+  const caseRef = {
+    orgId: SAMPLE_CASE.orgId,
+    caseId: SAMPLE_CASE.id,
+    employeeUserId: SAMPLE_CASE.employeeUserId,
+  };
+  await upsertById(
+    db,
+    t.conversations,
+    { id: SAMPLE_CASE.conversation.id, ...caseRef, expertUserId: SAMPLE_CASE.expertUserId },
+    { ...caseRef, expertUserId: SAMPLE_CASE.expertUserId },
+  );
+  for (const m of SAMPLE_CASE.conversation.messages) {
+    await upsertById(
+      db,
+      t.conversationMessages,
+      {
+        id: m.id,
+        conversationId: SAMPLE_CASE.conversation.id,
+        authorUserId: m.authorUserId,
+        body: m.body,
+        createdAt: new Date(m.createdAt),
+      },
+      { body: m.body },
+    );
+  }
+  await upsertById(
+    db,
+    t.intakeRecords,
+    {
+      id: SAMPLE_CASE.intake.id,
+      ...caseRef,
+      body: SAMPLE_CASE.intake.body,
+      createdAt: new Date(SAMPLE_CASE.intake.createdAt),
+    },
+    { body: SAMPLE_CASE.intake.body },
+  );
+
   return countAll(db);
 }
 
-function resolveSampleScope(scopeType: string, orgId: string | null, defaultTeamId: string | null) {
+/**
+ * The permission templates a legacy org role and platform role map to.
+ * Templates without a legacy role (employer_owner, approver, ...) are never
+ * derived: they are granted explicitly. Every org member also receives the
+ * employee template. Roles are matched case-insensitively.
+ */
+export function templatesForLegacyRoles(
+  orgRole: string | null,
+  platformRole: string | null,
+): PermissionTemplateDefinition[] {
+  const org = orgRole?.toUpperCase() ?? null;
+  const platform = platformRole?.toUpperCase() ?? null;
+  const matching = PERMISSION_TEMPLATES.filter(
+    (tmpl) => tmpl.legacyRole != null && (tmpl.legacyRole === org || tmpl.legacyRole === platform),
+  );
+  if (org && !matching.some((tmpl) => tmpl.key === 'employee')) {
+    const employee = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
+    if (employee) matching.push(employee);
+  }
+  return matching;
+}
+
+/**
+ * Conditions a derived grant carries: the expert template is limited to the
+ * expert's approved service categories. Null when there are none.
+ */
+export async function derivedGrantConditions(
+  db: Database,
+  tmpl: PermissionTemplateDefinition,
+  userId: string,
+): Promise<unknown[] | null> {
+  if (tmpl.scopeType !== 'assigned_cases' || tmpl.key !== 'expert') return null;
+  const expert = await db.query.experts.findFirst({
+    where: eq(t.experts.userId, userId),
+    with: { credentials: { where: eq(t.expertCredentials.status, 'APPROVED') } },
+  });
+  const categories = expert?.credentials.map((c) => c.serviceCategory) ?? [];
+  return categories.length > 0 ? [{ type: 'categories', allowed: categories }] : null;
+}
+
+/** Grant scope columns for a template's scope type. */
+export function resolveSampleScope(scopeType: string, orgId: string | null, defaultTeamId: string | null) {
   switch (scopeType) {
     case 'org_unit':
       return { scopeOrgId: orgId, scopeOrgUnitId: defaultTeamId, includeDescendants: true };
@@ -392,6 +499,9 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     permissionTemplates: t.permissionTemplates,
     grants: t.grants,
     assignments: t.assignments,
+    conversations: t.conversations,
+    conversationMessages: t.conversationMessages,
+    intakeRecords: t.intakeRecords,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

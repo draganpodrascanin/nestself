@@ -30,13 +30,18 @@ export function mapAuthError(err: unknown, t: TFunction<'auth'>): MappedError {
     if (err.code === 'invalid_code' || err.code === 'expired_code') {
       return { message: t('error.invalidCode'), isLockout: false };
     }
+    // The challenge expired or its three attempts are spent: ask for a new code.
+    if (err.code === 'invalid_challenge') {
+      return { message: t('error.challengeExpired'), isLockout: false };
+    }
     if (err.code === 'invalid_credentials') {
       return { message: t('error.invalidCredentials'), isLockout: false };
     }
     if (err.code === 'network') {
       return { message: t('error.network'), isLockout: false };
     }
-    return { message: err.message, isLockout: false };
+    // Never the API's own message: it is English and written for developers.
+    return { message: t('error.unknown'), isLockout: false };
   }
   return { message: t('error.unknown'), isLockout: false };
 }

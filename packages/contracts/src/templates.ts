@@ -213,8 +213,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     population: 'expert',
     actions: [
       'availability.manage', 'case.accept', 'case.decline',
-      'appointment.propose', 'conversation.participate', 'consultation.join',
-      'delivery.record', 'earnings.read', 'expert.profile.edit',
+      'appointment.propose', 'conversation.participate', 'conversation.read.assigned',
+      'consultation.join', 'delivery.record', 'earnings.read', 'expert.profile.edit',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_cases',

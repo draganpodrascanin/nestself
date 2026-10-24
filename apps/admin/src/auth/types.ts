@@ -19,8 +19,11 @@ export interface AuthContextValue extends AuthSnapshot {
   signOut: () => Promise<void>;
   /** CLIENT-R-04 */
   switchContext: (context: ActiveContext) => Promise<void>;
-  /** Phase 2: step-up dialog. For now a no-op placeholder. */
-  stepUp: () => void;
+  /**
+   * CLIENT-R-04: request step-up authentication. Opens the step-up dialog and
+   * resolves `true` once the user verified, `false` when they cancelled.
+   */
+  stepUp: () => Promise<boolean>;
   /** CLIENT-R-02 */
   refreshPrincipal: () => Promise<void>;
   /** Non-null when a background refresh or action failed. */

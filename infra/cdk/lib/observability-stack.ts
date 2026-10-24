@@ -120,10 +120,12 @@ export class NestSelfObservabilityStack extends cdk.Stack {
     cacheHitRateAlarm.addAlarmAction(alarmAction);
 
     // ── Metric: emergency access activation ──────────────────────
+    // The API logs one JSON line with `action: "emergency_access.approved"`
+    // per approval (EmergencyService.approve).
     new logs.MetricFilter(this, 'EmergencyAccessFilter', {
       logGroup: apiLogGroup,
       filterPattern: logs.FilterPattern.literal(
-        '{ $.action = "emergency_access.activated" }',
+        '{ $.action = "emergency_access.approved" }',
       ),
       metricNamespace: ns,
       metricName: 'EmergencyAccessActivations',

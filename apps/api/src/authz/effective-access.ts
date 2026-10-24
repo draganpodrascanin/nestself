@@ -52,7 +52,7 @@ export function effectiveAccess(
       if (!grant.actions.includes(action)) continue;
 
       const resource = syntheticResource(grant);
-      const decision = authorize(principal, action as Action, resource, ctx);
+      const decision = authorize(principal, action as Action, resource, contextAt(grant, ctx));
 
       if (decision.allowed && decision.grantIds.includes(grant.id)) {
         entries.push({
@@ -85,24 +85,32 @@ export function effectiveActions(
   const allowed = new Set<Action>();
 
   for (const action of ACTION_LIST) {
-    // Build a minimal resource from the first grant that contains this action
-    const grant = ctx.grants.find(
+    // Allowed when any current grant holding the action passes the engine at
+    // a resource inside that grant's own scope.
+    const candidates = ctx.grants.filter(
       (g) =>
         g.revokedAt == null &&
         g.actions.includes(action) &&
         (g.validFrom == null || g.validFrom <= ctx.now) &&
         (g.validUntil == null || g.validUntil > ctx.now),
     );
-    if (grant == null) continue;
-
-    const resource = syntheticResource(grant);
-    const decision = authorize(principal, action, resource, ctx);
-    if (decision.allowed) {
-      allowed.add(action);
-    }
+    const isAllowed = candidates.some(
+      (grant) => authorize(principal, action, syntheticResource(grant), contextAt(grant, ctx)).allowed,
+    );
+    if (isAllowed) allowed.add(action);
   }
 
   return [...allowed];
+}
+
+/**
+ * The context for a synthetic resource placed at the grant's own org unit:
+ * that unit is its own ancestor (AUTHZ-R-09), so descendant-scoped grants
+ * match. The runtime loader only fills `ancestorIds` for a real resource.
+ */
+function contextAt(grant: GrantInput, ctx: AuthorizationContext): AuthorizationContext {
+  if (grant.scopeOrgUnitId == null || ctx.ancestorIds.includes(grant.scopeOrgUnitId)) return ctx;
+  return { ...ctx, ancestorIds: [...ctx.ancestorIds, grant.scopeOrgUnitId] };
 }
 
 /**

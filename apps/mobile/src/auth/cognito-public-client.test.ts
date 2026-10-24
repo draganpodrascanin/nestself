@@ -48,6 +48,24 @@ describe('CognitoPublicClient', () => {
       expect(result.challengeName).toBe('EMAIL_OTP');
     });
 
+    it('passes the locale as ClientMetadata for the CustomMessage trigger', async () => {
+      const fetchFn = mockFetch({ ChallengeName: 'EMAIL_OTP', Session: 's' });
+      const client = createCognitoPublicClient(CONFIG, fetchFn);
+      await client.initiateEmailOtp('user@example.com', 'sr-Cyrl');
+
+      const body = JSON.parse(fetchFn.mock.calls[0]![1].body as string) as Record<string, unknown>;
+      expect(body['ClientMetadata']).toEqual({ locale: 'sr-Cyrl' });
+    });
+
+    it('sends no ClientMetadata without a locale', async () => {
+      const fetchFn = mockFetch({ ChallengeName: 'EMAIL_OTP', Session: 's' });
+      const client = createCognitoPublicClient(CONFIG, fetchFn);
+      await client.initiateEmailOtp('user@example.com');
+
+      const body = JSON.parse(fetchFn.mock.calls[0]![1].body as string) as Record<string, unknown>;
+      expect(body).not.toHaveProperty('ClientMetadata');
+    });
+
     it('maps UserNotFoundException to not_authorized', async () => {
       const fetchFn = mockFetch(
         { __type: 'UserNotFoundException', message: 'User does not exist.' },

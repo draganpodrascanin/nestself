@@ -22,6 +22,27 @@
       "when": 1792750343704,
       "tag": "0002_rls_legacy_content_closure",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792851691798,
+      "tag": "0003_professional_domain",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792852546055,
+      "tag": "0004_emergency_access_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792858358076,
+      "tag": "0005_drop_legacy_roles",
+      "breakpoints": true
     }
   ]
 }

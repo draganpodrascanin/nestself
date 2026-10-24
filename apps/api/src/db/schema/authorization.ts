@@ -199,13 +199,18 @@ export const emergencyAccess = pgTable(
     userId: text()
       .notNull()
       .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-    /** A different platform owner who approved the request [D-20]. */
-    approvedByUserId: text()
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    /**
+     * A different platform owner who approved the request [D-20]. Null while
+     * the request is pending; only approved rows count as active.
+     */
+    approvedByUserId: text().references(() => users.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    approvedAt: ts(),
     purpose: text().notNull(),
     scopeKind: emergencyScopeKind().notNull(),
     scopeId: text().notNull(),
+    /** Requested window in minutes; approval caps it at 240 [API-R-26]. */
+    requestedDurationMinutes: integer().notNull().default(240),
+    /** Provisional at request time, reset to the approval time on approve. */
     grantedAt: createdAt(),
     /** At most 4 hours from grantedAt [D-20]. */
     expiresAt: ts().notNull(),

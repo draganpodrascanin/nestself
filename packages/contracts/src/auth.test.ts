@@ -6,6 +6,7 @@ import {
   AUTH_ERROR_CODES,
   ApiErrorResponseSchema,
   StepUpRequiredErrorSchema,
+  EmailOtpStartRequestSchema,
   EmailOtpStartResponseSchema,
   MeResponseSchema,
   PasswordResetConfirmRequestSchema,
@@ -199,6 +200,22 @@ describe('StepUpRequiredErrorSchema', () => {
     });
     expect(result.details.stepUpClass).toBe('financial');
     expect(result.details.maxAge).toBe(900);
+  });
+});
+
+describe('EmailOtpStartRequestSchema', () => {
+  it('accepts a request without a locale', () => {
+    const result = EmailOtpStartRequestSchema.parse({ email: 'a@b.co' });
+    expect(result).toEqual({ email: 'a@b.co' });
+  });
+
+  it.each(['en', 'sr-Latn', 'sr-Cyrl', 'hu'])('accepts the %s locale', (locale) => {
+    expect(EmailOtpStartRequestSchema.parse({ email: 'a@b.co', locale }).locale).toBe(locale);
+  });
+
+  it('rejects a locale outside the four supported ones', () => {
+    expect(() => EmailOtpStartRequestSchema.parse({ email: 'a@b.co', locale: 'de' })).toThrow();
+    expect(() => EmailOtpStartRequestSchema.parse({ email: 'a@b.co', locale: 'sr' })).toThrow();
   });
 });
 

@@ -111,7 +111,7 @@ export function TotpEnrolScreen({
   const manualKey = secretUri ? extractSecret(secretUri) : '';
 
   const errors = displayError
-    ? [{ id: 'enrol-code', label: t('totpEnrol.codeLabel'), message: displayError }]
+    ? [{ id: 'enrol-code-input', label: t('totpEnrol.codeLabel'), message: displayError }]
     : [];
 
   return (

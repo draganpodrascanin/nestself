@@ -12528,5 +12528,504 @@
       "allowed": true,
       "denialReason": null
     }
+  },
+  {
+    "label": "CONF-DENY-01: platform_owner platform grant on conversation.read.assigned denied even with a CASE assignment",
+    "principal": {
+      "userId": "u-ops",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "platform_owner"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-po",
+          "subjectUserId": "u-ops",
+          "templateKey": "platform_owner",
+          "actions": [
+            "conversation.read.assigned"
+          ],
+          "scopeType": "platform",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-ops",
+          "kind": "CASE",
+          "targetId": "case1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CONF-DENY-02: hr_admin organization grant on conversation.read.assigned denied even with a CASE assignment",
+    "principal": {
+      "userId": "u-hr",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-hr",
+          "subjectUserId": "u-hr",
+          "templateKey": "hr_admin",
+          "actions": [
+            "conversation.read.assigned"
+          ],
+          "scopeType": "organization",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-hr",
+          "kind": "CASE",
+          "targetId": "case1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CONF-DENY-03: assigned expert reads the conversation through a matching CASE assignment",
+    "principal": {
+      "userId": "u-exp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "expert"
+      },
+      "memberships": [],
+      "staffTemplates": [],
+      "expert": {
+        "id": "e1",
+        "approvedCategories": [
+          "psychological"
+        ]
+      },
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-exp",
+          "subjectUserId": "u-exp",
+          "templateKey": "expert",
+          "actions": [
+            "conversation.read.assigned"
+          ],
+          "scopeType": "assigned_cases",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [
+            {
+              "type": "categories",
+              "allowed": [
+                "psychological"
+              ]
+            }
+          ],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-exp",
+          "kind": "CASE",
+          "targetId": "case1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CONF-DENY-04: participant employee reads own conversation through the own scope",
+    "principal": {
+      "userId": "u-emp",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.participate",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-emp",
+          "subjectUserId": "u-emp",
+          "templateKey": "employee",
+          "actions": [
+            "conversation.participate"
+          ],
+          "scopeType": "own",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": true,
+      "denialReason": null
+    }
+  },
+  {
+    "label": "CONF-DENY-05: team_manager org_unit grant (with descendants) on conversation.read.assigned denied even with a CASE assignment",
+    "principal": {
+      "userId": "u-mgr",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "organization",
+        "orgId": "o1"
+      },
+      "memberships": [
+        {
+          "membershipId": "m1",
+          "orgId": "o1",
+          "orgUnitId": "ou1",
+          "status": "ACTIVE",
+          "startDate": "2026-01-01T00:00:00.000Z",
+          "endDate": null
+        }
+      ],
+      "staffTemplates": [],
+      "expert": null,
+      "auth": {
+        "method": "email_otp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": false,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true,
+      "orgUnitId": "ou1"
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-mgr",
+          "subjectUserId": "u-mgr",
+          "templateKey": "team_manager",
+          "actions": [
+            "conversation.read.assigned"
+          ],
+          "scopeType": "org_unit",
+          "scopeOrgId": "o1",
+          "scopeOrgUnitId": "ou1",
+          "includeDescendants": true,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-mgr",
+          "kind": "CASE",
+          "targetId": "case1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [
+        "ou1",
+        "ou-root"
+      ],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
+  },
+  {
+    "label": "CONF-DENY-06: client_operations assigned_clients grant on conversation.read.assigned denied even with CASE and CLIENT assignments",
+    "principal": {
+      "userId": "u-ops",
+      "displayName": "Test User",
+      "initials": "TU",
+      "locale": "en",
+      "context": {
+        "kind": "operations"
+      },
+      "memberships": [],
+      "staffTemplates": [
+        "client_operations"
+      ],
+      "expert": null,
+      "auth": {
+        "method": "password_totp",
+        "time": "2026-10-22T09:00:00.000Z",
+        "secondFactor": true,
+        "lastStepUpAt": null
+      },
+      "sessionId": "s1",
+      "tokenFamily": null
+    },
+    "action": "conversation.read.assigned",
+    "resource": {
+      "type": "conversation",
+      "id": "case1",
+      "orgId": "o1",
+      "ownerId": "u-emp",
+      "isConfidential": true
+    },
+    "ctx": {
+      "now": "2026-10-22T10:00:00.000Z",
+      "isDeactivated": false,
+      "isSuspended": false,
+      "grants": [
+        {
+          "id": "g-cops",
+          "subjectUserId": "u-ops",
+          "templateKey": "client_operations",
+          "actions": [
+            "conversation.read.assigned"
+          ],
+          "scopeType": "assigned_clients",
+          "scopeOrgId": null,
+          "scopeOrgUnitId": null,
+          "includeDescendants": false,
+          "scopeRefKind": null,
+          "scopeRefId": null,
+          "conditions": [],
+          "validFrom": null,
+          "validUntil": null,
+          "delegationEnvelope": null,
+          "parentGrantId": null,
+          "revokedAt": null
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a-case",
+          "userId": "u-ops",
+          "kind": "CASE",
+          "targetId": "case1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        },
+        {
+          "id": "a-client",
+          "userId": "u-ops",
+          "kind": "CLIENT",
+          "targetId": "o1",
+          "startAt": "2026-01-01T00:00:00.000Z",
+          "endAt": null
+        }
+      ],
+      "ancestorIds": [],
+      "orgSelfApprovalAllowed": false,
+      "organizationTimezone": "Europe/Belgrade"
+    },
+    "expected": {
+      "allowed": false,
+      "denialReason": "no_matching_grant"
+    }
   }
 ]

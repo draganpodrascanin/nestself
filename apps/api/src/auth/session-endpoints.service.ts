@@ -6,7 +6,6 @@ import { SessionService } from '../session/session.service.js';
 import {
   PrincipalLoader,
 } from '../principal/principal-loader.js';
-import { ContextLoader } from '../authz/context-loader.js';
 import {
   KEY_VALUE_STORE,
   type KeyValueStore,
@@ -19,25 +18,17 @@ import { ApiHttpException } from '../common/api-error.js';
 import {
   hasActiveDateCurrentMembership,
   resolveDefaultPersonalOrgId,
-  computeAvailableContexts,
 } from '../authz/personal-context.js';
-import { contextScopedEffectiveActions } from '../authz/effective-access.js';
 import type {
   Principal,
   ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
+import { MeResponseBuilder } from './me-response.builder.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Extract the orgId relevant for grant loading from a context. */
-function contextOrgId(ctx: ActiveContext): string | undefined {
-  if (ctx.kind === 'personal') return ctx.orgId;
-  if (ctx.kind === 'organization') return ctx.orgId;
-  return undefined;
-}
 
 /** Reject a switchContext request with 403 invalid_context (ruling 2). */
 function denyContext(): never {
@@ -53,8 +44,8 @@ export class SessionEndpointsService {
   constructor(
     @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
-    @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    @Inject(forwardRef(() => MeResponseBuilder)) private readonly meResponse: MeResponseBuilder,
   ) {}
 
   async getMe(principal: Principal): Promise<MeResponse> {
@@ -66,15 +57,7 @@ export class SessionEndpointsService {
         message: 'User not found',
       });
     }
-    const [extras, effectiveActions] = await Promise.all([
-      this.principalLoader.loadAvailableContextExtras(loaded),
-      this.loadEffectiveActions(principal),
-    ]);
-    return {
-      principal,
-      effectiveActions,
-      availableContexts: computeAvailableContexts(loaded, extras),
-    };
+    return this.meResponse.build(principal);
   }
 
   async switchContext(
@@ -97,13 +80,13 @@ export class SessionEndpointsService {
 
     if (newContext.kind === 'personal') {
       if (newContext.orgId) {
-        // (1) personal with orgId → verify ACTIVE, date-current membership.
+        // (1) personal with orgId -> verify ACTIVE, date-current membership.
         if (!hasActiveDateCurrentMembership(loaded.memberships, newContext.orgId)) {
           denyContext();
         }
         resolvedContext = { kind: 'personal', orgId: newContext.orgId };
       } else {
-        // (2) personal without orgId → resolve default using sticky orgId.
+        // (2) personal without orgId -> resolve default using sticky orgId.
         const lastUsed = lastPersonalOrgId
           ?? (principal.context.kind === 'personal' ? principal.context.orgId : undefined);
         const defaultOrgId = resolveDefaultPersonalOrgId(
@@ -129,16 +112,7 @@ export class SessionEndpointsService {
     const population = this.resolvePopulation(loaded, resolvedContext);
     await this.sessions.updateContext(sessionId, resolvedContext, population);
 
-    const updatedPrincipal = { ...principal, context: resolvedContext };
-    const [extras, effectiveActions] = await Promise.all([
-      this.principalLoader.loadAvailableContextExtras(loaded),
-      this.loadEffectiveActions(updatedPrincipal),
-    ]);
-    return {
-      principal: updatedPrincipal,
-      effectiveActions,
-      availableContexts: computeAvailableContexts(loaded, extras),
-    };
+    return this.meResponse.build({ ...principal, context: resolvedContext });
   }
 
   async signOut(sessionId: string): Promise<void> {
@@ -224,23 +198,6 @@ export class SessionEndpointsService {
       { ttlSeconds: WS_TICKET_TTL },
     );
     return ticket;
-  }
-
-  /**
-   * Load the effective actions for the given context using the authorization
-   * engine (Ruling F). Evaluates `contextScopedEffectiveActions()` against
-   * the same `ContextLoader` the guard uses, so personal-context users do
-   * not see actions from organization-workspace templates.
-   */
-  private async loadEffectiveActions(
-    principal: Principal,
-  ): Promise<string[]> {
-    // Use a synthetic resource scoped to the context's org so the context
-    // loader builds the right grant set.
-    const orgId = contextOrgId(principal.context) ?? 'platform';
-    const resource = { type: 'synthetic', orgId: orgId === 'platform' ? undefined : orgId };
-    const ctx = await this.contextLoader.build(principal, resource);
-    return contextScopedEffectiveActions(principal, ctx);
   }
 
   private resolvePopulation(

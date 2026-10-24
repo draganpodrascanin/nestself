@@ -41,7 +41,9 @@ describe('NestSelfObservabilityStack -- staging', () => {
   });
 
   it('creates metric filters for emergency access', () => {
+    // The API logs `{ action: 'emergency_access.approved' }` once per approval.
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
+      FilterPattern: '{ $.action = "emergency_access.approved" }',
       MetricTransformations: Match.arrayWith([
         Match.objectLike({ MetricName: 'EmergencyAccessActivations' }),
       ]),

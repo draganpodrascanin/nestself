@@ -7,7 +7,7 @@
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -16,12 +16,15 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { externalIdentities, memberships } from '../src/db/schema/index.js';
+import { and, eq } from 'drizzle-orm';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
+import { hashSessionId } from '../src/session/session-helpers.js';
+import { sessionKey } from '../src/redis/redis-keys.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 import {
   MeResponseSchema,
   PasswordResponseSchema,
 } from '@nestself/contracts';
-import { eq, and } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -86,6 +89,9 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { email: 'user_stefan@example.com' },
       { email: 'user_ivana@example.com' },
       { email: 'user_nikola@example.com', password: 'TempPassword1!', temporaryPassword: 'TempPassword1!' },
+      // Pool-only users for the retry cases: they never reach a session.
+      { email: 'retry_exhaust@example.com' },
+      { email: 'retry_lock@example.com' },
     ]);
 
     // Link FakeIdentityProvider subs → ExternalIdentity rows.
@@ -128,6 +134,16 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     const match = csrfCookie.match(/nestself_csrf=([^;]+)/);
     if (!match) throw new Error('Could not parse CSRF token');
     return match[1]!;
+  }
+
+  /** The newest code the fake provider sent to an address. */
+  function lastSentCode(email: string): string {
+    return idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+  }
+
+  /** A well-formed code guaranteed to differ from `code`. */
+  function wrongCode(code: string): string {
+    return code === '000000' ? '111111' : '000000';
   }
 
   // -----------------------------------------------------------------------
@@ -476,183 +492,330 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(blockedStart.status).toBe(429);
     expect(blockedStart.body).toHaveProperty('code', 'too_many_attempts');
   });
-
   // -----------------------------------------------------------------------
-  // 11. Item 1: /me checks for employee and HR admin
+  // 10a. Code email locale
   // -----------------------------------------------------------------------
 
-  it('/me for employee: personal entry has orgName, no organization entry, effectiveActions includes content.read not program.overview', async () => {
-    // Sign in as employee (user_jovan).
-    const empAgent = request.agent(app.getHttpServer());
-    const startRes = await empAgent
-      .post('/api/auth/email-otp/start')
-      .send({ email: 'user_jovan@example.com' });
-    expect(startRes.status).toBe(200);
-    const code = idp.sentCodes.filter((c) => c.email === 'user_jovan@example.com').pop();
-    expect(code).toBeDefined();
-    const verifyRes = await empAgent
-      .post('/api/auth/email-otp/verify')
-      .send({ challengeToken: startRes.body.challengeToken, code: code!.code });
-    expect(verifyRes.status).toBe(200);
-
-    const meRes = await empAgent.get('/api/auth/me');
-    expect(meRes.status).toBe(200);
-    const me = MeResponseSchema.parse(meRes.body);
-
-    // Personal entry with orgName present.
-    const personalEntries = me.availableContexts.filter((c) => c.kind === 'personal');
-    expect(personalEntries.length).toBeGreaterThanOrEqual(1);
-    const personalEntry = personalEntries.find(
-      (c) => c.kind === 'personal' && c.orgId === 'org_sample',
-    );
-    expect(personalEntry).toBeDefined();
-    expect(personalEntry!.kind === 'personal' && personalEntry!.orgName).toBeTruthy();
-
-    // A plain employee has no organization-workspace grants, so no
-    // organization entry in availableContexts.
-    const orgEntries = me.availableContexts.filter((c) => c.kind === 'organization');
-    expect(orgEntries).toHaveLength(0);
-
-    // effectiveActions includes content.read; program.overview is only on
-    // hr_admin (legacyRole HR_ADMIN) which the employee does not receive.
-    expect(me.effectiveActions).toContain('content.read');
-    expect(me.effectiveActions).not.toContain('program.overview');
-
-    const empCsrf = extractCsrf(verifyRes);
-    await empAgent.post('/api/auth/sign-out').set('X-CSRF-Token', empCsrf);
+  it('email-otp/start forwards the requested locale to the identity provider', async () => {
+    const spy = vi.spyOn(idp, 'startEmailOtp');
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email: 'user_ivana@example.com', locale: 'sr-Cyrl' });
+      expect(res.status).toBe(200);
+      expect(spy).toHaveBeenCalledWith({ email: 'user_ivana@example.com', locale: 'sr-Cyrl' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
-  it('/me for HR admin: organization entry with orgName; program.overview only after switching to organization context', async () => {
-    // Sign in as hr_admin (user_ivana).
-    const hrAgent = request.agent(app.getHttpServer());
-    const startRes = await hrAgent
+  it('email-otp/start refuses a locale outside the supported four', async () => {
+    const res = await request(app.getHttpServer())
       .post('/api/auth/email-otp/start')
-      .send({ email: 'user_ivana@example.com' });
-    expect(startRes.status).toBe(200);
-    const code = idp.sentCodes.filter((c) => c.email === 'user_ivana@example.com').pop();
-    expect(code).toBeDefined();
-    const verifyRes = await hrAgent
-      .post('/api/auth/email-otp/verify')
-      .send({ challengeToken: startRes.body.challengeToken, code: code!.code });
-    expect(verifyRes.status).toBe(200);
-    const hrCsrf = extractCsrf(verifyRes);
-
-    // /me in personal context.
-    const personalMe = await hrAgent.get('/api/auth/me');
-    expect(personalMe.status).toBe(200);
-    const personalBody = MeResponseSchema.parse(personalMe.body);
-
-    // HR admin sees an organization entry with orgName.
-    const orgEntry = personalBody.availableContexts.find((c) => c.kind === 'organization');
-    expect(orgEntry).toBeDefined();
-    expect(orgEntry!.kind === 'organization' && orgEntry!.orgName).toBeTruthy();
-
-    // In personal context, organization-workspace actions are excluded.
-    // program.overview (hr_admin template, workspace 'organization') must
-    // NOT appear in personal context.
-    expect(personalBody.effectiveActions).not.toContain('program.overview');
-    // Employee-workspace actions are still present.
-    expect(personalBody.effectiveActions).toContain('content.read');
-
-    // Switch to organization context.
-    const ctxRes = await hrAgent
-      .post('/api/auth/context')
-      .set('X-CSRF-Token', hrCsrf)
-      .send({ context: { kind: 'organization', orgId: 'org_sample' } });
-    expect(ctxRes.status).toBe(200);
-    const orgBody = MeResponseSchema.parse(ctxRes.body);
-
-    // In organization context, program.overview IS present.
-    expect(orgBody.effectiveActions).toContain('program.overview');
-
-    await hrAgent.post('/api/auth/sign-out').set('X-CSRF-Token', hrCsrf);
+      .send({ email: 'user_ivana@example.com', locale: 'de' });
+    expect(res.status).toBe(400);
   });
 
   // -----------------------------------------------------------------------
-  // 12. Item 2: membership expiry → 403 org_context_expired → fallback
+  // 10b. Bounded retry on a wrong email code (§21)
   // -----------------------------------------------------------------------
 
-  it('expired membership returns 403 org_context_expired; personal fallback resolves or invalid_context', async () => {
-    // Sign in as user_stefan (manager).
-    const mgrAgent = request.agent(app.getHttpServer());
-    const startRes = await mgrAgent
-      .post('/api/auth/email-otp/start')
-      .send({ email: 'user_stefan@example.com' });
-    // Stefan was previously locked out; this is a new agent so should work
-    // if lockout was per agent. If throttled, skip the test.
-    if (startRes.status === 429) return;
-    expect(startRes.status).toBe(200);
-    const code = idp.sentCodes.filter((c) => c.email === 'user_stefan@example.com').pop();
-    expect(code).toBeDefined();
-    const verifyRes = await mgrAgent
-      .post('/api/auth/email-otp/verify')
-      .send({ challengeToken: startRes.body.challengeToken, code: code!.code });
-    expect(verifyRes.status).toBe(200);
-    const mgrCsrf = extractCsrf(verifyRes);
+  describe('email code retry', () => {
+    async function start(email: string): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email });
+      expect(res.status).toBe(200);
+      return res.body.challengeToken as string;
+    }
 
-    // Switch to organization context first.
-    const ctxRes = await mgrAgent
-      .post('/api/auth/context')
-      .set('X-CSRF-Token', mgrCsrf)
-      .send({ context: { kind: 'organization', orgId: 'org_sample' } });
-    expect(ctxRes.status).toBe(200);
+    function verify(challengeToken: string, code: string) {
+      return request(app.getHttpServer())
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken, code });
+    }
 
-    // End the membership in the database (simulate what members module does).
-    await testDb.db.update(memberships)
-      .set({ status: 'ENDED', endDate: new Date('2026-10-23T00:00:00Z') })
-      .where(
-        and(
-          eq(memberships.userId, 'user_stefan'),
-          eq(memberships.orgId, 'org_sample'),
-          eq(memberships.status, 'ACTIVE'),
-        ),
+    it('a wrong code answers invalid_code and the same token then accepts the right code', async () => {
+      const email = 'user_jovan@example.com';
+      const challengeToken = await start(email);
+      const code = lastSentCode(email);
+
+      const wrong = await verify(challengeToken, wrongCode(code));
+      expect(wrong.status).toBe(401);
+      expect(wrong.body).toHaveProperty('code', 'invalid_code');
+
+      const right = await verify(challengeToken, code);
+      expect(right.status).toBe(200);
+      expect(right.body.principal).toHaveProperty('userId', 'user_jovan');
+    });
+
+    it('after three wrong codes the token is gone and the right code answers invalid_challenge', async () => {
+      const email = 'retry_exhaust@example.com';
+      const challengeToken = await start(email);
+      const code = lastSentCode(email);
+
+      for (let i = 0; i < 3; i++) {
+        const wrong = await verify(challengeToken, wrongCode(code));
+        expect(wrong.status).toBe(401);
+        expect(wrong.body).toHaveProperty('code', 'invalid_code');
+      }
+
+      const right = await verify(challengeToken, code);
+      expect(right.status).toBe(401);
+      expect(right.body).toHaveProperty('code', 'invalid_challenge');
+    });
+
+    it('an unknown address answers three wrong codes and then the dead token exactly like a known one', async () => {
+      const challengeToken = await start('nobody_here@example.com');
+
+      for (let i = 0; i < 3; i++) {
+        const wrong = await verify(challengeToken, '000000');
+        expect(wrong.status).toBe(401);
+        expect(wrong.body).toHaveProperty('code', 'invalid_code');
+      }
+
+      const afterBudget = await verify(challengeToken, '000000');
+      expect(afterBudget.status).toBe(401);
+      expect(afterBudget.body).toHaveProperty('code', 'invalid_challenge');
+    });
+
+    it('the sign-in throttle still locks after five wrong codes spread over three challenges', async () => {
+      const email = 'retry_lock@example.com';
+      const wrong = () => wrongCode(lastSentCode(email));
+
+      // A: one wrong code, so A is handed back with tries left.
+      const a = await start(email);
+      const codeA = lastSentCode(email);
+      expect((await verify(a, wrong())).status).toBe(401);
+      // B: three wrong codes spend its budget (four failures so far).
+      const b = await start(email);
+      for (let i = 0; i < 3; i++) {
+        expect((await verify(b, wrong())).status).toBe(401);
+      }
+      // C: the fifth failure fires the lock, so C is not handed back.
+      const c = await start(email);
+      const codeC = lastSentCode(email);
+      const fifth = await verify(c, wrongCode(codeC));
+      expect(fifth.status).toBe(401);
+      expect(fifth.body).toHaveProperty('code', 'invalid_code');
+
+      const blocked = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/start')
+        .send({ email });
+      expect(blocked.status).toBe(429);
+      expect(blocked.body).toHaveProperty('code', 'too_many_attempts');
+
+      // A still had tries left, but the lock outranks it: its code is refused with 429.
+      const lockedA = await verify(a, codeA);
+      expect(lockedA.status).toBe(429);
+      expect(lockedA.body).toHaveProperty('code', 'too_many_attempts');
+
+      // C was not handed back after the locking failure: its right code finds no challenge.
+      const lockedC = await verify(c, codeC);
+      expect(lockedC.status).toBe(401);
+      expect(lockedC.body).toHaveProperty('code', 'invalid_challenge');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 11. Step-up re-authentication (T-2.6)
+  // -----------------------------------------------------------------------
+
+  describe('step-up', () => {
+    let ivanaAgent: ReturnType<typeof request.agent>;
+    let ivanaCsrf: string;
+    let ivanaSessionId: string;
+    let anaMembershipId: string;
+
+    function extractSessionId(res: request.Response): string {
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      const match = cookies.map((c) => c.match(/nestself_session=([^;]+)/)).find(Boolean);
+      if (!match) throw new Error('Session cookie not found');
+      return match[1]!;
+    }
+
+    async function signIn(email: string) {
+      const signInAgent = request.agent(app.getHttpServer());
+      const startRes = await signInAgent.post('/api/auth/email-otp/start').send({ email });
+      const code = idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+      const verifyRes = await signInAgent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code });
+      expect(verifyRes.status).toBe(200);
+      return { agent: signInAgent, csrf: extractCsrf(verifyRes), sessionId: extractSessionId(verifyRes) };
+    }
+
+    /** Move the session's authentication time 40 minutes into the past. */
+    async function ageSession(sessionId: string) {
+      const store = app.get<KeyValueStore>(KEY_VALUE_STORE);
+      const key = sessionKey(hashSessionId(sessionId));
+      const raw = await store.get(key);
+      expect(raw).not.toBeNull();
+      const ttl = await store.ttl(key);
+      const record = JSON.parse(raw!) as { auth: { time: string } };
+      record.auth.time = new Date(Date.now() - 40 * 60_000).toISOString();
+      await store.set(key, JSON.stringify(record), { ttlSeconds: ttl });
+    }
+
+    async function startStepUp(): Promise<string> {
+      const res = await ivanaAgent
+        .post('/api/auth/step-up/start')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ method: 'email_otp', ssoStartUrl: null });
+      return res.body.challengeToken as string;
+    }
+
+    const lastCode = (email: string) => idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+
+    it('signs ivana (hr_admin) in, switches to the org context and ages the session', async () => {
+      const ivana = await signIn('user_ivana@example.com');
+      ivanaAgent = ivana.agent;
+      ivanaCsrf = ivana.csrf;
+      ivanaSessionId = ivana.sessionId;
+
+      const ctxRes = await ivanaAgent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+      expect(ctxRes.status).toBe(200);
+
+      const [membership] = await testDb.db
+        .select()
+        .from(memberships)
+        .where(and(eq(memberships.userId, 'user_ana'), eq(memberships.orgId, 'org_sample')));
+      expect(membership).toBeDefined();
+      anaMembershipId = membership!.id;
+
+      await ageSession(ivanaSessionId);
+    });
+
+    it('people.deactivate after a 40-minute-old authentication is refused with step_up_required', async () => {
+      const res = await ivanaAgent
+        .post(`/api/orgs/org_sample/members/${anaMembershipId}/end`)
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ reason: 'DEACTIVATED_BY_HR' });
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({
+        code: 'step_up_required',
+        details: { stepUpClass: 'administration', maxAge: 1800, method: 'email_otp' },
+      });
+    });
+
+    it("another user presenting ivana's challenge token is refused with invalid_challenge", async () => {
+      const challengeToken = await startStepUp();
+      const jovan = await signIn('user_jovan@example.com');
+
+      const res = await jovan.agent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', jovan.csrf)
+        .send({ challengeToken, response: lastCode('user_ivana@example.com') });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+
+      await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
+
+    it('a step-up challenge cannot be used to sign in', async () => {
+      const challengeToken = await startStepUp();
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken, code: lastCode('user_ivana@example.com') });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+    });
+
+    it('a wrong step-up code keeps the challenge; the right code on the same token then succeeds', async () => {
+      const challengeToken = await startStepUp();
+      const code = lastCode('user_ivana@example.com');
+
+      const wrong = await ivanaAgent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ challengeToken, response: wrongCode(code) });
+      expect(wrong.status).toBe(401);
+      expect(wrong.body).toHaveProperty('code', 'invalid_code');
+
+      const right = await ivanaAgent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ challengeToken, response: code });
+      expect(right.status).toBe(204);
+
+      // Put the session back where the next case expects it: stale, needing step-up.
+      ivanaCsrf = extractCsrf(right);
+      ivanaSessionId = extractSessionId(right);
+      await ageSession(ivanaSessionId);
+    });
+
+    it('step-up verify returns 204 with a new session id and CSRF token; the action then succeeds', async () => {
+      const challengeToken = await startStepUp();
+
+      const verifyRes = await ivanaAgent
+        .post('/api/auth/step-up/verify')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ challengeToken, response: lastCode('user_ivana@example.com') });
+      expect(verifyRes.status).toBe(204);
+      const newSessionId = extractSessionId(verifyRes);
+      const newCsrf = extractCsrf(verifyRes);
+      expect(newSessionId).not.toBe(ivanaSessionId);
+      expect(newCsrf).not.toBe(ivanaCsrf);
+
+      // The old session id no longer authenticates.
+      const store = app.get<KeyValueStore>(KEY_VALUE_STORE);
+      expect(await store.get(sessionKey(hashSessionId(ivanaSessionId)))).toBeNull();
+
+      const endRes = await ivanaAgent
+        .post(`/api/orgs/org_sample/members/${anaMembershipId}/end`)
+        .set('X-CSRF-Token', newCsrf)
+        .send({ reason: 'DEACTIVATED_BY_HR' });
+      expect(endRes.status).toBe(200);
+      expect(endRes.body).toHaveProperty('status', 'ENDED');
+
+      await ivanaAgent.post('/api/auth/sign-out').set('X-CSRF-Token', newCsrf);
+    });
+  });
+
+  describe('effective actions', () => {
+    async function signInAs(email: string) {
+      const agent = request.agent(app.getHttpServer());
+      const startRes = await agent.post('/api/auth/email-otp/start').send({ email });
+      const code = idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+      const verifyRes = await agent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code });
+      expect(verifyRes.status).toBe(200);
+      return { agent, csrf: extractCsrf(verifyRes), body: verifyRes.body as { effectiveActions: string[] } };
+    }
+
+    it("ivana's /me in the organization context lists program.overview and access.preview", async () => {
+      const ivana = await signInAs('user_ivana@example.com');
+      const ctxRes = await ivana.agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+      expect(ctxRes.status).toBe(200);
+      expect(ctxRes.body.effectiveActions).toEqual(expect.arrayContaining(['program.overview', 'access.preview']));
+
+      const me = await ivana.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toEqual(
+        expect.arrayContaining(['program.overview', 'access.preview', 'access.delegate', 'content.read']),
       );
+      await ivana.agent.post('/api/auth/sign-out').set('X-CSRF-Token', ivana.csrf);
+    });
 
-    // Invalidate cached principal so the guard sees the ended membership.
-    // The simplest way: wait briefly and call an authorized route.
-    // But the principal is cached in Redis for 30s. We need to invalidate it.
-    // In production the members module calls invalidateUser; in tests we
-    // can call an endpoint or manipulate the cache. Using the raw pool:
-    // Let's just try to access an authorized route; the engine re-checks membership
-    // date-currency on every authorization decision via canEnterContext.
-    // Actually: the principal loader caches for 30s. We need to bust it.
-    // The quickest approach: set a small TTL or delete the key. Let's use
-    // the in-memory KV store approach (tests use in-memory, no Redis).
-    // Since tests use in-memory store, we can access it via app.get.
-    // But it's easier to just wait. Instead, let's get the PrincipalLoader
-    // and call invalidateUser.
-    const { PrincipalLoader } = await import('../src/principal/principal-loader.js');
-    const principalLoader = app.get(PrincipalLoader);
-    await principalLoader.invalidateUser('user_stefan', ['org_sample']);
+    it("jovan's /me lists content.read but not program.overview", async () => {
+      const jovan = await signInAs('user_jovan@example.com');
+      expect(jovan.body.effectiveActions).toContain('content.read');
 
-    // Call an authorized route → expect 403 org_context_expired.
-    const progRes = await mgrAgent
-      .get('/api/orgs/org_sample/programme')
-      .set('X-CSRF-Token', mgrCsrf);
-    expect(progRes.status).toBe(403);
-    expect(progRes.body).toHaveProperty('code', 'org_context_expired');
-
-    // Calling POST /api/auth/context with { kind: 'personal' } afterwards.
-    const fallbackRes = await mgrAgent
-      .post('/api/auth/context')
-      .set('X-CSRF-Token', mgrCsrf)
-      .send({ context: { kind: 'personal' } });
-    // Since the membership is ended, a personal context with no valid orgId
-    // returns { kind: 'personal' } (bare) or invalid_context.
-    // With no ACTIVE memberships, it should return bare personal.
-    expect(fallbackRes.status).toBe(200);
-    const fallbackBody = MeResponseSchema.parse(fallbackRes.body);
-    expect(fallbackBody.principal.context.kind).toBe('personal');
-
-    // Restore the membership for other tests.
-    await testDb.db.update(memberships)
-      .set({ status: 'ACTIVE', endDate: null })
-      .where(
-        and(
-          eq(memberships.userId, 'user_stefan'),
-          eq(memberships.orgId, 'org_sample'),
-        ),
-      );
-    await principalLoader.invalidateUser('user_stefan', ['org_sample']);
+      const me = await jovan.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toContain('content.read');
+      expect(me.body.effectiveActions).not.toContain('program.overview');
+      expect(me.body.effectiveActions).not.toContain('access.preview');
+      await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
   });
 });

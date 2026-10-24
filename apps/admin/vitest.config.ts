@@ -7,5 +7,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
+    // Tests assume sample mode regardless of a developer's `.env.local`.
+    env: { VITE_DATA_SOURCE: 'sample' },
   },
 });

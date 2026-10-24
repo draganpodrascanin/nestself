@@ -4,7 +4,7 @@
  * authorization context need from Postgres.
  */
 import { Injectable } from '@nestjs/common';
-import { and, eq, gt, inArray, isNotNull, isNull, lte, notExists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, notExists, or, sql, type SQL } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import {
@@ -21,6 +21,28 @@ import {
 export type GrantRow = typeof grants.$inferSelect;
 export type AssignmentRow = typeof assignments.$inferSelect;
 export type EmergencyAccessRow = typeof emergencyAccess.$inferSelect;
+
+/** A pending emergency access request: provisional window, no approver yet. */
+export interface NewEmergencyRequest {
+  userId: string;
+  purpose: string;
+  scopeKind: EmergencyAccessRow['scopeKind'];
+  scopeId: string;
+  requestedDurationMinutes: number;
+  grantedAt: Date;
+  expiresAt: Date;
+}
+
+export interface EmergencyAccessFilter {
+  userId?: string;
+}
+
+/** Who revoked a grant, when, and why; written to every revoked row. */
+export interface RevocationInput {
+  at: Date;
+  byUserId: string | null;
+  reason: string;
+}
 
 export interface OrgSettings {
   selfApprovalAllowed: boolean;
@@ -87,16 +109,161 @@ export class AuthorizationRepository {
       .where(and(inArray(grants.parentGrantId, parentGrantIds), isNull(grants.revokedAt)));
   }
 
+  /**
+   * Revoke the given grants that are still unrevoked. Returns the ids this
+   * call actually revoked (already-revoked rows are left untouched).
+   */
   async revokeGrants(
     grantIds: string[],
-    revoked: { at: Date; byUserId: string | null; reason: string },
+    revoked: RevocationInput,
     tx?: DbExecutor,
-  ): Promise<void> {
-    if (grantIds.length === 0) return;
-    await this.exec(tx)
+  ): Promise<string[]> {
+    if (grantIds.length === 0) return [];
+    const rows = await this.exec(tx)
       .update(grants)
       .set({ revokedAt: revoked.at, revokedByUserId: revoked.byUserId, revokedReason: revoked.reason })
-      .where(and(inArray(grants.id, grantIds), isNull(grants.revokedAt)));
+      .where(and(inArray(grants.id, grantIds), isNull(grants.revokedAt)))
+      .returning({ id: grants.id });
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Revoke the root grants and every unrevoked descendant delegated from
+   * them. Roots get the caller's reason; descendants get `parent_revoked`
+   * (same `at` and `byUserId`), matching the nightly orphan sweep. `roots` lists the roots this
+   * call revoked; `children` every descendant it revoked, breadth first.
+   * Run inside the root grants' tenant scope (`withOrgScope(orgId)`) or the
+   * system context; descendants of an org grant share its organization.
+   */
+  async revokeGrantTree(
+    rootIds: string[],
+    revoked: RevocationInput,
+    tx?: DbExecutor,
+  ): Promise<{ roots: string[]; children: string[] }> {
+    const roots = await this.revokeGrants(rootIds, revoked, tx);
+    const children: string[] = [];
+    // Revoked rows drop out of findActiveChildGrants, so the walk terminates
+    // even on a malformed (cyclic) parent chain.
+    let parents = rootIds;
+    while (parents.length > 0) {
+      const next = await this.findActiveChildGrants(parents, tx);
+      if (next.length === 0) break;
+      const revokedIds = await this.revokeGrants(
+        next.map((g) => g.id),
+        { ...revoked, reason: 'parent_revoked' },
+        tx,
+      );
+      children.push(...revokedIds);
+      parents = revokedIds;
+    }
+    return { roots, children };
+  }
+
+  // ── Grant administration (auth phase 2) ───────────────────────────────
+
+  /** One grant by id, or null when absent or hidden by the tenant scope. */
+  async findGrantById(id: string, tx?: DbExecutor): Promise<GrantRow | null> {
+    const [row] = await this.exec(tx).select().from(grants).where(eq(grants.id, id));
+    return row ?? null;
+  }
+
+  /**
+   * Grants scoped to one organization (`scope_org_id = orgId`), newest
+   * first; unrevoked only unless `includeRevoked`. Run inside
+   * `withOrgScope(orgId)`.
+   */
+  async listGrantsForOrg(
+    orgId: string,
+    filter: { subjectUserId?: string; includeRevoked?: boolean },
+    tx?: DbExecutor,
+  ): Promise<GrantRow[]> {
+    const where: SQL[] = [eq(grants.scopeOrgId, orgId)];
+    if (filter.subjectUserId) where.push(eq(grants.subjectUserId, filter.subjectUserId));
+    if (!filter.includeRevoked) where.push(isNull(grants.revokedAt));
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(...where))
+      .orderBy(desc(grants.grantedAt), desc(grants.id));
+  }
+
+  /**
+   * Platform-wide and own-scoped grants (`scope_org_id IS NULL`), newest
+   * first; unrevoked only unless `includeRevoked`, optionally one subject's.
+   * Visible in every scope; the system context is the natural caller.
+   */
+  async listPlatformGrants(
+    filter: { subjectUserId?: string; includeRevoked?: boolean },
+    tx?: DbExecutor,
+  ): Promise<GrantRow[]> {
+    const where: SQL[] = [isNull(grants.scopeOrgId)];
+    if (filter.subjectUserId) where.push(eq(grants.subjectUserId, filter.subjectUserId));
+    if (!filter.includeRevoked) where.push(isNull(grants.revokedAt));
+    return this.exec(tx)
+      .select()
+      .from(grants)
+      .where(and(...where))
+      .orderBy(desc(grants.grantedAt), desc(grants.id));
+  }
+
+  /**
+   * Adjust a grant's conditions or validity window; omitted fields are kept.
+   * Throws when the grant is absent or hidden by the tenant scope, so run it
+   * in the grant's scope (`withOrgScope(orgId)` for org grants).
+   */
+  async updateGrant(
+    id: string,
+    patch: { conditions?: unknown[]; validFrom?: Date; validUntil?: Date | null },
+    tx?: DbExecutor,
+  ): Promise<GrantRow> {
+    const set: Partial<typeof grants.$inferInsert> = {};
+    if (patch.conditions !== undefined) set.conditions = patch.conditions;
+    if (patch.validFrom !== undefined) set.validFrom = patch.validFrom;
+    if (patch.validUntil !== undefined) set.validUntil = patch.validUntil;
+    if (Object.keys(set).length === 0) {
+      const existing = await this.findGrantById(id, tx);
+      if (!existing) throw new Error(`Grant ${id} not found`);
+      return existing;
+    }
+    const [row] = await this.exec(tx).update(grants).set(set).where(eq(grants.id, id)).returning();
+    if (!row) throw new Error(`Grant ${id} not found`);
+    return row;
+  }
+
+  /**
+   * Number of `parent_grant_id` hops from the grant to its root (root = 0).
+   * Run in the grant's tenant scope; a parent hidden by the scope or deleted
+   * ends the chain.
+   */
+  async delegationDepth(grantId: string, tx?: DbExecutor): Promise<number> {
+    const result = await this.exec(tx).execute<{ depth: number }>(sql`
+      with recursive chain(id, parent_grant_id, depth) as (
+        select ${grants.id}, ${grants.parentGrantId}, 0
+        from ${grants} where ${grants.id} = ${grantId}
+        union all
+        select g.id, g.parent_grant_id, chain.depth + 1
+        from ${grants} as g join chain on g.id = chain.parent_grant_id
+        where chain.depth < 64
+      )
+      select coalesce(max(depth), 0)::int as depth from chain
+    `);
+    return Number(result.rows[0]?.depth ?? 0);
+  }
+
+  /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
+  async findActiveMembership(
+    userId: string,
+    orgId: string,
+    tx?: DbExecutor,
+  ): Promise<{ membershipId: string; orgUnitId: string | null } | null> {
+    const [row] = await this.exec(tx)
+      .select({ membershipId: memberships.id, orgUnitId: memberships.orgUnitId })
+      .from(memberships)
+      .where(
+        and(eq(memberships.userId, userId), eq(memberships.orgId, orgId), eq(memberships.status, 'ACTIVE')),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   // ── Nightly reconciliation (T-2.10, D-17) ─────────────────────────────
@@ -191,7 +358,10 @@ export class AuthorizationRepository {
     return rows.map((r) => r.ancestorId);
   }
 
-  /** Emergency access records that are unrevoked and unexpired at `now` (never cached, AUTHZ-R-46). */
+  /**
+   * Emergency access records that are approved, unrevoked and unexpired at
+   * `now` (never cached, AUTHZ-R-46). A pending request is never active.
+   */
   async findActiveEmergencyAccess(userId: string, now: Date, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
     return this.exec(tx)
       .select()
@@ -199,6 +369,7 @@ export class AuthorizationRepository {
       .where(
         and(
           eq(emergencyAccess.userId, userId),
+          isNotNull(emergencyAccess.approvedByUserId),
           isNull(emergencyAccess.revokedAt),
           gt(emergencyAccess.expiresAt, now),
         ),
@@ -244,6 +415,92 @@ export class AuthorizationRepository {
       .from(organizations)
       .where(inArray(organizations.id, orgIds));
     return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
+  async createEmergencyRequest(values: NewEmergencyRequest, tx?: DbExecutor): Promise<EmergencyAccessRow> {
+    const [row] = await this.exec(tx)
+      .insert(emergencyAccess)
+      .values({ ...values, approvedByUserId: null, approvedAt: null })
+      .returning();
+    return row!;
+  }
+
+  async findEmergencyAccess(id: string, tx?: DbExecutor): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx).select().from(emergencyAccess).where(eq(emergencyAccess.id, id));
+    return row ?? null;
+  }
+
+  /** Every emergency access record in any state, newest first (pending, active, expired, revoked). */
+  async listEmergencyAccess(filter: EmergencyAccessFilter, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(emergencyAccess)
+      .where(filter.userId ? eq(emergencyAccess.userId, filter.userId) : undefined)
+      .orderBy(desc(emergencyAccess.grantedAt), desc(emergencyAccess.id));
+  }
+
+  /**
+   * Approve a pending request: restarts the window at `at`. Returns null when
+   * the row is missing, already approved or revoked, so two concurrent
+   * approvals cannot both succeed.
+   */
+  async approveEmergencyAccess(
+    id: string,
+    approverUserId: string,
+    at: Date,
+    expiresAt: Date,
+    tx?: DbExecutor,
+  ): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx)
+      .update(emergencyAccess)
+      .set({ approvedByUserId: approverUserId, approvedAt: at, grantedAt: at, expiresAt })
+      .where(
+        and(
+          eq(emergencyAccess.id, id),
+          isNull(emergencyAccess.approvedByUserId),
+          isNull(emergencyAccess.revokedAt),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  }
+
+  /** Delete a pending request (denial); an approved record is never deleted. */
+  async deleteEmergencyRequest(id: string, tx?: DbExecutor): Promise<boolean> {
+    const rows = await this.exec(tx)
+      .delete(emergencyAccess)
+      .where(and(eq(emergencyAccess.id, id), isNull(emergencyAccess.approvedByUserId)))
+      .returning({ id: emergencyAccess.id });
+    return rows.length > 0;
+  }
+
+  /** Set `revokedAt` once; `byUserId` null marks the expiry sweeper. Null when already revoked or missing. */
+  async revokeEmergencyAccess(
+    id: string,
+    byUserId: string | null,
+    at: Date,
+    tx?: DbExecutor,
+  ): Promise<EmergencyAccessRow | null> {
+    const [row] = await this.exec(tx)
+      .update(emergencyAccess)
+      .set({ revokedAt: at, revokedByUserId: byUserId })
+      .where(and(eq(emergencyAccess.id, id), isNull(emergencyAccess.revokedAt)))
+      .returning();
+    return row ?? null;
+  }
+
+  /** Approved, unrevoked records whose window has closed at `now` (sweeper input). */
+  async findExpiredApprovedEmergencyAccess(now: Date, tx?: DbExecutor): Promise<EmergencyAccessRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(emergencyAccess)
+      .where(
+        and(
+          isNotNull(emergencyAccess.approvedByUserId),
+          isNull(emergencyAccess.revokedAt),
+          lte(emergencyAccess.expiresAt, now),
+        ),
+      );
   }
 
   /** Service categories with an APPROVED, effective, unexpired credential. */

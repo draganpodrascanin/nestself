@@ -8,14 +8,11 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import type { MemberEndRequest, MemberEndResponse } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
-import { DbService, type Transaction } from '../db/db.service.js';
+import { DbService } from '../db/db.service.js';
 import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { AccessRevocationService } from '../auth/access-revocation.service.js';
-
-/** Maximum depth of parent → child grant cascade (SESS-R-22). */
-const MAX_CASCADE_DEPTH = 3;
 
 @Injectable()
 export class MembersService {
@@ -82,38 +79,28 @@ export class MembersService {
       const auditEvents: AuditEventInput[] = [];
 
       if (directGrants.length > 0) {
-        const directIds = directGrants.map((g) => g.id);
-        await this.authzRepo.revokeGrants(directIds, {
-          at: now,
-          byUserId: actorUserId,
-          reason: 'membership_ended',
-        }, tx);
-        allRevokedIds.push(...directIds);
-
-        for (const g of directGrants) {
-          auditEvents.push({
-            action: g.parentGrantId ? 'grant.delegation_revoked' : 'grant.revoked',
-            actorUserId,
-            actorKind: 'USER',
-            orgId,
-            recordType: 'grant',
-            recordId: g.id,
-            result: 'ALLOWED',
-            details: { reason: 'membership_ended', membershipId },
-          });
-        }
-
-        // Cascade: revoke child grants (depth ≤ 3).
-        await this.cascadeRevokeChildren(
-          directIds,
-          now,
-          actorUserId,
-          orgId,
-          membershipId,
-          allRevokedIds,
-          auditEvents,
+        // Revoke the direct grants and every delegation descending from them.
+        const { roots, children } = await this.authzRepo.revokeGrantTree(
+          directGrants.map((g) => g.id),
+          { at: now, byUserId: actorUserId, reason: 'membership_ended' },
           tx,
         );
+        allRevokedIds.push(...roots, ...children);
+
+        // Roots carry membership_ended; descendants parent_revoked (as stored
+        // by revokeGrantTree). The per-event `depth` detail of the old
+        // depth-limited cascade is dropped deliberately.
+        const delegated = new Set(directGrants.filter((g) => g.parentGrantId).map((g) => g.id));
+        for (const id of roots) {
+          auditEvents.push(
+            this.grantRevokedEvent(id, delegated.has(id), 'membership_ended', actorUserId, orgId, membershipId),
+          );
+        }
+        for (const id of children) {
+          auditEvents.push(
+            this.grantRevokedEvent(id, true, 'parent_revoked', actorUserId, orgId, membershipId),
+          );
+        }
       }
 
       // (c) Audit: membership.ended first, then grant events.
@@ -167,45 +154,24 @@ export class MembersService {
     };
   }
 
-  /** Cascade-revoke child and grandchild grants up to MAX_CASCADE_DEPTH. */
-  private async cascadeRevokeChildren(
-    parentIds: string[],
-    now: Date,
+  /** Audit event for one grant revoked by a membership end (directly or as a descendant). */
+  private grantRevokedEvent(
+    grantId: string,
+    isDelegation: boolean,
+    reason: 'membership_ended' | 'parent_revoked',
     actorUserId: string,
     orgId: string,
     membershipId: string,
-    allRevokedIds: string[],
-    auditEvents: AuditEventInput[],
-    tx: Transaction,
-  ): Promise<void> {
-    let currentParentIds = parentIds;
-
-    for (let depth = 1; depth <= MAX_CASCADE_DEPTH; depth++) {
-      const children = await this.authzRepo.findActiveChildGrants(currentParentIds, tx);
-      if (children.length === 0) break;
-
-      const childIds = children.map((g) => g.id);
-      await this.authzRepo.revokeGrants(childIds, {
-        at: now,
-        byUserId: actorUserId,
-        reason: 'parent_revoked',
-      }, tx);
-      allRevokedIds.push(...childIds);
-
-      for (const g of children) {
-        auditEvents.push({
-          action: 'grant.delegation_revoked',
-          actorUserId,
-          actorKind: 'USER',
-          orgId,
-          recordType: 'grant',
-          recordId: g.id,
-          result: 'ALLOWED',
-          details: { reason: 'parent_revoked', membershipId, depth },
-        });
-      }
-
-      currentParentIds = childIds;
-    }
+  ): AuditEventInput {
+    return {
+      action: isDelegation ? 'grant.delegation_revoked' : 'grant.revoked',
+      actorUserId,
+      actorKind: 'USER',
+      orgId,
+      recordType: 'grant',
+      recordId: grantId,
+      result: 'ALLOWED',
+      details: { reason, membershipId },
+    };
   }
 }

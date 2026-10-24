@@ -33,7 +33,7 @@ NestSelf serves five populations from one platform: employees of client companie
 
 ## How sign-in works
 
-- **Employee**: enter email → receive an **eight digit** code (Cognito's length, not configurable) → enter it → session cookie. Five wrong codes lock the address for 15 minutes, and one wrong code already ends that challenge: the token is single-use, so a retry answers `invalid_challenge` and the user must request a new code (`implementation.md`, sections 6 and 21).
+- **Employee**: enter email → receive an **eight digit** code (Cognito's length, not configurable) → enter it → session cookie. A wrong code can be retyped on the same challenge up to three times; after the third the user requests a new code, and five wrong codes in total lock the address for 15 minutes (`implementation.md`, section 6). The code email is written in the language of the sign-in screen.
 - **Expert or staff**: enter email → password → authenticator code (first time: scan a QR code) → session cookie. Invited staff set a password first.
 - **Invitation**: HR invites by email; the link previews the organization name and activates the membership on acceptance, then runs the matching sign-in.
 - **Mobile**: email code directly against Cognito; the app refreshes tokens itself and uses short-lived tickets to open WebSockets.

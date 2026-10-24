@@ -183,7 +183,10 @@ export const SAMPLE_PRINCIPALS: Record<
   },
   hr_admin: {
     principal: hrAdminPrincipal,
-    effectiveActions: actionsForTemplates('employee', 'hr_admin'),
+    // The sample HR admin also holds the employer owner template
+    // (`grant_user_ivana_employer_owner` in SAMPLE_GRANTS), so the access
+    // management screen is reachable in sample mode.
+    effectiveActions: actionsForTemplates('employee', 'hr_admin', 'employer_owner'),
     availableContexts: ORG_ADMIN_CONTEXTS,
   },
   expert: {

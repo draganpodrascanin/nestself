@@ -28,16 +28,14 @@ import type {
 import { ApiHttpException } from '../common/api-error.js';
 import {
   defaultContext,
-  computeAvailableContexts,
 } from '../authz/personal-context.js';
-import { ContextLoader } from '../authz/context-loader.js';
-import { contextScopedEffectiveActions } from '../authz/effective-access.js';
 import type {
   Principal,
   ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
 import type { AuthMethod } from '../session/session.types.js';
+import { MeResponseBuilder } from './me-response.builder.js';
 
 /** Exported so sign-in.service can use it. */
 export type SessionCreationResult = MeResponse & {
@@ -59,10 +57,10 @@ export class IdentityResolutionService {
   constructor(
     @Inject(forwardRef(() => SessionService)) private readonly sessions: SessionService,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
-    @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => SignInThrottle)) private readonly throttle: SignInThrottle,
+    @Inject(forwardRef(() => MeResponseBuilder)) private readonly meResponse: MeResponseBuilder,
   ) {}
 
   /** Resolve a token-bearing outcome into a session + MeResponse. */
@@ -180,26 +178,7 @@ export class IdentityResolutionService {
     loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
-    const [extras, effectiveActions] = await Promise.all([
-      this.principalLoader.loadAvailableContextExtras(loaded),
-      this.loadEffectiveActions(principal),
-    ]);
-    return {
-      principal,
-      effectiveActions,
-      availableContexts: computeAvailableContexts(loaded, extras),
-    };
-  }
-
-  /** Engine-based effective actions, workspace-scoped (ruling 4, T-C1.02). */
-  private async loadEffectiveActions(principal: Principal): Promise<string[]> {
-    const orgId =
-      principal.context.kind === 'personal' ? principal.context.orgId
-      : principal.context.kind === 'organization' ? principal.context.orgId
-      : undefined;
-    const resource = { type: 'synthetic', orgId };
-    const ctx = await this.contextLoader.build(principal, resource);
-    return contextScopedEffectiveActions(principal, ctx);
+    return this.meResponse.build(principal);
   }
 
   resolvePopulation(

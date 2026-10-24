@@ -29,6 +29,8 @@ import { authorize } from './authorize.js';
 import { ApiHttpException } from '../common/api-error.js';
 import type { Principal, Resource } from '@nestself/contracts';
 import { STEP_UP_CLASS_BY_ACTION } from '@nestself/contracts';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { assertStepUpFresh } from './step-up-freshness.js';
 
 interface HttpReq {
   principal?: Principal;
@@ -45,6 +47,7 @@ export class AuthorizationGuard implements CanActivate {
     @Inject(forwardRef(() => Reflector)) private readonly reflector: Reflector,
     @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
+    @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -97,7 +100,7 @@ export class AuthorizationGuard implements CanActivate {
     });
     const decision = authorize(principal, meta.action, resource, ctx);
 
-    // Annotate step-up class for later (phase 2)
+    // Annotate the step-up class; enforced below once the action is allowed.
     const stepUpClass = STEP_UP_CLASS_BY_ACTION[meta.action];
     if (stepUpClass) {
       req.stepUpClass = stepUpClass;
@@ -171,6 +174,8 @@ export class AuthorizationGuard implements CanActivate {
         message: 'Access denied',
       });
     }
+
+    await assertStepUpFresh(principal, meta.action, this.store);
 
     return true;
   }

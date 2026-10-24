@@ -24,7 +24,10 @@ import { MembersModule } from './members/members.module.js';
 import { UsersModule } from './users/users.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { OrgUnitsModule } from './org-units/org-units.module.js';
+import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
+import { ProfessionalModule } from './professional/professional.module.js';
+import { EmergencyModule } from './emergency/emergency.module.js';
 
 @Module({
   imports: [
@@ -73,6 +76,9 @@ import { WsModule } from './ws/ws.module.js';
     UsersModule,
     JobsModule,
     OrgUnitsModule,
+    GrantsModule,
+    ProfessionalModule,
+    EmergencyModule,
     WsModule,
   ],
   providers: [

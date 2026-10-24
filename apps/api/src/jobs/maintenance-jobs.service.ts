@@ -1,5 +1,5 @@
 /**
- * MaintenanceJobsService — the nightly reconciliation work the auth strategy
+ * MaintenanceJobsService — the scheduled reconciliation work the auth strategy
  * asks for (D-07, D-17, D-21, AUTHZ-R-64, T-2.10). Every method is a plain,
  * idempotent unit of work that reports what it changed; `JobSchedulerService`
  * runs them on a schedule in the worker process and `scripts/run-job.ts` runs
@@ -20,8 +20,11 @@ import {
   STALE_FAMILY_DENYLIST_TTL,
   mobileFamilyKey,
   revokedFamilyKey,
+  sessionKey,
   userMobileFamiliesKey,
 } from '../redis/redis-keys.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { SessionService } from '../session/session.service.js';
 
 /** Months of `audit_events` partitions kept ahead of today (D-21). */
 export const AUDIT_PARTITION_MONTHS_AHEAD = 3;
@@ -30,6 +33,8 @@ export const MAINTENANCE_JOB_NAMES = [
   'audit.ensure-partitions',
   'grants.reconcile',
   'mobile.prune-stale-families',
+  'emergency.sweep-expired',
+  'sessions.reconcile-ttl',
 ] as const;
 export type MaintenanceJobName = (typeof MAINTENANCE_JOB_NAMES)[number];
 
@@ -49,10 +54,25 @@ export interface StaleFamilyReport {
   revoked: Array<{ userId: string; originJti: string }>;
 }
 
+export interface EmergencySweepReport {
+  expired: string[];
+}
+
+export interface SessionTtlReport {
+  job: 'sessions.reconcile-ttl';
+  scanned: number;
+  /** Hashes of the destroyed sessions (the id the session list exposes). */
+  destroyed: string[];
+  /** Records whose read or destroy threw; logged by hash and retried on the next run. */
+  failed: number;
+}
+
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
   | ({ job: 'grants.reconcile' } & GrantReconciliationReport)
-  | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport);
+  | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport)
+  | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport)
+  | SessionTtlReport;
 
 @Injectable()
 export class MaintenanceJobsService {
@@ -64,6 +84,7 @@ export class MaintenanceJobsService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principals: PrincipalLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    private readonly sessions: SessionService,
   ) {}
 
   /** Run one job by name. */
@@ -75,6 +96,10 @@ export class MaintenanceJobsService {
         return { job: name, ...(await this.reconcileGrants(now)) };
       case 'mobile.prune-stale-families':
         return { job: name, ...(await this.pruneStaleMobileFamilies()) };
+      case 'emergency.sweep-expired':
+        return { job: name, ...(await this.sweepExpiredEmergencyAccess(now)) };
+      case 'sessions.reconcile-ttl':
+        return this.reconcileSessionTtl(now);
     }
   }
 
@@ -153,6 +178,76 @@ export class MaintenanceJobsService {
   }
 
   /**
+   * Emergency access sweeper (4.7 lifecycle rule 5, every 15 minutes):
+   * approved, unrevoked records whose `expiresAt` has passed get
+   * `revokedAt = now` with no revoking user, an `emergency_access.expired`
+   * audit event and a cache invalidation. Secondary enforcement only:
+   * `findActiveEmergencyAccess` already ignores expired rows on every request.
+   */
+  async sweepExpiredEmergencyAccess(now = new Date()): Promise<EmergencySweepReport> {
+    const rows = await this.authzRepo.findExpiredApprovedEmergencyAccess(now);
+    const expired: string[] = [];
+    for (const row of rows) {
+      // Null when a manual revoke won the race: that path already audited.
+      const revoked = await this.authzRepo.revokeEmergencyAccess(row.id, null, now);
+      if (!revoked) continue;
+      await this.audit.record({
+        action: 'emergency_access.expired',
+        actorUserId: null,
+        actorKind: 'JOB',
+        recordType: 'emergency_access',
+        recordId: row.id,
+        result: 'ALLOWED',
+        details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
+        occurredAt: now,
+      });
+      await this.principals.invalidateUser(row.userId);
+      expired.push(row.id);
+    }
+    this.logger.log(`emergency access swept: ${expired.length} expired`);
+    return { expired };
+  }
+
+  /**
+   * Session TTL-drift reconciliation (SESS-R-16, T-2.10). A session key's TTL
+   * is its remaining absolute lifetime, but a key that outlived
+   * `absoluteExpiresAt` (a lost TTL, a restore, a write that reset it) would
+   * otherwise live on until someone presents its cookie. Each such record is
+   * destroyed through `SessionService.destroyOwnedByHash`, which revokes the
+   * encrypted refresh token, removes the hash from the user's session set and
+   * publishes the invalidation. A record that does not parse, or lacks a
+   * user id or a valid expiry, is counted in `scanned` and left alone. A
+   * record whose read or destroy throws is logged by hash, counted in
+   * `failed`, and the run continues with the next key.
+   */
+  async reconcileSessionTtl(now = new Date()): Promise<SessionTtlReport> {
+    const report: SessionTtlReport = { job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [], failed: 0 };
+    const prefix = sessionKey('');
+    const keys = await this.store.scan(sessionKey('*'));
+    for (const key of keys) {
+      report.scanned += 1;
+      const hash = key.slice(prefix.length);
+      try {
+        const raw = await this.store.get(key);
+        if (!raw) continue;
+        const record = parseSessionExpiry(raw);
+        if (!record || record.absoluteExpiresAt >= now.getTime()) continue;
+        if (await this.sessions.destroyOwnedByHash(record.userId, hash)) {
+          report.destroyed.push(hash);
+        }
+      } catch (err) {
+        report.failed += 1;
+        const reason = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`session ${hash} not reconciled (${reason}); retried on the next run`);
+      }
+    }
+    this.logger.log(
+      `sessions reconciled: ${report.scanned} scanned, ${report.destroyed.length} destroyed, ${report.failed} failed`,
+    );
+    return report;
+  }
+
+  /**
    * Mobile token families not seen for 30 days (AUTHZ-R-64, D-07). The
    * bearer verifier refreshes `mobile_family:{jti}` on every request with a
    * 30-day TTL, so a family whose key is gone is stale. The API never holds
@@ -192,4 +287,19 @@ export class MaintenanceJobsService {
     );
     return report;
   }
+}
+
+/** The two fields the TTL reconciliation needs, or null for a malformed record. */
+function parseSessionExpiry(raw: string): { userId: string; absoluteExpiresAt: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { userId, absoluteExpiresAt } = parsed as { userId?: unknown; absoluteExpiresAt?: unknown };
+  if (typeof userId !== 'string' || typeof absoluteExpiresAt !== 'string') return null;
+  const expiresAt = Date.parse(absoluteExpiresAt);
+  return Number.isNaN(expiresAt) ? null : { userId, absoluteExpiresAt: expiresAt };
 }

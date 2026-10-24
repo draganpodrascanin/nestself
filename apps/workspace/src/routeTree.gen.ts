@@ -27,6 +27,7 @@ import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedSupportAreaRouteImport } from './routes/_authenticated/support/$area'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedHrHrIndexRouteImport } from './routes/_authenticated/_hr/hr/index'
+import { Route as AuthenticatedHrHrAccessRouteImport } from './routes/_authenticated/_hr/hr/access'
 import { Route as AuthenticatedHrHrEligibilityRouteImport } from './routes/_authenticated/_hr/hr/eligibility'
 import { Route as AuthenticatedHrHrEventsRouteImport } from './routes/_authenticated/_hr/hr/events'
 import { Route as AuthenticatedHrHrReportsRouteImport } from './routes/_authenticated/_hr/hr/reports'
@@ -127,6 +128,11 @@ const AuthenticatedHrHrIndexRoute = AuthenticatedHrHrIndexRouteImport.update({
   path: '/hr/',
   getParentRoute: () => AuthenticatedHrRoute,
 } as any)
+const AuthenticatedHrHrAccessRoute = AuthenticatedHrHrAccessRouteImport.update({
+  id: '/hr/access',
+  path: '/hr/access',
+  getParentRoute: () => AuthenticatedHrRoute,
+} as any)
 const AuthenticatedHrHrEligibilityRoute =
   AuthenticatedHrHrEligibilityRouteImport.update({
     id: '/hr/eligibility',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/polls/': typeof AuthenticatedPollsIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
+  '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
@@ -199,6 +206,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/polls': typeof AuthenticatedPollsIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
+  '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
@@ -226,6 +234,7 @@ export interface FileRoutesById {
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
+  '/_authenticated/_hr/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/_authenticated/_hr/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/_authenticated/_hr/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/_authenticated/_hr/hr/reports': typeof AuthenticatedHrHrReportsRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/messages/'
     | '/polls/'
     | '/support/'
+    | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/reports'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/polls'
     | '/support'
+    | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/reports'
@@ -298,6 +309,7 @@ export interface FileRouteTypes {
     | '/_authenticated/messages/'
     | '/_authenticated/polls/'
     | '/_authenticated/support/'
+    | '/_authenticated/_hr/hr/access'
     | '/_authenticated/_hr/hr/eligibility'
     | '/_authenticated/_hr/hr/events'
     | '/_authenticated/_hr/hr/reports'
@@ -440,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHrHrIndexRouteImport
       parentRoute: typeof AuthenticatedHrRoute
     }
+    '/_authenticated/_hr/hr/access': {
+      id: '/_authenticated/_hr/hr/access'
+      path: '/hr/access'
+      fullPath: '/hr/access'
+      preLoaderRoute: typeof AuthenticatedHrHrAccessRouteImport
+      parentRoute: typeof AuthenticatedHrRoute
+    }
     '/_authenticated/_hr/hr/eligibility': {
       id: '/_authenticated/_hr/hr/eligibility'
       path: '/hr/eligibility'
@@ -486,6 +505,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedHrRouteChildren {
+  AuthenticatedHrHrAccessRoute: typeof AuthenticatedHrHrAccessRoute
   AuthenticatedHrHrEligibilityRoute: typeof AuthenticatedHrHrEligibilityRoute
   AuthenticatedHrHrEventsRoute: typeof AuthenticatedHrHrEventsRoute
   AuthenticatedHrHrReportsRoute: typeof AuthenticatedHrHrReportsRoute
@@ -493,6 +513,7 @@ interface AuthenticatedHrRouteChildren {
 }
 
 const AuthenticatedHrRouteChildren: AuthenticatedHrRouteChildren = {
+  AuthenticatedHrHrAccessRoute: AuthenticatedHrHrAccessRoute,
   AuthenticatedHrHrEligibilityRoute: AuthenticatedHrHrEligibilityRoute,
   AuthenticatedHrHrEventsRoute: AuthenticatedHrHrEventsRoute,
   AuthenticatedHrHrReportsRoute: AuthenticatedHrHrReportsRoute,

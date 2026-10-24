@@ -57,7 +57,7 @@ export function TotpScreen({ challengeToken, authApi, onSuccess, onError, error:
   );
 
   const errors = displayError
-    ? [{ id: 'totp-code', label: t('totp.codeLabel'), message: displayError }]
+    ? [{ id: 'totp-code-input', label: t('totp.codeLabel'), message: displayError }]
     : [];
 
   return (

@@ -28,7 +28,6 @@ function makeMembership(overrides: Record<string, unknown> = {}): MembershipRow 
     startDate: new Date('2026-01-01'),
     endDate: null,
     endedReason: null,
-    role: 'EMPLOYEE' as const,
     teamId: null,
     createdAt: new Date(),
     updatedAt: new Date(),

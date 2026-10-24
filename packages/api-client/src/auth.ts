@@ -20,7 +20,7 @@ import {
   PasswordResetStartResponseSchema,
   PasswordResetConfirmResponseSchema,
 } from '@nestself/contracts';
-import type { ActiveContext } from '@nestself/contracts';
+import type { ActiveContext, Locale } from '@nestself/contracts';
 import type { ApiClient } from './client';
 import { z } from 'zod';
 
@@ -41,10 +41,13 @@ export function createAuthApi(client: ApiClient) {
         schema: DiscoverResponseSchema,
       }),
 
-    /** POST /auth/email-otp/start — request an email OTP code. */
-    emailOtpStart: (email: string) =>
+    /**
+     * POST /auth/email-otp/start — request an email OTP code, written in
+     * `locale` when given.
+     */
+    emailOtpStart: (email: string, locale?: Locale) =>
       client.request('/api/auth/email-otp/start', {
-        ...jsonPost({ email }),
+        ...jsonPost({ email, locale }),
         schema: EmailOtpStartResponseSchema,
       }),
 

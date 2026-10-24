@@ -88,7 +88,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
  * Also wires the global error handler deps for QueryCache (ruling 6).
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions, availableContexts, switchContext, refreshPrincipal } = useAuth();
+  const { principal, effectiveActions, availableContexts, switchContext, stepUp, refreshPrincipal } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -118,11 +118,12 @@ function AuthRouterSync({ children }: { children: ReactNode }) {
       queryClient,
       refreshPrincipal,
       switchContext,
+      stepUp,
       showToast: (message: string) => toast.add({ title: message, tone: 'danger' }),
       t,
     };
     return () => { globalErrorDepsRef.current = null; };
-  }, [router.navigate, queryClient, refreshPrincipal, switchContext, toast, t]);
+  }, [router.navigate, queryClient, refreshPrincipal, switchContext, stepUp, toast, t]);
 
   return <>{children}</>;
 }

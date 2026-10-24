@@ -9,6 +9,12 @@ import { LocaleSchema, defaultLocale, locales } from './locale.ts';
 import { SupportAreaSchema, supportAreaIcon, supportAreas } from './support.ts';
 import { HealthResponseSchema } from './health.ts';
 import { accessModel } from './access-model.ts';
+import {
+  ApprovalAuthorityListResponseSchema,
+  GrantListResponseSchema,
+  GrantRevokeRequestSchema,
+} from './org-admin.ts';
+import { AUTH_ERROR_CODES } from './auth.ts';
 
 describe('roles', () => {
   it('parses a valid OrgRole', () => {
@@ -137,5 +143,74 @@ describe('access-model', () => {
 
   it('first row is Conversation content', () => {
     expect(accessModel.rows[0]?.data).toBe('Conversation content');
+  });
+});
+
+describe('grant administration', () => {
+  const grant = {
+    id: 'grant_1',
+    subjectUserId: 'user_ana',
+    templateKey: 'team_manager',
+    actions: ['budget.read'],
+    scopeType: 'org_unit',
+    scopeOrgId: 'org_sample',
+    scopeOrgUnitId: 'team_product',
+    includeDescendants: false,
+    conditions: [{ type: 'spending_ceiling', amountMinor: 1000, currency: 'EUR' }],
+    validFrom: '2026-10-24T00:00:00.000Z',
+    validUntil: null,
+    parentGrantId: null,
+    grantedByUserId: 'user_ivana',
+    grantedAt: '2026-10-24T00:00:00.000Z',
+    revokedAt: null,
+  };
+
+  it('GrantRevokeRequestSchema accepts a reason of 3 to 500 characters', () => {
+    expect(GrantRevokeRequestSchema.parse({ reason: 'role' })).toEqual({ reason: 'role' });
+    expect(GrantRevokeRequestSchema.safeParse({ reason: 'x'.repeat(500) }).success).toBe(true);
+  });
+
+  it('GrantRevokeRequestSchema rejects a missing, short or long reason', () => {
+    expect(GrantRevokeRequestSchema.safeParse({}).success).toBe(false);
+    expect(GrantRevokeRequestSchema.safeParse({ reason: 'no' }).success).toBe(false);
+    expect(GrantRevokeRequestSchema.safeParse({ reason: 'x'.repeat(501) }).success).toBe(false);
+  });
+
+  it('GrantListResponseSchema wraps grant responses in items', () => {
+    expect(GrantListResponseSchema.parse({ items: [grant] }).items).toHaveLength(1);
+    expect(GrantListResponseSchema.parse({ items: [] }).items).toEqual([]);
+    expect(GrantListResponseSchema.safeParse({ items: [{ ...grant, id: '' }] }).success).toBe(false);
+    expect(GrantListResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('AUTH_ERROR_CODES includes the grant administration codes', () => {
+    expect(AUTH_ERROR_CODES).toContain('subject_not_member');
+    expect(AUTH_ERROR_CODES).toContain('template_inactive');
+    expect(AUTH_ERROR_CODES).toContain('missing_conditions');
+  });
+});
+
+describe('approval authority schemas', () => {
+  const authority = {
+    id: 'aa_1',
+    userId: 'user_stefan',
+    orgId: 'org_sample',
+    orgUnitId: null,
+    includeDescendants: false,
+    categories: ['events'],
+    maxAmountMinor: 50_000,
+    currency: 'EUR',
+    validFrom: '2026-10-24T00:00:00.000Z',
+    validUntil: null,
+    delegatedFromId: null,
+    alternateUserId: null,
+    isConfidentialApprover: false,
+  };
+
+  it('ApprovalAuthorityListResponseSchema wraps authority responses in items', () => {
+    expect(ApprovalAuthorityListResponseSchema.parse({ items: [authority] }).items).toEqual([authority]);
+    expect(ApprovalAuthorityListResponseSchema.parse({ items: [] }).items).toEqual([]);
+    expect(ApprovalAuthorityListResponseSchema.safeParse({ items: [{ ...authority, userId: '' }] }).success).toBe(false);
+    expect(ApprovalAuthorityListResponseSchema.safeParse({}).success).toBe(false);
   });
 });

@@ -119,6 +119,136 @@
     "connected": "API csatlakoztatva",
     "sampleMode": "API nincs csatlakoztatva (mintaadatok mód)"
   },
+  "access": {
+    "nav": "Hozzáférés",
+    "title": "Hozzáférés-kezelés",
+    "lead": "Ki melyik jogosultságsablonnal rendelkezik a szervezetedben, és mire jogosítja fel az egyes sablon.",
+    "sampleNote": "Mintaadatok: a kiosztás, a delegálás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
+    "loading": "Hozzáférés betöltése",
+    "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
+    "noOrganization": "A hozzáférés-kezeléshez a fiókodnak pontosan egy aktív szervezeti tagsággal kell rendelkeznie.",
+    "tableCaption": "Jogosultságok a szervezetedben",
+    "columns": {
+      "template": "Sablon",
+      "subject": "Személy",
+      "scope": "Hatókör",
+      "validity": "Érvényesség",
+      "status": "Állapot",
+      "actions": "Műveletek"
+    },
+    "status": {
+      "active": "Aktív",
+      "revoked": "Visszavonva",
+      "expired": "Lejárt",
+      "scheduled": "Ütemezett"
+    },
+    "templates": {
+      "employer_owner": "Munkáltatói tulajdonos",
+      "hr_admin": "HR-adminisztrátor",
+      "team_manager": "Csapatvezető",
+      "approver": "Jóváhagyó",
+      "employer_finance": "Munkáltatói pénzügy",
+      "reporting_user": "Riportfelhasználó",
+      "employee": "Munkavállaló",
+      "event_supplier": "Rendezvénybeszállító",
+      "delegated": "Delegált hozzáférés"
+    },
+    "scope": {
+      "label": "Hatókör",
+      "organization": "Teljes szervezet",
+      "orgUnit": "Egy szervezeti egység",
+      "unit": "{{name}}",
+      "unitWithDescendants": "{{name}} és az alatta lévő egységek",
+      "unitLabel": "Szervezeti egység",
+      "includeDescendants": "Az alatta lévő egységekkel együtt",
+      "unknownUnit": "Ismeretlen szervezeti egység"
+    },
+    "validity": {
+      "noEnd": "Nincs lejárati dátum",
+      "from": "{{date}} óta",
+      "until": "{{date}}-ig",
+      "range": "{{from}} – {{until}}",
+      "validUntil": "Érvényes eddig"
+    },
+    "conditions": {
+      "spendingCeiling": "Költési limit",
+      "amount": "Összeg",
+      "currency": "Pénznem",
+      "categories": "Kategóriák",
+      "categoriesHint": "A kategóriákat vesszővel válaszd el.",
+      "timeWindow": "Időablak",
+      "days": "Napok",
+      "from": "Ettől",
+      "to": "Eddig",
+      "day": {
+        "0": "V",
+        "1": "H",
+        "2": "K",
+        "3": "Sze",
+        "4": "Cs",
+        "5": "P",
+        "6": "Szo"
+      }
+    },
+    "assign": {
+      "open": "Sablon kiosztása",
+      "title": "Jogosultságsablon kiosztása",
+      "member": "Tag",
+      "template": "Sablon",
+      "choose": "Válassz",
+      "submit": "Kiosztás",
+      "cancel": "Mégse",
+      "success": "A sablon kiosztva."
+    },
+    "revoke": {
+      "open": "Visszavonás",
+      "openFor": "{{template}} visszavonása tőle: {{subject}}",
+      "title": "Visszavonod ezt a jogosultságot?",
+      "description": "{{subject}} azonnal elveszíti a(z) {{template}} jogosultságait.",
+      "confirm": "Jogosultság visszavonása",
+      "cancel": "Megtartás",
+      "success": "A jogosultság visszavonva."
+    },
+    "reason": {
+      "label": "Indoklás",
+      "hint": "3–500 karakter. Az indoklás bekerül az auditnaplóba."
+    },
+    "delegate": {
+      "open": "Delegálás",
+      "openFor": "{{template}} egy részének delegálása",
+      "title": "Hozzáférésed egy részének delegálása",
+      "description": "A személy csak az általad kiválasztott műveleteket kapja meg, a saját jogosultságod hatókörén belül.",
+      "member": "Tag",
+      "actions": "Delegálandó műveletek",
+      "submit": "Delegálás",
+      "cancel": "Mégse",
+      "success": "A hozzáférés delegálva."
+    },
+    "preview": {
+      "title": "Tényleges hozzáférés",
+      "lead": "Válassz egy tagot, hogy lásd, milyen műveleteket biztosítanak számára a jogosultságai ebben a szervezetben.",
+      "member": "Tag",
+      "empty": "Ennek a tagnak nincs művelete ebben a szervezetben.",
+      "loading": "Tényleges hozzáférés betöltése"
+    },
+    "errors": {
+      "loadTitle": "A hozzáférés nem tölthető be",
+      "membersLoadTitle": "A tagok nem tölthetők be",
+      "orgUnitsLoadTitle": "A szervezeti egységek nem tölthetők be",
+      "missingConditions": "Ehhez a sablonhoz minden kötelező feltételt ki kell töltened.",
+      "subjectNotMember": "Ez a személy nem aktív tagja a szervezetnek.",
+      "templateInactive": "Ez a sablon már nem érhető el.",
+      "delegationExceedsBoundary": "Csak olyan műveleteket és hatókört delegálhatsz, amelyekkel te magad is rendelkezel.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "conflict": "Ez a jogosultság időközben megváltozott. Frissítsd a listát, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra.",
+      "memberRequired": "Válassz tagot.",
+      "templateRequired": "Válassz sablont.",
+      "orgUnitRequired": "Válassz szervezeti egységet.",
+      "reasonLength": "Adj meg 3–500 karakter hosszú indoklást.",
+      "actionsRequired": "Válassz legalább egy műveletet."
+    }
+  },
   "contextSwitcher": {
     "label": "Munkaterület váltása",
     "personal": "Saját terület",

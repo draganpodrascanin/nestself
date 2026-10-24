@@ -1,0 +1,229 @@
+/**
+ * Operations grant administration e2e tests (T-2.1, operations side):
+ * platform grants, organization grants reached from the operations
+ * workspace and the per-context user access view over HTTP.
+ *
+ * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
+ */
+import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { eq } from 'drizzle-orm';
+import { CONFIDENTIAL_ACTIONS, PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { computeTotp } from '../src/identity/totp.js';
+import { seed } from '../src/db/seed/seed-lib.js';
+import { auditEvents, externalIdentities, grants } from '../src/db/schema/index.js';
+import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+
+const TEST_DB_URL = process.env.TEST_DATABASE_URL;
+const shouldRun = !!TEST_DB_URL;
+
+const ORG = 'org_sample';
+const NIKOLA_EMAIL = 'user_nikola@example.com';
+const TEMP_PASSWORD = 'TempPassword1!';
+
+describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
+  let app: INestApplication;
+  let idp: FakeIdentityProvider;
+  let testDb: TestDatabase;
+  const jwtSecret = randomBytes(32).toString('hex');
+
+  beforeAll(async () => {
+    testDb = await resetTestDatabase(TEST_DB_URL!, 'opsgrants');
+    await seed(testDb.db);
+
+    process.env.DATABASE_URL = testDb.url;
+    process.env.AUTH_MODE = 'stub';
+    process.env.JWT_SECRET = jwtSecret;
+    process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
+    process.env.NODE_ENV = 'test';
+    delete process.env.REDIS_URL;
+
+    const { AppModule } = await import('../src/app.module.js');
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+
+    idp = app.get(IdentityProviderService) as FakeIdentityProvider;
+    idp.seedUsers([{ email: NIKOLA_EMAIL, password: TEMP_PASSWORD, temporaryPassword: TEMP_PASSWORD }]);
+    const idpUser = await idp.findUserByEmail(NIKOLA_EMAIL);
+    if (!idpUser) throw new Error('FakeIDP user not found');
+    await testDb.db.insert(externalIdentities).values({
+      userId: 'user_nikola',
+      provider: 'cognito',
+      subject: idpUser.sub,
+      cognitoUsername: idpUser.username,
+      email: NIKOLA_EMAIL,
+      emailVerified: true,
+    });
+
+    // The seed gives nikola client_operations (assigned_clients) only; the
+    // platform grant endpoints need a platform-scoped access.grant. The
+    // sample data has no platform owner, so insert that grant here.
+    const platformOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'platform_owner')!;
+    await testDb.db.insert(grants).values({
+      id: 'grant_test_nikola_platform_owner',
+      subjectUserId: 'user_nikola',
+      templateKey: platformOwner.key,
+      actions: [...platformOwner.actions],
+      scopeType: platformOwner.scopeType,
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      includeDescendants: false,
+      grantedByUserId: 'user_nikola',
+      grantedAt: new Date('2026-01-01'),
+      validFrom: new Date('2026-01-01'),
+    });
+  }, 180_000);
+
+  afterAll(async () => {
+    await app?.close();
+    await testDb?.close();
+  });
+
+  function extractCsrf(res: request.Response): string {
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const csrf = cookies?.find((c) => c.startsWith('nestself_csrf='))?.match(/nestself_csrf=([^;]+)/);
+    if (!csrf) throw new Error('CSRF cookie not found');
+    return csrf[1]!;
+  }
+
+  /** Staff sign-in: temporary password, new password, TOTP enrolment. */
+  async function signInStaff() {
+    const agent = request.agent(app.getHttpServer());
+    const pw = await agent.post('/api/auth/password').send({ email: NIKOLA_EMAIL, password: TEMP_PASSWORD });
+    expect(pw.status).toBe(200);
+    const newPw = await agent
+      .post('/api/auth/challenge')
+      .send({ challengeToken: pw.body.challengeToken, response: 'NewSecurePassword1!' });
+    expect(newPw.status).toBe(200);
+    expect(newPw.body).toHaveProperty('step', 'totp_enrol');
+    const enrol = await agent.post('/api/auth/totp/enrol').send({ challengeToken: newPw.body.challengeToken });
+    expect(enrol.status).toBe(200);
+    const secret = (enrol.body.secretUri as string).match(/secret=([A-Z2-7]+)/)![1]!;
+    const complete = await agent
+      .post('/api/auth/challenge')
+      .send({ challengeToken: enrol.body.challengeToken ?? newPw.body.challengeToken, response: computeTotp(secret) });
+    expect(complete.status).toBe(200);
+    return { agent, csrf: extractCsrf(complete) };
+  }
+
+  let nikola: Awaited<ReturnType<typeof signInStaff>>;
+  let orgGrantId: string;
+
+  it('signs in nikola in the operations context', async () => {
+    nikola = await signInStaff();
+    const ctx = await nikola.agent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ context: { kind: 'operations' } });
+    expect(ctx.status).toBe(200);
+    expect(ctx.body.principal.context).toEqual({ kind: 'operations' });
+  });
+
+  it('creates a support_operator platform grant: 201, listed under /ops/grants and audited', async () => {
+    const res = await nikola.agent
+      .post('/api/ops/grants')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ templateKey: 'support_operator', subjectUserId: 'user_nikola', scopeType: 'assigned_cases' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      subjectUserId: 'user_nikola',
+      templateKey: 'support_operator',
+      scopeType: 'assigned_cases',
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      grantedByUserId: 'user_nikola',
+    });
+    expect(res.body.actions).toEqual([...PERMISSION_TEMPLATES.find((t) => t.key === 'support_operator')!.actions]);
+
+    const list = await nikola.agent.get('/api/ops/grants').query({ subjectUserId: 'user_nikola' });
+    expect(list.status).toBe(200);
+    const ids = list.body.items.map((g: { id: string }) => g.id);
+    expect(ids).toContain(res.body.id);
+    expect(ids).toContain('grant_test_nikola_platform_owner');
+    for (const g of list.body.items as Array<{ scopeOrgId: string | null }>) expect(g.scopeOrgId).toBeNull();
+
+    const [audit] = await testDb.db.select().from(auditEvents).where(eq(auditEvents.recordId, res.body.id as string));
+    expect(audit).toMatchObject({ action: 'grant.created', orgId: null });
+  });
+
+  it('rejects a non-operations template or a scope type other than the template own: 400 validation', async () => {
+    const orgTemplate = await nikola.agent
+      .post('/api/ops/grants')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ templateKey: 'hr_admin', subjectUserId: 'user_ana', scopeType: 'organization' });
+    expect(orgTemplate.status).toBe(400);
+    expect(orgTemplate.body.code).toBe('validation');
+
+    const wrongScope = await nikola.agent
+      .post('/api/ops/grants')
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ templateKey: 'support_operator', subjectUserId: 'user_nikola', scopeType: 'platform' });
+    expect(wrongScope.status).toBe(400);
+    expect(wrongScope.body.code).toBe('validation');
+  });
+
+  it("shows ana's access per context: org_sample with content.read, plus the platform context", async () => {
+    const res = await nikola.agent.get('/api/ops/users/user_ana/access');
+    expect(res.status).toBe(200);
+    expect(res.body.userId).toBe('user_ana');
+    const contexts = res.body.contexts as Array<{ orgId: string | null; actions: string[] }>;
+    const org = contexts.find((c) => c.orgId === ORG);
+    expect(org).toBeDefined();
+    expect(org!.actions).toContain('content.read');
+    expect(contexts.some((c) => c.orgId === null)).toBe(true);
+    for (const c of contexts) for (const action of CONFIDENTIAL_ACTIONS) expect(c.actions).not.toContain(action);
+  });
+
+  it('returns 404 for the access view of an unknown user', async () => {
+    const res = await nikola.agent.get('/api/ops/users/user_missing/access');
+    expect(res.status).toBe(404);
+  });
+
+  it('creates an organization grant for ana through /ops/orgs/:orgId/grants: 201', async () => {
+    const res = await nikola.agent
+      .post(`/api/ops/orgs/${ORG}/grants`)
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ templateKey: 'reporting_user', subjectUserId: 'user_ana', scopeType: 'org_unit', scopeOrgUnitId: 'team_product' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      subjectUserId: 'user_ana',
+      templateKey: 'reporting_user',
+      scopeOrgId: ORG,
+      scopeOrgUnitId: 'team_product',
+      grantedByUserId: 'user_nikola',
+    });
+    orgGrantId = res.body.id as string;
+
+    const list = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants`).query({ subjectUserId: 'user_ana' });
+    expect(list.status).toBe(200);
+    expect(list.body.items.map((g: { id: string }) => g.id)).toContain(orgGrantId);
+
+    const preview = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants/preview`).query({ userId: 'user_ana' });
+    expect(preview.status).toBe(200);
+    expect(preview.body.grantIds).toContain(orgGrantId);
+    expect(preview.body.actions).toContain('reports.aggregate.read');
+  });
+
+  it('revokes that grant through /ops/orgs/:orgId/grants/:grantId/revoke', async () => {
+    const res = await nikola.agent
+      .post(`/api/ops/orgs/${ORG}/grants/${orgGrantId}/revoke`)
+      .set('X-CSRF-Token', nikola.csrf)
+      .send({ reason: 'reporting no longer needed' });
+    expect(res.status).toBe(200);
+    expect(res.body.revokedAt).not.toBeNull();
+
+    const list = await nikola.agent.get(`/api/ops/orgs/${ORG}/grants`).query({ subjectUserId: 'user_ana' });
+    expect(list.body.items.map((g: { id: string }) => g.id)).not.toContain(orgGrantId);
+  });
+});

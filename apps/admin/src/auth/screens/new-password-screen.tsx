@@ -76,7 +76,7 @@ export function NewPasswordScreen({
   const errors = displayError
     ? [
         {
-          id: 'new-password',
+          id: 'new-password-input',
           label: t('auth:newPassword.newPasswordLabel'),
           message: displayError,
         },

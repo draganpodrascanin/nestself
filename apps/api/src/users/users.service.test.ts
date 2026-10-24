@@ -53,7 +53,6 @@ const ACTIVE_USER = {
   lastSignInAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-  platformRole: null,
   emailVerifiedAt: null,
 };
 

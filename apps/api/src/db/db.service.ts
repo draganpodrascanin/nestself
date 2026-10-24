@@ -5,6 +5,8 @@
  * - `db`: the typed Drizzle database (`db.query.*`, `db.select()` ...).
  * - `withOrgScope(orgId, fn)`: a transaction with the row-level-security
  *   tenant setting `app.current_org_id` applied (defense in depth, D-19).
+ * - `withTransaction(fn)`: a plain transaction without a tenant setting
+ *   (the system context), for platform rows that belong to no organization.
  * - `ping()`: connectivity probe for the health indicator.
  *
  * Repositories under `./repositories` build on this service; application
@@ -92,5 +94,17 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   /** Transaction scoped to one organization through RLS [D-19, D-37]. */
   withOrgScope<T>(orgId: string, fn: (tx: Transaction) => Promise<T>): Promise<T> {
     return withOrgScope(this.db, orgId, fn);
+  }
+
+  /**
+   * Plain transaction without a tenant setting: the system context. The RLS
+   * policies treat an empty `app.current_org_id` as the unscoped system
+   * context (`coalesce(current_setting(...), '') = ''` in `schema/_shared.ts`),
+   * so a plain transaction sees every row. Use it for writes that belong to no
+   * organization (platform grants) and must commit or roll back as one unit
+   * with their audit event; organization data goes through `withOrgScope`.
+   */
+  withTransaction<T>(fn: (tx: Transaction) => Promise<T>): Promise<T> {
+    return this.db.transaction(fn);
   }
 }

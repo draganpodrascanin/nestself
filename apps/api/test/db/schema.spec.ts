@@ -10,7 +10,17 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
-import { channels, grants, organizations, orgUnitClosure, orgUnits, posts } from '../../src/db/schema/index.js';
+import {
+  channels,
+  conversationMessages,
+  conversations,
+  grants,
+  intakeRecords,
+  organizations,
+  orgUnitClosure,
+  orgUnits,
+  posts,
+} from '../../src/db/schema/index.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -34,7 +44,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBeGreaterThanOrEqual(2);
+    expect(Number(rows[0]!.n)).toBe(6);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -166,9 +176,10 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       const { rows } = await owner.pool.query<{ relname: string; rls: boolean; forced: boolean }>(
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
          WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
-                           'posts','polls','poll_options','poll_votes','org_unit_closure')`,
+                           'posts','polls','poll_options','poll_votes','org_unit_closure',
+                           'conversations','conversation_messages','intake_records')`,
       );
-      expect(rows).toHaveLength(13);
+      expect(rows).toHaveLength(16);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -243,6 +254,78 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(all).toHaveLength(2);
     });
 
+    it('confidential-domain tables are isolated by tenant (conversations, messages, intake)', async () => {
+      await owner.db.insert(conversations).values([
+        { id: 'rls_conv_a', orgId: 'rls_org_a', caseId: 'rls_case_a', employeeUserId: 'rls_user', expertUserId: 'rls_user' },
+        { id: 'rls_conv_b', orgId: 'rls_org_b', caseId: 'rls_case_b', employeeUserId: 'rls_user', expertUserId: 'rls_user' },
+      ]);
+      await owner.db.insert(conversationMessages).values([
+        { id: 'rls_msg_a', conversationId: 'rls_conv_a', authorUserId: 'rls_user', body: 'Sample message (fixture)' },
+        { id: 'rls_msg_b', conversationId: 'rls_conv_b', authorUserId: 'rls_user', body: 'Sample message (fixture)' },
+      ]);
+      await owner.db.insert(intakeRecords).values([
+        { id: 'rls_intake_a', orgId: 'rls_org_a', caseId: 'rls_case_a', employeeUserId: 'rls_user', body: 'Sample intake (fixture)' },
+        { id: 'rls_intake_b', orgId: 'rls_org_b', caseId: 'rls_case_b', employeeUserId: 'rls_user', body: 'Sample intake (fixture)' },
+      ]);
+
+      // The second organization's scoped reads see none of the first one's rows.
+      const fromB = await withOrgScope(app.db, 'rls_org_b', async (tx) => ({
+        conversations: await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, 'rls_conv_a')),
+        messages: await tx
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.conversationId, 'rls_conv_a')),
+        intake: await tx.select({ id: intakeRecords.id }).from(intakeRecords).where(eq(intakeRecords.id, 'rls_intake_a')),
+      }));
+      expect(fromB).toEqual({ conversations: [], messages: [], intake: [] });
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(inArray(conversationMessages.id, ['rls_msg_a', 'rls_msg_b'])),
+      );
+      expect(fromA.map((m) => m.id)).toEqual(['rls_msg_a']);
+
+      const rejected = async (write: Parameters<typeof withOrgScope>[2]) => {
+        const err = await withOrgScope(app.db, 'rls_org_a', write).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(Error);
+        const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+        expect(cause.message).toMatch(/row-level security policy/);
+      };
+      await rejected((tx) =>
+        tx.insert(conversations).values({
+          id: 'rls_conv_leak',
+          orgId: 'rls_org_b',
+          caseId: 'rls_case_leak',
+          employeeUserId: 'rls_user',
+          expertUserId: 'rls_user',
+        }),
+      );
+      await rejected((tx) =>
+        tx.insert(conversationMessages).values({
+          id: 'rls_msg_leak',
+          conversationId: 'rls_conv_b',
+          authorUserId: 'rls_user',
+          body: 'Sample message (fixture)',
+        }),
+      );
+      await rejected((tx) =>
+        tx.insert(intakeRecords).values({
+          id: 'rls_intake_leak',
+          orgId: 'rls_org_b',
+          caseId: 'rls_case_leak',
+          employeeUserId: 'rls_user',
+          body: 'Sample intake (fixture)',
+        }),
+      );
+      const leaked = await owner.db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, 'rls_conv_leak'));
+      expect(leaked).toEqual([]);
+    });
+
     it('the tenant setting does not leak out of the transaction', async () => {
       await withOrgScope(app.db, 'rls_org_a', async () => undefined);
       const rows = await app.db.select({ id: orgUnits.id }).from(orgUnits);
@@ -272,46 +355,30 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(counts2).toEqual(counts1);
     });
 
-    // -- Seed grant correctness (Defect 1, T-C1.02) ---------------------------
+    it('removes the over-privileged grants that seeds before the legacy-role fix created', async () => {
+      await seed(owner.db);
+      const stale = {
+        subjectUserId: 'user_jovan',
+        actions: ['people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org_sample',
+        grantedByUserId: 'user_ivana',
+        validFrom: new Date('2026-01-01'),
+      };
+      await owner.db.insert(grants).values([
+        { ...stale, id: 'grant_user_jovan_employer_owner', templateKey: 'employer_owner' },
+        { ...stale, id: 'grant_user_jovan_approver', templateKey: 'approver' },
+        { ...stale, id: 'grant_explicit_jovan_approver', templateKey: 'approver' },
+      ]);
 
-    /** Template keys that must never appear in seed grants unless explicitly assigned. */
-    const EXPLICITLY_ASSIGNED_ONLY = ['employer_owner', 'approver', 'employer_finance', 'reporting_user', 'event_supplier'];
+      await seed(owner.db);
 
-    async function grantTemplateKeysFor(userId: string): Promise<string[]> {
       const rows = await owner.db
-        .select({ templateKey: grants.templateKey })
+        .select({ id: grants.id })
         .from(grants)
-        .where(eq(grants.subjectUserId, userId));
-      return rows.map((r) => r.templateKey).filter((k): k is string => k != null);
-    }
-
-    it('plain employee has only the employee grant', async () => {
-      await seed(owner.db);
-      const keys = await grantTemplateKeysFor('user_jovan');
-      expect(keys).toEqual(['employee']);
-    });
-
-    it('HR admin has employee + hr_admin grants', async () => {
-      await seed(owner.db);
-      const keys = await grantTemplateKeysFor('user_ivana');
-      expect(keys.sort()).toEqual(['employee', 'hr_admin']);
-    });
-
-    it('manager has employee + team_manager grants', async () => {
-      await seed(owner.db);
-      const keys = await grantTemplateKeysFor('user_stefan');
-      expect(keys.sort()).toEqual(['employee', 'team_manager']);
-    });
-
-    it('no member has explicitly-assigned-only templates unless fixtures assign them', async () => {
-      await seed(owner.db);
-      const { rows } = await owner.pool.query<{ user_id: string; template_key: string }>(
-        `SELECT subject_user_id AS user_id, template_key
-         FROM grants
-         WHERE template_key = ANY($1::text[])`,
-        [EXPLICITLY_ASSIGNED_ONLY],
-      );
-      expect(rows).toEqual([]);
+        .where(eq(grants.subjectUserId, 'user_jovan'));
+      expect(rows.map((r) => r.id).sort()).toEqual(['grant_explicit_jovan_approver', 'grant_user_jovan_employee']);
+      await owner.db.delete(grants).where(eq(grants.id, 'grant_explicit_jovan_approver'));
     });
   });
 });

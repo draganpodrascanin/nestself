@@ -80,7 +80,7 @@ export function NewPasswordScreen({
   );
 
   const errors = displayError
-    ? [{ id: 'new-password', label: t('newPassword.newPasswordLabel'), message: displayError }]
+    ? [{ id: 'new-password-input', label: t('newPassword.newPasswordLabel'), message: displayError }]
     : [];
 
   return (
