@@ -115,8 +115,9 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     for (const g of rows) {
       expect(g.grantedAt).toEqual(NOW);
       expect(g.validFrom).toEqual(NOW);
-      // Org grants: the organization's first HR admin. Platform grants: the user.
-      const expected = g.scopeOrgId ? 'user_ivana' : g.subjectUserId;
+      // Organization A grants: its first HR admin. Organization B has no HR
+      // admin, and platform grants have no organization: the user grants.
+      const expected = g.scopeOrgId === 'org_sample' ? 'user_ivana' : g.subjectUserId;
       expect({ id: g.id, by: g.grantedByUserId }).toEqual({ id: g.id, by: expected });
     }
   });

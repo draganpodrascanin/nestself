@@ -12,7 +12,7 @@
  */
 import { PrincipalSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import type { Principal, AvailableContextEntry } from '@nestself/contracts';
-import { SAMPLE_ORG } from './org.ts';
+import { SAMPLE_ORG, SAMPLE_ORG_B } from './org.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -203,5 +203,70 @@ export const SAMPLE_PRINCIPALS: Record<
     principal: adminPrincipal,
     effectiveActions: actionsForTemplates('platform_owner'),
     availableContexts: [{ kind: 'operations' }],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Acceptance principals (T-C1.14): the second organization and the person
+// with memberships in both. Employees only: personal contexts, one per org.
+// ---------------------------------------------------------------------------
+
+function acceptancePrincipal(
+  userId: string,
+  displayName: string,
+  initials: string,
+  memberships: { id: string; orgId: string; orgUnitId: string }[],
+) {
+  return PrincipalSchema.parse({
+    userId,
+    displayName,
+    initials,
+    locale: 'sr-Latn',
+    memberships: memberships.map((m) => ({
+      membershipId: m.id,
+      orgId: m.orgId,
+      orgUnitId: m.orgUnitId,
+      status: 'ACTIVE',
+      startDate: '2026-01-01T00:00:00Z',
+      endDate: null,
+    })),
+    staffTemplates: [],
+    expert: null,
+    context: { kind: 'personal', orgId: memberships[0]!.orgId },
+    auth: { method: 'email_otp', time: AUTH_TIME, secondFactor: false, lastStepUpAt: null },
+    sessionId: `sess_sample_${userId}`,
+    tokenFamily: null,
+  });
+}
+
+const ORG_A_PERSONAL: AvailableContextEntry = {
+  kind: 'personal',
+  orgId: 'org_sample',
+  orgName: SAMPLE_ORG.name,
+};
+const ORG_B_PERSONAL: AvailableContextEntry = {
+  kind: 'personal',
+  orgId: SAMPLE_ORG_B.id,
+  orgName: SAMPLE_ORG_B.name,
+};
+
+export const SAMPLE_ACCEPTANCE_PRINCIPALS: Record<
+  'employeeB' | 'multiOrgEmployee',
+  { principal: Principal; effectiveActions: readonly string[]; availableContexts: readonly AvailableContextEntry[] }
+> = {
+  employeeB: {
+    principal: acceptancePrincipal('user_emilija', 'Emilija', 'E', [
+      { id: 'mem_emilija', orgId: SAMPLE_ORG_B.id, orgUnitId: 'ou_b_team_support' },
+    ]),
+    effectiveActions: actionsForTemplates('employee'),
+    availableContexts: [ORG_B_PERSONAL],
+  },
+  multiOrgEmployee: {
+    principal: acceptancePrincipal('user_mirjam', 'Mirjam', 'M', [
+      { id: 'mem_mirjam_a', orgId: 'org_sample', orgUnitId: 'team_product' },
+      { id: 'mem_mirjam_b', orgId: SAMPLE_ORG_B.id, orgUnitId: 'ou_b_team_support' },
+    ]),
+    effectiveActions: actionsForTemplates('employee'),
+    availableContexts: [ORG_A_PERSONAL, ORG_B_PERSONAL],
   },
 };

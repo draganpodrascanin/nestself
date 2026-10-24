@@ -9,6 +9,8 @@
 import { count, eq, inArray } from 'drizzle-orm';
 import {
   SAMPLE_ORG,
+  SAMPLE_ORG_B,
+  SAMPLE_ORG_B_UNITS,
   SAMPLE_TEAMS,
   SAMPLE_PEOPLE,
   SAMPLE_EDITORIAL_STAFF,
@@ -23,7 +25,13 @@ import {
   SAMPLE_CASE,
   SAMPLE_CATEGORIES,
   SAMPLE_CATEGORY_LABELS,
+  SAMPLE_ACCEPTANCE_PEOPLE,
+  SAMPLE_ACCEPTANCE_ROLES,
+  SAMPLE_CONTENT_RESOURCES,
+  SAMPLE_PUBLICATION_DATES,
+  acceptanceScaleEmployees,
 } from '@nestself/sample-data';
+import { approvalHash } from '@nestself/content/schema';
 import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
 import { RETENTION_POLICIES } from './retention-policies.js';
 import { buildClosureRows } from '../../org-units/closure.js';
@@ -77,8 +85,25 @@ export const editorialAssignmentId = (userId: string, categoryId: string): strin
 const upperRole = <T extends string>(role: string | null | undefined): T | null =>
   role ? (role.toUpperCase() as T) : null;
 
-export async function seed(db: Database): Promise<Record<string, number>> {
-  // ── Organisation ──
+export interface SeedOptions {
+  /**
+   * Also seed the generated acceptance employees that bring organization A to
+   * 30 and organization B to 12 employees (epic 23.1). Off by default: the
+   * named people are enough for the demos; aggregate tests switch it on.
+   */
+  seedAcceptanceScale?: boolean;
+}
+
+/**
+ * Id of the grant that gives an acceptance person the employee template in one
+ * organization. The person's first membership keeps the plain id, later ones
+ * are suffixed with the organization (the convention of the grant backfill).
+ */
+export const acceptanceEmployeeGrantId = (userId: string, orgId: string, index: number): string =>
+  index === 0 ? `grant_${userId}_employee` : `grant_${userId}_${orgId}_employee`;
+
+export async function seed(db: Database, options: SeedOptions = {}): Promise<Record<string, number>> {
+  // ── Organisations (A and B) ──
   await upsertById(
     db,
     t.organizations,
@@ -91,6 +116,19 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       status: 'ACTIVE',
     },
     { name: SAMPLE_ORG.name, slug: SAMPLE_ORG.slug },
+  );
+  await upsertById(
+    db,
+    t.organizations,
+    {
+      id: SAMPLE_ORG_B.id,
+      name: SAMPLE_ORG_B.name,
+      slug: SAMPLE_ORG_B.slug,
+      country: 'HU',
+      timezone: 'Europe/Budapest',
+      status: 'ACTIVE',
+    },
+    { name: SAMPLE_ORG_B.name, slug: SAMPLE_ORG_B.slug },
   );
 
   // ── Legacy teams (legacy_teams table) ──
@@ -114,8 +152,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   // ── Closure table (AUTHZ-R-09: every node is its own ancestor at depth 0) ──
-  const closureRows = buildClosureRows(
-    SAMPLE_ORG_UNITS.map((u) => ({ id: u.id, parentId: u.parentId })),
+  // Organization B's units, then both trees' closure rows.
+  for (const ou of SAMPLE_ORG_B_UNITS) {
+    await upsertById(
+      db,
+      t.orgUnits,
+      { id: ou.id, orgId: ou.orgId, parentId: ou.parentId, kind: ou.kind, name: ou.name },
+      { name: ou.name, kind: ou.kind, parentId: ou.parentId },
+    );
+  }
+  const closureRows = [SAMPLE_ORG_UNITS, SAMPLE_ORG_B_UNITS].flatMap((units) =>
+    buildClosureRows(units.map((u) => ({ id: u.id, parentId: u.parentId }))),
   );
   for (const row of closureRows) {
     await db
@@ -177,6 +224,41 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       },
       { displayName: staff.displayName },
     );
+  }
+
+  // ── Acceptance people (T-C1.14): organization B and the two-membership person ──
+  for (const person of SAMPLE_ACCEPTANCE_PEOPLE) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: person.id,
+        email: `${person.id}@example.com`,
+        displayName: person.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: person.displayName },
+    );
+    for (const m of person.memberships) {
+      await upsertAcceptanceMembership(db, person.id, m.orgId, m.orgUnitId);
+    }
+  }
+
+  // ── Generated acceptance employees (opt-in, epic 23.1 scale) ──
+  const generatedEmployees = options.seedAcceptanceScale ? acceptanceScaleEmployees() : [];
+  for (const employee of generatedEmployees) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: employee.id,
+        email: `${employee.id}@example.com`,
+        displayName: employee.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: employee.displayName },
+    );
+    await upsertAcceptanceMembership(db, employee.id, employee.orgId, employee.orgUnitId);
   }
 
   // ── External identities (fake pool subjects, D-04) ──
@@ -306,7 +388,7 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   // Iterate the organization fixtures, not a hard-coded list. The seed only
   // manages organizations it inserted (SAMPLE_ORG and any future additions);
   // test-created orgs are not seeded.
-  const seededOrgIds = [SAMPLE_ORG.id];
+  const seededOrgIds = [SAMPLE_ORG.id, SAMPLE_ORG_B.id];
   for (const orgId of seededOrgIds) {
     const capId = `org_cap_${orgId}_library`;
     await upsertById(
@@ -341,6 +423,8 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       { title: c.title, summary: c.summary },
     );
   }
+
+  await seedContentResources(db);
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
   for (const rp of RETENTION_POLICIES) {
@@ -503,6 +587,39 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     }
   }
 
+  // ── Employee grants for the acceptance people (T-C1.14) ──
+  // One employee grant per ACTIVE membership; the id convention matches the
+  // grant backfill. Organization B has no HR admin, so its members are their
+  // own granter (as in the backfill).
+  const employeeTemplate = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
+  if (!employeeTemplate) throw new Error('The employee permission template is missing');
+  const employeeGrantees = [
+    ...SAMPLE_ACCEPTANCE_PEOPLE.flatMap((p) =>
+      p.memberships.map((m, index) => ({ userId: p.id, orgId: m.orgId, index })),
+    ),
+    ...generatedEmployees.map((e) => ({ userId: e.id, orgId: e.orgId, index: 0 })),
+  ];
+  for (const { userId, orgId, index } of employeeGrantees) {
+    const update = {
+      actions: [...employeeTemplate.actions],
+      scopeType: employeeTemplate.scopeType,
+      ...resolveSampleScope(employeeTemplate.scopeType, orgId, null),
+      conditions: null,
+    };
+    await db
+      .insert(t.grants)
+      .values({
+        id: acceptanceEmployeeGrantId(userId, orgId, index),
+        subjectUserId: userId,
+        templateKey: employeeTemplate.key,
+        grantedByUserId: orgId === SAMPLE_ORG.id ? (hrAdmin?.id ?? userId) : userId,
+        grantedAt: SAMPLE_START_DATE,
+        validFrom: SAMPLE_START_DATE,
+        ...update,
+      })
+      .onConflictDoUpdate({ target: t.grants.id, set: update });
+  }
+
   // ── Confidential professional domain: one case (T-2.4) ──
   // The expert reaches the case through a CASE assignment targeting its id.
   await db
@@ -554,6 +671,133 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   );
 
   return countAll(db);
+}
+
+async function upsertAcceptanceMembership(
+  db: Database,
+  userId: string,
+  orgId: string,
+  orgUnitId: string,
+): Promise<void> {
+  await db
+    .insert(t.memberships)
+    .values({
+      userId,
+      orgId,
+      status: 'ACTIVE',
+      startDate: SAMPLE_START_DATE,
+      orgUnitId,
+    })
+    .onConflictDoUpdate({
+      target: [t.memberships.userId, t.memberships.orgId, t.memberships.startDate],
+      set: { status: 'ACTIVE', orgUnitId },
+    });
+}
+
+/**
+ * Sample articles with an approved revision per variant and the publications
+ * of the availability demo (T-C1.14): `all_eligible` and `org_a` are live,
+ * `future` is scheduled, `withdrawn` was live and then withdrawn. The
+ * reviewer approves, the publisher publishes. Idempotent (stable ids).
+ */
+async function seedContentResources(db: Database): Promise<void> {
+  const authorId = SAMPLE_ACCEPTANCE_ROLES.author;
+  const reviewerId = SAMPLE_ACCEPTANCE_ROLES.reviewer;
+  const publisherId = SAMPLE_ACCEPTANCE_ROLES.publisher;
+  const liveFrom = new Date(SAMPLE_PUBLICATION_DATES.liveFrom);
+  const futureFrom = new Date(SAMPLE_PUBLICATION_DATES.futureFrom);
+  const withdrawnAt = new Date(SAMPLE_PUBLICATION_DATES.withdrawnAt);
+
+  for (const resource of SAMPLE_CONTENT_RESOURCES) {
+    const resourceValues = {
+      type: resource.type,
+      state: 'active' as const,
+      primaryCategoryId: resource.primaryCategoryId,
+      ownerUserId: authorId,
+      reviewPolicy: resource.reviewPolicy,
+      reviewDiscipline: resource.reviewDiscipline,
+    };
+    await upsertById(db, t.contentResources, { id: resource.id, ...resourceValues }, resourceValues);
+
+    for (const variant of resource.variants) {
+      const variantValues = {
+        contentResourceId: resource.id,
+        locale: variant.locale,
+        slug: variant.slug,
+      };
+      await upsertById(db, t.contentVariants, { id: variant.id, ...variantValues }, variantValues);
+
+      const hash = await approvalHash({
+        body: variant.body,
+        title: variant.title,
+        summary: variant.summary,
+        outcome: variant.outcome,
+        durationSeconds: resource.durationSeconds,
+        difficulty: resource.difficulty,
+        sources: [...resource.sources],
+        locale: variant.locale,
+        mediaAssetIds: [],
+        relatedResourceIds: [],
+        cta: null,
+        reviewDiscipline: resource.reviewDiscipline,
+        proposedAudience: null,
+      });
+
+      const revisionId = `rev_${variant.id}_1`;
+      const revisionValues = {
+        contentVariantId: variant.id,
+        revisionNumber: 1,
+        state: 'approved' as const,
+        body: variant.body,
+        title: variant.title,
+        summary: variant.summary,
+        outcome: variant.outcome,
+        durationSeconds: resource.durationSeconds,
+        durationBand: resource.durationBand,
+        difficulty: resource.difficulty,
+        sources: [...resource.sources],
+        authorUserId: authorId,
+        lastEditorUserId: authorId,
+        approvalHash: hash,
+        submittedAt: liveFrom,
+        approvedAt: liveFrom,
+        approvedByUserId: reviewerId,
+      };
+      await upsertById(db, t.contentRevisions, { id: revisionId, ...revisionValues }, revisionValues);
+
+      const publicationId = `pub_${variant.id}`;
+      const scenario = resource.scenario;
+      const publicationValues = {
+        contentVariantId: variant.id,
+        contentRevisionId: revisionId,
+        approvalHash: hash,
+        state:
+          scenario === 'future'
+            ? ('scheduled' as const)
+            : scenario === 'withdrawn'
+              ? ('withdrawn' as const)
+              : ('live' as const),
+        requiredCapability: 'library' as const,
+        startsAt: scenario === 'future' ? futureFrom : liveFrom,
+        withdrawnAt: scenario === 'withdrawn' ? withdrawnAt : null,
+        withdrawnByUserId: scenario === 'withdrawn' ? publisherId : null,
+        withdrawalReason: scenario === 'withdrawn' ? SAMPLE_PUBLICATION_DATES.withdrawalReason : null,
+        publishedByUserId: publisherId,
+      };
+      await upsertById(db, t.contentPublications, { id: publicationId, ...publicationValues }, publicationValues);
+
+      const audienceValues =
+        scenario === 'org_a'
+          ? { kind: 'organization' as const, orgId: SAMPLE_ORG.id, orgUnitId: null }
+          : { kind: 'all_eligible' as const, orgId: null, orgUnitId: null };
+      await upsertById(
+        db,
+        t.contentPublicationAudiences,
+        { id: `aud_${publicationId}_1`, publicationId, ...audienceValues },
+        { publicationId, ...audienceValues },
+      );
+    }
+  }
 }
 
 /**
@@ -634,6 +878,11 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     categories: t.categories,
     categoryLabels: t.categoryLabels,
     orgContentCapabilities: t.orgContentCapabilities,
+    contentResources: t.contentResources,
+    contentVariants: t.contentVariants,
+    contentRevisions: t.contentRevisions,
+    contentPublications: t.contentPublications,
+    contentPublicationAudiences: t.contentPublicationAudiences,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

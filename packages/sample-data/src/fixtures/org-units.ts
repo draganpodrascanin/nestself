@@ -62,3 +62,47 @@ export const SAMPLE_ORG_UNITS = [
     sample: true as const,
   },
 ] as const;
+
+/**
+ * Sample org-unit tree for organization B (T-C1.14). Parents come before
+ * children.
+ *
+ *   org_sample_b root (COMPANY)
+ *   └── ou_b_operations (DEPARTMENT)
+ *       ├── ou_b_team_support (TEAM)
+ *       └── ou_b_team_field (TEAM)
+ */
+export const SAMPLE_ORG_B_UNITS = [
+  {
+    id: 'ou_b_root',
+    orgId: 'org_sample_b',
+    parentId: null,
+    kind: 'COMPANY' as const,
+    name: 'Example B kft.',
+    sample: true as const,
+  },
+  {
+    id: 'ou_b_operations',
+    orgId: 'org_sample_b',
+    parentId: 'ou_b_root',
+    kind: 'DEPARTMENT' as const,
+    name: 'Operations',
+    sample: true as const,
+  },
+  {
+    id: 'ou_b_team_support',
+    orgId: 'org_sample_b',
+    parentId: 'ou_b_operations',
+    kind: 'TEAM' as const,
+    name: 'Support',
+    sample: true as const,
+  },
+  {
+    id: 'ou_b_team_field',
+    orgId: 'org_sample_b',
+    parentId: 'ou_b_operations',
+    kind: 'TEAM' as const,
+    name: 'Field',
+    sample: true as const,
+  },
+] as const;

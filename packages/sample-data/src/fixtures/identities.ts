@@ -1,5 +1,6 @@
 import { SAMPLE_PEOPLE } from './people.ts';
 import { SAMPLE_EDITORIAL_STAFF } from './editorial-staff.ts';
+import { SAMPLE_ACCEPTANCE_PEOPLE } from './content-acceptance.ts';
 
 /**
  * Development password for sample staff and experts in the fake identity
@@ -34,4 +35,6 @@ export const SAMPLE_EXTERNAL_IDENTITIES = [
   ...SAMPLE_PEOPLE.map((p) => identityFor(p, p.platformRole ? 'password' : 'email_otp')),
   /** Editorial staff are operations staff: password plus authenticator. */
   ...SAMPLE_EDITORIAL_STAFF.map((p) => identityFor(p, 'password')),
+  /** Acceptance employees (organization B and the two-membership person) sign in by email code. */
+  ...SAMPLE_ACCEPTANCE_PEOPLE.map((p) => identityFor(p, 'email_otp')),
 ];
