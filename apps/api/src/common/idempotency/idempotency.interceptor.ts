@@ -10,15 +10,24 @@
  * A handler error releases the reservation and is not stored, so the client
  * can retry.
  *
+ * Token-based CAS: each reservation carries a random token.  Completion
+ * stores only if the token still matches; release deletes only if it
+ * matches.  This prevents a stale holder from overwriting a key that was
+ * re-reserved by another process after TTL expiry.
+ *
+ * TTL refresh: while the handler is in flight, the reservation TTL is
+ * refreshed every TTL/3 so that long uploads do not expire mid-request.
+ *
  * @see ARC-R-10, RTE-R-05, CLI-R-10, T-C1.07
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   type CallHandler,
   type ExecutionContext,
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   type NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -53,8 +62,8 @@ interface HttpRes {
 }
 
 type Record_ =
-  | { state: 'processing'; fingerprint: string }
-  | { state: 'complete'; fingerprint: string; status: number; body: unknown };
+  | { state: 'processing'; fingerprint: string; token: string }
+  | { state: 'complete'; fingerprint: string; token: string; status: number; body: unknown };
 
 /** JSON with object keys sorted recursively, so key order never changes the hash. */
 export function canonicalJson(value: unknown): string {
@@ -73,10 +82,24 @@ function sortKeys(value: unknown): unknown {
   return value;
 }
 
-export function requestFingerprint(method: string, path: string, body: unknown): string {
-  return createHash('sha256')
-    .update(`${method.toUpperCase()}\n${path}\n${canonicalJson(body ?? null)}`)
-    .digest('hex');
+/**
+ * Compute a stable request fingerprint from method, path, body, and
+ * optional header values (e.g. Content-Digest).
+ */
+export function requestFingerprint(
+  method: string,
+  path: string,
+  body: unknown,
+  headerValues?: string[],
+): string {
+  const hash = createHash('sha256');
+  hash.update(`${method.toUpperCase()}\n${path}\n${canonicalJson(body ?? null)}`);
+  if (headerValues) {
+    for (const v of headerValues) {
+      hash.update(`\n${v}`);
+    }
+  }
+  return hash.digest('hex');
 }
 
 function conflict(reason: 'in_progress' | 'payload_mismatch'): ApiHttpException {
@@ -93,6 +116,8 @@ function conflict(reason: 'in_progress' | 'payload_mismatch'): ApiHttpException 
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(IdempotencyInterceptor.name);
+
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
@@ -127,14 +152,25 @@ export class IdempotencyInterceptor implements NestInterceptor {
       });
     }
 
+    // Collect fingerprint header values (e.g. content-digest)
+    const headerValues = meta.fingerprintHeaders?.map((name) => {
+      const v = req.headers[name.toLowerCase()];
+      return typeof v === 'string' ? v : Array.isArray(v) ? v[0] ?? '' : '';
+    });
+
     const path = (req.path ?? req.url ?? '').split('?')[0]!;
-    const fingerprint = requestFingerprint(req.method, path, req.body);
+    const fingerprint = requestFingerprint(req.method, path, req.body, headerValues);
     const key = idempotencyKey(meta.scope, userId, header);
+
+    const token = randomBytes(16).toString('hex');
+    const reservationValue = JSON.stringify(
+      { state: 'processing', fingerprint, token } satisfies Record_,
+    );
 
     const inFlightTtl = meta.inFlightTtlSeconds ?? IDEMPOTENCY_IN_FLIGHT_TTL;
     const reserved = await this.store.set(
       key,
-      JSON.stringify({ state: 'processing', fingerprint } satisfies Record_),
+      reservationValue,
       { onlyIfAbsent: true, ttlSeconds: inFlightTtl },
     );
 
@@ -144,29 +180,60 @@ export class IdempotencyInterceptor implements NestInterceptor {
         // Expired or released between the SET NX and the GET: ask to retry.
         throw conflict('in_progress');
       }
-      const existing = JSON.parse(raw) as Record_;
+      let existing: Record_;
+      try {
+        existing = JSON.parse(raw) as Record_;
+      } catch {
+        // Corrupt stored value: log and treat as a miss.
+        this.logger.warn(`Corrupt idempotency record for key ${key}: ${raw.slice(0, 120)}`);
+        await this.store.del(key);
+        throw conflict('in_progress');
+      }
       if (existing.fingerprint !== fingerprint) throw conflict('payload_mismatch');
       if (existing.state === 'processing') throw conflict('in_progress');
       res.setHeader(IDEMPOTENCY_REPLAYED_HEADER, 'true');
       return from([existing.body]);
     }
 
+    // Periodically refresh the TTL while the handler is in flight.
+    const refreshInterval = Math.max(1, Math.floor(inFlightTtl / 3));
+    const refreshTimer = setInterval(() => {
+      this.store.expire(key, inFlightTtl).catch(() => {});
+    }, refreshInterval * 1000);
+    if (refreshTimer.unref) refreshTimer.unref();
+
     const status = this.successStatus(context, req.method);
     return next.handle().pipe(
       take(1),
       mergeMap(async (body) => {
+        clearInterval(refreshTimer);
         const stored: Record_ = {
           state: 'complete',
           fingerprint,
+          token,
           status,
           body: body === undefined ? null : body,
         };
-        await this.store.set(key, JSON.stringify(stored), { ttlSeconds: IDEMPOTENCY_TTL });
+        const swapped = await this.store.compareAndSet(
+          key,
+          reservationValue,
+          JSON.stringify(stored),
+          { ttlSeconds: IDEMPOTENCY_TTL },
+        );
+        if (!swapped) {
+          // Token no longer matches (TTL expired and someone re-reserved).
+          // The handler result is still returned to the client, but it
+          // won't be replayed. This is safe: the client gets its result.
+          this.logger.warn(`Idempotency CAS failed for key ${key}; result not stored`);
+        }
         return body;
       }),
-      catchError((err: unknown) =>
-        from(this.store.del(key)).pipe(mergeMap(() => throwError(() => err))),
-      ),
+      catchError((err: unknown) => {
+        clearInterval(refreshTimer);
+        return from(
+          this.store.compareAndDelete(key, reservationValue),
+        ).pipe(mergeMap(() => throwError(() => err)));
+      }),
     );
   }
 

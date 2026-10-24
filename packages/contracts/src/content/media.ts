@@ -2,6 +2,25 @@
  * Media contract schemas (MED-R-31, 8.15).
  *
  * Request and response schemas for media endpoints; error codes.
+ *
+ * ## Upload protocol (T-C1.08, MED-R-33)
+ *
+ * Uploads are `multipart/form-data` with metadata fields sent **before** the
+ * file part.  The request **must** include a `Content-Digest` header per
+ * RFC 9530 carrying the SHA-256 digest of the file body:
+ *
+ * ```
+ * Content-Digest: sha-256=:<base64-encoded-sha256>:
+ * ```
+ *
+ * The server computes the digest during the streaming upload and returns
+ * 400 `validation` with `details.reason = 'digest_mismatch'` if the values
+ * do not match.  The admin application computes the digest client-side
+ * (T-C1.12) and sends it with each upload request.
+ *
+ * The `Content-Digest` value is also included in the idempotency fingerprint,
+ * so that a replayed `Idempotency-Key` with a different file triggers
+ * 409 `payload_mismatch` without re-reading the body.
  */
 import { z } from 'zod';
 
@@ -162,3 +181,9 @@ export const MEDIA_KIND_ALLOWED_MIMES: Record<MediaKind, string[]> = {
 
 /** Kinds enabled in M1. Audio, video, captions are deferred to T-C2.09. */
 export const MEDIA_KINDS_ENABLED: MediaKind[] = ['image', 'pdf'];
+
+/**
+ * Hard maximum upload size in bytes, independent of kind.  Overridable via
+ * the `MEDIA_MAX_UPLOAD_BYTES` environment variable.
+ */
+export const MEDIA_MAX_UPLOAD_BYTES = 300 * 1024 * 1024;

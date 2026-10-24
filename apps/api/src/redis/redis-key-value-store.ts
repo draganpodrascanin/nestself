@@ -151,6 +151,48 @@ export class RedisKeyValueStore implements KeyValueStore {
     };
   }
 
+  async compareAndDelete(key: string, expectedValue: string): Promise<boolean> {
+    const script = `
+      if redis.call('GET', KEYS[1]) == ARGV[1] then
+        return redis.call('DEL', KEYS[1])
+      end
+      return 0
+    `;
+    const result = await this.wrap(
+      this.client.eval(script, { keys: [key], arguments: [expectedValue] }) as Promise<number>,
+    );
+    return result === 1;
+  }
+
+  async compareAndSet(
+    key: string,
+    expectedValue: string,
+    newValue: string,
+    opts?: { ttlSeconds?: number },
+  ): Promise<boolean> {
+    const ttl = opts?.ttlSeconds;
+    const script = ttl != null
+      ? `
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+          return redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+        end
+        return nil
+      `
+      : `
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+          return redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+        end
+        return nil
+      `;
+    const args = ttl != null
+      ? [expectedValue, newValue, String(ttl)]
+      : [expectedValue, newValue];
+    const result = await this.wrap(
+      this.client.eval(script, { keys: [key], arguments: args }),
+    );
+    return result !== null;
+  }
+
   async ping(): Promise<boolean> {
     try {
       const reply = await this.client.ping();

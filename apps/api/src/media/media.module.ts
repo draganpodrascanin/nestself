@@ -4,6 +4,10 @@
  * Provides the MEDIA_STORAGE token (local or s3), the MediaService for
  * database operations, MediaJobProcessor for background processing,
  * and the two controllers (ops and library).
+ *
+ * The MULTER_MODULE_OPTIONS provider wires the custom streaming
+ * UploadStorageEngine into multer so that FileInterceptor in the
+ * ops controller uses it automatically (C2).
  */
 import { Module, type DynamicModule, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,8 +20,18 @@ import { MediaOpsController } from './media-ops.controller.js';
 import { MediaLibraryController } from './media-library.controller.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { CmsScopeService } from '../authz/cms-scope.service.js';
+import { CmsResourceLoader } from '../cms/cms-resource-loader.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AvailabilityModule } from '../library/availability/availability.module.js';
+import { createUploadStorageEngine } from './upload-storage-engine.js';
+import { DbService } from '../db/db.service.js';
+import { AuditWriter } from '../audit/audit-writer.js';
+
+/**
+ * Token used by `FileInterceptor` to pick up module-level multer options.
+ * Value matches the constant in `@nestjs/platform-express/multer`.
+ */
+const MULTER_MODULE_OPTIONS = 'MULTER_MODULE_OPTIONS';
 
 @Module({})
 export class MediaModule {
@@ -60,9 +74,34 @@ export class MediaModule {
             return new LocalMediaStorage(baseDir);
           },
         },
+        // Wire our custom streaming StorageEngine into multer (C2).
+        // FileInterceptor injects MULTER_MODULE_OPTIONS (@Optional) and
+        // merges it with local options.  Local limits win; module storage
+        // is used because FileInterceptor passes no storage of its own.
+        {
+          provide: MULTER_MODULE_OPTIONS,
+          inject: [MEDIA_STORAGE, DbService, AuditWriter, CmsScopeService, ConfigService],
+          useFactory: (
+            storage: MediaStorage,
+            dbService: DbService,
+            auditWriter: AuditWriter,
+            cmsScopeService: CmsScopeService,
+            configService: ConfigService,
+          ) => ({
+            storage: createUploadStorageEngine({
+              storage,
+              dbService,
+              auditWriter,
+              cmsScopeService,
+              maxUploadBytes:
+                configService.get<number>('MEDIA_MAX_UPLOAD_BYTES') ?? undefined,
+            }),
+          }),
+        },
         MediaService,
         MediaJobProcessor,
         CmsScopeService,
+        CmsResourceLoader,
       ],
       exports: [MEDIA_STORAGE, MediaService, MediaJobProcessor],
     };

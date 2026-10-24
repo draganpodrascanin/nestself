@@ -73,6 +73,32 @@ export interface KeyValueStore {
     handler: (message: string) => void,
   ): Promise<() => Promise<void>>;
 
+  /**
+   * Atomically delete a key only if its current value exactly equals
+   * `expectedValue`. Used for compare-and-delete idempotency reservations
+   * so a stale holder cannot release a key that was re-reserved by another
+   * process after TTL expiry.
+   *
+   * Redis: Lua script for atomicity.  Memory: single-threaded, safe as-is.
+   * @returns `true` if the key existed with the expected value and was deleted.
+   */
+  compareAndDelete(key: string, expectedValue: string): Promise<boolean>;
+
+  /**
+   * Atomically set a key to `newValue` only if its current value exactly
+   * equals `expectedValue`. Used for compare-and-swap completion of
+   * idempotency reservations.
+   *
+   * Redis: Lua script for atomicity.  Memory: single-threaded, safe as-is.
+   * @returns `true` if the key existed with the expected value and was updated.
+   */
+  compareAndSet(
+    key: string,
+    expectedValue: string,
+    newValue: string,
+    opts?: SetOptions,
+  ): Promise<boolean>;
+
   /** Ping the store. Returns true when reachable. */
   ping(): Promise<boolean>;
 

@@ -25,6 +25,8 @@ function createMocks() {
     sMembers: vi.fn(),
     scan: vi.fn(),
     publish: vi.fn(),
+    compareAndDelete: vi.fn(),
+    compareAndSet: vi.fn(),
     ping: vi.fn(),
     close: vi.fn(),
   };

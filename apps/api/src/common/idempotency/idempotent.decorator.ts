@@ -16,6 +16,13 @@ export interface IdempotentOptions {
   required?: boolean;
   /** Override the in-flight reservation TTL in seconds (default 60). Use for long uploads. */
   inFlightTtlSeconds?: number;
+  /**
+   * Header names (lowercase) included in the request fingerprint so that
+   * the idempotency key is also tied to their values.  For media uploads
+   * this carries `['content-digest']` so a replayed key with a different
+   * payload digest triggers `payload_mismatch` without buffering the body.
+   */
+  fingerprintHeaders?: string[];
 }
 
 export const Idempotent = (scope: string, options: IdempotentOptions = {}) =>
@@ -24,6 +31,7 @@ export const Idempotent = (scope: string, options: IdempotentOptions = {}) =>
       scope,
       required: options.required ?? false,
       inFlightTtlSeconds: options.inFlightTtlSeconds,
+      fingerprintHeaders: options.fingerprintHeaders,
     } satisfies IdempotentMetadata),
     UseInterceptors(IdempotencyInterceptor),
   );

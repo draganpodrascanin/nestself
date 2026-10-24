@@ -3,14 +3,17 @@
  *
  * POST   /api/ops/cms/media                 — upload (media.upload)
  * GET    /api/ops/cms/media                 — list (media.manage, category-scoped)
- * GET    /api/ops/cms/media/:assetId        — detail (media.manage)
- * PUT    /api/ops/cms/media/:assetId        — update (media.manage)
- * DELETE /api/ops/cms/media/:assetId        — delete (media.manage)
- * GET    /api/ops/cms/media/:assetId/:rendition — preview (content.preview)
+ * GET    /api/ops/cms/media/:assetId        — detail (media.manage, I4)
+ * PUT    /api/ops/cms/media/:assetId        — update (media.manage, I4)
+ * DELETE /api/ops/cms/media/:assetId        — delete (media.manage, I4)
+ * GET    /api/ops/cms/media/:assetId/:rendition — preview (content.preview, I4)
  *
- * C2: Upload uses FileInterceptor (multer) for real multipart streaming.
- *     JSON-body mode is kept for e2e test convenience.
+ * C2: Upload uses a custom multer StorageEngine that streams directly into
+ *     quarantine, validates metadata fields, counts bytes, computes SHA-256,
+ *     and sniffs magic bytes during the request.
  * C3: Delivery uses deliverRendition() for pipeline-based streaming.
+ *
+ * The upload requires `Content-Digest: sha-256=:<base64>:` per RFC 9530 (I1).
  */
 import {
   Body,
@@ -19,30 +22,32 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Post,
   Put,
   Query,
   Req,
   Res,
-  UseInterceptors,
   UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type {
+  MediaAssetUpdate,
+  MediaListQuery,
+  Principal,
+} from '@nestself/contracts';
 import {
   ACTIONS,
   MediaAssetUpdateSchema,
   MediaListQuerySchema,
   MediaRenditionKindSchema,
-  type MediaAssetUpdate,
-  type MediaListQuery,
-  type Principal,
-  type Resource,
 } from '@nestself/contracts';
-import { MEDIA_KIND_MAX_BYTES, MEDIA_KINDS_ENABLED, MediaUploadMetadataSchema } from '@nestself/contracts';
-import { Authorize, type ResourceResolver } from '../authz/authorize.decorator.js';
+import { Authorize } from '../authz/authorize.decorator.js';
 import { operationsResource, assertOperationsSession } from '../authz/resolvers.js';
 import { operationsCategoryScope } from '../authz/operations-category-scope.js';
+import { Authenticated } from '../authz/authenticated.decorator.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { Idempotent } from '../common/idempotency/idempotent.decorator.js';
@@ -51,9 +56,11 @@ import { ApiHttpException } from '../common/api-error.js';
 import { MediaService } from './media.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CmsScopeService } from '../authz/cms-scope.service.js';
-import { Inject } from '@nestjs/common';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage.js';
 import { deliverRendition, type DeliverReq, type DeliverRes } from './deliver-rendition.js';
+import type { UploadedAsset } from './upload-storage-engine.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { CmsResourceLoader } from '../cms/cms-resource-loader.js';
 
 /** Minimal request shape (avoids `@types/express`). */
 interface HttpReq {
@@ -70,141 +77,65 @@ interface HttpRes {
   on(event: string, listener: (...args: unknown[]) => void): void;
 }
 
-/** Route-parameter id extractor for `operationsResource`. */
-const assetIdFromParam = (req: Record<string, unknown>): string | undefined => {
-  const params = req['params'] as Record<string, string | undefined> | undefined;
-  return params?.['assetId'];
-};
-
-/**
- * Upload resolver: extract `ownerCategoryId` from the parsed JSON body
- * or from the query string (multipart). The guard runs after Express's
- * body parser so the body is available for JSON requests.
- */
-function uploadCategoryResolver(type: string): ResourceResolver {
-  return (req, principal: Principal): Resource => {
-    assertOperationsSession(principal);
-    const body = (req as { body?: Record<string, unknown> }).body;
-    const query = (req as { query?: Record<string, unknown> }).query;
-    // Take the first value if query param is an array (reject duplicate params)
-    let catId = (body?.ownerCategoryId ?? query?.ownerCategoryId) as string | string[] | undefined;
-    if (Array.isArray(catId)) catId = catId[0];
-    if (catId) return { type, collectionId: catId };
-    // Without a category, return type-only so the guard can check the action exists
-    return { type };
-  };
-}
-
-
 @Controller('ops/cms/media')
 export class MediaOpsController {
   constructor(
     private readonly mediaService: MediaService,
     private readonly cmsScopeService: CmsScopeService,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
+    private readonly cmsResourceLoader: CmsResourceLoader,
   ) {}
 
   /**
-   * Upload a media file.
+   * Upload a media file via multipart/form-data.
    *
-   * Supports two modes:
-   * 1. Multipart form-data (Content-Type: multipart/form-data):
-   *    File field "file", metadata in query params.
-   * 2. JSON body (for e2e tests): file as base64 string in "file" field,
-   *    metadata inline.
+   * Metadata fields (kind, ownerCategoryId, licenseKind, etc.) must be sent
+   * as form fields BEFORE the file part.  The request must include a
+   * `Content-Digest: sha-256=:<base64>:` header per RFC 9530.
+   *
+   * Authorization note: the guard phase uses `@Authenticated()` because
+   * NestJS guards run BEFORE interceptors.  FileInterceptor (multer)
+   * populates `req.body` with multipart fields, but the guard can't read
+   * them yet.  The category scope check runs in the custom
+   * UploadStorageEngine after metadata parsing (C2, MED-R-33).  The
+   * `assertOperationsSession()` call below verifies the session and
+   * context at the handler level.
    */
   @Post()
-  @Authorize(ACTIONS['media.upload'], uploadCategoryResolver('media_asset'))
-  @Idempotent('media.upload', { inFlightTtlSeconds: 900 })
+  @Authenticated()
+  @Idempotent('media.upload', {
+    inFlightTtlSeconds: 900,
+    fingerprintHeaders: ['content-digest'],
+  })
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file', {
     limits: {
-      // Hard cap — the kind-specific limit is checked after.
-      fileSize: 300 * 1024 * 1024, // 300 MB (largest kind: video)
+      files: 1,
+      fields: 10,
+      fieldSize: 4096,
+      parts: 12,
+      headerPairs: 50,
     },
   }))
   async upload(
-    @Req() req: HttpReq & AsyncIterable<Buffer>,
-    @UploadedFile() uploadedFile: { buffer: Buffer; mimetype: string; originalname: string } | undefined,
+    @UploadedFile() uploadedFile: UploadedAsset | undefined,
     @CurrentPrincipal() principal: Principal,
   ) {
-    // Parse metadata from query params (multipart) or body (JSON)
-    const contentType = (req.headers['content-type'] ?? '') as string;
-    const metadataSource = contentType.startsWith('multipart')
-      ? req.query
-      : (req.body ?? req.query);
+    // Guard phase only checked @Authenticated; verify operations context.
+    assertOperationsSession(principal);
 
-    const metadata = MediaUploadMetadataSchema.parse(metadataSource);
-
-    // Check kind is enabled
-    if (!MEDIA_KINDS_ENABLED.includes(metadata.kind)) {
-      throw new ApiHttpException({
-        status: 400,
-        code: 'media_type_rejected',
-        message: `Media kind '${metadata.kind}' is not enabled`,
-        details: { reason: 'kind_not_enabled' },
-      });
+    if (uploadedFile && uploadedFile.assetId) {
+      return {
+        assetId: uploadedFile.assetId,
+        state: uploadedFile.state,
+      };
     }
 
-    // Get file buffer
-    let fileBuffer: Buffer;
-    let originalFilename = 'upload';
-    let mimeType = 'application/octet-stream';
-
-    if (uploadedFile) {
-      // Multipart upload via FileInterceptor/multer (C2)
-      fileBuffer = uploadedFile.buffer;
-      originalFilename = uploadedFile.originalname || 'upload';
-      mimeType = uploadedFile.mimetype || 'application/octet-stream';
-    } else if (!contentType.startsWith('multipart')) {
-      // JSON mode: file as base64
-      const body = req.body;
-      if (body?.file && typeof body.file === 'string') {
-        fileBuffer = Buffer.from(body.file, 'base64');
-      } else if (body?.fileBuffer && Buffer.isBuffer(body.fileBuffer)) {
-        fileBuffer = body.fileBuffer as Buffer;
-      } else {
-        throw new ApiHttpException({
-          status: 400,
-          code: 'validation',
-          message: 'No file provided',
-        });
-      }
-      if (typeof body?.originalFilename === 'string') {
-        originalFilename = body.originalFilename;
-      }
-      if (typeof body?.mimeType === 'string') {
-        mimeType = body.mimeType;
-      }
-    } else {
-      // Multipart but multer didn't find a file
-      throw new ApiHttpException({
-        status: 400,
-        code: 'validation',
-        message: 'No file provided in multipart request (expected field name "file")',
-      });
-    }
-
-    // Size cap before processing (413)
-    const maxBytes = MEDIA_KIND_MAX_BYTES[metadata.kind];
-    if (fileBuffer.length > maxBytes) {
-      throw new ApiHttpException({
-        status: 413,
-        code: 'media_too_large',
-        message: `File exceeds maximum size of ${maxBytes} bytes for kind '${metadata.kind}'`,
-        details: { maxBytes, actualBytes: fileBuffer.length },
-      });
-    }
-
-    const result = await this.mediaService.upload(
-      fileBuffer,
-      mimeType,
-      originalFilename,
-      metadata,
-      principal,
-    );
-
-    return result;
+    throw new ApiHttpException({
+      status: 400,
+      code: 'validation',
+      message: 'No file provided in multipart request (expected field name "file")',
+    });
   }
 
   @Get()
@@ -213,7 +144,6 @@ export class MediaOpsController {
     @Query(new ZodValidationPipe(MediaListQuerySchema)) query: MediaListQuery,
     @CurrentPrincipal() principal: Principal,
   ) {
-    // Determine category ids the principal can access
     let categoryIds: string[] | null = null;
 
     if (query.categoryId) {
@@ -241,9 +171,40 @@ export class MediaOpsController {
     });
   }
 
+  /**
+   * Asset detail (I4): scoped through CmsResourceLoader.
+   * Missing row → 404.  Out-of-scope → 404 (not 403).
+   * In-scope + unready → detail is returned (not 409 — only preview is 409).
+   */
   @Get(':assetId')
   @Authorize(ACTIONS['media.manage'], operationsResource('media_asset', assetIdFromParam))
-  async detail(@Param('assetId') assetId: string) {
+  async detail(
+    @Param('assetId') assetId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    const resource = await this.cmsResourceLoader.forAsset(assetId);
+    if (!resource) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
+    // Scope check: verify the principal has access to this category
+    const allowed = await this.cmsScopeService.allowedCategoryIds(
+      principal,
+      ACTIONS['media.manage'],
+    );
+    if (resource.collectionId && !allowed.includes(resource.collectionId)) {
+      // Out-of-scope → 404 (not 403), per I4
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
     const detail = await this.mediaService.getDetail(assetId);
     if (!detail) {
       throw new ApiHttpException({
@@ -262,6 +223,28 @@ export class MediaOpsController {
     @Body(new ZodValidationPipe(MediaAssetUpdateSchema)) body: MediaAssetUpdate,
     @CurrentPrincipal() principal: Principal,
   ) {
+    const resource = await this.cmsResourceLoader.forAsset(assetId);
+    if (!resource) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
+    // Scope check
+    const allowed = await this.cmsScopeService.allowedCategoryIds(
+      principal,
+      ACTIONS['media.manage'],
+    );
+    if (resource.collectionId && !allowed.includes(resource.collectionId)) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
     const result = await this.mediaService.updateAsset(assetId, body, principal);
     if (!result) {
       throw new ApiHttpException({
@@ -280,14 +263,41 @@ export class MediaOpsController {
     @Param('assetId') assetId: string,
     @CurrentPrincipal() principal: Principal,
   ) {
+    const resource = await this.cmsResourceLoader.forAsset(assetId);
+    if (!resource) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
+    // Scope check
+    const allowed = await this.cmsScopeService.allowedCategoryIds(
+      principal,
+      ACTIONS['media.manage'],
+    );
+    if (resource.collectionId && !allowed.includes(resource.collectionId)) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
     await this.mediaService.deleteAsset(assetId, principal);
   }
 
+  /**
+   * Preview a rendition (I4): missing → 404, out-of-scope → 404 (not 403),
+   * in-scope + unready → 409 media_not_ready.
+   */
   @Get(':assetId/:rendition')
   @Authorize(ACTIONS['content.preview'], operationsResource('media_asset', assetIdFromParam))
   async preview(
     @Param('assetId') assetId: string,
     @Param('rendition') renditionKind: string,
+    @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,
     @Res() res: HttpRes,
   ) {
@@ -301,9 +311,41 @@ export class MediaOpsController {
       });
     }
 
+    const resource = await this.cmsResourceLoader.forAsset(assetId);
+    if (!resource) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+
+    // Scope check: assets with deleted category (collectionId null) are
+    // visible only to media.manage holders.
+    if (resource.collectionId === null) {
+      const manageAllowed = await this.cmsScopeService.allowedCategoryIds(
+        principal,
+        ACTIONS['media.manage'],
+      );
+      if (manageAllowed.length === 0) {
+        throw new ApiHttpException({
+          status: 404,
+          code: 'not_found',
+          message: 'Media asset not found',
+        });
+      }
+    }
+
     // Only ready assets can be previewed by staff
     const asset = await this.mediaService.getAsset(assetId);
-    if (!asset || asset.state !== 'ready') {
+    if (!asset) {
+      throw new ApiHttpException({
+        status: 404,
+        code: 'not_found',
+        message: 'Media asset not found',
+      });
+    }
+    if (asset.state !== 'ready') {
       throw new ApiHttpException({
         status: 409,
         code: 'media_not_ready',
@@ -333,4 +375,10 @@ export class MediaOpsController {
       res as DeliverRes,
     );
   }
+}
+
+/** Route-parameter id extractor for `operationsResource`. */
+function assetIdFromParam(req: Record<string, unknown>): string | undefined {
+  const params = req['params'] as Record<string, string | undefined> | undefined;
+  return params?.['assetId'];
 }

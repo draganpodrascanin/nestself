@@ -25,6 +25,10 @@ class TestController {
   @Post('long')
   @Idempotent('test', { inFlightTtlSeconds: 900 })
   longUpload() {}
+
+  @Post('digest')
+  @Idempotent('test', { fingerprintHeaders: ['content-digest'] })
+  withDigest() {}
 }
 
 function ctx(
@@ -84,6 +88,7 @@ describe('IdempotencyInterceptor', () => {
     const stored = JSON.parse((await store.get(k))!);
     expect(stored).toMatchObject({ state: 'complete', status: 201, body: { ok: true } });
     expect(stored.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored.token).toMatch(/^[0-9a-f]{32}$/);
     expect(await store.ttl(k)).toBeGreaterThan(86000);
   });
 
@@ -140,7 +145,7 @@ describe('IdempotencyInterceptor', () => {
     expect(replay.value).toEqual({ slow: true });
   });
 
-  it('releases the reservation when the handler throws', async () => {
+  it('releases the reservation when the handler throws (CAS delete)', async () => {
     const boom = new Error('boom');
     const obs = await interceptor.intercept(ctx(proto.optional, withKey({ a: 1 }), {}), {
       handle: () => throwError(() => boom),
@@ -200,21 +205,76 @@ describe('IdempotencyInterceptor', () => {
   });
 
   it('uses custom inFlightTtlSeconds for the reservation', async () => {
-    // Start a request that will not complete yet
     const holder = interceptor.intercept(ctx(proto.longUpload, withKey({ a: 1 }), {}), {
       handle: () => of({ slow: true }),
     });
-    const obs = await holder; // reserved, not yet subscribed
+    const obs = await holder;
 
-    // The reservation should exist with the custom TTL (900 s)
     const k = idempotencyKey('test', 'u1', KEY);
     const ttl = await store.ttl(k);
-    // TTL should be close to 900 (allow a few seconds of test execution)
     expect(ttl).toBeGreaterThan(850);
     expect(ttl).toBeLessThanOrEqual(900);
 
-    // Complete the request
     await firstValueFrom(obs);
+  });
+
+  // ── New tests: fingerprintHeaders ──
+
+  it('fingerprintHeaders: same key + same digest → replay', async () => {
+    const digestHeader = 'sha-256=:abc123=:';
+    await call(proto.withDigest, {
+      ...withKey({ a: 1 }),
+      headers: { 'idempotency-key': KEY, 'content-digest': digestHeader },
+    });
+    const second = await call(proto.withDigest, {
+      ...withKey({ a: 1 }),
+      headers: { 'idempotency-key': KEY, 'content-digest': digestHeader },
+    });
+    expect(second.value).toEqual({ ok: true });
+    expect(responseHeaders['Idempotent-Replayed']).toBe('true');
+  });
+
+  it('fingerprintHeaders: same key + different digest → 409 payload_mismatch', async () => {
+    await call(proto.withDigest, {
+      ...withKey({ a: 1 }),
+      headers: { 'idempotency-key': KEY, 'content-digest': 'sha-256=:aaa=:' },
+    });
+    await expect(
+      call(proto.withDigest, {
+        ...withKey({ a: 1 }),
+        headers: { 'idempotency-key': KEY, 'content-digest': 'sha-256=:bbb=:' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'idempotency_conflict',
+      details: { reason: 'payload_mismatch' },
+    });
+  });
+
+  // ── New tests: token-based CAS ──
+
+  it('reservation carries a token; completion uses compareAndSet', async () => {
+    const { value } = await call(proto.optional, withKey({ a: 1 }));
+    expect(value).toEqual({ ok: true });
+
+    // The stored record has a token field
+    const raw = (await store.get(idempotencyKey('test', 'u1', KEY)))!;
+    const record = JSON.parse(raw);
+    expect(record).toHaveProperty('token');
+    expect(record.token).toMatch(/^[0-9a-f]{32}$/);
+    expect(record.state).toBe('complete');
+  });
+
+  it('corrupt stored value is treated as a miss (logged, key deleted)', async () => {
+    const k = idempotencyKey('test', 'u1', KEY);
+    // Store a corrupt value
+    await store.set(k, 'not-json!!!');
+    // Next call should treat it as in_progress (since it fails to parse)
+    await expect(call(proto.optional, withKey({ a: 1 }))).rejects.toMatchObject({
+      code: 'idempotency_conflict',
+      details: { reason: 'in_progress' },
+    });
+    // The corrupt key should have been deleted
+    expect(await store.get(k)).toBeNull();
   });
 });
 
@@ -228,5 +288,54 @@ describe('fingerprint helpers', () => {
     expect(requestFingerprint('PUT', '/x', { a: 1 })).not.toBe(a);
     expect(requestFingerprint('POST', '/y', { a: 1 })).not.toBe(a);
     expect(requestFingerprint('POST', '/x', { a: 2 })).not.toBe(a);
+  });
+  it('fingerprint includes header values when provided', () => {
+    const a = requestFingerprint('POST', '/x', { a: 1 }, ['digest-aaa']);
+    const b = requestFingerprint('POST', '/x', { a: 1 }, ['digest-bbb']);
+    const c = requestFingerprint('POST', '/x', { a: 1 });
+    expect(a).not.toBe(b);
+    expect(a).not.toBe(c);
+  });
+});
+
+describe('MemoryKeyValueStore compareAndDelete / compareAndSet', () => {
+  let store: MemoryKeyValueStore;
+
+  beforeEach(() => {
+    store = new MemoryKeyValueStore();
+  });
+
+  it('compareAndDelete deletes when value matches', async () => {
+    await store.set('k', 'v1');
+    expect(await store.compareAndDelete('k', 'v1')).toBe(true);
+    expect(await store.get('k')).toBeNull();
+  });
+
+  it('compareAndDelete does not delete when value differs', async () => {
+    await store.set('k', 'v1');
+    expect(await store.compareAndDelete('k', 'v2')).toBe(false);
+    expect(await store.get('k')).toBe('v1');
+  });
+
+  it('compareAndDelete returns false for missing key', async () => {
+    expect(await store.compareAndDelete('missing', 'v1')).toBe(false);
+  });
+
+  it('compareAndSet updates when value matches', async () => {
+    await store.set('k', 'v1', { ttlSeconds: 100 });
+    expect(await store.compareAndSet('k', 'v1', 'v2', { ttlSeconds: 200 })).toBe(true);
+    expect(await store.get('k')).toBe('v2');
+    const ttl = await store.ttl('k');
+    expect(ttl).toBeGreaterThan(190);
+  });
+
+  it('compareAndSet does not update when value differs', async () => {
+    await store.set('k', 'v1');
+    expect(await store.compareAndSet('k', 'wrong', 'v2')).toBe(false);
+    expect(await store.get('k')).toBe('v1');
+  });
+
+  it('compareAndSet returns false for missing key', async () => {
+    expect(await store.compareAndSet('missing', 'v1', 'v2')).toBe(false);
   });
 });
