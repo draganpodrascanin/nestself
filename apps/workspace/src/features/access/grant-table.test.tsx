@@ -69,4 +69,9 @@ describe('GrantTable status', () => {
     render(table([grant('g_later', '2026-10-25T00:00:00.000Z')]));
     expect(within(screen.getAllByRole('row')[1]!).getByText('Scheduled')).toBeInTheDocument();
   });
+
+  it('marks each row with its grant id so a journey can find the grant it created', () => {
+    render(table([grant('g_tagged', '2026-01-01T00:00:00.000Z')]));
+    expect(screen.getAllByRole('row')[1]).toHaveAttribute('data-grant-id', 'g_tagged');
+  });
 });

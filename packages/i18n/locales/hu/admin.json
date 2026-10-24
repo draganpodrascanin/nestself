@@ -210,7 +210,7 @@
       "title": "Tulajdonjog átruházása",
       "description": "Válaszd ki azt az aktív tagot, aki ennek a szervezetnek a tulajdonosa lesz.",
       "member": "Új tulajdonos",
-      "currentOwner": "{{name}} az átruházás befejeztével elveszíti a tulajdonosi jogait. Az ezekből delegált jogosultságok az új tulajdonoshoz kerülnek.",
+      "currentOwner": "{{name}} az átruházás befejeztével elveszíti a tulajdonosi jogait. A tulajdonosi jogosultságából delegált jogosultságok az új tulajdonoshoz kerülnek.",
       "noOwner": "Ennek a szervezetnek még nincs tulajdonosa. A kiválasztott tag lesz az első tulajdonosa.",
       "submit": "Tulajdonjog átruházása",
       "cancel": "Mégse",

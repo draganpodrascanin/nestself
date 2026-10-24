@@ -22,9 +22,9 @@
  *
  * Re-runs: the API accepts duplicate delegations, so every run adds one more
  * delegated grant for Stefan; the assertions only require at least one such
- * row. The team_manager grant for Ana is revoked in the same run, so the
- * number of active ones is back where it started; revoked rows accumulate,
- * and the assertions count them relative to the start of the run.
+ * row. The team_manager grant for Ana is found by the id in the create
+ * response and revoked in the same run; revoked rows accumulate, and the
+ * assertions count them relative to the start of the run.
  *
  * Labels come from packages/i18n/locales/en/auth.json and workspace.json
  * (`access`).
@@ -53,7 +53,6 @@ async function signIn(page: Page) {
   await expect(page).not.toHaveURL(/\/sign-in/, { timeout: 15_000 });
 }
 
-/** Picks a member in the effective-access preview and returns the panel. */
 /** Opens a select inside a dialog and picks an option (the popup is portalled). */
 async function pick(page: Page, scope: Locator, label: string, option: string) {
   const combobox = scope.getByRole('combobox', { name: label });
@@ -62,6 +61,7 @@ async function pick(page: Page, scope: Locator, label: string, option: string) {
   await expect(combobox).toHaveText(option);
 }
 
+/** Picks a member in the effective-access preview and returns the panel. */
 async function previewFor(page: Page, memberName: string) {
   const panel = page.getByRole('region', { name: 'Effective access' });
   await panel.getByRole('combobox', { name: 'Member' }).click();
@@ -128,15 +128,10 @@ test.describe('Workspace HR grant administration', () => {
     await expect(stefanPanel.getByText('people.invite', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Owner-driven assignment: team_manager for Ana on one org unit, with the
-    // spending ceiling the template requires.
-    const revokeAnaManager = page.getByRole('button', { name: `Revoke Team manager from ${EMPLOYEE_NAME}` });
-    const revokedAnaManagerRows = table
-      .getByRole('row')
-      .filter({ hasText: 'Team manager' })
-      .filter({ hasText: EMPLOYEE_NAME })
-      .filter({ hasText: 'Revoked' });
-    const activeBefore = await revokeAnaManager.count();
-    const revokedBefore = await revokedAnaManagerRows.count();
+    // spending ceiling the template requires. The grant id comes from the
+    // create response, so the run revokes exactly the grant it created.
+    const anaManagerRows = table.getByRole('row').filter({ hasText: 'Team manager' }).filter({ hasText: EMPLOYEE_NAME });
+    const revokedBefore = await anaManagerRows.filter({ hasText: 'Revoked' }).count();
 
     await page.getByRole('button', { name: 'Assign template' }).click();
     const assign = page.getByRole('dialog', { name: 'Assign a permission template' });
@@ -146,14 +141,23 @@ test.describe('Workspace HR grant administration', () => {
     await pick(page, assign, 'Org unit', ORG_UNIT_NAME);
     await assign.getByLabel('Amount').fill('500');
     await assign.getByLabel('Currency').fill('EUR');
+    const created = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && /\/api\/orgs\/[^/]+\/grants$/.test(new URL(res.url()).pathname),
+    );
     await assign.getByRole('button', { name: 'Assign', exact: true }).click();
+    const createdResponse = await created;
+    expect(createdResponse.status()).toBe(201);
+    const { id: createdId } = (await createdResponse.json()) as { id: string };
 
     await expect(page.getByText('Template assigned.')).toBeVisible({ timeout: 10_000 });
     await expect(assign).toBeHidden();
-    await expect(revokeAnaManager).toHaveCount(activeBefore + 1, { timeout: 10_000 });
+    const createdRow = table.locator(`tr[data-grant-id="${createdId}"]`);
+    await expect(createdRow).toContainText('Team manager');
+    await expect(createdRow).toContainText(EMPLOYEE_NAME);
+    await expect(createdRow).toContainText('Active');
 
-    // Revoke it again with a reason; the row stays, marked Revoked.
-    await revokeAnaManager.first().click();
+    // Revoke that grant with a reason; the row stays, marked Revoked.
+    await createdRow.getByRole('button', { name: `Revoke Team manager from ${EMPLOYEE_NAME}` }).click();
     const revoke = page.getByRole('alertdialog', { name: 'Revoke this grant?' });
     await expect(revoke).toBeVisible();
     await revoke.getByLabel('Reason').fill('End-to-end run clean-up');
@@ -161,7 +165,8 @@ test.describe('Workspace HR grant administration', () => {
 
     await expect(page.getByText('Grant revoked.')).toBeVisible({ timeout: 10_000 });
     await expect(revoke).toBeHidden();
-    await expect(revokeAnaManager).toHaveCount(activeBefore, { timeout: 10_000 });
-    await expect(revokedAnaManagerRows).toHaveCount(revokedBefore + 1);
+    await expect(createdRow).toContainText('Revoked', { timeout: 10_000 });
+    await expect(createdRow.getByRole('button', { name: /^Revoke/ })).toHaveCount(0);
+    await expect(anaManagerRows.filter({ hasText: 'Revoked' })).toHaveCount(revokedBefore + 1);
   });
 });

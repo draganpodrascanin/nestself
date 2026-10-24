@@ -591,6 +591,25 @@ describe('OrgAccessScreen: transfer ownership', () => {
     expect(await screen.findByText(t('admin:access.transfer.success'))).toBeInTheDocument();
   });
 
+  it('names the new owner after a transfer, from the refetched grants', async () => {
+    const user = userEvent.setup();
+    const afterTransfer: GrantResponse[] = [
+      ...GRANTS.map((g) => (g.id === 'g_owner' ? { ...g, revokedAt: '2026-10-25T00:00:00.000Z' } : g)),
+      grant({ id: 'g_owner_new', subjectUserId: 'user_stefan', templateKey: 'employer_owner' }),
+    ];
+    const listGrants = vi.fn().mockResolvedValueOnce({ items: GRANTS }).mockResolvedValue({ items: afterTransfer });
+    renderOrg({ opsApi: makeOpsApi({ listGrants }) });
+    await submitTransfer(user, await openTransfer(user));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: TITLE() })).not.toBeInTheDocument());
+    await waitFor(() => expect(listGrants).toHaveBeenCalledTimes(2));
+
+    const dialog = await openTransfer(user);
+    expect(within(dialog).getByText(t('admin:access.transfer.currentOwner', { name: 'Stefan Marković' }))).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: t('admin:access.transfer.member') }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Ivana Jovanović', 'Ana Nikolić']);
+  });
+
   it.each([
     ['forbidden', 403, 'forbidden'],
     ['subject_not_member', 409, 'subjectNotMember'],

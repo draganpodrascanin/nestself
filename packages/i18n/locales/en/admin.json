@@ -210,7 +210,7 @@
       "title": "Transfer ownership",
       "description": "Choose the active member who becomes the owner of this organisation.",
       "member": "New owner",
-      "currentOwner": "{{name}} loses owner rights as soon as the transfer completes. Grants delegated from them move to the new owner.",
+      "currentOwner": "{{name}} loses owner rights as soon as the transfer completes. Grants delegated from their owner grant move to the new owner.",
       "noOwner": "This organisation has no owner yet. The member you choose becomes its first owner.",
       "submit": "Transfer ownership",
       "cancel": "Cancel",

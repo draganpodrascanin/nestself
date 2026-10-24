@@ -229,7 +229,7 @@
       "title": "Prenos vlasništva",
       "description": "Izaberi aktivnog člana koji postaje vlasnik organizacije.",
       "member": "Novi vlasnik",
-      "confirmation": "Gubiš vlasnička prava čim se prenos završi. Dozvole koje si delegirao iz njih prelaze na novog vlasnika.",
+      "confirmation": "Vlasnička prava gubiš čim se prenos završi. Dozvole delegirane iz tvoje vlasničke dozvole prelaze na novog vlasnika.",
       "submit": "Prenesi vlasništvo",
       "cancel": "Otkaži",
       "success": "Vlasništvo je preneto."

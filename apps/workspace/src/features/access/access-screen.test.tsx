@@ -707,19 +707,50 @@ describe('TransferOwnershipDialog', () => {
     expect(adminApi.transferOwnership).not.toHaveBeenCalled();
   });
 
-  it('transfers, refetches the grants, refreshes the principal and closes', async () => {
+  it('transfers, refetches the grants, refreshes the principal and drops the owner-only controls', async () => {
     const user = userEvent.setup();
-    const { adminApi, auth } = renderScreen();
-    const dialog = await openTransfer(user);
-    await waitFor(() => expect(adminApi.listGrants).toHaveBeenCalledTimes(1));
+    const afterTransfer: GrantResponse[] = [
+      ...GRANTS.map((g) => (g.id === 'g_owner' ? { ...g, revokedAt: '2026-10-25T00:00:00.000Z' } : g)),
+      grant({ id: 'g_owner_new', subjectUserId: 'user_stefan', templateKey: 'employer_owner' }),
+    ];
+    const listGrants = vi
+      .fn()
+      .mockResolvedValueOnce({ items: GRANTS })
+      .mockResolvedValue({ items: afterTransfer });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const adminApi = makeAdminApi({ listGrants });
+    // refreshPrincipal swaps in the actions the caller keeps without the owner grant.
+    let current: AuthContextValue;
+    const ui = () => (
+      <QueryClientProvider client={queryClient}>
+        <I18nextProvider i18n={testI18n}>
+          <ToastProvider labels={{ dismiss: 'Dismiss' }}>
+            <AuthContext value={current}>
+              <AccessScreen adminApi={adminApi} sampleMode={false} />
+            </AuthContext>
+          </ToastProvider>
+        </I18nextProvider>
+      </QueryClientProvider>
+    );
+    const refreshPrincipal = vi.fn(async () => {
+      current = { ...current, effectiveActions: [...SAMPLE_PRINCIPALS.hr_admin.effectiveActions, 'access.preview'].filter((a) => a !== 'access.grant' && a !== 'access.revoke') };
+      result.rerender(ui());
+    });
+    current = makeAuth({ refreshPrincipal });
+    const result = render(ui());
 
+    expect(await screen.findByRole('button', { name: t('workspace:access.assign.open') })).toBeInTheDocument();
+    const dialog = await openTransfer(user);
     await submitTransfer(user, dialog);
 
     await waitFor(() => expect(adminApi.transferOwnership).toHaveBeenCalledWith(ORG_ID, { newOwnerUserId: 'user_stefan' }));
-    await waitFor(() => expect(adminApi.listGrants).toHaveBeenCalledTimes(2));
-    expect(auth.refreshPrincipal).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(listGrants).toHaveBeenCalledTimes(2));
+    expect(refreshPrincipal).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: TRANSFER_TITLE() })).not.toBeInTheDocument());
     expect(await screen.findByText(t('workspace:access.transfer.success'))).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: TRANSFER_OPEN() })).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: t('workspace:access.assign.open') })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Revoke/ })).not.toBeInTheDocument();
   });
 
   it.each([

@@ -229,7 +229,7 @@
       "title": "Tulajdonjog átruházása",
       "description": "Válaszd ki azt az aktív tagot, aki a szervezet tulajdonosa lesz.",
       "member": "Új tulajdonos",
-      "confirmation": "Az átruházás befejeztével elveszíted a tulajdonosi jogaidat. Az ezekből általad delegált jogosultságok az új tulajdonoshoz kerülnek.",
+      "confirmation": "Az átruházás befejeztével elveszíted a tulajdonosi jogaidat. A tulajdonosi jogosultságodból delegált jogosultságok az új tulajdonoshoz kerülnek.",
       "submit": "Tulajdonjog átruházása",
       "cancel": "Mégse",
       "success": "A tulajdonjog átruházva."

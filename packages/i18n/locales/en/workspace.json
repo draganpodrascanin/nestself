@@ -229,7 +229,7 @@
       "title": "Transfer ownership",
       "description": "Choose the active member who becomes the owner of the organization.",
       "member": "New owner",
-      "confirmation": "You lose your owner rights as soon as the transfer completes. Grants you delegated from them move to the new owner.",
+      "confirmation": "You lose your owner rights as soon as the transfer completes. Grants you delegated from your owner grant move to the new owner.",
       "submit": "Transfer ownership",
       "cancel": "Cancel",
       "success": "Ownership transferred."
