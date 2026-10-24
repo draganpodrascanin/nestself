@@ -30,6 +30,7 @@ import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
 import { MediaModule } from './media/media.module.js';
 import { CmsModule } from './cms/cms.module.js';
+import { LibraryModule } from './library/library.module.js';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { CmsModule } from './cms/cms.module.js';
     WsModule,
     MediaModule.register(),
     CmsModule,
+    LibraryModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },
