@@ -57,9 +57,18 @@ Same as `2026-10-24-auth-phase-2.md`: no installs; every route `@Authorize`; eve
 - [ ] Step 2: retry tests (status 0 → retry, 404 → no retry, 500 → retry up to 3) → implement → GREEN.
 - [ ] Step 3: commit `fix(test): per-worktree test database names` and `fix(web): retry network failures, not 4xx`.
 
-### Task 4: Docs and PR
+### Task 4: Screenshots, docs and PR
 
-- [ ] `docs/auth/implementation.md` §11 (ownership model, transfer routes), §21 (remove the owner decision; note the strategy amendment), `docs/tasks/auth/phase-2-readiness.md` §4 (decision taken), `docs/auth/quick-guide.md`, PDFs rebuilt; `CLAUDE.md` one line ("one employer_owner per organization; transfer via the API").
-- [ ] `pnpm verify` with the DB suites; `pnpm e2e:auth`.
-- [ ] Commit `docs(auth): organization ownership model`.
+**User requirement (2026-10-25):** every auth capability must have real frontend screens, and the PDF documentation must carry screenshots of them.
+
+**Files:**
+- Create: `docs/auth/pdf/capture-screenshots.mjs` (Playwright, Chromium; starts nothing itself: it expects the stub stack from `playwright.auth.config.ts` to be running, or is invoked as a Playwright project `screenshots` in that config with its own `testDir e2e/screenshots`); writes PNGs (1280×800, light theme, `deviceScaleFactor: 1`) into `docs/auth/screenshots/`: `workspace-sign-in-identifier.png`, `workspace-sign-in-code.png`, `admin-sign-in-password.png`, `admin-totp-enrol.png`, `step-up-dialog.png` (force it by ageing the session through the API test hook or by calling the dialog's story in Storybook if simpler — prefer a real screen), `workspace-access.png`, `workspace-assign-template.png`, `workspace-transfer-ownership.png`, `workspace-effective-access.png`, `admin-org-access.png`, `admin-platform-access.png`, `admin-user-access-lookup.png`; sample mode is acceptable for screens whose API path needs grants nobody holds, but prefer `VITE_DATA_SOURCE=api` against the stub API with the seeded people (Ivana as owner)
+- Modify: `docs/auth/pdf/build.mjs` so relative Markdown images resolve to `file://` paths of the source directory (verify it today; fix if not), `package.json` root script `docs:auth:screenshots` and `docs:auth:pdf`
+- Modify: `docs/auth/implementation.md` (embed the screenshots in §6 sign-in, §8 step-up, §11 grants/ownership, each with a one-line caption) and `docs/auth/quick-guide.md` (sign-in and access screens); `docs/auth/implementation.md` §11 (ownership model, transfer routes), §21 (owner decision resolved; strategy amendment), `docs/tasks/auth/phase-2-readiness.md` §4, `CLAUDE.md` one line ("one employer_owner per organization; transfer via the API"); rebuild both PDFs and check the images render in them (open the PDF page count / grep the PDF for `/Image`)
+- `e2e/README.md`: how to regenerate screenshots
+
+- [ ] Capture script + builder fix; screenshots committed (PNG, under 300 KB each; no real names other than the fictional sample people).
+- [ ] Docs edits; `pnpm verify` with the DB suites; `pnpm e2e:auth`.
+- [ ] Commit `docs(auth): organization ownership model and screenshots in the guides`.
 - [ ] Push `feat/auth-foundation` and open the PR against `main` with the phase 2 summary.
+
