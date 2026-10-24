@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./schema": "./src/schema/index.ts",
+    "./schema/node": "./src/schema/approval-hash-node.ts",
     "./editor": "./src/editor/index.ts",
     "./render": "./src/render/index.ts",
     "./search": "./src/search/index.ts"

@@ -1,1 +1,26 @@
-export { react as default } from '@nestself/eslint-config/react';
+import { react } from '@nestself/eslint-config/react';
+
+/** @type {import('eslint').Linter.Config[]} */
+export default [
+  ...react,
+  // Guard: src/schema/** and src/search/** must not import React or React-
+  // dependent packages. The schema subpath is imported by the API (Node.js)
+  // and must stay free of browser/React dependencies (C-04).
+  {
+    name: 'nestself/content-schema-no-react',
+    files: ['src/schema/**/*.ts', 'src/schema/**/*.tsx', 'src/search/**/*.ts', 'src/search/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'react', message: 'Schema and search subpaths must not import React (C-04).' },
+            { name: 'react-dom', message: 'Schema and search subpaths must not import react-dom (C-04).' },
+            { name: '@tiptap/react', message: 'Schema and search subpaths must not import @tiptap/react (C-04).' },
+            { name: '@nestself/ui', message: 'Schema and search subpaths must not import @nestself/ui (C-04).' },
+          ],
+        },
+      ],
+    },
+  },
+];
