@@ -62,10 +62,12 @@ describe('SiteHeader', () => {
 });
 
 describe('SiteHeader motion', () => {
+  const COLLAPSED = '@max-[1000px]:hidden';
+
   it('collapsed navigation is out of the layout, the tab order and the accessibility tree', () => {
     render(<SiteHeader {...defaultProps} />);
     const row = document.getElementById('site-nav')!.parentElement!;
-    expect(row.style.display).toBe('none');
+    expect(row.className).toContain(COLLAPSED);
     expect(row.style.visibility).toBe('hidden');
   });
 
@@ -73,12 +75,12 @@ describe('SiteHeader motion', () => {
     const user = userEvent.setup();
     render(<SiteHeader {...defaultProps} />);
     const row = document.getElementById('site-nav')!.parentElement!;
-    const toggle = screen.getByRole('button', { name: 'Open menu' });
-    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    expect(row.className).not.toContain(COLLAPSED);
     await waitFor(() => expect(row.style.visibility).toBe('visible'));
-    expect(row.style.display).toBe('block');
     await user.click(screen.getByRole('button', { name: 'Close menu' }));
-    await waitFor(() => expect(row.style.display).toBe('none'));
-    expect(row.style.visibility).toBe('hidden');
+    expect(row.className, 'stays in the layout while the collapse plays').not.toContain(COLLAPSED);
+    await waitFor(() => expect(row.className).toContain(COLLAPSED));
+    await waitFor(() => expect(row.style.visibility).toBe('hidden'));
   });
 });

@@ -43,6 +43,8 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/auth-results/
 e2e/auth-report/
+e2e/motion-results/
+e2e/motion-report/
 e2e/.auth-state/
 
 # design deliverables kept out of git (the extracted package lives in docs/design-handoff)

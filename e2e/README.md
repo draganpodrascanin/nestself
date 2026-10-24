@@ -135,6 +135,22 @@ e2e/auth/
 
 Reports and results are written to `e2e/auth-report/` and `e2e/auth-results/` (both git-ignored).
 
+## Motion suite (`e2e/motion/`)
+
+Checks that everything which pops out, slides or expands is animated (the Motion rule in `CLAUDE.md`). It runs in Chromium against the `@nestself/ui` Storybook on port 6106, separate from `pnpm e2e`, which forces reduced motion and disables animations for stable screenshots.
+
+```bash
+pnpm e2e:motion
+```
+
+`recordFrames()` in `motion-helpers.ts` samples the element on every animation frame while the test opens or closes it. The specs assert:
+
+- **popouts.motion.ts**: dialog, alert dialog, bottom sheet, left and right drawers, menu, select and toast enter and exit through the Web Animations API on `opacity` / `transform` only, with token durations (120 / 200 / 280 ms) and `cubic-bezier(0.2, 0, 0, 1)`; entry and exit both show in-between frames; opacity never flickers; the popup stays visible while it exits and then leaves; scrims fade both ways; a menu closed mid-entry turns around from where it was.
+- **disclosures.motion.ts**: accordion panels transition the measured height; the tabs indicator slides and lands on the tab; the compact site navigation expands frame by frame, collapses out of the layout, and leaves the desktop navigation alone.
+- **reduced.motion.ts**: with `prefers-reduced-motion: reduce`, popouts only fade (at most 50 ms, no transform) and accordion panels open instantly.
+
+When you add a component that moves, add its story and a case to the matching spec.
+
 ## Notes
 
 - Base page entries are Serbian Latin at unprefixed URLs (`/`, `/plans`); `-en`, `-hu` and `-sr-cyrl` are the prefixed locale variants.

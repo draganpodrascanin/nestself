@@ -37,3 +37,31 @@ export const Open: StoryObj = {
     </Sheet>
   ),
 };
+
+/** Drawer from the inline start edge: same Sheet, `side="left"`. */
+export const DrawerLeft: StoryObj = {
+  render: () => (
+    <Sheet>
+      <SheetTrigger>
+        <button className="rounded-control border border-border-control px-4 py-2">Open left drawer</button>
+      </SheetTrigger>
+      <SheetContent side="left" title="Filters" description="Narrow the list without leaving the page.">
+        <p>Drawer body content goes here.</p>
+      </SheetContent>
+    </Sheet>
+  ),
+};
+
+/** Drawer from the inline end edge: same Sheet, `side="right"`. */
+export const DrawerRight: StoryObj = {
+  render: () => (
+    <Sheet>
+      <SheetTrigger>
+        <button className="rounded-control border border-border-control px-4 py-2">Open right drawer</button>
+      </SheetTrigger>
+      <SheetContent side="right" title="Details" description="Secondary details slide in from the edge.">
+        <p>Drawer body content goes here.</p>
+      </SheetContent>
+    </Sheet>
+  ),
+};

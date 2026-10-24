@@ -39,6 +39,8 @@ export function SiteHeader({
   className,
 }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
+  /** True once the collapse has finished; the row then leaves the layout. */
+  const [collapsed, setCollapsed] = useState(true);
   const navId = 'site-nav';
   const navMotion = useMotionPreset('disclosure');
 
@@ -63,7 +65,10 @@ export function SiteHeader({
           type="button"
           aria-expanded={open}
           aria-controls={navId}
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={() => {
+            setCollapsed(false);
+            setOpen((prev) => !prev);
+          }}
           className={cn(
             'min-h-11 min-w-11 pointer-coarse:min-h-12 pointer-coarse:min-w-12 hidden items-center justify-center rounded-control @max-[1000px]:inline-flex',
             'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
@@ -76,23 +81,23 @@ export function SiteHeader({
 
       {/*
         Below 1000 px the wrapper is the collapsible row that animates open and
-        closed, and ends `display: none` so a closed menu adds no row gap. From
-        1001 px it is `display: contents` (important, so it beats the inline
-        style), and its height, opacity and visibility never reach the inline
-        navigation; the nav re-asserts `visible` because visibility inherits.
+        closed; once collapsed it is `display: none`, so a closed menu adds no
+        row gap. That class is lifted before the row expands, so Motion measures
+        the real `auto` height. From 1001 px the wrapper is `display: contents`:
+        its height, opacity and visibility never reach the inline navigation
+        (the nav re-asserts `visible` because visibility inherits).
       */}
       <MotionFeatures>
         <m.div
           initial={false}
-          animate={
-            open
-              ? { ...navMotion.animate, display: 'block' }
-              : {
-                  ...navMotion.exit,
-                  transitionEnd: { ...navMotion.exit.transitionEnd, display: 'none' },
-                }
-          }
-          className="overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1001px]:contents!"
+          animate={open ? navMotion.animate : navMotion.exit}
+          onAnimationComplete={() => {
+            if (!open) setCollapsed(true);
+          }}
+          className={cn(
+            'overflow-hidden @max-[1000px]:flex-[0_0_100%] @min-[1001px]:contents',
+            collapsed && '@max-[1000px]:hidden',
+          )}
         >
           <nav
             id={navId}
