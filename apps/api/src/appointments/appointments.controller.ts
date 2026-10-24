@@ -7,10 +7,19 @@
  * POST /orgs/:orgId/appointments     bookings.coordinate  operationsOrgResource('appointment')   10/60 s
  * POST /appointments/:id/cancel      appointment.cancel   appointmentResource                    10/60 s
  *
+ * Follow-ups (T-CW-1.9, D-CW-37, `FollowUpService`), each answering the
+ * appointment it changed or created:
+ *
+ * POST /appointments/:id/follow-up     appointment.propose  appointmentResource  10/60 s  expert proposes (201)
+ * POST /appointments/:id/confirm       consultation.join    appointmentResource  10/60 s  employee confirms
+ * POST /appointments/:id/suggest-times consultation.join    appointmentResource  10/60 s  employee suggests 1 to 3 windows
+ * POST /appointments/:id/schedule      appointment.propose  appointmentResource  10/60 s  expert picks a suggested window
+ * POST /appointments/:id/decline       consultation.join    appointmentResource  10/60 s  employee declines
+ *
  * Creation belongs to NestSelf operations in the operations context
  * (`client_operations` through its CLIENT assignment): no template reaches
  * `appointment.propose` on an organization resource from an organization
- * context. Experts propose follow-ups through T-CW-1.9's route.
+ * context. Experts propose follow-ups through the follow-up route.
  *
  * The list has no `:id`, so `appointmentResource` cannot resolve it, and the
  * rows it returns span organizations: the service authorizes every row with
@@ -26,11 +35,19 @@ import { Throttle } from '@nestjs/throttler';
 import {
   ACTIONS,
   AppointmentCreateRequestSchema,
+  AppointmentFollowUpRequestSchema,
   AppointmentListQuerySchema,
+  AppointmentSuggestTimesRequestSchema,
+  FollowUpConfirmRequestSchema,
+  FollowUpDeclineRequestSchema,
+  FollowUpScheduleRequestSchema,
   type AppointmentCreateRequest,
+  type AppointmentFollowUpRequest,
   type AppointmentListQuery,
   type AppointmentListResponse,
   type AppointmentResponse,
+  type AppointmentSuggestTimesRequest,
+  type FollowUpScheduleRequest,
   type Principal,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
@@ -43,11 +60,16 @@ import { appointmentResource } from './appointment.resolver.js';
 import { AppointmentNonDisclosureFilter } from './appointment-non-disclosure.filter.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AppointmentsService } from './appointments.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { FollowUpService } from './follow-up.service.js';
 
 @Controller()
 @UseFilters(AppointmentNonDisclosureFilter)
 export class AppointmentsController {
-  constructor(private readonly appointments: AppointmentsService) {}
+  constructor(
+    private readonly appointments: AppointmentsService,
+    private readonly followUps: FollowUpService,
+  ) {}
 
   @Get('appointments')
   @Authenticated()
@@ -82,5 +104,67 @@ export class AppointmentsController {
   @Authorize(ACTIONS['appointment.cancel'], appointmentResource)
   cancel(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<AppointmentResponse> {
     return this.appointments.cancel(id, principal);
+  }
+
+  // ── Follow-ups (T-CW-1.9, D-CW-37) ──────────────────────────────────────
+
+  @Post('appointments/:id/follow-up')
+  @HttpCode(201)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['appointment.propose'], appointmentResource)
+  proposeFollowUp(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(AppointmentFollowUpRequestSchema)) body: AppointmentFollowUpRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentResponse> {
+    return this.followUps.propose(id, body, principal);
+  }
+
+  @Post('appointments/:id/confirm')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['consultation.join'], appointmentResource)
+  confirmFollowUp(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(FollowUpConfirmRequestSchema)) _body: unknown,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentResponse> {
+    return this.followUps.confirm(id, principal);
+  }
+
+  @Post('appointments/:id/suggest-times')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['consultation.join'], appointmentResource)
+  suggestTimes(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(AppointmentSuggestTimesRequestSchema)) body: AppointmentSuggestTimesRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentResponse> {
+    return this.followUps.suggestTimes(id, body, principal);
+  }
+
+  @Post('appointments/:id/schedule')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['appointment.propose'], appointmentResource)
+  scheduleFollowUp(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(FollowUpScheduleRequestSchema)) body: FollowUpScheduleRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentResponse> {
+    return this.followUps.schedule(id, body, principal);
+  }
+
+  @Post('appointments/:id/decline')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['consultation.join'], appointmentResource)
+  declineFollowUp(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(FollowUpDeclineRequestSchema)) _body: unknown,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentResponse> {
+    return this.followUps.decline(id, principal);
   }
 }

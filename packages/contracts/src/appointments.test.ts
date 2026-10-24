@@ -17,7 +17,9 @@ import {
   AppointmentSchema,
   AppointmentStatusSchema,
   AppointmentSuggestTimesRequestSchema,
+  AppointmentRemindPayloadSchema,
   FOLLOW_UP_APPROVAL_POLICIES,
+  FOLLOW_UP_APPROVAL_POLICY_DEFAULT,
   FOLLOW_UP_DURATION_MAX_MINUTES,
   FOLLOW_UP_DURATION_MIN_MINUTES,
   FOLLOW_UP_MAX_SUGGESTED_WINDOWS,
@@ -28,8 +30,10 @@ import {
   FollowUpScheduleRequestSchema,
   FollowUpSuggestTimesRequestSchema,
   TimeZoneSchema,
+  USER_ROOM_EVENT_NAMES,
   canTransitionAppointment,
   isIanaTimeZone,
+  userRoomName,
   type AppointmentStatus,
 } from './appointments.ts';
 import * as appointmentsModule from './appointments.ts';
@@ -411,5 +415,86 @@ describe('AppointmentApprovalDecisionRequestSchema (CW-R-109)', () => {
     expect(issuePaths(AppointmentApprovalDecisionRequestSchema.safeParse({ safeReason: '   ' }))).toEqual(['safeReason']);
     const long = 'a'.repeat(APPROVAL_SAFE_REASON_MAX_LENGTH + 1);
     expect(issuePaths(AppointmentApprovalDecisionRequestSchema.safeParse({ safeReason: long }))).toEqual(['safeReason']);
+  });
+});
+
+describe('AppointmentResponseSchema suggested windows (CALL-37, T-CW-1.9)', () => {
+  const windows = [
+    { startsAt: '2026-11-20T09:00:00.000Z', endsAt: '2026-11-20T12:00:00.000Z' },
+    { startsAt: '2026-11-21T13:00:00.000Z', endsAt: '2026-11-21T15:00:00.000Z' },
+  ];
+
+  it('carries the employee’s suggested windows beside the seam, only when there are some', () => {
+    const proposed = { ...appointment, status: 'proposed', followUpOf: 'appt_0', suggestedWindows: windows };
+    expect(AppointmentResponseSchema.parse(proposed)).toEqual(proposed);
+    expect(AppointmentResponseSchema.parse(appointment)).not.toHaveProperty('suggestedWindows');
+    // The seam itself stays exact (D-CW-02).
+    expect(AppointmentSchema.parse(proposed)).not.toHaveProperty('suggestedWindows');
+  });
+
+  it('rejects more than three windows or a reversed window', () => {
+    const four = [...windows, ...windows];
+    expect(issuePaths(AppointmentResponseSchema.safeParse({ ...appointment, suggestedWindows: four }))).toEqual([
+      'suggestedWindows',
+    ]);
+    const reversed = [{ startsAt: windows[0]!.endsAt, endsAt: windows[0]!.startsAt }];
+    expect(issuePaths(AppointmentResponseSchema.safeParse({ ...appointment, suggestedWindows: reversed }))).toEqual([
+      'suggestedWindows.0.endsAt',
+    ]);
+  });
+});
+
+describe('Follow-up approval policy default (D-CW-37)', () => {
+  it('is automatic', () => {
+    expect(FOLLOW_UP_APPROVAL_POLICY_DEFAULT).toBe('automatic');
+    expect(FOLLOW_UP_APPROVAL_POLICIES).toContain(FOLLOW_UP_APPROVAL_POLICY_DEFAULT);
+  });
+});
+
+describe('User room (CALL-42, CALL-01 criterion 5)', () => {
+  it('names one room per user', () => {
+    expect(userRoomName('user_jovan')).toBe('user:user_jovan');
+  });
+
+  it('serves the follow-up proposal and the reminder', () => {
+    expect(USER_ROOM_EVENT_NAMES).toEqual(['appointment.follow_up.proposed', 'appointment.remind']);
+  });
+
+  it('`appointment.remind` carries ids and times only', () => {
+    const payload = { appointmentId: 'appt_1', startsAt: '2026-11-10T09:00:00.000Z', offsetMinutes: 60 };
+    expect(AppointmentRemindPayloadSchema.parse(payload)).toEqual(payload);
+    expect(AppointmentRemindPayloadSchema.safeParse({ ...payload, serviceCategory: 'psychological' }).success).toBe(false);
+    expect(issuePaths(AppointmentRemindPayloadSchema.safeParse({ ...payload, offsetMinutes: 0 }))).toEqual(['offsetMinutes']);
+    expect(issuePaths(AppointmentRemindPayloadSchema.safeParse({ ...payload, startsAt: 'tomorrow' }))).toEqual(['startsAt']);
+  });
+});
+
+describe('AppointmentResponseSchema participants (display only)', () => {
+  const people = { expert: { firstName: 'Milica' }, employee: { firstName: 'Jovan' } };
+
+  it('carries each participant’s first name beside the seam, and the expert’s optional photo and credentials', () => {
+    const withPeople = { ...appointment, ...people };
+    expect(AppointmentResponseSchema.parse(withPeople)).toEqual(withPeople);
+    const richer = {
+      ...appointment,
+      expert: { firstName: 'Milica', photoUrl: 'https://cdn.example/milica.jpg', credentials: 'Licensed psychologist' },
+      employee: { firstName: 'Jovan' },
+    };
+    expect(AppointmentResponseSchema.parse(richer)).toEqual(richer);
+    expect(AppointmentSchema.parse(withPeople)).not.toHaveProperty('expert');
+  });
+
+  it('never carries a surname or an address', () => {
+    expect(
+      AppointmentResponseSchema.safeParse({ ...appointment, ...people, employee: { firstName: 'Jovan', lastName: 'Petrović' } })
+        .success,
+    ).toBe(false);
+    expect(
+      AppointmentResponseSchema.safeParse({ ...appointment, ...people, expert: { firstName: 'Milica', email: 'm@example.com' } })
+        .success,
+    ).toBe(false);
+    expect(issuePaths(AppointmentResponseSchema.safeParse({ ...appointment, employee: { firstName: '' } }))).toEqual([
+      'employee.firstName',
+    ]);
   });
 });

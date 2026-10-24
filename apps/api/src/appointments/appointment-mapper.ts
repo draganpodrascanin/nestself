@@ -2,11 +2,37 @@
  * Appointment mappers: the API response (the contract seam, CALL-31), the
  * authorization resource and the list cursor.
  */
-import type { AppointmentResponse, Resource } from '@nestself/contracts';
+import type {
+  AppointmentEmployeeDisplay,
+  AppointmentExpertDisplay,
+  AppointmentResponse,
+  Resource,
+} from '@nestself/contracts';
 import type { AppointmentKey, AppointmentRecord } from './appointments.repository.js';
 
-/** Exactly the seam fields; nothing else leaves the module. */
-export function toAppointmentResponse(record: AppointmentRecord): AppointmentResponse {
+/** The participants as the response names them (`AppointmentsRepository.participantsOf`). */
+export interface AppointmentParticipants {
+  expert: AppointmentExpertDisplay;
+  employee: AppointmentEmployeeDisplay;
+}
+
+/**
+ * The first name inside a display name: its first word. `users` stores one
+ * display name, so this is the only part of it that leaves the API (never a
+ * surname). Null for a blank name.
+ */
+export function firstNameOf(displayName: string | null | undefined): string | null {
+  const first = displayName?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
+
+/**
+ * The seam fields, the participants' display names when given, and the
+ * employee's suggested windows when there are some (CALL-37); nothing else
+ * leaves the module (`proposedAt` and `respondedAt` stay inside).
+ */
+export function toAppointmentResponse(record: AppointmentRecord, participants?: AppointmentParticipants): AppointmentResponse {
+  const suggestedWindows = record.suggestedWindows?.length ? { suggestedWindows: record.suggestedWindows } : {};
   return {
     id: record.id,
     orgId: record.orgId,
@@ -19,6 +45,8 @@ export function toAppointmentResponse(record: AppointmentRecord): AppointmentRes
     timeZone: record.timeZone,
     fundingRef: record.fundingRef,
     followUpOf: record.followUpOf,
+    ...(participants ? { expert: participants.expert, employee: participants.employee } : {}),
+    ...suggestedWindows,
   };
 }
 

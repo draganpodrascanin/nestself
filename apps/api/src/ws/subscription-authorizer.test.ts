@@ -6,7 +6,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import type { GrantInput } from '@nestself/contracts';
-import { RoomAccessRegistry, type RoomTarget } from './room-access.registry.js';
+import { RoomAccessRegistry, userRoomTarget, type RoomTarget } from './room-access.registry.js';
 import { SubscriptionAuthorizer } from './subscription-authorizer.js';
 import { parseRoom, type ParsedRoom } from './ws-messages.js';
 
@@ -146,6 +146,24 @@ describe('SubscriptionAuthorizer', () => {
       expect(decision.allowed).toBe(false);
       expect(decision.allowed ? null : decision.reason).toEqual(expect.any(String));
       expect(decision.allowed ? null : decision.reason).not.toBe('not_found');
+    });
+
+    it('lets a user subscribe to their own user room without an engine decision (CALL-42)', async () => {
+      const loader = contextLoaderWith([]);
+      const authorizer = new SubscriptionAuthorizer(loader as never, new RoomAccessRegistry());
+      const decision = await authorizer.authorizeRoom(PRINCIPAL, room('user:user_jovan'));
+      expect(decision).toEqual({ allowed: true, target: userRoomTarget('user_jovan') });
+      expect(loader.build).not.toHaveBeenCalled();
+    });
+
+    it('answers not_found for anybody else’s user room, whatever their grants', async () => {
+      const loader = contextLoaderWith([grant(['consultation.join', 'preferences.manage'], 'platform')]);
+      const authorizer = new SubscriptionAuthorizer(loader as never, new RoomAccessRegistry());
+      expect(await authorizer.authorizeRoom(PRINCIPAL, room('user:user_milica'))).toEqual({
+        allowed: false,
+        reason: 'not_found',
+      });
+      expect(loader.build).not.toHaveBeenCalled();
     });
 
     it.each(['webinar:w1', 'webinar:w1:moderation', 'call:session_1'])(

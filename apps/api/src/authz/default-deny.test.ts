@@ -142,6 +142,12 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       get: 'consultation.join',
       create: 'bookings.coordinate',
       cancel: 'appointment.cancel',
+      // Follow-ups (T-CW-1.9, guidelines 7.1).
+      proposeFollowUp: 'appointment.propose',
+      confirmFollowUp: 'consultation.join',
+      suggestTimes: 'consultation.join',
+      scheduleFollowUp: 'appointment.propose',
+      declineFollowUp: 'consultation.join',
     });
   });
 

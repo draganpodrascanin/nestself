@@ -8,6 +8,8 @@
  *
  * - `org:{orgId}:programme`: `program.overview` on the organization; a denial
  *   carries the engine's reason (T-1.11).
+ * - `user:{userId}`: that user only, by identity, with no lookup and no
+ *   engine decision; anyone else gets `not_found` (T-CW-1.9, CALL-42).
  * - `call:`, `webinar:`, `webinar:...:moderation`: the module that owns the
  *   kind resolves the room (`RoomAccessRegistry`); no resolver answers
  *   `room_not_available`, a missing room, a principal with no place in it and
@@ -28,7 +30,7 @@ import type {
 } from '@nestself/contracts';
 import type { Socket } from 'socket.io';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { RoomAccessRegistry, type RoomTarget } from './room-access.registry.js';
+import { RoomAccessRegistry, userRoomTarget, type RoomTarget } from './room-access.registry.js';
 import { parseRoom, type ParsedRoom, type SubscribeDenialReason } from './ws-messages.js';
 
 export type RoomDecision =
@@ -65,6 +67,10 @@ export class SubscriptionAuthorizer {
       const target: RoomTarget = { action: 'program.overview', resource: { type: 'program', orgId: room.id } };
       const decision = await this.authorizeSubscription(principal, target.action, target.resource);
       return decision.allowed ? { allowed: true, target } : { allowed: false, reason: decision.denialReason ?? 'denied' };
+    }
+
+    if (room.kind === 'user') {
+      return room.id === principal.userId ? { allowed: true, target: userRoomTarget(room.id) } : NOT_FOUND;
     }
 
     const resolve = this.rooms.resolverFor(room.kind);

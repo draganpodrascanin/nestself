@@ -47,6 +47,8 @@ export type AppointmentApprovalStatus = z.infer<typeof AppointmentApprovalStatus
 export const FOLLOW_UP_APPROVAL_POLICIES = ['automatic', 'manager_approval'] as const;
 export const FollowUpApprovalPolicySchema = z.enum(FOLLOW_UP_APPROVAL_POLICIES);
 export type FollowUpApprovalPolicy = z.infer<typeof FollowUpApprovalPolicySchema>;
+/** Every organisation starts here (D-CW-37; the column default is `AUTOMATIC`). */
+export const FOLLOW_UP_APPROVAL_POLICY_DEFAULT: FollowUpApprovalPolicy = 'automatic';
 
 // ---------------------------------------------------------------------------
 // Status lifecycle (CALL-30)
@@ -114,6 +116,18 @@ function endsAfterStart(value: { startsAt: string; endsAt: string }): boolean {
 
 const endsAfterStartIssue = { path: ['endsAt'], message: 'endsAt must be after startsAt' };
 
+/**
+ * One time window: an employee's alternative for a proposed follow-up
+ * (CALL-37). Times only, never free text (D-CW-04, D-22).
+ */
+export const FollowUpTimeWindowSchema = z
+  .object({
+    startsAt: isoDateTime,
+    endsAt: isoDateTime,
+  })
+  .refine(endsAfterStart, endsAfterStartIssue);
+export type FollowUpTimeWindow = z.infer<typeof FollowUpTimeWindowSchema>;
+
 // ---------------------------------------------------------------------------
 // Appointment seam (D-CW-02, CALL-31)
 // ---------------------------------------------------------------------------
@@ -153,7 +167,37 @@ export const AppointmentSchema = z.object({
 });
 export type Appointment = z.infer<typeof AppointmentSchema>;
 
-export const AppointmentResponseSchema = AppointmentSchema;
+/**
+ * How the API names a participant to the other one and to operations: the
+ * first name only, never a surname or an address. The expert may also carry a
+ * photo and a credentials line once the expert record holds them.
+ */
+export const AppointmentEmployeeDisplaySchema = z.strictObject({
+  firstName: z.string().min(1).max(100),
+});
+export type AppointmentEmployeeDisplay = z.infer<typeof AppointmentEmployeeDisplaySchema>;
+
+export const AppointmentExpertDisplaySchema = AppointmentEmployeeDisplaySchema.extend({
+  photoUrl: z.string().url().optional(),
+  credentials: z.string().min(1).max(200).optional(),
+});
+export type AppointmentExpertDisplay = z.infer<typeof AppointmentExpertDisplaySchema>;
+
+/**
+ * An appointment as the API returns it: the seam, plus
+ * - the participants' display names (`expert`, `employee`), which the
+ *   appointment routes always fill; optional because other routes that
+ *   answer an appointment (the outcome) return the seam only;
+ * - the windows the employee suggested for a `proposed` follow-up (CALL-37),
+ *   present only when there are some, so the expert can pick one
+ *   (`POST /appointments/:id/schedule` takes its index).
+ * None of these is part of the seam.
+ */
+export const AppointmentResponseSchema = AppointmentSchema.extend({
+  expert: AppointmentExpertDisplaySchema.optional(),
+  employee: AppointmentEmployeeDisplaySchema.optional(),
+  suggestedWindows: z.array(FollowUpTimeWindowSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS).optional(),
+});
 export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>;
 
 /** Default page size of `GET /appointments`. */
@@ -241,14 +285,6 @@ export type FollowUpConfirmRequest = z.infer<typeof FollowUpConfirmRequestSchema
 export const FollowUpDeclineRequestSchema = z.strictObject({});
 export type FollowUpDeclineRequest = z.infer<typeof FollowUpDeclineRequestSchema>;
 
-export const FollowUpTimeWindowSchema = z
-  .object({
-    startsAt: isoDateTime,
-    endsAt: isoDateTime,
-  })
-  .refine(endsAfterStart, endsAfterStartIssue);
-export type FollowUpTimeWindow = z.infer<typeof FollowUpTimeWindowSchema>;
-
 /** `POST /appointments/:id/suggest-times` (employee): one to three windows. */
 export const AppointmentSuggestTimesRequestSchema = z.object({
   windows: z.array(FollowUpTimeWindowSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS),
@@ -282,3 +318,36 @@ export const AppointmentApprovalDecisionRequestSchema = z.object({
 export type AppointmentApprovalDecisionRequest = z.infer<
   typeof AppointmentApprovalDecisionRequestSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Socket.IO room `user:{userId}` (CALL-42, CALL-01 criterion 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * One user's own room: only that user may subscribe. It carries what must
+ * reach the user wherever they are in the app, not only on a call page: a
+ * follow-up proposal made after the employee left the post-call screen
+ * (`appointment.follow_up.proposed`, the same payload as on the call room,
+ * `FollowUpProposedPayloadSchema`) and the in-app reminder toast
+ * (`appointment.remind`).
+ */
+export function userRoomName(userId: string): string {
+  return `user:${userId}`;
+}
+
+export const USER_ROOM_EVENT_NAMES = ['appointment.follow_up.proposed', 'appointment.remind'] as const;
+export const UserRoomEventNameSchema = z.enum(USER_ROOM_EVENT_NAMES);
+export type UserRoomEventName = z.infer<typeof UserRoomEventNameSchema>;
+
+/**
+ * `appointment.remind` on `user:{userId}`: a reminder fired while the user is
+ * online (D-CW-26, guidelines 10.4). Ids and times only: no category, no
+ * other participant.
+ */
+export const AppointmentRemindPayloadSchema = z.strictObject({
+  appointmentId: idField,
+  startsAt: isoDateTime,
+  /** Minutes before `startsAt` this reminder belongs to (`REMINDER_OFFSETS_MINUTES`). */
+  offsetMinutes: z.number().int().positive(),
+});
+export type AppointmentRemindPayload = z.infer<typeof AppointmentRemindPayloadSchema>;

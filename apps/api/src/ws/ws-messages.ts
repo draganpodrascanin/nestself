@@ -9,9 +9,10 @@
  *   webinar:{webinarId}               event.register (served from T-CW-2.3)
  *   webinar:{webinarId}:moderation    event.moderate (served from T-CW-2.3)
  *   org:{orgId}:programme             program.overview on the organization (T-1.11)
+ *   user:{userId}                     that user only, by identity, no engine decision (T-CW-1.9)
  *
  * Events: every server-side emit is checked against `ROOM_EVENTS` (its room
- * kind and payload schema, from `@nestself/contracts`) by `RoomEmitter`
+ * kinds and payload schema, from `@nestself/contracts`) by `RoomEmitter`
  * before it is published, and again by `RoomEventRelay` before it reaches a
  * socket (`checkRoomEvent`, CW-R-36).
  *
@@ -19,9 +20,12 @@
  */
 import { z } from 'zod';
 import {
+  AppointmentRemindPayloadSchema,
   CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  type AppointmentRemindPayload,
   type CallRoomEventName,
   type CallRoomEventPayloads,
+  type UserRoomEventName,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -35,17 +39,21 @@ import {
  */
 const ROOM_ID = '[A-Za-z0-9][A-Za-z0-9_-]{0,127}';
 
-export const ROOM_KINDS = ['call', 'webinar', 'webinar_moderation', 'org_programme'] as const;
+export const ROOM_KINDS = ['call', 'webinar', 'webinar_moderation', 'org_programme', 'user'] as const;
 export type RoomKind = (typeof ROOM_KINDS)[number];
 
-/** Room kinds whose rooms a feature module resolves (`RoomAccessRegistry`). */
-export type ModuleRoomKind = Exclude<RoomKind, 'org_programme'>;
+/**
+ * Room kinds whose rooms a feature module resolves (`RoomAccessRegistry`).
+ * The org programme room is the engine's (T-1.11) and the user room is
+ * decided by identity (`SubscriptionAuthorizer`).
+ */
+export type ModuleRoomKind = Exclude<RoomKind, 'org_programme' | 'user'>;
 
 export interface ParsedRoom {
   kind: RoomKind;
   /** The full room name. */
   room: string;
-  /** The session, webinar or organization id inside the name. */
+  /** The session, webinar, organization or user id inside the name. */
   id: string;
 }
 
@@ -54,6 +62,7 @@ const ROOM_PATTERNS: readonly (readonly [RoomKind, RegExp])[] = [
   ['webinar', new RegExp(`^webinar:(${ROOM_ID})$`)],
   ['webinar_moderation', new RegExp(`^webinar:(${ROOM_ID}):moderation$`)],
   ['org_programme', new RegExp(`^org:(${ROOM_ID}):programme$`)],
+  ['user', new RegExp(`^user:(${ROOM_ID})$`)],
 ];
 
 /** The served room behind a name, or null for any other name. */
@@ -143,23 +152,29 @@ export type SubscribeDenialReason =
 // Server-side room events (CW-R-36)
 // ---------------------------------------------------------------------------
 
-export type RoomEventName = CallRoomEventName;
-export type RoomEventPayload<E extends RoomEventName> = CallRoomEventPayloads[E];
+export type RoomEventName = CallRoomEventName | UserRoomEventName;
+export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload };
+export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
 
 export interface RoomEventSpec {
-  /** The only room kind the event may be emitted to. */
-  roomKind: RoomKind;
+  /** The only room kinds the event may be emitted to. */
+  roomKinds: readonly RoomKind[];
   schema: z.ZodType;
 }
 
 function callRoomEvent(event: CallRoomEventName): RoomEventSpec {
-  return { roomKind: 'call', schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event] };
+  return { roomKinds: ['call'], schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event] };
 }
 
 /**
- * Each event the API emits, with its room kind and payload schema. The
+ * Each event the API emits, with its room kinds and payload schema. The
  * mapped type makes a missing event a compile error. Webinar events join
  * with T-CW-2.3.
+ *
+ * The user room (`user:{userId}`, T-CW-1.9) carries the follow-up proposal,
+ * with the call room's payload, so an employee who left the post-call screen
+ * still sees it (CALL-42), and the in-app reminder (`appointment.remind`,
+ * CALL-01 criterion 5). No other call event reaches it.
  */
 export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'call.participant.joined': callRoomEvent('call.participant.joined'),
@@ -167,22 +182,27 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'call.session.ended': callRoomEvent('call.session.ended'),
   'call.signal': callRoomEvent('call.signal'),
   'call.location.shared': callRoomEvent('call.location.shared'),
-  'appointment.follow_up.proposed': callRoomEvent('appointment.follow_up.proposed'),
+  'appointment.follow_up.proposed': {
+    roomKinds: ['call', 'user'],
+    schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.proposed'],
+  },
   'appointment.follow_up.confirmed': callRoomEvent('appointment.follow_up.confirmed'),
   'appointment.follow_up.declined': callRoomEvent('appointment.follow_up.declined'),
   'appointment.times_suggested': callRoomEvent('appointment.times_suggested'),
+  'appointment.remind': { roomKinds: ['user'], schema: AppointmentRemindPayloadSchema },
 };
 
 /**
  * The checked payload of `event` on `room`, or null when the event is not one
- * `ROOM_EVENTS` lists, the room is not of the event's kind or the payload
+ * `ROOM_EVENTS` lists, the room is not of one of the event's kinds or the payload
  * fails the event's strict schema. Run by `RoomEmitter` before it publishes
  * and by `RoomEventRelay` before it emits.
  */
 export function checkRoomEvent(room: string, event: string, payload: unknown): Record<string, unknown> | null {
   if (!Object.hasOwn(ROOM_EVENTS, event)) return null;
   const spec = ROOM_EVENTS[event as RoomEventName];
-  if (parseRoom(room)?.kind !== spec.roomKind) return null;
+  const kind = parseRoom(room)?.kind;
+  if (!kind || !spec.roomKinds.includes(kind)) return null;
   const parsed = spec.schema.safeParse(payload);
   return parsed.success ? (parsed.data as Record<string, unknown>) : null;
 }

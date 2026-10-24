@@ -53,6 +53,19 @@ describe('RoomEmitter', () => {
     ]);
   });
 
+  it('emitToUser publishes a user room event on that user’s room (T-CW-1.9)', () => {
+    const remind = { appointmentId: 'appt_1', startsAt: '2026-11-24T15:00:00.000Z', offsetMinutes: 60 };
+    expect(emitter.emitToUser('user_jovan', 'appointment.remind', remind)).toBe(true);
+    expect(published).toEqual([{ room: 'user:user_jovan', event: 'appointment.remind', payload: remind }]);
+  });
+
+  it('emitToUser drops a payload that fails its schema', () => {
+    const remind = { appointmentId: 'appt_1', startsAt: 'soon', offsetMinutes: 60 };
+    expect(emitter.emitToUser('user_jovan', 'appointment.remind', remind)).toBe(false);
+    expect(published).toEqual([]);
+    expect(errors).toHaveLength(1);
+  });
+
   it('needs no Socket.IO server, so the worker can emit', () => {
     expect(new RoomEmitter(store).emit('call:session_1', 'call.location.shared', { sessionId: 'session_1' })).toBe(true);
     expect(published).toHaveLength(1);

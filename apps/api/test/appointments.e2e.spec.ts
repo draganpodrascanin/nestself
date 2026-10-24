@@ -291,6 +291,9 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       timeZone: 'Europe/Belgrade',
       fundingRef: null,
       followUpOf: null,
+      // Display only: first names, never a surname or an address.
+      expert: { firstName: 'Milica' },
+      employee: { firstName: 'Jovan' },
     });
     confirmedId = body.id;
 
@@ -368,8 +371,17 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     for (const who of [jovan, milica]) {
       const res = await who.agent.get(`${LIST}/${confirmedId}`);
       expect(res.status).toBe(200);
-      expect(AppointmentResponseSchema.parse(res.body)).toMatchObject({ id: confirmedId, status: 'confirmed' });
+      expect(AppointmentResponseSchema.parse(res.body)).toMatchObject({
+        id: confirmedId,
+        status: 'confirmed',
+        expert: { firstName: 'Milica' },
+        employee: { firstName: 'Jovan' },
+      });
+      expect(JSON.stringify(res.body)).not.toMatch(/Risti|Petrovi|@example\.com/);
     }
+    // The list names the participants the same way.
+    const [listed] = (await listPage(jovan)).items;
+    expect(listed).toMatchObject({ expert: { firstName: 'Milica' }, employee: { firstName: 'Jovan' } });
 
     expectNotFound(await ana.agent.get(`${LIST}/${confirmedId}`));
     expectNotFound(await jovan.agent.get(`${LIST}/appt_missing`));

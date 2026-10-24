@@ -13,15 +13,28 @@
  *
  * The registry lives in `WsModule` so feature modules can import it without
  * `WsModule` importing them back.
+ *
+ * The user room (`user:{userId}`, T-CW-1.9) has no resolver: only that user
+ * may subscribe, an identity check `SubscriptionAuthorizer` makes itself
+ * before any lookup; {@link userRoomTarget} is what it records.
  */
 import { Injectable } from '@nestjs/common';
-import type { Action, Principal, Resource } from '@nestself/contracts';
+import { ACTIONS, type Action, type Principal, type Resource } from '@nestself/contracts';
 import type { ModuleRoomKind } from './ws-messages.js';
 
 /** What a room subscription is authorised against, derived on the server. */
 export interface RoomTarget {
   action: Action;
   resource: Resource;
+}
+
+/**
+ * What a `user:{userId}` subscription records: the subscriber's own user
+ * record. Never evaluated by the engine; the room is allowed to that user
+ * and to nobody else, whatever their grants.
+ */
+export function userRoomTarget(userId: string): RoomTarget {
+  return { action: ACTIONS['preferences.manage'], resource: { type: 'user', id: userId, ownerId: userId } };
 }
 
 /** Null when the room does not exist or the principal has no place in it; both read as `not_found`. */

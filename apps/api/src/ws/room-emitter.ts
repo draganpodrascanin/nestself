@@ -20,10 +20,15 @@
  * name and never thrown, because the request or job that caused it has
  * already succeeded.
  *
+ * `emitToUser` addresses one user's own room (`user:{userId}`, T-CW-1.9):
+ * the follow-up proposal (CALL-42) and the in-app reminder (CALL-01
+ * criterion 5), whichever page the user has open.
+ *
  * Who may join a room is decided at subscription time (`EventsGateway`,
  * `SubscriptionAuthorizer`, `RoomAccessRegistry`).
  */
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { userRoomName, type UserRoomEventName } from '@nestself/contracts';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { ROOM_EVENTS_CHANNEL } from '../redis/redis-keys.js';
 import { checkRoomEvent, type RoomEventEnvelope, type RoomEventName, type RoomEventPayload } from './ws-messages.js';
@@ -58,5 +63,10 @@ export class RoomEmitter {
       failed(error);
     }
     return true;
+  }
+
+  /** Publishes a user room event to `user:{userId}`; the same checks and result as {@link emit}. */
+  emitToUser<E extends UserRoomEventName>(userId: string, event: E, payload: RoomEventPayload<E>): boolean {
+    return this.emit(userRoomName(userId), event, payload);
   }
 }

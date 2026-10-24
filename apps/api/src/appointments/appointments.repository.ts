@@ -10,17 +10,24 @@
  * participant list do not know the organization before loading the row, and
  * every row is authorized before it is returned. Writes run inside
  * `DbService.withOrgScope` (RLS).
+ *
+ * Follow-ups (T-CW-1.9): {@link lockById} serialises proposals on one
+ * consultation, {@link findOpenFollowUp} finds the one open follow-up, and
+ * {@link updateFromStatus} changes a follow-up only from the status the
+ * caller read, so a concurrent response cannot slip in between.
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, gt, gte, inArray, lt, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lt, or, type SQL } from 'drizzle-orm';
 import {
   APPOINTMENT_STATUSES,
   canTransitionAppointment,
+  type AppointmentResponse,
   type AppointmentStatus,
 } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db/db.service.js';
-import { appointments, assignments } from '../db/schema/index.js';
+import { appointments, assignments, users } from '../db/schema/index.js';
+import { firstNameOf, toAppointmentResponse, type AppointmentParticipants } from './appointment-mapper.js';
 
 type AppointmentRow = typeof appointments.$inferSelect;
 type DbAppointmentStatus = AppointmentRow['status'];
@@ -50,14 +57,30 @@ export function toDbAppointmentStatus(status: AppointmentStatus): DbAppointmentS
   return TO_DB_STATUS[status];
 }
 
-/** An appointment row with the contract spelling of its status. */
-export type AppointmentRecord = Omit<AppointmentRow, 'status'> & { status: AppointmentStatus };
+/** The follow-up columns (T-CW-1.9), which the call layer does not read. */
+type FollowUpColumn = 'suggestedWindows' | 'proposedAt' | 'respondedAt';
+
+/**
+ * An appointment row with the contract spelling of its status. The repository
+ * always fills the follow-up columns; they are optional in the type so a
+ * record built elsewhere (the call layer's fixtures) need not name them.
+ */
+export type AppointmentRecord = Omit<AppointmentRow, 'status' | FollowUpColumn> &
+  Partial<Pick<AppointmentRow, FollowUpColumn>> & { status: AppointmentStatus };
 
 /** The service generates `id` up front, so the expert's eligibility can be checked against it. */
 export type NewAppointment = Omit<typeof appointments.$inferInsert, 'id' | 'status' | 'createdAt' | 'updatedAt'> & {
   id: string;
   status: AppointmentStatus;
 };
+
+/** The columns a follow-up response may change besides the status. */
+export type FollowUpChanges = Partial<
+  Pick<typeof appointments.$inferInsert, 'startsAt' | 'endsAt' | 'suggestedWindows' | 'respondedAt'>
+>;
+
+/** Statuses of a follow-up nobody has closed yet: one per consultation (D-CW-37). */
+const OPEN_FOLLOW_UP_STATUSES: readonly DbAppointmentStatus[] = ['PROPOSED', 'AWAITING_APPROVAL'];
 
 /** A position in the `(startsAt, id)` order: the last row of the previous page. */
 export interface AppointmentKey {
@@ -119,6 +142,88 @@ export class AppointmentsRepository {
       startAt: new Date(),
       reason: 'appointment_expert',
     });
+  }
+
+  /**
+   * The row, locked `FOR UPDATE` until `tx` ends: concurrent follow-up
+   * proposals on one consultation run one after the other.
+   */
+  async lockById(id: string, tx: DbExecutor): Promise<AppointmentRecord | null> {
+    const [row] = await tx.select().from(appointments).where(eq(appointments.id, id)).for('update');
+    return row ? toRecord(row) : null;
+  }
+
+  /** The follow-up of `followUpOf` that is still `proposed` or `awaiting_approval`, if any. */
+  async findOpenFollowUp(followUpOf: string, tx?: DbExecutor): Promise<AppointmentRecord | null> {
+    const [row] = await this.exec(tx)
+      .select()
+      .from(appointments)
+      .where(and(eq(appointments.followUpOf, followUpOf), inArray(appointments.status, [...OPEN_FOLLOW_UP_STATUSES])))
+      .orderBy(desc(appointments.createdAt))
+      .limit(1);
+    return row ? toRecord(row) : null;
+  }
+
+  /**
+   * Update the appointment only while its status is still `from`, moving it
+   * to `to` when given (`canTransitionAppointment` must allow the move).
+   * Null when the row is missing, its status is no longer `from` or the move
+   * is not allowed.
+   */
+  async updateFromStatus(
+    id: string,
+    from: AppointmentStatus,
+    to: AppointmentStatus | null,
+    changes: FollowUpChanges,
+    tx?: DbExecutor,
+  ): Promise<AppointmentRecord | null> {
+    if (to !== null && !canTransitionAppointment(from, to)) return null;
+    const [row] = await this.exec(tx)
+      .update(appointments)
+      .set({ ...changes, ...(to === null ? {} : { status: TO_DB_STATUS[to] }) })
+      .where(and(eq(appointments.id, id), eq(appointments.status, TO_DB_STATUS[from])))
+      .returning();
+    return row ? toRecord(row) : null;
+  }
+
+  /**
+   * The participants' display names, per appointment id: each user's first
+   * name (`firstNameOf`), never a surname or an address. The expert record
+   * holds no photo or credentials line yet, so those optional fields are
+   * left out. An appointment one of whose participants has no usable name
+   * gets no entry, and its response names neither participant.
+   */
+  async participantsOf(records: AppointmentRecord[], tx?: DbExecutor): Promise<Map<string, AppointmentParticipants>> {
+    const userIds = [...new Set(records.flatMap((r) => [r.expertUserId, r.employeeUserId]))];
+    const names = new Map<string, string>();
+    if (userIds.length > 0) {
+      const rows = await this.exec(tx)
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, userIds));
+      for (const row of rows) {
+        const first = firstNameOf(row.displayName);
+        if (first) names.set(row.id, first);
+      }
+    }
+    const result = new Map<string, AppointmentParticipants>();
+    for (const record of records) {
+      const expert = names.get(record.expertUserId);
+      const employee = names.get(record.employeeUserId);
+      if (expert && employee) result.set(record.id, { expert: { firstName: expert }, employee: { firstName: employee } });
+    }
+    return result;
+  }
+
+  /** The API responses of `records`, with the participants' display names, in the same order. */
+  async toResponses(records: AppointmentRecord[], tx?: DbExecutor): Promise<AppointmentResponse[]> {
+    const participants = await this.participantsOf(records, tx);
+    return records.map((record) => toAppointmentResponse(record, participants.get(record.id)));
+  }
+
+  async toResponse(record: AppointmentRecord, tx?: DbExecutor): Promise<AppointmentResponse> {
+    const [response] = await this.toResponses([record], tx);
+    return response!;
   }
 
   /** Matching rows in `(startsAt, id)` order, earliest first. */

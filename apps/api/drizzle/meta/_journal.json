@@ -64,6 +64,13 @@
       "when": 1792879545255,
       "tag": "0008_call_session_end_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792881769509,
+      "tag": "0009_follow_up",
+      "breakpoints": true
     }
   ]
 }

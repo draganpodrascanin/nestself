@@ -14,7 +14,8 @@
  *   `categories` condition. The appointment starts `confirmed`, the expert
  *   gets that CASE assignment, and `appointment.created` is audited.
  * - Read (`GET /appointments/:id`): authorized by the guard through
- *   `appointmentResource`.
+ *   `appointmentResource`. Every response of these routes names the
+ *   participants by first name (`AppointmentsRepository.toResponses`).
  * - List (`GET /appointments`, CALL-18, CALL-28, CALL-42): `@Authenticated()`
  *   on the route, authorized here, paged on `(startsAt, id)`. Outside the
  *   operations context it lists the rows where the caller is the employee or
@@ -75,12 +76,7 @@ import { authorize } from '../authz/authorize.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 import { assemblePrincipal } from '../principal/assemble-principal.js';
 import { ApiHttpException } from '../common/api-error.js';
-import {
-  appointmentResourceOf,
-  decodeAppointmentCursor,
-  encodeAppointmentCursor,
-  toAppointmentResponse,
-} from './appointment-mapper.js';
+import { appointmentResourceOf, decodeAppointmentCursor, encodeAppointmentCursor } from './appointment-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import {
   AppointmentsRepository,
@@ -215,7 +211,7 @@ export class AppointmentsService {
     // The new CASE assignment must reach the expert's next decision, not after the cache TTL.
     await this.principals.invalidateUser(created.expertUserId);
 
-    const response = toAppointmentResponse(created);
+    const response = await this.repo.toResponse(created);
     await this.onAppointmentCreated(response);
     return response;
   }
@@ -286,7 +282,7 @@ export class AppointmentsService {
   async get(id: string): Promise<AppointmentResponse> {
     const record = await this.repo.findById(id);
     if (!record) throw notFound();
-    return toAppointmentResponse(record);
+    return this.repo.toResponse(record);
   }
 
   async list(principal: Principal, query: AppointmentListQuery): Promise<AppointmentListResponse> {
@@ -304,7 +300,7 @@ export class AppointmentsService {
 
     if (principal.context.kind === 'operations') {
       const { window, nextCursor } = paginate(await this.listForOperations(principal, filter), query.limit);
-      return { items: window.map(toAppointmentResponse), nextCursor };
+      return { items: await this.repo.toResponses(window), nextCursor };
     }
 
     // The cursor follows the candidate rows, so a row the engine drops never shifts a page.
@@ -316,7 +312,7 @@ export class AppointmentsService {
       await this.auditListDenial(principal, action);
       throw notFound();
     }
-    return { items: visible.map(toAppointmentResponse), nextCursor };
+    return { items: await this.repo.toResponses(visible), nextCursor };
   }
 
   /** CALL-28: up to `filter.limit` appointments of the organizations the caller coordinates bookings for. */
@@ -439,7 +435,7 @@ export class AppointmentsService {
       result: 'ALLOWED',
       details: { appointmentId: canceled.id, canceledByUserId: actor.userId },
     });
-    const response = toAppointmentResponse(canceled);
+    const response = await this.repo.toResponse(canceled);
     await this.onAppointmentCanceled(response);
     return response;
   }
