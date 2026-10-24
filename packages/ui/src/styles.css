@@ -26,7 +26,7 @@
   html { scroll-behavior: smooth; }
   body { margin: 0; position: relative; background: var(--color-canvas); color: var(--color-text); font: var(--font-weight-body) 1rem/1.5 var(--font-body); -webkit-font-smoothing: antialiased; }
   #root, #__next, [data-app-root] { isolation: isolate; }
-  [hidden] { display: none !important; }
+  [hidden]:not([hidden="until-found"]) { display: none !important; }
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }

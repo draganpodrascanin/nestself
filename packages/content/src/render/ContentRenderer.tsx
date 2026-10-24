@@ -5,15 +5,12 @@
  * node-type-to-component map. No dangerouslySetInnerHTML, no innerHTML,
  * no HTML sanitizer. Text is rendered as React children (auto-escaped).
  *
- * Props:
- * - document: a validated ContentDocument
- * - mediaUrl: resolves asset id + rendition to a delivery URL
- * - resolveCta: resolves a CTA to a rendered action or null
- * - resolveRelated: resolves a related resource id or null
- * - resolveInternalLink: resolves nestself:content/<id> to an app path
- * - headingOffset: shifts heading levels (default 0)
+ * Hosts must run `migrateDocument` + `validateContentDocument` before
+ * rendering. The renderer performs best-effort defense-in-depth but is
+ * not a validation layer.
  */
-import { BlockNode, type BlockContext } from './blocks.tsx';
+import { BlockNode } from './dispatch.tsx';
+import type { RenderContext } from './context.ts';
 import type { ContentRendererProps } from './types.ts';
 
 /**
@@ -22,27 +19,38 @@ import type { ContentRendererProps } from './types.ts';
  * The reading-width container is set by the parent layout; the
  * renderer itself is unstyled at the outer level (it renders blocks
  * that assume they fill the available width).
+ *
+ * `documentKey` is used as the React key on the block container so
+ * that checklist state (and any other local state) resets when the
+ * document changes — even within the same mount point (item 13).
  */
 export function ContentRenderer({
   document: doc,
+  media,
   mediaUrl,
   resolveCta,
   resolveRelated,
   resolveInternalLink,
+  linkComponent,
+  labels,
+  documentKey,
   headingOffset = 0,
 }: ContentRendererProps) {
-  const ctx: BlockContext = {
+  const ctx: RenderContext = {
+    media,
     mediaUrl,
     resolveCta,
     resolveRelated,
     resolveInternalLink,
-    headingOffset,
+    linkComponent,
+    labels,
+    headingOffset: Math.max(0, headingOffset),
   };
 
   return (
-    <div data-testid="content-renderer">
-      {(doc.content as Array<Record<string, unknown>>).map((node, i) => (
-        <BlockNode key={i} node={node as never} ctx={ctx} />
+    <div key={documentKey} role="article">
+      {(doc.content as Array<{ type: string; [k: string]: unknown }>).map((node, i) => (
+        <BlockNode key={i} node={node} ctx={ctx} />
       ))}
     </div>
   );

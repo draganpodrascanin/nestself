@@ -2,11 +2,24 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-    // Render tests need jsdom; schema tests stay in node.
-    environmentMatchGlobs: [
-      ['src/render/**/*.test.tsx', 'jsdom'],
+    projects: [
+      {
+        // Schema tests run in node
+        test: {
+          name: 'schema',
+          environment: 'node',
+          include: ['src/schema/**/*.test.ts'],
+        },
+      },
+      {
+        // Render tests run in jsdom with the test setup
+        test: {
+          name: 'render',
+          environment: 'jsdom',
+          include: ['src/render/**/*.test.tsx'],
+          setupFiles: ['src/test/setup.ts'],
+        },
+      },
     ],
   },
 });

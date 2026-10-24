@@ -8,12 +8,17 @@ export { ContentRenderer } from './ContentRenderer.tsx';
 export type {
   ContentRendererProps,
   MediaUrlResolver,
-  MediaRendition,
+  MediaAssetMeta,
+  MediaRenditionKind,
   CtaResolver,
   ResolvedCta,
+  CtaLink,
+  CtaAction,
   RelatedResourceResolver,
   ResolvedRelatedResource,
   InternalLinkResolver,
+  LinkComponentType,
+  ContentRendererLabels,
 } from './types.ts';
 
-export { isSafeHref, isInternalHref, extractContentId } from './safe-href.ts';
+export { isSafeHref, isInternalHref, extractContentId, isSafeAppHref } from './safe-href.ts';

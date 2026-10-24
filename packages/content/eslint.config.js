@@ -43,6 +43,26 @@ export default [
           selector: 'JSXAttribute[name.name="dangerouslySetInnerHTML"]',
           message: 'dangerouslySetInnerHTML is banned in render/ and editor/ (C-03, FMT-R-14, 6.9). Use React children instead.',
         },
+        {
+          selector: 'Property[key.name="dangerouslySetInnerHTML"]',
+          message: 'dangerouslySetInnerHTML via createElement/spread is banned in render/ and editor/ (C-03, FMT-R-14, 6.9).',
+        },
+        {
+          selector: 'Property[key.value="dangerouslySetInnerHTML"]',
+          message: 'dangerouslySetInnerHTML via string key is banned in render/ and editor/ (C-03, FMT-R-14, 6.9).',
+        },
+        {
+          selector: 'MemberExpression[property.name=/^(innerHTML|outerHTML)$/]',
+          message: 'innerHTML/outerHTML assignment is banned in render/ and editor/ (C-03, FMT-R-14, 6.9). Use React children instead.',
+        },
+        {
+          selector: 'CallExpression[callee.property.name=/^(insertAdjacentHTML|createContextualFragment|write|writeln)$/]',
+          message: 'DOM HTML injection methods are banned in render/ and editor/ (C-03, FMT-R-14, 6.9). Use React children instead.',
+        },
+        {
+          selector: 'JSXAttribute[name.name="srcDoc"]',
+          message: 'iframe srcDoc is banned in render/ and editor/ (C-03, FMT-R-14, 6.9). It allows unescaped HTML injection.',
+        },
       ],
     },
   },

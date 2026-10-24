@@ -1,0 +1,7 @@
+{
+  "extends": "@nestself/typescript-config/vite-react.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["src/**/*.stories.tsx", "src/render/**/*.tsx", "src/schema/**/*.ts"]
+}

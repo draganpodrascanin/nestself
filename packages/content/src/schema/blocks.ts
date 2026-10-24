@@ -56,14 +56,75 @@ const INTERNAL_LINK_RE = /^nestself:content\/[A-Za-z0-9_-]{1,64}$/;
 // eslint-disable-next-line no-control-regex -- intentionally matching all non-ASCII
 const NON_ASCII_RE = /[^\x00-\x7f]/;
 
+// ---------------------------------------------------------------------------
+// Pure href predicate (used by both Zod and the renderer — item 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when `href` is safe to use as a link target.
+ *
+ * Accepted forms:
+ * - `nestself:content/<ContentId>` (internal content links)
+ * - `https://<host>/<path>` with:
+ *   - literal `https://` prefix (rejects `https:host`, `HTTPS://`)
+ *   - non-empty hostname (rejects `https:///path`)
+ *   - ASCII-only authority (scheme + host; IDN must be punycode)
+ *   - no userinfo, no non-default port
+ *   - no whitespace or control characters anywhere
+ *   - path/query/fragment may contain percent-encoded non-ASCII
+ *     (the editor percent-encodes on paste)
+ *
+ * This single predicate is the source of truth: the Zod `LinkHrefSchema`
+ * refine delegates here, and `safe-href.ts` re-exports it for the renderer.
+ */
+export function isValidHref(href: string): boolean {
+  // Reject non-strings defensively
+  if (typeof href !== 'string' || href.length === 0) return false;
+
+  // Reject whitespace and control characters (including U+00A0)
+  if (WHITESPACE_OR_CONTROL_RE.test(href)) return false;
+
+  // Accept internal content links
+  if (INTERNAL_LINK_RE.test(href)) return true;
+
+  // Must literally start with 'https://' (T-C1.06 hardening a).
+  // Rejects 'https:host', 'HTTPS://', 'https:///path'.
+  if (!href.startsWith('https://')) return false;
+
+  // The authority portion of the raw input (between 'https://' and the next
+  // '/', '?', or '#') must be ASCII-only. This catches full-width lookalikes,
+  // zero-width characters and Cyrillic homoglyphs in the host before URL
+  // parsing normalizes them away (e.g. ｅxample.com → example.com).
+  // Paths may contain percent-encoded non-ASCII; the editor encodes on paste.
+  const authorityEnd = href.indexOf('/', 8); // 8 = 'https://'.length
+  const rawAuthority = authorityEnd === -1 ? href.slice(8) : href.slice(8, authorityEnd);
+  if (NON_ASCII_RE.test(rawAuthority)) return false;
+
+  try {
+    const url = new URL(href);
+    if (url.protocol !== 'https:') return false;
+    // Must have a non-empty hostname (rejects https:///path)
+    if (!url.hostname) return false;
+    // No userinfo
+    if (url.username || url.password) return false;
+    // No non-default port
+    if (url.port !== '') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Schema for link hrefs. Enforces:
  * - Non-empty (min 1)
  * - No whitespace or control characters (including U+00A0)
- * - ASCII-only (IDN hosts must be punycode; T-C1.06 hardening b)
  * - Must be `https://...` or `nestself:content/<id>`
- * - HTTPS links: must literally start with `https://` (T-C1.06 hardening a),
- *   no userinfo (@), no non-default port
+ * - HTTPS links: ASCII-only authority, no userinfo, no non-default port,
+ *   non-empty hostname (T-C1.06 hardening)
+ *
+ * Delegates to `isValidHref` — the single source of truth for href
+ * safety, shared with the renderer layer.
  *
  * The host allowlist is applied at runtime in validateContentDocument,
  * not in the base Zod schema (R4).
@@ -72,34 +133,8 @@ export const LinkHrefSchema = z
   .string()
   .min(1, 'Link href must not be empty.')
   .refine(
-    (href) => !WHITESPACE_OR_CONTROL_RE.test(href),
-    'Link href must not contain whitespace or control characters.',
-  )
-  .refine(
-    (href) => !NON_ASCII_RE.test(href),
-    'Link href must be ASCII-only; use punycode for internationalized domain names.',
-  )
-  .refine(
-    (href) => {
-      // Accept internal links
-      if (INTERNAL_LINK_RE.test(href)) return true;
-      // Must literally start with 'https://' (T-C1.06 hardening a).
-      // This rejects inputs like 'https:allowed.example' that the URL
-      // parser would normalize into a valid https URL.
-      if (!href.startsWith('https://')) return false;
-      try {
-        const url = new URL(href);
-        if (url.protocol !== 'https:') return false;
-        // Reject userinfo
-        if (url.username || url.password) return false;
-        // Reject non-default ports
-        if (url.port !== '') return false;
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    'Link href must be https:// (no port, no userinfo) or nestself:content/<id>.',
+    isValidHref,
+    'Link href must be https:// (ASCII authority, no port, no userinfo) or nestself:content/<id>.',
   );
 
 // ---------------------------------------------------------------------------

@@ -1,51 +1,32 @@
 /**
- * Safe href check for the renderer layer.
+ * Safe href utilities for the renderer layer.
  *
- * Even though validation already rejects unsafe hrefs, the renderer
- * provides defense-in-depth: it only renders hrefs that pass the
- * same check used by the schema. A link that somehow bypasses
- * validation (e.g. a document fed directly to the renderer) renders
- * as plain text instead of an anchor (6.9).
+ * `isValidHref` is the single source of truth, defined in `schema/blocks.ts`
+ * and re-exported here. The renderer calls it as defense-in-depth: a link
+ * that somehow bypasses schema validation (e.g. a document fed directly to
+ * the renderer) renders as plain text instead of an anchor (6.9).
+ *
+ * `isSafeAppHref` validates hrefs returned by host resolvers (CTA, related
+ * resource, internal link). These are app-generated paths or URLs, not
+ * user-supplied content, but we still guard against open-redirect patterns.
  */
 
-/** Matches the INTERNAL_LINK_RE from blocks.ts. */
+import { isValidHref } from '../schema/blocks.ts';
+
+// Re-export the canonical predicate
+export { isValidHref };
+
+/** Backward-compatible alias for `isValidHref`. */
+export const isSafeHref = isValidHref;
+
+/** Internal content link pattern: `nestself:content/<ContentId>`. */
 const INTERNAL_LINK_RE = /^nestself:content\/[A-Za-z0-9_-]{1,64}$/;
-
-/** Matches the NON_ASCII_RE from blocks.ts (T-C1.06 hardening). */
-// eslint-disable-next-line no-control-regex -- intentionally matching all non-ASCII
-const NON_ASCII_RE = /[^\x00-\x7f]/;
-
-/**
- * Returns true if the href is safe to render as a link.
- * Mirrors the Zod-layer checks: must be `nestself:content/<id>` or
- * literally start with `https://`, be ASCII-only, have no userinfo,
- * and have no non-default port.
- */
-export function isSafeHref(href: string): boolean {
-  if (INTERNAL_LINK_RE.test(href)) return true;
-
-  // ASCII-only
-  if (NON_ASCII_RE.test(href)) return false;
-
-  // Must literally start with 'https://'
-  if (!href.startsWith('https://')) return false;
-
-  try {
-    const url = new URL(href);
-    if (url.protocol !== 'https:') return false;
-    if (url.username || url.password) return false;
-    if (url.port !== '') return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Returns true if the href is an internal content link.
  */
 export function isInternalHref(href: string): boolean {
-  return INTERNAL_LINK_RE.test(href);
+  return typeof href === 'string' && INTERNAL_LINK_RE.test(href);
 }
 
 /**
@@ -53,6 +34,23 @@ export function isInternalHref(href: string): boolean {
  * Returns null if the href is not internal.
  */
 export function extractContentId(href: string): string | null {
-  if (!INTERNAL_LINK_RE.test(href)) return null;
+  if (!isInternalHref(href)) return null;
   return href.slice('nestself:content/'.length);
+}
+
+/**
+ * Validates an href returned by a host resolver (CTA, related resource,
+ * internal link). Accepts:
+ * - Same-origin relative paths: starts with `/` but not `//` (prevents
+ *   protocol-relative URLs like `//evil.example`).
+ * - Any href that passes `isValidHref` (https or internal).
+ *
+ * Rejects `javascript:`, `data:`, protocol-relative, and other schemes.
+ */
+export function isSafeAppHref(href: string): boolean {
+  if (typeof href !== 'string' || href.length === 0) return false;
+  // Same-origin relative path (starts with / but not //)
+  if (href[0] === '/' && href[1] !== '/') return true;
+  // Full URL — delegate to the canonical predicate
+  return isValidHref(href);
 }

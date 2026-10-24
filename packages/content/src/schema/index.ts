@@ -12,6 +12,8 @@ export {
   // Schemas — public surface
   ContentIdSchema,
   LinkHrefSchema,
+  // Pure href predicate (used by Zod and the renderer — item 8)
+  isValidHref,
   MarkSchema,
   SectionHeadingSchema,
   ParagraphSchema,

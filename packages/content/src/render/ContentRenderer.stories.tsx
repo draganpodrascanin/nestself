@@ -3,6 +3,9 @@
  *
  * Demonstrates every block type, light and dark themes,
  * and a Cyrillic document produced with transliterateDocument.
+ *
+ * No external hosts for media — all media URLs use inline data URIs
+ * or local placeholder paths. The `media` record drives which blocks render.
  */
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -10,29 +13,85 @@ import type { ContentDocument } from '../schema/document.ts';
 import { transliterateDocument } from '../schema/transliterate.ts';
 
 import { ContentRenderer } from './ContentRenderer.tsx';
-import type { ContentRendererProps } from './types.ts';
+import type { ContentRendererProps, MediaAssetMeta } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Shared mocks
 // ---------------------------------------------------------------------------
 
-const mediaUrl: ContentRendererProps['mediaUrl'] = (id, rendition) =>
-  `https://placehold.co/800x450?text=${id}+${rendition}`;
+/** Media metadata for story assets. */
+const storyMedia: Record<string, MediaAssetMeta> = {
+  'nature-calm-01': {
+    kind: 'image',
+    renditions: ['detail_webp', 'detail_jpeg'],
+    width: 800,
+    height: 450,
+    focalPoint: { x: 0.5, y: 0.4 },
+  },
+  'relaxation-audio-01': {
+    kind: 'audio',
+    renditions: ['audio'],
+  },
+  'exercise-video-01': {
+    kind: 'video',
+    renditions: ['video', 'poster_webp'],
+  },
+  'guide-pdf-01': {
+    kind: 'pdf',
+    renditions: ['pdf'],
+  },
+};
+
+/**
+ * Media URL resolver: generates a local placeholder SVG data URI
+ * instead of referencing external hosts.
+ */
+const mediaUrl: ContentRendererProps['mediaUrl'] = (id, rendition) => {
+  // Generate a simple inline SVG placeholder — no external hosts
+  const label = encodeURIComponent(`${id} (${rendition})`);
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Crect width='800' height='450' fill='%23e2e8f0'/%3E%3Ctext x='400' y='225' text-anchor='middle' dy='.3em' fill='%2364748b' font-family='system-ui' font-size='14'%3E${label}%3C/text%3E%3C/svg%3E`;
+};
+
+const labels: ContentRendererProps['labels'] = {
+  transcript: 'Transkript',
+  noteWarning: 'Upozorenje',
+  noteTip: 'Savet',
+  noteDisclaimer: 'Napomena',
+  noteDefault: 'Beleska',
+  checklist: 'Lista za proveru',
+  opensInNewTab: '(otvara se u novom tabu)',
+  downloadPdf: 'Preuzmi PDF',
+  imageUnavailable: 'Slika nije dostupna',
+};
 
 const resolveCta: ContentRendererProps['resolveCta'] = (cta) => ({
+  kind: 'link',
   href: '#',
   label: cta.label ?? 'Take action',
-  isLink: cta.ctaKind === 'open_content',
 });
 
 const resolveRelated: ContentRendererProps['resolveRelated'] = (id) => ({
-  title: `Related: ${id}`,
+  title: `Povezano: ${id}`,
   href: `#${id}`,
-  description: 'A related content resource.',
+  description: 'Povezani sadrzaj.',
 });
 
 const resolveInternalLink: ContentRendererProps['resolveInternalLink'] = (id) =>
   `/content/${id}`;
+
+// ---------------------------------------------------------------------------
+// Shared default props
+// ---------------------------------------------------------------------------
+
+const sharedProps: Omit<ContentRendererProps, 'document'> = {
+  media: storyMedia,
+  mediaUrl,
+  resolveCta,
+  resolveRelated,
+  resolveInternalLink,
+  labels,
+  documentKey: 'story-doc-1',
+};
 
 // ---------------------------------------------------------------------------
 // Sample document with every block type
@@ -211,10 +270,7 @@ export const AllBlocks: StoryObj = {
     <div className="max-w-[var(--reading-width,42rem)] mx-auto">
       <ContentRenderer
         document={fullDocument()}
-        mediaUrl={mediaUrl}
-        resolveCta={resolveCta}
-        resolveRelated={resolveRelated}
-        resolveInternalLink={resolveInternalLink}
+        {...sharedProps}
       />
     </div>
   ),
@@ -223,13 +279,10 @@ export const AllBlocks: StoryObj = {
 export const WithHeadingOffset: StoryObj = {
   render: () => (
     <div className="max-w-[var(--reading-width,42rem)] mx-auto">
-      <h1 className="text-text type-heading-lg mb-6">Article Title (h1)</h1>
+      <h1 className="text-text type-screen-title mb-6">Article Title (h1)</h1>
       <ContentRenderer
         document={fullDocument()}
-        mediaUrl={mediaUrl}
-        resolveCta={resolveCta}
-        resolveRelated={resolveRelated}
-        resolveInternalLink={resolveInternalLink}
+        {...sharedProps}
         headingOffset={1}
       />
     </div>
@@ -243,10 +296,8 @@ export const CyrillicDocument: StoryObj = {
       <div className="max-w-[var(--reading-width,42rem)] mx-auto">
         <ContentRenderer
           document={cyrillic}
-          mediaUrl={mediaUrl}
-          resolveCta={resolveCta}
-          resolveRelated={resolveRelated}
-          resolveInternalLink={resolveInternalLink}
+          {...sharedProps}
+          documentKey="story-cyrillic"
         />
       </div>
     );
@@ -254,20 +305,16 @@ export const CyrillicDocument: StoryObj = {
 };
 
 export const DarkMode: StoryObj = {
-  parameters: {
-    backgrounds: { default: 'dark' },
+  globals: {
+    mode: 'dark',
   },
   render: () => (
-    <div data-theme="dark" className="bg-surface p-6">
-      <div className="max-w-[var(--reading-width,42rem)] mx-auto">
-        <ContentRenderer
-          document={fullDocument()}
-          mediaUrl={mediaUrl}
-          resolveCta={resolveCta}
-          resolveRelated={resolveRelated}
-          resolveInternalLink={resolveInternalLink}
-        />
-      </div>
+    <div className="max-w-[var(--reading-width,42rem)] mx-auto">
+      <ContentRenderer
+        document={fullDocument()}
+        {...sharedProps}
+        documentKey="story-dark"
+      />
     </div>
   ),
 };
@@ -283,10 +330,8 @@ export const MinimalDocument: StoryObj = {
             { type: 'paragraph', content: [{ type: 'text', text: 'A simple paragraph.' }] },
           ],
         }}
-        mediaUrl={mediaUrl}
-        resolveCta={resolveCta}
-        resolveRelated={resolveRelated}
-        resolveInternalLink={resolveInternalLink}
+        {...sharedProps}
+        documentKey="story-minimal"
       />
     </div>
   ),
