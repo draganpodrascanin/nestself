@@ -3,9 +3,9 @@
  * organization endpoints accept, required condition types, the parent-grant
  * bound for delegation (AUTHZ-R-37) and the API errors these rules raise.
  *
- * The bound applies when the parent grant carries no `delegationEnvelope`:
- * the parent grant itself is then the envelope. `validateDelegation` (the
- * engine check) still runs after these rules.
+ * The parent grant always bounds a delegation; a `delegationEnvelope` on it
+ * only adds restrictions, which `validateDelegation` (the engine check)
+ * applies after these rules.
  */
 import { ApiHttpException } from '../common/api-error.js';
 import {

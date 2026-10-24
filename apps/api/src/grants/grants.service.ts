@@ -287,10 +287,10 @@ export class GrantsService {
       };
 
       const childAncestorIds = scopeOrgUnitId ? await this.authzRepo.findAncestorIds(scopeOrgUnitId, tx) : [];
-      if (parent.delegationEnvelope == null) {
-        const bound = checkDelegationBounds(parent, proposed, childAncestorIds);
-        if (bound) throw exceedsBoundary(bound);
-      }
+      // The parent grant always bounds the delegation; an envelope only adds
+      // restrictions (checked by the engine below) [API-R-23, AUTHZ-R-37].
+      const bound = checkDelegationBounds(parent, proposed, childAncestorIds);
+      if (bound) throw exceedsBoundary(bound);
 
       // Engine check: the delegator's grants plus the parent chain read from
       // the DB (ancestors belong to other users; DB rows beat cached copies).
@@ -305,7 +305,7 @@ export class GrantsService {
         ancestorIds: childAncestorIds,
         orgSelfApprovalAllowed: false,
         organizationTimezone: 'UTC',
-        delegatorGrants: grants,
+        delegatorGrants,
       };
       const engine = validateDelegation(proposed, ctx);
       if (!engine.valid) throw exceedsBoundary(engine.reason ?? 'delegation_invalid');
@@ -432,7 +432,6 @@ export class GrantsService {
     const parentRow = await this.authzRepo.findGrantById(grant.parentGrantId!, tx);
     if (!parentRow) throw exceedsBoundary('delegation_parent_revoked');
     const parent = toGrantInput(parentRow);
-    if (parent.delegationEnvelope != null) return;
     const ancestorIds = grant.scopeOrgUnitId ? await this.authzRepo.findAncestorIds(grant.scopeOrgUnitId, tx) : [];
     const bound = checkDelegationBounds(parent, { ...toGrantInput(grant), conditions }, ancestorIds);
     if (bound) throw exceedsBoundary(bound);

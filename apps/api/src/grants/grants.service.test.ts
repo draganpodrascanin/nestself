@@ -331,6 +331,18 @@ describe('GrantsService', () => {
       expect(err.code).toBe('delegation_exceeds_boundary');
       expect(err.details).toEqual({ reason: 'spending_ceiling_exceeds_parent' });
     });
+
+    it('keeps a delegated grant within its parent bound when the parent has an envelope', async () => {
+      m.grants.set(
+        'grant_parent',
+        row({ ...PARENT, delegationEnvelope: { maxDepth: 2 }, conditions: [{ type: 'spending_ceiling', amountMinor: 500, currency: 'EUR' }] }),
+      );
+      m.grants.set('grant_1', row({ parentGrantId: 'grant_parent', templateKey: null, actions: ['people.invite'], scopeType: 'organization', scopeOrgUnitId: null, conditions: [{ type: 'spending_ceiling', amountMinor: 400, currency: 'EUR' }] }));
+      const err = await apiError(
+        svc.update(ORG, 'grant_1', { conditions: [{ type: 'spending_ceiling', amountMinor: 600, currency: 'EUR' }] }, ACTOR),
+      );
+      expect(err.details).toEqual({ reason: 'spending_ceiling_exceeds_parent' });
+    });
   });
 
   // ── revoke ──────────────────────────────────────────────────────────
@@ -483,6 +495,28 @@ describe('GrantsService', () => {
     it('prefers the DB parent row over a stale cached copy', async () => {
       m.grants.set('grant_parent', row({ ...PARENT, revokedAt: NOW }));
       expect(await boundary(svc.delegate(ORG, DELEGATE, ACTOR))).toBe('delegation_parent_revoked');
+    });
+
+    it('applies the parent bound even when the parent has an envelope without actions (API-R-23)', async () => {
+      m.grants.set('grant_parent', row({ ...PARENT, delegationEnvelope: { maxDepth: 2 } }));
+      expect(await boundary(svc.delegate(ORG, { ...DELEGATE, actions: ['people.invite', 'policy.manage'] }, ACTOR))).toBe(
+        'actions_exceed_parent',
+      );
+    });
+
+    it('creates the delegation when both the parent bound and the envelope pass', async () => {
+      m.grants.set('grant_parent', row({ ...PARENT, delegationEnvelope: { maxDepth: 2 } }));
+      await svc.delegate(ORG, DELEGATE, ACTOR);
+      expect(m.authzRepo.createGrant).toHaveBeenCalled();
+    });
+
+    it('lets the engine apply an envelope maxDepth over the full parent chain', async () => {
+      const root = row({ id: 'grant_root', subjectUserId: 'user_jovan', actions: PARENT.actions, scopeType: 'organization', scopeOrgUnitId: null, conditions: null });
+      m.grants.set('grant_root', root);
+      m.grants.set('grant_parent', row({ ...PARENT, parentGrantId: 'grant_root', delegationEnvelope: { maxDepth: 1 } }));
+      m.authzRepo.delegationDepth.mockResolvedValueOnce(1);
+      // Proposed depth 2 > envelope maxDepth 1; the engine needs the DB chain to count it.
+      expect(await boundary(svc.delegate(ORG, DELEGATE, ACTOR))).toBe('delegation_depth_exceeded');
     });
 
     it('maps an envelope rejection from the engine', async () => {
