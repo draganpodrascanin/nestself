@@ -47,9 +47,10 @@ Same as `2026-10-24-auth-phase-2.md`: no installs; every route `@Authorize`; eve
 - [ ] Step 1: tests RED → implement → GREEN per app; `pnpm e2e:auth` 6/6 with the extended journey.
 - [ ] Step 2: commit `feat(web): ownership transfer and owner-driven grant assignment`.
 
-### Task 3: Per-worktree test databases and the retry predicate
+### Task 3: Per-worktree test databases, a dedicated Playwright database, and the retry predicate
 
 **Files:**
+- Modify: `playwright.auth.config.ts` — the stub API web server runs with `DATABASE_URL` pointing at a dedicated database (`nestself_e2e` on the same server as `TEST_DATABASE_URL`, derived from it, or `E2E_DATABASE_URL` when set); add a `globalSetup` (`e2e/global-setup.ts`) that drops/recreates that database, runs the migrations and the seed (reuse `apps/api/test/db/test-database.ts` `resetTestDatabase` and `apps/api/src/db/seed` programmatically through `tsx`, or shell out to `pnpm --filter @nestself/api db:migrate` / `db:seed` with the env overridden); `e2e/README.md` documents it; `pnpm e2e:auth` therefore never depends on the developer database
 - Modify: `apps/api/test/db/test-database.ts` (`resetTestDatabase(baseUrl, suffix)` derives the database name as `<base>_<prefix>_<suffix>` where `prefix` = `TEST_DATABASE_PREFIX` env if set, else a short stable hash of the worktree root path (`git rev-parse --show-toplevel` equivalent: use `process.cwd()` walked up to the nearest `pnpm-workspace.yaml`)), every e2e/DB spec unchanged (they pass only the suffix), `docs/environment.md` + `apps/api/README.md` (one paragraph)
 - Modify: `apps/workspace/src/query-retry.ts`, `apps/admin/src/query-retry.ts` (+ tests): retry only when the error is not an `ApiError` with `400 <= status < 500`; status 0 (network) retries; docs §11.1 wording already claims this
 
