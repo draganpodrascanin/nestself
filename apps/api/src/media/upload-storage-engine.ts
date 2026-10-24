@@ -307,11 +307,27 @@ async function handleFile(
     // storage.put() reads from passthrough (it internally pipelines
     // passthrough → writeStream).  Both must run concurrently:
     // pipeline feeds the passthrough, storage drains it.
-    const pipelinePromise = pipeline(
-      fileStream as NodeJS.ReadableStream,
-      counter,
-      passthrough,
-    );
+    //
+    // The multipart source is deliberately NOT part of the pipeline: a
+    // pipeline would destroy it with the 413 error, multer listens for
+    // errors on the file stream and would answer the request immediately,
+    // before the cleanup below has removed the row and the partial object.
+    // Instead the source is piped manually; on failure it is unpiped and
+    // left for multer to drain after this function has cleaned up.
+    const pipelinePromise = pipeline(counter, passthrough);
+    fileStream.pipe(counter);
+    const detachSource = () => {
+      fileStream.unpipe(counter);
+      fileStream.resume();
+    };
+    counter.once('error', detachSource);
+    // Client abort / truncated body: the source errors or closes before end.
+    fileStream.once('error', (e: Error) => counter.destroy(e));
+    fileStream.once('close', () => {
+      if (!(fileStream as { readableEnded?: boolean }).readableEnded) {
+        counter.destroy(new Error('Upload aborted by client'));
+      }
+    });
 
     const putPromise = ctx.storage.put(quarantineKey, passthrough as unknown as Readable, {
       contentType: file.mimetype || 'application/octet-stream',

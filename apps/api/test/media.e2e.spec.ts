@@ -8,10 +8,12 @@
  */
 import 'dotenv/config';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readdir } from 'node:fs/promises';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -37,6 +39,7 @@ import {
 } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 import { MediaService } from '../src/media/media.service.js';
+import { MEDIA_STORAGE, type MediaStorage } from '../src/media/storage/media-storage.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const shouldRun = !!TEST_DB_URL;
@@ -47,6 +50,8 @@ const KATARINA = 'user_katarina';
 const VUK = 'user_vuk';
 /** Jovan is a regular employee (no content/media grants). */
 const JOVAN = 'user_jovan';
+
+const UPLOAD_CAP_BYTES = 200 * 1024;
 
 const OPS_MEDIA = '/api/ops/cms/media';
 const CATEGORY_ID = 'cat_stress';
@@ -78,6 +83,9 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
     process.env.NODE_ENV = 'test';
     process.env.MEDIA_STORAGE = 'local';
     process.env.MEDIA_LOCAL_DIR = mediaDir;
+    // Small global cap so the 413 test needs only a ~300 KB body (all other
+    // fixtures in this suite are far smaller). Read once at module creation.
+    process.env.MEDIA_MAX_UPLOAD_BYTES = String(UPLOAD_CAP_BYTES);
     delete process.env.REDIS_URL;
 
     const { AppModule } = await import('../src/app.module.js');
@@ -687,6 +695,148 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-disposition']).toMatch(/attachment/);
       expect(res.headers['content-security-policy']).toBe('sandbox');
+    });
+  });
+  // ─── Oversized upload and client abort cleanup ───────────────────────
+
+  describe('upload cleanup', () => {
+    /** Files left anywhere under MEDIA_LOCAL_DIR/quarantine/. */
+    async function quarantineFiles(): Promise<string[]> {
+      const root = join(mediaDir, 'quarantine');
+      const out: string[] = [];
+      const entries = await readdir(root, { recursive: true }).catch(() => [] as string[]);
+      for (const e of entries) if (/original(\.meta)?$/.test(e)) out.push(e);
+      return out;
+    }
+
+    async function waitFor(check: () => Promise<boolean>, ms = 10_000): Promise<void> {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await check()) return;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error('waitFor timed out');
+    }
+
+    it('oversized image → 413 media_too_large, streamed (not buffered), no row or file remains', async () => {
+      const session = await signInOps(KATARINA);
+      const before = await testDb.db.select({ id: mediaAssets.id }).from(mediaAssets);
+      const filesBefore = await quarantineFiles();
+
+      // JPEG magic prefix + noise, 300 KB: larger than the 200 KB test cap.
+      const body = Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        randomBytes(300 * 1024 - 4),
+      ]);
+
+      // Spy on the storage put and record every chunk the engine hands it.
+      // Streaming proof: data arrives in several small chunks (never one
+      // buffer holding the whole body), and consumption stops at the cap
+      // rather than reading the full 300 KB.
+      const storage = app.get<MediaStorage>(MEDIA_STORAGE);
+      const chunkSizes: number[] = [];
+      const putSpy = vi.spyOn(storage, 'put').mockImplementation(async (_key, stream) => {
+        for await (const chunk of stream) chunkSizes.push((chunk as Buffer).length);
+      });
+
+      let res: request.Response;
+      try {
+        res = await uploadJpeg(session, body);
+      } finally {
+        putSpy.mockRestore();
+      }
+
+      expect(res.status).toBe(413);
+      expect(res.body.code).toBe('media_too_large');
+
+      expect(chunkSizes.length).toBeGreaterThan(1);
+      expect(Math.max(...chunkSizes)).toBeLessThanOrEqual(128 * 1024);
+      const received = chunkSizes.reduce((a, b) => a + b, 0);
+      expect(received).toBeLessThanOrEqual(UPLOAD_CAP_BYTES);
+
+      const after = await testDb.db.select({ id: mediaAssets.id }).from(mediaAssets);
+      expect(after.length).toBe(before.length);
+      expect(await quarantineFiles()).toEqual(filesBefore);
+    });
+
+    it('client abort mid-body → no uploaded row and no partial quarantine file', async () => {
+      const session = await signInOps(KATARINA);
+      const cookie = (
+        (session.agent as unknown as {
+          jar: { getCookies: (a: object) => Array<{ toValueString(): string }> };
+        }).jar.getCookies({ domain: '127.0.0.1', path: '/api/ops/cms/media', secure: false, script: false })
+      )
+        .map((c) => c.toValueString())
+        .join('; ');
+      expect(cookie).toContain('nestself_csrf=');
+
+      const before = await testDb.db
+        .select({ id: mediaAssets.id })
+        .from(mediaAssets)
+        .where(eq(mediaAssets.state, 'uploaded'));
+      const beforeIds = new Set(before.map((r) => r.id));
+      const filesBefore = await quarantineFiles();
+
+      await app.listen(0, '127.0.0.1');
+      const { port } = app.getHttpServer().address() as AddressInfo;
+
+      const full = Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        randomBytes(150 * 1024),
+      ]);
+      const boundary = `----abort${randomUUID()}`;
+      const field = (n: string, v: string) =>
+        `--${boundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`;
+      const head =
+        field('kind', 'image') +
+        field('ownerCategoryId', CATEGORY_ID) +
+        field('licenseKind', 'owned') +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.jpg"\r\n` +
+        'Content-Type: image/jpeg\r\n\r\n';
+
+      const req = http.request({
+        host: '127.0.0.1',
+        port,
+        method: 'POST',
+        path: OPS_MEDIA,
+        headers: {
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+          // Declares the full body; we never send it all.
+          'content-length': String(Buffer.byteLength(head) + full.length + 100),
+          'content-digest': contentDigest(full),
+          'x-csrf-token': session.csrf,
+          cookie,
+        },
+      });
+      req.on('error', () => {});
+      req.write(head);
+      req.write(full.subarray(0, 60 * 1024));
+
+      // The engine has inserted its row and is streaming to quarantine.
+      let newIds: string[] = [];
+      await waitFor(async () => {
+        const rows = await testDb.db
+          .select({ id: mediaAssets.id })
+          .from(mediaAssets)
+          .where(eq(mediaAssets.state, 'uploaded'));
+        newIds = rows.map((r) => r.id).filter((id) => !beforeIds.has(id));
+        return newIds.length === 1 && (await quarantineFiles()).length > filesBefore.length;
+      });
+
+      req.destroy();
+
+      await waitFor(async () => {
+        const rows = await testDb.db
+          .select({ id: mediaAssets.id })
+          .from(mediaAssets)
+          .where(eq(mediaAssets.state, 'uploaded'));
+        const left = rows.filter((r) => !beforeIds.has(r.id));
+        return left.length === 0 && (await quarantineFiles()).length === filesBefore.length;
+      });
+
+      const rows = await testDb.db.select({ id: mediaAssets.id }).from(mediaAssets);
+      expect(rows.some((r) => newIds.includes(r.id))).toBe(false);
+      expect(await quarantineFiles()).toEqual(filesBefore);
     });
   });
 });
