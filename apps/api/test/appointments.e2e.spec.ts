@@ -26,7 +26,12 @@ import {
   PERMISSION_TEMPLATES,
   type AppointmentListResponse,
 } from '@nestself/contracts';
-import { SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
+import {
+  SAMPLE_APPOINTMENTS,
+  SAMPLE_CALL_SESSIONS,
+  SAMPLE_DEV_PASSWORD,
+  SAMPLE_EXTERNAL_IDENTITIES,
+} from '@nestself/sample-data';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
@@ -36,6 +41,10 @@ import {
   appointments,
   assignments,
   auditEvents,
+  callFeedback,
+  callOutcomes,
+  callParticipants,
+  callSessions,
   experts,
   externalIdentities,
   grants,
@@ -173,6 +182,16 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
   beforeAll(async () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'appointments');
     await seed(testDb.db);
+    // The seeded sample appointments (T-CW-1.1) belong to the same people;
+    // this suite counts every appointment row, so it starts from none.
+    const sampleSessionIds = SAMPLE_CALL_SESSIONS.map((session) => session.id);
+    const sampleAppointmentIds = SAMPLE_APPOINTMENTS.map((appointment) => appointment.id);
+    await testDb.db.delete(callFeedback).where(inArray(callFeedback.sessionId, sampleSessionIds));
+    await testDb.db.delete(callOutcomes).where(inArray(callOutcomes.sessionId, sampleSessionIds));
+    await testDb.db.delete(callParticipants).where(inArray(callParticipants.sessionId, sampleSessionIds));
+    await testDb.db.delete(callSessions).where(inArray(callSessions.id, sampleSessionIds));
+    await testDb.db.delete(assignments).where(inArray(assignments.targetId, sampleAppointmentIds));
+    await testDb.db.delete(appointments).where(inArray(appointments.id, sampleAppointmentIds));
 
     process.env.DATABASE_URL = testDb.url;
     process.env.AUTH_MODE = 'stub';

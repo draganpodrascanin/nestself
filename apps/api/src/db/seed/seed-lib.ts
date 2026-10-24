@@ -20,16 +20,24 @@ import {
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_CASE,
+  SAMPLE_APPOINTMENTS,
+  SAMPLE_CALL_SESSIONS,
+  type SampleAppointment,
+  type SampleCallSession,
 } from '@nestself/sample-data';
-// Calls and webinars fixtures are not seeded yet because their tables do not
-// exist. The tasks that create the tables import and upsert them here:
-// SAMPLE_APPOINTMENTS in T-CW-0.6 (appointments), SAMPLE_CALL_SESSIONS in
-// T-CW-1.1 (call_sessions, call_participants, call_outcomes, call_feedback;
-// the consultation session), SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES and
-// SAMPLE_WEBINAR_POLLS in T-CW-2.1 (webinars, webinar_hosts, webinar_messages,
-// webinar_polls with options and results, and the webinar session of
-// SAMPLE_CALL_SESSIONS, which points at a sample webinar).
+// Calls and webinars: SAMPLE_APPOINTMENTS and the consultation entry of
+// SAMPLE_CALL_SESSIONS (call_sessions, call_participants, call_outcomes,
+// call_feedback) are seeded below (T-CW-1.1). SAMPLE_WEBINARS,
+// SAMPLE_WEBINAR_MESSAGES and SAMPLE_WEBINAR_POLLS, and the webinar session of
+// SAMPLE_CALL_SESSIONS (which points at a sample webinar), wait for the
+// webinars tables of T-CW-2.1.
 import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
+import {
+  toDbFormat,
+  toDbOutcomeStatus,
+  toDbParticipantRole,
+  toDbSessionStatus,
+} from '../../calls/call-mapper.js';
 import { RETENTION_POLICIES } from './retention-policies.js';
 import { buildClosureRows } from '../../org-units/closure.js';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
@@ -432,7 +440,125 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     { body: SAMPLE_CASE.intake.body },
   );
 
+  // ── Appointments (T-CW-0.6 table) with the expert's CASE assignment ──
+  // The assignment is the one AppointmentsService.create adds: it lets the
+  // expert reach the appointment through the expert template.
+  for (const appointment of SAMPLE_APPOINTMENTS) {
+    const row = sampleAppointmentRow(appointment);
+    const { id: _id, ...update } = row;
+    await upsertById(db, t.appointments, row, update);
+    await db
+      .insert(t.assignments)
+      .values({
+        id: `assignment_${row.expertUserId}_case_${row.id}`,
+        userId: row.expertUserId,
+        kind: 'CASE',
+        targetId: row.id,
+        assignedByUserId: hrAdmin?.id ?? row.expertUserId,
+        startAt: SAMPLE_START_DATE,
+        reason: 'appointment_expert',
+      })
+      .onConflictDoNothing({ target: t.assignments.id });
+  }
+
+  // ── Call sessions (T-CW-1.1): the ended consultation with its outcome and feedback ──
+  for (const sample of seededSampleCallSessions()) {
+    const rows = sampleCallSessionRows(sample);
+    const { id: _sessionId, ...sessionUpdate } = rows.session;
+    await upsertById(db, t.callSessions, rows.session, sessionUpdate);
+    for (const participant of rows.participants) {
+      const { id: _participantId, ...participantUpdate } = participant;
+      await upsertById(db, t.callParticipants, participant, participantUpdate);
+    }
+    if (rows.outcome) {
+      const { id: _outcomeId, ...outcomeUpdate } = rows.outcome;
+      await upsertById(db, t.callOutcomes, rows.outcome, outcomeUpdate);
+    }
+    for (const feedback of rows.feedback) {
+      const { id: _feedbackId, ...feedbackUpdate } = feedback;
+      await upsertById(db, t.callFeedback, feedback, feedbackUpdate);
+    }
+  }
+
   return countAll(db);
+}
+
+/** The `appointments` row of a sample appointment, with the UPPER_CASE status (CW-R-19a). */
+export function sampleAppointmentRow(appointment: SampleAppointment): typeof t.appointments.$inferInsert & { id: string; expertUserId: string } {
+  return {
+    id: appointment.id,
+    orgId: appointment.orgId,
+    expertUserId: appointment.expertUserId,
+    employeeUserId: appointment.employeeUserId,
+    startsAt: new Date(appointment.startsAt),
+    endsAt: new Date(appointment.endsAt),
+    status: appointment.status.toUpperCase() as (typeof t.appointmentStatus.enumValues)[number],
+    serviceCategory: appointment.serviceCategory,
+    timeZone: appointment.timeZone,
+    fundingRef: appointment.fundingRef,
+    followUpOf: appointment.followUpOf,
+  };
+}
+
+/**
+ * The sample call sessions this seed writes: consultations only. The webinar
+ * session points at a sample webinar, whose table arrives with T-CW-2.1.
+ */
+export function seededSampleCallSessions(): SampleCallSession[] {
+  return SAMPLE_CALL_SESSIONS.filter((session) => session.format === 'consultation');
+}
+
+/** The rows of one sample call session, with the UPPER_CASE enums (CW-R-19a). */
+export function sampleCallSessionRows(sample: SampleCallSession) {
+  const orgId = sample.orgId;
+  const session = {
+    id: sample.id,
+    appointmentId: sample.appointmentId,
+    webinarId: sample.webinarId,
+    orgId,
+    format: toDbFormat(sample.format),
+    providerMeetingId: sample.providerMeetingId,
+    status: toDbSessionStatus(sample.status),
+    startsAt: new Date(sample.startsAt),
+    endsAt: new Date(sample.endsAt),
+    startedAt: sample.startedAt ? new Date(sample.startedAt) : null,
+    endedAt: sample.endedAt ? new Date(sample.endedAt) : null,
+  } satisfies typeof t.callSessions.$inferInsert;
+  const participants = sample.participants.map(
+    (participant) =>
+      ({
+        id: participant.id,
+        sessionId: sample.id,
+        orgId,
+        userId: participant.userId,
+        role: toDbParticipantRole(participant.role),
+        firstJoinedAt: participant.firstJoinedAt ? new Date(participant.firstJoinedAt) : null,
+        lastLeftAt: participant.lastLeftAt ? new Date(participant.lastLeftAt) : null,
+        reconnectCount: participant.reconnectCount,
+      }) satisfies typeof t.callParticipants.$inferInsert,
+  );
+  const outcome = sample.outcome
+    ? ({
+        id: sample.outcome.id,
+        sessionId: sample.id,
+        orgId,
+        status: toDbOutcomeStatus(sample.outcome.status),
+        recordedByUserId: sample.outcome.recordedByUserId,
+        connectionMetrics: sample.outcome.connectionMetrics,
+      } satisfies typeof t.callOutcomes.$inferInsert)
+    : null;
+  const feedback = sample.feedback.map(
+    (entry) =>
+      ({
+        id: entry.id,
+        sessionId: sample.id,
+        orgId,
+        userId: entry.userId,
+        score: entry.score,
+        comment: entry.comment,
+      }) satisfies typeof t.callFeedback.$inferInsert,
+  );
+  return { session, participants, outcome, feedback };
 }
 
 /**
@@ -510,6 +636,11 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     conversations: t.conversations,
     conversationMessages: t.conversationMessages,
     intakeRecords: t.intakeRecords,
+    appointments: t.appointments,
+    callSessions: t.callSessions,
+    callParticipants: t.callParticipants,
+    callOutcomes: t.callOutcomes,
+    callFeedback: t.callFeedback,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

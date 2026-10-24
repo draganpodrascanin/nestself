@@ -459,6 +459,42 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(rows).toEqual([]);
     });
 
+    it('seeds the sample appointments and the consultation call session (T-CW-1.1)', async () => {
+      // Earlier tests in this file add their own rows, so the counts are lower bounds.
+      const counts = await seed(owner.db);
+      expect(counts.appointments).toBeGreaterThanOrEqual(5);
+      expect(counts.callFeedback).toBeGreaterThanOrEqual(1);
+
+      const appointmentRows = await owner.db
+        .select({ id: appointments.id, status: appointments.status })
+        .from(appointments)
+        .where(inArray(appointments.id, ['appt_sample_completed', 'appt_sample_upcoming']));
+      expect(appointmentRows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        { id: 'appt_sample_completed', status: 'COMPLETED' },
+        { id: 'appt_sample_upcoming', status: 'CONFIRMED' },
+      ]);
+
+      const [session] = await owner.db
+        .select()
+        .from(callSessions)
+        .where(eq(callSessions.id, 'call_session_sample_consultation'));
+      expect(session).toMatchObject({ format: 'CONSULTATION', status: 'ENDED', appointmentId: 'appt_sample_completed' });
+      // The webinar session waits for the webinars table (T-CW-2.1).
+      const webinarSessions = await owner.db.select().from(callSessions).where(eq(callSessions.format, 'WEBINAR'));
+      expect(webinarSessions).toEqual([]);
+
+      const [outcome] = await owner.db
+        .select()
+        .from(callOutcomes)
+        .where(eq(callOutcomes.sessionId, 'call_session_sample_consultation'));
+      expect(outcome).toMatchObject({ status: 'COMPLETED', recordedByUserId: 'user_milica' });
+      const roles = await owner.db
+        .select({ role: callParticipants.role })
+        .from(callParticipants)
+        .where(eq(callParticipants.sessionId, 'call_session_sample_consultation'));
+      expect(roles.map((r) => r.role).sort()).toEqual(['EMPLOYEE', 'EXPERT']);
+    });
+
     it('is idempotent (run twice, row counts equal)', async () => {
       const counts1 = await seed(owner.db);
       const counts2 = await seed(owner.db);

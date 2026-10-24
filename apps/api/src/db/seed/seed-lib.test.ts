@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-import { SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { EXTRA_SAMPLE_TEMPLATES, extraSampleGrantIds, templatesForLegacyRoles } from './seed-lib.js';
+import { SAMPLE_APPOINTMENTS, SAMPLE_CALL_SESSIONS, SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
+import {
+  EXTRA_SAMPLE_TEMPLATES,
+  extraSampleGrantIds,
+  sampleAppointmentRow,
+  sampleCallSessionRows,
+  seededSampleCallSessions,
+  templatesForLegacyRoles,
+} from './seed-lib.js';
 
 const keys = (orgRole: string | null, platformRole: string | null) =>
   templatesForLegacyRoles(orgRole, platformRole)
@@ -67,5 +74,55 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     const seeded = [...derived, ...extraSampleGrantIds()].sort();
     expect(seeded).toHaveLength(17);
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
+  });
+});
+
+describe('sample appointments and call sessions (T-CW-1.1)', () => {
+  it('maps every sample appointment to its UPPER_CASE status', () => {
+    const rows = SAMPLE_APPOINTMENTS.map(sampleAppointmentRow);
+    expect(rows.map((r) => [r.id, r.status])).toEqual([
+      ['appt_sample_completed', 'COMPLETED'],
+      ['appt_sample_canceled', 'CANCELED'],
+      ['appt_sample_follow_up_proposed', 'PROPOSED'],
+      ['appt_sample_follow_up_awaiting', 'AWAITING_APPROVAL'],
+      ['appt_sample_upcoming', 'CONFIRMED'],
+    ]);
+    expect(rows[2]).toMatchObject({ followUpOf: 'appt_sample_completed', startsAt: new Date('2026-11-04T15:00:00.000Z') });
+    // The fixture marker is not a column.
+    expect(rows.every((r) => !('sample' in r))).toBe(true);
+  });
+
+  it('seeds the consultation session only; the webinar session waits for the webinars table (T-CW-2.1)', () => {
+    expect(SAMPLE_CALL_SESSIONS.map((s) => s.format)).toEqual(['consultation', 'webinar']);
+    expect(seededSampleCallSessions().map((s) => s.id)).toEqual(['call_session_sample_consultation']);
+  });
+
+  it('maps the consultation session, participants, outcome and feedback to the UPPER_CASE enums', () => {
+    const [session] = seededSampleCallSessions();
+    const rows = sampleCallSessionRows(session!);
+    expect(rows.session).toMatchObject({
+      id: 'call_session_sample_consultation',
+      appointmentId: 'appt_sample_completed',
+      orgId: 'org_sample',
+      format: 'CONSULTATION',
+      status: 'ENDED',
+      providerMeetingId: 'sample_meeting_consultation',
+      startedAt: new Date('2026-10-14T13:56:00.000Z'),
+    });
+    expect(rows.participants.map((p) => [p.id, p.role, p.orgId])).toEqual([
+      ['call_participant_sample_expert', 'EXPERT', 'org_sample'],
+      ['call_participant_sample_employee', 'EMPLOYEE', 'org_sample'],
+    ]);
+    expect(rows.outcome).toMatchObject({ status: 'COMPLETED', sessionId: session!.id, recordedByUserId: 'user_milica' });
+    expect(rows.feedback).toEqual([
+      {
+        id: 'call_feedback_sample_consultation',
+        sessionId: session!.id,
+        orgId: 'org_sample',
+        userId: 'user_jovan',
+        score: 4,
+        comment: 'Sample feedback comment (fixture)',
+      },
+    ]);
   });
 });
