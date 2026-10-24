@@ -5,6 +5,7 @@ import { X } from '@phosphor-icons/react/dist/ssr';
 import { Children, createContext, isValidElement, useContext } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
+import { POPUP_LAYER_ABOVE_DIALOG } from '../../../lib/layers';
 import { useOpenState } from '../../../lib/use-open-state';
 import { AnimatePresence, m, MotionFeatures, useMotionPreset } from '../../../motion';
 
@@ -76,7 +77,7 @@ export function DialogContent({
     <MotionFeatures>
       <AnimatePresence>
         {open ? (
-          <BaseDialog.Portal keepMounted>
+          <BaseDialog.Portal keepMounted className={POPUP_LAYER_ABOVE_DIALOG}>
             <BaseDialog.Backdrop
               className="inset-0 fixed z-[var(--z-scrim)] bg-scrim"
               render={<m.div {...backdropMotion} />}

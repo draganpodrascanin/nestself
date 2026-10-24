@@ -6,6 +6,7 @@ import { CaretDown, Check } from '@phosphor-icons/react/dist/ssr';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
+import { POPUP_LAYER } from '../../../lib/layers';
 import { m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 export interface FieldProps {
@@ -200,10 +201,10 @@ export function Select({
       </BaseSelect.Trigger>
       <MotionFeatures>
         <BaseSelect.Portal>
-          <BaseSelect.Positioner className="z-[var(--z-dropdown)]">
+          <BaseSelect.Positioner className={POPUP_LAYER}>
             <BaseSelect.Popup
               render={motionElement}
-              className="max-h-64 py-1 z-[var(--z-dropdown)] overflow-auto rounded-control bg-surface shadow-menu origin-[var(--transform-origin)]"
+              className="max-h-64 py-1 overflow-auto rounded-control bg-surface shadow-menu origin-[var(--transform-origin)]"
             >
               {options.map((opt) => (
                 <BaseSelect.Item

@@ -91,14 +91,11 @@ test.describe('Workspace HR grant administration', () => {
     await page.getByRole('button', { name: 'Delegate part of HR administrator' }).click();
     const dialog = page.getByRole('dialog', { name: 'Delegate part of your access' });
     await expect(dialog).toBeVisible();
-    // Keyboard, not a pointer click: the select's popup is layered below the
-    // dialog (--z-dropdown 20 < --z-dialog 40), so the dialog intercepts
-    // clicks on its options. Reported; the keyboard path is unaffected.
+    // A pointer click on the option: the select's popup layers above the
+    // dialog (--z-popup, set by DialogContent).
     const member = dialog.getByRole('combobox', { name: 'Member' });
     await member.click();
-    await expect(page.getByRole('option', { name: MANAGER_NAME })).toBeVisible();
-    await page.keyboard.type('Stefan');
-    await page.keyboard.press('Enter');
+    await page.getByRole('option', { name: MANAGER_NAME }).click();
     await expect(member).toHaveText(MANAGER_NAME);
     await dialog.getByRole('checkbox', { name: 'people.invite', exact: true }).click();
     await dialog.getByRole('button', { name: 'Delegate', exact: true }).click();
@@ -113,9 +110,9 @@ test.describe('Workspace HR grant administration', () => {
       .filter({ hasText: MANAGER_NAME });
     await expect(delegatedRows.first()).toBeVisible({ timeout: 10_000 });
 
-    // Not asserted: Stefan's effective access. The engine only accepts a
-    // delegated grant when its parent chain is in the context, and the
-    // context loader loads the subject's own grants only, so the delegation
-    // does not show in the preview yet (reported with Task 15).
+    // The delegation takes effect for Stefan: his effective access now lists
+    // people.invite (the context carries the delegated grant's parent chain).
+    const stefanPanel = await previewFor(page, MANAGER_NAME);
+    await expect(stefanPanel.getByText('people.invite', { exact: true })).toBeVisible({ timeout: 10_000 });
   });
 });

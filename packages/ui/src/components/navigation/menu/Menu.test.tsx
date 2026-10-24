@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuLinkItem } from './Menu';
+import { Dialog, DialogContent } from '../../dialogs/dialog/Dialog';
 import { expectNoA11yViolations } from '../../../test/axe';
 
 function MenuFixture({ onSelect }: { onSelect?: () => void }) {
@@ -131,5 +132,31 @@ describe('Menu motion', () => {
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
     await user.click(trigger);
     expect(await screen.findByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
+  });
+});
+
+describe('Menu layering', () => {
+  it('inside DialogContent the popup layers above the dialog and an item takes a mouse click', async () => {
+    const onSelect = vi.fn();
+    render(
+      <Dialog defaultOpen>
+        <DialogContent title="Row actions">
+          <MenuFixture onSelect={onSelect} />
+        </DialogContent>
+      </Dialog>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    const menu = await screen.findByRole('menu');
+    const positioner = menu.parentElement!;
+    expect(positioner.className).toContain('z-[var(--z-popup,var(--z-dropdown))]');
+    let source: Element | null = positioner;
+    while (source && !(typeof source.className === 'string' && source.className.includes('[--z-popup:'))) {
+      source = source.parentElement;
+    }
+    expect(source?.className).toContain('[--z-popup:calc(var(--z-dialog)+1)]');
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    expect(onSelect).toHaveBeenCalledOnce();
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Sheet, SheetTrigger, SheetContent } from './Sheet';
+import { Field, Select } from '../../fields/field/Field';
 import { expectNoA11yViolations } from '../../../test/axe';
 
 describe('Sheet', () => {
@@ -107,5 +108,26 @@ describe('Sheet motion', () => {
     await user.keyboard('{Escape}');
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  });
+});
+
+describe('Sheet popup layering', () => {
+  it('a Select opened inside SheetContent reads the above-dialog popup layer', async () => {
+    render(
+      <Sheet defaultOpen>
+        <SheetContent title="Filters">
+          <Field label="Choice">
+            <Select options={[{ value: 'a', label: 'Option A' }]} placeholder="Pick one" />
+          </Field>
+        </SheetContent>
+      </Sheet>,
+    );
+    await userEvent.setup().click(screen.getByRole('combobox', { name: 'Choice' }));
+    let node: Element | null = (await screen.findByRole('listbox')).parentElement;
+    expect(node?.className).toContain('z-[var(--z-popup,var(--z-dropdown))]');
+    while (node && !(typeof node.className === 'string' && node.className.includes('[--z-popup:'))) {
+      node = node.parentElement;
+    }
+    expect(node?.className).toContain('[--z-popup:calc(var(--z-dialog)+1)]');
   });
 });
