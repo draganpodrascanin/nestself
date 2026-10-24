@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-// @nestself/i18n does not depend on @nestself/contracts, so the test reads the
-// error codes from the contracts source: a new code cannot ship without copy.
-import { CALL_ERROR_CODES } from '../../contracts/src/calls.ts';
+// Every error code in the contracts needs copy: a new code cannot ship without it.
+import { CALL_ERROR_CODES } from '@nestself/contracts';
 import en from '../locales/en/calls.json';
 import hu from '../locales/hu/calls.json';
 import srCyrl from '../locales/sr-Cyrl/calls.json';
