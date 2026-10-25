@@ -72,6 +72,32 @@ const EMERGENCY = {
   revokedAt: null,
 };
 
+const SSO_DOMAIN = {
+  id: 'sd_1',
+  domain: 'example.test',
+  verifiedAt: null,
+  txtRecordName: '_nestself-verify.example.test',
+  txtRecordValue: 'nestself-domain-verification=abc',
+};
+
+const SSO_CONNECTION = {
+  id: 'sso_1',
+  orgId: 'org_1',
+  protocol: 'SAML',
+  cognitoProviderName: 'org-example-saml',
+  status: 'DRAFT',
+  metadataUrl: 'https://idp.example.test/metadata',
+  oidcIssuer: null,
+  oidcClientId: null,
+  idpInitiatedAllowed: false,
+  jitProvisioning: false,
+  defaultOrgUnitId: null,
+  certificateExpiresAt: null,
+  lastTestedAt: null,
+  domains: [SSO_DOMAIN],
+  spMetadata: { entityId: 'urn:amazon:cognito:sp:pool', acsUrl: 'https://auth.example.test/saml2/idpresponse' },
+};
+
 interface Call {
   url: string;
   method: string;
@@ -368,7 +394,8 @@ describe('createOrgAdminApi', () => {
       for (const name of [
         'listOrganizations', 'getOrganization', 'suspendUser', 'reinstateUser', 'listEmergencyAccess',
         'requestEmergencyAccess', 'approveEmergencyAccess', 'denyEmergencyAccess', 'revokeEmergencyAccess',
-        'readEmergencyRecord',
+        'readEmergencyRecord', 'listSsoConnections', 'createSsoConnection', 'updateSsoConnection', 'addSsoDomain',
+        'verifySsoDomain', 'testSsoConnection', 'activateSsoConnection',
       ]) {
         expect(name in api).toBe(false);
       }
@@ -600,6 +627,89 @@ describe('createOrgAdminApi', () => {
       it('rejects an emergency record with an unknown record type', async () => {
         const { api } = setupOps({ emergencyAccessId: 'ea_1', recordType: 'payroll', recordId: 'x', content: null });
         await expect(api.readEmergencyRecord('ea_1', 'conversation', 'x')).rejects.toMatchObject({ code: 'invalid_response' });
+      });
+    });
+    describe('SSO connections', () => {
+      it('lists connections, optionally for one organization, GET without CSRF', async () => {
+        const all = setupOps({ items: [SSO_CONNECTION] });
+        const res = await all.api.listSsoConnections();
+        expect(res.items).toEqual([SSO_CONNECTION]);
+        expect(all.last().method).toBe('GET');
+        expect(all.last().url).toBe('http://x/api/ops/sso-connections');
+        expect(all.last().csrf).toBeNull();
+
+        const one = setupOps({ items: [] });
+        await one.api.listSsoConnections({ orgId: 'org/1' });
+        expect(one.last().url).toBe('http://x/api/ops/sso-connections?orgId=org%2F1');
+      });
+
+      it('creates a connection with POST, CSRF and body', async () => {
+        const { api, last } = setupOps(SSO_CONNECTION);
+        const body = { orgId: 'org_1', slug: 'example', protocol: 'SAML' as const, metadataUrl: 'https://idp.example.test/metadata' };
+        await expect(api.createSsoConnection(body)).resolves.toEqual(SSO_CONNECTION);
+        expect(last().method).toBe('POST');
+        expect(last().url).toBe('http://x/api/ops/sso-connections');
+        expect(last().csrf).toBe('tok');
+        expect(last().body).toEqual(body);
+      });
+
+      it('updates a connection with PATCH, CSRF and body', async () => {
+        const { api, last } = setupOps({ ...SSO_CONNECTION, status: 'SUSPENDED' });
+        const res = await api.updateSsoConnection('sso/1', { status: 'SUSPENDED' });
+        expect(res.status).toBe('SUSPENDED');
+        expect(last().method).toBe('PATCH');
+        expect(last().url).toBe('http://x/api/ops/sso-connections/sso%2F1');
+        expect(last().csrf).toBe('tok');
+        expect(last().body).toEqual({ status: 'SUSPENDED' });
+      });
+
+      it('adds a domain and returns the TXT record', async () => {
+        const { api, last } = setupOps(SSO_DOMAIN);
+        const res = await api.addSsoDomain('sso_1', { domain: 'example.test' });
+        expect(res.txtRecordName).toBe('_nestself-verify.example.test');
+        expect(last().method).toBe('POST');
+        expect(last().url).toBe('http://x/api/ops/sso-connections/sso_1/domains');
+        expect(last().csrf).toBe('tok');
+        expect(last().body).toEqual({ domain: 'example.test' });
+      });
+
+      it('verifies a domain with POST and no body', async () => {
+        const { api, last } = setupOps({ ...SSO_DOMAIN, verifiedAt: '2026-10-25T00:00:00.000Z' });
+        const res = await api.verifySsoDomain('sso_1', 'sd_1');
+        expect(res.verifiedAt).toBe('2026-10-25T00:00:00.000Z');
+        expect(last().method).toBe('POST');
+        expect(last().url).toBe('http://x/api/ops/sso-connections/sso_1/domains/sd_1/verify');
+        expect(last().csrf).toBe('tok');
+        expect(last().body).toBeUndefined();
+      });
+
+      it('starts a test and returns the start URL', async () => {
+        const { api, last } = setupOps({ startUrl: 'http://api.example.test/api/auth/sso/start?connection=org-example-saml' });
+        const res = await api.testSsoConnection('sso_1');
+        expect(res.startUrl).toMatch(/^http:\/\/api\.example\.test/);
+        expect(last().method).toBe('POST');
+        expect(last().url).toBe('http://x/api/ops/sso-connections/sso_1/test');
+        expect(last().csrf).toBe('tok');
+        expect(last().body).toBeUndefined();
+      });
+
+      it('activates a tested connection with POST', async () => {
+        const { api, last } = setupOps({ ...SSO_CONNECTION, status: 'ACTIVE' });
+        const res = await api.activateSsoConnection('sso_1');
+        expect(res.status).toBe('ACTIVE');
+        expect(last().method).toBe('POST');
+        expect(last().url).toBe('http://x/api/ops/sso-connections/sso_1/activate');
+        expect(last().csrf).toBe('tok');
+      });
+
+      it('rejects a connection with an unknown status', async () => {
+        const { api } = setupOps({ items: [{ ...SSO_CONNECTION, status: 'PAUSED' }] });
+        await expect(api.listSsoConnections()).rejects.toMatchObject({ code: 'invalid_response' });
+      });
+
+      it('rejects a test response without an absolute start URL', async () => {
+        const { api } = setupOps({ startUrl: '/relative' });
+        await expect(api.testSsoConnection('sso_1')).rejects.toMatchObject({ code: 'invalid_response' });
       });
     });
   });

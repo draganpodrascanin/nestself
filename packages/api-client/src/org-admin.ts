@@ -2,7 +2,7 @@
  * Typed wrappers for organization administration: invitations, members, org
  * units, grants and approval authorities (auth-strategy.md section 5.3) and
  * their operations mirrors (section 5.4), plus the operations-only client
- * list, user suspension and emergency access routes.
+ * list, user suspension, emergency access and SSO connection routes.
  *
  * One factory serves both workspaces. `{ kind: 'org' }` targets
  * `/api/orgs/:orgId/...` and returns the full `OrgAdminApi`; `{ kind: 'ops' }`
@@ -32,6 +32,10 @@ import {
   OrgUnitListResponseSchema,
   OrgUnitResponseSchema,
   OwnershipTransferResponseSchema,
+  SsoConnectionListResponseSchema,
+  SsoConnectionResponseSchema,
+  SsoDomainResponseSchema,
+  SsoTestResponseSchema,
   UserAccessResponseSchema,
   UserReinstateResponseSchema,
   UserSuspendResponseSchema,
@@ -55,6 +59,9 @@ import type {
   OrgUnitUpdateRequest,
   OwnershipTransferRequest,
   PlatformGrantCreateRequest,
+  SsoConnectionCreateRequestSchema,
+  SsoConnectionDomainRequestSchema,
+  SsoConnectionUpdateRequest,
   UserSuspendRequest,
 } from '@nestself/contracts';
 import type { ApiClient } from './client';
@@ -84,6 +91,17 @@ export interface OrganizationListParams {
 export interface EmergencyAccessListParams {
   userId?: string;
 }
+
+/** Query of `GET /ops/sso-connections` (`SsoConnectionListQuerySchema` in the API). */
+export interface SsoConnectionListParams {
+  orgId?: string;
+}
+
+/** Body of `POST /ops/sso-connections`; `jitProvisioning` and `idpInitiatedAllowed` default to `false`. */
+export type SsoConnectionCreateBody = z.input<typeof SsoConnectionCreateRequestSchema>;
+
+/** Body of `POST /ops/sso-connections/:id/domains`; the server trims and lowercases the domain. */
+export type SsoDomainBody = z.input<typeof SsoConnectionDomainRequestSchema>;
 
 /** Body of `POST .../members/:membershipId/end`; `reason` defaults to `DEACTIVATED_BY_HR` on the server. */
 export type MemberEndBody = z.input<typeof MemberEndRequestSchema>;
@@ -373,6 +391,55 @@ function buildOpsOnly(client: ApiClient) {
         `/api/ops/emergency-access/${seg(id)}/records/${seg(recordType)}/${seg(recordId)}`,
         { method: 'GET', schema: EmergencyRecordResponseSchema },
       ),
+
+    /** GET /ops/sso-connections — connections with their domains, optionally for one organization. */
+    listSsoConnections: (query: SsoConnectionListParams = {}) =>
+      client.request(`/api/ops/sso-connections${queryString({ ...query })}`, {
+        method: 'GET',
+        schema: SsoConnectionListResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections — a new connection in DRAFT (step-up class administration). */
+    createSsoConnection: (body: SsoConnectionCreateBody) =>
+      client.request('/api/ops/sso-connections', {
+        ...send('POST', body),
+        schema: SsoConnectionResponseSchema,
+      }),
+
+    /** PATCH /ops/sso-connections/:id — metadata, JIT, default org unit, write-only secret, or a status change. */
+    updateSsoConnection: (id: string, body: SsoConnectionUpdateRequest) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}`, {
+        ...send('PATCH', body),
+        schema: SsoConnectionResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/domains — add a domain; the response carries the DNS TXT record to publish. */
+    addSsoDomain: (id: string, body: SsoDomainBody) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/domains`, {
+        ...send('POST', body),
+        schema: SsoDomainResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/domains/:domainId/verify — check the DNS TXT record. */
+    verifySsoDomain: (id: string, domainId: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/domains/${seg(domainId)}/verify`, {
+        method: 'POST',
+        schema: SsoDomainResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/test — register the provider, move to TESTING, return a single-use start URL. */
+    testSsoConnection: (id: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/test`, {
+        method: 'POST',
+        schema: SsoTestResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/activate — TESTING to ACTIVE after a test sign-in. */
+    activateSsoConnection: (id: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/activate`, {
+        method: 'POST',
+        schema: SsoConnectionResponseSchema,
+      }),
   };
 }
 

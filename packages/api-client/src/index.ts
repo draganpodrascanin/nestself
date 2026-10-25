@@ -14,6 +14,9 @@ export type {
   EmergencyAccessListParams,
   MemberEndBody,
   EmergencyAccessRequestBody,
+  SsoConnectionListParams,
+  SsoConnectionCreateBody,
+  SsoDomainBody,
 } from './org-admin';
 export { createProfessionalApi } from './professional';
 export type { ProfessionalApi, ConversationListParams } from './professional';
