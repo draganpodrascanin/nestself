@@ -348,7 +348,12 @@ export class WebinarsService {
           capabilities: attendeeCapabilities(false),
         });
       }
-      await this.access.scoped(webinar.orgId, (tx) => this.repo.setFloor(joiner.registration.id, null, tx));
+      const active = await this.access.scoped(webinar.orgId, async (tx) => {
+        await this.repo.setFloor(joiner.registration.id, null, tx);
+        return (await this.repo.listActiveRegistrations(webinar.id, tx)).some((r) => r.floorGivenAt !== null);
+      });
+      // The audience's "a participant is speaking" follows the floor (WBN-25.8).
+      this.events.toAudienceAdded(webinar.id, 'webinar.floor.state', { active });
     }
 
     await this.record(principal.userId, webinar, 'webinar.joined', { webinarId: webinar.id, participantId: participant.id });

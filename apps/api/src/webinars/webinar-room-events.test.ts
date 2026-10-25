@@ -56,6 +56,22 @@ describe('WebinarRoomEvents', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it('sends the T-CW-2.3 additions to webinar:{id}: the removed message id and the anonymous floor flag', () => {
+    const { emit, events } = setup();
+    expect(events.toAudienceAdded('w1', 'webinar.message.removed', { messageId: 'msg_1' })).toBe(true);
+    expect(events.toAudienceAdded('w1', 'webinar.floor.state', { active: true })).toBe(true);
+    expect(emit.mock.calls).toEqual([
+      ['webinar:w1', 'webinar.message.removed', { messageId: 'msg_1' }],
+      ['webinar:w1', 'webinar.floor.state', { active: true }],
+    ]);
+  });
+
+  it('never sends a floor flag that names the speaker (D-CW-15)', () => {
+    const { emit, events } = setup();
+    expect(events.toAudienceAdded('w1', 'webinar.floor.state', { active: true, participantId: 'part_1' } as never)).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
   it('never emits a published message that carries a name or a user id (D-CW-15)', () => {
     const { emit, events } = setup();
     expect(events.toAudience('w1', 'webinar.message.published', message)).toBe(true);

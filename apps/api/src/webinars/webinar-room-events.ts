@@ -11,7 +11,11 @@
  *   `webinar.hand.raised`, `webinar.hand.lowered`,
  *   `webinar.attendance.count`, and `webinar.ended`;
  * - `user:{userId}` (one attendee, CW-R-34): `webinar.floor.given` and
- *   `webinar.floor.taken`.
+ *   `webinar.floor.taken`;
+ * - `webinar:{webinarId}`, the canonical additions of T-CW-2.3
+ *   (`WEBINAR_ROOM_ADDED_EVENT_NAMES`): `webinar.message.removed` and the
+ *   anonymous `webinar.floor.state`, checked against
+ *   `WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS`.
  *
  * Each payload is checked here against the contract's
  * `WEBINAR_EVENT_PAYLOAD_SCHEMAS` first (strict objects: no name reaches the
@@ -23,6 +27,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   userRoomName,
   webinarModerationRoomName,
   webinarRoomName,
@@ -30,6 +35,8 @@ import {
   type WebinarEventPayloads,
   type WebinarModerationRoomEventName,
   type WebinarParticipantEventName,
+  type WebinarRoomAddedEventName,
+  type WebinarRoomAddedEventPayloads,
   type WebinarRoomEventName,
 } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -56,6 +63,20 @@ export class WebinarRoomEvents {
     payload: WebinarEventPayloads[E],
   ): boolean {
     return this.send(webinarModerationRoomName(webinarId), event, payload);
+  }
+
+  /** A canonical addition of the public room `webinar:{webinarId}` (T-CW-2.3): removed messages, the floor flag. */
+  toAudienceAdded<E extends WebinarRoomAddedEventName>(
+    webinarId: string,
+    event: E,
+    payload: WebinarRoomAddedEventPayloads[E],
+  ): boolean {
+    const checked = WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload);
+    if (!checked.success) {
+      this.logger.error({ event }, 'Webinar room event failed its contract schema; not emitted');
+      return false;
+    }
+    return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarRoomName(webinarId), event, checked.data);
   }
 
   /** A floor event to one attendee's own room only (CW-R-34). */

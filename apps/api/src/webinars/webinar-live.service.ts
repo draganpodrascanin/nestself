@@ -9,7 +9,9 @@
  *   `webinar:{id}:moderation` with the registration name, anonymous towards
  *   the audience unless they attached their first name. Each side is refused
  *   the other's kind (403). The moderator publishes (optionally editing the
- *   text, the original kept), answers or dismisses. Attendees and presenters
+ *   text, the original kept), answers or dismisses; dismissing a published
+ *   message sends `webinar.message.removed { messageId }` to the audience
+ *   (WBN-24.2). Attendees and presenters
  *   read published and answered messages only; moderating principals read
  *   every message with its author's registration name.
  * - Hand-raise (WBN-10): an attendee who joined raises or lowers their hand;
@@ -17,7 +19,8 @@
  * - Floor (WBN-25, WBN-26, D-CW-35, CW-R-108): a host gives an attendee the
  *   floor with `UpdateAttendeeCapabilities` audio `SendReceive` and video and
  *   content `Receive`, and takes it back to receive-only; the events go to
- *   that attendee's own room only (CW-R-34). `webinar.floor.given` is audited
+ *   that attendee's own room only (CW-R-34); the audience gets the anonymous
+ *   `webinar.floor.state { active }` (WBN-25.8). `webinar.floor.given` is audited
  *   with `recordingNoticeShown: true` (CW-R-128): the client shows the
  *   recording notice before it lets the attendee unmute.
  * - Polls (WBN-11, WBN-27, CW-R-24): created, opened and closed by moderating
@@ -295,6 +298,8 @@ export class WebinarLiveService {
       this.repo.updateMessage(message.id, ['pending', 'published'], { status: 'dismissed' }, tx),
     );
     if (!dismissed) throw conflict('message_not_dismissable', 'Only a pending or published message can be dismissed');
+    // The audience saw a published message; it leaves the public chat (WBN-24.2). A pending one never reached it.
+    if (message.status === 'published') this.events.toAudienceAdded(webinarId, 'webinar.message.removed', { messageId });
     await this.record(principal.userId, webinar, 'webinar.message.dismissed', { webinarId, messageId });
     return this.moderationView(dismissed);
   }
@@ -356,6 +361,8 @@ export class WebinarLiveService {
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, new Date(), tx));
     if (target.registration.handRaisedAt) this.events.toModeration(webinarId, 'webinar.hand.lowered', { participantId });
     this.events.toParticipant(target.registration.userId, 'webinar.floor.given', { participantId, capabilities: FLOOR });
+    // The audience learns that a participant is speaking, never who (WBN-25.8, D-CW-15).
+    this.events.toAudienceAdded(webinarId, 'webinar.floor.state', { active: true });
     await this.record(principal.userId, target.webinar, 'webinar.floor.given', {
       webinarId,
       participantId,
@@ -377,6 +384,11 @@ export class WebinarLiveService {
       participantId,
       capabilities: RECEIVE_ONLY,
     });
+    // Still active while another attendee holds the floor.
+    const active = (
+      await this.access.scoped(target.webinar.orgId, (tx) => this.repo.listActiveRegistrations(webinarId, tx))
+    ).some((registration) => registration.floorGivenAt !== null);
+    this.events.toAudienceAdded(webinarId, 'webinar.floor.state', { active });
     await this.record(principal.userId, target.webinar, 'webinar.floor.taken', { webinarId, participantId });
     return { participantId, hasFloor: false, capabilities: RECEIVE_ONLY };
   }

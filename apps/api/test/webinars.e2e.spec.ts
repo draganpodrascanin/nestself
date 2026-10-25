@@ -605,6 +605,19 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
 
     const seen = WebinarMessageListResponseSchema.parse((await get(jovan, `/webinars/${liveId}/messages`)).body);
     expect(seen.items.map((m) => m.status).sort()).toEqual(['answered', 'published', 'published']);
+    // A pending message never reached the audience: nothing to remove from the public chat.
+    expect(emitted('webinar.message.removed')).toEqual([]);
+  });
+
+  it('dismissing a published message removes it from the public chat, by id only (WBN-24.2, T-CW-2.3 addition)', async () => {
+    const written = await post(jovan, `/webinars/${liveId}/messages`, { kind: 'attendee', text: 'Published, then removed' });
+    const id = written.body.id as string;
+    expect((await post(nikola, `/webinars/${liveId}/messages/${id}/publish`, {})).status).toBe(200);
+    const dismissed = await post(nikola, `/webinars/${liveId}/messages/${id}/dismiss`, {});
+    expect(dismissed.body).toMatchObject({ status: 'dismissed' });
+    expect(emitted('webinar.message.removed')).toEqual([[`webinar:${liveId}`, 'webinar.message.removed', { messageId: id }]]);
+    const seen = WebinarMessageListResponseSchema.parse((await get(jovan, `/webinars/${liveId}/messages`)).body);
+    expect(seen.items.map((m) => m.id)).not.toContain(id);
   });
 
   // ── Hand-raise and floor (WBN-10, WBN-25, D-CW-35) ────────────────────────
@@ -687,6 +700,21 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       attendeeJoin.attendee.AttendeeId,
     );
     expect(after.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+  });
+
+  it('the audience learns only that someone has the floor: webinar.floor.state on give, take and a rejoin (WBN-25.8)', async () => {
+    const floorPath = (action: string) => `/webinars/${liveId}/participants/${attendeeJoin.participantId}/${action}`;
+    expect((await post(nikola, floorPath('give-floor'))).status).toBe(200);
+    expect((await post(nikola, floorPath('take-floor'))).status).toBe(200);
+    expect((await post(nikola, floorPath('give-floor'))).status).toBe(200);
+    // The floor does not survive a reconnect (D-CW-35), and the flag follows it.
+    expect((await post(jovan, `/webinars/${liveId}/join`)).status).toBe(200);
+    expect(emitted('webinar.floor.state')).toEqual([
+      [`webinar:${liveId}`, 'webinar.floor.state', { active: true }],
+      [`webinar:${liveId}`, 'webinar.floor.state', { active: false }],
+      [`webinar:${liveId}`, 'webinar.floor.state', { active: true }],
+      [`webinar:${liveId}`, 'webinar.floor.state', { active: false }],
+    ]);
   });
 
   // ── Polls (WBN-11, WBN-27, CW-R-24) ───────────────────────────────────────
