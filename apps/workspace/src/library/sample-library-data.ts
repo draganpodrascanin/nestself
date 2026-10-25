@@ -103,6 +103,7 @@ export function sampleContentDetail(
     availableLocales: resource.variants.map((v) => v.locale),
     saved: false,
     playbackPosition: null,
+    replacementLink: null,
   };
 }
 

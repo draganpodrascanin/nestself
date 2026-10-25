@@ -290,25 +290,25 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
   };
 
   // Resolve CTA from the read model (LIB-R-23).
-  // The API drops unavailable targets, so if `detail.cta.target` is present,
-  // the CTA is actionable. When `label` becomes optional (contract change),
+  // The API drops unavailable targets, so if `detail.cta.targetId` is present,
+  // the CTA is actionable. When `label` is null (contract change),
   // we fall back to a translated label per kind.
   const resolveCta = (cta: { ctaKind: string; targetId?: string | null; label?: string | null }): ResolvedCta | null => {
     if (!detail.cta) return null;
-    if (detail.cta.target) {
+    if (detail.cta.targetId) {
       return {
         kind: 'link' as const,
-        href: detail.cta.target,
+        href: detail.cta.targetId,
         label: ctaLabel(detail.cta.kind, cta.label ?? detail.cta.label),
       };
     }
-    // CTA without a target: nothing to link to
+    // CTA without a targetId: nothing to link to
     return null;
   };
 
   // LIB-R-27: replacement link for unavailable content.
-  // The contract field is being added; when it lands, render a Link here.
-  // TODO(T-C1.13): Wire `detail.replacementResourceId` once the field name is settled.
+  // TODO(T-C1.13): Wire `detail.replacementLink` into a visible CTA when
+  // the library API populates it (field exists in the contract, always null for now).
 
   return (
     <div className="space-y-6 max-w-reading">
