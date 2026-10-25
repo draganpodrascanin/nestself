@@ -125,7 +125,7 @@ describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
     const hosts = rooms.get('webinar:w1:hosts')!;
     rooms.get('webinar:w1:moderation')!('webinar.hand.lowered', { participantId: 'p2' });
     hosts('webinar.floor.state', { active: true, participantId: 'p2' });
-    expect(moderator.getSnapshot().speakers).toEqual([{ participantId: 'p2', name: 'Ana Kovač (sample)' }]);
+    expect(moderator.getSnapshot().speakers).toEqual([{ participantId: 'p2', name: 'Ana Kovač (sample)', muted: false, unmuteRequested: false }]);
     hosts('webinar.floor.state', { active: false, participantId: 'p2' });
     expect(moderator.getSnapshot()).toMatchObject({ speakers: [], floorActive: false });
   });
@@ -217,7 +217,7 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
 
     await moderator.giveFloor(attendee.getSnapshot().participantId!);
     await vi.waitFor(() => expect(audio.setAudioCapability).toHaveBeenCalledWith(true));
-    expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: false });
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', acknowledged: false });
     expect(moderator.getSnapshot().speakers).toEqual([expect.objectContaining({ name: 'Ana Kovač (sample)' })]);
     expect(moderator.getSnapshot().hands).toEqual([]);
     expect(server.emitted.find((entry) => entry.event === 'webinar.floor.given')).toMatchObject({
@@ -227,7 +227,7 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
     expect(attendee.getSnapshot().floorActive).toBe(true);
 
     attendee.acknowledgeFloor();
-    expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: true });
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', acknowledged: true });
     // Acknowledging does not lower the hand.
     expect(attendee.getSnapshot().myHand.raised).toBe(true);
 
@@ -285,7 +285,7 @@ describe('WebinarClient floor in a replica meeting (T-CW-3.2, D-CW-14, D-CW-35)'
     const [credentials] = audio.promoteToPrimaryMeeting.mock.calls[0] as unknown as [Record<string, string>];
     expect(credentials).toEqual({ AttendeeId: expect.any(String), ExternalUserId: participantId, JoinToken: expect.any(String) });
     expect(audio.setAudioCapability).not.toHaveBeenCalled();
-    expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: false });
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', acknowledged: false });
     // The token is handed to the controller and never kept in the state.
     expect(JSON.stringify(attendee.getSnapshot())).not.toContain(credentials['JoinToken']!);
   });
@@ -348,6 +348,88 @@ describe('WebinarClient floor in a replica meeting (T-CW-3.2, D-CW-14, D-CW-35)'
     server.simulate.floorTaken(participantId);
     await vi.waitFor(() => expect(controller.promotedAs).toBeNull());
     expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+  });
+});
+
+describe('WebinarClient mute and unmute consent (WBN-26)', () => {
+  function audioSpies() {
+    return {
+      setAudioCapability: vi.fn(async () => undefined),
+      setMuted: vi.fn(),
+      promoteToPrimaryMeeting: vi.fn(async () => undefined),
+      demoteFromPrimaryMeeting: vi.fn(async () => undefined),
+    };
+  }
+
+  async function withFloor(replicated = false) {
+    const server = new FakeWebinarServer({ status: 'live', replicated });
+    const audio = audioSpies();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', name: 'Ana (sample)', audio });
+    const moderator = new FakeWebinarClient({ server, role: 'moderator' });
+    const presenter = new FakeWebinarClient({ server, role: 'presenter' });
+    for (const client of [attendee, moderator, presenter]) client.connect();
+    const participantId = attendee.getSnapshot().participantId!;
+    await moderator.giveFloor(participantId);
+    await vi.waitFor(() => expect(attendee.getSnapshot().myFloor.status).toBe('given'));
+    return { server, audio, attendee, moderator, presenter, participantId };
+  }
+
+  it('a host mutes: the attendee is muted locally and told so, every host sees the row muted', async () => {
+    const { server, audio, attendee, moderator, presenter, participantId } = await withFloor();
+    await presenter.muteSpeaker(participantId);
+    expect(server.requests.at(-1)).toMatchObject({ action: 'floor.mute', input: { participantId, body: {} } });
+    expect(server.emitted.filter((entry) => entry.event === 'webinar.floor.muted').map(({ room, payload, to }) => ({ room, payload, to }))).toEqual([
+      { room: 'webinar:sample-webinar', payload: {}, to: participantId },
+      { room: 'webinar:sample-webinar:hosts', payload: { participantId }, to: undefined },
+    ]);
+    expect(audio.setMuted).toHaveBeenLastCalledWith(true);
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', mutedByHost: true, unmuteRequested: false });
+    expect(moderator.getSnapshot().speakers).toEqual([expect.objectContaining({ participantId, muted: true })]);
+    expect(presenter.getSnapshot().speakers).toEqual([expect.objectContaining({ participantId, muted: true })]);
+  });
+
+  it('only the attendee unmutes, after a host asks and they consent; declining sends nothing', async () => {
+    const { server, audio, attendee, moderator, participantId } = await withFloor();
+    await moderator.muteSpeaker(participantId);
+    await moderator.requestUnmute(participantId);
+    expect(moderator.getSnapshot().speakers[0]).toMatchObject({ muted: true, unmuteRequested: true });
+    expect(attendee.getSnapshot().myFloor.unmuteRequested).toBe(true);
+
+    attendee.declineUnmute();
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ mutedByHost: true, unmuteRequested: false });
+    expect(server.requests.some((request) => request.action === 'floor.unmute')).toBe(false);
+
+    await moderator.requestUnmute(participantId);
+    await attendee.consentToUnmute();
+    expect(server.requests.at(-1)).toMatchObject({ action: 'floor.unmute', input: { participantId, body: {} }, from: { role: 'attendee' } });
+    expect(audio.setMuted).toHaveBeenLastCalledWith(false);
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ mutedByHost: false, unmuteRequested: false });
+    expect(moderator.getSnapshot().speakers[0]).toMatchObject({ muted: false, unmuteRequested: false });
+    await expect(moderator.consentToUnmute()).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('a replica attendee leaves the primary meeting when muted and is promoted again with fresh credentials on consent', async () => {
+    const { audio, attendee, moderator, participantId } = await withFloor(true);
+    await vi.waitFor(() => expect(audio.promoteToPrimaryMeeting).toHaveBeenCalledOnce());
+    await moderator.muteSpeaker(participantId);
+    await vi.waitFor(() => expect(audio.demoteFromPrimaryMeeting).toHaveBeenCalledOnce());
+    await moderator.requestUnmute(participantId);
+    await attendee.consentToUnmute();
+    expect(audio.promoteToPrimaryMeeting).toHaveBeenCalledTimes(2);
+    const [first] = audio.promoteToPrimaryMeeting.mock.calls[0] as unknown as [{ JoinToken: string }];
+    const [second] = audio.promoteToPrimaryMeeting.mock.calls[1] as unknown as [{ JoinToken: string }];
+    expect(second.JoinToken).not.toBe(first.JoinToken);
+    expect(audio.setMuted).toHaveBeenLastCalledWith(false);
+    expect(JSON.stringify(attendee.getSnapshot())).not.toContain(second.JoinToken);
+  });
+
+  it('ignores consent events with another shape or for an attendee without the floor', () => {
+    const { transport, rooms } = recordingTransport();
+    const attendee = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p1', transport });
+    attendee.connect();
+    rooms.get('webinar:w1')!('webinar.floor.unmute_requested', {});
+    rooms.get('webinar:w1')!('webinar.floor.muted', { participantId: 'p1' });
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'none', mutedByHost: false, unmuteRequested: false });
   });
 });
 
@@ -474,6 +556,7 @@ describe('webinarErrorMessage (error visibility rule)', () => {
     expect(webinarErrorMessage(new WebinarActionError('message.send', 'network'), t)).toBe(t('errors.network'));
     expect(webinarErrorMessage('something_new', t)).toBe(t('errors.unknown'));
     expect(webinarErrorMessage('not_editable', t)).toBe(t('webinar.errors.notEditable'));
+    expect(webinarErrorMessage('conflict', t)).toBe(t('errors.conflict'));
     // The capacity copy names the server's limit, else the replicated ceiling (D-CW-36).
     expect(webinarErrorMessage('capacity_above_limit', t)).toBe(t('webinar.capacityAboveLimit', { limit: WEBINAR_REPLICATED_CAPACITY }));
     expect(webinarErrorMessage(toWebinarActionError('message.send', { code: 'capacity_above_limit', details: { limit: 250 } }), t)).toBe(

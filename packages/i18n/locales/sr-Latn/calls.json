@@ -147,7 +147,7 @@
     "messagePublished": "Voditelj je objavio vašu poruku.",
     "floorGiven": "Voditelj vam je dao reč.",
     "floorTaken": "Voditelj vam je oduzeo reč. Mikrofon vam je ponovo isključen.",
-    "youCanSpeakNow": "Sada možete da govorite. Uključite mikrofon da biste govorili.",
+    "youCanSpeakNow": "Sada možete da govorite, uključite mikrofon da biste govorili.",
     "capacityAboveLimit": "Kapacitet može biti najviše {{limit}} učesnika.",
     "lobbyTitle": "Vebinar uskoro počinje",
     "startsIn": "Počinje za {{time}}",
@@ -260,7 +260,13 @@
         "dismissed": "Poruka je odbačena.",
         "floorGiven": "Reč je data.",
         "floorTaken": "Reč je oduzeta."
-      }
+      },
+      "mute": "Isključi mikrofon",
+      "muteName": "Isključi mikrofon: {{name}}",
+      "askUnmute": "Zamoli da uključi mikrofon",
+      "askUnmuteName": "Zamoli da uključi mikrofon: {{name}}",
+      "unmuteAsked": "Zahtev je poslat",
+      "muted": "Mikrofon isključen"
     },
     "poll": {
       "title": "Anketa",
@@ -486,7 +492,13 @@
     "ending": "Završavanje…",
     "recordingFailed": "Snimanje nije uspelo. Vebinar se nastavlja bez snimka.",
     "lobbyFloorRecording": "Ako vam voditelj da reč, vaš glas je deo snimka.",
-    "captionsStatement": "Titlovi uživo još nisu dostupni. Snimci se titluju nakon provere."
+    "captionsStatement": "Titlovi uživo još nisu dostupni. Snimci se titluju nakon provere.",
+    "mutedByHost": "Voditelj vam je isključio mikrofon. Možete ponovo da govorite kada vas voditelj zamoli da ga uključite.",
+    "unmuteRequest": {
+      "title": "Voditelj vas moli da uključite mikrofon. Uključiti?",
+      "unmute": "Uključi mikrofon",
+      "stayMuted": "Ostavi isključen"
+    }
   },
   "workshop": {
     "join": "Pridruži se radionici",
@@ -553,7 +565,16 @@
     "cameraError": "Kamera nije mogla da se pokrene. Zatvorite druge aplikacije koje je koriste, pa ponovite proveru.",
     "microphoneError": "Mikrofon nije mogao da se pokrene. Zatvorite druge aplikacije koje ga koriste, pa ponovite proveru.",
     "joinDisabledHint": "Moći ćete da se pridružite kada se provera završi.",
-    "joining": "Pridruživanje…"
+    "joining": "Pridruživanje…",
+    "screenShare": {
+      "label": "Deljenje ekrana",
+      "hint": "Neobavezno: proverite da li možete da delite ekran pre vebinara.",
+      "test": "Testiraj deljenje ekrana",
+      "testing": "Testiranje…",
+      "supported": "Deljenje ekrana radi u ovom pregledaču.",
+      "unsupported": "Ovaj pregledač ne može da deli ekran. Koristite noviji Chrome, Edge, Firefox ili Safari na računaru.",
+      "denied": "Deljenje ekrana nije dozvoljeno. Dozvolite ga u pregledaču kada budete delili ekran."
+    }
   },
   "errors": {
     "joinWindowClosed": "Ovoj sesiji sada nije moguće pristupiti. Pristup se otvara malo pre početka i zatvara se 10 minuta posle njega; ako ste se već pridružili, možete se ponovo pridružiti do malo posle kraja.",

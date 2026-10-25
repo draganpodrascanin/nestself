@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 afterEach(() => {
   cleanup();
 });
+
+// `waitFor` and `findBy*` wait up to 3 s: Motion exits and fake round trips run late on a loaded machine.
+configure({ asyncUtilTimeout: 3_000 });
 
 // Polyfill window.matchMedia for jsdom
 Object.defineProperty(window, 'matchMedia', {

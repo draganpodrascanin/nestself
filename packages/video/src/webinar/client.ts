@@ -66,6 +66,8 @@ import type {
   WebinarRoomAddedEventPayloads,
 } from '@nestself/contracts';
 import { WebinarActionError, toWebinarActionError } from './errors';
+import { hostsConsentPayload, isFloorConsentEvent, isParticipantConsentEvent, unmutePrimaryAttendee } from './floor-consent';
+import type { WebinarFloorConsentEventName } from './floor-consent';
 import type {
   WebinarAction,
   WebinarActionArea,
@@ -162,7 +164,7 @@ function emptySnapshot(options: WebinarClientOptions): WebinarSnapshot {
     speakers: [],
     polls: { list: [], results: {}, votes: {} },
     myHand: { raised: false, raisedAt: null },
-    myFloor: { status: 'none', acknowledged: false },
+    myFloor: { status: 'none', acknowledged: false, mutedByHost: false, unmuteRequested: false },
     floorActive: false,
     pending: [],
     errors: {},
@@ -183,8 +185,11 @@ export class WebinarClient implements WebinarClientApi {
    * Never filled for anyone else.
    */
   private readonly names = new Map<string, string>();
-  /** This attendee's floor runs through a promotion onto the primary meeting (T-CW-3.2). */
-  private promoted = false;
+  /**
+   * How this attendee's floor runs: the audio capability of a single meeting,
+   * or a promotion onto the primary meeting from a replica (T-CW-3.2).
+   */
+  private floorPath: 'capability' | 'promotion' | null = null;
 
   constructor(options: WebinarClientOptions) {
     this.transport = options.transport;
@@ -256,7 +261,39 @@ export class WebinarClient implements WebinarClientApi {
   }
 
   /** Validates an incoming event against its room and its contract schema, then applies it. */
+  /** WBN-26 events (`floor-consent.ts`): to this attendee through the public handler, to hosts on the hosts' room. */
+  private receiveConsent(room: 'public' | 'hosts', event: WebinarFloorConsentEventName, payload: unknown): void {
+    if (room === 'public') {
+      // The attendee's own room: an empty payload, for whoever holds this socket's floor.
+      if (!isParticipantConsentEvent(event, payload)) return;
+      if (this.snapshot.role !== 'attendee' || this.snapshot.myFloor.status !== 'given') return;
+      if (event === 'webinar.floor.muted') void this.mutedByHost();
+      else this.update({ myFloor: { ...this.snapshot.myFloor, unmuteRequested: true } });
+      return;
+    }
+    const data = hostsConsentPayload(event, payload);
+    if (!data) return;
+    if (event === 'webinar.floor.muted') this.patchSpeaker(data.participantId, { muted: true, unmuteRequested: false });
+    else this.patchSpeaker(data.participantId, { muted: false, unmuteRequested: false });
+  }
+
+  /** A host muted this attendee: mute locally; a promoted attendee also leaves the primary meeting (the API deletes that attendee). */
+  private async mutedByHost(): Promise<void> {
+    this.update({ myFloor: { ...this.snapshot.myFloor, mutedByHost: true, unmuteRequested: false } });
+    this.audio?.setMuted(true);
+    if (this.floorPath === 'promotion') await this.audio?.demoteFromPrimaryMeeting?.().catch(() => undefined);
+  }
+
+  private patchSpeaker(participantId: string, patch: Partial<WebinarSpeaker>): void {
+    if (!this.snapshot.speakers.some((entry) => entry.participantId === participantId)) return;
+    this.update({ speakers: this.snapshot.speakers.map((entry) => (entry.participantId === participantId ? { ...entry, ...patch } : entry)) });
+  }
+
   private receive(room: 'public' | 'moderation', event: string, payload: unknown): void {
+    if (isFloorConsentEvent(event)) {
+      if (room === 'public') this.receiveConsent('public', event, payload);
+      return;
+    }
     const allowed = room === 'public' ? PUBLIC_EVENTS : MODERATION_EVENTS;
     if (!allowed.has(event)) return;
     // Names never reach anyone but the moderator, whatever a transport delivers (D-CW-15).
@@ -271,7 +308,12 @@ export class WebinarClient implements WebinarClientApi {
 
   /** The hosts' room: counts and the floor holder's participant id, validated with that room's schemas. */
   private receiveHosts(event: string, payload: unknown): void {
-    if (!this.isHost || !HOSTS_EVENTS.has(event)) return;
+    if (!this.isHost) return;
+    if (isFloorConsentEvent(event)) {
+      this.receiveConsent('hosts', event, payload);
+      return;
+    }
+    if (!HOSTS_EVENTS.has(event)) return;
     const parsed = WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarHostsRoomEventName].safeParse(payload);
     if (!parsed.success) return;
     const data = parsed.data as { webinarId?: string };
@@ -295,7 +337,7 @@ export class WebinarClient implements WebinarClientApi {
     let next: readonly WebinarSpeaker[] = speakers;
     if (active) {
       if (!speakers.some((entry) => entry.participantId === participantId)) {
-        next = [...speakers, { participantId, name: this.nameOf(participantId) }];
+        next = [...speakers, { participantId, name: this.nameOf(participantId), muted: false, unmuteRequested: false }];
       }
     } else {
       next = speakers.filter((entry) => entry.participantId !== participantId);
@@ -404,19 +446,14 @@ export class WebinarClient implements WebinarClientApi {
 
   private async floorGiven(primaryAttendee?: WebinarPrimaryAttendee): Promise<void> {
     if (this.snapshot.myFloor.status === 'given') return;
-    this.update({ myFloor: { status: 'given', acknowledged: false } });
+    this.update({ myFloor: { status: 'given', acknowledged: false, mutedByHost: false, unmuteRequested: false } });
     if (primaryAttendee) {
       // A replica attendee speaks through a promotion onto the primary meeting, audio only (T-CW-3.2).
-      this.promoted = true;
-      try {
-        if (!this.audio?.promoteToPrimaryMeeting) throw new Error('Promotion is not supported by this controller');
-        await this.audio.promoteToPrimaryMeeting(primaryAttendee);
-      } catch {
-        this.promoted = false;
-        this.setError('floor', new WebinarActionError('floor.audio', 'unknown'));
-      }
+      this.floorPath = 'promotion';
+      if (!(await this.promote(primaryAttendee))) this.floorPath = null;
       return;
     }
+    this.floorPath = 'capability';
     try {
       await this.audio?.setAudioCapability?.(true);
     } catch (error) {
@@ -426,15 +463,13 @@ export class WebinarClient implements WebinarClientApi {
 
   private async floorTaken(): Promise<void> {
     if (this.snapshot.myFloor.status !== 'given') return;
-    this.update({ myFloor: { status: 'taken', acknowledged: false } });
+    this.update({ myFloor: { status: 'taken', acknowledged: false, mutedByHost: false, unmuteRequested: false } });
     try {
       this.audio?.setMuted(true);
-      if (this.promoted) {
-        this.promoted = false;
-        await this.audio?.demoteFromPrimaryMeeting?.();
-      } else {
-        await this.audio?.setAudioCapability?.(false);
-      }
+      const path = this.floorPath;
+      this.floorPath = null;
+      if (path === 'promotion') await this.audio?.demoteFromPrimaryMeeting?.();
+      else await this.audio?.setAudioCapability?.(false);
     } catch (error) {
       this.setError('floor', toWebinarActionError('floor.audio', error));
     }
@@ -442,12 +477,41 @@ export class WebinarClient implements WebinarClientApi {
 
   acknowledgeFloor(): void {
     if (this.snapshot.myFloor.status !== 'given' || this.snapshot.myFloor.acknowledged) return;
-    this.update({ myFloor: { status: 'given', acknowledged: true } });
+    this.update({ myFloor: { ...this.snapshot.myFloor, acknowledged: true } });
   }
 
   dismissFloorNotice(): void {
     if (this.snapshot.myFloor.status !== 'taken') return;
-    this.update({ myFloor: { status: 'none', acknowledged: false } });
+    this.update({ myFloor: { status: 'none', acknowledged: false, mutedByHost: false, unmuteRequested: false } });
+  }
+
+  /** Promotes with the credentials, which are handed on and never kept; false (and a floor error) when it fails. */
+  private async promote(primaryAttendee: WebinarPrimaryAttendee): Promise<boolean> {
+    try {
+      if (!this.audio?.promoteToPrimaryMeeting) throw new Error('Promotion is not supported by this controller');
+      await this.audio.promoteToPrimaryMeeting(primaryAttendee);
+      return true;
+    } catch {
+      this.setError('floor', new WebinarActionError('floor.audio', 'unknown'));
+      return false;
+    }
+  }
+
+  async consentToUnmute(): Promise<void> {
+    const participantId = this.snapshot.participantId;
+    if (this.isHost || !participantId) return this.fail('floor', 'floor.unmute', 'forbidden');
+    if (!this.snapshot.myFloor.unmuteRequested) return;
+    const response = await this.run('floor', 'floor.unmute', { participantId, body: {} });
+    this.update({ myFloor: { ...this.snapshot.myFloor, mutedByHost: false, unmuteRequested: false } });
+    // A replica attendee comes back on the primary meeting with fresh credentials (T-CW-3.2).
+    const primaryAttendee = unmutePrimaryAttendee(response);
+    if (primaryAttendee && !(await this.promote(primaryAttendee))) return;
+    this.audio?.setMuted(false);
+  }
+
+  declineUnmute(): void {
+    if (!this.snapshot.myFloor.unmuteRequested) return;
+    this.update({ myFloor: { ...this.snapshot.myFloor, unmuteRequested: false } });
   }
 
   // -------------------------------------------------------------------------
@@ -636,7 +700,7 @@ export class WebinarClient implements WebinarClientApi {
     if (!this.isHost) return this.fail('floor', 'floor.give', 'forbidden');
     const response = WebinarFloorResponseSchema.safeParse(await this.run('floor', 'floor.give', { participantId, body: {} }, participantId));
     if (response.success && !response.data.hasFloor) return;
-    const speaker: WebinarSpeaker = { participantId, name: this.nameOf(participantId) };
+    const speaker: WebinarSpeaker = { participantId, name: this.nameOf(participantId), muted: false, unmuteRequested: false };
     this.update({ speakers: [...this.snapshot.speakers.filter((entry) => entry.participantId !== participantId), speaker] });
     this.removeHand(participantId);
   }
@@ -645,6 +709,18 @@ export class WebinarClient implements WebinarClientApi {
     if (!this.isHost) return this.fail('floor', 'floor.take', 'forbidden');
     await this.run('floor', 'floor.take', { participantId, body: {} }, participantId);
     this.update({ speakers: this.snapshot.speakers.filter((entry) => entry.participantId !== participantId) });
+  }
+
+  async muteSpeaker(participantId: string): Promise<void> {
+    if (!this.isHost) return this.fail('floor', 'floor.mute', 'forbidden');
+    await this.run('floor', 'floor.mute', { participantId, body: {} }, participantId);
+    this.patchSpeaker(participantId, { muted: true, unmuteRequested: false });
+  }
+
+  async requestUnmute(participantId: string): Promise<void> {
+    if (!this.isHost) return this.fail('floor', 'floor.unmuteRequest', 'forbidden');
+    await this.run('floor', 'floor.unmuteRequest', { participantId, body: {} }, participantId);
+    this.patchSpeaker(participantId, { unmuteRequested: true });
   }
 
   async openPoll(pollId: string): Promise<void> {

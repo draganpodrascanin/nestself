@@ -24,6 +24,8 @@ import {
   AppointmentRemindPayloadSchema,
   CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
@@ -33,6 +35,10 @@ import {
   type UserRoomEventName,
   type WebinarEventName,
   type WebinarEventPayloads,
+  type WebinarFloorMuteHostsEventName,
+  type WebinarFloorMuteHostsEventPayloads,
+  type WebinarFloorMuteParticipantEventName,
+  type WebinarFloorMuteParticipantEventPayloads,
   type WebinarHostsRoomEventName,
   type WebinarHostsRoomEventPayloads,
   type WebinarModerationRoomAddedEventName,
@@ -172,7 +178,9 @@ export type RoomEventName =
   | WebinarEventName
   | WebinarRoomAddedEventName
   | WebinarHostsRoomEventName
-  | WebinarModerationRoomAddedEventName;
+  | WebinarModerationRoomAddedEventName
+  | WebinarFloorMuteHostsEventName
+  | WebinarFloorMuteParticipantEventName;
 /**
  * `webinar.floor.state` has one payload per room (`{ active }` publicly, with
  * the holder's `participantId` on the hosts' room): a union, not the
@@ -182,7 +190,12 @@ type FloorStatePayload = WebinarRoomAddedEventPayloads['webinar.floor.state'] | 
 export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload } & WebinarEventPayloads &
   Omit<WebinarRoomAddedEventPayloads, 'webinar.floor.state'> &
   Omit<WebinarHostsRoomEventPayloads, 'webinar.floor.state'> &
-  WebinarModerationRoomAddedEventPayloads & { 'webinar.floor.state': FloorStatePayload };
+  WebinarModerationRoomAddedEventPayloads & { 'webinar.floor.state': FloorStatePayload } & {
+    // WBN-26: `{}` to the attendee's own room, `{ participantId }` to the hosts' room.
+    'webinar.floor.muted': WebinarFloorMuteParticipantEventPayloads['webinar.floor.muted'] | WebinarFloorMuteHostsEventPayloads['webinar.floor.muted'];
+    'webinar.floor.unmute_requested': WebinarFloorMuteParticipantEventPayloads['webinar.floor.unmute_requested'];
+    'webinar.floor.unmuted': WebinarFloorMuteHostsEventPayloads['webinar.floor.unmuted'];
+  };
 export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
 
 export interface RoomEventSpec {
@@ -228,6 +241,10 @@ function addedWebinarEvent(event: WebinarRoomAddedEventName): RoomEventSpec {
  * holder's participant id: numbers and ids only. The public room's
  * `webinar.floor.state` is the anonymous `{ active }`. A failed recording
  * pipeline reaches the moderators as `webinar.recording.failed` (CW-R-121).
+ * Muting the floor holder (WBN-26): `webinar.floor.muted {}` and
+ * `webinar.floor.unmute_requested {}` to the attendee's own room only,
+ * `webinar.floor.muted` and `webinar.floor.unmuted` with the participant id to
+ * the hosts' room.
  */
 export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'call.participant.joined': callRoomEvent('call.participant.joined'),
@@ -265,6 +282,16 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'webinar.attendance.count': webinarEvent('webinar.attendance.count', ['webinar_moderation', 'webinar_hosts']),
   'webinar.hand.count': { roomKinds: ['webinar_hosts'], schema: WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS['webinar.hand.count'] },
   'webinar.message.removed': addedWebinarEvent('webinar.message.removed'),
+  'webinar.floor.muted': {
+    roomKinds: ['user', 'webinar_hosts'],
+    schema: WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS['webinar.floor.muted'],
+    schemaByRoomKind: { webinar_hosts: WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS['webinar.floor.muted'] },
+  },
+  'webinar.floor.unmute_requested': {
+    roomKinds: ['user'],
+    schema: WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS['webinar.floor.unmute_requested'],
+  },
+  'webinar.floor.unmuted': { roomKinds: ['webinar_hosts'], schema: WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS['webinar.floor.unmuted'] },
   'webinar.recording.failed': {
     roomKinds: ['webinar_moderation'],
     schema: WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.recording.failed'],

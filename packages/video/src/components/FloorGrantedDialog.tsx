@@ -81,6 +81,55 @@ export function FloorGrantedDialog({ client, controller, error }: FloorGrantedDi
   );
 }
 
+export interface UnmuteConsentDialogProps {
+  /** The attendee's webinar client; opens on `webinar.floor.unmute_requested` while they hold the floor. */
+  client: WebinarClientApi;
+  /** A failure from outside, already translated. */
+  error?: string | null;
+}
+
+/**
+ * WBN-26: a host asks the muted floor holder to unmute; only the attendee
+ * decides. "Unmute" posts the consent (`POST .../unmute`) and unmutes;
+ * "Stay muted" or closing sends nothing. A failure keeps the prompt open with
+ * the error. Animated with the dialog preset.
+ */
+export function UnmuteConsentDialog({ client, error }: UnmuteConsentDialogProps) {
+  const { t } = useTranslation('calls');
+  const stage = useWebinarStage(client);
+  const open = stage.myFloor.status === 'given' && stage.myFloor.unmuteRequested;
+  const errors = useErrorMessages(error, stage.errorOf('floor'));
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) stage.declineUnmute();
+      }}
+    >
+      <DialogContent title={t('webinar.unmuteRequest.title')} description={t('webinar.recordingNoticeFloor')} closeLabel={t('webinar.floorDialog.close')}>
+        <div data-testid="webinar-unmute-consent" className="gap-3 flex flex-col">
+          <MotionFeatures>
+            <ErrorStack messages={errors} testId="webinar-unmute-error" />
+          </MotionFeatures>
+        </div>
+        <DialogActions>
+          <Button variant="secondary" onClick={() => stage.declineUnmute()}>
+            {t('webinar.unmuteRequest.stayMuted')}
+          </Button>
+          <Button
+            leadingIcon={<Microphone size={20} weight="bold" />}
+            loading={stage.isPending('floor.unmute')}
+            loadingLabel={t('webinar.chat.sending')}
+            onClick={() => void stage.consentToUnmute().catch(() => undefined)}
+          >
+            {t('webinar.unmuteRequest.unmute')}
+          </Button>
+        </DialogActions>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export interface FloorTakenNoticeProps {
   client: WebinarClientApi;
   className?: string;

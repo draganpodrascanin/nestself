@@ -141,6 +141,31 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     await waitFor(() => expect(screen.queryByTestId('webinar-queue-speakers')).toBeNull());
   });
 
+  it('mutes a speaker and asks them to unmute; only their consent unmutes (WBN-26)', async () => {
+    const user = userEvent.setup();
+    const { controller, attendee, moderator, participantId } = await setup();
+    await attendee.raiseHand();
+    await moderator.giveFloor(participantId);
+    await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(true));
+    attendee.acknowledgeFloor();
+    controller.setMuted(false);
+    renderWithI18n(<ModeratorQueue client={moderator} />);
+
+    await user.click(screen.getByRole('button', { name: t('webinar.moderation.muteName', { name: 'Ana Kovač (sample)' }) }));
+    const speaker = await screen.findByTestId('webinar-queue-speaker');
+    await waitFor(() => expect(speaker).toHaveAttribute('data-muted', 'true'));
+    expect(speaker).toHaveTextContent(t('webinar.moderation.muted'));
+    expect(controller.getSnapshot().media.muted).toBe(true);
+    expect(attendee.getSnapshot().myFloor.mutedByHost).toBe(true);
+
+    await user.click(within(speaker).getByRole('button', { name: t('webinar.moderation.askUnmuteName', { name: 'Ana Kovač (sample)' }) }));
+    expect(await within(speaker).findByRole('button', { name: t('webinar.moderation.unmuteAsked') })).toBeDisabled();
+    expect(controller.getSnapshot().media.muted).toBe(true);
+    await act(() => attendee.consentToUnmute());
+    await waitFor(() => expect(speaker).not.toHaveAttribute('data-muted'));
+    expect(controller.getSnapshot().media.muted).toBe(false);
+  });
+
   it('lets a presenter take the floor back from the floor holder the hosts room names, anonymously (WBN-25)', async () => {
     const user = userEvent.setup();
     const { server, controller, attendee, moderator, participantId } = await setup();

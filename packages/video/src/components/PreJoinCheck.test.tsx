@@ -118,3 +118,52 @@ describe('PreJoinCheck (D-CW-21, CALL-03, CALL-04)', () => {
     await expectNoA11yViolations(container);
   });
 });
+
+describe('PreJoinCheck screen-share check for hosts (WBN-16)', () => {
+  const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
+  afterEach(() => {
+    if (originalMediaDevices) Object.defineProperty(navigator, 'mediaDevices', originalMediaDevices);
+    else delete (navigator as { mediaDevices?: unknown }).mediaDevices;
+  });
+
+  function withDisplayMedia(getDisplayMedia?: () => Promise<unknown>) {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: getDisplayMedia ? { getDisplayMedia } : {} });
+  }
+
+  it('is offered to presenters and moderators only, and never runs by itself', async () => {
+    const getDisplayMedia = vi.fn();
+    withDisplayMedia(getDisplayMedia);
+    const { unmount } = renderWithI18n(<PreJoinCheck controller={new FakeCallSessionController({ role: 'presenter', format: 'webinar' })} onJoin={vi.fn()} />);
+    expect(await screen.findByTestId('prejoin-screen-share-test')).toHaveTextContent(t('prejoin.screenShare.test'));
+    expect(getDisplayMedia).not.toHaveBeenCalled();
+    unmount();
+    renderWithI18n(<PreJoinCheck controller={new FakeCallSessionController({ role: 'employee' })} onJoin={vi.fn()} />);
+    await screen.findByText(t('prejoin.network'));
+    expect(screen.queryByTestId('prejoin-screen-share-test')).toBeNull();
+  });
+
+  it('reports a working screen share and stops the trial at once', async () => {
+    const user = userEvent.setup();
+    const stop = vi.fn();
+    withDisplayMedia(vi.fn(async () => ({ getTracks: () => [{ stop }] })));
+    renderWithI18n(<PreJoinCheck controller={new FakeCallSessionController({ role: 'moderator', format: 'webinar' })} onJoin={vi.fn()} />);
+    await user.click(await screen.findByTestId('prejoin-screen-share-test'));
+    expect(await screen.findByTestId('prejoin-screen-share-result')).toHaveTextContent(t('prejoin.screenShare.supported'));
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('reports a refusal and a browser without screen sharing', async () => {
+    const user = userEvent.setup();
+    withDisplayMedia(vi.fn(async () => Promise.reject(Object.assign(new Error('denied'), { name: 'NotAllowedError' }))));
+    const { unmount } = renderWithI18n(<PreJoinCheck controller={new FakeCallSessionController({ role: 'presenter', format: 'webinar' })} onJoin={vi.fn()} />);
+    await user.click(await screen.findByTestId('prejoin-screen-share-test'));
+    expect(await screen.findByTestId('prejoin-screen-share-result')).toHaveTextContent(t('prejoin.screenShare.denied'));
+    unmount();
+
+    withDisplayMedia();
+    renderWithI18n(<PreJoinCheck controller={new FakeCallSessionController({ role: 'presenter', format: 'webinar' })} onJoin={vi.fn()} />);
+    await user.click(await screen.findByTestId('prejoin-screen-share-test'));
+    expect(await screen.findByTestId('prejoin-screen-share-result')).toHaveTextContent(t('prejoin.screenShare.unsupported'));
+  });
+});

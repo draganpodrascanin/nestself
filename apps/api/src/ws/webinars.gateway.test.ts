@@ -410,6 +410,26 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
       expect(own.events('webinar.floor.given')).toEqual([{ participantId: 'p1', capabilities }]);
     });
 
+    it('emits the WBN-26 events through the emitter to the attendee and the hosts only', async () => {
+      const own = await subscribed(registrant, ROOM, `user:${REGISTRANT}`);
+      const host = await subscribed(presenter, ROOM, HOSTS);
+      const publish = vi.spyOn(rooms, 'emit');
+      expect(rooms.emit(`user:${REGISTRANT}`, 'webinar.floor.muted', {})).toBe(true);
+      expect(rooms.emit(`user:${REGISTRANT}`, 'webinar.floor.unmute_requested', {})).toBe(true);
+      expect(rooms.emit(HOSTS, 'webinar.floor.muted', { participantId: 'p1' })).toBe(true);
+      expect(rooms.emit(HOSTS, 'webinar.floor.unmuted', { participantId: 'p1' })).toBe(true);
+      expect(rooms.emit(ROOM, 'webinar.floor.muted', {})).toBe(false);
+      expect(rooms.emit(`user:${REGISTRANT}`, 'webinar.floor.muted', { participantId: 'p1' })).toBe(false);
+      expect(publish).toHaveBeenCalledTimes(6);
+      await flush();
+      expect(own.events('webinar.floor.muted')).toEqual([{}]);
+      expect(own.events('webinar.floor.unmute_requested')).toEqual([{}]);
+      expect(host.events('webinar.floor.muted')).toEqual([{ participantId: 'p1' }]);
+      expect(host.events('webinar.floor.unmuted')).toEqual([{ participantId: 'p1' }]);
+      expect(own.events('webinar.floor.unmuted')).toEqual([]);
+      expect(errors).toHaveLength(2);
+    });
+
     it('sends webinar.ended to both rooms', async () => {
       const attendee = await subscribed(registrant, ROOM);
       const host = await subscribed(moderator, MODERATION);

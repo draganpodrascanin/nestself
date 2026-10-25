@@ -2,6 +2,7 @@ import {
   CheckCircle,
   CircleNotch,
   Microphone,
+  MonitorArrowUp,
   SpeakerHigh,
   VideoCamera,
   VideoCameraSlash,
@@ -94,6 +95,68 @@ function CheckRow({ icon, label, status, statusText, children }: { icon: ReactNo
         {children}
       </div>
     </li>
+  );
+}
+
+type ScreenShareResult = 'idle' | 'testing' | 'supported' | 'unsupported' | 'denied';
+
+/**
+ * Hosts only (WBN-16): an optional screen-sharing trial. It runs only when
+ * the host presses the button (the browser asks which screen to share), and
+ * every track stops at once; nothing is shared with anyone.
+ */
+function ScreenShareCheck() {
+  const { t } = useTranslation('calls');
+  const notice = useMotionPreset('popover');
+  const [result, setResult] = useState<ScreenShareResult>('idle');
+
+  const test = async () => {
+    const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    if (typeof media?.getDisplayMedia !== 'function') {
+      setResult('unsupported');
+      return;
+    }
+    setResult('testing');
+    try {
+      const stream = await media.getDisplayMedia({ video: true, audio: false });
+      for (const track of stream.getTracks()) track.stop();
+      setResult('supported');
+    } catch (error) {
+      setResult((error as { name?: unknown } | null)?.name === 'NotAllowedError' ? 'denied' : 'unsupported');
+    }
+  };
+
+  const status = result === 'supported' ? 'passed' : result === 'unsupported' || result === 'denied' ? 'failed' : null;
+  return (
+    <CheckRow icon={<MonitorArrowUp size={20} />} label={t('prejoin.screenShare.label')} status={status}>
+      <p className="type-metadata text-text-secondary">{t('prejoin.screenShare.hint')}</p>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="self-start"
+        loading={result === 'testing'}
+        loadingLabel={t('prejoin.screenShare.testing')}
+        onClick={() => void test()}
+        data-testid="prejoin-screen-share-test"
+      >
+        {t('prejoin.screenShare.test')}
+      </Button>
+      <MotionFeatures>
+        <AnimatePresence initial={false}>
+          {result === 'supported' || result === 'unsupported' || result === 'denied' ? (
+            <m.p
+              key={result}
+              {...notice}
+              role="status"
+              data-testid="prejoin-screen-share-result"
+              className={cn('type-metadata origin-top', result === 'supported' ? 'text-success' : 'text-danger')}
+            >
+              {t(`prejoin.screenShare.${result}`)}
+            </m.p>
+          ) : null}
+        </AnimatePresence>
+      </MotionFeatures>
+    </CheckRow>
   );
 }
 
@@ -250,6 +313,7 @@ export function PreJoinCheck({ controller, onJoin, joining = false, error, permi
               {readiness.network === 'poor' ? <p className="type-metadata text-text">{t('prejoin.networkPoorHint')}</p> : null}
               {readiness.network === 'offline' ? <p className="type-metadata text-danger">{t('prejoin.networkOfflineHint')}</p> : null}
             </CheckRow>
+            {call.role === 'presenter' || call.role === 'moderator' ? <ScreenShareCheck /> : null}
           </ul>
         </div>
 

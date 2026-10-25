@@ -1,4 +1,4 @@
-import { HandPalm, MicrophoneStage, Record, StopCircle, UsersThree } from '@phosphor-icons/react/dist/ssr';
+import { HandPalm, MicrophoneSlash, MicrophoneStage, Record, StopCircle, UsersThree } from '@phosphor-icons/react/dist/ssr';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -68,15 +68,49 @@ function HandItem({ hand, stage }: { hand: WebinarHand; stage: UseWebinarStageRe
   );
 }
 
+/**
+ * A floor holder for the hosts: mute them, or ask a muted holder to unmute
+ * (only they can, WBN-26), and take the floor back.
+ */
 function SpeakerItem({ speaker, stage }: { speaker: WebinarSpeaker; stage: UseWebinarStageResult }) {
   const { t } = useTranslation('calls');
   const name = speaker.name ?? t('webinar.chat.participant');
   return (
-    <div data-testid="webinar-queue-speaker" className="gap-3 p-3 flex flex-wrap items-center justify-between rounded-card bg-info-surface text-info">
-      <span className="gap-2 flex items-center type-body font-[var(--font-weight-label)]">
-        <MicrophoneStage size={18} weight="fill" aria-hidden />
+    <div
+      data-testid="webinar-queue-speaker"
+      data-muted={speaker.muted || undefined}
+      className="gap-3 p-3 flex flex-wrap items-center justify-between rounded-card bg-info-surface text-info"
+    >
+      <span className="gap-2 flex flex-wrap items-center type-body font-[var(--font-weight-label)]">
+        {speaker.muted ? <MicrophoneSlash size={18} weight="fill" aria-hidden /> : <MicrophoneStage size={18} weight="fill" aria-hidden />}
         {name}
+        {speaker.muted ? <Badge tone="warning">{t('webinar.moderation.muted')}</Badge> : null}
       </span>
+      <span className="gap-2 flex flex-wrap">
+        {speaker.muted ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={speaker.unmuteRequested ? undefined : t('webinar.moderation.askUnmuteName', { name })}
+            disabled={speaker.unmuteRequested}
+            loading={stage.isPending('floor.unmuteRequest', speaker.participantId)}
+            loadingLabel={t('webinar.chat.sending')}
+            onClick={() => void stage.requestUnmute(speaker.participantId).catch(() => undefined)}
+          >
+            {speaker.unmuteRequested ? t('webinar.moderation.unmuteAsked') : t('webinar.moderation.askUnmute')}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={t('webinar.moderation.muteName', { name })}
+            loading={stage.isPending('floor.mute', speaker.participantId)}
+            loadingLabel={t('webinar.chat.sending')}
+            onClick={() => void stage.muteSpeaker(speaker.participantId).catch(() => undefined)}
+          >
+            {t('webinar.moderation.mute')}
+          </Button>
+        )}
       <Button
         size="sm"
         variant="secondary"
@@ -87,6 +121,7 @@ function SpeakerItem({ speaker, stage }: { speaker: WebinarSpeaker; stage: UseWe
       >
         {t('webinar.moderation.takeFloor')}
       </Button>
+      </span>
     </div>
   );
 }

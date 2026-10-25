@@ -15,6 +15,8 @@
  */
 import {
   ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
@@ -36,6 +38,7 @@ import type {
   WebinarStatus,
 } from '@nestself/contracts';
 import { WebinarClient } from '../webinar/client';
+import type { WebinarFloorConsentEventName } from '../webinar/floor-consent';
 import type { WebinarClientOptions } from '../webinar/client';
 import type { WebinarAction, WebinarActionInputs, WebinarInitialState, WebinarRoomHandler, WebinarTransport, WebinarViewerRole } from '../webinar/types';
 
@@ -61,7 +64,13 @@ export interface FakeWebinarServerOptions {
   replicated?: boolean;
 }
 
-type FakeEventName = WebinarEventName | WebinarRoomAddedEventName | WebinarHostsRoomEventName | WebinarModerationRoomAddedEventName;
+type FakeEventName =
+  | WebinarEventName
+  | WebinarRoomAddedEventName
+  | WebinarHostsRoomEventName
+  | WebinarModerationRoomAddedEventName
+  | WebinarFloorConsentEventName;
+
 
 export interface FakeWebinarEmission {
   room: string;
@@ -101,7 +110,7 @@ function toPublic(message: WebinarModerationMessage): WebinarMessage {
   return rest;
 }
 
-const HOST_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>(['floor.give', 'floor.take', 'webinar.end']);
+const HOST_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>(['floor.give', 'floor.take', 'floor.mute', 'floor.unmuteRequest', 'webinar.end']);
 const MODERATOR_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>([
   'message.publish',
   'message.answer',
@@ -122,8 +131,8 @@ export class FakeWebinarServer {
   private readonly messages = new Map<string, WebinarModerationMessage>();
   private readonly polls = new Map<string, { poll: WebinarPoll; counts: Map<string, number> }>();
   private readonly hands = new Map<string, { name: string; raisedAt: string }>();
-  /** Attendees who have the floor, with the registration name the moderator may see. */
-  private readonly speakers = new Map<string, string | null>();
+  /** Attendees who have the floor, with the registration name the moderator may see and whether a host muted them. */
+  private readonly speakers = new Map<string, { name: string | null; muted: boolean }>();
   /** Registration names by participant id, for the moderator's view of the speakers. */
   private readonly names = new Map<string, string>();
   private readonly failures = new Map<WebinarAction, string>();
@@ -164,8 +173,15 @@ export class FakeWebinarServer {
     return this.id('participant');
   }
 
-  addPoll(poll: WebinarPoll): void {
-    this.polls.set(poll.id, { poll, counts: new Map(poll.options.map((option) => [option.id, 0])) });
+  addPoll(poll: WebinarPoll, results: readonly { optionId: string; count: number }[] = []): void {
+    const counts = new Map(poll.options.map((option) => [option.id, 0]));
+    for (const result of results) if (counts.has(result.optionId)) counts.set(result.optionId, result.count);
+    this.polls.set(poll.id, { poll: { ...poll, webinarId: this.webinarId }, counts });
+  }
+
+  /** Puts an existing message in the server's state without emitting anything (sample data). */
+  seedMessage(message: WebinarModerationMessage): void {
+    this.messages.set(message.id, { ...message, webinarId: this.webinarId });
   }
 
   /** The state a client of this identity would load on entering (`GET /webinars/:id`, messages, polls). */
@@ -185,7 +201,12 @@ export class FakeWebinarServer {
         ? {
             attendanceCount: this.attendance,
             handCount: this.hands.size,
-            speakers: [...this.speakers].map(([participantId, name]) => ({ participantId, name: moderator ? name : null })),
+            speakers: [...this.speakers].map(([participantId, speaker]) => ({
+              participantId,
+              name: moderator ? speaker.name : null,
+              muted: speaker.muted,
+              unmuteRequested: false,
+            })),
             ...(moderator ? { hands: [...this.hands].map(([participantId, hand]) => ({ participantId, name: hand.name, raisedAt: hand.raisedAt })) } : {}),
           }
         : identity.participantId && this.hands.has(identity.participantId)
@@ -234,7 +255,14 @@ export class FakeWebinarServer {
 
   /** The contract schema of `event` on `room`: the hosts' room and the T-CW-2.3 additions have their own. */
   private schemaFor(room: string, event: FakeEventName) {
-    if (room === this.hostsRoom) return WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarHostsRoomEventName];
+    if (room === this.hostsRoom) {
+      if (event in WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS) {
+        return WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS[event as keyof typeof WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS];
+      }
+      return WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarHostsRoomEventName];
+    }
+    // The attendee's own room (delivered with the public room): the WBN-26 events carry `{}`.
+    if (event === 'webinar.floor.muted' || event === 'webinar.floor.unmute_requested') return WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS[event];
     if (event in WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS) return WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event as WebinarRoomAddedEventName];
     if (event in WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS) {
       return WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event as WebinarModerationRoomAddedEventName];
@@ -325,7 +353,7 @@ export class FakeWebinarServer {
     const capabilities = { audio: given ? ('send_receive' as const) : ('receive' as const), video: 'receive' as const, content: 'receive' as const };
     if (given) {
       this.lower(participantId);
-      this.speakers.set(participantId, this.names.get(participantId) ?? null);
+      this.speakers.set(participantId, { name: this.names.get(participantId) ?? null, muted: false });
     } else {
       this.speakers.delete(participantId);
     }
@@ -438,6 +466,41 @@ export class FakeWebinarServer {
         if (this.recordingStatus !== 'recording') throw apiError('recording_not_allowed');
         this.setRecording('stopped');
         return { webinarId: this.webinarId, status: this.recordingStatus, startedAt: this.recordingStartedAt, stoppedAt: now() };
+      }
+      case 'floor.mute': {
+        // WBN-26: the attendee's own room gets the mute, the hosts the muted row.
+        const { participantId } = rawInput as WebinarActionInputs['floor.mute'];
+        const speaker = this.speakers.get(participantId);
+        if (!speaker) throw apiError('floor_not_available');
+        speaker.muted = true;
+        this.emit(this.room, 'webinar.floor.muted', {}, participantId);
+        this.emit(this.hostsRoom, 'webinar.floor.muted', { participantId });
+        return { participantId, hasFloor: true, muted: true, capabilities: { audio: 'receive', video: 'receive', content: 'receive' } };
+      }
+      case 'floor.unmuteRequest': {
+        const { participantId } = rawInput as WebinarActionInputs['floor.unmuteRequest'];
+        if (!this.speakers.get(participantId)?.muted) throw apiError('floor_not_available');
+        this.emit(this.room, 'webinar.floor.unmute_requested', {}, participantId);
+        return { participantId, requested: true };
+      }
+      case 'floor.unmute': {
+        // Only the attendee themselves consents to unmute.
+        const { participantId } = rawInput as WebinarActionInputs['floor.unmute'];
+        const speaker = this.speakers.get(participantId);
+        if (identity.participantId !== participantId || !speaker) throw apiError('not_found');
+        speaker.muted = false;
+        this.emit(this.hostsRoom, 'webinar.floor.unmuted', { participantId });
+        // A replica attendee comes back on the primary meeting with fresh sample credentials (T-CW-3.2).
+        const primaryAttendee = this.replicated
+          ? { AttendeeId: this.id('primary-attendee'), ExternalUserId: participantId, JoinToken: this.id('join-token') }
+          : undefined;
+        return {
+          participantId,
+          hasFloor: true,
+          muted: false,
+          capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' },
+          ...(primaryAttendee ? { primaryAttendee } : {}),
+        };
       }
       case 'webinar.end': {
         if (this.status !== 'live') throw apiError('webinar_not_open');

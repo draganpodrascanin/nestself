@@ -71,7 +71,10 @@ export function WebinarStageAttendeeControls({ controller, client, soundMuted, o
   const popover = useMotionPreset('popover');
   const lockedId = useId();
   const floor = stage.myFloor.status === 'given';
-  const locked = floor && !stage.myFloor.acknowledged;
+  const mutedByHost = floor && stage.myFloor.mutedByHost;
+  // The microphone waits for the floor notice, and after a host's mute for the attendee's consent (WBN-26).
+  const locked = floor && (!stage.myFloor.acknowledged || mutedByHost);
+  const mutedByHostId = useId();
   const errors = useErrorMessages(null, useMicrophoneBlocked(client, controller), stage.errorOf('floor'));
 
   const announcement = useChangeAnnouncement(`${floor && !media.muted}|${soundMuted}`, (previous, next) => {
@@ -86,6 +89,13 @@ export function WebinarStageAttendeeControls({ controller, client, soundMuted, o
     <div className="gap-2 flex max-w-full flex-col items-center">
       <MotionFeatures>
         <ErrorStack messages={errors} testId="webinar-controls-error" />
+        <AnimatePresence initial={false}>
+          {mutedByHost ? (
+            <m.p key="muted-by-host" id={mutedByHostId} {...popover} role="status" data-testid="webinar-muted-by-host" className="p-3 max-w-xl rounded-control bg-info-surface text-info type-metadata origin-bottom">
+              {t('webinar.mutedByHost')}
+            </m.p>
+          ) : null}
+        </AnimatePresence>
       </MotionFeatures>
       <div role="group" aria-label={t('webinar.controlsLabel')} className="gap-2 p-2 flex max-w-full flex-wrap items-center justify-center rounded-card bg-raised shadow-menu" data-testid="webinar-attendee-controls">
         <MotionFeatures>
@@ -98,7 +108,7 @@ export function WebinarStageAttendeeControls({ controller, client, soundMuted, o
                   icon={media.muted ? <MicrophoneSlash size={22} weight="bold" /> : <Microphone size={22} weight="bold" />}
                   off={media.muted}
                   disabled={locked}
-                  describedBy={locked ? lockedId : undefined}
+                  describedBy={mutedByHost ? mutedByHostId : locked ? lockedId : undefined}
                   onClick={() => controller.setMuted(!media.muted)}
                 />
                 <span id={lockedId} className="sr-only">

@@ -145,7 +145,7 @@
     "messagePublished": "Egy házigazda közzétette az üzenetét.",
     "floorGiven": "Egy házigazda szót adott Önnek.",
     "floorTaken": "A házigazda visszavette a szót. A mikrofonja ismét ki van kapcsolva.",
-    "youCanSpeakNow": "Most beszélhet. Kapcsolja be a mikrofonját a beszédhez.",
+    "youCanSpeakNow": "Most beszélhet, kapcsolja be a mikrofonját a beszédhez.",
     "capacityAboveLimit": "A létszám legfeljebb {{limit}} résztvevő lehet.",
     "lobbyTitle": "A webinárium hamarosan kezdődik",
     "startsIn": "Kezdésig: {{time}}",
@@ -258,7 +258,13 @@
         "dismissed": "Az üzenet elutasítva.",
         "floorGiven": "A szót megadta.",
         "floorTaken": "A szót visszavette."
-      }
+      },
+      "mute": "Némítás",
+      "muteName": "Némítás: {{name}}",
+      "askUnmute": "Kérés a bekapcsolásra",
+      "askUnmuteName": "Kérés a bekapcsolásra: {{name}}",
+      "unmuteAsked": "Kérés elküldve",
+      "muted": "Némítva"
     },
     "poll": {
       "title": "Szavazás",
@@ -483,7 +489,13 @@
     "ending": "Befejezés…",
     "recordingFailed": "A felvétel nem sikerült. A webinárium felvétel nélkül folytatódik.",
     "lobbyFloorRecording": "Ha egy házigazda szót ad Önnek, a hangja a felvétel része lesz.",
-    "captionsStatement": "Élő felirat még nem érhető el. A felvételek feliratozása ellenőrzés után történik."
+    "captionsStatement": "Élő felirat még nem érhető el. A felvételek feliratozása ellenőrzés után történik.",
+    "mutedByHost": "Egy házigazda lenémította a mikrofonját. Akkor beszélhet újra, ha egy házigazda megkéri, hogy kapcsolja be.",
+    "unmuteRequest": {
+      "title": "A házigazda arra kéri, kapcsolja be a mikrofonját. Bekapcsolja?",
+      "unmute": "Mikrofon bekapcsolása",
+      "stayMuted": "Maradjon némítva"
+    }
   },
   "workshop": {
     "join": "Csatlakozás a workshophoz",
@@ -550,7 +562,16 @@
     "cameraError": "A kamera nem indult el. Zárja be a kamerát használó többi alkalmazást, majd ellenőrizze újra.",
     "microphoneError": "A mikrofon nem indult el. Zárja be a mikrofont használó többi alkalmazást, majd ellenőrizze újra.",
     "joinDisabledHint": "Az ellenőrzés befejezése után csatlakozhat.",
-    "joining": "Csatlakozás…"
+    "joining": "Csatlakozás…",
+    "screenShare": {
+      "label": "Képernyőmegosztás",
+      "hint": "Nem kötelező: ellenőrizze a webinárium előtt, hogy meg tudja-e osztani a képernyőt.",
+      "test": "Képernyőmegosztás tesztelése",
+      "testing": "Tesztelés…",
+      "supported": "A képernyőmegosztás működik ebben a böngészőben.",
+      "unsupported": "Ez a böngésző nem tud képernyőt megosztani. Használjon újabb Chrome, Edge, Firefox vagy Safari böngészőt számítógépen.",
+      "denied": "A képernyőmegosztás nem engedélyezett. Engedélyezze a böngészőben, amikor megoszt."
+    }
   },
   "errors": {
     "joinWindowClosed": "Ehhez az alkalomhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik meg, és 10 perccel utána zárul; ha már csatlakozott, röviddel a befejezés utánig újra csatlakozhat.",

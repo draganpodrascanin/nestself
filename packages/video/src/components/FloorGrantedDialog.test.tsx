@@ -5,7 +5,7 @@ import { expectNoA11yViolations } from '@nestself/ui/test';
 import { renderWithI18n, t } from '../test/i18n';
 import { FakeCallSessionController } from '../testing/fake-controller';
 import { FakeWebinarClient, FakeWebinarServer } from '../testing/fake-webinar';
-import { FloorGrantedDialog, FloorTakenNotice } from './FloorGrantedDialog';
+import { FloorGrantedDialog, FloorTakenNotice, UnmuteConsentDialog } from './FloorGrantedDialog';
 
 async function setup() {
   const server = new FakeWebinarServer({ status: 'live' });
@@ -42,7 +42,7 @@ describe('FloorGrantedDialog (CW-R-125, WBN-10, WBN-25)', () => {
     await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(true));
 
     await user.click(screen.getByRole('button', { name: t('webinar.floorDialog.unmute') }));
-    expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: true });
+    expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', acknowledged: true });
     expect(controller.getSnapshot().media.muted).toBe(false);
     expect(screen.queryByTestId('webinar-floor-dialog')).not.toBeNull();
     await waitFor(() => expect(screen.queryByTestId('webinar-floor-dialog')).toBeNull());
@@ -110,5 +110,47 @@ describe('FloorGrantedDialog (CW-R-125, WBN-10, WBN-25)', () => {
     act(() => void server.simulate.floorGiven(`${participantId}-b`));
     expect(await screen.findByRole('alert')).toHaveTextContent(t('webinar.errors.microphoneUnavailable'));
     expect(attendee.getSnapshot().myFloor.status).toBe('none');
+  });
+});
+
+describe('UnmuteConsentDialog (WBN-26)', () => {
+  async function muted() {
+    const ctx = await setup();
+    const moderator = new FakeWebinarClient({ server: ctx.server, role: 'moderator' });
+    moderator.connect();
+    ctx.attendee.connect();
+    await moderator.giveFloor(ctx.participantId);
+    await moderator.muteSpeaker(ctx.participantId);
+    return { ...ctx, moderator };
+  }
+
+  it('asks for consent when a host requests an unmute; "Stay muted" sends nothing and closes with an exit', async () => {
+    const user = userEvent.setup();
+    const { server, attendee, moderator, participantId } = await muted();
+    renderWithI18n(<UnmuteConsentDialog client={attendee} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await act(() => moderator.requestUnmute(participantId));
+    const dialog = await screen.findByRole('dialog', { name: t('webinar.unmuteRequest.title') });
+    expect(dialog).toHaveAccessibleDescription(t('webinar.recordingNoticeFloor'));
+    await user.click(within(dialog).getByRole('button', { name: t('webinar.unmuteRequest.stayMuted') }));
+    expect(screen.queryByTestId('webinar-unmute-consent')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('webinar-unmute-consent')).toBeNull());
+    expect(server.requests.some((request) => request.action === 'floor.unmute')).toBe(false);
+    expect(attendee.getSnapshot().myFloor.mutedByHost).toBe(true);
+  });
+
+  it('"Unmute" consents and unmutes; a failure keeps the prompt open with the error', async () => {
+    const user = userEvent.setup();
+    const { server, controller, attendee, moderator, participantId } = await muted();
+    renderWithI18n(<UnmuteConsentDialog client={attendee} />);
+    await act(() => moderator.requestUnmute(participantId));
+    server.simulate.failNext('floor.unmute', 'floor_not_available');
+    await user.click(await screen.findByRole('button', { name: t('webinar.unmuteRequest.unmute') }));
+    expect(await within(screen.getByTestId('webinar-unmute-consent')).findByRole('alert')).toHaveTextContent(t('errors.floorNotAvailable'));
+
+    await user.click(screen.getByRole('button', { name: t('webinar.unmuteRequest.unmute') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(controller.getSnapshot().media.muted).toBe(false);
+    expect(moderator.getSnapshot().speakers[0]).toMatchObject({ muted: false });
   });
 });

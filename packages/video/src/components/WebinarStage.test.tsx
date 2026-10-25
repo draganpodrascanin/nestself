@@ -175,6 +175,23 @@ describe('WebinarStage (WBN-06 to WBN-08, WBN-16 to WBN-19, WBN-28)', () => {
     await waitFor(() => expect(screen.queryByTestId('webinar-floor-active')).toBeNull());
   });
 
+  it('locks the microphone and says so while a host has muted the attendee (WBN-26)', async () => {
+    const { server, controller, client } = await setup();
+    const moderator = new FakeWebinarClient({ server, role: 'moderator' });
+    moderator.connect();
+    renderStage({ controller, client });
+    const participantId = client.getSnapshot().participantId!;
+    await act(() => moderator.giveFloor(participantId));
+    act(() => client.acknowledgeFloor());
+    await act(() => moderator.muteSpeaker(participantId));
+    expect(await screen.findByTestId('webinar-muted-by-host')).toHaveTextContent(t('webinar.mutedByHost'));
+    const microphone = within(screen.getByTestId('webinar-floor-microphone')).getByRole('button', { hidden: true });
+    expect(microphone).toBeDisabled();
+    expect(microphone).toHaveAccessibleDescription(t('webinar.mutedByHost'));
+    await act(() => moderator.requestUnmute(participantId));
+    expect(await screen.findByRole('dialog', { name: t('webinar.unmuteRequest.title') })).toBeInTheDocument();
+  });
+
   it('tells an attendee with the floor that the microphone is blocked', async () => {
     const { server, controller, client } = await setup();
     renderStage({ controller, client });

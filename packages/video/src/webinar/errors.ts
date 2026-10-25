@@ -60,6 +60,7 @@ const GENERIC_KEYS: Readonly<Record<string, string>> = {
   forbidden: 'errors.forbidden',
   rate_limited: 'errors.rateLimited',
   validation: 'errors.validation',
+  conflict: 'errors.conflict',
   microphone_unavailable: 'webinar.errors.microphoneUnavailable',
 };
 

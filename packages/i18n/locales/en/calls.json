@@ -147,7 +147,7 @@
     "messagePublished": "A host published your message.",
     "floorGiven": "A host gave you the floor.",
     "floorTaken": "The host took the floor back. Your microphone is off again.",
-    "youCanSpeakNow": "You can speak now. Unmute to talk.",
+    "youCanSpeakNow": "You can speak now, unmute to talk.",
     "capacityAboveLimit": "Capacity can be at most {{limit}} attendees.",
     "lobbyTitle": "The webinar starts soon",
     "startsIn": "Starts in {{time}}",
@@ -260,7 +260,13 @@
         "dismissed": "Message dismissed.",
         "floorGiven": "The floor was given.",
         "floorTaken": "The floor was taken back."
-      }
+      },
+      "mute": "Mute",
+      "muteName": "Mute {{name}}",
+      "askUnmute": "Ask to unmute",
+      "askUnmuteName": "Ask {{name}} to unmute",
+      "unmuteAsked": "Asked to unmute",
+      "muted": "Muted"
     },
     "poll": {
       "title": "Poll",
@@ -486,7 +492,13 @@
     "ending": "Ending…",
     "recordingFailed": "The recording failed. The webinar continues without a recording.",
     "lobbyFloorRecording": "If a host gives you the floor, your voice is part of the recording.",
-    "captionsStatement": "Live captions are not yet available. Replays are captioned after review."
+    "captionsStatement": "Live captions are not yet available. Replays are captioned after review.",
+    "mutedByHost": "A host muted your microphone. You can speak again when a host asks you to unmute.",
+    "unmuteRequest": {
+      "title": "The host asks you to unmute. Unmute?",
+      "unmute": "Unmute",
+      "stayMuted": "Stay muted"
+    }
   },
   "workshop": {
     "join": "Join workshop",
@@ -553,7 +565,16 @@
     "cameraError": "Your camera could not start. Close other apps that use it, then check again.",
     "microphoneError": "Your microphone could not start. Close other apps that use it, then check again.",
     "joinDisabledHint": "You can join when the check is finished.",
-    "joining": "Joining…"
+    "joining": "Joining…",
+    "screenShare": {
+      "label": "Screen sharing",
+      "hint": "Optional: check that you can share your screen before the webinar.",
+      "test": "Test screen sharing",
+      "testing": "Testing…",
+      "supported": "Screen sharing works in this browser.",
+      "unsupported": "This browser cannot share the screen. Use a recent Chrome, Edge, Firefox or Safari on a computer.",
+      "denied": "Screen sharing was not allowed. Allow it in the browser when you share."
+    }
   },
   "errors": {
     "joinWindowClosed": "This session cannot be joined right now. Joining opens shortly before the start and closes 10 minutes after it; if you already joined, you can rejoin until shortly after the end.",

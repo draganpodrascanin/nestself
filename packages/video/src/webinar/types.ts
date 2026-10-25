@@ -47,6 +47,9 @@ export const WEBINAR_ACTIONS = [
   'hand.lower',
   'floor.give',
   'floor.take',
+  'floor.mute',
+  'floor.unmuteRequest',
+  'floor.unmute',
   'poll.open',
   'poll.close',
   'poll.vote',
@@ -65,6 +68,9 @@ export const WEBINAR_ACTION_ROUTES = {
   'hand.lower': { method: 'DELETE', path: '/webinars/:id/hand' },
   'floor.give': { method: 'POST', path: '/webinars/:id/participants/:participantId/give-floor' },
   'floor.take': { method: 'POST', path: '/webinars/:id/participants/:participantId/take-floor' },
+  'floor.mute': { method: 'POST', path: '/webinars/:id/participants/:participantId/mute' },
+  'floor.unmuteRequest': { method: 'POST', path: '/webinars/:id/participants/:participantId/unmute-request' },
+  'floor.unmute': { method: 'POST', path: '/webinars/:id/participants/:participantId/unmute' },
   'poll.open': { method: 'POST', path: '/webinars/:id/polls/:pollId/open' },
   'poll.close': { method: 'POST', path: '/webinars/:id/polls/:pollId/close' },
   'poll.vote': { method: 'POST', path: '/webinars/:id/polls/:pollId/vote' },
@@ -88,6 +94,12 @@ export interface WebinarActionInputs {
   'hand.lower': { body: EmptyBody };
   'floor.give': { participantId: string; body: EmptyBody };
   'floor.take': { participantId: string; body: EmptyBody };
+  /** Hosts: mute the attendee who has the floor (WBN-26). */
+  'floor.mute': { participantId: string; body: EmptyBody };
+  /** Hosts: ask that attendee to unmute; only the attendee can. */
+  'floor.unmuteRequest': { participantId: string; body: EmptyBody };
+  /** The attendee consents to unmute; `participantId` is their own. */
+  'floor.unmute': { participantId: string; body: EmptyBody };
   'poll.open': { pollId: string; body: EmptyBody };
   'poll.close': { pollId: string; body: EmptyBody };
   'poll.vote': { pollId: string; body: WebinarPollVoteRequest };
@@ -140,6 +152,10 @@ export interface WebinarHand {
 export interface WebinarSpeaker {
   participantId: string;
   name: string | null;
+  /** A host muted this speaker (WBN-26); only the speaker can unmute, after a host asks. */
+  muted: boolean;
+  /** A host asked this speaker to unmute and the answer is not in yet. */
+  unmuteRequested: boolean;
 }
 
 export interface WebinarPollsState {
@@ -160,6 +176,10 @@ export interface WebinarPollsState {
 export interface WebinarFloorState {
   status: 'none' | 'given' | 'taken';
   acknowledged: boolean;
+  /** A host muted this attendee (WBN-26): the microphone stays off until they consent to a host's request. */
+  mutedByHost: boolean;
+  /** A host asks this attendee to unmute: the consent prompt is open. */
+  unmuteRequested: boolean;
 }
 
 export interface WebinarHandState {
@@ -254,12 +274,20 @@ export interface WebinarClientApi {
   acknowledgeFloor(): void;
   /** Hides the "floor taken back" notice. */
   dismissFloorNotice(): void;
+  /** The attendee agrees to the host's unmute request: `POST .../participants/:participantId/unmute`, then unmutes (WBN-26). */
+  consentToUnmute(): Promise<void>;
+  /** The attendee stays muted; nothing is sent. */
+  declineUnmute(): void;
 
   publish(messageId: string, text?: string): Promise<void>;
   answer(messageId: string, answerText: string): Promise<void>;
   dismiss(messageId: string): Promise<void>;
   giveFloor(participantId: string): Promise<void>;
   takeFloor(participantId: string): Promise<void>;
+  /** Hosts: mute a speaker (WBN-26). */
+  muteSpeaker(participantId: string): Promise<void>;
+  /** Hosts: ask a muted speaker to unmute; they decide. */
+  requestUnmute(participantId: string): Promise<void>;
   openPoll(pollId: string): Promise<void>;
   closePoll(pollId: string): Promise<void>;
   stopRecording(): Promise<void>;

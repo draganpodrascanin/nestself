@@ -11,6 +11,8 @@ import {
   USER_ROOM_EVENT_NAMES,
   WEBINAR_EVENT_NAMES,
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_HOSTS_EVENT_NAMES,
+  WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES,
   WEBINAR_HOSTS_ROOM_EVENT_NAMES,
   WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES,
@@ -138,7 +140,7 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
     expect(ROOM_EVENTS['appointment.times_suggested'].roomKinds).toEqual(['call', 'user']);
     expect(ROOM_EVENTS['appointment.remind']).toEqual({ roomKinds: ['user'], schema: AppointmentRemindPayloadSchema });
     expect(Object.keys(ROOM_EVENTS).sort()).toEqual(
-      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES, ...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES, ...WEBINAR_HOSTS_ROOM_EVENT_NAMES, ...WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES])].sort(),
+      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES, ...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES, ...WEBINAR_HOSTS_ROOM_EVENT_NAMES, ...WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES, ...WEBINAR_FLOOR_MUTE_HOSTS_EVENT_NAMES, ...WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES])].sort(),
     );
   });
 
@@ -171,6 +173,24 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
       roomKinds: ['webinar_moderation'],
       schema: WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.recording.failed'],
     });
+  });
+
+  it('sends the mute and the unmute request to the attendee alone and the muted state to the hosts (WBN-26)', () => {
+    expect(checkRoomEvent('user:user_jovan', 'webinar.floor.muted', {})).toEqual({});
+    expect(checkRoomEvent('user:user_jovan', 'webinar.floor.unmute_requested', {})).toEqual({});
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.muted', { participantId: 'p1' })).toEqual({ participantId: 'p1' });
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.unmuted', { participantId: 'p1' })).toEqual({ participantId: 'p1' });
+    // The attendee's room never names anyone; the public and moderation rooms never get these.
+    expect(checkRoomEvent('user:user_jovan', 'webinar.floor.muted', { participantId: 'p1' })).toBeNull();
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.muted', {})).toBeNull();
+    for (const room of ['webinar:w1', 'webinar:w1:moderation']) {
+      for (const event of ['webinar.floor.muted', 'webinar.floor.unmute_requested', 'webinar.floor.unmuted']) {
+        expect(checkRoomEvent(room, event, { participantId: 'p1' })).toBeNull();
+        expect(checkRoomEvent(room, event, {})).toBeNull();
+      }
+    }
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.unmute_requested', { participantId: 'p1' })).toBeNull();
+    expect(checkRoomEvent('user:user_jovan', 'webinar.floor.unmuted', {})).toBeNull();
   });
 
   it('carries the recording outcome: ready and failed publicly, the failure reason to the moderators only (CW-R-121)', () => {

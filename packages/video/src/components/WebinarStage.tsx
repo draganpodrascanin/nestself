@@ -10,7 +10,7 @@ import { useWebinarStage } from '../hooks/useWebinarStage';
 import { formatInZone } from '../time-zone';
 import type { CallSessionControllerApi } from '../types';
 import type { WebinarClientApi } from '../webinar/types';
-import { FloorGrantedDialog, FloorTakenNotice } from './FloorGrantedDialog';
+import { FloorGrantedDialog, FloorTakenNotice, UnmuteConsentDialog } from './FloorGrantedDialog';
 import { formatClock } from './format-clock';
 import { WebinarStageAttendeeControls } from './WebinarStageAttendeeControls';
 import { WebinarStageHostControls } from './WebinarStageHostControls';
@@ -340,7 +340,12 @@ export function WebinarStage({
           </div>
         ) : null}
 
-        {!isHost ? <FloorGrantedDialog client={client} controller={controller} /> : null}
+        {!isHost ? (
+          <>
+            <FloorGrantedDialog client={client} controller={controller} />
+            <UnmuteConsentDialog client={client} />
+          </>
+        ) : null}
         <Announcer announcement={announcement} testId="webinar-stage-announcer" />
       </m.section>
     </MotionFeatures>

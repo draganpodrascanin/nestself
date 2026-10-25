@@ -144,4 +144,11 @@ export type {
   FakeWebinarServerOptions,
 } from './testing/fake-webinar';
 export { FAKE_WEBINAR_SAMPLE_PEOPLE, FAKE_WEBINAR_SAMPLE_POLL, createSampleWebinarServer } from './testing/fake-webinar-sample';
-export type { FakeWebinarSampleOptions } from './testing/fake-webinar-sample';
+export type {
+  FakeWebinarSampleOptions,
+  SampleWebinarContent,
+  SampleWebinarMessageInput,
+  SampleWebinarPeople,
+  SampleWebinarPerson,
+  SampleWebinarPollInput,
+} from './testing/fake-webinar-sample';
