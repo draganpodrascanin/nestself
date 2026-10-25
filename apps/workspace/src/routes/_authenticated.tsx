@@ -16,6 +16,7 @@ import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
+import { UserMenu } from '../features/account/user-menu';
 import { isSampleDataMode } from '../data-source';
 
 export const Route = createFileRoute('/_authenticated')({
@@ -113,7 +114,10 @@ function AuthenticatedLayout() {
   const topbar = (
     <div className="flex w-full items-center justify-between">
       <p className="type-label text-primary">NestSelf</p>
-      <ApiStatus />
+      <div className="flex items-center gap-4">
+        <ApiStatus />
+        <UserMenu />
+      </div>
     </div>
   );
 

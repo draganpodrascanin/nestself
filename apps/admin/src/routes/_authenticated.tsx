@@ -6,6 +6,7 @@ import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { ApiStatus } from './__root';
+import { UserMenu } from '../features/account/user-menu';
 
 function PermissionBlock() {
   const { t } = useTranslation('common');
@@ -32,6 +33,10 @@ function AuthenticatedLayout() {
     (can(principal, 'client.configure', undefined, effectiveActions) ||
       can(principal, 'content.publish', undefined, effectiveActions) ||
       principal.staffTemplates.length > 0);
+
+  // Signed out (for example just after Sign out, before /sign-in renders):
+  // render nothing rather than flash the permission block.
+  if (!principal) return null;
 
   if (!hasAccess) {
     return <PermissionBlock />;
@@ -77,7 +82,10 @@ function AuthenticatedLayout() {
       topbar={
         <div className="flex w-full items-center justify-between">
           <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
-          <ApiStatus />
+          <div className="flex items-center gap-4">
+            <ApiStatus />
+            <UserMenu />
+          </div>
         </div>
       }
       bottomBar={
