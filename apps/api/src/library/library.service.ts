@@ -379,11 +379,10 @@ export class LibraryService {
           categoryId: contentResources.primaryCategoryId,
         })
         .from(savedItems)
-        .leftJoin(avail, eq(avail.contentResourceId, savedItems.contentResourceId))
-        .leftJoin(contentPublications, eq(contentPublications.id, avail.publicationId))
-        .leftJoin(contentVariants, eq(contentVariants.id, contentPublications.contentVariantId))
-        .leftJoin(contentResources, eq(contentResources.id, contentVariants.contentResourceId))
-        .leftJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId))
+        .leftJoin(avail, sql`"avail"."content_resource_id" = ${savedItems.contentResourceId}`)
+        .leftJoin(contentPublications, sql`${contentPublications.id} = "avail"."publication_id"`)
+        .leftJoin(contentResources, sql`${contentResources.id} = "avail"."content_resource_id"`)
+        .leftJoin(contentRevisions, sql`${contentRevisions.id} = ${contentPublications.contentRevisionId}`)
         .where(
           and(
             eq(savedItems.membershipId, ctx.membershipId),

@@ -875,31 +875,32 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       await testDb.pool.query(`DELETE FROM media_assets WHERE id = $1`, [assetId]);
     });
 
-    it('ended membership returns 404 for detail', async () => {
+    it('ended membership returns 403 org_context_expired', async () => {
       const session = await signInPersonal(JOVAN);
 
-      // End Jovan's membership in org A in the past
+      // End Jovan's membership in the past
       await testDb.pool.query(
-        `UPDATE memberships SET end_date = $1 WHERE user_id = $2 AND org_id = 'org_sample_a'`,
+        `UPDATE memberships SET end_date = $1 WHERE user_id = $2 AND org_id = 'org_sample'`,
         [new Date('2025-06-01T00:00:00Z'), JOVAN],
       );
 
+      // Detail: context loader rejects the expired membership before availability runs
       const res = await session.agent
         .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
         .set('accept-language', 'sr-Latn');
-      expect(res.status).toBe(404);
-      expect(res.body.code).toBe('content_not_available');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('org_context_expired');
 
-      // List also returns empty
+      // List also rejected
       const list = await session.agent
         .get('/api/library/content')
         .set('accept-language', 'sr-Latn');
-      expect(list.status).toBe(200);
-      expect(list.body.items.length).toBe(0);
+      expect(list.status).toBe(403);
+      expect(list.body.code).toBe('org_context_expired');
 
       // Restore
       await testDb.pool.query(
-        `UPDATE memberships SET end_date = NULL WHERE user_id = $1 AND org_id = 'org_sample_a'`,
+        `UPDATE memberships SET end_date = NULL WHERE user_id = $1 AND org_id = 'org_sample'`,
         [JOVAN],
       );
     });
@@ -910,34 +911,40 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       // publish it -- the detail should reflect the newer revision's content.
       const newRevId = 'test_supersede_rev';
       const newPubId = 'test_supersede_pub';
+      const srcRevId = 'rev_var_evening_wind_down_sr-Latn_1';
+      const srcPubId = 'pub_var_evening_wind_down_sr-Latn';
 
-      // Create a newer revision
+      // Create a newer revision by copying key columns from the source
       await testDb.pool.query(
         `INSERT INTO content_revisions
-         SELECT (jsonb_populate_record(null::content_revisions, to_jsonb(r) || jsonb_build_object(
-           'id', $1, 'revision_number', 99, 'title', 'SUPERSEDE TITLE', 'summary', 'SUPERSEDE SUMMARY'
-         ))).*
-         FROM content_revisions r WHERE r.id = 'rev_var_evening_wind_down_sr-Latn_1'`,
-        [newRevId],
+           (id, content_variant_id, revision_number, state, body, title, summary,
+            author_user_id, last_editor_user_id, related_resource_ids)
+         SELECT $1, content_variant_id, 99, state, body,
+                'SUPERSEDE TITLE', 'SUPERSEDE SUMMARY',
+                author_user_id, last_editor_user_id, related_resource_ids
+         FROM content_revisions WHERE id = $2
+         ON CONFLICT (id) DO NOTHING`,
+        [newRevId, srcRevId],
       );
 
       // Publish the newer revision (starts_at slightly later to guarantee ordering)
       await testDb.pool.query(
         `INSERT INTO content_publications
-         SELECT (jsonb_populate_record(null::content_publications, to_jsonb(p) || jsonb_build_object(
-           'id', $1, 'content_revision_id', $2, 'state', 'live',
-           'starts_at', (now() - interval '1 hour')
-         ))).*
-         FROM content_publications p WHERE p.id = 'pub_var_evening_wind_down_sr-Latn'`,
-        [newPubId, newRevId],
+           (id, content_variant_id, content_revision_id, approval_hash, state,
+            starts_at, required_capability, published_by_user_id)
+         SELECT $1, content_variant_id, $2, approval_hash, 'live',
+                now() - interval '1 hour', required_capability, published_by_user_id
+         FROM content_publications WHERE id = $3
+         ON CONFLICT (id) DO NOTHING`,
+        [newPubId, newRevId, srcPubId],
       );
       await testDb.pool.query(
-        `INSERT INTO content_publication_audiences
-         SELECT (jsonb_populate_record(null::content_publication_audiences, to_jsonb(a) || jsonb_build_object(
-           'id', 'test_supersede_aud', 'publication_id', $1
-         ))).*
-         FROM content_publication_audiences a WHERE a.publication_id = 'pub_var_evening_wind_down_sr-Latn'`,
-        [newPubId],
+        `INSERT INTO content_publication_audiences (id, publication_id, kind)
+         SELECT 'test_supersede_aud', $1, kind
+         FROM content_publication_audiences WHERE publication_id = $2
+         LIMIT 1
+         ON CONFLICT (id) DO NOTHING`,
+        [newPubId, srcPubId],
       );
 
       const session = await signInPersonal(JOVAN);
