@@ -13,6 +13,7 @@ import { WebinarAudiencePolicySchema, WebinarLocalizedTextSchema } from '@nestse
 import {
   EXTRA_SAMPLE_TEMPLATES,
   extraSampleGrantIds,
+  sampleApprovalRows,
   sampleAppointmentRow,
   sampleCallSessionRows,
   sampleWebinarMessageRow,
@@ -70,8 +71,8 @@ describe('templatesForLegacyRoles', () => {
 
 describe('EXTRA_SAMPLE_TEMPLATES', () => {
   it('makes the sample HR admin the employer owner as well', () => {
-    expect(EXTRA_SAMPLE_TEMPLATES).toEqual({ user_ivana: ['employer_owner'] });
-    expect(extraSampleGrantIds()).toEqual(['grant_user_ivana_employer_owner']);
+    expect(EXTRA_SAMPLE_TEMPLATES).toEqual({ user_ivana: ['employer_owner', 'approver'] });
+    expect(extraSampleGrantIds()).toEqual(['grant_user_ivana_employer_owner', 'grant_user_ivana_approver']);
   });
 
   it('names only known templates', () => {
@@ -79,12 +80,12 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     expect(Object.values(EXTRA_SAMPLE_TEMPLATES).flat().every((key) => known.has(key))).toBe(true);
   });
 
-  it('seeds the same 17 grant ids as SAMPLE_GRANTS', () => {
+  it('seeds the same 18 grant ids as SAMPLE_GRANTS', () => {
     const derived = SAMPLE_PEOPLE.filter((p) => p.orgId || p.platformRole).flatMap((p) =>
       templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => `grant_${p.id}_${tmpl.key}`),
     );
     const seeded = [...derived, ...extraSampleGrantIds()].sort();
-    expect(seeded).toHaveLength(17);
+    expect(seeded).toHaveLength(18);
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
   });
 });
@@ -195,5 +196,34 @@ describe('sample webinars (T-CW-2.1)', () => {
     expect(options).toHaveLength(3);
     expect(votes.map((v) => v.optionId)).toEqual(['webinar_poll_option_sample_1', 'webinar_poll_option_sample_2']);
     for (const vote of votes) expect(Object.keys(vote).sort()).toEqual(['id', 'optionId', 'orgId', 'pollId']);
+  });
+});
+
+describe('sample follow-up approval (T-CW-1.5)', () => {
+  it('routes the awaiting_approval item to the sample approver in the employee\'s unit', () => {
+    const rows = sampleApprovalRows('team_product');
+    expect(rows.authorities).toEqual([
+      {
+        id: 'approval_authority_sample_ivana',
+        userId: 'user_ivana',
+        orgId: 'org_sample',
+        orgUnitId: 'ou_root',
+        includeDescendants: true,
+        categories: [],
+        alternateUserId: null,
+        validFrom: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+    expect(rows.approvals).toEqual([
+      {
+        id: 'approval_sample_follow_up_awaiting',
+        appointmentId: 'appt_sample_follow_up_awaiting',
+        orgId: 'org_sample',
+        orgUnitId: 'team_product',
+        approverUserId: 'user_ivana',
+        alternateUserId: null,
+        status: 'PENDING',
+      },
+    ]);
   });
 });

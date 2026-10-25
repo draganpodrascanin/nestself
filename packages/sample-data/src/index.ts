@@ -24,6 +24,12 @@ export type {
   SampleCallOutcome,
   SampleCallFeedback,
 } from './fixtures/appointments.ts';
+export {
+  SAMPLE_APPROVAL_AUTHORITIES,
+  SAMPLE_APPROVAL_ITEMS,
+  SAMPLE_APPROVER_USER_ID,
+} from './fixtures/approvals.ts';
+export type { SampleApprovalAuthority, SampleApprovalItem } from './fixtures/approvals.ts';
 export { SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES, SAMPLE_WEBINAR_POLLS } from './fixtures/webinars.ts';
 export type {
   SampleWebinar,

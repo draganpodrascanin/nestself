@@ -72,6 +72,8 @@ import { AuthorizationService } from '../authz/authorization.service.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AppointmentViewerReader } from './appointment-viewer.js';
 import { authorize } from '../authz/authorize.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 import { assemblePrincipal } from '../principal/assemble-principal.js';
@@ -148,6 +150,7 @@ export class AppointmentsService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditWriter,
     private readonly callsJobs: CallsJobSchedulerService,
+    private readonly viewers: AppointmentViewerReader,
   ) {}
 
   // ── Create ──────────────────────────────────────────────────────────────
@@ -278,11 +281,12 @@ export class AppointmentsService {
 
   // ── Read ────────────────────────────────────────────────────────────────
 
-  /** The guard has authorized the caller on this appointment. */
-  async get(id: string): Promise<AppointmentResponse> {
+  /** The guard has authorized the caller on this appointment; the response carries the caller's state (T-CW-1.5). */
+  async get(id: string, principal: Principal): Promise<AppointmentResponse> {
     const record = await this.repo.findById(id);
     if (!record) throw notFound();
-    return this.repo.toResponse(record);
+    const [response] = await this.viewers.decorate(principal, [record], [await this.repo.toResponse(record)]);
+    return response!;
   }
 
   async list(principal: Principal, query: AppointmentListQuery): Promise<AppointmentListResponse> {
@@ -301,7 +305,7 @@ export class AppointmentsService {
 
     if (principal.context.kind === 'operations') {
       const { window, nextCursor } = paginate(await this.listForOperations(principal, filter), query.limit);
-      return { items: await this.repo.toResponses(window), nextCursor };
+      return { items: await this.viewers.decorate(principal, window, await this.repo.toResponses(window)), nextCursor };
     }
 
     // The cursor follows the candidate rows, so a row the engine drops never shifts a page.
@@ -313,7 +317,7 @@ export class AppointmentsService {
       await this.auditListDenial(principal, action);
       throw notFound();
     }
-    return { items: await this.repo.toResponses(visible), nextCursor };
+    return { items: await this.viewers.decorate(principal, visible, await this.repo.toResponses(visible)), nextCursor };
   }
 
   /** CALL-28: up to `filter.limit` appointments of the organizations the caller coordinates bookings for. */
@@ -415,6 +419,15 @@ export class AppointmentsService {
   // ── Cancel ──────────────────────────────────────────────────────────────
 
   /** CALL-27, CALL-30: only a `confirmed` appointment can be canceled. */
+  /** `POST /appointments/:id/cancel`: the caller's cancel path is checked first (`authorizeCancel`), then the cancel. */
+  async cancelAs(id: string, principal: Principal): Promise<AppointmentResponse> {
+    const current = await this.repo.findById(id);
+    if (!current) throw notFound();
+    await this.authorizeCancel(principal, current);
+    return this.cancel(id, principal);
+  }
+
+  /** The cancel itself, for a caller already authorized (the route through `cancelAs`, or an internal step). */
   async cancel(id: string, actor: Principal): Promise<AppointmentResponse> {
     const current = await this.repo.findById(id);
     if (!current) throw notFound();
@@ -439,5 +452,24 @@ export class AppointmentsService {
     const response = await this.repo.toResponse(canceled);
     await this.onAppointmentCanceled(response);
     return response;
+  }
+
+  /**
+   * Who may cancel (CALL-27, T-CW-1.5): the employee through
+   * `appointment.cancel` on the appointment, and NestSelf operations in the
+   * operations context through `bookings.coordinate` on its organization
+   * (`client_operations` by its CLIENT assignment). The service coordinator
+   * template is queue-scoped and an appointment carries no queue, so it cannot
+   * reach one; the coordinator's cancel is the operations path until the
+   * booking epic adds queues to appointments. A denial is audited and answers
+   * 404 through the controller's non-disclosure filter.
+   */
+  private async authorizeCancel(principal: Principal, record: AppointmentRecord): Promise<void> {
+    if (principal.context.kind === 'operations') {
+      assertOperationsSession(principal);
+      await this.authz.require(principal, ACTIONS['bookings.coordinate'], { type: 'appointment', orgId: record.orgId });
+      return;
+    }
+    await this.authz.require(principal, ACTIONS['appointment.cancel'], appointmentResourceOf(record));
   }
 }

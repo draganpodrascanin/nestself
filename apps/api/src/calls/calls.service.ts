@@ -127,6 +127,7 @@ import { RoomAccessRegistry, type RoomTarget } from '../ws/room-access.registry.
 import { RoomEmitter } from '../ws/room-emitter.js';
 import {
   APPOINTMENT_STATUS_FOR_OUTCOME,
+  callPendingSignalKey,
   callRoom,
   credentialsTtlSeconds,
   isWithinJoinWindow,
@@ -266,6 +267,7 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     } else {
       ({ path, credentials } = await this.createOrWait(session, participant, appointment));
     }
+    if (role === 'employee') await this.clearPendingSignal(session.id);
 
     // Only now is the session ACTIVE: a location never lands on a row that fails or never starts (CW-R-80a).
     if (body.locationText !== undefined) {
@@ -710,7 +712,43 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     if (session.status === 'ended') throw notJoinable();
     const payload = CallSignalPayloadSchema.parse({ type: body.type, etaMinutes: body.etaMinutes, fromRole: role });
     this.rooms.emit(callRoom(session.id), 'call.signal', payload);
+    if (body.type === 'running_late') await this.keepPendingSignal(appointment, session, body.etaMinutes);
     this.logger.log({ sessionId: session.id, operation: 'signal', signal: body.type }, 'Call signal sent');
+  }
+
+  /**
+   * Keeps the running-late signal for an employee who has not joined yet, so
+   * the waiting screen shows it whenever the employee opens it (CALL-05,
+   * T-CW-1.5): `call:{sessionId}:pending_signal` until the room closes or the
+   * employee joins. Best effort: the room event has already gone out.
+   */
+  private async keepPendingSignal(
+    appointment: AppointmentRecord,
+    session: CallSessionRecord,
+    etaMinutes: number | undefined,
+  ): Promise<void> {
+    try {
+      const employee = await this.scoped(appointment.orgId, (tx) =>
+        this.repo.findParticipant(session.id, appointment.employeeUserId, tx),
+      );
+      if (employee) return;
+      const now = new Date();
+      const signal = { type: 'running_late' as const, ...(etaMinutes === undefined ? {} : { etaMinutes }), sentAt: now.toISOString() };
+      await this.kv.set(callPendingSignalKey(session.id), JSON.stringify(signal), {
+        ttlSeconds: credentialsTtlSeconds(session.endsAt, now),
+      });
+    } catch (error) {
+      this.logger.warn({ sessionId: session.id, operation: 'keepPendingSignal', error: errorName(error) }, 'Signal not kept');
+    }
+  }
+
+  /** The employee is in: the waiting screen's signal is no longer pending. */
+  private async clearPendingSignal(sessionId: string): Promise<void> {
+    try {
+      await this.kv.del(callPendingSignalKey(sessionId));
+    } catch (error) {
+      this.logger.warn({ sessionId, operation: 'clearPendingSignal', error: errorName(error) }, 'Pending signal not cleared');
+    }
   }
 
   // ── Room (T-CW-1.6, D-CW-16, D-CW-37) ────────────────────────────────────

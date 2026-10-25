@@ -184,6 +184,33 @@ export const AppointmentExpertDisplaySchema = AppointmentEmployeeDisplaySchema.e
 export type AppointmentExpertDisplay = z.infer<typeof AppointmentExpertDisplaySchema>;
 
 /**
+ * The caller's own state on an appointment (T-CW-1.5), filled by
+ * `GET /appointments/:id` and the list rows:
+ * - `hasJoined`: the caller has joined the latest call session (a
+ *   `call_participants` row);
+ * - `pendingSignal`: the expert's latest "running late" signal, sent while
+ *   the employee had not joined yet, kept until the employee joins or the
+ *   room closes (CALL-05).
+ */
+export const AppointmentPendingSignalSchema = z.strictObject({
+  type: z.literal('running_late'),
+  etaMinutes: z.number().int().positive().optional(),
+  sentAt: isoDateTime,
+});
+export type AppointmentPendingSignal = z.infer<typeof AppointmentPendingSignalSchema>;
+
+export const AppointmentViewerSchema = z.strictObject({
+  hasJoined: z.boolean(),
+  pendingSignal: AppointmentPendingSignalSchema.optional(),
+});
+export type AppointmentViewer = z.infer<typeof AppointmentViewerSchema>;
+
+/** How a follow-up approval ended without a confirmation, as the employee sees it (D-CW-37). */
+export const APPROVAL_OUTCOMES = ['rejected', 'expired'] as const;
+export const ApprovalOutcomeSchema = z.enum(APPROVAL_OUTCOMES);
+export type ApprovalOutcome = z.infer<typeof ApprovalOutcomeSchema>;
+
+/**
  * An appointment as the API returns it: the seam, plus
  * - the participants' display names (`expert`, `employee`), which the
  *   appointment routes always fill; optional because other routes that
@@ -197,6 +224,15 @@ export const AppointmentResponseSchema = AppointmentSchema.extend({
   expert: AppointmentExpertDisplaySchema.optional(),
   employee: AppointmentEmployeeDisplaySchema.optional(),
   suggestedWindows: z.array(FollowUpTimeWindowSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS).optional(),
+  /** The caller's state (T-CW-1.5); filled by `GET /appointments/:id` and the list. */
+  viewer: AppointmentViewerSchema.optional(),
+  /**
+   * Employee viewer only: how the latest decided approval of this follow-up
+   * ended, and the approver's safe reason when it was rejected. Never sent
+   * to the expert, operations, the approver or the employer.
+   */
+  approvalOutcome: ApprovalOutcomeSchema.optional(),
+  declineReason: z.string().min(1).max(APPROVAL_SAFE_REASON_MAX_LENGTH).optional(),
 });
 export type AppointmentResponse = z.infer<typeof AppointmentResponseSchema>;
 
@@ -352,9 +388,10 @@ export type AppointmentApprovalDecisionRequest = z.infer<
  * reach the user wherever they are in the app, not only on a call page: a
  * follow-up proposal made after the employee left the post-call screen
  * (`appointment.follow_up.proposed`, to the employee), the employee's
- * alternative windows (`appointment.times_suggested`, to the expert), both
- * with the call room's payloads (`FollowUpProposedPayloadSchema`,
- * `TimesSuggestedPayloadSchema`), and the in-app reminder toast
+ * alternative windows and a decline (`appointment.times_suggested` and
+ * `appointment.follow_up.declined`, to the expert, T-CW-1.5), all with the
+ * call room's payloads (`FollowUpProposedPayloadSchema`,
+ * `TimesSuggestedPayloadSchema`, `FollowUpDeclinedPayloadSchema`), and the in-app reminder toast
  * (`appointment.remind`).
  */
 export function userRoomName(userId: string): string {
@@ -364,6 +401,7 @@ export function userRoomName(userId: string): string {
 export const USER_ROOM_EVENT_NAMES = [
   'appointment.follow_up.proposed',
   'appointment.times_suggested',
+  'appointment.follow_up.declined',
   'appointment.remind',
 ] as const;
 export const UserRoomEventNameSchema = z.enum(USER_ROOM_EVENT_NAMES);

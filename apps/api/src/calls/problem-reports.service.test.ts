@@ -19,8 +19,12 @@ import type { CallsService } from './calls.service.js';
 import {
   PROBLEM_REPORT_EVENT_PREFIX,
   ProblemReportsService,
+  decodeProblemReportCursor,
+  encodeProblemReportCursor,
   problemReportCategoryOf,
   problemReportEventName,
+  type ProblemReportPageFilter,
+  type ProblemReportPageRow,
   type ProblemReportRow,
   type StoredProblemReport,
 } from './problem-reports.service.js';
@@ -63,9 +67,16 @@ function participant(userId: string, role: 'expert' | 'employee'): CallParticipa
 
 const principal = (userId: string) => ({ userId }) as Principal;
 
-/** The service with its two queries replaced by an in-memory list. */
+/** The service with its queries replaced by an in-memory list. */
 class TestProblemReportsService extends ProblemReportsService {
   readonly rows: ProblemReportRow[] = [];
+  pageRows: ProblemReportPageRow[] = [];
+  lastFilter: ProblemReportPageFilter | null = null;
+
+  protected override async loadReportPage(filter: ProblemReportPageFilter): Promise<ProblemReportPageRow[]> {
+    this.lastFilter = filter;
+    return this.pageRows.slice(0, filter.limit);
+  }
 
   protected override async storeReport(row: ProblemReportRow, _tx: DbExecutor | undefined): Promise<void> {
     this.rows.push(row);
@@ -195,5 +206,93 @@ describe('ProblemReportsService', () => {
     for (const report of response.problemReports) {
       expect(Object.keys(report).sort()).toEqual([...DIAGNOSTICS_PROBLEM_REPORT_FIELDS].sort());
     }
+  });
+});
+
+describe('ProblemReportsService.list (support queue, T-CW-1.5)', () => {
+  let audit: { record: ReturnType<typeof vi.fn> };
+  let service: TestProblemReportsService;
+
+  const pageRow = (n: number, overrides: Partial<ProblemReportPageRow> = {}): ProblemReportPageRow => ({
+    id: `cce_${n}`,
+    sessionId: `session_${n}`,
+    appointmentId: `appt_${n}`,
+    eventName: 'problem_report:audio',
+    createdAt: new Date(NOW.getTime() - n * 60_000),
+    role: 'employee',
+    durationMs: 600_000,
+    metrics: { rtt: 200, packetLoss: 0.03, reconnectCount: 2 },
+    browser: 'Chrome 130',
+    os: 'macOS 15',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    audit = { record: vi.fn(async () => undefined) };
+    service = new TestProblemReportsService(
+      {} as CallsRepository,
+      {} as DbService,
+      {} as CallsService,
+      audit as unknown as AuditWriter,
+    );
+  });
+
+  it('lists ids, time, role, category and the rebuilt summary, newest first, with a next cursor', async () => {
+    service.pageRows = [pageRow(1), pageRow(2, { eventName: 'problem_report:connection', role: 'expert', metrics: null }), pageRow(3)];
+
+    const page = await service.list(principal('user_nikola'), { limit: 2 });
+
+    expect(page.items).toEqual([
+      {
+        sessionId: 'session_1',
+        appointmentId: 'appt_1',
+        reportedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+        role: 'employee',
+        category: 'audio',
+        summary: { durationMs: 600_000, reconnectCount: 2, metrics: { rtt: 200, packetLoss: 0.03 }, browser: 'Chrome 130', os: 'macOS 15' },
+      },
+      {
+        sessionId: 'session_2',
+        appointmentId: 'appt_2',
+        reportedAt: new Date(NOW.getTime() - 120_000).toISOString(),
+        role: 'expert',
+        category: 'connection',
+        summary: { durationMs: 600_000, browser: 'Chrome 130', os: 'macOS 15' },
+      },
+    ]);
+    expect(decodeProblemReportCursor(page.nextCursor!)).toEqual({ createdAt: pageRow(2).createdAt, id: 'cce_2' });
+    // One more row than the page asks for tells whether there is a next page.
+    expect(service.lastFilter).toMatchObject({ limit: 3 });
+
+    const [event] = audit.record.mock.calls.map((call) => call[0] as AuditEventInput);
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(event).toMatchObject({
+      action: 'call.diagnostics.viewed',
+      actorUserId: 'user_nikola',
+      orgId: null,
+      details: { viewedByUserId: 'user_nikola', reportCount: 2, sessionIds: ['session_1', 'session_2'] },
+    });
+  });
+
+  it('passes the filters and the cursor through, and refuses a cursor it did not issue', async () => {
+    const cursor = encodeProblemReportCursor({ createdAt: NOW, id: 'cce_9' });
+    await service.list(principal('user_nikola'), {
+      limit: 10,
+      orgId: 'org_sample',
+      from: '2026-11-01T00:00:00.000Z',
+      to: '2026-11-30T00:00:00.000Z',
+      cursor,
+    });
+    expect(service.lastFilter).toEqual({
+      limit: 11,
+      orgId: 'org_sample',
+      from: new Date('2026-11-01T00:00:00.000Z'),
+      to: new Date('2026-11-30T00:00:00.000Z'),
+      before: { createdAt: NOW, id: 'cce_9' },
+    });
+
+    const error = await service.list(principal('user_nikola'), { limit: 10, cursor: 'not-a-cursor' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiHttpException);
+    expect((error as ApiHttpException).getStatus()).toBe(400);
   });
 });

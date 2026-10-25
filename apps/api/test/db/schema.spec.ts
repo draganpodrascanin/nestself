@@ -11,7 +11,9 @@ import { eq, inArray } from 'drizzle-orm';
 import { withOrgScope } from '../../src/db/db.service.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
 import {
+  appointmentApprovals,
   appointments,
+  approvalAuthorities,
   callFeedback,
   callOutcomes,
   callParticipants,
@@ -601,6 +603,25 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(callParticipants)
         .where(eq(callParticipants.sessionId, 'call_session_sample_consultation'));
       expect(roles.map((r) => r.role).sort()).toEqual(['EMPLOYEE', 'EXPERT']);
+
+      // T-CW-1.5: the sample approver's authority and pending item for the awaiting_approval follow-up.
+      const [approval] = await owner.db
+        .select()
+        .from(appointmentApprovals)
+        .where(eq(appointmentApprovals.id, 'approval_sample_follow_up_awaiting'));
+      expect(approval).toMatchObject({
+        appointmentId: 'appt_sample_follow_up_awaiting',
+        approverUserId: 'user_ivana',
+        status: 'PENDING',
+        orgId: 'org_sample',
+      });
+      const [authority] = await owner.db
+        .select()
+        .from(approvalAuthorities)
+        .where(eq(approvalAuthorities.id, 'approval_authority_sample_ivana'));
+      expect(authority).toMatchObject({ userId: 'user_ivana', orgUnitId: 'ou_root', includeDescendants: true });
+      const [approverGrant] = await owner.db.select().from(grants).where(eq(grants.id, 'grant_user_ivana_approver'));
+      expect(approverGrant).toMatchObject({ templateKey: 'approver', scopeOrgId: 'org_sample' });
     });
 
     it('seeds the sample webinars, their chat and the poll with anonymous votes (T-CW-2.1)', async () => {

@@ -21,6 +21,8 @@ import {
   AppointmentSchema,
   AppointmentStatusSchema,
   AppointmentSuggestTimesRequestSchema,
+  AppointmentViewerSchema,
+  APPROVAL_OUTCOMES,
   AppointmentRemindPayloadSchema,
   FOLLOW_UP_APPROVAL_CATEGORY,
   FOLLOW_UP_APPROVAL_POLICIES,
@@ -474,8 +476,13 @@ describe('User room (CALL-42, CALL-01 criterion 5)', () => {
     expect(userRoomName('user_jovan')).toBe('user:user_jovan');
   });
 
-  it('serves the follow-up proposal, the employee’s suggested times (to the expert) and the reminder', () => {
-    expect(USER_ROOM_EVENT_NAMES).toEqual(['appointment.follow_up.proposed', 'appointment.times_suggested', 'appointment.remind']);
+  it('serves the follow-up proposal, the employee’s suggested times and decline (to the expert) and the reminder', () => {
+    expect(USER_ROOM_EVENT_NAMES).toEqual([
+      'appointment.follow_up.proposed',
+      'appointment.times_suggested',
+      'appointment.follow_up.declined',
+      'appointment.remind',
+    ]);
   });
 
   it('`appointment.remind` carries ids, times and the appointment’s time zone only', () => {
@@ -595,5 +602,54 @@ describe('Follow-up approval policy setting (CALL-41)', () => {
     expect(issuePaths(FollowUpApprovalPolicyRequestSchema.safeParse({ policy: 'MANAGER_APPROVAL' }))).toEqual(['policy']);
     expect(FollowUpApprovalPolicyRequestSchema.safeParse({ policy: 'automatic', extra: true }).success).toBe(false);
     expect(FollowUpApprovalPolicyResponseSchema.parse({ policy: 'automatic' })).toEqual({ policy: 'automatic' });
+  });
+});
+
+describe('AppointmentResponseSchema viewer state and approval outcome (T-CW-1.5)', () => {
+  const seam = {
+    id: 'appt_1',
+    orgId: 'org_1',
+    expertUserId: 'user_expert',
+    employeeUserId: 'user_employee',
+    startsAt: '2026-11-10T09:00:00.000Z',
+    endsAt: '2026-11-10T09:50:00.000Z',
+    status: 'confirmed',
+    serviceCategory: 'psychological',
+    timeZone: 'Europe/Belgrade',
+    fundingRef: null,
+    followUpOf: null,
+  };
+
+  it('carries the caller’s join state and the expert’s pending running-late signal', () => {
+    const viewer = {
+      hasJoined: false,
+      pendingSignal: { type: 'running_late', etaMinutes: 10, sentAt: '2026-11-10T08:55:00.000Z' },
+    };
+    expect(AppointmentResponseSchema.parse({ ...seam, viewer })).toEqual({ ...seam, viewer });
+    expect(AppointmentViewerSchema.parse({ hasJoined: true })).toEqual({ hasJoined: true });
+    expect(
+      AppointmentViewerSchema.parse({ hasJoined: false, pendingSignal: { type: 'running_late', sentAt: viewer.pendingSignal.sentAt } }),
+    ).toEqual({ hasJoined: false, pendingSignal: { type: 'running_late', sentAt: viewer.pendingSignal.sentAt } });
+  });
+
+  it('refuses another signal type, extra viewer fields and a missing join state', () => {
+    const sentAt = '2026-11-10T08:55:00.000Z';
+    expect(AppointmentViewerSchema.safeParse({ hasJoined: false, pendingSignal: { type: 'cannot_hear', sentAt } }).success).toBe(
+      false,
+    );
+    expect(AppointmentViewerSchema.safeParse({ hasJoined: false, userId: 'user_x' }).success).toBe(false);
+    expect(issuePaths(AppointmentViewerSchema.safeParse({}))).toEqual(['hasJoined']);
+  });
+
+  it('carries the employee’s approval outcome and safe decline reason', () => {
+    expect(APPROVAL_OUTCOMES).toEqual(['rejected', 'expired']);
+    const rejected = { ...seam, status: 'declined', approvalOutcome: 'rejected', declineReason: 'The budget for this quarter is used.' };
+    expect(AppointmentResponseSchema.parse(rejected)).toEqual(rejected);
+    const expired = { ...seam, status: 'declined', approvalOutcome: 'expired' };
+    expect(AppointmentResponseSchema.parse(expired)).toEqual(expired);
+    expect(issuePaths(AppointmentResponseSchema.safeParse({ ...seam, approvalOutcome: 'approved' }))).toEqual(['approvalOutcome']);
+    expect(
+      issuePaths(AppointmentResponseSchema.safeParse({ ...seam, declineReason: 'x'.repeat(APPROVAL_SAFE_REASON_MAX_LENGTH + 1) })),
+    ).toEqual(['declineReason']);
   });
 });

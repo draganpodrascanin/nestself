@@ -8,10 +8,12 @@ import {
   CALL_JOIN_WINDOW_AFTER_MINUTES,
   CALL_JOIN_WINDOW_BEFORE_MINUTES,
   CALL_ROOM_CLOSE_AFTER_MINUTES,
+  AppointmentPendingSignalSchema,
   ChimeAttendeeSchema,
   ChimeMeetingSchema,
   DiagnosticsResponseSchema,
   callRoomName,
+  type AppointmentPendingSignal,
   type AppointmentStatus,
   type CallFormat,
   type CallOutcomeStatus,
@@ -62,6 +64,28 @@ export const fromDbOutcomeStatus = (status: DbOutcomeStatus): CallOutcomeStatus 
 
 /** The Socket.IO room of a call session (decision record section 7): the clients' `callRoomName`. */
 export const callRoom: (sessionId: string) => string = callRoomName;
+
+/**
+ * `call:{sessionId}:pending_signal`: the expert's latest running-late signal,
+ * kept while the employee has not joined (T-CW-1.5, CALL-05). The calls
+ * module writes it on the signal and deletes it when the employee joins; the
+ * appointments module reads it into the employee's `viewer.pendingSignal`.
+ * It expires when the room closes.
+ */
+export function callPendingSignalKey(sessionId: string): string {
+  return `call:${sessionId}:pending_signal`;
+}
+
+/** The kept signal, or null when the entry is missing or not a valid one. */
+export function parsePendingSignal(raw: string | null): AppointmentPendingSignal | null {
+  if (!raw) return null;
+  try {
+    const parsed = AppointmentPendingSignalSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A participant's first join of a consultation, or a rejoin after they already joined. */
 export type JoinKind = 'first' | 'rejoin';

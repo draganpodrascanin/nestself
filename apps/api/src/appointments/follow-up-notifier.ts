@@ -8,7 +8,7 @@
  * | confirmed        | `appointment.follow_up.confirmed`               |                                        | `appointment.follow_up.confirmed` with the calendar file, both parties |
  * | awaiting approval| `appointment.follow_up.confirmed` (`awaiting_approval`) |                                | none here: the approver's email is T-CW-1.10's |
  * | times suggested  | `appointment.times_suggested`                   | `user:{expert}`                        | none (guidelines 10.5 names none)            |
- * | declined         | `appointment.follow_up.declined`                |                                        | `appointment.follow_up.declined`, expert     |
+ * | declined         | `appointment.follow_up.declined`                | `user:{expert}` (T-CW-1.5)             | `appointment.follow_up.declined`, expert     |
  *
  * Everything here is best effort: the step has already succeeded, so a
  * failed emit or email is logged with ids only and never thrown. Payloads
@@ -106,9 +106,10 @@ export class FollowUpNotifier {
   }
 
   async declined(followUp: AppointmentRecord): Promise<void> {
-    await this.toCallRoom(followUp, 'declined', (sessionId) =>
-      this.callRoom.emitDeclined(sessionId, { appointmentId: followUp.followUpOf ?? followUp.id, followUpId: followUp.id }),
-    );
+    const payload = { appointmentId: followUp.followUpOf ?? followUp.id, followUpId: followUp.id };
+    await this.toCallRoom(followUp, 'declined', (sessionId) => this.callRoom.emitDeclined(sessionId, payload));
+    // The expert's own room: the decline shows live wherever the expert is in the admin app (T-CW-1.5).
+    this.guard(followUp, 'userRoom', () => this.rooms.emitToUser(followUp.expertUserId, 'appointment.follow_up.declined', payload));
     await this.mail(followUp, 'expert', (to, locale) => ({
       to,
       locale,

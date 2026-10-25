@@ -20,6 +20,10 @@ import {
   CALL_LOCATION_TEXT_MAX_LENGTH,
   CALL_PROBLEM_CATEGORIES,
   CallProblemReportRequestSchema,
+  PROBLEM_REPORT_LIST_DEFAULT_LIMIT,
+  PROBLEM_REPORT_LIST_MAX_LIMIT,
+  ProblemReportListQuerySchema,
+  ProblemReportListResponseSchema,
   DIAGNOSTICS_PROBLEM_REPORT_FIELDS,
   CallFeedbackRequestSchema,
   CallJoinRequestSchema,
@@ -706,5 +710,49 @@ describe('package entry', () => {
     expect(entry.VideoProviderNameSchema).toBe(VideoProviderNameSchema);
     expect('VideoProviderSchema' in entry).toBe(false);
     expect('VIDEO_PROVIDERS' in entry).toBe(false);
+  });
+});
+
+describe('Problem report listing for support (T-CW-1.5, CALL-16 criterion 5)', () => {
+  const item = {
+    sessionId: 'sess_1',
+    appointmentId: 'appt_1',
+    reportedAt: '2026-11-10T09:40:00.000Z',
+    role: 'employee',
+    category: 'audio',
+    summary: { durationMs: 600_000, reconnectCount: 1, metrics: { rtt: 220 }, browser: 'Chrome 130', os: 'macOS 15' },
+  };
+
+  it('pages with a cursor and bounded limits, filtered by organization and time', () => {
+    expect(ProblemReportListQuerySchema.parse({})).toEqual({ limit: PROBLEM_REPORT_LIST_DEFAULT_LIMIT });
+    expect(
+      ProblemReportListQuerySchema.parse({
+        orgId: 'org_1',
+        from: '2026-11-01T00:00:00.000Z',
+        to: '2026-11-30T00:00:00.000Z',
+        limit: '20',
+        cursor: 'abc',
+      }),
+    ).toEqual({ orgId: 'org_1', from: '2026-11-01T00:00:00.000Z', to: '2026-11-30T00:00:00.000Z', limit: 20, cursor: 'abc' });
+    expect(issuePaths(ProblemReportListQuerySchema.safeParse({ limit: PROBLEM_REPORT_LIST_MAX_LIMIT + 1 }))).toEqual(['limit']);
+    expect(
+      issuePaths(ProblemReportListQuerySchema.safeParse({ from: '2026-11-30T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' })),
+    ).toEqual(['to']);
+  });
+
+  it('lists ids, time, role, category and the connection summary only: no names', () => {
+    const page = { items: [item], nextCursor: null };
+    expect(ProblemReportListResponseSchema.parse(page)).toEqual(page);
+    for (const extra of ['userId', 'displayName', 'note', 'orgId']) {
+      expect(ProblemReportListResponseSchema.safeParse({ items: [{ ...item, [extra]: 'x' }], nextCursor: null }).success, extra).toBe(
+        false,
+      );
+    }
+    expect(
+      ProblemReportListResponseSchema.safeParse({
+        items: [{ ...item, summary: { ...item.summary, deviceLabel: 'Mic' } }],
+        nextCursor: null,
+      }).success,
+    ).toBe(false);
   });
 });

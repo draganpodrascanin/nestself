@@ -36,6 +36,8 @@ import {
   DIAGNOSTICS_PROBLEM_REPORT_FIELDS,
   DIAGNOSTICS_RESPONSE_FIELDS,
   DiagnosticsResponseSchema,
+  PERMISSION_TEMPLATES,
+  ProblemReportListResponseSchema,
   type CallJoinResponse,
 } from '@nestself/contracts';
 import { SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
@@ -80,6 +82,8 @@ const APPT_LATER = 'appt_call_later';
 const APPT_CANCELED = 'appt_call_canceled';
 /** Inside the window; its meeting is ended by the provider (T-CW-1.2). */
 const APPT_PROVIDER = 'appt_call_provider_end';
+/** Inside the window; the expert signals running late before the employee joins (T-CW-1.5). */
+const APPT_SIGNAL = 'appt_call_pending_signal';
 
 /**
  * Every key set a call audit event may carry (guidelines 7.5). `call.ended`
@@ -96,7 +100,10 @@ const CALL_AUDIT_DETAIL_KEYS: Record<string, string[][]> = {
   ],
   'call.outcome.recorded': [['outcomeStatus', 'sessionId']],
   'call.feedback.submitted': [['sessionId']],
-  'call.diagnostics.viewed': [['sessionId', 'viewedByUserId']],
+  'call.diagnostics.viewed': [
+    ['sessionId', 'viewedByUserId'],
+    ['reportCount', 'sessionIds', 'viewedByUserId'],
+  ],
   'call.problem.reported': [['category', 'sessionId']],
 };
 
@@ -248,6 +255,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     await insertAppointment(APPT_LATER, new Date(now + 3 * 24 * 60 * MINUTE));
     await insertAppointment(APPT_CANCELED, new Date(now + 5 * MINUTE), 'CANCELED');
     await insertAppointment(APPT_PROVIDER, new Date(now + 5 * MINUTE));
+    await insertAppointment(APPT_SIGNAL, new Date(now + 5 * MINUTE));
 
     // Stefan keeps team_manager only: an employer-scoped principal.
     await testDb.db
@@ -358,6 +366,32 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     expect(emitted('call.participant.joined').map((call) => call[0])).toEqual([`call:${sessionId}`, `call:${sessionId}`]);
   });
 
+  // ── Viewer state (T-CW-1.5, CALL-05) ────────────────────────────────────────
+
+  it("the appointment carries the caller's join state and the expert's pending running-late signal", async () => {
+    const view = async (who: SignedIn) => {
+      const res = await who.agent.get(`/api/appointments/${APPT_SIGNAL}`);
+      expect(res.status).toBe(200);
+      return AppointmentResponseSchema.parse(res.body);
+    };
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: false });
+
+    const late = await post(milica, `/appointments/${APPT_SIGNAL}/signal`, { type: 'running_late', etaMinutes: 10 });
+    expect(late.status).toBe(204);
+    const pending = { type: 'running_late', etaMinutes: 10, sentAt: expect.any(String) };
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: false, pendingSignal: pending });
+    expect((await view(milica)).viewer).toEqual({ hasJoined: false, pendingSignal: pending });
+    // The list rows carry it as well.
+    const list = await jovan.agent.get('/api/appointments');
+    const row = (list.body.items as { id: string; viewer: unknown }[]).find((item) => item.id === APPT_SIGNAL);
+    expect(row?.viewer).toEqual({ hasJoined: false, pendingSignal: pending });
+
+    // The employee joins: joined, and the signal is no longer pending.
+    expect((await join(jovan, APPT_SIGNAL)).status).toBe(200);
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: true });
+    expect((await view(milica)).viewer).toEqual({ hasJoined: false });
+  });
+
   it('a rejoin returns identical credentials', async () => {
     const add = vi.spyOn(video, 'createParticipant');
     add.mockClear();
@@ -424,7 +458,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       .select({ appointmentId: callSessions.appointmentId })
       .from(callSessions)
       .where(eq(callSessions.format, 'CONSULTATION'));
-    expect(rows.map((r) => r.appointmentId).filter((id) => id !== 'appt_sample_completed')).toEqual([APPT_NOW]);
+    expect(rows.map((r) => r.appointmentId).filter((id) => id === APPT_LATER || id === APPT_CANCELED)).toEqual([]);
   });
 
   // ── Employer isolation golden cases (CALL-17, D-CW-30, CW-R-72) ─────────────
@@ -612,6 +646,64 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     expect(viewed!.details).toEqual({ sessionId, viewedByUserId: 'user_nikola' });
 
     expectNotFound(await diagnostics(nikola, 'session_missing'));
+  });
+
+  // ── Support queue (T-CW-1.5, CALL-16 criterion 5) ───────────────────────────
+
+  it('support lists the problem reports across sessions with a platform-scoped grant; HR gets 404 (T-CW-1.5)', async () => {
+    const queue = (who: SignedIn, query = '') => who.agent.get(`/api/ops/calls/problem-reports${query}`);
+    // nikola's support_operator grant is scoped to assigned cases: the queue is a platform view.
+    expectNotFound(await queue(nikola));
+    expectNotFound(await queue(ivana));
+
+    const supportTemplate = PERMISSION_TEMPLATES.find((t) => t.key === 'support_operator')!;
+    await testDb.db.insert(grants).values({
+      id: 'grant_test_user_nikola_support_platform',
+      subjectUserId: 'user_nikola',
+      templateKey: 'support_operator',
+      actions: [...supportTemplate.actions],
+      scopeType: 'platform',
+      scopeOrgId: null,
+      includeDescendants: false,
+      conditions: [],
+      grantedByUserId: 'user_nikola',
+      validFrom: new Date('2026-01-01'),
+    });
+    await app.get(PrincipalLoader).invalidateUser('user_nikola', ['platform']);
+
+    const res = await queue(nikola);
+    expect(res.status).toBe(200);
+    const page = ProblemReportListResponseSchema.parse(res.body);
+    const ours = page.items.filter((item) => item.sessionId === sessionId);
+    expect(ours.map((item) => [item.category, item.role, item.appointmentId])).toEqual([
+      ['connection', 'expert', APPT_NOW],
+      ['audio', 'employee', APPT_NOW],
+    ]);
+    expect(ours[1]!.summary).toEqual({
+      durationMs: 600_000,
+      reconnectCount: 1,
+      metrics: { rtt: 220, jitter: 31, packetLoss: 0.03, outgoingBitrate: 300_000 },
+      browser: 'Chrome 130',
+      os: 'macOS 15',
+    });
+    const text = JSON.stringify(res.body);
+    for (const leak of ['user_jovan', 'user_milica', 'Petrović', 'psychological']) expect(text).not.toContain(leak);
+
+    const first = ProblemReportListResponseSchema.parse((await queue(nikola, `?limit=1&orgId=${ORG}`)).body);
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = ProblemReportListResponseSchema.parse(
+      (await queue(nikola, `?limit=1&orgId=${ORG}&cursor=${encodeURIComponent(first.nextCursor!)}`)).body,
+    );
+    expect(second.items[0]!.reportedAt <= first.items[0]!.reportedAt).toBe(true);
+    expect(ProblemReportListResponseSchema.parse((await queue(nikola, '?orgId=org_none')).body).items).toEqual([]);
+
+    const pages = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'call.diagnostics.viewed'), eq(auditEvents.recordType, 'call_problem_reports')));
+    expect(pages).toHaveLength(4);
+    expect(pages.every((event) => event.actorUserId === 'user_nikola' && event.category === 'CONTENT_ACCESS')).toBe(true);
   });
 
   // ── End (CALL-21, D-CW-09) ──────────────────────────────────────────────────

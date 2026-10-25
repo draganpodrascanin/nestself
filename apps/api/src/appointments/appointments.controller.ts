@@ -5,7 +5,8 @@
  * GET  /appointments                 list: `@Authenticated()`, authorized in the service (see below)
  * GET  /appointments/:id             consultation.join    appointmentResource
  * POST /orgs/:orgId/appointments     bookings.coordinate  operationsOrgResource('appointment')   10/60 s
- * POST /appointments/:id/cancel      appointment.cancel   appointmentResource                    10/60 s
+ * POST /appointments/:id/cancel      `@Authenticated()`; the employee (appointment.cancel) or operations
+ *                                    (bookings.coordinate on the organization), checked in the service   10/60 s
  *
  * Follow-ups (T-CW-1.9, D-CW-37, `FollowUpService`), each answering the
  * appointment it changed or created:
@@ -83,8 +84,8 @@ export class AppointmentsController {
 
   @Get('appointments/:id')
   @Authorize(ACTIONS['consultation.join'], appointmentResource)
-  get(@Param('id') id: string): Promise<AppointmentResponse> {
-    return this.appointments.get(id);
+  get(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<AppointmentResponse> {
+    return this.appointments.get(id, principal);
   }
 
   @Post('orgs/:orgId/appointments')
@@ -99,12 +100,13 @@ export class AppointmentsController {
     return this.appointments.create(orgId, body, principal);
   }
 
+  /** The employee or operations; authorized in the service (`authorizeCancel`). */
   @Post('appointments/:id/cancel')
   @HttpCode(200)
   @Throttle(WRITE_THROTTLE)
-  @Authorize(ACTIONS['appointment.cancel'], appointmentResource)
+  @Authenticated()
   cancel(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<AppointmentResponse> {
-    return this.appointments.cancel(id, principal);
+    return this.appointments.cancelAs(id, principal);
   }
 
   // ── Follow-ups (T-CW-1.9, D-CW-37) ──────────────────────────────────────

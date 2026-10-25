@@ -33,7 +33,9 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
+  appointmentApprovals,
   appointments,
+  approvalAuthorities,
   assignments,
   auditEvents,
   callSessions,
@@ -219,6 +221,11 @@ describe.skipIf(!shouldRun)('Follow-up lifecycle (e2e)', () => {
   beforeAll(async () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'follow_up');
     await seed(testDb.db);
+    // The seed's sample approver (T-CW-1.5): an authority over the whole organization, the
+    // approver grant of user_ivana and a pending item. This suite routes its own approvals.
+    await testDb.db.delete(appointmentApprovals).where(eq(appointmentApprovals.id, 'approval_sample_follow_up_awaiting'));
+    await testDb.db.delete(approvalAuthorities).where(eq(approvalAuthorities.id, 'approval_authority_sample_ivana'));
+    await testDb.db.delete(grants).where(eq(grants.id, 'grant_user_ivana_approver'));
 
     process.env.DATABASE_URL = testDb.url;
     process.env.AUTH_MODE = 'stub';

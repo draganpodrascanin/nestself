@@ -25,6 +25,9 @@ import {
   SAMPLE_WEBINARS,
   SAMPLE_WEBINAR_MESSAGES,
   SAMPLE_WEBINAR_POLLS,
+  SAMPLE_APPROVAL_AUTHORITIES,
+  SAMPLE_APPROVAL_ITEMS,
+  SAMPLE_APPROVER_USER_ID,
   type SampleAppointment,
   type SampleCallSession,
   type SampleWebinar,
@@ -34,7 +37,9 @@ import {
 // Calls and webinars: SAMPLE_APPOINTMENTS and both entries of
 // SAMPLE_CALL_SESSIONS (call_sessions, call_participants, call_outcomes,
 // call_feedback, T-CW-1.1), and SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES and
-// SAMPLE_WEBINAR_POLLS (T-CW-2.1) are seeded below.
+// SAMPLE_WEBINAR_POLLS (T-CW-2.1), and the sample approver's authority and
+// pending item (SAMPLE_APPROVAL_AUTHORITIES, SAMPLE_APPROVAL_ITEMS, T-CW-1.5)
+// are seeded below.
 import {
   PERMISSION_TEMPLATES,
   type PermissionTemplateDefinition,
@@ -87,7 +92,8 @@ async function upsertById<TTable extends TableWithId>(
  * `@nestself/sample-data`). The backfill never derives these.
  */
 export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>> = {
-  user_ivana: ['employer_owner'],
+  // The approver template makes her the sample follow-up approver (T-CW-1.5).
+  user_ivana: ['employer_owner', 'approver'],
 };
 
 /** Ids of the grants created from `EXTRA_SAMPLE_TEMPLATES`. */
@@ -537,7 +543,55 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     }
   }
 
+  // ── Follow-up approval (T-CW-1.5): the sample approver's authority and pending item ──
+  // After the appointments: the item references the awaiting_approval follow-up.
+  const approvalRows = sampleApprovalRows(defaultTeamId);
+  for (const authority of approvalRows.authorities) {
+    const { id: _authorityId, ...authorityUpdate } = authority;
+    await upsertById(db, t.approvalAuthorities, authority, authorityUpdate);
+  }
+  for (const approval of approvalRows.approvals) {
+    const { id: _approvalId, ...approvalUpdate } = approval;
+    await upsertById(db, t.appointmentApprovals, approval, approvalUpdate);
+  }
+
   return countAll(db);
+}
+
+/**
+ * The sample approver's `approval_authorities` rows and the pending
+ * `appointment_approvals` row of each sample approval item, routed to that
+ * approver in the employee's unit (`employeeUnitId`, the unit the seed gives
+ * every sample membership).
+ */
+export function sampleApprovalRows(employeeUnitId: string | null) {
+  const authorities = SAMPLE_APPROVAL_AUTHORITIES.map(
+    (authority) =>
+      ({
+        id: authority.id,
+        userId: authority.userId,
+        orgId: authority.orgId,
+        orgUnitId: authority.orgUnitId,
+        includeDescendants: authority.includeDescendants,
+        categories: [...authority.categories],
+        alternateUserId: authority.alternateUserId,
+        validFrom: new Date(authority.validFrom),
+      }) satisfies typeof t.approvalAuthorities.$inferInsert,
+  );
+  const approvals = SAMPLE_APPROVAL_ITEMS.map((item) => {
+    const appointment = SAMPLE_APPOINTMENTS.find((candidate) => candidate.id === item.appointmentId);
+    if (!appointment) throw new Error(`SAMPLE_APPROVAL_ITEMS names an unknown appointment: ${item.appointmentId}`);
+    return {
+      id: item.id,
+      appointmentId: item.appointmentId,
+      orgId: appointment.orgId,
+      orgUnitId: employeeUnitId,
+      approverUserId: SAMPLE_APPROVER_USER_ID,
+      alternateUserId: null,
+      status: item.status.toUpperCase() as (typeof t.appointmentApprovalStatus.enumValues)[number],
+    } satisfies typeof t.appointmentApprovals.$inferInsert;
+  });
+  return { authorities, approvals };
 }
 
 // ── Webinar fixtures (T-CW-2.1) ──────────────────────────────────────────────
@@ -852,6 +906,8 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     callParticipants: t.callParticipants,
     callOutcomes: t.callOutcomes,
     callFeedback: t.callFeedback,
+    approvalAuthorities: t.approvalAuthorities,
+    appointmentApprovals: t.appointmentApprovals,
     webinars: t.webinars,
     webinarHosts: t.webinarHosts,
     webinarRegistrations: t.webinarRegistrations,

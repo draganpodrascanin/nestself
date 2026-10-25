@@ -519,6 +519,53 @@ export const CallProblemReportRequestSchema = z.strictObject({
 });
 export type CallProblemReportRequest = z.infer<typeof CallProblemReportRequestSchema>;
 
+/** Default and largest page size of `GET /ops/calls/problem-reports`. */
+export const PROBLEM_REPORT_LIST_DEFAULT_LIMIT = 50;
+export const PROBLEM_REPORT_LIST_MAX_LIMIT = 100;
+
+/**
+ * `GET /ops/calls/problem-reports` query (CALL-16 criterion 5, T-CW-1.5):
+ * support's queue of reports, newest first. `orgId` narrows to one client
+ * organization; `from` (inclusive) and `to` (exclusive) bound `reportedAt`;
+ * `cursor` is the opaque `nextCursor` of the previous page.
+ */
+export const ProblemReportListQuerySchema = z
+  .object({
+    orgId: z.string().min(1).optional(),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(PROBLEM_REPORT_LIST_MAX_LIMIT)
+      .default(PROBLEM_REPORT_LIST_DEFAULT_LIMIT),
+    cursor: z.string().min(1).max(512).optional(),
+  })
+  .refine((q) => !q.from || !q.to || Date.parse(q.to) > Date.parse(q.from), {
+    path: ['to'],
+    message: 'to must be after from',
+  });
+export type ProblemReportListQuery = z.infer<typeof ProblemReportListQuerySchema>;
+
+/** One report as support lists it: ids, time, the reporter's role, the category and the summary; no names. */
+export const ProblemReportListItemSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  appointmentId: z.string().min(1).nullable(),
+  reportedAt: z.string().datetime(),
+  role: CallParticipantRoleSchema,
+  category: CallProblemCategorySchema,
+  summary: CallProblemSummarySchema,
+});
+export type ProblemReportListItem = z.infer<typeof ProblemReportListItemSchema>;
+
+export const ProblemReportListResponseSchema = z.strictObject({
+  items: z.array(ProblemReportListItemSchema),
+  /** Pass as `cursor` for the next page; null on the last page. */
+  nextCursor: z.string().nullable(),
+});
+export type ProblemReportListResponse = z.infer<typeof ProblemReportListResponseSchema>;
+
 // ---------------------------------------------------------------------------
 // Support diagnostics (GET /ops/calls/:sessionId/diagnostics, D-CW-28)
 // ---------------------------------------------------------------------------

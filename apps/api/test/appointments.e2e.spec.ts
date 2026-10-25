@@ -38,6 +38,7 @@ import { computeTotp } from '../src/identity/totp.js';
 import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
+  appointmentApprovals,
   appointments,
   assignments,
   auditEvents,
@@ -194,6 +195,8 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     await testDb.db.delete(callParticipants).where(inArray(callParticipants.sessionId, sampleSessionIds));
     await testDb.db.delete(callSessions).where(inArray(callSessions.id, sampleSessionIds));
     await testDb.db.delete(assignments).where(inArray(assignments.targetId, sampleAppointmentIds));
+    // The sample approval item (T-CW-1.5) references the awaiting_approval follow-up.
+    await testDb.db.delete(appointmentApprovals).where(inArray(appointmentApprovals.appointmentId, sampleAppointmentIds));
     await testDb.db.delete(appointments).where(inArray(appointments.id, sampleAppointmentIds));
 
     process.env.DATABASE_URL = testDb.url;
@@ -598,5 +601,100 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
         expect(AUDIT_DETAIL_KEYS.has(key), `${event.action}: ${key}`).toBe(true);
       }
     }
+  });
+
+  // ── Operations cancel (CALL-27, T-CW-1.5) ────────────────────────────────
+
+  it('operations cancel a confirmed appointment of an assigned organization; others get 404', async () => {
+    const OPS_CANCEL_ID = 'appt_test_ops_cancel';
+    await testDb.db.insert(appointments).values({
+      id: OPS_CANCEL_ID,
+      orgId: ORG,
+      expertUserId: 'user_milica',
+      employeeUserId: 'user_jovan',
+      startsAt: new Date('2026-12-01T09:00:00.000Z'),
+      endsAt: new Date('2026-12-01T09:50:00.000Z'),
+      serviceCategory: 'psychological',
+    });
+
+    // Operations without a CLIENT assignment to the organization have no cancel path (the expert's
+    // 404 is the case above). The route allows 10 writes a minute per client: keep this test lean.
+    expectNotFound(await cancel(nikola, OTHER_ORG_ID));
+
+    const res = await cancel(nikola, OPS_CANCEL_ID);
+    expect(res.status).toBe(200);
+    expect(AppointmentResponseSchema.parse(res.body)).toMatchObject({ id: OPS_CANCEL_ID, status: 'canceled' });
+    const [event] = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'appointment.canceled'), eq(auditEvents.recordId, OPS_CANCEL_ID)));
+    expect(event!.details).toEqual({ appointmentId: OPS_CANCEL_ID, canceledByUserId: 'user_nikola' });
+  });
+
+  // ── Approval outcome for the employee (T-CW-1.5, D-CW-37) ────────────────
+
+  it('the employee sees how the approval ended and the safe reason; the expert and the approver never do', async () => {
+    const REJECTED_ID = 'appt_test_follow_up_rejected';
+    const EXPIRED_ID = 'appt_test_follow_up_expired';
+    const followUp = (id: string, startsAt: string) => ({
+      id,
+      orgId: ORG,
+      expertUserId: 'user_milica',
+      employeeUserId: 'user_jovan',
+      startsAt: new Date(startsAt),
+      endsAt: new Date(new Date(startsAt).getTime() + 50 * 60_000),
+      status: 'DECLINED' as const,
+      serviceCategory: 'psychological',
+      followUpOf: confirmedId,
+    });
+    await testDb.db
+      .insert(appointments)
+      .values([followUp(REJECTED_ID, '2026-12-08T09:00:00.000Z'), followUp(EXPIRED_ID, '2026-12-09T09:00:00.000Z')]);
+    for (const id of [REJECTED_ID, EXPIRED_ID]) {
+      await testDb.db.insert(assignments).values({
+        userId: 'user_milica',
+        kind: 'CASE',
+        targetId: id,
+        assignedByUserId: 'user_milica',
+        startAt: new Date('2026-01-01'),
+      });
+    }
+    await app.get(PrincipalLoader).invalidateUser('user_milica');
+    const reason = 'The team budget for this quarter is used up.';
+    await testDb.db.insert(appointmentApprovals).values([
+      {
+        appointmentId: REJECTED_ID,
+        orgId: ORG,
+        approverUserId: 'user_ivana',
+        status: 'REJECTED',
+        reason,
+        decidedAt: new Date('2026-11-20T10:00:00.000Z'),
+      },
+      { appointmentId: EXPIRED_ID, orgId: ORG, approverUserId: 'user_ivana', status: 'EXPIRED', decidedAt: new Date('2026-11-21T10:00:00.000Z') },
+    ]);
+
+    const read = async (who: SignedIn, id: string) => {
+      const res = await who.agent.get(`${LIST}/${id}`);
+      expect(res.status).toBe(200);
+      return AppointmentResponseSchema.parse(res.body);
+    };
+    expect(await read(jovan, REJECTED_ID)).toMatchObject({ approvalOutcome: 'rejected', declineReason: reason });
+    const expired = await read(jovan, EXPIRED_ID);
+    expect(expired.approvalOutcome).toBe('expired');
+    expect(expired).not.toHaveProperty('declineReason');
+    const rows = (await listPage(jovan, '?status=declined')).items;
+    expect(rows.find((row) => row.id === REJECTED_ID)).toMatchObject({ approvalOutcome: 'rejected', declineReason: reason });
+
+    for (const id of [REJECTED_ID, EXPIRED_ID]) {
+      const asExpert = await read(milica, id);
+      expect(asExpert).not.toHaveProperty('approvalOutcome');
+      expect(asExpert).not.toHaveProperty('declineReason');
+      expect(asExpert.viewer).toEqual({ hasJoined: false });
+      // The approver is no participant: the appointment itself is not disclosed.
+      expectNotFound(await ivana.agent.get(`${LIST}/${id}`));
+    }
+    const expertList = (await listPage(milica, '?status=declined')).items;
+    expect(JSON.stringify(expertList)).not.toContain(reason);
+    expect(JSON.stringify(expertList)).not.toContain('approvalOutcome');
   });
 });

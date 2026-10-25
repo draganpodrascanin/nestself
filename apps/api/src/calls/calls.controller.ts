@@ -11,6 +11,7 @@
  * POST /calls/:sessionId/client-events     consultation.join  callSessionResource    60/60 s
  * POST /calls/:sessionId/problem-report    consultation.join  callSessionResource     5/60 s  participants only (service), CALL-16
  * GET  /ops/calls/:sessionId/diagnostics   diagnostic.read    operationsResource('call')            with the problem reports
+ * GET  /ops/calls/problem-reports          diagnostic.read    operationsResource('call')            support queue (T-CW-1.5), platform-scoped grant
  *
  * Every authorization denial and context mismatch answers 404, as on the
  * appointment routes (CALL-17, D-CW-30, `AppointmentNonDisclosureFilter`):
@@ -20,7 +21,7 @@
  * reserved to the other participant) stay 403. Consultations are not
  * recorded: there is no recording route (D-CW-34, CW-R-79a).
  */
-import { Body, Controller, Get, Header, HttpCode, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import {
@@ -30,6 +31,7 @@ import {
   CallOutcomeRequestSchema,
   CallSignalRequestSchema,
   CallProblemReportRequestSchema,
+  ProblemReportListQuerySchema,
   ClientEventBatchRequestSchema,
   type AppointmentResponse,
   type CallFeedbackRequest,
@@ -38,6 +40,8 @@ import {
   type CallLocationResponse,
   type CallOutcomeRequest,
   type CallProblemReportRequest,
+  type ProblemReportListQuery,
+  type ProblemReportListResponse,
   type CallSignalRequest,
   type ClientEventBatchRequest,
   type DiagnosticsResponse,
@@ -159,6 +163,21 @@ export class CallsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<void> {
     return this.problemReports.report(sessionId, principal, body);
+  }
+
+  /**
+   * Support's problem-report queue (T-CW-1.5, CALL-16 criterion 5). The
+   * resource has no session id, so only a platform-scoped `diagnostic.read`
+   * reaches it; a support operator scoped to assigned cases reads the reports
+   * of their sessions through the diagnostics route.
+   */
+  @Get('ops/calls/problem-reports')
+  @Authorize(ACTIONS['diagnostic.read'], operationsResource('call'))
+  problemReportQueue(
+    @Query(new ZodValidationPipe(ProblemReportListQuerySchema)) query: ProblemReportListQuery,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProblemReportListResponse> {
+    return this.problemReports.list(principal, query);
   }
 
   @Get('ops/calls/:sessionId/diagnostics')

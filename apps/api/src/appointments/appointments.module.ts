@@ -22,6 +22,7 @@ import { CallsSchedulerModule } from '../jobs/calls-scheduler.module.js';
 import { MailerModule } from '../mailer/mailer.module.js';
 import { WsModule } from '../ws/ws.module.js';
 import { bindAppointmentLookup } from './appointment.resolver.js';
+import { AppointmentViewerReader } from './appointment-viewer.js';
 import { AppointmentsController } from './appointments.controller.js';
 import { AppointmentsRepository } from './appointments.repository.js';
 import { AppointmentsService } from './appointments.service.js';
@@ -42,6 +43,7 @@ import { FollowUpService } from './follow-up.service.js';
   providers: [
     AppointmentsRepository,
     AppointmentsService,
+    AppointmentViewerReader,
     FollowUpService,
     FollowUpPolicyReader,
     FollowUpCallRoom,

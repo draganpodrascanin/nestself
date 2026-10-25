@@ -35,7 +35,7 @@ import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import { RoomAccessRegistry } from '../ws/room-access.registry.js';
 import type { RoomEmitter } from '../ws/room-emitter.js';
-import { toDiagnosticsResponse } from './call-mapper.js';
+import { callPendingSignalKey, parsePendingSignal, toDiagnosticsResponse } from './call-mapper.js';
 import type { VideoMetrics } from './video-metrics.js';
 import type {
   CallConnectionMetrics,
@@ -967,6 +967,39 @@ describe('CallsService', () => {
       for (const [, , payload] of signals) CallSignalPayloadSchema.parse(payload);
       expect(repo.participants.size).toBe(0);
       expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('keeps the running-late signal for an employee who has not joined, until the employee joins (T-CW-1.5)', async () => {
+      await service.signal('appt_1', principal(EXPERT), { type: 'running_late', etaMinutes: 10 });
+      const [session] = [...repo.sessions.values()];
+      const key = callPendingSignalKey(session!.id);
+      expect(key).toBe(`call:${session!.id}:pending_signal`);
+      expect(parsePendingSignal(await kv.get(key))).toEqual({
+        type: 'running_late',
+        etaMinutes: 10,
+        sentAt: NOW.toISOString(),
+      });
+      // Until the room closes: endsAt + 15 minutes.
+      expect(await kv.ttl(key)).toBe((55 + CALL_ROOM_CLOSE_AFTER_MINUTES) * 60);
+
+      // Another kind of signal is never kept, and a later running-late replaces the earlier one.
+      await service.signal('appt_1', principal(EXPERT), { type: 'cannot_see' });
+      vi.setSystemTime(NOW.getTime() + MINUTE);
+      await service.signal('appt_1', principal(EXPERT), { type: 'running_late' });
+      expect(parsePendingSignal(await kv.get(key))).toEqual({
+        type: 'running_late',
+        sentAt: new Date(NOW.getTime() + MINUTE).toISOString(),
+      });
+
+      // The expert joining keeps it; the employee joining clears it.
+      await service.join('appt_1', principal(EXPERT), {});
+      expect(await kv.get(key)).not.toBeNull();
+      await service.join('appt_1', principal(EMPLOYEE), {});
+      expect(await kv.get(key)).toBeNull();
+
+      // Once the employee is in, the signal travels on the room only.
+      await service.signal('appt_1', principal(EXPERT), { type: 'running_late', etaMinutes: 5 });
+      expect(await kv.get(key)).toBeNull();
     });
 
     it('only the expert sends running late; signals need a confirmed appointment inside the window', async () => {
