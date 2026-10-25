@@ -25,8 +25,8 @@ export const workspacePages: PageEntry[] = [
   { name: 'workspace-settings', url: 'http://localhost:5173/settings' },
   { name: 'workspace-hr', url: 'http://localhost:5173/hr?role=hr_admin', prepare: 'setHrAdminRole' },
   { name: 'workspace-manage', url: 'http://localhost:5173/manage?role=manager', prepare: 'setManagerRole' },
-  // T-CW-1.10. No sample role holds approval.decide, so in sample mode /approvals shows the access notice on home.
-  { name: 'workspace-approvals', url: 'http://localhost:5173/approvals?role=manager', prepare: 'setManagerRole' },
+  // T-CW-1.10. The sample HR admin (user_ivana) is the sample approver: /approvals lists SAMPLE_APPROVAL_ITEMS.
+  { name: 'workspace-approvals', url: 'http://localhost:5173/approvals?role=hr_admin', prepare: 'setHrAdminRole' },
   { name: 'workspace-follow-up-policy', url: 'http://localhost:5173/follow-up-policy?role=hr_admin', prepare: 'setHrAdminRole' },
   { name: 'workspace-sign-in', url: 'http://localhost:5173/sign-in' },
 ];

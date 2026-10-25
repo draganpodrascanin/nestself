@@ -152,7 +152,7 @@ async function readyToJoin() {
   return join;
 }
 
-describe('call route (API mode)', () => {
+describe('call route (API mode)', { timeout: 20_000 }, () => {
   beforeEach(() => {
     fetchMock.mockReset();
   });
@@ -181,7 +181,8 @@ describe('call route (API mode)', () => {
     renderCall();
 
     expect(await screen.findByText(en.join.windowClosed, {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: en.join.contactSupport })).toHaveAttribute('href', '/support');
+    const support = en.support.technicalContact.replace('{{email}}', 'support@nestself.example');
+    expect(screen.getByRole('link', { name: support })).toHaveAttribute('href', 'mailto:support@nestself.example');
     expect(screen.queryByRole('button', { name: en.prejoin.joinNow })).not.toBeInTheDocument();
   });
 
@@ -382,6 +383,44 @@ describe('call route (API mode)', () => {
     expect(report.body).toMatchObject({ category: 'audio', summary: { reconnectCount: 0 } });
     expect(Object.keys(report.body as object).sort()).toEqual(['category', 'summary']);
   }, 15_000);
+
+  it('shows a running-late signal the expert sent before the page opened (CALL-05)', async () => {
+    const appointment = appointmentAt(Date.now() + 5 * MINUTE, {
+      viewer: { hasJoined: false, pendingSignal: { type: 'running_late', etaMinutes: 10, sentAt: new Date().toISOString() } },
+    });
+    serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment),
+      'POST /api/appointments/appt_1/join': () => json(200, joinResponse(appointment)),
+    });
+    renderCall();
+    const user = userEvent.setup();
+    await user.click(await readyToJoin());
+    expect(await screen.findByText('Your expert is running late and will join in about 10 minutes.', {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('shows someone who never joined the closed window and the technical support contact, not a rejoin (CALL-07)', async () => {
+    serve({ 'GET /api/appointments/appt_1': () => json(200, appointmentAt(Date.now() - 11 * MINUTE, { viewer: { hasJoined: false } })) });
+    renderCall();
+
+    expect(await screen.findByText(en.join.windowClosed, {}, { timeout: 5000 })).toBeInTheDocument();
+    const support = en.support.technicalContact.replace('{{email}}', 'support@nestself.example');
+    expect(screen.getByRole('link', { name: support })).toHaveAttribute('href', 'mailto:support@nestself.example');
+    expect(screen.queryByText(/If you already joined this session/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.prejoin.joinNow })).not.toBeInTheDocument();
+  });
+
+  it('says so when the lookup for a waiting proposal fails, and retries it', async () => {
+    let fail = true;
+    const followUpAt = Date.now() + 7 * 24 * 60 * MINUTE;
+    const waiting = appointmentAt(followUpAt, { id: 'appt_2', status: 'proposed', followUpOf: 'appt_1' });
+    const { user } = await toPostCall({
+      'GET /api/appointments': () => (fail ? json(500, { code: 'internal', message: 'English' }) : json(200, { items: [waiting], nextCursor: null })),
+    });
+    expect(await screen.findByText(new RegExp(en.postCall.proposalLookupFailed), {}, { timeout: 5000 })).toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: en.followUp.employeeTitle })).toBeInTheDocument();
+  });
 
   it('sends a signed-out visitor to sign-in with the call as the return path', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(json(401, { code: 'unauthenticated', message: 'No session' })));

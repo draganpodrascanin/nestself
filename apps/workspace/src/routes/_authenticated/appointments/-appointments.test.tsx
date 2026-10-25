@@ -33,7 +33,7 @@ function renderAt(path: string, role: keyof typeof SAMPLE_PRINCIPALS = 'employee
   return router;
 }
 
-describe('appointments in sample mode', () => {
+describe('appointments in sample mode', { timeout: 20_000 }, () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);

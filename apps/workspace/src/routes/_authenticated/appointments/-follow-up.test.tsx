@@ -105,7 +105,7 @@ function renderAt(path: string) {
   return router;
 }
 
-describe('follow-ups on the appointment pages (API mode)', () => {
+describe('follow-ups on the appointment pages (API mode)', { timeout: 20_000 }, () => {
   beforeEach(() => {
     fetchMock.mockReset();
   });

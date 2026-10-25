@@ -46,6 +46,8 @@ import type { TFunction } from 'i18next';
 import { useAuth } from '../../../auth';
 import { formatZonedDate, formatZonedTime } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
+import { Reveal } from '../../../calls/reveal';
+import { sampleApprovalItems } from '../../../calls/sample';
 
 type CallsT = TFunction<'calls'>;
 
@@ -214,6 +216,9 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
   const [decideError, setDecideError] = useState<string | null>(null);
   /** The last item opened for declining: kept after closing, for the dialog's exit animation. */
   const [rejecting, setRejecting] = useState<AppointmentApprovalItem | null>(null);
+  // Sample mode (CW-R-56): the fixture's items, and the standard notice that nothing was sent.
+  const [sampleItems] = useState(() => (sampleMode ? sampleApprovalItems() : []));
+  const [sampleNotice, setSampleNotice] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
 
   const refresh = () => {
@@ -254,10 +259,29 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
       </div>
 
       {sampleMode ? (
-        <>
-          <Alert tone="info">{t('calls:approval.sampleNote')}</Alert>
-          <StatusBlock state="empty" title={t('calls:approval.emptyTitle')} body={t('calls:approval.emptyBody')} />
-        </>
+        sampleItems.length === 0 ? (
+          <>
+            <Alert tone="info">{t('calls:approval.sampleNote')}</Alert>
+            <StatusBlock state="empty" title={t('calls:approval.emptyTitle')} body={t('calls:approval.emptyBody')} />
+          </>
+        ) : (
+          <>
+            <Alert tone="info">{t('calls:approval.sampleItemsNote')}</Alert>
+            <Reveal show={sampleNotice}>
+              <Alert tone="info">{t('calls:sample.actionNoop')}</Alert>
+            </Reveal>
+            <section aria-labelledby="approvals-pending" className="space-y-3">
+              <Heading level={2} typeRole="sectionTitle" id="approvals-pending">
+                {t('calls:approval.pendingTitle')}
+              </Heading>
+              <ul className="space-y-3">
+                {sampleItems.map((item) => (
+                  <ApprovalCard key={item.id} item={item} onApprove={() => setSampleNotice(true)} onReject={() => setSampleNotice(true)} />
+                ))}
+              </ul>
+            </section>
+          </>
+        )
       ) : orgId === null ? (
         <Alert tone="info">{t('calls:approval.noOrganization')}</Alert>
       ) : list.isPending ? (

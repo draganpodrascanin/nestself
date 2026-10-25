@@ -97,8 +97,10 @@ describe('calls namespace', () => {
     expect(typeof errors.unknown).toBe('string');
   });
 
-  it('has no error key that is not a call error code or unknown', () => {
-    const expected = [...CALL_ERROR_CODES.map(camelCase), 'unknown'].sort();
+  it('has no error key that is not a call error code, a generic request code or unknown', () => {
+    // The apps' call error maps also translate the API's generic codes (network, not_found, ...).
+    const GENERIC_REQUEST_CODES = ['conflict', 'forbidden', 'network', 'not_found', 'rate_limited', 'validation'];
+    const expected = [...CALL_ERROR_CODES, ...GENERIC_REQUEST_CODES].map(camelCase).concat('unknown').sort();
     expect(Object.keys(en.errors).sort()).toEqual(expected);
   });
 

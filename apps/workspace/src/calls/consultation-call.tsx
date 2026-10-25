@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   AnimatePresence,
+  Button,
   Field,
   Heading,
   Input,
@@ -32,9 +33,9 @@ import {
   useToast,
 } from '@nestself/ui';
 import { appointmentKeys, startClientEventPoster } from '@nestself/api-client';
-import type { ClientEventPoster, FollowUpProposedEvent } from '@nestself/api-client';
+import type { AppointmentView, ClientEventPoster, FollowUpProposedEvent } from '@nestself/api-client';
 import { CALL_LOCATION_TEXT_MAX_LENGTH } from '@nestself/contracts';
-import type { Appointment, CallJoinResponse, CallSignalPayload } from '@nestself/contracts';
+import type { CallJoinResponse, CallSignalPayload } from '@nestself/contracts';
 import {
   CallStage,
   ConnectionBadge,
@@ -62,6 +63,7 @@ import { durationMinutes, roomClosesAt, supportAreaOf, useZonedFormat } from './
 import { mapCallError } from './map-call-error';
 import { FeedbackForm, ReportProblemDialog } from './post-call';
 import { Reveal } from './reveal';
+import { TechnicalSupportLink, supportMailto } from './support-contact';
 import { useConsultationController } from './use-consultation-controller';
 import { useJoinWindow } from './use-join-window';
 
@@ -74,7 +76,7 @@ const MINUTE_MS = 60_000;
 type EndReason = 'left' | 'ended' | 'room_closed';
 
 export interface ConsultationCallProps {
-  appointment: Appointment;
+  appointment: AppointmentView;
   /** The expert's first name where it is known; never from the video provider. */
   expertName: string | null;
 }
@@ -96,7 +98,7 @@ function WaitingPanel({
   expertName,
   runningLate,
 }: {
-  appointment: Appointment;
+  appointment: AppointmentView;
   expertName: string | null;
   runningLate: { etaMinutes?: number } | null;
 }) {
@@ -131,7 +133,7 @@ function WaitingPanel({
 }
 
 /** Joining before the window, after it or for an appointment that is not confirmed (CALL-02, CALL-07, CALL-20). */
-function JoinGate({ appointment }: { appointment: Appointment }) {
+function JoinGate({ appointment }: { appointment: AppointmentView }) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const window = useJoinWindow(appointment);
@@ -154,9 +156,7 @@ function JoinGate({ appointment }: { appointment: Appointment }) {
       <Alert tone="warning">
         <span className="gap-2 flex flex-col">
           <span>{t('join.windowClosed')}</span>
-          <Link to="/support" className="text-primary underline underline-offset-[0.2em]">
-            {t('join.contactSupport')}
-          </Link>
+          <TechnicalSupportLink />
         </span>
       </Alert>
     );
@@ -166,6 +166,7 @@ function JoinGate({ appointment }: { appointment: Appointment }) {
 
 export function ConsultationCall({ appointment, expertName }: ConsultationCallProps) {
   const { t } = useTranslation('calls');
+  const { t: tCommon } = useTranslation('common');
   const format = useZonedFormat();
   const toast = useToast();
   const { announce } = useAnnounce();
@@ -194,7 +195,11 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
   const [locationText, setLocationText] = useState('');
   const [locationError, setLocationError] = useState<string | null>(null);
   const [expertPresent, setExpertPresent] = useState(false);
-  const [runningLate, setRunningLate] = useState<{ etaMinutes?: number } | null>(null);
+  // A running-late signal the expert sent before this page opened (CALL-05); live signals replace it.
+  const [runningLate, setRunningLate] = useState<{ etaMinutes?: number } | null>(() => {
+    const pending = appointment.viewer?.pendingSignal;
+    return pending ? { etaMinutes: pending.etaMinutes } : null;
+  });
   const [controlError, setControlError] = useState<string | null>(null);
   const [endReason, setEndReason] = useState<EndReason | null>(null);
   const [postCallDue, setPostCallDue] = useState(false);
@@ -483,7 +488,7 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
           fullscreen={fullscreen.isFullscreen}
           onRejoin={() => void rejoin()}
           rejoinPending={joining}
-          supportHref="/support"
+          supportHref={supportMailto()}
           error={rejoinError}
           header={
             <>
@@ -569,6 +574,19 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
             status="proposed"
           />
         ) : null}
+        {/* The lookup for a proposal already waiting must not fail silently: say so and offer a retry. */}
+        <Reveal show={!proposal && waiting.isError}>
+          <Alert tone="warning">
+            <span className="gap-2 flex flex-col items-start">
+              <span>
+                {t('postCall.proposalLookupFailed')} {mapCallError(waiting.error, t)}
+              </span>
+              <Button variant="secondary" size="sm" onClick={() => void waiting.refetch()}>
+                {tCommon('action.retry')}
+              </Button>
+            </span>
+          </Alert>
+        </Reveal>
         <ReportProblemDialog sessionId={sessionId} recorder={recorder} />
         <Link
           to="/appointments"

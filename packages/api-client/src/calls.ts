@@ -20,7 +20,6 @@
  */
 import { z } from 'zod';
 import {
-  APPROVAL_SAFE_REASON_MAX_LENGTH,
   AppointmentApprovalItemSchema,
   AppointmentApprovalListResponseSchema,
   AppointmentListResponseSchema,
@@ -28,15 +27,17 @@ import {
   CLIENT_EVENT_BATCH_MAX,
   CallJoinResponseSchema,
   CallLocationResponseSchema,
-  CallParticipantRoleSchema,
-  CallProblemCategorySchema,
-  CallProblemSummarySchema,
   DiagnosticsResponseSchema,
   FollowUpApprovalPolicyResponseSchema,
+  ProblemReportListItemSchema,
+  ProblemReportListResponseSchema,
 } from '@nestself/contracts';
 import type {
   AppointmentApprovalDecisionRequest,
   AppointmentCreateRequest,
+  AppointmentResponse,
+  ProblemReportListItem,
+  ProblemReportListResponse,
   AppointmentStatus,
   CallFeedbackRequest,
   CallProblemReportRequest,
@@ -77,58 +78,22 @@ export interface ProblemReportListParams {
 }
 
 /**
- * What the appointment routes add for the person reading them (CALL-05,
- * CALL-07): whether they already joined this session, and a running-late
- * signal the expert sent before they opened the page. Declared here until the
- * contracts carry it; the field names are the API's.
+ * An appointment as the detail and list routes return it to a participant,
+ * with the reader's fields (`viewer`, and for the employee of a declined
+ * follow-up `approvalOutcome` and `declineReason`, CALL-05, CALL-07,
+ * CALL-39). The contracts' response schema carries them; these names stay
+ * for the apps that import them from here.
  */
-export const AppointmentViewerSchema = z.object({
-  hasJoined: z.boolean(),
-  pendingSignal: z
-    .object({
-      type: z.literal('running_late'),
-      etaMinutes: z.number().int().positive().optional(),
-      sentAt: z.string().datetime(),
-    })
-    .optional(),
-});
-export type AppointmentViewer = z.infer<typeof AppointmentViewerSchema>;
+export { APPROVAL_OUTCOMES, AppointmentViewerSchema } from '@nestself/contracts';
+export type { AppointmentViewer } from '@nestself/contracts';
+export const AppointmentViewSchema = AppointmentResponseSchema;
+export type AppointmentView = AppointmentResponse;
 
-/** Why a follow-up the employee confirmed did not go ahead (CALL-39): rejected by the approver, or the approval lapsed. */
-export const APPROVAL_OUTCOMES = ['rejected', 'expired'] as const;
-
-/**
- * An appointment as the detail and list routes return it to a participant:
- * the response, plus `viewer` and, for the employee of a declined follow-up,
- * the approver's safe reason and how the approval ended (CALL-39).
- */
-export const AppointmentViewSchema = AppointmentResponseSchema.extend({
-  viewer: AppointmentViewerSchema.optional(),
-  declineReason: z.string().min(1).max(APPROVAL_SAFE_REASON_MAX_LENGTH).optional(),
-  approvalOutcome: z.enum(APPROVAL_OUTCOMES).optional(),
-});
-export type AppointmentView = z.infer<typeof AppointmentViewSchema>;
-
-export const AppointmentViewListResponseSchema = AppointmentListResponseSchema.extend({
-  items: z.array(AppointmentViewSchema),
-});
-
-/** One technical problem report as operations list them: ids, role, category and the connection summary only. */
-export const ProblemReportItemSchema = z.object({
-  sessionId: z.string().min(1),
-  appointmentId: z.string().min(1).nullable(),
-  reportedAt: z.string().datetime(),
-  role: CallParticipantRoleSchema,
-  category: CallProblemCategorySchema,
-  summary: CallProblemSummarySchema,
-});
-export type ProblemReportItem = z.infer<typeof ProblemReportItemSchema>;
-
-export const ProblemReportListResponseSchema = z.object({
-  items: z.array(ProblemReportItemSchema),
-  nextCursor: z.string().nullable(),
-});
-export type ProblemReportListResponse = z.infer<typeof ProblemReportListResponseSchema>;
+/** One technical problem report as operations list it (`GET /ops/calls/problem-reports`). */
+export const ProblemReportItemSchema = ProblemReportListItemSchema;
+export type ProblemReportItem = ProblemReportListItem;
+export { ProblemReportListResponseSchema };
+export type { ProblemReportListResponse };
 
 const NoContentSchema = z.undefined();
 
@@ -169,14 +134,14 @@ export function createCallsApi(client: ApiClient) {
     listAppointments: (params: AppointmentListParams = {}) =>
       client.request(`/api/appointments${queryString(params)}`, {
         method: 'GET',
-        schema: AppointmentViewListResponseSchema,
+        schema: AppointmentListResponseSchema,
       }),
 
     /** GET /appointments/:id, with what the reader needs (`viewer`, a declined follow-up's reason). */
     getAppointment: (appointmentId: string) =>
       client.request(appointmentPath(appointmentId), {
         method: 'GET',
-        schema: AppointmentViewSchema,
+        schema: AppointmentResponseSchema,
       }),
 
     /**

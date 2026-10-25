@@ -5,7 +5,7 @@
  */
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { appointmentDetailQuery, appointmentListQuery } from '@nestself/api-client';
-import type { AppointmentResponse } from '@nestself/contracts';
+import type { AppointmentListParams, AppointmentView } from '@nestself/api-client';
 import { useAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { callsApi } from './calls-api';
@@ -13,7 +13,7 @@ import { sampleAppointment, sampleAppointmentsFor } from './sample';
 
 export interface AppointmentListState {
   status: 'pending' | 'error' | 'success';
-  items: AppointmentResponse[];
+  items: AppointmentView[];
   error: unknown;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -21,13 +21,15 @@ export interface AppointmentListState {
   refetch: () => void;
 }
 
-export function useAppointmentList(): AppointmentListState {
+/** `params.from` bounds `startsAt` from below (the home page asks for what is still ahead). */
+export function useAppointmentList(params: Pick<AppointmentListParams, 'from'> = {}): AppointmentListState {
   const { principal } = useAuth();
-  const query = useInfiniteQuery({ ...appointmentListQuery(callsApi), enabled: !isSampleDataMode });
+  const query = useInfiniteQuery({ ...appointmentListQuery(callsApi, params), enabled: !isSampleDataMode });
   if (isSampleDataMode) {
+    const from = params.from ? Date.parse(params.from) : null;
     return {
       status: 'success',
-      items: sampleAppointmentsFor(principal?.userId),
+      items: sampleAppointmentsFor(principal?.userId).filter((item) => from === null || Date.parse(item.startsAt) >= from),
       error: null,
       hasNextPage: false,
       isFetchingNextPage: false,
@@ -48,7 +50,7 @@ export function useAppointmentList(): AppointmentListState {
 
 export interface AppointmentState {
   status: 'pending' | 'error' | 'success';
-  appointment: AppointmentResponse | null;
+  appointment: AppointmentView | null;
   error: unknown;
   refetch: () => void;
 }

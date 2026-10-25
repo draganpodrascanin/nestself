@@ -5,17 +5,14 @@ import {
   Heading,
   Text,
   CategoryIcon,
-  Avatar,
   StatusBlock,
   PhotoFigure,
-  CoverageNotice,
 } from '@nestself/ui';
 import { supportAreaIcon } from '@nestself/contracts';
 import type { SupportArea } from '@nestself/contracts';
-import { SAMPLE_BOOKING, SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { formatDateTime } from '@nestself/i18n';
-import type { Locale } from '@nestself/i18n';
+import { SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { useAuth } from '../../auth';
+import { NextAppointment } from '../../calls/next-appointment';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
@@ -27,10 +24,9 @@ export const Route = createFileRoute('/_authenticated/')({
 });
 
 function HomePage() {
-  const { t, i18n } = useTranslation(['workspace', 'common']);
+  const { t } = useTranslation(['workspace', 'common']);
   const { principal } = useAuth();
   const { denied } = Route.useSearch();
-  const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
 
   const supportAreas: SupportArea[] = ['psychological', 'legal', 'financial'];
 
@@ -78,27 +74,12 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Next appointment card */}
+      {/* Next appointment (CALL-02): the same list as /appointments, never a fixture in API mode */}
       <section>
         <Heading level={2} typeRole="sectionTitle" className="mb-4">
           {t('workspace:home.upcoming')}
         </Heading>
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Avatar initials="MR" name={SAMPLE_BOOKING.advisorName} size="md" />
-            <div>
-              <Text className="font-[var(--font-weight-label)]">
-                {t('workspace:appointment.with', { name: SAMPLE_BOOKING.advisorName })}
-              </Text>
-              <Text className="type-metadata text-text-secondary">
-                {formatDateTime(new Date(SAMPLE_BOOKING.appointmentAt), locale)}
-              </Text>
-            </div>
-          </div>
-          <CoverageNotice>
-            {t('workspace:appointment.format')}: {t(`workspace:appointment.${SAMPLE_BOOKING.format}`)}
-          </CoverageNotice>
-        </div>
+        <NextAppointment />
       </section>
 
       {/* Channel digest */}

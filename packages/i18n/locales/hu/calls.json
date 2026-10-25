@@ -65,7 +65,12 @@
     "pickLabel": "Javasolt időpontok",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
     "scheduledFor": "Rögzítve: {{date}}, {{time}}.",
-    "expired": "A javasolt időpont elmúlt. A szakértője javasolhat újat."
+    "expired": "A javasolt időpont elmúlt. A szakértője javasolhat újat.",
+    "approvalRejected": "A vezetője elutasította ezt a következő alkalmat: {{reason}}",
+    "approvalRejectedNoReason": "A vezetője elutasította ezt a következő alkalmat.",
+    "approvalExpired": "A jóváhagyás a javasolt időpont előtt lejárt.",
+    "lookupFailed": "Nem sikerült ellenőrizni, van-e korábbi javaslat a következő alkalomra.",
+    "declinedToast": "A munkavállaló elutasította a következő alkalomra tett javaslatát."
   },
   "approval": {
     "pending": "Döntésre vár",
@@ -122,17 +127,18 @@
       "loadFailedTitle": "A szabályt nem sikerült betölteni",
       "sampleNote": "Mintaadatok: a választás nem kerül mentésre.",
       "sampleSaved": "Mintaadatok: semmi sem lett elmentve."
-    }
+    },
+    "sampleItemsNote": "Mintaadatok: ezek a kérelmek kitaláltak. A jóváhagyás vagy elutasítás semmit sem küld el."
   },
   "webinar": {
     "register": "Regisztráció",
     "unregister": "Regisztráció lemondása",
     "join": "Csatlakozás a webináriumhoz",
-    "lobby": "A kamerája kikapcsolva marad. Írhat a házigazdáknak, és kézfeltartással kérhet szót.",
+    "lobby": "A kamerája kikapcsolva marad; írhat a házigazdáknak, és kézfeltartással kérhet szót.",
     "started": "A webinárium elkezdődött.",
     "ended": "A webinárium véget ért.",
     "recording": "Felvétel",
-    "recordingNotice": "Ez a webinárium felvételre kerül. A felvételen csak az előadók szerepelnek.",
+    "recordingNotice": "Ez a webinárium felvételre kerül; a felvételen csak az előadók szerepelnek.",
     "recordingNoticeFloor": "Az Ön hangja a felvétel része. A kamerája kikapcsolva marad.",
     "messageSubmitted": "Üzenetét elküldtük a házigazdáknak. A csevegésben csak akkor jelenik meg, ha egy házigazda közzéteszi.",
     "messagePublished": "Egy házigazda közzétette az üzenetét.",
@@ -180,7 +186,8 @@
     },
     "errors": {
       "microphoneUnavailable": "A mikrofon nem indult el. Engedélyezze a böngészőnek a használatát, majd próbálja meg újra bekapcsolni.",
-      "joinWindowClosed": "Ehhez a webináriumhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik, és röviddel a befejezés után zárul."
+      "joinWindowClosed": "Ehhez a webináriumhoz most nem lehet csatlakozni. A csatlakozás röviddel a kezdés előtt nyílik, és röviddel a befejezés után zárul.",
+      "notEditable": "Ez a webinárium a jelenlegi állapotában már nem módosítható."
     },
     "chat": {
       "title": "Csevegés",
@@ -382,8 +389,9 @@
       "descriptionLegend": "Leírás",
       "descriptionHint": "Nem kötelező. Nyelvenként legfeljebb {{max}} karakter.",
       "languages": {
-        "en": "Hungarian",
-        "sr-Latn": "Mađarski",
+        "en": "Angol",
+        "sr-Latn": "Szerb (latin)",
+        "sr-Cyrl": "Szerb (cirill)",
         "hu": "Magyar"
       },
       "audience": "Közönség",
@@ -421,8 +429,8 @@
       "prejoinTitle": "Ellenőrizze a beállításokat",
       "registered": "Regisztrált résztvevők: {{count}}",
       "end": "Webinárium befejezése",
-      "endTitle": "Mindenki számára befejezi a webináriumot?",
-      "endBody": "A résztvevők kilépnek a webináriumból, és a felvétel leáll.",
+      "endTitle": "Befejezi ezt a webináriumot?",
+      "endBody": "Minden résztvevő kapcsolata megszakad.",
       "keepGoing": "Folytatás",
       "ending": "Befejezés…",
       "pollTitle": "Szavazás előkészítése",
@@ -434,7 +442,16 @@
       "pollInvalid": "Adjon meg egy kérdést és kettő–hat különböző lehetőséget.",
       "sampleNotice": "Ez egy bemutató mintaadatokkal. Nem indul megbeszélés, és semmi sem kerül rögzítésre vagy elküldésre.",
       "backToWebinar": "Vissza a webináriumhoz"
-    }
+    },
+    "participantSpeaking": "Egy résztvevő beszél",
+    "endForEveryone": "Webinárium befejezése mindenkinek",
+    "endConfirmTitle": "Befejezi ezt a webináriumot?",
+    "endConfirmBody": "Minden résztvevő kapcsolata megszakad.",
+    "keepGoing": "Webinárium folytatása",
+    "ending": "Befejezés…",
+    "recordingFailed": "A felvétel nem sikerült. A webinárium felvétel nélkül folytatódik.",
+    "lobbyFloorRecording": "Ha egy házigazda szót ad Önnek, a hangja a felvétel része lesz.",
+    "captionsStatement": "Élő felirat még nem érhető el. A felvételek feliratozása ellenőrzés után történik."
   },
   "workshop": {
     "join": "Csatlakozás a workshophoz",
@@ -526,7 +543,8 @@
     "rateLimited": "Túl sok próbálkozás. Várjon egy percet, majd próbálja újra.",
     "forbidden": "Ez a művelet Ön számára nem érhető el.",
     "validation": "A kérés egy része nem lett elfogadva. Ellenőrizze, és próbálja újra.",
-    "conflict": "Ez a lépés a webinárium jelenlegi állapotában nem lehetséges."
+    "conflict": "Ez a lépés a webinárium jelenlegi állapotában nem lehetséges.",
+    "notEditable": "Ez a webinárium már nem módosítható így. A szervezet és a közönség csak vázlat állapotban változtatható."
   },
   "email": {
     "reminderSubject": "Az Ön NestSelf alkalma",
@@ -663,7 +681,9 @@
       "canceled": "Lemondva",
       "declined": "Elutasítva",
       "no_show": "Elmaradt"
-    }
+    },
+    "nextLoadFailed": "A következő időpontját nem sikerült betölteni.",
+    "openNext": "A következő időpont megnyitása"
   },
   "join": {
     "button": "Csatlakozás az alkalomhoz",
@@ -712,7 +732,8 @@
     "ended": "A konzultáció véget ért",
     "left": "Ön kilépett a konzultációból",
     "roomClosed": "Az alkalom ideje lejárt",
-    "backToAppointments": "Vissza az időpontokhoz"
+    "backToAppointments": "Vissza az időpontokhoz",
+    "proposalLookupFailed": "Nem sikerült ellenőrizni, javasolt-e a szakértője következő alkalmat."
   },
   "feedback": {
     "title": "Milyen volt az alkalom?",
@@ -770,7 +791,9 @@
       "service": "Szolgáltatás",
       "time": "Időpont",
       "status": "Állapot",
-      "outcome": "Eredmény"
+      "outcome": "Eredmény",
+      "expert": "Szakértő",
+      "organisation": "Szervezet"
     },
     "outcomeColumn": {
       "completed": "Megtartva",
@@ -792,7 +815,23 @@
       "hint": "Csak Ön látja, és csak ezen az alkalmon. Az alkalom végén törlődik."
     },
     "recordOutcome": "Eredmény rögzítése",
-    "outcomeRecorded": "Rögzített eredmény: {{status}}"
+    "outcomeRecorded": "Rögzített eredmény: {{status}}",
+    "newConsultation": "Új konzultáció",
+    "upcoming": "Közelgő",
+    "past": "Korábbi",
+    "view": "Megtekintés",
+    "readOnly": "Operatív nézet: csak olvasható. Csak a kijelölt szakértő csatlakozik a híváshoz és rögzíti az eredményt.",
+    "filters": {
+      "title": "Szűrők",
+      "organisation": "Szervezet",
+      "allOrganisations": "Minden szervezet",
+      "status": "Állapot",
+      "allStatuses": "Minden állapot",
+      "from": "Ettől",
+      "to": "Eddig",
+      "apply": "Szűrők alkalmazása",
+      "clear": "Szűrők törlése"
+    }
   },
   "outcome": {
     "title": "Az alkalom eredményének rögzítése",
@@ -815,5 +854,104 @@
   },
   "reminder": {
     "toast": "Emlékeztető: a NestSelf alkalma ekkor kezdődik: {{time}}."
+  },
+  "support": {
+    "technicalContact": "Műszaki ügyfélszolgálat: {{email}}"
+  },
+  "cancel": {
+    "button": "Időpont lemondása",
+    "title": "Lemondja ezt az időpontot?",
+    "body": "{{date}}, {{time}}. Mindkét résztvevő értesítést kap, és a lemondás nem vonható vissza.",
+    "confirm": "Időpont lemondása",
+    "keep": "Időpont megtartása",
+    "done": "Az időpontot lemondták."
+  },
+  "create": {
+    "nav": "Új konzultáció",
+    "title": "Új konzultáció",
+    "intro": "Foglaljon konzultációt egy Ön által támogatott szervezet munkavállalójának, a szolgáltatásra jóváhagyott szakértővel.",
+    "organisation": "Szervezet",
+    "organisationId": "Szervezetazonosító",
+    "employee": "Munkavállaló",
+    "employeeId": "A munkavállaló felhasználói azonosítója",
+    "chooseEmployee": "Válasszon munkavállalót",
+    "expert": "Szakértő",
+    "expertId": "A szakértő felhasználói azonosítója",
+    "chooseExpert": "Válasszon szakértőt",
+    "category": "Szolgáltatás",
+    "date": "Dátum",
+    "start": "Kezdés",
+    "end": "Befejezés",
+    "timeZone": "Az időpontok a(z) {{timeZone}} időzónában értendők.",
+    "submit": "Konzultáció lefoglalása",
+    "errorSummary": "A konzultációt nem sikerült lefoglalni",
+    "created": "Konzultáció lefoglalva: {{date}}, {{time}}.",
+    "membersFailed": "A szervezet tagjait nem sikerült betölteni. Adja meg helyette a munkavállaló felhasználói azonosítóját.",
+    "errors": {
+      "required": "Töltse ki ezt a mezőt.",
+      "expertCategory": "Ez a szakértő nincs jóváhagyva erre a szolgáltatásra.",
+      "notMember": "Ez a munkavállaló nem tagja a szervezetnek."
+    }
+  },
+  "supportCalls": {
+    "nav": "Hívástámogatás",
+    "title": "Hívásdiagnosztika",
+    "intro": "Keressen meg egy hívásmunkamenetet a kapcsolati diagnosztika megtekintéséhez. Minden keresést rögzítünk.",
+    "sessionId": "Munkamenet-azonosító",
+    "lookup": "Keresés",
+    "required": "Adja meg a munkamenet azonosítóját.",
+    "notFound": "Ezzel az azonosítóval nem érhető el Önnek hívásmunkamenet.",
+    "sampleNote": "Mintaadatok: a diagnosztika és a bejelentések kitaláltak.",
+    "sessionTitle": "Munkamenet: {{id}}",
+    "notRecorded": "Nincs rögzítve",
+    "fields": {
+      "status": "Állapot",
+      "provider": "Szolgáltató",
+      "startedAt": "Kezdete",
+      "endedAt": "Vége",
+      "appointment": "Időpont",
+      "providerMeetingId": "A szolgáltató megbeszélés-azonosítója"
+    },
+    "participantsTitle": "Résztvevők",
+    "participant": {
+      "role": "Szerep",
+      "joinedAt": "Csatlakozott",
+      "leftAt": "Kilépett",
+      "reconnects": "Újracsatlakozások",
+      "quality": "Kapcsolat",
+      "errors": "Hibakódok",
+      "browser": "Böngésző",
+      "os": "Operációs rendszer"
+    },
+    "noParticipants": "Senki sem csatlakozott ehhez a munkamenethez.",
+    "reportsTitle": "Műszaki hibabejelentések",
+    "reportsEmpty": "Nincs műszaki hibabejelentés.",
+    "reportsFailed": "A hibabejelentéseket nem sikerült betölteni.",
+    "reportColumns": {
+      "reportedAt": "Bejelentve",
+      "role": "Bejelentő",
+      "category": "Probléma",
+      "summary": "Kapcsolati összefoglaló",
+      "session": "Munkamenet"
+    },
+    "summary": "{{duration}}, újracsatlakozások: {{reconnects}}",
+    "openDiagnostics": "Diagnosztika",
+    "sessionStatus": {
+      "pending": "Függőben",
+      "creating": "Indul",
+      "active": "Aktív",
+      "ended": "Befejeződött",
+      "failed": "Sikertelen"
+    },
+    "roles": {
+      "expert": "Szakértő",
+      "employee": "Munkavállaló",
+      "presenter": "Előadó",
+      "moderator": "Moderátor",
+      "attendee": "Résztvevő",
+      "facilitator": "Facilitátor",
+      "participant": "Műhelyrésztvevő"
+    },
+    "reportsUnavailable": "A hibabejelentések listázásához platformszintű diagnosztikai hozzáférés kell. Ehelyett keressen rá egy munkamenetre az azonosítója alapján fent."
   }
 }

@@ -93,6 +93,7 @@ Unlike the other optional variables, `CHIME_REGION` and `VIDEO_SMOKE_ENABLED` do
 | --- | --- | --- |
 | `VITE_API_URL` | Base URL for API requests (proxied by Vite in development) | `http://localhost:4000` |
 | `VITE_DATA_SOURCE` | `sample` renders fictional fixtures with the sample-data banner and a sample sign-in; `api` uses the real sign-in screens and the API | `sample` |
+| `VITE_SUPPORT_EMAIL` | Technical support address the call screens offer when a session cannot be joined or reconnected (CALL-07, CALL-10), as a `mailto:` link. **Launch checklist:** set the real address; the default is a placeholder on the reserved `.example` domain | `support@nestself.example` |
 
 ## Mobile (`apps/mobile/.env.local`)
 

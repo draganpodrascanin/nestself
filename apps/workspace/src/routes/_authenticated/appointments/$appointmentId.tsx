@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { can } from '@nestself/contracts';
 import { useTranslation } from 'react-i18next';
 import { Card, Heading, StatusBlock } from '@nestself/ui';
 import { ApiError } from '@nestself/api-client';
 import type { Appointment } from '@nestself/contracts';
 import { useAuth } from '../../../auth';
 import { AppointmentStatusBadge, JoinPanel, useCategoryLabel, useExpertLabel } from '../../../calls/appointment-parts';
+import { CancelAppointment } from '../../../calls/cancel-appointment';
 import { EmployeeFollowUpPanel, followUpOf } from '../../../calls/follow-up-panel';
 import { useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
@@ -98,6 +100,7 @@ function AppointmentDetailPage() {
       </Heading>
       <AppointmentDetails appointment={appointment} />
       <JoinPanel appointment={appointment} />
+      {principal && can(principal, 'appointment.cancel', undefined, effectiveActions) ? <CancelAppointment appointment={appointment} /> : null}
       <EmployeeFollowUpPanel key={appointment.id} {...followUpOf(appointment)} />
     </div>
   );

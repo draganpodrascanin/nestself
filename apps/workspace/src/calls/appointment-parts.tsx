@@ -13,7 +13,9 @@ import { isSampleDataMode } from '../data-source';
 import { STATUS_TONE, roomClosesAt, supportAreaOf, useZonedFormat } from './format';
 import { sampleFirstName } from './sample';
 import { Reveal } from './reveal';
+import { TechnicalSupportLink } from './support-contact';
 import { useJoinWindow } from './use-join-window';
+import type { JoinWindowAppointment } from './use-join-window';
 
 export function AppointmentStatusBadge({ appointment }: { appointment: Appointment }) {
   const { t } = useTranslation('calls');
@@ -42,7 +44,7 @@ export function useExpertLabel() {
 }
 
 /** "Join session" with the join window states of CALL-02, CALL-06 and CALL-07, and "Rejoin" after the first-join window. */
-export function JoinPanel({ appointment }: { appointment: Appointment }) {
+export function JoinPanel({ appointment }: { appointment: JoinWindowAppointment & Pick<Appointment, 'timeZone'> }) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const window = useJoinWindow(appointment);
@@ -89,9 +91,7 @@ export function JoinPanel({ appointment }: { appointment: Appointment }) {
         <Alert tone="warning">
           <span className="gap-2 flex flex-col">
             <span>{t('join.windowClosed')}</span>
-            <Link to="/support" className="text-primary underline underline-offset-[0.2em]">
-              {t('join.contactSupport')}
-            </Link>
+            <TechnicalSupportLink />
           </span>
         </Alert>
         {sampleDemo}

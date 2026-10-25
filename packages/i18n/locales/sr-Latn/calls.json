@@ -66,7 +66,12 @@
     "pickLabel": "Predloženi termini",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
     "scheduledFor": "Zakazano za {{date}} u {{time}}.",
-    "expired": "Predloženo vreme je prošlo. Vaš stručnjak može da predloži novo."
+    "expired": "Predloženo vreme je prošlo. Vaš stručnjak može da predloži novo.",
+    "approvalRejected": "Vaš rukovodilac je odbio ovu narednu sesiju: {{reason}}",
+    "approvalRejectedNoReason": "Vaš rukovodilac je odbio ovu narednu sesiju.",
+    "approvalExpired": "Odobrenje je isteklo pre predloženog termina.",
+    "lookupFailed": "Nismo mogli da proverimo da li postoji raniji predlog naredne sesije.",
+    "declinedToast": "Zaposleni je odbio vaš predlog naredne sesije."
   },
   "approval": {
     "pending": "Čeka odluku",
@@ -124,17 +129,18 @@
       "loadFailedTitle": "Pravilo nije moglo da se učita",
       "sampleNote": "Primer podataka: vaš izbor se ne čuva.",
       "sampleSaved": "Primer podataka: ništa nije sačuvano."
-    }
+    },
+    "sampleItemsNote": "Primer podataka: ovi zahtevi su izmišljeni. Odobravanje ili odbijanje ništa ne šalje."
   },
   "webinar": {
     "register": "Registruj se",
     "unregister": "Otkaži prijavu",
     "join": "Pridruži se vebinaru",
-    "lobby": "Vaša kamera ostaje isključena. Možete pisati voditeljima i podići ruku da zatražite reč.",
+    "lobby": "Vaša kamera ostaje isključena; možete pisati voditeljima i podići ruku da zatražite reč.",
     "started": "Vebinar je počeo.",
     "ended": "Vebinar je završen.",
     "recording": "Snimanje",
-    "recordingNotice": "Ovaj vebinar se snima. Na snimku su samo predavači.",
+    "recordingNotice": "Ovaj vebinar se snima; na snimku su samo predavači.",
     "recordingNoticeFloor": "Vaš glas je deo snimka. Kamera ostaje isključena.",
     "messageSubmitted": "Vaša poruka je poslata voditeljima. U četu se pojavljuje samo ako je neki voditelj objavi.",
     "messagePublished": "Voditelj je objavio vašu poruku.",
@@ -182,7 +188,8 @@
     },
     "errors": {
       "microphoneUnavailable": "Mikrofon nije mogao da se pokrene. Dozvolite pregledaču da ga koristi, pa ponovo pokušajte da ga uključite.",
-      "joinWindowClosed": "Ovom vebinaru trenutno ne možete da se pridružite. Pridruživanje se otvara malo pre početka i zatvara malo posle završetka."
+      "joinWindowClosed": "Ovom vebinaru trenutno ne možete da se pridružite. Pridruživanje se otvara malo pre početka i zatvara malo posle završetka.",
+      "notEditable": "Ovaj vebinar se u trenutnom statusu više ne može menjati."
     },
     "chat": {
       "title": "Čet",
@@ -385,9 +392,10 @@
       "descriptionLegend": "Opis",
       "descriptionHint": "Neobavezno. Najviše {{max}} karaktera po jeziku.",
       "languages": {
-        "en": "Serbian (Latin)",
+        "en": "Engleski",
         "sr-Latn": "Srpski (latinica)",
-        "hu": "Szerb (latin)"
+        "sr-Cyrl": "Srpski (ćirilica)",
+        "hu": "Mađarski"
       },
       "audience": "Publika",
       "audienceOrganizations": "Izabrane organizacije",
@@ -424,8 +432,8 @@
       "prejoinTitle": "Proverite opremu",
       "registered": "Prijavljenih učesnika: {{count}}",
       "end": "Završi vebinar",
-      "endTitle": "Završiti vebinar za sve?",
-      "endBody": "Učesnici napuštaju vebinar i snimanje se zaustavlja.",
+      "endTitle": "Završiti ovaj vebinar?",
+      "endBody": "Svi učesnici će biti isključeni.",
       "keepGoing": "Nastavi",
       "ending": "Završavanje…",
       "pollTitle": "Pripremite anketu",
@@ -437,7 +445,16 @@
       "pollInvalid": "Unesite pitanje i dve do šest različitih opcija.",
       "sampleNotice": "Ovo je demonstracija sa primerima podataka. Nijedan sastanak se ne pokreće i ništa se ne snima niti šalje.",
       "backToWebinar": "Nazad na vebinar"
-    }
+    },
+    "participantSpeaking": "Učesnik govori",
+    "endForEveryone": "Završi vebinar za sve",
+    "endConfirmTitle": "Završiti ovaj vebinar?",
+    "endConfirmBody": "Svi učesnici će biti isključeni.",
+    "keepGoing": "Nastavi vebinar",
+    "ending": "Završavanje…",
+    "recordingFailed": "Snimanje nije uspelo. Vebinar se nastavlja bez snimka.",
+    "lobbyFloorRecording": "Ako vam voditelj da reč, vaš glas je deo snimka.",
+    "captionsStatement": "Titlovi uživo još nisu dostupni. Snimci se titluju nakon provere."
   },
   "workshop": {
     "join": "Pridruži se radionici",
@@ -529,7 +546,8 @@
     "rateLimited": "Previše pokušaja. Sačekajte minut, pa pokušajte ponovo.",
     "forbidden": "Ova radnja vam nije dostupna.",
     "validation": "Nešto u zahtevu nije prihvaćeno. Proverite i pokušajte ponovo.",
-    "conflict": "Ovaj korak nije moguć u trenutnom stanju vebinara."
+    "conflict": "Ovaj korak nije moguć u trenutnom stanju vebinara.",
+    "notEditable": "Ovaj vebinar se više ne može menjati na ovaj način. Organizacija i publika mogu da se menjaju samo dok je u pripremi."
   },
   "email": {
     "reminderSubject": "Vaša NestSelf sesija",
@@ -667,7 +685,9 @@
       "canceled": "Otkazan",
       "declined": "Odbijen",
       "no_show": "Propušten"
-    }
+    },
+    "nextLoadFailed": "Vaš sledeći termin nije mogao da se učita.",
+    "openNext": "Otvorite svoj sledeći termin"
   },
   "join": {
     "button": "Pridruži se sesiji",
@@ -717,7 +737,8 @@
     "ended": "Konsultacija je završena",
     "left": "Napustili ste konsultaciju",
     "roomClosed": "Vreme sesije je isteklo",
-    "backToAppointments": "Nazad na termine"
+    "backToAppointments": "Nazad na termine",
+    "proposalLookupFailed": "Nismo mogli da proverimo da li je vaš stručnjak predložio narednu sesiju."
   },
   "feedback": {
     "title": "Kakva je bila vaša sesija?",
@@ -776,7 +797,9 @@
       "service": "Usluga",
       "time": "Vreme",
       "status": "Status",
-      "outcome": "Ishod"
+      "outcome": "Ishod",
+      "expert": "Stručnjak",
+      "organisation": "Organizacija"
     },
     "outcomeColumn": {
       "completed": "Održana",
@@ -798,7 +821,23 @@
       "hint": "Vidljivo samo vama i samo tokom ove sesije. Briše se kada se sesija završi."
     },
     "recordOutcome": "Zabeleži ishod",
-    "outcomeRecorded": "Ishod je zabeležen: {{status}}"
+    "outcomeRecorded": "Ishod je zabeležen: {{status}}",
+    "newConsultation": "Nova konsultacija",
+    "upcoming": "Predstojeće",
+    "past": "Prethodne",
+    "view": "Prikaži",
+    "readOnly": "Prikaz za operativni tim: samo za čitanje. Samo dodeljeni stručnjak se pridružuje pozivu i beleži ishod.",
+    "filters": {
+      "title": "Filteri",
+      "organisation": "Organizacija",
+      "allOrganisations": "Sve organizacije",
+      "status": "Status",
+      "allStatuses": "Svi statusi",
+      "from": "Od",
+      "to": "Do",
+      "apply": "Primeni filtere",
+      "clear": "Ukloni filtere"
+    }
   },
   "outcome": {
     "title": "Zabeležite ishod sesije",
@@ -821,5 +860,104 @@
   },
   "reminder": {
     "toast": "Podsetnik: vaša NestSelf sesija počinje u {{time}}."
+  },
+  "support": {
+    "technicalContact": "Kontaktirajte tehničku podršku: {{email}}"
+  },
+  "cancel": {
+    "button": "Otkaži termin",
+    "title": "Otkazati ovaj termin?",
+    "body": "{{date}} u {{time}}. Oba učesnika dobijaju obaveštenje, a otkazivanje se ne može poništiti.",
+    "confirm": "Otkaži termin",
+    "keep": "Zadrži termin",
+    "done": "Termin je otkazan."
+  },
+  "create": {
+    "nav": "Nova konsultacija",
+    "title": "Nova konsultacija",
+    "intro": "Zakažite konsultaciju za zaposlenog iz organizacije koju podržavate, sa stručnjakom odobrenim za tu uslugu.",
+    "organisation": "Organizacija",
+    "organisationId": "ID organizacije",
+    "employee": "Zaposleni",
+    "employeeId": "ID korisnika zaposlenog",
+    "chooseEmployee": "Izaberite zaposlenog",
+    "expert": "Stručnjak",
+    "expertId": "ID korisnika stručnjaka",
+    "chooseExpert": "Izaberite stručnjaka",
+    "category": "Usluga",
+    "date": "Datum",
+    "start": "Vreme početka",
+    "end": "Vreme završetka",
+    "timeZone": "Vremena su prikazana u vremenskoj zoni {{timeZone}}.",
+    "submit": "Zakaži konsultaciju",
+    "errorSummary": "Konsultacija nije zakazana",
+    "created": "Konsultacija je zakazana za {{date}} u {{time}}.",
+    "membersFailed": "Članovi organizacije nisu mogli da se učitaju. Umesto toga unesite ID korisnika zaposlenog.",
+    "errors": {
+      "required": "Popunite ovo polje.",
+      "expertCategory": "Ovaj stručnjak nije odobren za ovu uslugu.",
+      "notMember": "Ovaj zaposleni nije član organizacije."
+    }
+  },
+  "supportCalls": {
+    "nav": "Podrška za pozive",
+    "title": "Dijagnostika poziva",
+    "intro": "Potražite sesiju poziva da biste videli dijagnostiku veze. Svaka pretraga se beleži.",
+    "sessionId": "ID sesije",
+    "lookup": "Potraži",
+    "required": "Unesite ID sesije.",
+    "notFound": "Sesija poziva sa ovim ID-jem vam nije dostupna.",
+    "sampleNote": "Primer podataka: dijagnostika i prijave su izmišljene.",
+    "sessionTitle": "Sesija {{id}}",
+    "notRecorded": "Nije zabeleženo",
+    "fields": {
+      "status": "Status",
+      "provider": "Dobavljač",
+      "startedAt": "Početak",
+      "endedAt": "Kraj",
+      "appointment": "Termin",
+      "providerMeetingId": "ID sastanka kod dobavljača"
+    },
+    "participantsTitle": "Učesnici",
+    "participant": {
+      "role": "Uloga",
+      "joinedAt": "Pridružio se",
+      "leftAt": "Napustio",
+      "reconnects": "Ponovna povezivanja",
+      "quality": "Veza",
+      "errors": "Kodovi grešaka",
+      "browser": "Pregledač",
+      "os": "Operativni sistem"
+    },
+    "noParticipants": "Niko se nije pridružio ovoj sesiji.",
+    "reportsTitle": "Prijave tehničkih problema",
+    "reportsEmpty": "Nema prijava tehničkih problema.",
+    "reportsFailed": "Prijave problema nisu mogle da se učitaju.",
+    "reportColumns": {
+      "reportedAt": "Prijavljeno",
+      "role": "Prijavio",
+      "category": "Problem",
+      "summary": "Sažetak veze",
+      "session": "Sesija"
+    },
+    "summary": "{{duration}}, ponovna povezivanja: {{reconnects}}",
+    "openDiagnostics": "Dijagnostika",
+    "sessionStatus": {
+      "pending": "Na čekanju",
+      "creating": "Pokreće se",
+      "active": "Aktivna",
+      "ended": "Završena",
+      "failed": "Neuspela"
+    },
+    "roles": {
+      "expert": "Stručnjak",
+      "employee": "Zaposleni",
+      "presenter": "Predavač",
+      "moderator": "Moderator",
+      "attendee": "Učesnik",
+      "facilitator": "Voditelj",
+      "participant": "Učesnik radionice"
+    },
+    "reportsUnavailable": "Za pregled prijava problema potreban je pristup dijagnostici na nivou platforme. Umesto toga potražite sesiju po ID-ju iznad."
   }
 }

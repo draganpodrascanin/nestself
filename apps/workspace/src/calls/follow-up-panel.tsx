@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from '@nestself/ui';
 import { appointmentKeys } from '@nestself/api-client';
-import type { Appointment, AppointmentResponse, FollowUpSuggestTimesRequest } from '@nestself/contracts';
+import type { AppointmentView } from '@nestself/api-client';
+import type { Appointment, FollowUpSuggestTimesRequest } from '@nestself/contracts';
 import { FollowUpCard } from '@nestself/video';
 import type { EmployeeFollowUpStatus, FollowUpProposal } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
@@ -28,11 +29,16 @@ export interface EmployeeFollowUpPanelProps {
   status: EmployeeFollowUpStatus;
   /** The employee already suggested other windows (the API returns them). */
   timesSuggested?: boolean;
+  /** How the approval of a confirmed follow-up ended without a booking (CALL-39), with the approver's reason. */
+  approvalOutcome?: AppointmentView['approvalOutcome'];
+  declineReason?: string;
 }
 
 /** The follow-up card's input for an appointment that is itself a proposal (CALL-42). */
-export function followUpOf(appointment: AppointmentResponse): EmployeeFollowUpPanelProps {
+export function followUpOf(appointment: AppointmentView): EmployeeFollowUpPanelProps {
   return {
+    approvalOutcome: appointment.followUpOf ? appointment.approvalOutcome : undefined,
+    declineReason: appointment.declineReason,
     followUpId: appointment.id,
     proposal: { startsAt: appointment.startsAt, durationMinutes: durationMinutes(appointment), timeZone: appointment.timeZone },
     status: FOLLOW_UP_STATUS[appointment.status] ?? 'no_proposal',
@@ -46,7 +52,14 @@ export function followUpOf(appointment: AppointmentResponse): EmployeeFollowUpPa
  * mounted and shows the answer once given; every failure is rendered on the
  * card. In sample mode nothing is sent and a notice says so.
  */
-export function EmployeeFollowUpPanel({ followUpId, proposal, status: given, timesSuggested: suggestedBefore = false }: EmployeeFollowUpPanelProps) {
+export function EmployeeFollowUpPanel({
+  followUpId,
+  proposal,
+  status: given,
+  timesSuggested: suggestedBefore = false,
+  approvalOutcome,
+  declineReason,
+}: EmployeeFollowUpPanelProps) {
   const { t } = useTranslation('calls');
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -79,8 +92,19 @@ export function EmployeeFollowUpPanel({ followUpId, proposal, status: given, tim
     }
   };
 
+  // CALL-39: the approver's safe reason, or that the approval lapsed. Never shown to anyone but the employee.
+  const approvalNotice =
+    approvalOutcome === 'expired'
+      ? t('followUp.approvalExpired')
+      : approvalOutcome === 'rejected'
+        ? declineReason
+          ? t('followUp.approvalRejected', { reason: declineReason })
+          : t('followUp.approvalRejectedNoReason')
+        : null;
+
   return (
     <div className="gap-3 flex flex-col">
+      {approvalNotice ? <Alert tone="info">{approvalNotice}</Alert> : null}
       <Reveal show={expired}>
         <Alert tone="info">{timesSuggested ? t('followUp.timesSuggested') : t('followUp.expired')}</Alert>
       </Reveal>
