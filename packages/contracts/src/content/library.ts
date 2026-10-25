@@ -62,8 +62,8 @@ export const RelatedResourceSummarySchema = z.object({
 
 export const CtaSummarySchema = z.object({
   kind: z.string(),
-  label: z.string(),
-  target: z.string().nullable(),
+  label: z.string().nullable(),
+  targetId: z.string().nullable(),
 });
 
 // ---------------------------------------------------------------------------
@@ -94,6 +94,8 @@ export const LibraryContentDetailSchema = z.object({
   availableLocales: z.array(ContentLocaleSchema),
   saved: z.boolean(),
   playbackPosition: z.number().nullable(),
+  /** LIB-R-27: URL to a replacement resource when this one is withdrawn/superseded. */
+  replacementLink: z.string().nullable(),
 });
 export type LibraryContentDetail = z.infer<typeof LibraryContentDetailSchema>;
 

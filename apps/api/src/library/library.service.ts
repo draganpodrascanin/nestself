@@ -10,7 +10,9 @@
  * saved-item reads happen inside the transaction and availability/detail
  * lookups run after it, preventing pool deadlocks (C1).
  */
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { createHmac } from 'node:crypto';
+import { Inject, Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   and,
   eq,
@@ -42,46 +44,98 @@ import { transliterateText, transliterateDocument, type ContentDocument } from '
 import { ApiHttpException } from '../common/api-error.js';
 import type { LibraryContentDetail, LibraryCard, SavedItem } from '@nestself/contracts';
 import type { PrincipalContext } from './availability/availability-context-loader.js';
+import {
+  collectReferencedResourceIds,
+  filterDocumentBody,
+  extractCtaFromBody,
+} from './body-filter.js';
 
 // ---------------------------------------------------------------------------
-// Cursor helpers (I2: opaque JSON keysets, validated)
+// Cursor helpers (RTE-R-06: HMAC-signed opaque JSON keysets)
 // ---------------------------------------------------------------------------
 
 interface ListCursorKeyset { s: string; p: number; id: string }
 interface SavedCursorKeyset { t: string; id: string }
 
-function encodeListCursor(k: ListCursorKeyset): string {
-  return Buffer.from(JSON.stringify(k)).toString('base64url');
+/** PostgreSQL int4 range. */
+const INT4_MIN = -2_147_483_648;
+const INT4_MAX = 2_147_483_647;
+
+/** PostgreSQL timestamp range (very generous). */
+const PG_DATE_MIN = new Date('0001-01-01T00:00:00Z');
+const PG_DATE_MAX = new Date('9999-12-31T23:59:59Z');
+
+/** UUID / content-id pattern. */
+const CURSOR_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function hmacSign(payload: string, key: string): string {
+  return createHmac('sha256', key).update(payload).digest('base64url');
 }
 
-function decodeListCursor(raw: string): ListCursorKeyset {
+function encodeCursor(keyset: Record<string, unknown>, key: string): string {
+  const payload = JSON.stringify(keyset);
+  const sig = hmacSign(payload, key);
+  return Buffer.from(`${payload}\n${sig}`).toString('base64url');
+}
+
+function decodeCursorRaw(raw: string, key: string): Record<string, unknown> {
+  let decoded: string;
   try {
-    const json = JSON.parse(Buffer.from(raw, 'base64url').toString());
-    if (typeof json !== 'object' || json === null) throw 0;
-    const { s, p, id } = json;
-    if (typeof s !== 'string' || typeof p !== 'number' || typeof id !== 'string') throw 0;
-    if (isNaN(new Date(s).getTime())) throw 0;
-    return { s, p, id };
+    decoded = Buffer.from(raw, 'base64url').toString();
   } catch {
-    throw new ApiHttpException({ status: HttpStatus.BAD_REQUEST, code: 'validation', message: 'Invalid cursor' });
+    throw cursorError();
+  }
+  const newlineIdx = decoded.lastIndexOf('\n');
+  if (newlineIdx === -1) throw cursorError();
+
+  const payload = decoded.slice(0, newlineIdx);
+  const sig = decoded.slice(newlineIdx + 1);
+
+  // Verify HMAC
+  const expected = hmacSign(payload, key);
+  if (sig !== expected) throw cursorError();
+
+  try {
+    const json = JSON.parse(payload);
+    if (typeof json !== 'object' || json === null) throw 0;
+    return json as Record<string, unknown>;
+  } catch {
+    throw cursorError();
   }
 }
 
-function encodeSavedCursor(k: SavedCursorKeyset): string {
-  return Buffer.from(JSON.stringify(k)).toString('base64url');
+function decodeListCursor(raw: string, key: string): ListCursorKeyset {
+  const json = decodeCursorRaw(raw, key);
+  const { s, p, id } = json as { s: unknown; p: unknown; id: unknown };
+  if (typeof s !== 'string' || typeof p !== 'number' || typeof id !== 'string') throw cursorError();
+
+  // Validate types within PG ranges
+  if (!Number.isSafeInteger(p) || p < INT4_MIN || p > INT4_MAX) throw cursorError();
+  const d = new Date(s);
+  if (isNaN(d.getTime()) || d < PG_DATE_MIN || d > PG_DATE_MAX) throw cursorError();
+  if (!CURSOR_ID_RE.test(id)) throw cursorError();
+
+  return { s, p, id };
 }
 
-function decodeSavedCursor(raw: string): SavedCursorKeyset {
-  try {
-    const json = JSON.parse(Buffer.from(raw, 'base64url').toString());
-    if (typeof json !== 'object' || json === null) throw 0;
-    const { t, id } = json;
-    if (typeof t !== 'string' || typeof id !== 'string') throw 0;
-    if (isNaN(new Date(t).getTime())) throw 0;
-    return { t, id };
-  } catch {
-    throw new ApiHttpException({ status: HttpStatus.BAD_REQUEST, code: 'validation', message: 'Invalid cursor' });
-  }
+function decodeSavedCursor(raw: string, key: string): SavedCursorKeyset {
+  const json = decodeCursorRaw(raw, key);
+  const { t, id } = json as { t: unknown; id: unknown };
+  if (typeof t !== 'string' || typeof id !== 'string') throw cursorError();
+
+  const d = new Date(t);
+  if (isNaN(d.getTime()) || d < PG_DATE_MIN || d > PG_DATE_MAX) throw cursorError();
+  if (!CURSOR_ID_RE.test(id)) throw cursorError();
+
+  return { t, id };
+}
+
+function cursorError(): ApiHttpException {
+  return new ApiHttpException({
+    status: HttpStatus.BAD_REQUEST,
+    code: 'validation',
+    message: 'Invalid cursor',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -105,53 +159,6 @@ function normalizeSources(raw: unknown, isCyrillic: boolean): NormalizedSource[]
   });
 }
 
-// ---------------------------------------------------------------------------
-// CTA resolution (spec gap 1)
-// ---------------------------------------------------------------------------
-
-/**
- * CTA kinds whose target references another content resource and must be
- * available to the reader via the availability formula.
- */
-const CTA_AVAILABILITY_KINDS = new Set(['open_content', 'open_collection']);
-
-/**
- * CTA kinds mapped to the capability they require on the reader's org.
- * `suggest_topic` always renders; the rest require a specific capability.
- */
-const CTA_CAPABILITY_MAP: Record<string, string | null> = {
-  open_content: null,
-  open_collection: null,
-  open_service: null, // checked separately: capability matches the publication's own
-  suggest_topic: null, // always available
-  ask_general_question: 'general_questions',
-  express_event_interest: 'event_interest',
-};
-
-interface RawCta { kind: string; label: string; target?: string | null }
-
-function resolveCtaSync(
-  raw: unknown,
-  capabilities: readonly string[],
-  isCyrillic: boolean,
-): { kind: string; label: string; target: string | null } | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const cta = raw as RawCta;
-  if (!cta.kind || !cta.label) return null;
-
-  // Capability gate
-  const requiredCap = CTA_CAPABILITY_MAP[cta.kind];
-  if (requiredCap !== undefined && requiredCap !== null && !capabilities.includes(requiredCap)) {
-    return null;
-  }
-
-  // open_service: the capability is the publication's own required_capability,
-  // which is already checked by the availability formula -- so it passes.
-
-  const label = isCyrillic ? transliterateText(cta.label) : cta.label;
-  return { kind: cta.kind, label, target: cta.target ?? null };
-}
-
 // The four reader locales, always listed for a published resource.
 const ALL_READER_LOCALES = ['sr-Latn', 'sr-Cyrl', 'hu', 'en'] as const;
 
@@ -162,12 +169,16 @@ const ALL_READER_LOCALES = ['sr-Latn', 'sr-Cyrl', 'hu', 'en'] as const;
 @Injectable()
 export class LibraryService {
   private readonly logger = new Logger(LibraryService.name);
+  private readonly cursorKey: string;
 
   constructor(
     private readonly dbService: DbService,
     private readonly availabilityService: AvailabilityService,
     private readonly contextLoader: AvailabilityContextLoader,
-  ) {}
+    @Inject(ConfigService) configService: ConfigService,
+  ) {
+    this.cursorKey = configService.get<string>('resolvedLibraryCursorKey')!;
+  }
 
   // == Content detail ======================================================
 
@@ -181,12 +192,14 @@ export class LibraryService {
     const isCyrillic = ctx.readerLocale === 'sr-Cyrl';
     const authored = authoredLocale(ctx.readerLocale);
 
-    // Single statement: availability subquery joined to detail tables (C2/I1).
+    // ---- Main query + ancillary data in two parallel batches (max 2 connections) ----
+
+    // Batch 1: main detail query (single statement with availability join)
     const avail = this.availabilityService
       .availablePublications(ctx, db, { resourceIds: [contentResourceId] })
       .as('avail');
 
-    const rows = await db
+    const rowsPromise = db
       .select({
         resourceId: contentResources.id,
         resourceType: contentResources.type,
@@ -199,7 +212,6 @@ export class LibraryService {
         durationBand: contentRevisions.durationBand,
         difficulty: contentRevisions.difficulty,
         sources: contentRevisions.sources,
-        cta: contentRevisions.cta,
         relatedResourceIds: contentRevisions.relatedResourceIds,
         authorUserId: contentRevisions.authorUserId,
         approvedByUserId: contentRevisions.approvedByUserId,
@@ -213,51 +225,61 @@ export class LibraryService {
       .innerJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId))
       .limit(1);
 
+    // Batch 2: saved status (independent, uses org-scoped connection)
+    const savedPromise = this.getSavedStatus(ctx, contentResourceId);
+
+    const [rows, savedStatus] = await Promise.all([rowsPromise, savedPromise]);
+
     const row = rows[0];
     if (!row) {
       this.logLocaleInconsistency(ctx, contentResourceId);
       return null;
     }
 
-    // Parallel lookups for ancillary data
-    const [category, authorUser, reviewerUser, mediaRefs, savedStatus] = await Promise.all([
+    // ---- Body filtering (must-fix 1: FMT-R-05, LIB-R-23, ACC-R-22) ----
+    // Collect all resource ids referenced in the body, check their availability,
+    // then filter the body before transliteration.
+    const bodyRefIds = collectReferencedResourceIds(row.body);
+    const availableRefIds = bodyRefIds.length > 0
+      ? new Set(await this.availabilityService.availableResourceIds(ctx, db, bodyRefIds))
+      : new Set<string>();
+
+    const filteredBody = filterDocumentBody(row.body, {
+      availableIds: availableRefIds,
+      capabilities: ctx.capabilities,
+    });
+
+    // ---- CTA from the filtered body (must-fix 2: FMT-R-05) ----
+    const extractedCta = extractCtaFromBody(filteredBody);
+    let cta: LibraryContentDetail['cta'] = null;
+    if (extractedCta) {
+      const label = extractedCta.label
+        ? (isCyrillic ? transliterateText(extractedCta.label) : extractedCta.label)
+        : null;
+      cta = {
+        kind: extractedCta.kind,
+        label,
+        targetId: extractedCta.targetId,
+      };
+    }
+
+    // ---- Ancillary data (second batch, one connection) ----
+    const [category, authorUser, reviewerUser, mediaRefs] = await Promise.all([
       this.getCategoryDetail(db, row.primaryCategoryId, authored),
       db.select({ displayName: users.displayName }).from(users).where(eq(users.id, row.authorUserId)).limit(1),
       row.approvedByUserId
         ? db.select({ displayName: users.displayName }).from(users).where(eq(users.id, row.approvedByUserId)).limit(1)
         : Promise.resolve([]),
-      this.getMediaReferences(db, row.revisionId, isCyrillic, authored, ctx.now),
-      this.getSavedStatus(ctx, contentResourceId),
+      this.getMediaReferences(db, row.revisionId, isCyrillic, authored),
     ]);
 
     // Related resources: single-statement with availability subquery (C2/I1).
     const relatedResources = await this.getRelatedResources(ctx, db, row.relatedResourceIds ?? [], authored, contentResourceId);
 
-    // CTA: resolve per the capability gate; availability-gated targets checked
-    // via the related-resource availability join.
-    let cta: LibraryContentDetail['cta'] = null;
-    const rawCta = row.cta;
-    if (rawCta && typeof rawCta === 'object') {
-      const resolved = resolveCtaSync(rawCta, ctx.capabilities, isCyrillic);
-      if (resolved) {
-        // If CTA targets a content resource, it must be available
-        if (CTA_AVAILABILITY_KINDS.has(resolved.kind) && resolved.target) {
-          const targetAvail = await this.availabilityService.isAvailable(ctx, db, resolved.target);
-          if (!targetAvail) {
-            cta = null;
-          } else {
-            cta = resolved;
-          }
-        } else {
-          cta = resolved;
-        }
-      }
-    }
-
+    const body = isCyrillic ? transliterateDocument(filteredBody as ContentDocument, 'sr-Cyrl') : filteredBody;
     const title = isCyrillic ? transliterateText(row.title) : row.title;
     const summary = isCyrillic ? transliterateText(row.summary) : row.summary;
     const outcome = row.outcome ? (isCyrillic ? transliterateText(row.outcome) : row.outcome) : '';
-    const body = isCyrillic ? transliterateDocument(row.body as ContentDocument, 'sr-Cyrl') : row.body;
     const authorName = isCyrillic
       ? transliterateText(authorUser[0]?.displayName ?? '')
       : (authorUser[0]?.displayName ?? '');
@@ -298,6 +320,7 @@ export class LibraryService {
       availableLocales: [...ALL_READER_LOCALES],
       saved: savedStatus,
       playbackPosition: null,
+      replacementLink: null,
     };
   }
 
@@ -313,10 +336,10 @@ export class LibraryService {
     const isCyrillic = ctx.readerLocale === 'sr-Cyrl';
     const authored = authoredLocale(ctx.readerLocale);
 
-    // Cursor validation (I2)
+    // Cursor validation (RTE-R-06: HMAC-signed)
     let cursorCondition: ReturnType<typeof sql> | undefined;
     if (opts.cursor) {
-      const k = decodeListCursor(opts.cursor);
+      const k = decodeListCursor(opts.cursor, this.cursorKey);
       cursorCondition = sql`(${contentPublications.editorialPriority}, ${contentPublications.startsAt}, ${contentPublications.id})
         < (${k.p}, ${new Date(k.s)}, ${k.id})`;
     }
@@ -388,11 +411,11 @@ export class LibraryService {
     let nextCursor: string | null = null;
     if (hasMore) {
       const last = page[page.length - 1]!;
-      nextCursor = encodeListCursor({
+      nextCursor = encodeCursor({
         s: last.startsAt.toISOString(),
         p: last.editorialPriority,
         id: last.publicationId,
-      });
+      }, this.cursorKey);
     }
 
     return { items, nextCursor };
@@ -410,20 +433,22 @@ export class LibraryService {
     const authored = authoredLocale(ctx.readerLocale);
     const db = this.dbService.db;
 
-    // Cursor validation (I2)
+    // Cursor validation (RTE-R-06: HMAC-signed)
     let cursorDate: Date | undefined;
     let cursorId: string | undefined;
     if (opts.cursor) {
-      const k = decodeSavedCursor(opts.cursor);
+      const k = decodeSavedCursor(opts.cursor, this.cursorKey);
       cursorDate = new Date(k.t);
       cursorId = k.id;
     }
 
-    // Step 1: read saved items inside the org-scoped transaction (C1: no
-    // secondary db calls while the connection is held).
+    // Single statement inside withOrgScope: read saved items with availability
+    // join in one query (minor 3).
     const fetchLimit = opts.limit + 1;
-    const savedRows = await withOrgScope(db, ctx.orgId, async (tx) => {
-      return tx
+
+    const { savedRows, detailRows } = await withOrgScope(db, ctx.orgId, async (tx) => {
+      // Read saved items
+      const saved = await tx
         .select({
           id: savedItems.id,
           contentResourceId: savedItems.contentResourceId,
@@ -440,6 +465,31 @@ export class LibraryService {
         )
         .orderBy(desc(savedItems.createdAt), desc(savedItems.id))
         .limit(fetchLimit);
+
+      if (saved.length === 0) {
+        return { savedRows: saved, detailRows: [] as Array<{ resourceId: string; type: string; title: string; categoryId: string }> };
+      }
+
+      // Availability join in same transaction (minor 3: one statement)
+      const resourceIds = saved.map((r) => r.contentResourceId);
+      const avail = this.availabilityService
+        .availablePublications(ctx, tx, { resourceIds })
+        .as('avail');
+
+      const details = await tx
+        .select({
+          resourceId: contentResources.id,
+          type: contentResources.type,
+          title: contentRevisions.title,
+          categoryId: contentResources.primaryCategoryId,
+        })
+        .from(contentPublications)
+        .innerJoin(avail, eq(avail.publicationId, contentPublications.id))
+        .innerJoin(contentVariants, eq(contentVariants.id, contentPublications.contentVariantId))
+        .innerJoin(contentResources, eq(contentResources.id, contentVariants.contentResourceId))
+        .innerJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId));
+
+      return { savedRows: saved, detailRows: details };
     });
 
     const hasMore = savedRows.length > opts.limit;
@@ -447,27 +497,6 @@ export class LibraryService {
     if (page.length === 0) {
       return { items: [], nextCursor: null };
     }
-
-    // Step 2: availability check and detail fetch OUTSIDE the transaction (C1).
-    const resourceIds = page.map((r) => r.contentResourceId);
-
-    // Single-statement availability join for saved resource summaries (C2/I1).
-    const avail = this.availabilityService
-      .availablePublications(ctx, db, { resourceIds })
-      .as('avail');
-
-    const detailRows = await db
-      .select({
-        resourceId: contentResources.id,
-        type: contentResources.type,
-        title: contentRevisions.title,
-        categoryId: contentResources.primaryCategoryId,
-      })
-      .from(contentPublications)
-      .innerJoin(avail, eq(avail.publicationId, contentPublications.id))
-      .innerJoin(contentVariants, eq(contentVariants.id, contentPublications.contentVariantId))
-      .innerJoin(contentResources, eq(contentResources.id, contentVariants.contentResourceId))
-      .innerJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId));
 
     const availableDetails = new Map<string, { type: string; title: string; categoryId: string }>();
     for (const r of detailRows) {
@@ -508,10 +537,10 @@ export class LibraryService {
     let nextCursor: string | null = null;
     if (hasMore) {
       const last = page[page.length - 1]!;
-      nextCursor = encodeSavedCursor({
+      nextCursor = encodeCursor({
         t: last.createdAt.toISOString(),
         id: last.id,
-      });
+      }, this.cursorKey);
     }
 
     return { items, nextCursor };
@@ -525,17 +554,26 @@ export class LibraryService {
     const ctx = await this.contextLoader.forReader(principal, readerLocale);
     const db = this.dbService.db;
 
-    // Verify available (single statement)
-    const avail = await this.availabilityService.isAvailable(ctx, db, contentResourceId);
-    if (!avail) {
-      throw new ApiHttpException({
-        status: HttpStatus.NOT_FOUND,
-        code: 'content_not_available',
-        message: 'The requested content is not available',
-      });
-    }
-
+    // Verify available and save in one withOrgScope call (minor 3)
     await withOrgScope(db, ctx.orgId, async (tx) => {
+      const avail = this.availabilityService
+        .availablePublications(ctx, tx, { resourceIds: [contentResourceId] })
+        .as('avail');
+
+      const available = await tx
+        .select({ publicationId: sql<string>`${contentPublications.id}` })
+        .from(contentPublications)
+        .innerJoin(avail, eq(avail.publicationId, contentPublications.id))
+        .limit(1);
+
+      if (available.length === 0) {
+        throw new ApiHttpException({
+          status: HttpStatus.NOT_FOUND,
+          code: 'content_not_available',
+          message: 'The requested content is not available',
+        });
+      }
+
       await tx
         .insert(savedItems)
         .values({
@@ -626,8 +664,10 @@ export class LibraryService {
     revisionId: string,
     isCyrillic: boolean,
     locale: AuthoredLocale,
-    now: Date,
   ) {
+    // The availability formula (item 10) already guarantees every media asset
+    // referenced by this revision is ready and has valid rights. No redundant
+    // in-memory readiness check (minor 7).
     const rows = await db
       .select({
         assetId: mediaAssets.id,
@@ -636,19 +676,12 @@ export class LibraryService {
         height: mediaAssets.height,
         focalPoint: mediaAssets.focalPoint,
         altText: mediaAssets.altText,
-        state: mediaAssets.state,
-        rightsExpiresAt: mediaAssets.rightsExpiresAt,
       })
       .from(contentRevisionMedia)
       .innerJoin(mediaAssets, eq(mediaAssets.id, contentRevisionMedia.mediaAssetId))
       .where(eq(contentRevisionMedia.contentRevisionId, revisionId));
 
-    // Filter using ctx.now for consistent readiness check
-    const validAssets = rows.filter(
-      (r) => r.state === 'ready' && (!r.rightsExpiresAt || r.rightsExpiresAt > now),
-    );
-
-    const assetIds = validAssets.map((r) => r.assetId);
+    const assetIds = rows.map((r) => r.assetId);
     const renditionRows = assetIds.length > 0
       ? await db
           .select({
@@ -669,7 +702,7 @@ export class LibraryService {
       renditionsByAsset.set(r.mediaAssetId, existing);
     }
 
-    return validAssets.map((a) => {
+    return rows.map((a) => {
       const altObj = a.altText as Record<string, string> | null;
       // Alt text in the reader's authored locale only; no fallback to another language (empty string when missing).
       const rawAlt = altObj?.[locale] ?? null;
@@ -791,28 +824,40 @@ export class LibraryService {
 
   /**
    * AV-24: fire-and-forget error-level log when a resource is available in
-   * another locale but not in the reader's. Logs ids only (no PII). Cannot
-   * turn a 404 into a 500 -- all errors are caught.
+   * another locale but not in the reader's. One query (minor 4).
+   * Logs ids only (no PII). Cannot turn a 404 into a 500.
    */
   private logLocaleInconsistency(
     ctx: AvailabilityContext,
     contentResourceId: string,
   ): void {
     const db = this.dbService.db;
-    const otherLocales = (['sr-Latn', 'hu', 'en'] as const).filter(
-      (l) => l !== authoredLocale(ctx.readerLocale),
-    );
+    const currentAuthored = authoredLocale(ctx.readerLocale);
     // Fire and forget: do not await, catch all errors
     (async () => {
-      for (const locale of otherLocales) {
-        const otherCtx: AvailabilityContext = { ...ctx, readerLocale: locale };
-        const avail = await this.availabilityService.isAvailable(otherCtx, db, contentResourceId);
-        if (avail) {
-          this.logger.error(
-            `AV-24 locale inconsistency: resource=${contentResourceId} available in ${locale} but not in ${authoredLocale(ctx.readerLocale)} for org=${ctx.orgId}`,
-          );
-          return;
-        }
+      // Single query: check if any other locale has an available publication
+      const otherLocales = (['sr-Latn', 'hu', 'en'] as const).filter(
+        (l) => l !== currentAuthored,
+      );
+      if (otherLocales.length === 0) return;
+
+      const otherAvailCount = await db
+        .select({ cnt: sql<number>`count(*)` })
+        .from(contentVariants)
+        .innerJoin(contentPublications, eq(contentPublications.contentVariantId, contentVariants.id))
+        .where(
+          and(
+            eq(contentVariants.contentResourceId, contentResourceId),
+            inArray(contentVariants.locale, [...otherLocales]),
+            sql`${contentPublications.withdrawnAt} IS NULL`,
+            sql`${contentPublications.startsAt} <= ${ctx.now}`,
+          ),
+        );
+
+      if (otherAvailCount[0] && Number(otherAvailCount[0].cnt) > 0) {
+        this.logger.error(
+          `AV-24 locale inconsistency: resource=${contentResourceId} has publications in other locales but not in ${currentAuthored} for org=${ctx.orgId}`,
+        );
       }
     })().catch(() => {
       // Swallow: this diagnostic must never propagate an error

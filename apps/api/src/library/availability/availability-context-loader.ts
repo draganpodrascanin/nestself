@@ -160,41 +160,6 @@ export class AvailabilityContextLoader {
   }
 
   /**
-   * Legacy load method — builds context without membership validation.
-   * Kept for backward compatibility; prefer `forReader()` or `forPreview()`.
-   */
-  async load(
-    principal: PrincipalContext,
-    readerLocale: ReaderLocale,
-    now: Date = new Date(),
-    dbOverride?: DbExecutor,
-  ): Promise<AvailabilityContext> {
-    const db = dbOverride ?? this.dbService.db;
-    const membershipRows = await db
-      .select({ orgUnitId: memberships.orgUnitId })
-      .from(memberships)
-      .where(eq(memberships.id, principal.membershipId))
-      .limit(1);
-
-    const primaryUnitId = membershipRows[0]?.orgUnitId ?? null;
-    const [orgUnitIds, capabilities] = await Promise.all([
-      this.loadOrgUnitIds(db, primaryUnitId),
-      this.loadCapabilities(db, principal.orgId, now),
-    ]);
-
-    return {
-      kind: 'reader' as const,
-      userId: principal.userId,
-      orgId: principal.orgId,
-      membershipId: principal.membershipId,
-      orgUnitIds,
-      capabilities,
-      readerLocale,
-      now,
-    };
-  }
-
-  /**
    * Load the reader's org-unit ancestry chain: primary unit first, then
    * ancestors from `org_unit_closure` where `depth > 0`, ordered by depth
    * ascending (nearest ancestor first) (I5 minor).

@@ -116,6 +116,10 @@ export const envSchema = z
 
     // Content link host allowlist (FMT-R-06, Appendix A)
     CONTENT_LINK_HOST_ALLOWLIST: optionalString,
+
+    // Library cursor HMAC key (RTE-R-06). Required in production; in dev/test
+    // the key is derived from JWT_SECRET when absent.
+    LIBRARY_CURSOR_KEY: optionalString,
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -133,6 +137,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         message: 'JWT_SECRET is required when AUTH_MODE=stub',
         path: ['JWT_SECRET'],
+      });
+    }
+
+    // RTE-R-06: cursor key required in production
+    if (data.NODE_ENV === 'production' && !data.LIBRARY_CURSOR_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'LIBRARY_CURSOR_KEY is required when NODE_ENV=production',
+        path: ['LIBRARY_CURSOR_KEY'],
       });
     }
 
@@ -201,6 +214,8 @@ export type AppEnv = Env & {
   resolvedSessionEncryptionKey: string | undefined;
   /** Derived Cognito issuer URL. */
   resolvedCognitoIssuer: string | undefined;
+  /** Resolved library cursor HMAC key. */
+  resolvedLibraryCursorKey: string;
 };
 
 export function resolveAppEnv(env: Env): AppEnv {
@@ -223,10 +238,23 @@ export function resolveAppEnv(env: Env): AppEnv {
       ? `https://cognito-idp.${env.COGNITO_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}`
       : undefined);
 
+  // RTE-R-06: library cursor HMAC key. In dev/test, derive from JWT_SECRET.
+  let resolvedLibraryCursorKey = env.LIBRARY_CURSOR_KEY;
+  if (!resolvedLibraryCursorKey && env.JWT_SECRET) {
+    resolvedLibraryCursorKey = createHash('sha256')
+      .update(`library-cursor:${env.JWT_SECRET}`)
+      .digest('hex');
+  }
+  // Fallback for test environments that might not even have JWT_SECRET
+  if (!resolvedLibraryCursorKey) {
+    resolvedLibraryCursorKey = 'test-cursor-key-not-for-production';
+  }
+
   return {
     ...env,
     resolvedSessionEncryptionKey,
     resolvedCognitoIssuer,
+    resolvedLibraryCursorKey,
   };
 }
 

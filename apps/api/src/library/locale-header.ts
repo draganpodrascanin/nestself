@@ -3,21 +3,27 @@
  *
  * Restricted to the four interface locales: sr-Latn, sr-Cyrl, hu, en.
  * Case-insensitive matching, q=0 excluded. Default: sr-Latn.
+ *
+ * Serbian aliases (minor 5):
+ * - `sr`, `sr-Latn-*`, `sr-RS`, `sr-ME`, `sr-BA` -> sr-Latn
+ * - `sr-Cyrl-*` -> sr-Cyrl
  */
 import { ContentLocaleSchema } from '@nestself/contracts';
 import type { ReaderLocale } from './availability/availability-context.js';
 
-/** Canonical locales from the contract schema. */
-const VALID_LOCALES: Set<string> = new Set(ContentLocaleSchema.options);
+/** Canonical locales from the contract schema (lowercased for lookup). */
+const CANONICAL_BY_LOWER = new Map<string, ReaderLocale>(
+  ContentLocaleSchema.options.map((l) => [l.toLowerCase(), l as ReaderLocale]),
+);
 
-/** Map Accept-Language tag (lowercased) to a canonical locale. */
+/** Static alias map: Accept-Language tag (lowercased) -> canonical locale. */
 const ALIAS_MAP: Record<string, ReaderLocale> = {
   'sr': 'sr-Latn',
   'sr-latn': 'sr-Latn',
-  'sr-latn-rs': 'sr-Latn',
   'sr-rs': 'sr-Latn',
+  'sr-me': 'sr-Latn',
+  'sr-ba': 'sr-Latn',
   'sr-cyrl': 'sr-Cyrl',
-  'sr-cyrl-rs': 'sr-Cyrl',
 };
 
 /**
@@ -37,7 +43,7 @@ export function parseAcceptLanguageLocale(
     return { tag: tag!.trim(), q: Number.isFinite(q) ? q : 1 };
   });
 
-  // Sort by quality descending, then filter out q=0
+  // Sort by quality descending
   entries.sort((a, b) => b.q - a.q);
 
   for (const { tag, q } of entries) {
@@ -45,16 +51,17 @@ export function parseAcceptLanguageLocale(
 
     const lower = tag.toLowerCase();
 
-    // Direct match (case-insensitive)
-    if (VALID_LOCALES.has(tag)) {
-      return tag as ReaderLocale;
-    }
+    // Exact canonical match (case-insensitive)
+    const canonical = CANONICAL_BY_LOWER.get(lower);
+    if (canonical) return canonical;
 
-    // Alias match (lowercased)
+    // Static alias match
     const alias = ALIAS_MAP[lower];
     if (alias) return alias;
 
-    // Prefix match for language subtags
+    // Prefix-based matching for sr-Latn-*, sr-Cyrl-*, hu-*, en-*
+    if (lower.startsWith('sr-cyrl')) return 'sr-Cyrl';
+    if (lower.startsWith('sr-latn') || lower.startsWith('sr-')) return 'sr-Latn';
     if (lower.startsWith('hu')) return 'hu';
     if (lower.startsWith('en')) return 'en';
   }

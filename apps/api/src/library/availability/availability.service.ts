@@ -257,124 +257,15 @@ export class AvailabilityService {
 
   /**
    * Check whether a media asset is referenced by some available publication's
-   * revision. Single SQL query: joins from content_revision_media through the
-   * full availability formula with LIMIT 1 (I3).
+   * revision. Uses `availablePublications` with `mediaAssetId` filter to avoid
+   * duplicating the formula (minor 1).
    */
   async isMediaAssetAvailable(
     ctx: AvailabilityContext,
     db: DbExecutor,
     assetId: string,
   ): Promise<boolean> {
-    const rows = await db
-      .select({ _: sql<number>`1` })
-      .from(contentRevisionMedia)
-      .innerJoin(
-        contentPublications,
-        eq(
-          contentPublications.contentRevisionId,
-          contentRevisionMedia.contentRevisionId,
-        ),
-      )
-      .innerJoin(
-        contentVariants,
-        eq(contentVariants.id, contentPublications.contentVariantId),
-      )
-      .innerJoin(
-        contentResources,
-        eq(contentResources.id, contentVariants.contentResourceId),
-      )
-      .where(
-        and(
-          eq(contentRevisionMedia.mediaAssetId, assetId),
-
-          // Full availability formula inline (same as availablePublications)
-          isNull(contentPublications.withdrawnAt),
-          lte(contentPublications.startsAt, ctx.now),
-          eq(contentResources.state, 'active'),
-          or(
-            isNull(contentPublications.endsAt),
-            gt(contentPublications.endsAt, ctx.now),
-          ),
-          notExists(
-            db
-              .select({ _: sql`1` })
-              .from(sql`content_publications "newer"`)
-              .where(
-                sql`"newer".content_variant_id = ${contentPublications.contentVariantId}
-                    AND "newer".withdrawn_at IS NULL
-                    AND "newer".starts_at <= ${ctx.now}
-                    AND ("newer".starts_at, "newer".id) > (${contentPublications.startsAt}, ${contentPublications.id})`,
-              ),
-          ),
-          exists(
-            db
-              .select({ _: sql`1` })
-              .from(contentPublicationAudiences)
-              .where(
-                and(
-                  eq(
-                    contentPublicationAudiences.publicationId,
-                    contentPublications.id,
-                  ),
-                  audiencePredicate(ctx),
-                ),
-              ),
-          ),
-          ctx.capabilities.length > 0
-            ? sql`${contentPublications.requiredCapability} IN (${sql.join(
-                ctx.capabilities.map((c) => sql`${c}`),
-                sql`, `,
-              )})`
-            : sql`false`,
-          notExists(
-            db
-              .select({ _: sql`1` })
-              .from(
-                sql`content_revision_media "crm2"`,
-              )
-              .innerJoin(
-                mediaAssets,
-                sql`${mediaAssets.id} = "crm2".media_asset_id`,
-              )
-              .where(
-                and(
-                  sql`"crm2".content_revision_id = ${contentPublications.contentRevisionId}`,
-                  or(
-                    ne(mediaAssets.state, 'ready'),
-                    and(
-                      sql`${mediaAssets.rightsExpiresAt} IS NOT NULL`,
-                      lte(mediaAssets.rightsExpiresAt, ctx.now),
-                    ),
-                  ),
-                ),
-              ),
-          ),
-          eq(contentVariants.locale, authoredLocale(ctx.readerLocale)),
-          ...(ctx.kind === 'reader'
-            ? [
-                exists(
-                  db
-                    .select({ _: sql`1` })
-                    .from(memberships)
-                    .where(
-                      and(
-                        eq(memberships.id, ctx.membershipId),
-                        eq(memberships.userId, ctx.userId),
-                        eq(memberships.orgId, ctx.orgId),
-                        eq(memberships.status, 'ACTIVE'),
-                        lte(memberships.startDate, ctx.now),
-                        or(
-                          isNull(memberships.endDate),
-                          gt(memberships.endDate, ctx.now),
-                        ),
-                      ),
-                    ),
-                ),
-              ]
-            : []),
-        ),
-      )
-      .limit(1);
+    const rows = await this.availablePublications(ctx, db, { mediaAssetId: assetId });
     return rows.length > 0;
   }
 
