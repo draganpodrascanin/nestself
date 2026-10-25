@@ -49,17 +49,28 @@ export function ContextPicker({ sampleMode }: ContextPickerProps) {
     if (pending || (current && option.key === current.key)) return;
     setPending(true);
     try {
-      await switchContext(option.context);
-      await refreshPrincipal();
+      try {
+        await switchContext(option.context);
+      } catch (err) {
+        const key = contextErrorKey(err);
+        addToast({
+          tone: 'danger',
+          title: t('auth:context.picker.errors.title'),
+          description: t(`auth:context.picker.errors.${key}`),
+        });
+        // The context is no longer valid (an ended membership, for example):
+        // reload the principal so the menu stops offering it.
+        if (key === 'invalidContext' || key === 'orgContextExpired') {
+          await refreshPrincipal().catch(() => undefined);
+        }
+        return;
+      }
+      // The switch happened; a failed refresh is not a failed switch (the
+      // provider keeps the switch's own answer and reports its own error).
+      await refreshPrincipal().catch(() => undefined);
       // Every operations screen needs the operations context: start from the
       // overview rather than leave a screen that can no longer load.
       void navigate({ to: '/' });
-    } catch (err) {
-      addToast({
-        tone: 'danger',
-        title: t('auth:context.picker.errors.title'),
-        description: t(`auth:context.picker.errors.${contextErrorKey(err)}`),
-      });
     } finally {
       setPending(false);
     }

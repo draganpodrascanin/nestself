@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
+import { ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import type { MeResponse, Principal } from '@nestself/contracts';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
@@ -137,5 +138,56 @@ describe('useOperationsContext', () => {
     setPrincipal({ ...ADMIN.principal, context: { kind: 'personal' } });
     expect(switchContext).not.toHaveBeenCalled();
     expect(result.current.ready).toBe(false);
+  });
+});
+
+describe('a context that is no longer valid (admin)', () => {
+  it('refreshes after invalid_context and the ended organization disappears from the menu', async () => {
+    const user = userEvent.setup();
+    const withOrg: MeResponse = {
+      ...OPS_ME,
+      principal: {
+        ...OPS_ME.principal,
+        memberships: [
+          {
+            membershipId: 'mem_x',
+            orgId: 'org_sample',
+            orgName: 'Example d.o.o.',
+            orgUnitId: null,
+            status: 'ACTIVE',
+            startDate: '2025-01-01T00:00:00.000Z',
+            endDate: null,
+          },
+        ],
+      },
+    };
+    let current = withOrg;
+    const request = vi.fn(async (path: string, init: RequestInit) => {
+      if (path === '/api/auth/context' && init.method === 'POST') {
+        current = OPS_ME;
+        throw new ApiError({ status: 403, code: 'invalid_context', message: 'English', requestId: null });
+      }
+      if (path === '/api/auth/me') return current;
+      throw new Error(`unexpected ${path}`);
+    });
+    renderShell({ request, baseUrl: '' } as unknown as ApiClient);
+    await screen.findByText('overview page');
+
+    const trigger = () =>
+      screen.getByRole('button', {
+        name: t('auth:context.picker.open', { name: t('auth:context.picker.option.operations') }),
+      });
+    await user.click(trigger());
+    let menu = await screen.findByRole('menu', { name: t('auth:context.picker.heading') });
+    await user.click(within(menu).getByRole('menuitem', { name: 'Example d.o.o.' }));
+
+    expect((await screen.findAllByText(t('auth:context.picker.errors.invalidContext'))).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([path]) => path === '/api/auth/me').length).toBeGreaterThanOrEqual(2),
+    );
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await user.click(trigger());
+    menu = await screen.findByRole('menu', { name: t('auth:context.picker.heading') });
+    expect(within(menu).queryByText('Example d.o.o.')).not.toBeInTheDocument();
   });
 });

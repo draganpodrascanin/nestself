@@ -21,8 +21,14 @@ export function sampleMine(employeeUserId: string): ConversationSummary[] {
   return SAMPLE_CONVERSATIONS.filter((c) => c.employeeUserId === employeeUserId).map(summary);
 }
 
-export function sampleConversation(id: string): ConversationResponse | null {
-  const row = SAMPLE_CONVERSATIONS.find((c) => c.id === id);
+/**
+ * The sample conversation `id`. With `participantUserId`, only when that user
+ * is its employee, as the participant read on the API allows.
+ */
+export function sampleConversation(id: string, participantUserId?: string): ConversationResponse | null {
+  const row = SAMPLE_CONVERSATIONS.find(
+    (c) => c.id === id && (participantUserId === undefined || c.employeeUserId === participantUserId),
+  );
   return row ? { id: row.id, caseId: row.caseId, orgId: row.orgId, messages: row.messages } : null;
 }
 

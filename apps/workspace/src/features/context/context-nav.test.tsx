@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
+import { ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import type { MeResponse } from '@nestself/contracts';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
@@ -110,5 +111,53 @@ describe('context switch and gated navigation (Review Focus 4)', () => {
 
     const paths = request.mock.calls.map(([path, init]) => `${(init as RequestInit).method} ${path}`);
     expect(paths.slice(-2)).toEqual(['POST /api/auth/context', 'GET /api/auth/me']);
+  });
+});
+
+describe('a context that is no longer valid', () => {
+  it('refreshes after invalid_context and the ended organization disappears from the menu', async () => {
+    const user = userEvent.setup();
+    const second = {
+      membershipId: 'mem_second',
+      orgId: 'org_second',
+      orgName: 'Second Org d.o.o.',
+      orgUnitId: null,
+      status: 'ACTIVE' as const,
+      startDate: '2025-01-01T00:00:00.000Z',
+      endDate: null,
+    };
+    const withSecond: MeResponse = {
+      ...ORG_ME,
+      principal: { ...ORG_ME.principal, memberships: [...ORG_ME.principal.memberships, second] },
+    };
+    let current = withSecond;
+    const request = vi.fn(async (path: string, init: RequestInit) => {
+      if (path === '/api/auth/context' && init.method === 'POST') {
+        // The membership ended on the server: the switch is refused, and from
+        // now on /auth/me no longer lists it.
+        current = ORG_ME;
+        throw new ApiError({ status: 403, code: 'invalid_context', message: 'English', requestId: null });
+      }
+      if (path === '/api/auth/me') return current;
+      throw new Error(`unexpected ${path}`);
+    });
+    renderShell({ request, baseUrl: '' } as unknown as ApiClient);
+    await screen.findByText('home page');
+
+    const trigger = () =>
+      screen.getByRole('button', { name: t('auth:context.picker.open', { name: 'Example d.o.o.' }) });
+    await user.click(trigger());
+    let menu = await screen.findByRole('menu', { name: t('auth:context.picker.heading') });
+    await user.click(within(menu).getByRole('menuitem', { name: 'Second Org d.o.o.' }));
+
+    expect((await screen.findAllByText(t('auth:context.picker.errors.invalidContext'))).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(request.mock.calls.filter(([path]) => path === '/api/auth/me').length).toBeGreaterThanOrEqual(2),
+    );
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await user.click(trigger());
+    menu = await screen.findByRole('menu', { name: t('auth:context.picker.heading') });
+    expect(within(menu).queryByText('Second Org d.o.o.')).not.toBeInTheDocument();
+    expect(within(menu).getByText('Example d.o.o.')).toBeInTheDocument();
   });
 });

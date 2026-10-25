@@ -50,13 +50,14 @@ export function ExpertConversationScreen({ pro, conversationId, sampleMode }: Co
 }
 
 export function MyConversationScreen({ pro, conversationId, sampleMode }: ConversationScreenProps) {
+  const { principal } = useAuth();
   const query = useMyConversation(pro, conversationId, !sampleMode);
   return (
     <ConversationBody
       view="participant"
       conversationId={conversationId}
       sampleMode={sampleMode}
-      conversation={sampleMode ? sampleConversation(conversationId) : query.data}
+      conversation={sampleMode ? sampleConversation(conversationId, principal?.userId ?? '') : query.data}
       error={sampleMode ? null : query.isError ? casesErrorKey(query.error) : null}
       onRetry={() => void query.refetch()}
       extra={null}

@@ -117,7 +117,7 @@ describe('ContextPicker', () => {
     [new Error('network'), 'unknown'],
   ])('shows translated copy when the switch fails (%s)', async (err, key) => {
     const user = userEvent.setup();
-    const refreshPrincipal = vi.fn();
+    const refreshPrincipal = vi.fn().mockResolvedValue(undefined);
     const { router } = renderAt(
       <ContextPicker sampleMode={false} />,
       '/conversations',
@@ -129,7 +129,8 @@ describe('ContextPicker', () => {
     expect((await screen.findAllByText(t('auth:context.picker.errors.title'))).length).toBeGreaterThan(0);
     expect(screen.getAllByText(t(`auth:context.picker.errors.${key}`)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/^English /)).not.toBeInTheDocument();
-    expect(refreshPrincipal).not.toHaveBeenCalled();
+    // Only a context that is no longer valid reloads the principal.
+    expect(refreshPrincipal).toHaveBeenCalledTimes(key === 'invalidContext' || key === 'orgContextExpired' ? 1 : 0);
     expect(router.state.location.pathname).toBe('/conversations');
   });
 
@@ -145,6 +146,22 @@ describe('ContextPicker', () => {
     );
     await screen.findByText('ready');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('a failed refresh after a successful switch is not reported as a failed switch', async () => {
+    const user = userEvent.setup();
+    const switchContext = vi.fn().mockResolvedValue(undefined);
+    const refreshPrincipal = vi.fn().mockRejectedValue(new Error('network'));
+    const { router } = renderAt(
+      <ContextPicker sampleMode={false} />,
+      '/conversations',
+      makeAuth({ principal: MULTI, switchContext, refreshPrincipal }),
+    );
+    const menu = await open(user, 'Example d.o.o.');
+    await user.click(within(menu).getByRole('menuitem', { name: 'Second Org d.o.o.' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(refreshPrincipal).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(t('auth:context.picker.errors.title'))).not.toBeInTheDocument();
   });
 
   it('says in sample mode that switching creates nothing', async () => {

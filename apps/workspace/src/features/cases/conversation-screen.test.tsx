@@ -196,4 +196,24 @@ describe('MyConversationScreen', () => {
       expect(queryClient.getQueryCache().find({ queryKey: casesKeys.myConversation('conv_1') })).toBeUndefined(),
     );
   });
+
+  it('sample mode shows the sample employee’s own conversation only', async () => {
+    const pro = makePro();
+    renderAt(
+      <MyConversationScreen pro={pro} conversationId="conv_sample" sampleMode />,
+      '/conversations/conv_sample',
+      makeAuth({ principal: EMPLOYEE }),
+    );
+    expect(await screen.findByText('Sample message (fixture)')).toBeInTheDocument();
+    cleanup();
+    // conv_sample_ana belongs to another sample employee.
+    renderAt(
+      <MyConversationScreen pro={pro} conversationId="conv_sample_ana" sampleMode />,
+      '/conversations/conv_sample_ana',
+      makeAuth({ principal: EMPLOYEE }),
+    );
+    expect(await screen.findByText(t('workspace:cases.errors.notFound'))).toBeInTheDocument();
+    expect(screen.queryByText('Sample message (fixture)')).not.toBeInTheDocument();
+    expect(pro.getMyConversation).not.toHaveBeenCalled();
+  });
 });
