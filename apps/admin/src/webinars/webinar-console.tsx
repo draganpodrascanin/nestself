@@ -92,7 +92,13 @@ function sampleRole(effectiveActions: readonly string[]): WebinarHostRole {
   return effectiveActions.includes('event.moderate') ? 'moderator' : 'presenter';
 }
 
-function useHostClient(webinar: WebinarResponse, role: WebinarHostRole | null, controller: CallSessionControllerApi, onUnavailable: () => void): WebinarClientApi | null {
+function useHostClient(
+  webinar: WebinarResponse,
+  role: WebinarHostRole | null,
+  attendanceCount: number | null,
+  controller: CallSessionControllerApi,
+  onUnavailable: () => void,
+): WebinarClientApi | null {
   const { principal, effectiveActions } = useAuth();
   const [sample] = useState(() => {
     if (!isSampleDataMode) return null;
@@ -109,9 +115,10 @@ function useHostClient(webinar: WebinarResponse, role: WebinarHostRole | null, c
       audio: controller,
       // Hosts receive no floor events, so the user room is not joined.
       transport: createWebinarTransport({ api: webinarsApi, rooms: webinarRoomClient, webinarId: webinar.id, onUnavailable }),
-      initial: { status: webinar.status },
+      // The join response's attendance count, so the console shows a number before the first `webinar.attendance.count`.
+      initial: { status: webinar.status, ...(attendanceCount === null ? {} : { attendanceCount }) },
     });
-    // The detail's status seeds a new client only; `onUnavailable` is a state setter.
+    // The detail's status and the join's count seed a new client only; `onUnavailable` is a state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sample, role, webinar.id, controller]);
   return sample ?? live;
@@ -226,6 +233,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   // The join response's recording state; undefined until joined, null when the response carries none.
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [joinAttendance, setJoinAttendance] = useState<number | null>(null);
   const [joinRecording, setJoinRecording] = useState<RecordingStatus | null | undefined>(undefined);
   const queryClient = useQueryClient();
   const format = useZonedFormat();
@@ -234,7 +242,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   // Hosts may join from 30 minutes before the start (WBN-16); the demonstration is open at any time.
   const opensLater = !isSampleDataMode && now < opensAt.getTime() ? t('webinar.detail.joinOpensAt', { time: format.time(opensAt, webinar.timeZone) }) : null;
 
-  const client = useHostClient(webinar, role, controller, () => setRoomUnavailable(true));
+  const client = useHostClient(webinar, role, joinAttendance, controller, () => setRoomUnavailable(true));
   const title = localized(webinar.title);
   const registered = webinar.capacity - webinar.capacityRemaining;
   const isModerator = (client?.getSnapshot().role ?? role) === 'moderator';
@@ -266,11 +274,13 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
     }
     setJoining(true);
     try {
-      const response = await webinarsApi.join(webinar.id);
+      // `attendanceCount` is additive on the host's join response (read when present).
+      const response: WebinarJoinResponse & { attendanceCount?: number | null } = await webinarsApi.join(webinar.id);
       if (response.role === 'attendee') throw new Error('An attendee cannot open the host view');
       setRoomUnavailable(false);
       setJoinRecording(response.recordingStatus ?? null);
       setSessionId(response.sessionId);
+      setJoinAttendance(typeof response.attendanceCount === 'number' ? response.attendanceCount : null);
       setRole(response.role);
       setJoined(true);
       // A failure to connect media is shown by the stage through the controller's state.

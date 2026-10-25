@@ -76,5 +76,9 @@ export function sampleAttendee(userId: string | undefined): { participantId: str
   const participants = SAMPLE_CALL_SESSIONS.find((session) => session.id === SAMPLE_WEBINAR_SESSION_ID)?.participants ?? [];
   const own = participants.find((participant) => participant.role === 'attendee' && participant.userId === userId);
   const attendees = sampleWebinarContent().people.attendees;
-  return attendees.find((attendee) => attendee.participantId === own?.id) ?? attendees[0] ?? { participantId: 'sample-attendee', name: 'Sample attendee' };
+  const fallback = SAMPLE_PEOPLE.find((person) => person.id === userId) ?? SAMPLE_PEOPLE[0];
+  return (
+    attendees.find((attendee) => attendee.participantId === own?.id) ??
+    attendees[0] ?? { participantId: 'sample-attendee', name: fallback?.displayName ?? userId ?? 'sample-attendee' }
+  );
 }
