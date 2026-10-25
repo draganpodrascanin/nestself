@@ -64,10 +64,17 @@ export const questionKeys = {
 
 export const cmsKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'cms'] as const,
+  resources: (ctx: ActiveContext) => [...contextKey(ctx), 'cms', 'resources'] as const,
+  resourceList: (ctx: ActiveContext, params: Record<string, unknown>) =>
+    [...contextKey(ctx), 'cms', 'resources', 'list', params] as const,
+  resourceDetail: (ctx: ActiveContext, resourceId: string) =>
+    [...contextKey(ctx), 'cms', 'resources', resourceId] as const,
 };
 
 export const mediaKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'media'] as const,
+  detail: (ctx: ActiveContext, assetId: string) =>
+    [...contextKey(ctx), 'media', assetId] as const,
 };
 
 export const pollKeys = {
