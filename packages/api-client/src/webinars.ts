@@ -308,7 +308,10 @@ export function createWebinarRoomClient(connect: () => RoomSocket): WebinarRoomC
 // Transport of the `@nestself/video` webinar client
 // ---------------------------------------------------------------------------
 
-/** The webinar client's actions; the same list as `WEBINAR_ACTIONS` in `@nestself/video`. */
+/**
+ * The webinar client's actions: `WEBINAR_ACTIONS` of `@nestself/video`, and
+ * `webinar.end` (`POST /webinars/:id/end`), which the video package is adding.
+ */
 export const WEBINAR_TRANSPORT_ACTIONS = [
   'message.send',
   'message.publish',
@@ -322,6 +325,7 @@ export const WEBINAR_TRANSPORT_ACTIONS = [
   'poll.close',
   'poll.vote',
   'recording.stop',
+  'webinar.end',
 ] as const;
 export type WebinarTransportAction = (typeof WEBINAR_TRANSPORT_ACTIONS)[number];
 
@@ -339,6 +343,7 @@ export const WEBINAR_TRANSPORT_ROUTES = {
   'poll.close': { method: 'POST', path: '/webinars/:id/polls/:pollId/close' },
   'poll.vote': { method: 'POST', path: '/webinars/:id/polls/:pollId/vote' },
   'recording.stop': { method: 'POST', path: '/webinars/:id/recording/stop' },
+  'webinar.end': { method: 'POST', path: '/webinars/:id/end' },
 } as const satisfies Record<WebinarTransportAction, { method: 'POST' | 'DELETE'; path: string }>;
 
 /** An action's path ids and body; the webinar client validates the body against the contract first. */
@@ -409,6 +414,8 @@ export function createWebinarTransport({ api, rooms, webinarId, userId, onUnavai
             return api.vote(webinarId, pathId(input.pollId, action), input.body as WebinarPollVoteRequest);
           case 'recording.stop':
             return api.stopRecording(webinarId);
+          case 'webinar.end':
+            return api.end(webinarId);
         }
       };
       try {

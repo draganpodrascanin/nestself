@@ -400,6 +400,7 @@ describe('webinar transport', () => {
     'poll.close': { pollId: 'poll_1', body: {} },
     'poll.vote': { pollId: 'poll_1', body: { optionId: 'opt_a' } },
     'recording.stop': { body: {} },
+    'webinar.end': { body: {} },
   } as const;
 
   function transportSetup() {

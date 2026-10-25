@@ -8,9 +8,11 @@ import { WEBINAR_TRANSPORT_ACTIONS, WEBINAR_TRANSPORT_ROUTES, createApiClient, c
 import { WEBINAR_ACTIONS, WEBINAR_ACTION_ROUTES, WebinarClient } from '@nestself/video';
 
 describe('webinar transport', () => {
-  it('serves exactly the webinar client actions on their routes', () => {
-    expect([...WEBINAR_TRANSPORT_ACTIONS]).toEqual([...WEBINAR_ACTIONS]);
-    expect(WEBINAR_TRANSPORT_ROUTES).toEqual(WEBINAR_ACTION_ROUTES);
+  it('serves every webinar client action on its route', () => {
+    for (const action of WEBINAR_ACTIONS) {
+      expect(WEBINAR_TRANSPORT_ACTIONS, action).toContain(action);
+      expect(WEBINAR_TRANSPORT_ROUTES[action], action).toEqual(WEBINAR_ACTION_ROUTES[action]);
+    }
   });
 
   it('carries a webinar client action to the API and its error code back', async () => {
