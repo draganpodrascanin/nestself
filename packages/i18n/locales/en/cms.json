@@ -180,6 +180,8 @@
     "media_not_ready": "This media file is still being processed. Please wait.",
     "media_not_found": "Media file not found.",
     "media_type_rejected": "This file type is not accepted.",
+    "media_too_large": "This file exceeds the maximum upload size.",
+    "media_digest_mismatch": "The file was corrupted during upload. Please try again.",
     "content_invalid_block": "Content block is invalid.",
     "content_invalid_link": "A link in the content is not allowed.",
     "content_too_large": "The content exceeds the maximum size.",

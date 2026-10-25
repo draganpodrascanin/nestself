@@ -10,6 +10,7 @@
  * and transformPasted callback on the editor to normalize clipboard content.
  */
 import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Slice, Fragment, type Node as PmNode } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 
@@ -161,7 +162,8 @@ export const PasteNormalization = Extension.create({
   addProseMirrorPlugins() {
     const schema = this.editor.schema;
     return [
-      {
+      new Plugin({
+        key: new PluginKey('pasteNormalization'),
         props: {
           transformPasted(slice: Slice, _view: EditorView): Slice {
             const children: PmNode[] = [];
@@ -180,7 +182,7 @@ export const PasteNormalization = Extension.create({
             );
           },
         },
-      } as never,
+      }),
     ];
   },
 });

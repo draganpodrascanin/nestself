@@ -201,7 +201,13 @@ export const SAMPLE_PRINCIPALS: Record<
   },
   admin: {
     principal: adminPrincipal,
-    effectiveActions: actionsForTemplates('platform_owner'),
+    // Platform owner is the super-admin: grant every operations-workspace
+    // permission so the admin SPA is fully navigable in sample mode.
+    effectiveActions: actionsForTemplates(
+      'platform_owner',
+      'content_author', 'content_reviewer', 'content_publisher',
+      'editorial_lead',
+    ),
     availableContexts: [{ kind: 'operations' }],
   },
 };

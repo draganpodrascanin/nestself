@@ -180,6 +180,8 @@
     "media_not_ready": "Ez a médiafájl még feldolgozás alatt áll. Kérjük, várjon.",
     "media_not_found": "A médiafájl nem található.",
     "media_type_rejected": "Ez a fájltípus nem elfogadott.",
+    "media_too_large": "Ez a fájl meghaladja a maximális feltöltési méretet.",
+    "media_digest_mismatch": "A fájl megsérült a feltöltés során. Kérjük, próbálja újra.",
     "content_invalid_block": "A tartalomblokk érvénytelen.",
     "content_invalid_link": "A tartalomban lévő hivatkozás nem engedélyezett.",
     "content_too_large": "A tartalom meghaladja a maximális méretet.",

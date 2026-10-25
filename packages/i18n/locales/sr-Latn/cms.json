@@ -180,6 +180,8 @@
     "media_not_ready": "Ovaj fajl se još uvek obrađuje. Sačekajte.",
     "media_not_found": "Fajl nije pronađen.",
     "media_type_rejected": "Ovaj tip fajla nije prihvaćen.",
+    "media_too_large": "Ovaj fajl premašuje maksimalnu veličinu za otpremanje.",
+    "media_digest_mismatch": "Fajl je oštećen tokom otpremanja. Pokušajte ponovo.",
     "content_invalid_block": "Blok sadržaja je nevažeći.",
     "content_invalid_link": "Veza u sadržaju nije dozvoljena.",
     "content_too_large": "Sadržaj premašuje maksimalnu veličinu.",
