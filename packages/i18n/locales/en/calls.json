@@ -66,7 +66,12 @@
     "pickLabel": "Suggested times",
     "pickWindow": "{{date}}, {{from}} – {{to}}",
     "scheduledFor": "Scheduled for {{date}} at {{time}}.",
-    "expired": "The proposed time has passed. Your expert can propose a new one."
+    "expired": "The proposed time has passed. Your expert can propose a new one.",
+    "approvalRejected": "Your manager declined this follow-up: {{reason}}",
+    "approvalRejectedNoReason": "Your manager declined this follow-up.",
+    "approvalExpired": "The approval lapsed before the proposed time.",
+    "lookupFailed": "We could not check for an earlier follow-up proposal.",
+    "declinedToast": "The employee declined your follow-up proposal."
   },
   "approval": {
     "pending": "Waiting for a decision",
@@ -124,17 +129,18 @@
       "loadFailedTitle": "The policy could not be loaded",
       "sampleNote": "Sample mode: your choice is not saved.",
       "sampleSaved": "Sample mode: nothing was saved."
-    }
+    },
+    "sampleItemsNote": "Sample mode: these requests are fictional. Approving or declining sends nothing."
   },
   "webinar": {
     "register": "Register",
     "unregister": "Cancel registration",
     "join": "Join webinar",
-    "lobby": "Your camera stays off. You can write to the hosts and raise your hand to ask for the floor.",
+    "lobby": "Your camera stays off; you can write to the hosts and raise your hand to ask for the floor.",
     "started": "The webinar has started.",
     "ended": "The webinar has ended.",
     "recording": "Recording",
-    "recordingNotice": "This webinar is recorded. Only the presenters are on the recording.",
+    "recordingNotice": "This webinar is recorded; only the presenters are on the recording.",
     "recordingNoticeFloor": "Your voice is part of the recording. Your camera stays off.",
     "messageSubmitted": "Your message was sent to the hosts. It appears in the chat only if a host publishes it.",
     "messagePublished": "A host published your message.",
@@ -387,8 +393,9 @@
       "descriptionHint": "Optional. At most {{max}} characters per language.",
       "languages": {
         "en": "English",
-        "sr-Latn": "Engleski",
-        "hu": "Angol"
+        "sr-Latn": "Serbian (Latin)",
+        "sr-Cyrl": "Serbian (Cyrillic)",
+        "hu": "Hungarian"
       },
       "audience": "Audience",
       "audienceOrganizations": "Selected organisations",
@@ -425,8 +432,8 @@
       "prejoinTitle": "Check your setup",
       "registered": "Registered attendees: {{count}}",
       "end": "End webinar",
-      "endTitle": "End the webinar for everyone?",
-      "endBody": "Attendees leave the webinar and the recording stops.",
+      "endTitle": "End this webinar?",
+      "endBody": "All attendees will be disconnected.",
       "keepGoing": "Keep going",
       "ending": "Ending…",
       "pollTitle": "Prepare a poll",
@@ -446,7 +453,8 @@
     "keepGoing": "Keep the webinar going",
     "ending": "Ending…",
     "recordingFailed": "The recording failed. The webinar continues without a recording.",
-    "lobbyFloorRecording": "If a host gives you the floor, your voice is part of the recording."
+    "lobbyFloorRecording": "If a host gives you the floor, your voice is part of the recording.",
+    "captionsStatement": "Live captions are not yet available. Replays are captioned after review."
   },
   "workshop": {
     "join": "Join workshop",
@@ -538,7 +546,8 @@
     "rateLimited": "Too many attempts. Wait a minute, then try again.",
     "forbidden": "This action is not available to you.",
     "validation": "Something in the request was not accepted. Check it and try again.",
-    "conflict": "This step is not possible in the webinar's current state."
+    "conflict": "This step is not possible in the webinar's current state.",
+    "notEditable": "This webinar can no longer be changed this way. Organisation and audience changes are possible only while it is a draft."
   },
   "email": {
     "reminderSubject": "Your NestSelf session",
@@ -676,7 +685,9 @@
       "canceled": "Canceled",
       "declined": "Declined",
       "no_show": "Missed"
-    }
+    },
+    "nextLoadFailed": "Your next appointment could not be loaded.",
+    "openNext": "Open your next appointment"
   },
   "join": {
     "button": "Join session",
@@ -726,7 +737,8 @@
     "ended": "The consultation has ended",
     "left": "You left the consultation",
     "roomClosed": "The session time is over",
-    "backToAppointments": "Back to appointments"
+    "backToAppointments": "Back to appointments",
+    "proposalLookupFailed": "We could not check whether your expert proposed a follow-up."
   },
   "feedback": {
     "title": "How was your session?",
@@ -785,7 +797,9 @@
       "service": "Service",
       "time": "Time",
       "status": "Status",
-      "outcome": "Outcome"
+      "outcome": "Outcome",
+      "expert": "Expert",
+      "organisation": "Organisation"
     },
     "outcomeColumn": {
       "completed": "Delivered",
@@ -807,7 +821,23 @@
       "hint": "Visible to you only during this session. It is deleted when the session ends."
     },
     "recordOutcome": "Record the outcome",
-    "outcomeRecorded": "Outcome recorded: {{status}}"
+    "outcomeRecorded": "Outcome recorded: {{status}}",
+    "newConsultation": "New consultation",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "view": "View",
+    "readOnly": "Operations view: read-only. Only the assigned expert joins the call or records the outcome.",
+    "filters": {
+      "title": "Filters",
+      "organisation": "Organisation",
+      "allOrganisations": "All organisations",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply filters",
+      "clear": "Clear filters"
+    }
   },
   "outcome": {
     "title": "Record the session outcome",
@@ -830,5 +860,104 @@
   },
   "reminder": {
     "toast": "Reminder: your NestSelf session starts at {{time}}."
+  },
+  "support": {
+    "technicalContact": "Contact technical support: {{email}}"
+  },
+  "cancel": {
+    "button": "Cancel appointment",
+    "title": "Cancel this appointment?",
+    "body": "{{date}} at {{time}}. Both participants are told, and it cannot be undone.",
+    "confirm": "Cancel appointment",
+    "keep": "Keep appointment",
+    "done": "The appointment was canceled."
+  },
+  "create": {
+    "nav": "New consultation",
+    "title": "New consultation",
+    "intro": "Book a consultation for an employee of an organisation you support, with an expert approved for the service.",
+    "organisation": "Organisation",
+    "organisationId": "Organisation ID",
+    "employee": "Employee",
+    "employeeId": "Employee user ID",
+    "chooseEmployee": "Choose an employee",
+    "expert": "Expert",
+    "expertId": "Expert user ID",
+    "chooseExpert": "Choose an expert",
+    "category": "Service",
+    "date": "Date",
+    "start": "Start time",
+    "end": "End time",
+    "timeZone": "Times are in the {{timeZone}} time zone.",
+    "submit": "Book consultation",
+    "errorSummary": "The consultation was not booked",
+    "created": "Consultation booked for {{date}} at {{time}}.",
+    "membersFailed": "The organisation's members could not be loaded. Enter the employee's user ID instead.",
+    "errors": {
+      "required": "Fill in this field.",
+      "expertCategory": "This expert is not approved for this service.",
+      "notMember": "This employee is not a member of the organisation."
+    }
+  },
+  "supportCalls": {
+    "nav": "Call support",
+    "title": "Call diagnostics",
+    "intro": "Look up a call session to see its connection diagnostics. Every lookup is recorded.",
+    "sessionId": "Session ID",
+    "lookup": "Look up",
+    "required": "Enter a session ID.",
+    "notFound": "No call session with this ID is available to you.",
+    "sampleNote": "Sample mode: the diagnostics and reports are fictional.",
+    "sessionTitle": "Session {{id}}",
+    "notRecorded": "Not recorded",
+    "fields": {
+      "status": "Status",
+      "provider": "Provider",
+      "startedAt": "Started",
+      "endedAt": "Ended",
+      "appointment": "Appointment",
+      "providerMeetingId": "Provider meeting ID"
+    },
+    "participantsTitle": "Participants",
+    "participant": {
+      "role": "Role",
+      "joinedAt": "Joined",
+      "leftAt": "Left",
+      "reconnects": "Reconnections",
+      "quality": "Connection",
+      "errors": "Error codes",
+      "browser": "Browser",
+      "os": "Operating system"
+    },
+    "noParticipants": "Nobody joined this session.",
+    "reportsTitle": "Technical problem reports",
+    "reportsEmpty": "No technical problem reports.",
+    "reportsFailed": "The problem reports could not be loaded.",
+    "reportColumns": {
+      "reportedAt": "Reported",
+      "role": "Reported by",
+      "category": "Problem",
+      "summary": "Connection summary",
+      "session": "Session"
+    },
+    "summary": "{{duration}}, {{reconnects}} reconnections",
+    "openDiagnostics": "Diagnostics",
+    "sessionStatus": {
+      "pending": "Pending",
+      "creating": "Starting",
+      "active": "Active",
+      "ended": "Ended",
+      "failed": "Failed"
+    },
+    "roles": {
+      "expert": "Expert",
+      "employee": "Employee",
+      "presenter": "Presenter",
+      "moderator": "Moderator",
+      "attendee": "Attendee",
+      "facilitator": "Facilitator",
+      "participant": "Participant"
+    },
+    "reportsUnavailable": "Listing problem reports needs platform-wide diagnostics access. Look up a session by its ID above instead."
   }
 }
