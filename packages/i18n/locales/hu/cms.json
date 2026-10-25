@@ -1,0 +1,190 @@
+{
+  "title": "Tartalomkezelés",
+  "resources": {
+    "title": "Erőforrások",
+    "empty": "Még nincsenek erőforrások",
+    "emptyFiltered": "Egyetlen erőforrás sem felel meg a szűrőnek",
+    "create": "Erőforrás létrehozása",
+    "filter": {
+      "category": "Kategória",
+      "allCategories": "Minden kategória"
+    },
+    "columns": {
+      "title": "Cím",
+      "type": "Típus",
+      "category": "Kategória",
+      "state": "Állapot",
+      "locale": "Nyelv",
+      "updated": "Utolsó módosítás"
+    },
+    "state": {
+      "active": "Aktív",
+      "archived": "Archivált"
+    },
+    "type": {
+      "article": "Cikk",
+      "video": "Videó",
+      "audio": "Hang",
+      "practical": "Gyakorlati",
+      "qa": "Kérdés és válasz",
+      "collection": "Gyűjtemény"
+    }
+  },
+  "newResource": {
+    "title": "Cikk létrehozása",
+    "category": "Elsődleges kategória",
+    "categoryPlaceholder": "Válasszon kategóriát",
+    "contentType": "Tartalomtípus",
+    "audience": "Közönség",
+    "audienceAll": "Minden jogosult szervezet",
+    "audienceOrg": "Adott szervezet",
+    "audienceOrgUnit": "Adott szervezeti egység",
+    "locale": "Kezdő nyelv",
+    "initialTitle": "Cikk címe",
+    "initialTitlePlaceholder": "Írja be a cikk címét",
+    "reviewPolicy": "Ellenőrzési szabályzat",
+    "reviewPolicyProfessional": "Szakmai",
+    "reviewPolicyEditorial": "Szerkesztői",
+    "reviewDiscipline": "Ellenőrzési szakterület",
+    "disciplines": {
+      "psychological": "Pszichológiai",
+      "legal": "Jogi",
+      "financial": "Pénzügyi",
+      "health": "Egészségügyi",
+      "nutrition": "Táplálkozási",
+      "general": "Általános"
+    },
+    "submit": "Cikk létrehozása",
+    "success": "Cikk létrehozva"
+  },
+  "detail": {
+    "title": "Erőforrás részletei",
+    "metadata": "Metaadatok",
+    "variants": "Nyelvi változatok",
+    "publications": "Publikációk",
+    "noPublications": "Még nincs publikálva",
+    "addVariant": "Nyelv hozzáadása",
+    "publishNow": "Azonnali publikálás",
+    "publishSuccess": "Publikálva",
+    "publishRequiresApproval": "Mindhárom szerkesztett nyelvi változatot jóvá kell hagyni a publikálás előtt.",
+    "locale": {
+      "sr-Latn": "Szerb (latin)",
+      "hu": "Magyar",
+      "en": "Angol",
+      "sr-Cyrl": "Szerb (cirill)"
+    },
+    "revisionState": {
+      "draft": "Vázlat",
+      "in_review": "Ellenőrzés alatt",
+      "changes_requested": "Módosítás szükséges",
+      "approved": "Jóváhagyott",
+      "superseded": "Felváltott"
+    },
+    "publicationState": {
+      "scheduled": "Ütemezett",
+      "live": "Aktív",
+      "expired": "Lejárt",
+      "withdrawn": "Visszavont"
+    }
+  },
+  "editor": {
+    "title": "Változat szerkesztése",
+    "titleField": "Cím",
+    "titlePlaceholder": "Cikk címe",
+    "summary": "Összefoglaló",
+    "summaryPlaceholder": "A cikk rövid összefoglalója",
+    "outcome": "Várható eredmény",
+    "outcomePlaceholder": "Mit nyer az olvasó",
+    "duration": "Olvasási idő (másodperc)",
+    "durationPlaceholder": "Becsült időtartam másodpercben",
+    "sources": "Források",
+    "sourcesLabel": "Forrás neve",
+    "sourcesUrl": "Forrás URL (nem kötelező)",
+    "addSource": "Forrás hozzáadása",
+    "removeSource": "Forrás eltávolítása",
+    "body": "Szövegtörzs",
+    "bodyPlaceholder": "Kezdjen el írni...",
+    "save": "Mentés",
+    "submit": "Ellenőrzésre küldés",
+    "approve": "Jóváhagyás",
+    "returnChanges": "Visszaküldés módosításra",
+    "newRevision": "Új változat",
+    "preview": "Előnézet",
+    "previewClose": "Előnézet bezárása",
+    "previewWidth": {
+      "phone": "Telefon (320px)",
+      "mobile": "Mobil (390px)",
+      "desktop": "Asztali (1440px)"
+    },
+    "derivedLocaleNotice": "Ez a nyelv automatikusan készül a szerb (latin) változatból. Nem szerkeszthető közvetlenül.",
+    "saving": "Mentés...",
+    "saved": "Mentve",
+    "unsaved": "Mentetlen változtatások",
+    "autosaveError": "A mentés nem sikerült",
+    "validation": {
+      "title": "Érvényesítési hibák",
+      "titleRequired": "A cím megadása kötelező",
+      "titleTooLong": "A cím legfeljebb 200 karakter lehet",
+      "summaryTooLong": "Az összefoglaló legfeljebb 500 karakter lehet",
+      "outcomeTooLong": "Az eredmény legfeljebb 300 karakter lehet",
+      "bodyEmpty": "A szövegtörzs megadása kötelező",
+      "bodyInvalid": "A szövegtörzs hibákat tartalmaz"
+    },
+    "toolbar": {
+      "bold": "Félkövér",
+      "link": "Hivatkozás",
+      "linkUrl": "Hivatkozás URL",
+      "linkInsert": "Hivatkozás beszúrása",
+      "linkRemove": "Hivatkozás eltávolítása",
+      "heading": "Címsor",
+      "bulletList": "Felsorolás",
+      "orderedList": "Számozott lista",
+      "quote": "Idézet",
+      "image": "Kép",
+      "undo": "Visszavonás",
+      "redo": "Újra"
+    },
+    "image": {
+      "upload": "Kép feltöltése",
+      "uploading": "Feltöltés...",
+      "processing": "Feldolgozás...",
+      "altText": "Alternatív szöveg",
+      "caption": "Felirat (nem kötelező)",
+      "license": "Licenc",
+      "licenseOwned": "Saját",
+      "licenseLicensed": "Licencelt",
+      "licenseStock": "Stock",
+      "licenseGenerated": "Generált"
+    }
+  },
+  "sample": {
+    "saveNotice": "Próba mód: semmi nem lett mentve.",
+    "submitNotice": "Próba mód: semmi nem lett elküldve.",
+    "approveNotice": "Próba mód: semmi nem lett jóváhagyva.",
+    "publishNotice": "Próba mód: semmi nem lett publikálva.",
+    "uploadNotice": "Próba mód: semmi nem lett feltöltve."
+  },
+  "error": {
+    "unknown": "Váratlan hiba történt. Kérjük, próbálja újra.",
+    "content_edit_conflict": "Ezt a változatot valaki más módosította. Betöltheti a szerveren lévő verziót, vagy megtarthatja a sajátját és felülírhatja.",
+    "content_revision_locked": "Ez a változat zárolva van, és nem szerkeszthető.",
+    "content_not_submittable": "Ez a változat nem küldhető el jelenlegi állapotában.",
+    "content_self_review": "Nem ellenőrizheti a saját munkáját.",
+    "content_approval_stale": "A tartalom megváltozott a jóváhagyás óta. Ellenőrizze a változtatásokat, és hagyja jóvá újra.",
+    "content_locale_incomplete": "Nem minden szükséges nyelvi változat van kitöltve.",
+    "content_audience_exceeds_approval": "A közönség meghaladja a jóváhagyottat.",
+    "media_not_ready": "Ez a médiafájl még feldolgozás alatt áll. Kérjük, várjon.",
+    "media_not_found": "A médiafájl nem található.",
+    "media_type_rejected": "Ez a fájltípus nem elfogadott.",
+    "content_invalid_block": "A tartalomblokk érvénytelen.",
+    "content_invalid_link": "A tartalomban lévő hivatkozás nem engedélyezett.",
+    "content_too_large": "A tartalom meghaladja a maximális méretet.",
+    "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+    "not_found": "A kért erőforrás nem található.",
+    "validation": "A beküldött adatok érvénytelenek. Kérjük, ellenőrizze, és próbálja újra.",
+    "step_up_required": "A művelet befejezéséhez újbóli azonosítás szükséges.",
+    "network": "Hálózati hiba. Ellenőrizze a kapcsolatot, és próbálja újra.",
+    "conflict_reload": "Szerververzió betöltése",
+    "conflict_overwrite": "Sajátom megtartása és felülírás"
+  }
+}

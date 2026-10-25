@@ -22,3 +22,6 @@ export type {
 } from './types.ts';
 
 export { isSafeHref, isInternalHref, extractContentId, isSafeAppHref } from './safe-href.ts';
+
+export { ContentDetailLayout } from './ContentDetailLayout.tsx';
+export type { ContentDetailLayoutProps } from './ContentDetailLayout.tsx';

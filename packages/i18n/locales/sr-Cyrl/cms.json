@@ -1,0 +1,190 @@
+{
+  "title": "Управљање садржајем",
+  "resources": {
+    "title": "Ресурси",
+    "empty": "Још нема ресурса",
+    "emptyFiltered": "Ниједан ресурс не одговара филтеру",
+    "create": "Креирај ресурс",
+    "filter": {
+      "category": "Категорија",
+      "allCategories": "Све категорије"
+    },
+    "columns": {
+      "title": "Наслов",
+      "type": "Врста",
+      "category": "Категорија",
+      "state": "Стање",
+      "locale": "Језик",
+      "updated": "Последња измена"
+    },
+    "state": {
+      "active": "Активан",
+      "archived": "Архивиран"
+    },
+    "type": {
+      "article": "Чланак",
+      "video": "Видео",
+      "audio": "Аудио",
+      "practical": "Практично",
+      "qa": "Питања и одговори",
+      "collection": "Колекција"
+    }
+  },
+  "newResource": {
+    "title": "Креирај чланак",
+    "category": "Примарна категорија",
+    "categoryPlaceholder": "Изабери категорију",
+    "contentType": "Врста садржаја",
+    "audience": "Публика",
+    "audienceAll": "Све организације са приступом",
+    "audienceOrg": "Одређена организација",
+    "audienceOrgUnit": "Одређена организациона јединица",
+    "locale": "Почетни језик",
+    "initialTitle": "Наслов чланка",
+    "initialTitlePlaceholder": "Унесите наслов чланка",
+    "reviewPolicy": "Политика рецензије",
+    "reviewPolicyProfessional": "Стручна",
+    "reviewPolicyEditorial": "Уредништво",
+    "reviewDiscipline": "Област рецензије",
+    "disciplines": {
+      "psychological": "Психолошка",
+      "legal": "Правна",
+      "financial": "Финансијска",
+      "health": "Здравље",
+      "nutrition": "Исхрана",
+      "general": "Општа"
+    },
+    "submit": "Креирај чланак",
+    "success": "Чланак је креиран"
+  },
+  "detail": {
+    "title": "Детаљи ресурса",
+    "metadata": "Метаподаци",
+    "variants": "Језичке варијанте",
+    "publications": "Објаве",
+    "noPublications": "Још није објављен",
+    "addVariant": "Додај језик",
+    "publishNow": "Објави одмах",
+    "publishSuccess": "Објављено",
+    "publishRequiresApproval": "Све три ауторске варијанте морају бити одобрене пре објављивања.",
+    "locale": {
+      "sr-Latn": "Српски (латиница)",
+      "hu": "Мађарски",
+      "en": "Енглески",
+      "sr-Cyrl": "Српски (ћирилица)"
+    },
+    "revisionState": {
+      "draft": "Нацрт",
+      "in_review": "На рецензији",
+      "changes_requested": "Потребне измене",
+      "approved": "Одобрено",
+      "superseded": "Замењено"
+    },
+    "publicationState": {
+      "scheduled": "Заказано",
+      "live": "Активно",
+      "expired": "Истекло",
+      "withdrawn": "Повучено"
+    }
+  },
+  "editor": {
+    "title": "Измена варијанте",
+    "titleField": "Наслов",
+    "titlePlaceholder": "Наслов чланка",
+    "summary": "Кратак опис",
+    "summaryPlaceholder": "Кратак опис чланка",
+    "outcome": "Очекивани исход",
+    "outcomePlaceholder": "Шта ће читалац добити",
+    "duration": "Време читања (секунде)",
+    "durationPlaceholder": "Процењено трајање у секундама",
+    "sources": "Извори",
+    "sourcesLabel": "Назив извора",
+    "sourcesUrl": "УРЛ извора (опционо)",
+    "addSource": "Додај извор",
+    "removeSource": "Уклони извор",
+    "body": "Текст",
+    "bodyPlaceholder": "Почните да пишете...",
+    "save": "Сачувај",
+    "submit": "Пошаљи на рецензију",
+    "approve": "Одобри",
+    "returnChanges": "Врати на дораду",
+    "newRevision": "Нова ревизија",
+    "preview": "Преглед",
+    "previewClose": "Затвори преглед",
+    "previewWidth": {
+      "phone": "Телефон (320пx)",
+      "mobile": "Мобилни (390пx)",
+      "desktop": "Десктоп (1440пx)"
+    },
+    "derivedLocaleNotice": "Овај језик се аутоматски изводи из српског (латиница). Не може се директно уређивати.",
+    "saving": "Чување...",
+    "saved": "Сачувано",
+    "unsaved": "Несачуване измене",
+    "autosaveError": "Чување није успело",
+    "validation": {
+      "title": "Грешке у валидацији",
+      "titleRequired": "Наслов је обавезан",
+      "titleTooLong": "Наслов мора имати највише 200 знакова",
+      "summaryTooLong": "Опис мора имати највише 500 знакова",
+      "outcomeTooLong": "Исход мора имати највише 300 знакова",
+      "bodyEmpty": "Садржај текста је обавезан",
+      "bodyInvalid": "Садржај текста има грешке"
+    },
+    "toolbar": {
+      "bold": "Подебљан",
+      "link": "Веза",
+      "linkUrl": "УРЛ везе",
+      "linkInsert": "Уметни везу",
+      "linkRemove": "Уклони везу",
+      "heading": "Наслов",
+      "bulletList": "Листа са тачкама",
+      "orderedList": "Нумерисана листа",
+      "quote": "Цитат",
+      "image": "Слика",
+      "undo": "Поништи",
+      "redo": "Понови"
+    },
+    "image": {
+      "upload": "Отпреми слику",
+      "uploading": "Отпремање...",
+      "processing": "Обрада...",
+      "altText": "Алтернативни текст",
+      "caption": "Опис (опционо)",
+      "license": "Лиценца",
+      "licenseOwned": "Сопствена",
+      "licenseLicensed": "Лиценцирана",
+      "licenseStock": "Стоцк",
+      "licenseGenerated": "Генерисана"
+    }
+  },
+  "sample": {
+    "saveNotice": "Пробни режим: ништа није сачувано.",
+    "submitNotice": "Пробни режим: ништа није послато.",
+    "approveNotice": "Пробни режим: ништа није одобрено.",
+    "publishNotice": "Пробни режим: ништа није објављено.",
+    "uploadNotice": "Пробни режим: ништа није отпремљено."
+  },
+  "error": {
+    "unknown": "Дошло је до неочекиване грешке. Покушајте поново.",
+    "content_edit_conflict": "Ову ревизију је неко други изменио. Можете учитати верзију са сервера или задржати своју и преписати.",
+    "content_revision_locked": "Ова ревизија је закључана и не може се уређивати.",
+    "content_not_submittable": "Ова ревизија не може бити послата у тренутном стању.",
+    "content_self_review": "Не можете рецензирати сопствени рад.",
+    "content_approval_stale": "Садржај је измењен од последњег одобрења. Прегледајте измене и поново одобрите.",
+    "content_locale_incomplete": "Нису попуњене све потребне језичке варијанте.",
+    "content_audience_exceeds_approval": "Публика премашује оно што је одобрено.",
+    "media_not_ready": "Овај фајл се још увек обрађује. Сачекајте.",
+    "media_not_found": "Фајл није пронађен.",
+    "media_type_rejected": "Овај тип фајла није прихваћен.",
+    "content_invalid_block": "Блок садржаја је неважећи.",
+    "content_invalid_link": "Веза у садржају није дозвољена.",
+    "content_too_large": "Садржај премашује максималну величину.",
+    "forbidden": "Немате дозволу за ову радњу.",
+    "not_found": "Тражени ресурс није пронађен.",
+    "validation": "Послати подаци нису исправни. Проверите и покушајте поново.",
+    "step_up_required": "Потребна је поновна провера идентитета за ову радњу.",
+    "network": "Грешка у мрежи. Проверите везу и покушајте поново.",
+    "conflict_reload": "Учитај верзију са сервера",
+    "conflict_overwrite": "Задржи моје и препиши"
+  }
+}

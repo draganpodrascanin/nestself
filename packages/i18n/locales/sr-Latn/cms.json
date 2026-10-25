@@ -1,0 +1,190 @@
+{
+  "title": "Upravljanje sadržajem",
+  "resources": {
+    "title": "Resursi",
+    "empty": "Još nema resursa",
+    "emptyFiltered": "Nijedan resurs ne odgovara filteru",
+    "create": "Kreiraj resurs",
+    "filter": {
+      "category": "Kategorija",
+      "allCategories": "Sve kategorije"
+    },
+    "columns": {
+      "title": "Naslov",
+      "type": "Vrsta",
+      "category": "Kategorija",
+      "state": "Stanje",
+      "locale": "Jezik",
+      "updated": "Poslednja izmena"
+    },
+    "state": {
+      "active": "Aktivan",
+      "archived": "Arhiviran"
+    },
+    "type": {
+      "article": "Članak",
+      "video": "Video",
+      "audio": "Audio",
+      "practical": "Praktično",
+      "qa": "Pitanja i odgovori",
+      "collection": "Kolekcija"
+    }
+  },
+  "newResource": {
+    "title": "Kreiraj članak",
+    "category": "Primarna kategorija",
+    "categoryPlaceholder": "Izaberi kategoriju",
+    "contentType": "Vrsta sadržaja",
+    "audience": "Publika",
+    "audienceAll": "Sve organizacije sa pristupom",
+    "audienceOrg": "Određena organizacija",
+    "audienceOrgUnit": "Određena organizaciona jedinica",
+    "locale": "Početni jezik",
+    "initialTitle": "Naslov članka",
+    "initialTitlePlaceholder": "Unesite naslov članka",
+    "reviewPolicy": "Politika recenzije",
+    "reviewPolicyProfessional": "Stručna",
+    "reviewPolicyEditorial": "Uredništvo",
+    "reviewDiscipline": "Oblast recenzije",
+    "disciplines": {
+      "psychological": "Psihološka",
+      "legal": "Pravna",
+      "financial": "Finansijska",
+      "health": "Zdravlje",
+      "nutrition": "Ishrana",
+      "general": "Opšta"
+    },
+    "submit": "Kreiraj članak",
+    "success": "Članak je kreiran"
+  },
+  "detail": {
+    "title": "Detalji resursa",
+    "metadata": "Metapodaci",
+    "variants": "Jezičke varijante",
+    "publications": "Objave",
+    "noPublications": "Još nije objavljen",
+    "addVariant": "Dodaj jezik",
+    "publishNow": "Objavi odmah",
+    "publishSuccess": "Objavljeno",
+    "publishRequiresApproval": "Sve tri autorske varijante moraju biti odobrene pre objavljivanja.",
+    "locale": {
+      "sr-Latn": "Srpski (latinica)",
+      "hu": "Mađarski",
+      "en": "Engleski",
+      "sr-Cyrl": "Srpski (ćirilica)"
+    },
+    "revisionState": {
+      "draft": "Nacrt",
+      "in_review": "Na recenziji",
+      "changes_requested": "Potrebne izmene",
+      "approved": "Odobreno",
+      "superseded": "Zamenjeno"
+    },
+    "publicationState": {
+      "scheduled": "Zakazano",
+      "live": "Aktivno",
+      "expired": "Isteklo",
+      "withdrawn": "Povučeno"
+    }
+  },
+  "editor": {
+    "title": "Izmena varijante",
+    "titleField": "Naslov",
+    "titlePlaceholder": "Naslov članka",
+    "summary": "Kratak opis",
+    "summaryPlaceholder": "Kratak opis članka",
+    "outcome": "Očekivani ishod",
+    "outcomePlaceholder": "Šta će čitalac dobiti",
+    "duration": "Vreme čitanja (sekunde)",
+    "durationPlaceholder": "Procenjeno trajanje u sekundama",
+    "sources": "Izvori",
+    "sourcesLabel": "Naziv izvora",
+    "sourcesUrl": "URL izvora (opciono)",
+    "addSource": "Dodaj izvor",
+    "removeSource": "Ukloni izvor",
+    "body": "Tekst",
+    "bodyPlaceholder": "Počnite da pišete...",
+    "save": "Sačuvaj",
+    "submit": "Pošalji na recenziju",
+    "approve": "Odobri",
+    "returnChanges": "Vrati na doradu",
+    "newRevision": "Nova revizija",
+    "preview": "Pregled",
+    "previewClose": "Zatvori pregled",
+    "previewWidth": {
+      "phone": "Telefon (320px)",
+      "mobile": "Mobilni (390px)",
+      "desktop": "Desktop (1440px)"
+    },
+    "derivedLocaleNotice": "Ovaj jezik se automatski izvodi iz srpskog (latinica). Ne može se direktno uređivati.",
+    "saving": "Čuvanje...",
+    "saved": "Sačuvano",
+    "unsaved": "Nesačuvane izmene",
+    "autosaveError": "Čuvanje nije uspelo",
+    "validation": {
+      "title": "Greške u validaciji",
+      "titleRequired": "Naslov je obavezan",
+      "titleTooLong": "Naslov mora imati najviše 200 znakova",
+      "summaryTooLong": "Opis mora imati najviše 500 znakova",
+      "outcomeTooLong": "Ishod mora imati najviše 300 znakova",
+      "bodyEmpty": "Sadržaj teksta je obavezan",
+      "bodyInvalid": "Sadržaj teksta ima greške"
+    },
+    "toolbar": {
+      "bold": "Podebljan",
+      "link": "Veza",
+      "linkUrl": "URL veze",
+      "linkInsert": "Umetni vezu",
+      "linkRemove": "Ukloni vezu",
+      "heading": "Naslov",
+      "bulletList": "Lista sa tačkama",
+      "orderedList": "Numerisana lista",
+      "quote": "Citat",
+      "image": "Slika",
+      "undo": "Poništi",
+      "redo": "Ponovi"
+    },
+    "image": {
+      "upload": "Otpremi sliku",
+      "uploading": "Otpremanje...",
+      "processing": "Obrada...",
+      "altText": "Alternativni tekst",
+      "caption": "Opis (opciono)",
+      "license": "Licenca",
+      "licenseOwned": "Sopstvena",
+      "licenseLicensed": "Licencirana",
+      "licenseStock": "Stock",
+      "licenseGenerated": "Generisana"
+    }
+  },
+  "sample": {
+    "saveNotice": "Probni režim: ništa nije sačuvano.",
+    "submitNotice": "Probni režim: ništa nije poslato.",
+    "approveNotice": "Probni režim: ništa nije odobreno.",
+    "publishNotice": "Probni režim: ništa nije objavljeno.",
+    "uploadNotice": "Probni režim: ništa nije otpremljeno."
+  },
+  "error": {
+    "unknown": "Došlo je do neočekivane greške. Pokušajte ponovo.",
+    "content_edit_conflict": "Ovu reviziju je neko drugi izmenio. Možete učitati verziju sa servera ili zadržati svoju i prepisati.",
+    "content_revision_locked": "Ova revizija je zaključana i ne može se uređivati.",
+    "content_not_submittable": "Ova revizija ne može biti poslata u trenutnom stanju.",
+    "content_self_review": "Ne možete recenzirati sopstveni rad.",
+    "content_approval_stale": "Sadržaj je izmenjen od poslednjeg odobrenja. Pregledajte izmene i ponovo odobrite.",
+    "content_locale_incomplete": "Nisu popunjene sve potrebne jezičke varijante.",
+    "content_audience_exceeds_approval": "Publika premašuje ono što je odobreno.",
+    "media_not_ready": "Ovaj fajl se još uvek obrađuje. Sačekajte.",
+    "media_not_found": "Fajl nije pronađen.",
+    "media_type_rejected": "Ovaj tip fajla nije prihvaćen.",
+    "content_invalid_block": "Blok sadržaja je nevažeći.",
+    "content_invalid_link": "Veza u sadržaju nije dozvoljena.",
+    "content_too_large": "Sadržaj premašuje maksimalnu veličinu.",
+    "forbidden": "Nemate dozvolu za ovu radnju.",
+    "not_found": "Traženi resurs nije pronađen.",
+    "validation": "Poslati podaci nisu ispravni. Proverite i pokušajte ponovo.",
+    "step_up_required": "Potrebna je ponovna provera identiteta za ovu radnju.",
+    "network": "Greška u mreži. Proverite vezu i pokušajte ponovo.",
+    "conflict_reload": "Učitaj verziju sa servera",
+    "conflict_overwrite": "Zadrži moje i prepiši"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "title": "Content management",
+  "resources": {
+    "title": "Resources",
+    "empty": "No resources yet",
+    "emptyFiltered": "No resources match this filter",
+    "create": "Create resource",
+    "filter": {
+      "category": "Category",
+      "allCategories": "All categories"
+    },
+    "columns": {
+      "title": "Title",
+      "type": "Type",
+      "category": "Category",
+      "state": "State",
+      "locale": "Locale",
+      "updated": "Last updated"
+    },
+    "state": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "type": {
+      "article": "Article",
+      "video": "Video",
+      "audio": "Audio",
+      "practical": "Practical",
+      "qa": "Q&A",
+      "collection": "Collection"
+    }
+  },
+  "newResource": {
+    "title": "Create article",
+    "category": "Primary category",
+    "categoryPlaceholder": "Select a category",
+    "contentType": "Content type",
+    "audience": "Audience",
+    "audienceAll": "All eligible organisations",
+    "audienceOrg": "Specific organisation",
+    "audienceOrgUnit": "Specific organisational unit",
+    "locale": "Initial language",
+    "initialTitle": "Article title",
+    "initialTitlePlaceholder": "Enter a title for the article",
+    "reviewPolicy": "Review policy",
+    "reviewPolicyProfessional": "Professional",
+    "reviewPolicyEditorial": "Editorial",
+    "reviewDiscipline": "Review discipline",
+    "disciplines": {
+      "psychological": "Psychological",
+      "legal": "Legal",
+      "financial": "Financial",
+      "health": "Health",
+      "nutrition": "Nutrition",
+      "general": "General"
+    },
+    "submit": "Create article",
+    "success": "Article created"
+  },
+  "detail": {
+    "title": "Resource detail",
+    "metadata": "Metadata",
+    "variants": "Language variants",
+    "publications": "Publications",
+    "noPublications": "Not yet published",
+    "addVariant": "Add language",
+    "publishNow": "Publish now",
+    "publishSuccess": "Published",
+    "publishRequiresApproval": "All three authored locales must be approved before publishing.",
+    "locale": {
+      "sr-Latn": "Serbian (Latin)",
+      "hu": "Hungarian",
+      "en": "English",
+      "sr-Cyrl": "Serbian (Cyrillic)"
+    },
+    "revisionState": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "changes_requested": "Changes requested",
+      "approved": "Approved",
+      "superseded": "Superseded"
+    },
+    "publicationState": {
+      "scheduled": "Scheduled",
+      "live": "Live",
+      "expired": "Expired",
+      "withdrawn": "Withdrawn"
+    }
+  },
+  "editor": {
+    "title": "Edit variant",
+    "titleField": "Title",
+    "titlePlaceholder": "Article title",
+    "summary": "Summary",
+    "summaryPlaceholder": "A short summary of the article",
+    "outcome": "Expected outcome",
+    "outcomePlaceholder": "What the reader will gain",
+    "duration": "Reading time (seconds)",
+    "durationPlaceholder": "Estimated duration in seconds",
+    "sources": "Sources",
+    "sourcesLabel": "Source label",
+    "sourcesUrl": "Source URL (optional)",
+    "addSource": "Add source",
+    "removeSource": "Remove source",
+    "body": "Body",
+    "bodyPlaceholder": "Start writing...",
+    "save": "Save",
+    "submit": "Submit for review",
+    "approve": "Approve",
+    "returnChanges": "Return for changes",
+    "newRevision": "New revision",
+    "preview": "Preview",
+    "previewClose": "Close preview",
+    "previewWidth": {
+      "phone": "Phone (320px)",
+      "mobile": "Mobile (390px)",
+      "desktop": "Desktop (1440px)"
+    },
+    "derivedLocaleNotice": "This locale is automatically derived from Serbian (Latin). It cannot be edited directly.",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "unsaved": "Unsaved changes",
+    "autosaveError": "Save failed",
+    "validation": {
+      "title": "Validation errors",
+      "titleRequired": "Title is required",
+      "titleTooLong": "Title must be at most 200 characters",
+      "summaryTooLong": "Summary must be at most 500 characters",
+      "outcomeTooLong": "Outcome must be at most 300 characters",
+      "bodyEmpty": "Body content is required",
+      "bodyInvalid": "Body content has errors"
+    },
+    "toolbar": {
+      "bold": "Bold",
+      "link": "Link",
+      "linkUrl": "Link URL",
+      "linkInsert": "Insert link",
+      "linkRemove": "Remove link",
+      "heading": "Heading",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "quote": "Quote",
+      "image": "Image",
+      "undo": "Undo",
+      "redo": "Redo"
+    },
+    "image": {
+      "upload": "Upload image",
+      "uploading": "Uploading...",
+      "processing": "Processing...",
+      "altText": "Alt text",
+      "caption": "Caption (optional)",
+      "license": "Licence",
+      "licenseOwned": "Owned",
+      "licenseLicensed": "Licensed",
+      "licenseStock": "Stock",
+      "licenseGenerated": "Generated"
+    }
+  },
+  "sample": {
+    "saveNotice": "Sample mode: nothing was saved.",
+    "submitNotice": "Sample mode: nothing was submitted.",
+    "approveNotice": "Sample mode: nothing was approved.",
+    "publishNotice": "Sample mode: nothing was published.",
+    "uploadNotice": "Sample mode: nothing was uploaded."
+  },
+  "error": {
+    "unknown": "An unexpected error occurred. Please try again.",
+    "content_edit_conflict": "This revision was changed by someone else. You can reload the server version or keep yours and overwrite.",
+    "content_revision_locked": "This revision is locked and cannot be edited.",
+    "content_not_submittable": "This revision cannot be submitted in its current state.",
+    "content_self_review": "You cannot review your own work.",
+    "content_approval_stale": "The content has changed since approval. Review the changes and approve again.",
+    "content_locale_incomplete": "Not all required language variants have been completed.",
+    "content_audience_exceeds_approval": "The audience exceeds what has been approved.",
+    "media_not_ready": "This media file is still being processed. Please wait.",
+    "media_not_found": "Media file not found.",
+    "media_type_rejected": "This file type is not accepted.",
+    "content_invalid_block": "Content block is invalid.",
+    "content_invalid_link": "A link in the content is not allowed.",
+    "content_too_large": "The content exceeds the maximum size.",
+    "forbidden": "You do not have permission to perform this action.",
+    "not_found": "The requested resource was not found.",
+    "validation": "The submitted data is invalid. Please check and try again.",
+    "step_up_required": "Re-authentication is required to complete this action.",
+    "network": "Network error. Check your connection and try again.",
+    "conflict_reload": "Reload server version",
+    "conflict_overwrite": "Keep mine and overwrite"
+  }
+}
