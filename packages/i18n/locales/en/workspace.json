@@ -486,5 +486,74 @@
       "noChange": "Enter a different name.",
       "parentRequired": "Choose the new parent unit."
     }
+  },
+  "cases": {
+    "nav": "Cases",
+    "title": "Assigned cases",
+    "lead": "Conversations of the cases assigned to you. The list shows details only; open a case to read its messages.",
+    "caption": "Conversations of your assigned cases",
+    "empty": "No cases are assigned to you.",
+    "loading": "Loading",
+    "sampleNote": "Sample data: these conversations are fixtures. Nobody wrote them and nothing is read from a server.",
+    "columns": {
+      "case": "Case",
+      "employee": "Employee",
+      "expert": "Expert",
+      "started": "Started",
+      "messages": "Messages",
+      "open": "Conversation"
+    },
+    "open": "Open",
+    "openFor": "Open the conversation of case {{id}}",
+    "paging": {
+      "showing": "Showing {{shown}}",
+      "showingMore": "Showing {{shown}}. More are available.",
+      "loadMore": "Load more",
+      "loadMoreFailed": "More conversations could not be loaded"
+    },
+    "back": "Back to assigned cases",
+    "detailTitle": "Case {{id}}",
+    "detailTitleLoading": "Case conversation",
+    "conversationId": "Conversation {{id}}",
+    "retry": "Try again",
+    "messages": {
+      "heading": "Messages",
+      "label": "Messages, oldest first",
+      "readOnly": "Read only. Replies are not sent from this page.",
+      "empty": "This conversation has no messages yet.",
+      "you": "You",
+      "participant": "Participant {{id}}"
+    },
+    "intake": {
+      "heading": "Intake record",
+      "lead": "Enter the intake record ID of this case to read it. You may be asked to confirm it is you.",
+      "idLabel": "Intake record ID",
+      "required": "Enter the intake record ID.",
+      "open": "Open intake",
+      "errorTitle": "The intake record could not be opened",
+      "recorded": "Recorded {{when}}"
+    },
+    "errors": {
+      "listTitle": "The conversations could not be loaded",
+      "readTitle": "The conversation could not be opened",
+      "contextTitle": "The expert area could not be opened",
+      "context": "Your session could not be moved to the expert context. Choose Expert in the context menu at the top, or try again later.",
+      "stepUpCancelledTitle": "Verification cancelled",
+      "stepUpCancelled": "This content is shown only after you confirm it is you. Nothing was opened.",
+      "forbidden": "You do not have access to this record.",
+      "notFound": "This record does not exist or is no longer available.",
+      "rateLimited": "Too many requests in a short time. Wait a moment and try again.",
+      "unknown": "Something went wrong. Please try again."
+    }
+  },
+  "conversations": {
+    "nav": "Conversations",
+    "title": "My conversations",
+    "lead": "Your conversations with experts. Open one to read its messages.",
+    "caption": "Your conversations with experts",
+    "empty": "You have no conversations with an expert yet.",
+    "back": "Back to my conversations",
+    "detailTitle": "Conversation about case {{id}}",
+    "detailTitleLoading": "Conversation"
   }
 }

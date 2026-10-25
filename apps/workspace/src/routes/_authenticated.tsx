@@ -13,12 +13,15 @@ import {
   ShieldCheck,
   UsersThree,
   TreeStructure,
+  Briefcase,
+  ChatsCircle,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { UserMenu } from '../features/account/user-menu';
+import { ContextPicker } from '../features/context/context-picker';
 import { isSampleDataMode } from '../data-source';
 
 export const Route = createFileRoute('/_authenticated')({
@@ -86,7 +89,33 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...peopleNav, ...orgUnitsNav, ...accessNav];
+  // Expert area: an expert record, or the assigned-read action in this context.
+  const showCases = principal
+    ? principal.expert !== null || can(principal, 'conversation.read.assigned', undefined, effectiveActions)
+    : false;
+  const casesNav = showCases
+    ? [{ to: '/cases' as const, icon: Briefcase, label: t('workspace:cases.nav') }]
+    : [];
+
+  // The participant list, outside the expert context (an expert reads cases there).
+  const showConversations = principal
+    ? principal.context.kind !== 'expert' &&
+      can(principal, 'conversation.participate', undefined, effectiveActions)
+    : false;
+  const conversationsNav = showConversations
+    ? [{ to: '/conversations' as const, icon: ChatsCircle, label: t('workspace:conversations.nav') }]
+    : [];
+
+  const allNavItems = [
+    ...navItems,
+    ...conversationsNav,
+    ...casesNav,
+    ...managerNav,
+    ...hrNav,
+    ...peopleNav,
+    ...orgUnitsNav,
+    ...accessNav,
+  ];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [
@@ -129,6 +158,7 @@ function AuthenticatedLayout() {
       <p className="type-label text-primary">NestSelf</p>
       <div className="flex items-center gap-4">
         <ApiStatus />
+        <ContextPicker sampleMode={isSampleDataMode} />
         <UserMenu />
       </div>
     </div>

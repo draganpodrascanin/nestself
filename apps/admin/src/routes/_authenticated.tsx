@@ -7,6 +7,7 @@ import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { ApiStatus } from './__root';
 import { UserMenu } from '../features/account/user-menu';
+import { ContextPicker } from '../features/context/context-picker';
 
 function PermissionBlock() {
   const { t } = useTranslation('common');
@@ -87,6 +88,7 @@ function AuthenticatedLayout() {
           <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
           <div className="flex items-center gap-4">
             <ApiStatus />
+            <ContextPicker sampleMode={isSampleDataMode} />
             <UserMenu />
           </div>
         </div>

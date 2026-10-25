@@ -67,6 +67,9 @@ export function useOperationsContext(sampleMode: boolean): { ready: boolean; err
   const [error, setError] = useState<AccessErrorKey | null>(null);
 
   useEffect(() => {
+    // Once this mount has seen the operations context it never switches
+    // again: a later choice in the header context picker stands.
+    if (inOperations) switchRequested.current = true;
     if (sampleMode || !principal || inOperations || switchRequested.current) return;
     switchRequested.current = true;
     switchToOperations(switchContext).catch((err: unknown) => {

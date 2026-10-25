@@ -482,5 +482,74 @@
       "noChange": "Adj meg másik nevet.",
       "parentRequired": "Válaszd ki az új szülőegységet."
     }
+  },
+  "cases": {
+    "nav": "Esetek",
+    "title": "Hozzárendelt esetek",
+    "lead": "Az Önhöz rendelt esetek beszélgetései. A lista csak adatokat mutat; nyisson meg egy esetet az üzenetek olvasásához.",
+    "caption": "Hozzárendelt eseteinek beszélgetései",
+    "empty": "Nincs Önhöz rendelt eset.",
+    "loading": "Betöltés",
+    "sampleNote": "Mintaadatok: ezek a beszélgetések kitaláltak. Senki sem írta őket, és semmit sem olvasunk szerverről.",
+    "columns": {
+      "case": "Eset",
+      "employee": "Munkavállaló",
+      "expert": "Szakértő",
+      "started": "Kezdés",
+      "messages": "Üzenetek",
+      "open": "Beszélgetés"
+    },
+    "open": "Megnyitás",
+    "openFor": "A(z) {{id}} eset beszélgetésének megnyitása",
+    "paging": {
+      "showing": "Megjelenítve: {{shown}}",
+      "showingMore": "Megjelenítve: {{shown}}. Továbbiak is elérhetők.",
+      "loadMore": "Továbbiak betöltése",
+      "loadMoreFailed": "A további beszélgetéseket nem sikerült betölteni"
+    },
+    "back": "Vissza a hozzárendelt esetekhez",
+    "detailTitle": "{{id}} eset",
+    "detailTitleLoading": "Eset beszélgetése",
+    "conversationId": "{{id}} beszélgetés",
+    "retry": "Újrapróbálás",
+    "messages": {
+      "heading": "Üzenetek",
+      "label": "Üzenetek, a legrégebbitől",
+      "readOnly": "Csak olvasható. Erről az oldalról nem küldhető válasz.",
+      "empty": "Ebben a beszélgetésben még nincs üzenet.",
+      "you": "Ön",
+      "participant": "{{id}} résztvevő"
+    },
+    "intake": {
+      "heading": "Felvételi adatlap",
+      "lead": "Adja meg az eset felvételi adatlapjának azonosítóját az olvasáshoz. Előfordulhat, hogy meg kell erősítenie személyazonosságát.",
+      "idLabel": "Felvételi adatlap azonosítója",
+      "required": "Adja meg a felvételi adatlap azonosítóját.",
+      "open": "Felvételi adatlap megnyitása",
+      "errorTitle": "A felvételi adatlapot nem sikerült megnyitni",
+      "recorded": "Rögzítve: {{when}}"
+    },
+    "errors": {
+      "listTitle": "A beszélgetéseket nem sikerült betölteni",
+      "readTitle": "A beszélgetést nem sikerült megnyitni",
+      "contextTitle": "A szakértői terület nem nyitható meg",
+      "context": "A munkamenetet nem sikerült szakértői kontextusra váltani. Válassza a Szakértő lehetőséget a felső kontextusmenüben, vagy próbálja újra később.",
+      "stepUpCancelledTitle": "Az ellenőrzés megszakítva",
+      "stepUpCancelled": "Ez a tartalom csak a személyazonosság megerősítése után jelenik meg. Semmi sem nyílt meg.",
+      "forbidden": "Nincs hozzáférése ehhez az adathoz.",
+      "notFound": "Ez az adat nem létezik, vagy már nem érhető el.",
+      "rateLimited": "Túl sok kérés rövid idő alatt. Várjon egy kicsit, és próbálja újra.",
+      "unknown": "Hiba történt. Kérjük, próbálja újra."
+    }
+  },
+  "conversations": {
+    "nav": "Beszélgetések",
+    "title": "Beszélgetéseim",
+    "lead": "Beszélgetései szakértőkkel. Nyisson meg egyet az üzenetek olvasásához.",
+    "caption": "Beszélgetései szakértőkkel",
+    "empty": "Még nincs beszélgetése szakértővel.",
+    "back": "Vissza a beszélgetéseimhez",
+    "detailTitle": "Beszélgetés a(z) {{id}} esetről",
+    "detailTitleLoading": "Beszélgetés"
   }
 }

@@ -41,6 +41,9 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
   const switchRequested = useRef(false);
   const [switchError, setSwitchError] = useState<AccessErrorKey | null>(null);
   useEffect(() => {
+    // Once this mount has seen the organization context it never switches
+    // again: a later choice in the header context picker stands.
+    if (inOrgContext) switchRequested.current = true;
     if (sampleMode || orgId === null || inOrgContext || switchRequested.current) return;
     switchRequested.current = true;
     switchContext({ kind: 'organization', orgId }).catch((err: unknown) => {

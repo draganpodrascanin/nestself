@@ -486,5 +486,74 @@
       "noChange": "Unesi drugačiji naziv.",
       "parentRequired": "Izaberi novu nadređenu jedinicu."
     }
+  },
+  "cases": {
+    "nav": "Slučajevi",
+    "title": "Dodeljeni slučajevi",
+    "lead": "Razgovori slučajeva koji su vam dodeljeni. Lista prikazuje samo podatke; otvorite slučaj da pročitate poruke.",
+    "caption": "Razgovori vaših dodeljenih slučajeva",
+    "empty": "Nijedan slučaj vam nije dodeljen.",
+    "loading": "Učitavanje",
+    "sampleNote": "Primer podataka: ovi razgovori su fiktivni. Niko ih nije napisao i ništa se ne čita sa servera.",
+    "columns": {
+      "case": "Slučaj",
+      "employee": "Zaposleni",
+      "expert": "Stručnjak",
+      "started": "Započet",
+      "messages": "Poruke",
+      "open": "Razgovor"
+    },
+    "open": "Otvori",
+    "openFor": "Otvori razgovor slučaja {{id}}",
+    "paging": {
+      "showing": "Prikazano: {{shown}}",
+      "showingMore": "Prikazano: {{shown}}. Ima još.",
+      "loadMore": "Učitaj još",
+      "loadMoreFailed": "Ostali razgovori nisu mogli da se učitaju"
+    },
+    "back": "Nazad na dodeljene slučajeve",
+    "detailTitle": "Slučaj {{id}}",
+    "detailTitleLoading": "Razgovor slučaja",
+    "conversationId": "Razgovor {{id}}",
+    "retry": "Pokušaj ponovo",
+    "messages": {
+      "heading": "Poruke",
+      "label": "Poruke, od najstarije",
+      "readOnly": "Samo za čitanje. Odgovori se ne šalju sa ove stranice.",
+      "empty": "Ovaj razgovor još nema poruka.",
+      "you": "Vi",
+      "participant": "Učesnik {{id}}"
+    },
+    "intake": {
+      "heading": "Prijemni zapis",
+      "lead": "Unesite ID prijemnog zapisa ovog slučaja da biste ga pročitali. Možda će biti potrebno da potvrdite identitet.",
+      "idLabel": "ID prijemnog zapisa",
+      "required": "Unesite ID prijemnog zapisa.",
+      "open": "Otvori prijemni zapis",
+      "errorTitle": "Prijemni zapis nije mogao da se otvori",
+      "recorded": "Zabeleženo {{when}}"
+    },
+    "errors": {
+      "listTitle": "Razgovori nisu mogli da se učitaju",
+      "readTitle": "Razgovor nije mogao da se otvori",
+      "contextTitle": "Oblast za stručnjake nije mogla da se otvori",
+      "context": "Sesija nije mogla da se prebaci u kontekst stručnjaka. Izaberite Stručnjak u meniju konteksta na vrhu ili pokušajte kasnije.",
+      "stepUpCancelledTitle": "Potvrda je otkazana",
+      "stepUpCancelled": "Ovaj sadržaj se prikazuje tek kada potvrdite identitet. Ništa nije otvoreno.",
+      "forbidden": "Nemate pristup ovom zapisu.",
+      "notFound": "Ovaj zapis ne postoji ili više nije dostupan.",
+      "rateLimited": "Previše zahteva u kratkom roku. Sačekajte trenutak i pokušajte ponovo.",
+      "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
+    }
+  },
+  "conversations": {
+    "nav": "Razgovori",
+    "title": "Moji razgovori",
+    "lead": "Vaši razgovori sa stručnjacima. Otvorite razgovor da pročitate poruke.",
+    "caption": "Vaši razgovori sa stručnjacima",
+    "empty": "Još nemate razgovor sa stručnjakom.",
+    "back": "Nazad na moje razgovore",
+    "detailTitle": "Razgovor o slučaju {{id}}",
+    "detailTitleLoading": "Razgovor"
   }
 }
