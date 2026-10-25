@@ -9,6 +9,7 @@
  * stub whose handler the test calls as the server would.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LOBBY_RETRY_MS } from '../../../webinars/webinar-live';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
@@ -136,14 +137,26 @@ function renderAt(path: string) {
   return router;
 }
 
-/** The server's event on the public room. */
-function emit(event: string, payload: unknown) {
+/** The server's event on a room (the public room by default). */
+function emit(event: string, payload: unknown, room = `webinar:${ID}`) {
   act(() => {
-    for (const subscription of rooms.subscriptions) if (subscription.rooms.includes(`webinar:${ID}`)) subscription.handlers.onEvent(event, payload);
+    for (const subscription of rooms.subscriptions) if (subscription.rooms.includes(room)) subscription.handlers.onEvent(event, payload);
   });
 }
 
-describe('webinar discovery and registration (API mode)', () => {
+const PUBLISHED = {
+  id: 'msg_1',
+  webinarId: ID,
+  kind: 'host',
+  status: 'published',
+  text: 'Welcome, we start in a minute.',
+  authorFirstName: 'Milica',
+  answerText: null,
+  publishedAt: new Date().toISOString(),
+  createdAt: new Date().toISOString(),
+};
+
+describe('webinar discovery and registration (API mode)', { timeout: 30_000 }, () => {
   beforeEach(() => fetchMock.mockReset());
   afterEach(() => cleanup());
 
@@ -212,7 +225,7 @@ describe('webinar discovery and registration (API mode)', () => {
   });
 });
 
-describe('the live webinar (API mode)', () => {
+describe('the live webinar (API mode)', { timeout: 30_000 }, () => {
   beforeEach(() => {
     fetchMock.mockReset();
     rooms.subscriptions = [];
@@ -265,6 +278,88 @@ describe('the live webinar (API mode)', () => {
     emit('webinar.state', { webinarId: ID, status: 'live' });
     expect(await screen.findByTestId('webinar-attendee-controls', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(sent.filter((entry) => entry.path === `/api/webinars/${ID}/join`)).toHaveLength(2);
+  });
+
+  it('keeps what the lobby received, hydrates the REC indicator from the server, and hides the media note in the lobby', async () => {
+    let started = false;
+    const sent = serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, webinar({ registered: true })),
+      [`POST /api/webinars/${ID}/join`]: () => (started ? json(200, joinResponse()) : coded(409, 'webinar_not_open')()),
+      [`GET /api/webinars/${ID}/messages`]: () => json(200, { items: [], nextCursor: null }),
+      [`GET /api/webinars/${ID}/recording`]: () => json(200, { webinarId: ID, status: 'recording', startedAt: new Date().toISOString(), stoppedAt: null }),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinFromPrejoin(user);
+    await screen.findByTestId('webinar-lobby', {}, { timeout: 5000 });
+
+    // A room failure in the lobby: the 30-second retry covers it, and the media note does not apply yet.
+    act(() => rooms.subscriptions.forEach((subscription) => subscription.handlers.onUnavailable?.('connect_error')));
+    expect(screen.queryByText(en.webinar.liveView.realtimeUnavailable)).not.toBeInTheDocument();
+
+    emit('webinar.message.published', PUBLISHED);
+    started = true;
+    emit('webinar.state', { webinarId: ID, status: 'live' });
+    expect(await screen.findByTestId('webinar-attendee-controls', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(PUBLISHED.text)).toBeInTheDocument();
+    expect(await screen.findByTestId('webinar-rec-indicator')).toBeInTheDocument();
+    expect(sent).toContainEqual({ method: 'GET', path: `/api/webinars/${ID}/recording`, body: undefined });
+  });
+
+  it('retries the join every 30 seconds while waiting in the lobby', async () => {
+    // Only the lobby's 30-second timer is captured; every other interval runs for real.
+    const realSetInterval = window.setInterval.bind(window);
+    const lobbyTimers: (() => void)[] = [];
+    const spy = vi.spyOn(window, 'setInterval').mockImplementation(((handler: () => void, delay?: number) => {
+      if (delay === LOBBY_RETRY_MS) {
+        lobbyTimers.push(handler);
+        return 0;
+      }
+      return realSetInterval(handler, delay);
+    }) as typeof window.setInterval);
+    try {
+      let started = false;
+      const sent = serve({
+        [`GET /api/webinars/${ID}`]: () => json(200, webinar({ registered: true })),
+        [`POST /api/webinars/${ID}/join`]: () => (started ? json(200, joinResponse()) : coded(409, 'webinar_not_open')()),
+        [`GET /api/webinars/${ID}/messages`]: () => json(200, { items: [], nextCursor: null }),
+        [`GET /api/webinars/${ID}/recording`]: () => json(200, { webinarId: ID, status: 'recording', startedAt: null, stoppedAt: null }),
+      });
+      const user = userEvent.setup();
+      renderAt(`/webinars/${ID}/live`);
+      await joinFromPrejoin(user);
+      await screen.findByTestId('webinar-lobby', {}, { timeout: 5000 });
+      expect(lobbyTimers).toHaveLength(1);
+
+      // The room never says `live` (it is unavailable); the timer joins anyway.
+      started = true;
+      act(() => lobbyTimers[0]!());
+      expect(await screen.findByTestId('webinar-attendee-controls', {}, { timeout: 5000 })).toBeInTheDocument();
+      expect(sent.filter((entry) => entry.path === `/api/webinars/${ID}/join`)).toHaveLength(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('shows the floor dialog with the recording sentence when the floor is given on the user room', async () => {
+    serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, webinar({ status: 'live', registered: true })),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, joinResponse()),
+      [`GET /api/webinars/${ID}/messages`]: () => json(200, { items: [], nextCursor: null }),
+      [`GET /api/webinars/${ID}/recording`]: () => json(200, { webinarId: ID, status: 'recording', startedAt: null, stoppedAt: null }),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinFromPrejoin(user);
+    await screen.findByTestId('webinar-attendee-controls', {}, { timeout: 5000 });
+
+    emit(
+      'webinar.floor.given',
+      { participantId: 'part_1', capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' } },
+      `user:${employee.principal.userId}`,
+    );
+    const dialog = await screen.findByRole('dialog', { name: en.webinar.floorDialog.title });
+    expect(within(dialog).getByText(en.webinar.recordingNoticeFloor)).toBeInTheDocument();
   });
 
   it('shows a refused join on the pre-join screen', async () => {

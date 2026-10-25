@@ -37,7 +37,7 @@ export function PlacesBadge({ webinar }: { webinar: Pick<WebinarResponse, 'capac
   return <Badge>{t('webinar.placesLeft', { count: webinar.capacityRemaining })}</Badge>;
 }
 
-/** "This webinar is recorded. Only the presenters are on the recording." (D-CW-34, CW-R-126). */
+/** "This webinar is recorded; only the presenters are on the recording." (D-CW-34, CW-R-126, WBN-06). */
 export function RecordingNotice() {
   const { t } = useTranslation('calls');
   return (

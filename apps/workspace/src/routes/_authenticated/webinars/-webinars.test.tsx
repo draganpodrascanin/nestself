@@ -76,6 +76,8 @@ describe('webinars in sample mode', () => {
 
     expect(await screen.findByRole('heading', { name: TITLE, level: 1 })).toBeInTheDocument();
     expect(screen.getByText(calls.webinar.recordingNotice)).toBeInTheDocument();
+    // WBN-15: the captions status beside the recording notice.
+    expect(screen.getByTestId('webinar-captions-statement')).toHaveTextContent(calls.webinar.captionsStatement);
     expect(screen.getByTestId('webinar-registration-status')).toHaveTextContent(calls.webinar.detail.notRegistered);
     const lobby = screen.getByTestId('webinar-detail-lobby');
     expect(within(lobby).getByText(calls.webinar.lobby)).toBeInTheDocument();

@@ -41,6 +41,7 @@ import {
   WebinarResponseSchema,
   WebinarStatusResponseSchema,
   userRoomName,
+  webinarRoomName,
 } from '@nestself/contracts';
 import type {
   WebinarCreateRequestSchema,
@@ -202,6 +203,10 @@ export function createWebinarsApi(client: ApiClient) {
 
     // ── Recording (D-CW-18, D-CW-34) ───────────────────────────────────────
 
+    /** GET /webinars/:id/recording: the recording state, for the REC indicator of a host or attendee joining late (UX-45). */
+    recording: (webinarId: string) =>
+      client.request(webinarPath(webinarId, '/recording'), { method: 'GET', schema: WebinarRecordingStatusResponseSchema }),
+
     /** POST /webinars/:id/recording/stop: the moderator's early stop; the start is automatic. */
     stopRecording: (webinarId: string) =>
       client.request(webinarPath(webinarId, '/recording/stop'), { ...json('POST'), schema: WebinarRecordingStatusResponseSchema }),
@@ -358,7 +363,7 @@ export interface WebinarTransportOptions {
   api: WebinarsApi;
   rooms: WebinarRoomClient;
   webinarId: string;
-  /** The signed-in user: the floor events go to `user:{userId}` (CW-R-34) and arrive with the public room's events. */
+  /** The signed-in user: the floor events go to `user:{userId}` (CW-R-34) and arrive with the public room's events (`webinar:{id}` only). */
   userId?: string | null;
   onUnavailable?: (reason: string) => void;
 }
@@ -382,8 +387,8 @@ function pathId(value: string | undefined, action: WebinarTransportAction): stri
 export function createWebinarTransport({ api, rooms, webinarId, userId, onUnavailable }: WebinarTransportOptions): WebinarTransportImpl {
   return {
     subscribe(room, handler) {
-      const moderation = room.endsWith(':moderation');
-      const names = !moderation && userId ? [room, userRoomName(userId)] : [room];
+      // Only the public room carries the user's room along; the hosts' and moderation rooms stand alone.
+      const names = room === webinarRoomName(webinarId) && userId ? [room, userRoomName(userId)] : [room];
       return rooms.subscribe(names, { onEvent: handler, onUnavailable });
     },
 

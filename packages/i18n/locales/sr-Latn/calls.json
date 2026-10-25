@@ -383,7 +383,8 @@
       "registeredCount": "Prijavljeno: {{count}}",
       "joinedCount": "Pridružilo se: {{count}}",
       "peakCount": "Najviše istovremeno: {{count}}",
-      "sampleNotice": "Ovo su primeri podataka. Čuvanje, objavljivanje i otkazivanje ništa ne menjaju."
+      "sampleNotice": "Ovo su primeri podataka. Čuvanje, objavljivanje i otkazivanje ništa ne menjaju.",
+      "statusLive": "Vebinar je u toku."
     },
     "form": {
       "title": "Novi vebinar",
@@ -431,11 +432,6 @@
     "console": {
       "prejoinTitle": "Proverite opremu",
       "registered": "Prijavljenih učesnika: {{count}}",
-      "end": "Završi vebinar",
-      "endTitle": "Završiti ovaj vebinar?",
-      "endBody": "Svi učesnici će biti isključeni.",
-      "keepGoing": "Nastavi",
-      "ending": "Završavanje…",
       "pollTitle": "Pripremite anketu",
       "pollQuestion": "Pitanje",
       "pollOption": "Opcija {{number}}",

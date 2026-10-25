@@ -10,23 +10,20 @@
  * and beside it `ModeratorQueue` (attendance count, raised hands, give and
  * take the floor, and for the moderator the review queue and the early
  * "Stop recording" with its confirmation), the poll panel, the chat, and for
- * the moderator a form to prepare polls. "End webinar" asks first and ends it
- * for everyone (`POST .../end`, WBN-21, WBN-29).
+ * the moderator a form to prepare polls. The stage's "End webinar for
+ * everyone" asks first and ends it for everyone (`POST .../end` through the
+ * client's `webinar.end` action, WBN-21, WBN-29).
  *
  * The join response starts the controller once and is not kept (CW-R-59).
  * Sample mode runs on a scripted `FakeWebinarClient` and
  * `FakeCallSessionController`: nothing joins a meeting and nothing is sent.
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { StopCircle } from '@phosphor-icons/react';
 import {
   Alert,
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogTrigger,
   AnimatePresence,
   Button,
   Field,
@@ -36,9 +33,18 @@ import {
   m,
   useMotionPreset,
 } from '@nestself/ui';
-import { createWebinarTransport } from '@nestself/api-client';
+import { createWebinarTransport, webinarKeys } from '@nestself/api-client';
+import { useQueryClient } from '@tanstack/react-query';
 import { WEBINAR_POLL_OPTIONS_MAX, WEBINAR_POLL_OPTIONS_MIN, WebinarPollCreateRequestSchema } from '@nestself/contracts';
-import type { WebinarHostRole, WebinarJoinResponse, WebinarMessage, WebinarModerationMessage, WebinarPoll, WebinarResponse, WebinarStatus } from '@nestself/contracts';
+import type {
+  RecordingStatus,
+  WebinarHostRole,
+  WebinarJoinResponse,
+  WebinarMessage,
+  WebinarModerationMessage,
+  WebinarPoll,
+  WebinarResponse,
+} from '@nestself/contracts';
 import {
   ChatPanel,
   FakeCallSessionController,
@@ -56,7 +62,8 @@ import { isSampleDataMode } from '../data-source';
 import { useConsultationController } from '../calls/use-consultation-controller';
 import { Reveal } from '../calls/reveal';
 import { mapWebinarError } from './map-webinar-error';
-import { useLocalized, useWebinarWhen } from './webinar-format';
+import { hostJoinWindow, useLocalized, useNow, useWebinarWhen } from './webinar-format';
+import { useZonedFormat } from '../calls/format';
 import { canListWebinars } from './route-gate';
 import { webinarRoomClient } from './webinar-room-client';
 import { webinarsApi } from './webinars-api';
@@ -175,35 +182,6 @@ function PollCreator({ webinarId, client }: { webinarId: string; client: Webinar
   );
 }
 
-function EndWebinar({ pending, onEnd }: { pending: boolean; onEnd: () => void }) {
-  const { t } = useTranslation('calls');
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger>
-        <Button size="sm" variant="danger" leadingIcon={<StopCircle size={18} />} loading={pending} loadingLabel={t('webinar.console.ending')}>
-          {t('webinar.console.end')}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent
-        title={t('webinar.console.endTitle')}
-        description={t('webinar.console.endBody')}
-        confirmLabel={t('webinar.console.end')}
-        cancelLabel={t('webinar.console.keepGoing')}
-        destructive
-        confirmPending={pending}
-        onConfirm={onEnd}
-      />
-    </AlertDialog>
-  );
-}
-
-const noSubscription = () => () => undefined;
-
-/** The client's status, re-rendering on change; null before a client exists. */
-function useClientStatus(client: WebinarClientApi | null): WebinarStatus | null {
-  return useSyncExternalStore(client ? client.subscribe : noSubscription, () => client?.getSnapshot().status ?? null);
-}
-
 function Frame({ children }: { children: ReactNode }) {
   return <div className="gap-4 flex flex-col">{children}</div>;
 }
@@ -224,14 +202,20 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   const [stageError, setStageError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [ending, setEnding] = useState(false);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
+  // The join response's recording state; undefined until joined, null when the response carries none.
+  const [joinRecording, setJoinRecording] = useState<RecordingStatus | null | undefined>(undefined);
+  const queryClient = useQueryClient();
+  const format = useZonedFormat();
+  const { opensAt } = hostJoinWindow(webinar);
+  const now = useNow(!isSampleDataMode);
+  // Hosts may join from 30 minutes before the start (WBN-16); the demonstration is open at any time.
+  const opensLater = !isSampleDataMode && now < opensAt.getTime() ? t('webinar.detail.joinOpensAt', { time: format.time(opensAt, webinar.timeZone) }) : null;
 
   const client = useHostClient(webinar, role, controller, () => setRoomUnavailable(true));
   const title = localized(webinar.title);
   const registered = webinar.capacity - webinar.capacityRemaining;
   const isModerator = (client?.getSnapshot().role ?? role) === 'moderator';
-  const status = useClientStatus(client);
 
   const join = async () => {
     setJoinError(null);
@@ -242,10 +226,16 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
       controller.simulate.connected({ startsAt: new Date(start).toISOString(), endsAt: new Date(start + 60 * MINUTE_MS).toISOString() });
       return;
     }
+    if (Date.now() < opensAt.getTime()) {
+      setJoinError(t('webinar.detail.joinOpensAt', { time: format.time(opensAt, webinar.timeZone) }));
+      return;
+    }
     setJoining(true);
     try {
-      const response = await webinarsApi.join(webinar.id);
+      const response: WebinarJoinResponse & { recordingStatus?: RecordingStatus } = await webinarsApi.join(webinar.id);
       if (response.role === 'attendee') throw new Error('An attendee cannot open the host view');
+      setRoomUnavailable(false);
+      setJoinRecording(response.recordingStatus ?? null);
       setRole(response.role);
       setJoined(true);
       // A failure to connect media is shown by the stage through the controller's state.
@@ -279,6 +269,29 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
     };
   }, [client, role, webinar.id, t]);
 
+  /**
+   * The REC indicator from the server (UX-45): the join response's state when
+   * it carries one, else `GET /webinars/:id/recording`. If neither answers,
+   * the `webinar.recording` events still drive it.
+   */
+  useEffect(() => {
+    if (isSampleDataMode || !client || joinRecording === undefined) return undefined;
+    if (joinRecording) {
+      client.hydrate({ recordingStatus: joinRecording });
+      return undefined;
+    }
+    let current = true;
+    webinarsApi.recording(webinar.id).then(
+      (recording) => {
+        if (current) client.hydrate({ recordingStatus: recording.status });
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [client, joinRecording, webinar.id]);
+
   const start = async () => {
     if (!client) return;
     setStageError(null);
@@ -291,28 +304,11 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
     try {
       const response = await webinarsApi.start(webinar.id);
       client.hydrate({ status: response.status });
+      void queryClient.invalidateQueries({ queryKey: webinarKeys.all });
     } catch (err) {
       setStageError(mapWebinarError(err, t));
     } finally {
       setStarting(false);
-    }
-  };
-
-  const end = async () => {
-    if (!client) return;
-    setStageError(null);
-    if (isSampleDataMode && client instanceof FakeWebinarClient) {
-      client.simulate.end();
-      return;
-    }
-    setEnding(true);
-    try {
-      const response = await webinarsApi.end(webinar.id);
-      client.hydrate({ status: response.status });
-    } catch (err) {
-      setStageError(mapWebinarError(err, t));
-    } finally {
-      setEnding(false);
     }
   };
 
@@ -344,11 +340,15 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
         </header>
         {sampleNotice}
         <p className="p-3 rounded-control bg-info-surface text-info type-body">{t('webinar.startHint')}</p>
+        {opensLater ? (
+          <Alert tone="info">
+            <span data-testid="webinar-console-opens">{opensLater}</span>
+          </Alert>
+        ) : null}
         <PreJoinCheck controller={controller} onJoin={() => void join()} joining={joining} error={joinError} />
       </Frame>
     );
   } else {
-    const live = status === 'live';
     content = (
       <Frame>
         <Heading level={1} typeRole="screenTitle" className="sr-only">
@@ -370,7 +370,8 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
               onLeave={() => void leave()}
               onStart={() => void start()}
               startPending={starting}
-              header={live ? <EndWebinar pending={ending} onEnd={() => void end()} /> : null}
+              // The stage's own "End webinar for everyone" (WBN-21) ends it through the client; the lists then refresh.
+              onEnd={() => void queryClient.invalidateQueries({ queryKey: webinarKeys.all })}
               error={stageError}
             />
           </div>

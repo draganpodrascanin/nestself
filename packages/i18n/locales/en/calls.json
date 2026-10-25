@@ -383,7 +383,8 @@
       "registeredCount": "Registered: {{count}}",
       "joinedCount": "Joined: {{count}}",
       "peakCount": "Most at the same time: {{count}}",
-      "sampleNotice": "This is sample data. Saving, publishing and canceling change nothing."
+      "sampleNotice": "This is sample data. Saving, publishing and canceling change nothing.",
+      "statusLive": "The webinar is live."
     },
     "form": {
       "title": "New webinar",
@@ -431,11 +432,6 @@
     "console": {
       "prejoinTitle": "Check your setup",
       "registered": "Registered attendees: {{count}}",
-      "end": "End webinar",
-      "endTitle": "End this webinar?",
-      "endBody": "All attendees will be disconnected.",
-      "keepGoing": "Keep going",
-      "ending": "Ending…",
       "pollTitle": "Prepare a poll",
       "pollQuestion": "Question",
       "pollOption": "Option {{number}}",

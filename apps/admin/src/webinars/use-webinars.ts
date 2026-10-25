@@ -48,15 +48,19 @@ export function useOccurrenceList(): OccurrenceListState {
   };
 }
 
-/** One occurrence from the operations list; 404 when no page holds it. */
+/** At most this many list pages are read to find one occurrence (1,000 occurrences). */
+const LOOKUP_MAX_PAGES = 10;
+
+/** One occurrence from the operations list; 404 when the first ten pages do not hold it. */
 async function findOccurrence(webinarId: string): Promise<Webinar> {
   let cursor: string | undefined;
-  do {
+  for (let pageNumber = 0; pageNumber < LOOKUP_MAX_PAGES; pageNumber += 1) {
     const page = await webinarsApi.listOps({ cursor, limit: WEBINAR_LIST_MAX_LIMIT });
     const found = page.items.find((item) => item.id === webinarId);
     if (found) return found;
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor);
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
   throw new ApiError({ status: 404, code: 'not_found', message: 'Webinar not found', requestId: null });
 }
 

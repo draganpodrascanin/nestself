@@ -5,10 +5,10 @@
  * schedule in Europe/Belgrade, shown with the time zone. There is no
  * recording switch: every webinar is recorded, and the form says so.
  *
- * The capacity limit is the server's: above 250 the API answers 400
- * `capacity_above_limit`, which the form shows at the field and in the
- * summary, naming the limit and the milestone. Every other failure renders
- * translated copy too (error-visibility rule).
+ * The capacity is checked here (1 to 250, `max` on the input) and on the
+ * server, whose 400 `capacity_above_limit` the form shows at the field and in
+ * the summary too, naming the limit and the milestone. Every other failure
+ * renders translated copy (error-visibility rule).
  *
  * The API has no directory of eligible hosts or client organisations yet:
  * in API mode the hosts and organisations are entered as ids; in sample mode
@@ -143,6 +143,8 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     const capacityText = String(data.get('capacity') ?? '').trim();
     const capacity = Number(capacityText);
     if (!/^\d+$/.test(capacityText) || capacity < 1) problems.capacity = t('webinar.form.capacityRange');
+    // D-CW-36: one meeting holds 250 until M3; the server answers 400 `capacity_above_limit` as well.
+    else if (capacity > WEBINAR_SINGLE_MEETING_CAPACITY) problems.capacity = t('webinar.capacityAboveLimit', { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
 
     const presenterUserIds = pickers ? presenters : splitIds(String(data.get('presenters') ?? ''));
     const moderatorUserId = (pickers ? moderator : String(data.get('moderator') ?? '').trim()) || null;
@@ -262,7 +264,15 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
       </div>
 
       <Field label={t('webinar.form.capacity')} description={t('webinar.form.capacityHint', { limit: WEBINAR_SINGLE_MEETING_CAPACITY })} error={errors.capacity}>
-        <Input id={FIELD.capacity} name="capacity" type="number" defaultValue={String(WEBINAR_SINGLE_MEETING_CAPACITY)} className="max-w-40" />
+        <Input
+          id={FIELD.capacity}
+          name="capacity"
+          type="number"
+          defaultValue={String(WEBINAR_SINGLE_MEETING_CAPACITY)}
+          className="max-w-40"
+          // `Input` passes these through to the native input; its props do not list them.
+          {...({ min: '1', max: String(WEBINAR_SINGLE_MEETING_CAPACITY) } as Record<string, string>)}
+        />
       </Field>
 
       {pickers ? (

@@ -41,7 +41,7 @@ function WebinarsAdminPage() {
           <p className="type-body text-text-secondary">{t('calls:webinar.admin.intro')}</p>
         </div>
         {canManageWebinars(principal, effectiveActions) ? (
-          <Link to="/webinars/new" className="min-h-11 px-5 py-2.5 inline-flex items-center rounded-control bg-primary text-on-primary font-[var(--font-weight-label)] no-underline hover:bg-primary-hover focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus">
+          <Link to="/webinars/new" className="min-h-11 px-5 py-2.5 inline-flex items-center rounded-control bg-primary transition-colors text-on-primary font-[var(--font-weight-label)] no-underline hover:bg-primary-hover focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus">
             {t('calls:webinar.admin.new')}
           </Link>
         ) : null}

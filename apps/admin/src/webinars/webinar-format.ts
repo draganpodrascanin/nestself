@@ -3,6 +3,7 @@
  * live routes: the title in the reader's language with a fallback, the
  * schedule in the occurrence's time zone and the hosts' join window.
  */
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CALL_ROOM_CLOSE_AFTER_MINUTES, WEBINAR_HOST_JOIN_BEFORE_MINUTES } from '@nestself/contracts';
 import type { WebinarLocalizedText } from '@nestself/contracts';
@@ -50,4 +51,15 @@ export function hostJoinWindow(webinar: { startsAt: string; endsAt: string }) {
     opensAt: new Date(Date.parse(webinar.startsAt) - WEBINAR_HOST_JOIN_BEFORE_MINUTES * MINUTE_MS),
     closesAt: new Date(Date.parse(webinar.endsAt) + CALL_ROOM_CLOSE_AFTER_MINUTES * MINUTE_MS),
   };
+}
+
+/** Ticks every `intervalMs` while `active`. */
+export function useNow(active: boolean, intervalMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return undefined;
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [active, intervalMs]);
+  return now;
 }

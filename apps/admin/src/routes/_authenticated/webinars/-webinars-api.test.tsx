@@ -1,12 +1,15 @@
 /**
- * Admin webinar routes in API mode (WBN-30, WBN-31, D-CW-36): the form
- * posts the occurrence without any recording field and shows
- * `capacity_above_limit` with the limit and the milestone; publish asks
- * first, then transitions the draft and says so; an incomplete draft gets
- * the publishing checklist; a failed list load explains itself.
+ * Admin webinar routes in API mode (WBN-16 to WBN-33, D-CW-36): the form
+ * refuses a capacity above 250 itself and maps the server's
+ * `capacity_above_limit`, and posts the occurrence without any recording
+ * field; publish asks first, then transitions the draft; an incomplete draft
+ * gets the publishing checklist; every failure renders translated copy (list
+ * load, cancel, unknown occurrence, attendance, and in the console a refused
+ * join, start, chat load and poll creation); the console waits for the hosts'
+ * join window and hydrates the REC indicator from the server.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -27,6 +30,16 @@ vi.mock('../../../data-source', () => ({
 
 vi.mock('../../../calls/user-room-client', () => ({ userRoomClient: { subscribe: () => () => undefined } }));
 
+vi.mock('../../../calls/use-consultation-controller', async () => {
+  const { useState } = await import('react');
+  const { FakeCallSessionController } = await import('@nestself/video');
+  return {
+    useConsultationController: () => useState(() => new FakeCallSessionController({ role: 'moderator', format: 'webinar' }))[0],
+  };
+});
+
+vi.mock('../../../webinars/webinar-room-client', () => ({ webinarRoomClient: { subscribe: () => () => undefined } }));
+
 import { routeTree } from '../../../routeTree.gen';
 import { api } from '../../../api';
 import { initialSnapshot } from '../../../auth';
@@ -34,6 +47,45 @@ import i18n from '../../../i18n';
 
 const operations = SAMPLE_PRINCIPALS.operations;
 const ID = 'web_1';
+const MINUTE = 60_000;
+
+/** The host's view of the occurrence (`GET /webinars/:id`), starting in ten minutes unless told otherwise. */
+function hostView(overrides: Record<string, unknown> = {}) {
+  const startsAt = Date.now() + 10 * MINUTE;
+  return {
+    id: ID,
+    title: { en: 'Sleep and rest' },
+    description: null,
+    startsAt: new Date(startsAt).toISOString(),
+    endsAt: new Date(startsAt + 60 * MINUTE).toISOString(),
+    timeZone: 'Europe/Belgrade',
+    status: 'published',
+    capacity: 120,
+    capacityRemaining: 100,
+    presenters: [{ displayName: 'Milica' }],
+    registered: false,
+    ...overrides,
+  };
+}
+
+function hostJoin() {
+  const now = Date.now();
+  return {
+    webinarId: ID,
+    sessionId: 'sess_1',
+    participantId: 'part_host',
+    format: 'webinar',
+    startsAt: new Date(now).toISOString(),
+    endsAt: new Date(now + 60 * MINUTE).toISOString(),
+    meeting: { MeetingId: 'm1', MediaRegion: 'eu-central-1', MediaPlacement: { AudioHostUrl: 'a:1', AudioFallbackUrl: 'b', SignalingUrl: 'c' } },
+    attendee: { AttendeeId: 'att_host', ExternalUserId: 'part_host', JoinToken: 'token' },
+    role: 'moderator',
+    capabilities: { audio: 'send_receive', video: 'send_receive', content: 'send_receive' },
+  };
+}
+
+const RECORDING = () => json(200, { webinarId: ID, status: 'recording', startedAt: new Date().toISOString(), stoppedAt: null });
+const NO_MESSAGES = () => json(200, { items: [], nextCursor: null });
 
 function occurrence(overrides: Record<string, unknown> = {}) {
   return {
@@ -97,34 +149,49 @@ function renderAt(path: string) {
   return router;
 }
 
-describe('admin webinars (API mode)', () => {
+describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await i18n.changeLanguage('en');
   });
   afterEach(() => cleanup());
 
-  it('posts the occurrence and shows capacity_above_limit with the limit and M3', async () => {
-    const sent = serve({ 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 250 }) });
-    const user = userEvent.setup();
-    renderAt('/webinars/new');
-
+  async function fillForm(user: ReturnType<typeof userEvent.setup>, capacity: string) {
     const titles = await screen.findByRole('group', { name: en.webinar.form.titleLegend }, { timeout: 5000 });
     await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
     await user.type(within(titles).getByLabelText(en.webinar.form.languages['sr-Latn']), 'San i odmor');
-    const capacity = screen.getByLabelText(en.webinar.form.capacity);
-    await user.clear(capacity);
-    await user.type(capacity, '300');
+    const field = screen.getByLabelText(en.webinar.form.capacity);
+    expect(field).toHaveAttribute('max', '250');
+    await user.clear(field);
+    await user.type(field, capacity);
     await user.type(screen.getByLabelText(en.webinar.form.presenters), 'user_milica');
     await user.type(screen.getByLabelText(en.webinar.form.moderator), 'user_nikola');
     await user.type(screen.getByLabelText(en.webinar.form.date), '2030-12-02');
     await user.type(screen.getByLabelText(en.webinar.form.startTime), '17:00');
     await user.type(screen.getByLabelText(en.webinar.form.endTime), '18:00');
     await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
+  }
 
-    const message = 'Capacity can be at most 250 attendees until larger webinars are supported in milestone M3.';
-    expect(en.webinar.capacityAboveLimit.replace('{{limit}}', '250')).toBe(message);
-    expect((await screen.findAllByText(new RegExp(message.replace('.', '\\.')))).length).toBeGreaterThan(0);
+  const LIMIT_MESSAGE = 'Capacity can be at most 250 attendees until larger webinars are supported in milestone M3.';
+
+  it('refuses a capacity of 300 before sending, naming the limit and M3', async () => {
+    const sent = serve({});
+    const user = userEvent.setup();
+    renderAt('/webinars/new');
+    await fillForm(user, '300');
+
+    expect(en.webinar.capacityAboveLimit.replace('{{limit}}', '250')).toBe(LIMIT_MESSAGE);
+    expect((await screen.findAllByText(new RegExp(LIMIT_MESSAGE.replace('.', '\\.')))).length).toBeGreaterThan(0);
+    expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(false);
+  });
+
+  it("posts the occurrence and shows the server's capacity_above_limit at the field", async () => {
+    const sent = serve({ 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 250 }) });
+    const user = userEvent.setup();
+    renderAt('/webinars/new');
+    await fillForm(user, '200');
+
+    expect((await screen.findAllByText(new RegExp(LIMIT_MESSAGE.replace('.', '\\.')))).length).toBeGreaterThan(0);
     expect(screen.queryByText('English developer message')).not.toBeInTheDocument();
     expect(sent.find((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')?.body).toEqual({
       title: { en: 'Sleep and rest', 'sr-Latn': 'San i odmor' },
@@ -135,7 +202,7 @@ describe('admin webinars (API mode)', () => {
       endsAt: '2030-12-02T17:00:00.000Z',
       timeZone: 'Europe/Belgrade',
       audiencePolicy: { type: 'all_eligible' },
-      capacity: 300,
+      capacity: 200,
     });
   });
 
@@ -158,21 +225,46 @@ describe('admin webinars (API mode)', () => {
     expect(router.state.location.pathname).toBe(`/webinars/${ID}`);
   });
 
-  it('publishes a draft after the confirmation', async () => {
+  it('publishes a draft after the confirmation; the status sentence follows', async () => {
+    let status = 'draft';
     const sent = serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence()], nextCursor: null }),
-      [`POST /api/ops/webinars/${ID}/publish`]: () => json(200, { webinarId: ID, status: 'published' }),
+      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status })], nextCursor: null }),
+      [`POST /api/ops/webinars/${ID}/publish`]: () => {
+        status = 'published';
+        return json(200, { webinarId: ID, status: 'published' });
+      },
     });
     const user = userEvent.setup();
     renderAt(`/webinars/${ID}`);
 
-    await user.click(await screen.findByRole('button', { name: en.webinar.admin.publish }, { timeout: 5000 }));
+    expect(await screen.findByTestId('webinar-admin-status', {}, { timeout: 5000 })).toHaveTextContent(en.webinar.admin.created);
+    await user.click(screen.getByRole('button', { name: en.webinar.admin.publish }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(en.webinar.admin.publishBody)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: en.webinar.admin.publish }));
 
-    expect(await screen.findByText(en.webinar.admin.published)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('webinar-admin-status')).toHaveTextContent(en.webinar.admin.published));
+    expect(screen.queryByText(en.webinar.admin.created)).not.toBeInTheDocument();
     expect(sent).toContainEqual({ method: 'POST', path: `/api/ops/webinars/${ID}/publish`, body: {} });
+  });
+
+  it.each([
+    ['draft', en.webinar.admin.created],
+    ['published', en.webinar.admin.published],
+    ['live', en.webinar.admin.statusLive],
+    ['ended', en.webinar.ended],
+    ['canceled', en.webinar.admin.canceled],
+  ])('says one status sentence for a %s occurrence', async (status, sentence) => {
+    serve({
+      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status })),
+      [`GET /api/ops/webinars/${ID}/attendance`]: () => json(200, { webinarId: ID, registeredCount: 0, joinedCount: 0, peakConcurrent: 0, registrants: [] }),
+    });
+    renderAt(`/webinars/${ID}`);
+    const block = await screen.findByTestId('webinar-admin-status', {}, { timeout: 5000 });
+    expect(block).toHaveTextContent(sentence);
+    const others = [en.webinar.admin.created, en.webinar.admin.published, en.webinar.admin.statusLive, en.webinar.ended, en.webinar.admin.canceled].filter((text) => text !== sentence);
+    for (const other of others) expect(screen.queryByText(other)).not.toBeInTheDocument();
   });
 
   it('explains what an incomplete draft needs before publishing', async () => {
@@ -194,5 +286,114 @@ describe('admin webinars (API mode)', () => {
     renderAt('/webinars');
     expect(await screen.findByText(en.webinar.admin.errorTitle, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(en.errors.rateLimited)).toBeInTheDocument();
+  });
+  it('shows a failed cancellation', async () => {
+    serve({
+      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status: 'published' })], nextCursor: null }),
+      [`POST /api/ops/webinars/${ID}/cancel`]: coded(409, 'conflict', { reason: 'not_cancelable' }),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}`);
+    await user.click(await screen.findByRole('button', { name: en.webinar.admin.cancel }, { timeout: 5000 }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: en.webinar.admin.cancel }));
+    expect(await screen.findByText(en.errors.conflict)).toBeInTheDocument();
+  });
+
+  it('says when the occurrence is not found', async () => {
+    serve({ 'GET /api/ops/webinars': () => json(200, { items: [], nextCursor: null }) });
+    renderAt(`/webinars/${ID}`);
+    expect(await screen.findByText(en.webinar.admin.notFoundTitle, {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('shows a failed attendance load', async () => {
+    serve({
+      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status: 'ended' })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}/attendance`]: coded(503, 'video_provider_unavailable'),
+    });
+    renderAt(`/webinars/${ID}`);
+    expect(await screen.findByText(en.webinar.admin.attendanceErrorTitle, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(en.errors.videoProviderUnavailable)).toBeInTheDocument();
+  });
+});
+
+describe('the moderator console (API mode)', { timeout: 30_000 }, () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await i18n.changeLanguage('en');
+  });
+  afterEach(() => cleanup());
+
+  async function joinConsole(user: ReturnType<typeof userEvent.setup>) {
+    const join = await screen.findByRole('button', { name: en.prejoin.joinNow }, { timeout: 5000 });
+    await waitFor(() => expect(join).toBeEnabled());
+    await user.click(join);
+  }
+
+  it('waits for the hosts\' join window', async () => {
+    serve({ [`GET /api/webinars/${ID}`]: () => json(200, hostView({ startsAt: new Date(Date.now() + 120 * MINUTE).toISOString(), endsAt: new Date(Date.now() + 180 * MINUTE).toISOString() })) });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    expect(await screen.findByTestId('webinar-console-opens', {}, { timeout: 5000 })).toHaveTextContent(/^You can join from /);
+    await joinConsole(user);
+    expect((await screen.findAllByText(/^You can join from /)).length).toBeGreaterThan(1);
+  });
+
+  it('shows a refused join', async () => {
+    serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, hostView()),
+      [`POST /api/webinars/${ID}/join`]: coded(409, 'webinar_not_open'),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinConsole(user);
+    expect(await screen.findByText(en.errors.webinarNotOpen, {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('hydrates the REC indicator, and shows failed start, chat load and poll creation', async () => {
+    const sent = serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, hostView()),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, hostJoin()),
+      [`GET /api/webinars/${ID}/messages`]: coded(429, 'rate_limited'),
+      [`GET /api/webinars/${ID}/recording`]: RECORDING,
+      [`POST /api/webinars/${ID}/start`]: coded(409, 'webinar_not_open'),
+      [`POST /api/webinars/${ID}/polls`]: coded(409, 'conflict'),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinConsole(user);
+
+    // The chat history could not be loaded.
+    expect(await screen.findByText(en.errors.rateLimited, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(sent).toContainEqual({ method: 'GET', path: `/api/webinars/${ID}/recording`, body: undefined });
+
+    const lobby = await screen.findByTestId('webinar-lobby');
+    await user.click(within(lobby).getByRole('button', { name: en.webinar.start }));
+    expect(await screen.findByText(en.errors.webinarNotOpen)).toBeInTheDocument();
+
+    const creator = screen.getByRole('region', { name: en.webinar.console.pollTitle });
+    await user.type(within(creator).getByLabelText(en.webinar.console.pollQuestion), 'Which break?');
+    await user.type(within(creator).getByLabelText(new RegExp(`^${en.webinar.console.pollOption.replace('{{number}}', '1')}`)), 'A walk');
+    await user.type(within(creator).getByLabelText(new RegExp(`^${en.webinar.console.pollOption.replace('{{number}}', '2')}`)), 'Tea');
+    await user.click(within(creator).getByRole('button', { name: en.webinar.console.pollCreate }));
+    expect(await within(creator).findByText(en.errors.conflict)).toBeInTheDocument();
+  });
+
+  it('shows a failed end on the stage', async () => {
+    serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, hostView({ status: 'live' })),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, { ...hostJoin(), recordingStatus: 'recording' }),
+      [`GET /api/webinars/${ID}/messages`]: NO_MESSAGES,
+      [`GET /api/webinars/${ID}/recording`]: RECORDING,
+      [`POST /api/webinars/${ID}/end`]: coded(409, 'webinar_not_open'),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinConsole(user);
+
+    expect(await screen.findByTestId('webinar-rec-indicator', {}, { timeout: 5000 })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: en.webinar.endForEveryone }));
+    const dialog = await screen.findByRole('alertdialog', { name: en.webinar.endConfirmTitle });
+    await user.click(within(dialog).getByRole('button', { name: en.webinar.endForEveryone }));
+    expect(await screen.findByText(en.errors.webinarNotOpen)).toBeInTheDocument();
   });
 });

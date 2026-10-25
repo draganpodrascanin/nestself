@@ -249,6 +249,12 @@ describe('webinar live routes', () => {
     expect(voted.last()).toEqual({ url: 'http://x/api/webinars/web_1/polls/poll_1/vote', method: 'POST', body: { optionId: 'opt_a' }, cache: undefined });
   });
 
+  it('reads the recording state', async () => {
+    const { api, last } = setup({ webinarId: 'web_1', status: 'recording', startedAt: AT, stoppedAt: null });
+    await expect(api.recording('web_1')).resolves.toEqual({ webinarId: 'web_1', status: 'recording', startedAt: AT, stoppedAt: null });
+    expect(last()).toMatchObject({ url: 'http://x/api/webinars/web_1/recording', method: 'GET' });
+  });
+
   it('stops the recording early', async () => {
     const { api, last } = setup({ webinarId: 'web_1', status: 'processing', startedAt: AT, stoppedAt: END });
     await expect(api.stopRecording('web_1')).resolves.toMatchObject({ status: 'processing' });
@@ -452,7 +458,12 @@ describe('webinar transport', () => {
     const handler = vi.fn();
     transport.subscribe('webinar:web_1', handler);
     transport.subscribe('webinar:web_1:moderation', handler);
-    expect(subscribe.mock.calls.map(([rooms]) => rooms)).toEqual([['webinar:web_1', 'user:user_jovan'], ['webinar:web_1:moderation']]);
+    transport.subscribe('webinar:web_1:hosts', handler);
+    expect(subscribe.mock.calls.map(([rooms]) => rooms)).toEqual([
+      ['webinar:web_1', 'user:user_jovan'],
+      ['webinar:web_1:moderation'],
+      ['webinar:web_1:hosts'],
+    ]);
     subscribe.mock.calls[0]![1].onEvent('webinar.floor.given', { participantId: 'part_1' });
     expect(handler).toHaveBeenCalledWith('webinar.floor.given', { participantId: 'part_1' });
   });

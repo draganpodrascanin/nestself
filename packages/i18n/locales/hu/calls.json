@@ -380,7 +380,8 @@
       "registeredCount": "Regisztrált: {{count}}",
       "joinedCount": "Csatlakozott: {{count}}",
       "peakCount": "Egyszerre legtöbben: {{count}}",
-      "sampleNotice": "Ezek mintaadatok. A mentés, a közzététel és a lemondás semmit sem változtat."
+      "sampleNotice": "Ezek mintaadatok. A mentés, a közzététel és a lemondás semmit sem változtat.",
+      "statusLive": "A webinárium most zajlik."
     },
     "form": {
       "title": "Új webinárium",
@@ -428,11 +429,6 @@
     "console": {
       "prejoinTitle": "Ellenőrizze a beállításokat",
       "registered": "Regisztrált résztvevők: {{count}}",
-      "end": "Webinárium befejezése",
-      "endTitle": "Befejezi ezt a webináriumot?",
-      "endBody": "Minden résztvevő kapcsolata megszakad.",
-      "keepGoing": "Folytatás",
-      "ending": "Befejezés…",
       "pollTitle": "Szavazás előkészítése",
       "pollQuestion": "Kérdés",
       "pollOption": "{{number}}. lehetőség",

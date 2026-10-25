@@ -10,7 +10,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
+import { SAMPLE_PRINCIPALS, SAMPLE_WEBINARS } from '@nestself/sample-data';
 import calls from '@nestself/i18n/locales/en/calls.json';
 import common from '@nestself/i18n/locales/en/common.json';
 import { routeTree } from '../../../routeTree.gen';
@@ -73,8 +73,8 @@ describe('admin webinars (sample mode)', () => {
     renderAt(`/webinars/${UPCOMING}`, 'operations');
 
     expect(await screen.findByRole('heading', { name: TITLE, level: 1 })).toBeInTheDocument();
-    expect(screen.getByText('Milica')).toBeInTheDocument();
-    expect(screen.getByText('Nikola')).toBeInTheDocument();
+    const hosts = SAMPLE_WEBINARS.find((webinar) => webinar.id === UPCOMING)!.hosts;
+    for (const host of hosts) expect(screen.getByText(host.displayName)).toBeInTheDocument();
     expect(screen.getByText(calls.webinar.admin.audienceAll)).toBeInTheDocument();
     expect(screen.getByText(calls.webinar.recordingNotice)).toBeInTheDocument();
     // Already published: no Publish, but Cancel and the live view.
@@ -93,6 +93,12 @@ describe('admin webinars (sample mode)', () => {
     renderAt('/webinars/new', 'operations');
 
     expect(await screen.findByRole('heading', { name: calls.webinar.form.title, level: 1 })).toBeInTheDocument();
+    // Each locale field is labelled with its language, in the reader's language.
+    const titleFields = screen.getByRole('group', { name: calls.webinar.form.titleLegend });
+    for (const label of ['English', 'Serbian (Latin)', 'Serbian (Cyrillic)', 'Hungarian']) {
+      expect(within(titleFields).getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(Object.values(calls.webinar.form.languages)).toEqual(['English', 'Serbian (Latin)', 'Serbian (Cyrillic)', 'Hungarian']);
     // No recording switch: every webinar is recorded (D-CW-34).
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.getByText(calls.webinar.recordingNotice)).toBeInTheDocument();
@@ -134,9 +140,11 @@ describe('admin webinars (sample mode)', () => {
     expect(screen.getByRole('heading', { name: calls.webinar.console.pollTitle })).toBeInTheDocument();
     expect(screen.getByTestId('webinar-share-screen')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: calls.webinar.console.end }));
-    const dialog = await screen.findByRole('alertdialog');
-    await user.click(within(dialog).getByRole('button', { name: calls.webinar.console.end }));
+    // The stage's end control asks with the WBN-21 copy first.
+    await user.click(screen.getByRole('button', { name: calls.webinar.endForEveryone }));
+    const dialog = await screen.findByRole('alertdialog', { name: calls.webinar.endConfirmTitle });
+    expect(within(dialog).getByText(calls.webinar.endConfirmBody)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: calls.webinar.endForEveryone }));
     expect(await screen.findByTestId('webinar-ended', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 

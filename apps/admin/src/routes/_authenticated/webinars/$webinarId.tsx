@@ -14,7 +14,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertDialog, AlertDialogContent, AlertDialogTrigger, Button, Heading, StatusBlock } from '@nestself/ui';
 import { ApiError, webinarKeys } from '@nestself/api-client';
-import type { Webinar, WebinarAudiencePolicy } from '@nestself/contracts';
+import type { Webinar, WebinarAudiencePolicy, WebinarStatus } from '@nestself/contracts';
+import type { AlertTone } from '@nestself/ui';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
 import { Reveal } from '../../../calls/reveal';
@@ -26,13 +27,20 @@ import { WebinarStatusBadge } from '../../../webinars/webinar-parts';
 import { webinarsApi } from '../../../webinars/webinars-api';
 
 export const Route = createFileRoute('/_authenticated/webinars/$webinarId')({
-  validateSearch: (search: Record<string, unknown>): { created?: boolean } =>
-    search.created === true || search.created === 'true' ? { created: true } : {},
   beforeLoad: ({ context }) => requireWebinarListOrHost(context.auth),
   component: WebinarAdminRoute,
 });
 
 type Outcome = { tone: 'success' | 'info' | 'danger'; message: string } | null;
+
+/** One sentence per status, so the page never says "draft" and "published" at once. */
+const STATUS_SENTENCE: Readonly<Record<WebinarStatus, { key: string; tone: AlertTone }>> = {
+  draft: { key: 'calls:webinar.admin.created', tone: 'info' },
+  published: { key: 'calls:webinar.admin.published', tone: 'success' },
+  live: { key: 'calls:webinar.admin.statusLive', tone: 'success' },
+  ended: { key: 'calls:webinar.ended', tone: 'info' },
+  canceled: { key: 'calls:webinar.admin.canceled', tone: 'warning' },
+};
 
 function useAudienceLabel() {
   const { t } = useTranslation('calls');
@@ -60,7 +68,7 @@ function Actions({ webinar }: { webinar: Webinar }) {
     try {
       if (kind === 'publish') await webinarsApi.publish(webinar.id);
       else await webinarsApi.cancel(webinar.id);
-      setOutcome({ tone: 'success', message: t(kind === 'publish' ? 'webinar.admin.published' : 'webinar.admin.canceled') });
+      // The page's status sentence follows the new status once the occurrence is read again.
       await queryClient.invalidateQueries({ queryKey: webinarKeys.all });
     } catch (err) {
       // Publishing checks the presenters, the moderator, a future start and the audience (WBN-31).
@@ -149,7 +157,6 @@ function Attendance({ webinar }: { webinar: Webinar }) {
 
 function WebinarAdminDetail() {
   const { webinarId } = Route.useParams();
-  const { created } = Route.useSearch();
   const { t } = useTranslation(['calls', 'common']);
   const { t: tCalls } = useTranslation('calls');
   const { principal, effectiveActions } = useAuth();
@@ -211,7 +218,9 @@ function WebinarAdminDetail() {
         </div>
       </header>
       {isSampleDataMode ? <Alert tone="info">{t('calls:webinar.admin.sampleNotice')}</Alert> : null}
-      {created ? <Alert tone="success">{t('calls:webinar.admin.created')}</Alert> : null}
+      <div data-testid="webinar-admin-status">
+        <Alert tone={STATUS_SENTENCE[webinar.status].tone}>{t(STATUS_SENTENCE[webinar.status].key)}</Alert>
+      </div>
 
       <dl className="gap-x-6 gap-y-3 m-0 grid grid-cols-1 sm:grid-cols-[max-content_1fr]">
         {facts.map(([term, value]) => (

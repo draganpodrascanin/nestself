@@ -40,7 +40,7 @@ function NewWebinarPage() {
       <WebinarForm
         onCreated={(webinar) => {
           void queryClient.invalidateQueries({ queryKey: webinarKeys.ops() });
-          void navigate({ to: '/webinars/$webinarId', params: { webinarId: webinar.id }, search: { created: true } });
+          void navigate({ to: '/webinars/$webinarId', params: { webinarId: webinar.id } });
         }}
       />
     </div>
