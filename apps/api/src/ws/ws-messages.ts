@@ -6,8 +6,8 @@
  * and the resource, `SubscriptionAuthorizer.authorizeRoom`):
  *
  *   call:{sessionId}                  consultation.join on the session's appointment, participants only
- *   webinar:{webinarId}               event.register (served from T-CW-2.3)
- *   webinar:{webinarId}:moderation    event.moderate (served from T-CW-2.3)
+ *   webinar:{webinarId}               active registrants (event.register on their registration) and hosts (T-CW-2.3)
+ *   webinar:{webinarId}:moderation    hosts: presenters (event.present) and moderators (event.moderate) (T-CW-2.3)
  *   org:{orgId}:programme             program.overview on the organization (T-1.11)
  *   user:{userId}                     that user only, by identity, no engine decision (T-CW-1.9)
  *
@@ -22,10 +22,16 @@ import { z } from 'zod';
 import {
   AppointmentRemindPayloadSchema,
   CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   type AppointmentRemindPayload,
   type CallRoomEventName,
   type CallRoomEventPayloads,
   type UserRoomEventName,
+  type WebinarEventName,
+  type WebinarEventPayloads,
+  type WebinarRoomAddedEventName,
+  type WebinarRoomAddedEventPayloads,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -152,8 +158,9 @@ export type SubscribeDenialReason =
 // Server-side room events (CW-R-36)
 // ---------------------------------------------------------------------------
 
-export type RoomEventName = CallRoomEventName | UserRoomEventName;
-export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload };
+export type RoomEventName = CallRoomEventName | UserRoomEventName | WebinarEventName | WebinarRoomAddedEventName;
+export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload } & WebinarEventPayloads &
+  WebinarRoomAddedEventPayloads;
 export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
 
 export interface RoomEventSpec {
@@ -166,16 +173,32 @@ function callRoomEvent(event: CallRoomEventName): RoomEventSpec {
   return { roomKinds: ['call'], schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event] };
 }
 
+function webinarEvent(event: WebinarEventName, roomKinds: readonly RoomKind[]): RoomEventSpec {
+  return { roomKinds, schema: WEBINAR_EVENT_PAYLOAD_SCHEMAS[event] };
+}
+
+function addedWebinarEvent(event: WebinarRoomAddedEventName): RoomEventSpec {
+  return { roomKinds: ['webinar'], schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event] };
+}
+
 /**
  * Each event the API emits, with its room kinds and payload schema. The
- * mapped type makes a missing event a compile error. Webinar events join
- * with T-CW-2.3.
+ * mapped type makes a missing event a compile error.
  *
  * The user room (`user:{userId}`, T-CW-1.9) carries the follow-up proposal
  * to the employee, so one who left the post-call screen still sees it
- * (CALL-42), the employee's suggested times to the expert, both with the
- * call room's payloads, and the in-app reminder (`appointment.remind`,
+ * (CALL-42), the employee's suggested times and a decline to the expert
+ * (T-CW-1.5), all with the call room's payloads, and the in-app reminder (`appointment.remind`,
  * CALL-01 criterion 5). No other call event reaches it.
+ *
+ * Webinar events (T-CW-2.3, D-CW-16, guidelines 8): the public room
+ * `webinar:{webinarId}` carries the status, published and answered messages,
+ * polls and the recording state, plus two canonical additions,
+ * `webinar.message.removed` and `webinar.floor.state` (anonymous, WBN-25.8);
+ * the moderation room carries submitted messages, hands and the attendance
+ * count, which name people or count them and so never reach the public room
+ * (D-CW-15); `webinar.ended` goes to both; the floor events go to the one
+ * attendee's own room `user:{userId}` only (CW-R-34).
  */
 export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'call.participant.joined': callRoomEvent('call.participant.joined'),
@@ -188,12 +211,31 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
     schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.proposed'],
   },
   'appointment.follow_up.confirmed': callRoomEvent('appointment.follow_up.confirmed'),
-  'appointment.follow_up.declined': callRoomEvent('appointment.follow_up.declined'),
+  'appointment.follow_up.declined': {
+    roomKinds: ['call', 'user'],
+    schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.declined'],
+  },
   'appointment.times_suggested': {
     roomKinds: ['call', 'user'],
     schema: CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.times_suggested'],
   },
   'appointment.remind': { roomKinds: ['user'], schema: AppointmentRemindPayloadSchema },
+  'webinar.state': webinarEvent('webinar.state', ['webinar']),
+  'webinar.message.published': webinarEvent('webinar.message.published', ['webinar']),
+  'webinar.message.answered': webinarEvent('webinar.message.answered', ['webinar']),
+  'webinar.poll.opened': webinarEvent('webinar.poll.opened', ['webinar']),
+  'webinar.poll.closed': webinarEvent('webinar.poll.closed', ['webinar']),
+  'webinar.poll.results': webinarEvent('webinar.poll.results', ['webinar']),
+  'webinar.recording': webinarEvent('webinar.recording', ['webinar']),
+  'webinar.ended': webinarEvent('webinar.ended', ['webinar', 'webinar_moderation']),
+  'webinar.floor.given': webinarEvent('webinar.floor.given', ['user']),
+  'webinar.floor.taken': webinarEvent('webinar.floor.taken', ['user']),
+  'webinar.message.submitted': webinarEvent('webinar.message.submitted', ['webinar_moderation']),
+  'webinar.hand.raised': webinarEvent('webinar.hand.raised', ['webinar_moderation']),
+  'webinar.hand.lowered': webinarEvent('webinar.hand.lowered', ['webinar_moderation']),
+  'webinar.attendance.count': webinarEvent('webinar.attendance.count', ['webinar_moderation']),
+  'webinar.message.removed': addedWebinarEvent('webinar.message.removed'),
+  'webinar.floor.state': addedWebinarEvent('webinar.floor.state'),
 };
 
 /**

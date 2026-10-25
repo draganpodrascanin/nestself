@@ -913,3 +913,46 @@ export const ROOM_EVENT_PAYLOAD_SCHEMAS = {
 export type RoomEventName = CallRoomEventName | WebinarEventName;
 export type RoomEventPayloads = CallRoomEventPayloads & WebinarEventPayloads;
 export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
+
+// ---------------------------------------------------------------------------
+// Additions to the canonical webinar events (T-CW-2.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * `webinar.message.removed`, public room: a published message a host
+ * dismissed leaves the public chat (WBN-24.2: "the message disappears from
+ * the public feed"). The id only.
+ */
+export const WebinarMessageRemovedPayloadSchema = z.strictObject({
+  messageId: idField,
+});
+export type WebinarMessageRemovedPayload = z.infer<typeof WebinarMessageRemovedPayloadSchema>;
+
+/**
+ * `webinar.floor.state`, public room: whether an attendee has the floor, so
+ * the audience sees "a participant is speaking" (WBN-25.8). Anonymous by
+ * construction: a flag, never a participant id or a name (D-CW-15).
+ */
+export const WebinarFloorStatePayloadSchema = z.strictObject({
+  active: z.boolean(),
+});
+export type WebinarFloorStatePayload = z.infer<typeof WebinarFloorStatePayloadSchema>;
+
+/**
+ * Public-room events the stories need beyond the decision record's section 7
+ * list, added in T-CW-2.3 as canonical additions. They are kept out of
+ * `WEBINAR_ROOM_EVENT_NAMES`, `WEBINAR_EVENT_PAYLOAD_SCHEMAS` and
+ * `ROOM_EVENT_PAYLOAD_SCHEMAS`, which mirror section 7 exactly; the gateway's
+ * `ROOM_EVENTS` and the web client accept both lists.
+ */
+export const WEBINAR_ROOM_ADDED_EVENT_NAMES = ['webinar.message.removed', 'webinar.floor.state'] as const;
+export type WebinarRoomAddedEventName = (typeof WEBINAR_ROOM_ADDED_EVENT_NAMES)[number];
+
+export const WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS = {
+  'webinar.message.removed': WebinarMessageRemovedPayloadSchema,
+  'webinar.floor.state': WebinarFloorStatePayloadSchema,
+} as const satisfies { readonly [E in WebinarRoomAddedEventName]: z.ZodType };
+
+export type WebinarRoomAddedEventPayloads = {
+  [E in WebinarRoomAddedEventName]: z.infer<(typeof WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};

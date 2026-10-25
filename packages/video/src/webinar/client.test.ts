@@ -283,6 +283,58 @@ describe('WebinarClient polls and recording (WBN-11, WBN-27, WBN-28)', () => {
   });
 });
 
+describe('WebinarClient canonical additions (T-CW-2.3)', () => {
+  const published = {
+    id: 'm1',
+    webinarId: 'w1',
+    kind: 'attendee' as const,
+    status: 'published' as const,
+    text: 'Off topic',
+    authorFirstName: null,
+    answerText: null,
+    publishedAt: '2026-10-25T10:01:00.000Z',
+    createdAt: '2026-10-25T10:00:00.000Z',
+  };
+
+  it('removes a dismissed published message from the public chat (webinar.message.removed)', () => {
+    const moderatorRooms = recordingTransport();
+    const { transport, rooms } = recordingTransport();
+    const moderator = new WebinarClient({
+      webinarId: 'w1',
+      role: 'moderator',
+      transport: moderatorRooms.transport,
+      initial: { moderationMessages: [{ ...published, authorParticipantId: 'p1', authorName: 'Ana (sample)', showFirstName: false }] },
+    });
+    const attendee = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p2', transport, initial: { publicMessages: [published] } });
+    moderator.connect();
+    attendee.connect();
+    expect(attendee.getSnapshot().publicMessages).toHaveLength(1);
+
+    for (const room of [rooms, moderatorRooms.rooms]) room.get('webinar:w1')!('webinar.message.removed', { messageId: 'm1' });
+    expect(attendee.getSnapshot().publicMessages).toEqual([]);
+    expect(moderator.getSnapshot().publicMessages).toEqual([]);
+    expect(moderator.getSnapshot().moderationMessages[0]).toMatchObject({ id: 'm1', status: 'dismissed' });
+
+    // A payload with anything but the id fails the strict schema and is ignored.
+    const before = attendee.getSnapshot();
+    rooms.get('webinar:w1')!('webinar.message.removed', { messageId: 'm1', text: 'x' });
+    expect(attendee.getSnapshot()).toBe(before);
+  });
+
+  it('tracks the anonymous floor flag (webinar.floor.state, WBN-25.8) and clears it when the webinar ends', () => {
+    const { transport, rooms } = recordingTransport();
+    const attendee = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p2', transport });
+    attendee.connect();
+    expect(attendee.getSnapshot().floorActive).toBe(false);
+    rooms.get('webinar:w1')!('webinar.floor.state', { active: true });
+    expect(attendee.getSnapshot().floorActive).toBe(true);
+    rooms.get('webinar:w1')!('webinar.floor.state', { active: false, participantId: 'p1' });
+    expect(attendee.getSnapshot().floorActive).toBe(true);
+    rooms.get('webinar:w1')!('webinar.ended', { webinarId: 'w1', endedAt: '2026-10-25T11:00:00.000Z' });
+    expect(attendee.getSnapshot().floorActive).toBe(false);
+  });
+});
+
 describe('webinarErrorMessage (error visibility rule)', () => {
   it('maps contract codes and generic codes to copy, and unknown codes to errors.unknown', () => {
     expect(webinarErrorMessage('floor_not_available', t)).toBe(t('errors.floorNotAvailable'));

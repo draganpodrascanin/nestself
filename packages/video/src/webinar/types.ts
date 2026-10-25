@@ -184,6 +184,8 @@ export interface WebinarSnapshot {
   myHand: WebinarHandState;
   /** Attendees: this viewer's floor. */
   myFloor: WebinarFloorState;
+  /** Some attendee has the floor (`webinar.floor.state`, anonymous): "a participant is speaking" (WBN-25.8). */
+  floorActive: boolean;
   /** Keys of actions in flight: `<action>` or `<action>:<target id>`. */
   pending: readonly string[];
   errors: Readonly<Partial<Record<WebinarActionArea, WebinarActionErrorLike>>>;

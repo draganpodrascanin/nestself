@@ -5,6 +5,11 @@
  * with the contract's `ROOM_EVENT_PAYLOAD_SCHEMAS`, applies it to an immutable
  * snapshot and performs the chat, hand, floor, poll and recording actions.
  *
+ * Besides the section 7 events it accepts the two canonical additions of
+ * T-CW-2.3 on the public room: `webinar.message.removed` (a published message
+ * a host dismissed leaves the chat) and `webinar.floor.state` (an anonymous
+ * flag: some attendee has the floor).
+ *
  * Role rules held here, on top of the server's (D-CW-15, D-CW-35, WBN-08):
  * - an attendee's state never holds a roster, a name, a hand list or a count;
  *   moderation-room events reaching an attendee client are dropped;
@@ -19,6 +24,8 @@ import {
   ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_EVENT_NAMES,
   WEBINAR_PARTICIPANT_EVENT_NAMES,
+  WEBINAR_ROOM_ADDED_EVENT_NAMES,
+  WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_EVENT_NAMES,
   WebinarFloorResponseSchema,
   WebinarHandRaiseResponseSchema,
@@ -38,6 +45,8 @@ import type {
   WebinarMessageCreateRequest,
   WebinarModerationMessage,
   WebinarPoll,
+  WebinarRoomAddedEventName,
+  WebinarRoomAddedEventPayloads,
 } from '@nestself/contracts';
 import { WebinarActionError, toWebinarActionError } from './errors';
 import type {
@@ -67,7 +76,15 @@ export interface WebinarClientOptions {
   initial?: WebinarInitialState;
 }
 
-const PUBLIC_EVENTS: ReadonlySet<string> = new Set<string>([...WEBINAR_ROOM_EVENT_NAMES, ...WEBINAR_PARTICIPANT_EVENT_NAMES]);
+type ClientEventName = WebinarEventName | WebinarRoomAddedEventName;
+
+const PUBLIC_EVENTS: ReadonlySet<string> = new Set<string>([
+  ...WEBINAR_ROOM_EVENT_NAMES,
+  ...WEBINAR_ROOM_ADDED_EVENT_NAMES,
+  ...WEBINAR_PARTICIPANT_EVENT_NAMES,
+]);
+/** Every payload schema the client validates against: the contract's room events and the T-CW-2.3 additions. */
+const PAYLOAD_SCHEMAS = { ...ROOM_EVENT_PAYLOAD_SCHEMAS, ...WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS };
 const MODERATION_EVENTS: ReadonlySet<string> = new Set<string>([...WEBINAR_MODERATION_ROOM_EVENT_NAMES, 'webinar.ended']);
 const HOST_ONLY_EVENTS: ReadonlySet<string> = new Set<string>(WEBINAR_MODERATION_ROOM_EVENT_NAMES);
 
@@ -116,6 +133,7 @@ function emptySnapshot(options: WebinarClientOptions): WebinarSnapshot {
     polls: { list: [], results: {}, votes: {} },
     myHand: { raised: false, raisedAt: null },
     myFloor: { status: 'none', acknowledged: false },
+    floorActive: false,
     pending: [],
     errors: {},
   };
@@ -201,16 +219,29 @@ export class WebinarClient implements WebinarClientApi {
     const allowed = room === 'public' ? PUBLIC_EVENTS : MODERATION_EVENTS;
     if (!allowed.has(event)) return;
     if (HOST_ONLY_EVENTS.has(event) && !this.isHost) return;
-    const schema = ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarEventName];
+    const schema = PAYLOAD_SCHEMAS[event as ClientEventName];
     const parsed = schema.safeParse(payload);
     if (!parsed.success) return;
     const data = parsed.data as { webinarId?: string };
     if (data.webinarId !== undefined && data.webinarId !== this.snapshot.webinarId) return;
-    this.apply(event as WebinarEventName, parsed.data);
+    this.apply(event as ClientEventName, parsed.data);
   }
 
-  private apply(event: WebinarEventName, payload: unknown): void {
+  private apply(event: ClientEventName, payload: unknown): void {
     switch (event) {
+      case 'webinar.message.removed': {
+        const { messageId } = payload as WebinarRoomAddedEventPayloads['webinar.message.removed'];
+        if (this.snapshot.publicMessages.some((entry) => entry.id === messageId)) {
+          this.update({ publicMessages: this.snapshot.publicMessages.filter((entry) => entry.id !== messageId) });
+        }
+        if (this.isModerator) this.patchModeration(messageId, { status: 'dismissed', answerText: null });
+        return;
+      }
+      case 'webinar.floor.state': {
+        const { active } = payload as WebinarRoomAddedEventPayloads['webinar.floor.state'];
+        if (active !== this.snapshot.floorActive) this.update({ floorActive: active });
+        return;
+      }
       case 'webinar.state': {
         const { status } = payload as WebinarEventPayloads['webinar.state'];
         if (status === 'ended') this.markEnded(now());
@@ -274,7 +305,7 @@ export class WebinarClient implements WebinarClientApi {
 
   private markEnded(endedAt: string): void {
     const recording = this.snapshot.recording.status === 'recording' ? { status: 'processing' as const } : this.snapshot.recording;
-    this.update({ status: 'ended', endedAt: this.snapshot.endedAt ?? endedAt, recording });
+    this.update({ status: 'ended', endedAt: this.snapshot.endedAt ?? endedAt, recording, floorActive: false });
   }
 
   // -------------------------------------------------------------------------

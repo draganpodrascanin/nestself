@@ -9,6 +9,13 @@ import {
   CALL_ROOM_EVENT_NAMES,
   CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
   USER_ROOM_EVENT_NAMES,
+  WEBINAR_EVENT_NAMES,
+  WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_EVENT_NAMES,
+  WEBINAR_PARTICIPANT_EVENT_NAMES,
+  WEBINAR_ROOM_ADDED_EVENT_NAMES,
+  WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_ROOM_EVENT_NAMES,
   userRoomName,
 } from '@nestself/contracts';
 import { CallSubscribeSchema, ROOM_EVENTS, SubscribeMessageSchema, checkRoomEvent, parseRoom } from './ws-messages.js';
@@ -124,8 +131,37 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
     expect(ROOM_EVENTS['appointment.times_suggested'].roomKinds).toEqual(['call', 'user']);
     expect(ROOM_EVENTS['appointment.remind']).toEqual({ roomKinds: ['user'], schema: AppointmentRemindPayloadSchema });
     expect(Object.keys(ROOM_EVENTS).sort()).toEqual(
-      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES])].sort(),
+      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES, ...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES])].sort(),
     );
+  });
+
+  it('binds every webinar event to its room kinds and its contract schema (T-CW-2.3, guidelines 8)', () => {
+    for (const event of WEBINAR_ROOM_EVENT_NAMES) {
+      expect(ROOM_EVENTS[event].roomKinds).toContain('webinar');
+      expect(ROOM_EVENTS[event].schema).toBe(WEBINAR_EVENT_PAYLOAD_SCHEMAS[event]);
+    }
+    for (const event of WEBINAR_MODERATION_ROOM_EVENT_NAMES) {
+      expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['webinar_moderation'], schema: WEBINAR_EVENT_PAYLOAD_SCHEMAS[event] });
+    }
+    for (const event of WEBINAR_PARTICIPANT_EVENT_NAMES) {
+      expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['user'], schema: WEBINAR_EVENT_PAYLOAD_SCHEMAS[event] });
+    }
+    for (const event of WEBINAR_ROOM_ADDED_EVENT_NAMES) {
+      expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['webinar'], schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event] });
+    }
+    expect(ROOM_EVENTS['webinar.ended'].roomKinds).toEqual(['webinar', 'webinar_moderation']);
+  });
+
+  it('keeps names and counts off the public webinar room and the floor off every shared room', () => {
+    const hand = { participantId: 'p1', participantName: 'Jovan', raisedAt: '2026-11-10T15:00:00.000Z' };
+    expect(checkRoomEvent('webinar:w1', 'webinar.hand.raised', hand)).toBeNull();
+    expect(checkRoomEvent('webinar:w1:moderation', 'webinar.hand.raised', hand)).toEqual(hand);
+    expect(checkRoomEvent('webinar:w1', 'webinar.attendance.count', { webinarId: 'w1', count: 3 })).toBeNull();
+    const floor = { participantId: 'p1', capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' } };
+    expect(checkRoomEvent('webinar:w1', 'webinar.floor.given', floor)).toBeNull();
+    expect(checkRoomEvent('user:user_jovan', 'webinar.floor.given', floor)).toEqual(floor);
+    expect(checkRoomEvent('webinar:w1', 'webinar.floor.state', { active: true })).toEqual({ active: true });
+    expect(checkRoomEvent('webinar:w1', 'webinar.message.removed', { messageId: 'm1', text: 'x' })).toBeNull();
   });
 });
 
@@ -140,12 +176,15 @@ describe('checkRoomEvent on the user room', () => {
 
   it('passes the follow-up proposal and the reminder to a user room', () => {
     expect(checkRoomEvent(userRoomName('user_jovan'), 'appointment.follow_up.proposed', proposed)).toEqual(proposed);
+    // T-CW-1.5: the expert hears a decline on their own room.
+    const declined = { appointmentId: 'appt_done', followUpId: 'appt_next' };
+    expect(checkRoomEvent(userRoomName('user_milica'), 'appointment.follow_up.declined', declined)).toEqual(declined);
     expect(checkRoomEvent(userRoomName('user_jovan'), 'appointment.remind', remind)).toEqual(remind);
   });
 
   it('keeps every other call event off the user room and the reminder off the call room', () => {
     expect(checkRoomEvent('user:user_jovan', 'call.signal', { type: 'cannot_hear', fromRole: 'expert' })).toBeNull();
-    expect(checkRoomEvent('user:user_jovan', 'appointment.follow_up.declined', { appointmentId: 'a', followUpId: 'b' })).toBeNull();
+    expect(checkRoomEvent('user:user_jovan', 'call.participant.joined', { participantId: 'p', role: 'expert' })).toBeNull();
     expect(checkRoomEvent('call:session_1', 'appointment.remind', remind)).toBeNull();
   });
 
