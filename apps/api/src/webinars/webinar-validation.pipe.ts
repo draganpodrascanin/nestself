@@ -1,14 +1,15 @@
 /**
  * Validation pipe of the occurrence form (`POST` and `PATCH /ops/webinars`,
- * WBN-30, D-CW-36). The contract refines `capacity` at
- * `WEBINAR_SINGLE_MEETING_CAPACITY` (250) with the issue message
+ * WBN-30, D-CW-14). The contract refines `capacity` at
+ * `WEBINAR_REPLICATED_CAPACITY` (1,000, media replication above 250,
+ * T-CW-3.2) with the issue message
  * `capacity_above_limit`; this pipe turns that issue into the coded 400 the
  * clients map to translated copy, with the limit in `details`, the way the
  * services raise every other coded 400 (`ApiHttpException`). Any other issue
  * is the plain validation failure of `ZodValidationPipe`.
  */
 import { Injectable, type PipeTransform } from '@nestjs/common';
-import { WEBINAR_SINGLE_MEETING_CAPACITY, type CallErrorCode } from '@nestself/contracts';
+import { WEBINAR_REPLICATED_CAPACITY, type CallErrorCode } from '@nestself/contracts';
 import type { ZodType } from 'zod';
 import { ApiHttpException } from '../common/api-error.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -33,8 +34,8 @@ export class WebinarFormValidationPipe implements PipeTransform {
       throw new ApiHttpException({
         status: 400,
         code: CAPACITY_ABOVE_LIMIT,
-        message: `A webinar holds at most ${WEBINAR_SINGLE_MEETING_CAPACITY} attendees until media replication lands in M3`,
-        details: { field: 'capacity', limit: WEBINAR_SINGLE_MEETING_CAPACITY },
+        message: `A webinar holds at most ${WEBINAR_REPLICATED_CAPACITY} attendees`,
+        details: { field: 'capacity', limit: WEBINAR_REPLICATED_CAPACITY },
       });
     }
     return this.fallback.transform(value);

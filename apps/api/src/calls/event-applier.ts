@@ -26,6 +26,16 @@
  *   `call.session.ended` emitted. Its end reason is `provider` unless the
  *   expert or a job stamped theirs before calling the provider.
  *
+ * Media replication (T-CW-3.2, D-CW-14): a replica's events carry the
+ * replica's meeting id and `{sessionId}-r{n}`, so they are mapped back to the
+ * session by that external id (`parseReplicaExternalMeetingId`). Its attendee
+ * events apply as the primary's do; its `MeetingStarted` and `MeetingEnded`
+ * are stored only, since the primary's own schedule the cleanup and close
+ * the session (deleting the primary deletes the replicas). A webinar
+ * attendee's join and leave follow their own attendee: the audio-only
+ * attendee a floor promotion adds on the primary, or one a reconnect
+ * replaced, changes nothing.
+ *
  * Other event names (`AttendeeAuthorized`, `AttendeeVideoStarted` and the
  * rest of OPS-10) are stored and otherwise ignored. An event for a meeting no
  * session knows is reported as `unknown_meeting`, and the consumer deletes it
@@ -40,7 +50,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
-import { VIDEO_PROVIDER_EVENT_TYPES, type VideoProviderEventType } from '../video/video-provider.js';
+import {
+  VIDEO_PROVIDER_EVENT_TYPES,
+  parseReplicaExternalMeetingId,
+  type VideoProviderEventType,
+} from '../video/video-provider.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from './calls.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -90,6 +104,24 @@ function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
 }
 
+/** An event of one of the session's replica meetings (`{sessionId}-r{n}`, T-CW-3.2). */
+function isReplicaEvent(event: CallProviderEvent, session: CallSessionRecord): boolean {
+  if (!event.externalMeetingId || event.providerMeetingId === session.providerMeetingId) return false;
+  return parseReplicaExternalMeetingId(event.externalMeetingId)?.sessionId === session.id;
+}
+
+/**
+ * Whether the event is about the participant's own attendee. A webinar
+ * attendee's attendance follows the attendee they joined with: the
+ * audio-only attendee a floor promotion adds on the primary (T-CW-3.2), or
+ * an attendee a reconnect replaced, does not make them join or leave.
+ */
+function ownAttendee(participant: CallParticipantRecord, event: CallProviderEvent, session: CallSessionRecord): boolean {
+  if (session.format !== 'webinar' || participant.role !== 'attendee') return true;
+  if (!participant.providerAttendeeId || !event.providerAttendeeId) return true;
+  return participant.providerAttendeeId === event.providerAttendeeId;
+}
+
 /** The event names the applier acts on, as the fake provider emits them; null for any other. */
 function knownEventType(name: string): VideoProviderEventType | null {
   return (VIDEO_PROVIDER_EVENT_TYPES as readonly string[]).includes(name) ? (name as VideoProviderEventType) : null;
@@ -116,9 +148,11 @@ export class EventApplier {
       return 'unknown_meeting';
     }
 
-    // A meeting other than the session's own: one a lost creation race left behind (CallsService).
-    const stray = session.providerMeetingId !== null && session.providerMeetingId !== event.providerMeetingId;
-    if (!stray && event.eventType === 'MeetingEnded' && session.status === 'creating') {
+    // A replica of the session's webinar (T-CW-3.2), or a meeting other than the session's own: one a lost
+    // creation race left behind (CallsService).
+    const fromReplica = isReplicaEvent(event, session);
+    const stray = !fromReplica && session.providerMeetingId !== null && session.providerMeetingId !== event.providerMeetingId;
+    if (!stray && !fromReplica && event.eventType === 'MeetingEnded' && session.status === 'creating') {
       throw new CallEventNotReadyError('MeetingEnded arrived before the session became active');
     }
 
@@ -136,7 +170,7 @@ export class EventApplier {
         tx,
       );
       if (!stored) return null;
-      return stray ? {} : this.applyState(event, session, tx);
+      return stray ? {} : this.applyState(event, session, fromReplica, tx);
     });
 
     if (!effects) {
@@ -154,22 +188,31 @@ export class EventApplier {
     return 'applied';
   }
 
-  private async applyState(event: CallProviderEvent, session: CallSessionRecord, tx: DbExecutor): Promise<Effects> {
+  private async applyState(
+    event: CallProviderEvent,
+    session: CallSessionRecord,
+    fromReplica: boolean,
+    tx: DbExecutor,
+  ): Promise<Effects> {
     const eventType = knownEventType(event.eventType);
     // Any other name (OPS-10) is stored and otherwise ignored.
     if (!eventType) return {};
     switch (eventType) {
       case 'MeetingStarted':
+        // The primary's start schedules the cleanup, which deletes the replicas with it.
+        if (fromReplica) return {};
         return { scheduleCleanup: session.status !== 'ended' && session.status !== 'failed' };
       case 'AttendeeJoined': {
         const participant = await this.findParticipant(event, session, tx);
-        if (participant) await this.repo.recordParticipantJoined(participant.id, event.occurredAt, tx);
+        if (participant && ownAttendee(participant, event, session)) {
+          await this.repo.recordParticipantJoined(participant.id, event.occurredAt, tx);
+        }
         return {};
       }
       case 'AttendeeLeft':
       case 'AttendeeDropped': {
         const participant = await this.findParticipant(event, session, tx);
-        if (!participant) return {};
+        if (!participant || !ownAttendee(participant, event, session)) return {};
         await this.repo.recordParticipantLeft(participant.id, event.occurredAt, tx);
         const rejoined = event.providerAttendeeId
           ? await this.repo.hasLaterProviderEvent(
@@ -183,6 +226,8 @@ export class EventApplier {
         return rejoined ? {} : { left: participant };
       }
       case 'MeetingEnded': {
+        // A replica ends with its primary; only the primary's end closes the session.
+        if (fromReplica) return {};
         const closed = await this.lifecycle.closeInTransaction(
           session.id,
           { endedAt: event.occurredAt, reason: 'provider' },
@@ -217,11 +262,17 @@ export class EventApplier {
     if (effects.closed) await this.lifecycle.announceClosed(effects.closed);
   }
 
-  /** By provider meeting id; a session still CREATING has none yet and is found by its own id. */
+  /**
+   * By provider meeting id; a session still CREATING has none yet and is
+   * found by its own id, and a replica by the session id in its
+   * `{sessionId}-r{n}` (T-CW-3.2).
+   */
   private async findSession(event: CallProviderEvent): Promise<CallSessionRecord | null> {
     const byMeeting = await this.repo.findSessionByProviderMeetingId(event.providerMeetingId);
     if (byMeeting) return byMeeting;
-    return event.externalMeetingId ? this.repo.findSessionById(event.externalMeetingId) : null;
+    if (!event.externalMeetingId) return null;
+    const replica = parseReplicaExternalMeetingId(event.externalMeetingId);
+    return this.repo.findSessionById(replica?.sessionId ?? event.externalMeetingId);
   }
 
   /** By `ExternalUserId` (the participant id), else by attendee id, within the session. */

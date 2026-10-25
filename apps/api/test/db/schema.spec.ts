@@ -55,7 +55,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(14);
+    expect(Number(rows[0]!.n)).toBe(15);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {

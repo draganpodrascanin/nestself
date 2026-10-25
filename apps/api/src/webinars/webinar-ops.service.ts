@@ -4,7 +4,8 @@
  *
  * - Create and edit (`POST`, `PATCH /ops/webinars`, `event.manage`): title
  *   and description per locale, schedule, audience policy, capacity (at most
- *   `WEBINAR_SINGLE_MEETING_CAPACITY` until M3: 400 `capacity_above_limit`),
+ *   `WEBINAR_REPLICATED_CAPACITY`, media replication above 250, T-CW-3.2:
+ *   400 `capacity_above_limit`),
  *   presenters and the moderator. No recording field: every webinar is
  *   recorded. A new occurrence is `draft`; editing is allowed while `draft`
  *   or `published` (409 `not_editable` after). The occurrence takes the

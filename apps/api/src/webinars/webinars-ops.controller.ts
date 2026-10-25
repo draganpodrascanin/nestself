@@ -19,7 +19,7 @@
  * the occurrence form). Every denial, and a call from outside the operations
  * context (`context_mismatch`), answers 404: an employer-scoped principal
  * learns nothing about an occurrence's registrations or attendance (D-CW-30).
- * A capacity above 250 answers 400 `capacity_above_limit` (D-CW-36); an edit
+ * A capacity above 1,000 answers 400 `capacity_above_limit` (D-CW-14); an edit
  * the status no longer allows 409 `not_editable`.
  */
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';

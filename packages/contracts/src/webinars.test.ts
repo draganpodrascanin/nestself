@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { ACTIONS } from './actions.ts';
-import { CALL_ERROR_CODES, CALL_ROOM_EVENT_NAMES, WEBINAR_SINGLE_MEETING_CAPACITY } from './calls.ts';
+import {
+  CALL_ERROR_CODES,
+  CALL_ROOM_EVENT_NAMES,
+  WEBINAR_REPLICATED_CAPACITY,
+  WEBINAR_SINGLE_MEETING_CAPACITY,
+} from './calls.ts';
 import { locales } from './locale.ts';
 import { PERMISSION_TEMPLATES } from './templates.ts';
 import {
@@ -141,9 +146,11 @@ describe('WebinarCreateRequestSchema (WBN-30)', () => {
     expect(parsed.moderatorUserId).toBeNull();
   });
 
-  it('refines capacity at 250 with the capacity_above_limit code until M3 (D-CW-36)', () => {
+  it('refines capacity at 1,000 with the capacity_above_limit code once replication lands (D-CW-14, T-CW-3.2)', () => {
     expect(WebinarCreateRequestSchema.safeParse({ ...createBody, capacity: 250 }).success).toBe(true);
-    const over = WebinarCreateRequestSchema.safeParse({ ...createBody, capacity: 251 });
+    expect(WebinarCreateRequestSchema.safeParse({ ...createBody, capacity: 500 }).success).toBe(true);
+    expect(WebinarCreateRequestSchema.safeParse({ ...createBody, capacity: WEBINAR_REPLICATED_CAPACITY }).success).toBe(true);
+    const over = WebinarCreateRequestSchema.safeParse({ ...createBody, capacity: WEBINAR_REPLICATED_CAPACITY + 1 });
     expect(over.success).toBe(false);
     expect(over.error?.issues).toHaveLength(1);
     expect(over.error?.issues[0]?.path).toEqual(['capacity']);
@@ -182,9 +189,10 @@ describe('WebinarUpdateRequestSchema', () => {
     expect(WebinarUpdateRequestSchema.parse({ moderatorUserId: null })).toEqual({ moderatorUserId: null });
   });
 
-  it('refuses an empty body, a capacity above 250, a status and a reversed schedule', () => {
+  it('refuses an empty body, a capacity above 1,000, a status and a reversed schedule', () => {
     expect(WebinarUpdateRequestSchema.safeParse({}).success).toBe(false);
-    const over = WebinarUpdateRequestSchema.safeParse({ capacity: 300 });
+    expect(WebinarUpdateRequestSchema.parse({ capacity: 300 })).toEqual({ capacity: 300 });
+    const over = WebinarUpdateRequestSchema.safeParse({ capacity: WEBINAR_REPLICATED_CAPACITY + 1 });
     expect(over.error?.issues[0]?.message).toBe('capacity_above_limit');
     expect(WebinarUpdateRequestSchema.safeParse({ status: 'live' }).success).toBe(false);
     expect(
@@ -683,6 +691,11 @@ describe('webinar rooms and events (decision record section 7)', () => {
     expect(
       given.safeParse({ ...payload, capabilities: { ...payload.capabilities, video: 'send_receive' } }).success,
     ).toBe(false);
+    // A replica attendee also gets primary credentials to promote into (WEB-09), never a meeting id.
+    const primaryAttendee = { AttendeeId: 'att_primary', ExternalUserId: 'part_1', JoinToken: 'token' };
+    expect(given.parse({ ...payload, primaryAttendee })).toEqual({ ...payload, primaryAttendee });
+    expect(given.safeParse({ ...payload, primaryAttendee: { ...primaryAttendee, MeetingId: 'meeting_1' } }).success).toBe(false);
+    expect(given.safeParse({ ...payload, primaryAttendee: { ...primaryAttendee, JoinToken: '' } }).success).toBe(false);
     const taken = WEBINAR_EVENT_PAYLOAD_SCHEMAS['webinar.floor.taken'];
     expect(taken.safeParse(payload).success).toBe(false);
     expect(taken.safeParse({ ...payload, capabilities: { ...payload.capabilities, audio: 'receive' } }).success).toBe(

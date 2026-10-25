@@ -411,4 +411,68 @@ describe('EventApplier', () => {
     await applier.apply(event('MeetingStarted', 0));
     expect(scheduleCleanup).not.toHaveBeenCalled();
   });
+
+  // ── Media replication (T-CW-3.2, D-CW-14) ───────────────────────────────────
+
+  describe('a replicated webinar', () => {
+    const ATTENDEE = 'participant_attendee';
+    const REPLICA = 'meeting_1_replica_2';
+
+    /** An event of replica 2: Chime reports the replica's id and its `{sessionId}-r2`. */
+    function replicaEvent(eventType: string, seconds: number, participantId?: string): CallProviderEvent {
+      return { ...event(eventType, seconds, participantId), providerMeetingId: REPLICA, externalMeetingId: `${SESSION}-r2` };
+    }
+
+    beforeEach(() => {
+      repo.sessions.set(SESSION, session({ appointmentId: null, webinarId: 'webinar_1', format: 'webinar', locationText: null }));
+      repo.participants.set(ATTENDEE, { ...participant(ATTENDEE, 'employee'), role: 'attendee', userId: 'user_ana' });
+    });
+
+    it('maps a replica event back to its session by the replica external meeting id', async () => {
+      expect(await applier.apply(replicaEvent('AttendeeJoined', 5, ATTENDEE))).toBe('applied');
+      expect(repo.events[0]).toMatchObject({ sessionId: SESSION, providerMeetingId: REPLICA, eventType: 'AttendeeJoined' });
+      expect(repo.participants.get(ATTENDEE)!.firstJoinedAt).toEqual(at(5));
+
+      expect(await applier.apply(replicaEvent('AttendeeLeft', 90, ATTENDEE))).toBe('applied');
+      expect(repo.participants.get(ATTENDEE)!.lastLeftAt).toEqual(at(90));
+      expect(notifyParticipantLeft).toHaveBeenCalledWith(SESSION, expect.objectContaining({ id: ATTENDEE }));
+    });
+
+    it('closes the session on the primary MeetingEnded only, never on a replica one', async () => {
+      expect(await applier.apply(replicaEvent('MeetingEnded', 50))).toBe('applied');
+      expect(repo.sessions.get(SESSION)!.status).toBe('active');
+      expect(emit).not.toHaveBeenCalled();
+
+      expect(await applier.apply(event('MeetingEnded', 60))).toBe('applied');
+      expect(repo.sessions.get(SESSION)!.status).toBe('ended');
+    });
+
+    it('schedules the cleanup on the primary MeetingStarted only', async () => {
+      await applier.apply(replicaEvent('MeetingStarted', 0));
+      expect(scheduleCleanup).not.toHaveBeenCalled();
+      await applier.apply(event('MeetingStarted', 0));
+      expect(scheduleCleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not count the floor promotion on the primary as joining or leaving the webinar', async () => {
+      await applier.apply(replicaEvent('AttendeeJoined', 5, ATTENDEE));
+      // The promotion attendee: same participant (ExternalUserId), another attendee id, on the primary.
+      const promotion = (eventType: string, seconds: number): CallProviderEvent => ({
+        ...event(eventType, seconds, ATTENDEE),
+        providerAttendeeId: 'attendee-promotion',
+      });
+      expect(await applier.apply(promotion('AttendeeJoined', 30))).toBe('applied');
+      expect(await applier.apply(promotion('AttendeeLeft', 40))).toBe('applied');
+
+      expect(repo.events).toHaveLength(3);
+      expect(repo.participants.get(ATTENDEE)).toMatchObject({ firstJoinedAt: at(5), lastLeftAt: null });
+      expect(notifyParticipantLeft).not.toHaveBeenCalled();
+    });
+
+    it('treats an event of another session replica as unknown', async () => {
+      const foreign = { ...replicaEvent('AttendeeJoined', 5, ATTENDEE), externalMeetingId: 'session_other-r1' };
+      expect(await applier.apply(foreign)).toBe('unknown_meeting');
+      expect(repo.events).toHaveLength(0);
+    });
+  });
 });

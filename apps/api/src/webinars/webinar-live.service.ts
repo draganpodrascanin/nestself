@@ -19,7 +19,12 @@
  *   number of raised hands (`webinar.hand.count`), nobody else anything.
  * - Floor (WBN-25, WBN-26, D-CW-35, CW-R-108): a host gives an attendee the
  *   floor with `UpdateAttendeeCapabilities` audio `SendReceive` and video and
- *   content `Receive`, and takes it back to receive-only; the events go to
+ *   content `Receive`, and takes it back to receive-only. An attendee seated
+ *   in a replica cannot be given audio there (SPIKE-CW-06): the floor is an
+ *   audio-only attendee on the primary (`promoteToPrimary`), whose credentials
+ *   travel in `webinar.floor.given` as `primaryAttendee` for the client's
+ *   `promoteToPrimaryMeeting` (WEB-09), and taking it back deletes that
+ *   attendee (`demoteFromPrimary`, T-CW-3.2). The events go to
  *   that attendee's own room only (CW-R-34); the audience gets the anonymous
  *   `webinar.floor.state { active }` (WBN-25.8) and the hosts' room
  *   `webinar:{id}:hosts` gets `{ active, participantId }` for the attendee
@@ -47,6 +52,7 @@ import {
   type Principal,
   type WebinarFloorResponse,
   type WebinarHandRaiseResponse,
+  type WebinarPrimaryAttendee,
   type WebinarMessage,
   type WebinarMessageAnswerRequest,
   type WebinarMessageCreateRequest,
@@ -372,15 +378,39 @@ export class WebinarLiveService {
 
   async giveFloor(webinarId: string, participantId: string, principal: Principal): Promise<WebinarFloorResponse> {
     const target = await this.floorTarget(webinarId, participantId, principal);
-    await this.video.updateParticipantCapabilities({
-      providerMeetingId: target.providerMeetingId,
-      providerAttendeeId: target.providerAttendeeId,
-      role: 'attendee',
-      capabilities: attendeeCapabilities(true),
-    });
+    let primaryAttendee: WebinarPrimaryAttendee | undefined;
+    if (target.replicaIndex === null) {
+      await this.video.updateParticipantCapabilities({
+        providerMeetingId: target.providerMeetingId,
+        providerAttendeeId: target.providerAttendeeId,
+        role: 'attendee',
+        capabilities: attendeeCapabilities(true),
+      });
+    } else {
+      // A second grant replaces the first promotion rather than leaving two attendees on the primary.
+      if (target.floorAttendeeId) await this.demote(target, target.floorAttendeeId);
+      const promoted = await this.video.promoteToPrimary({
+        sessionId: target.sessionId,
+        providerMeetingId: target.providerMeetingId,
+        participantId,
+      });
+      await this.access.scoped(target.webinar.orgId, (tx) =>
+        this.repo.setFloorAttendee(participantId, promoted.providerAttendeeId, tx),
+      );
+      // Credentials only, never the primary's meeting id; to this attendee's own socket (CW-R-34, CW-R-69).
+      primaryAttendee = {
+        AttendeeId: promoted.attendee.AttendeeId,
+        ExternalUserId: promoted.attendee.ExternalUserId,
+        JoinToken: promoted.attendee.JoinToken,
+      };
+    }
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, new Date(), tx));
     if (target.registration.handRaisedAt) this.events.toModeration(webinarId, 'webinar.hand.lowered', { participantId });
-    this.events.toParticipant(target.registration.userId, 'webinar.floor.given', { participantId, capabilities: FLOOR });
+    this.events.toParticipant(target.registration.userId, 'webinar.floor.given', {
+      participantId,
+      capabilities: FLOOR,
+      ...(primaryAttendee ? { primaryAttendee } : {}),
+    });
     // The audience learns that a participant is speaking, never who (WBN-25.8, D-CW-15); the hosts learn which participant.
     this.events.toAudienceAdded(webinarId, 'webinar.floor.state', { active: true });
     this.events.toHosts(webinarId, 'webinar.floor.state', { active: true, participantId });
@@ -396,12 +426,17 @@ export class WebinarLiveService {
 
   async takeFloor(webinarId: string, participantId: string, principal: Principal): Promise<WebinarFloorResponse> {
     const target = await this.floorTarget(webinarId, participantId, principal);
-    await this.video.updateParticipantCapabilities({
-      providerMeetingId: target.providerMeetingId,
-      providerAttendeeId: target.providerAttendeeId,
-      role: 'attendee',
-      capabilities: attendeeCapabilities(false),
-    });
+    if (target.floorAttendeeId) {
+      // The client is demoted when its primary attendee goes (WEB-09).
+      await this.demote(target, target.floorAttendeeId);
+    } else if (target.replicaIndex === null) {
+      await this.video.updateParticipantCapabilities({
+        providerMeetingId: target.providerMeetingId,
+        providerAttendeeId: target.providerAttendeeId,
+        role: 'attendee',
+        capabilities: attendeeCapabilities(false),
+      });
+    }
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, null, tx));
     this.events.toParticipant(target.registration.userId, 'webinar.floor.taken', {
       participantId,
@@ -445,9 +480,29 @@ export class WebinarLiveService {
     return {
       webinar,
       registration,
+      sessionId: session.id,
+      participantId: participant.id,
+      /** The primary meeting. */
       providerMeetingId: session.providerMeetingId,
       providerAttendeeId: participant.providerAttendeeId,
+      /** Null when the attendee sits in the primary (a single meeting). */
+      replicaIndex: participant.replicaIndex ?? null,
+      floorAttendeeId: participant.floorAttendeeId ?? null,
     };
+  }
+
+  /** Deletes a replica attendee's promotion attendee on the primary and forgets it (T-CW-3.2). */
+  private async demote(
+    target: { webinar: WebinarRecord; sessionId: string; participantId: string; providerMeetingId: string },
+    floorAttendeeId: string,
+  ): Promise<void> {
+    await this.video.demoteFromPrimary({
+      sessionId: target.sessionId,
+      providerMeetingId: target.providerMeetingId,
+      participantId: target.participantId,
+      providerAttendeeId: floorAttendeeId,
+    });
+    await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloorAttendee(target.participantId, null, tx));
   }
 
   // ── Polls (WBN-11, WBN-27) ────────────────────────────────────────────────

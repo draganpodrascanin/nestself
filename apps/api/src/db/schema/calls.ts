@@ -65,6 +65,12 @@ export const callSessions = pgTable(
     format: callFormat().notNull(),
     /** Set once `CreateMeeting` succeeds (CW-R-20). */
     providerMeetingId: text(),
+    /**
+     * The replica meetings of a webinar above one meeting, in replica order
+     * (media replication, D-CW-14, T-CW-3.2); empty otherwise. Chime cannot
+     * list a primary's replicas, so they are kept here.
+     */
+    replicaMeetingIds: text().array().notNull().default(sql`'{}'::text[]`),
     status: callSessionStatus().notNull().default('PENDING'),
     /** Scheduled window, copied from the appointment or the occurrence. */
     startsAt: ts().notNull(),
@@ -124,6 +130,13 @@ export const callParticipants = pgTable(
       .references(() => users.id, { onDelete: 'restrict' }),
     role: callParticipantRole().notNull(),
     providerAttendeeId: text(),
+    /** The replica (1-based) a webinar attendee is seated in; null on the primary (T-CW-3.2). */
+    replicaIndex: integer(),
+    /**
+     * While a replica attendee holds the floor: their attendee on the primary,
+     * deleted when the floor is taken back (promotion, WEB-09, T-CW-3.2).
+     */
+    floorAttendeeId: text(),
     firstJoinedAt: ts(),
     lastLeftAt: ts(),
     reconnectCount: integer().notNull().default(0),
@@ -135,6 +148,7 @@ export const callParticipants = pgTable(
     index('call_participants_user_id_idx').on(t.userId),
     index('call_participants_provider_attendee_id_idx').on(t.providerAttendeeId),
     check('call_participants_reconnect_count_check', sql`${t.reconnectCount} >= 0`),
+    check('call_participants_replica_index_check', sql`${t.replicaIndex} IS NULL OR ${t.replicaIndex} >= 1`),
     tenantIsolation('call_participants_tenant_isolation', t.orgId),
   ],
 ).enableRLS();

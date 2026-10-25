@@ -17,6 +17,12 @@
  *   the confirmation email with the recording notice (WBN-04, WBN-05).
  * - Unregister (WBN-03): only while `published` (409 `registration_closed`
  *   after); the reminder jobs are removed by id (CW-R-37a).
+ * - Media replication (D-CW-14, T-CW-3.2): when the attendees, the hosts and
+ *   the recording pipeline do not fit one meeting (always above 250
+ *   registrations), the first host's join creates a primary and replicas;
+ *   their ids are kept on the session. Hosts join the primary; attendees the
+ *   least-loaded replica (`pickReplica`), their replica kept on the
+ *   participant. The end deletes the replicas, then the primary.
  * - Join (WBN-07, WBN-16, guidelines 4.8): hosts (a presenter with
  *   `event.present`, the moderator with `event.moderate`) from 30 minutes
  *   before the start while `published` or `live`; attendees with an active
@@ -49,7 +55,7 @@ import {
   ACTIONS,
   CALL_TICKET_TTL_SECONDS,
   WEBINAR_LIST_DEFAULT_LIMIT,
-  WEBINAR_REPLICATED_CAPACITY,
+  WEBINAR_SINGLE_MEETING_CAPACITY,
   WebinarJoinResponseSchema,
   type CallParticipantRole,
   type Principal,
@@ -84,6 +90,7 @@ import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis
 import {
   VIDEO_PROVIDER,
   capabilitiesForRole,
+  pickReplica,
   videoProviderUnavailable,
   type ProviderSession,
   type VideoProvider,
@@ -361,8 +368,20 @@ export class WebinarsService implements WebinarSessionClosedHandler {
 
     if (joiner.kind === 'attendee' && joiner.registration.floorGivenAt) {
       // A rejoining attendee starts receive-only again (D-CW-35): the floor does not survive a reconnect.
-      // A new attendee is receive-only already; the cached one still holds the floor's audio.
-      if (path === 'cached' && session.providerMeetingId && participant.providerAttendeeId) {
+      // A replica attendee loses its promotion attendee on the primary (T-CW-3.2). Otherwise a new
+      // attendee is receive-only already, and the cached one still holds the floor's audio.
+      const seat = await this.access.scoped(webinar.orgId, (tx) =>
+        this.repo.findParticipantOfWebinar(webinar.id, participant.id, tx),
+      );
+      if (seat?.floorAttendeeId && session.providerMeetingId) {
+        await this.video.demoteFromPrimary({
+          sessionId: session.id,
+          providerMeetingId: session.providerMeetingId,
+          participantId: participant.id,
+          providerAttendeeId: seat.floorAttendeeId,
+        });
+        await this.access.scoped(webinar.orgId, (tx) => this.repo.setFloorAttendee(participant.id, null, tx));
+      } else if (path === 'cached' && seat?.replicaIndex == null && session.providerMeetingId && participant.providerAttendeeId) {
         await this.video.updateParticipantCapabilities({
           providerMeetingId: session.providerMeetingId,
           providerAttendeeId: participant.providerAttendeeId,
@@ -472,16 +491,14 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     );
     if (!creating) throw videoProviderUnavailable();
 
+    const capacity = await this.plannedCapacity(webinar);
     const started = Date.now();
     let created: ProviderSession;
     try {
       created = await this.video.createSession({
         sessionId: session.id,
         format: 'webinar',
-        // One seat more than the audience for the media capture pipeline, which joins the meeting as an
-        // attendee (SPIKE-CW-03 assumption, D-CW-18): a full single meeting otherwise has no room for it.
-        // The adapter plans replicas from this number; the documented ceiling is never exceeded.
-        capacity: Math.min(webinar.capacity + RECORDING_PIPELINE_SEATS, WEBINAR_REPLICATED_CAPACITY),
+        capacity,
         orgId: webinar.orgId,
         webinarId: webinar.id,
         participant: { participantId: participant.id, role: participant.role },
@@ -507,14 +524,25 @@ export class WebinarsService implements WebinarSessionClosedHandler {
         { providerMeetingId: created.providerMeetingId, startedAt: new Date() },
         tx,
       );
-      if (moved) await this.calls.setProviderAttendee(participant.id, created.participant.providerAttendeeId, tx);
+      if (moved) {
+        await this.calls.setProviderAttendee(participant.id, created.participant.providerAttendeeId, tx);
+        // Written with ACTIVE, so an attendee who sees the meeting also sees its replicas (T-CW-3.2).
+        if (created.replicas.length > 0) {
+          await this.repo.setReplicaMeetingIds(session.id, created.replicas.map((r) => r.providerMeetingId), tx);
+        }
+        const seat = created.replicas.find((r) => r.providerMeetingId === created.participant.providerMeetingId);
+        if (seat) await this.repo.setParticipantReplica(participant.id, seat.replicaIndex, tx);
+      }
       return moved;
     });
     if (!active) {
       // The webinar ended, or the lock expired and another host finished first (CW-R-12).
       const current = await this.access.scoped(webinar.orgId, (tx) => this.calls.findSessionById(session.id, tx));
       if (current?.providerMeetingId !== created.providerMeetingId) {
-        await this.video.endSession({ providerMeetingId: created.providerMeetingId });
+        await this.video.endSession({
+          providerMeetingId: created.providerMeetingId,
+          replicaMeetingIds: created.replicas.map((r) => r.providerMeetingId),
+        });
       }
       if (current?.status !== 'active' || !current.providerMeetingId) throw webinarNotOpen();
       return this.addAttendee(current, participant, webinar);
@@ -530,9 +558,31 @@ export class WebinarsService implements WebinarSessionClosedHandler {
       result: 'ALLOWED',
       details: { sessionId: session.id, webinarId: webinar.id, format: 'webinar' },
     });
-    const credentials = serialiseCredentials({ meeting: created.meeting, attendee: created.participant.attendee });
+    // The creator is a host, on the primary; a replica seat would carry that replica's meeting.
+    const meeting =
+      created.replicas.find((r) => r.providerMeetingId === created.participant.providerMeetingId)?.meeting ??
+      created.meeting;
+    const credentials = serialiseCredentials({ meeting, attendee: created.participant.attendee });
     await this.cacheCredentials(active, participant, webinar, credentials);
     return credentials;
+  }
+
+  /**
+   * The audience the adapter plans meetings for (D-CW-14, T-CW-3.2). Chime
+   * counts every attendee, host and the media capture pipeline (SPIKE-CW-03
+   * assumption, D-CW-18) against a meeting's 250. When they all fit, one
+   * meeting, asked for one seat more than the audience for the pipeline.
+   * Otherwise the webinar is replicated: the attendees sit in replicas sized
+   * from the registrations, the hosts and the pipeline in the primary. Above
+   * 250 registrations that is always so; just below, the hosts and the
+   * pipeline tip it, and the adapter gets 251 so it plans replicas.
+   */
+  private async plannedCapacity(webinar: WebinarRecord): Promise<number> {
+    const hosts = await this.access.scoped(webinar.orgId, (tx) => this.repo.listHosts(webinar.id, tx));
+    if (webinar.capacity + hosts.length + RECORDING_PIPELINE_SEATS <= WEBINAR_SINGLE_MEETING_CAPACITY) {
+      return webinar.capacity + RECORDING_PIPELINE_SEATS;
+    }
+    return Math.max(webinar.capacity, WEBINAR_SINGLE_MEETING_CAPACITY + 1);
   }
 
   /** An attendee waiting for the meeting a host is creating, for up to `pollTimeoutMs`. */
@@ -548,7 +598,12 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     throw videoProviderUnavailable();
   }
 
-  /** A new attendee in the meeting (`CreateAttendee`); an attendee is receive-only (D-CW-35). */
+  /**
+   * A new attendee (`CreateAttendee`). Hosts join the primary. An attendee is
+   * receive-only (D-CW-35) and, when the webinar is replicated, sits in the
+   * least-loaded replica (T-CW-3.2); the credentials carry that replica's
+   * meeting, never the primary's.
+   */
   private async addAttendee(
     session: CallSessionRecord,
     participant: CallParticipantRecord,
@@ -556,18 +611,42 @@ export class WebinarsService implements WebinarSessionClosedHandler {
   ): Promise<CachedCredentials> {
     const providerMeetingId = session.providerMeetingId;
     if (!providerMeetingId) throw videoProviderUnavailable();
-    const info = await this.video.describeSession({ providerMeetingId });
+    const replicaMeetingIds = await this.access.scoped(webinar.orgId, (tx) => this.repo.replicaMeetingIds(session.id, tx));
+    const replica =
+      participant.role === 'attendee' && replicaMeetingIds.length > 0
+        ? await this.replicaFor(session, webinar, replicaMeetingIds)
+        : null;
+    const info = await this.video.describeSession({ providerMeetingId: replica?.providerMeetingId ?? providerMeetingId });
     if (!info) throw webinarNotOpen();
     const added = await this.video.createParticipant({
       providerMeetingId,
       participantId: participant.id,
       role: participant.role,
       ...(participant.role === 'attendee' ? { capabilities: attendeeCapabilities(false) } : {}),
+      ...(replica ? { replicaMeetingIds, target: { replicaIndex: replica.replicaIndex } } : {}),
     });
-    await this.access.scoped(webinar.orgId, (tx) => this.calls.setProviderAttendee(participant.id, added.providerAttendeeId, tx));
+    await this.access.scoped(webinar.orgId, async (tx) => {
+      await this.calls.setProviderAttendee(participant.id, added.providerAttendeeId, tx);
+      if (replica) await this.repo.setParticipantReplica(participant.id, replica.replicaIndex, tx);
+    });
     const credentials = serialiseCredentials({ meeting: info.meeting, attendee: added.attendee });
     await this.cacheCredentials(session, participant, webinar, credentials);
     return credentials;
+  }
+
+  /** The least-loaded replica with a free seat (`pickReplica`); 409 `webinar_full` when none has one. */
+  private async replicaFor(
+    session: CallSessionRecord,
+    webinar: WebinarRecord,
+    replicaMeetingIds: readonly string[],
+  ): Promise<{ replicaIndex: number; providerMeetingId: string }> {
+    const counts = await this.access.scoped(webinar.orgId, (tx) => this.repo.countAttendeesByReplica(session.id, tx));
+    const replica = pickReplica(
+      replicaMeetingIds.map((providerMeetingId, i) => ({ replicaIndex: i + 1, providerMeetingId })),
+      counts,
+    );
+    if (!replica) throw apiError(409, 'webinar_full', 'The webinar is full');
+    return replica;
   }
 
   private async cacheCredentials(
@@ -688,13 +767,15 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     this.events.toModeration(webinarId, 'webinar.ended', payload);
   }
 
-  /** Deletes the meeting and closes the open session; drops every cached credential (D-CW-08). */
+  /** Deletes the meetings and closes the open session; drops every cached credential (D-CW-08). */
   private async closeSession(webinar: WebinarRecord, endedAt: Date): Promise<CallSessionRecord | null> {
     const session = await this.access.scoped(webinar.orgId, (tx) => this.repo.findOpenSession(webinar.id, tx));
     if (!session) return null;
     if (session.status === 'active' && session.providerMeetingId) {
       await this.access.scoped(webinar.orgId, (tx) => this.calls.stampEndReason(session.id, 'expert', tx));
-      await this.video.endSession({ providerMeetingId: session.providerMeetingId });
+      // Replicas first, then the primary (T-CW-3.2); deleting the primary would take them along anyway.
+      const replicaMeetingIds = await this.access.scoped(webinar.orgId, (tx) => this.repo.replicaMeetingIds(session.id, tx));
+      await this.video.endSession({ providerMeetingId: session.providerMeetingId, replicaMeetingIds });
       await this.access.scoped(webinar.orgId, (tx) => this.calls.closeSession(session.id, { endedAt, reason: 'expert' }, tx));
     } else {
       // No meeting yet (PENDING) or one being created: a creator that finishes now finds the session ended.

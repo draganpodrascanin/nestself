@@ -203,6 +203,19 @@ export interface WebinarListFilter {
   limit: number;
 }
 
+/** A participant of an occurrence's session with its seat in a replicated webinar (T-CW-3.2). */
+export interface WebinarParticipantSeat {
+  id: string;
+  sessionId: string;
+  userId: string;
+  role: string;
+  providerAttendeeId: string | null;
+  /** The replica (1-based) the attendee sits in; null on the primary. */
+  replicaIndex: number | null;
+  /** The promotion attendee on the primary while a replica attendee holds the floor. */
+  floorAttendeeId: string | null;
+}
+
 /** One attendee participant's presence in one webinar session. */
 export interface AttendeePresence {
   userId: string;
@@ -863,12 +876,12 @@ export class WebinarsRepository {
     return toSessionRecord(row!);
   }
 
-  /** The participant of one of the occurrence's sessions, or null. */
+  /** The participant of one of the occurrence's sessions, with its seat (T-CW-3.2), or null. */
   async findParticipantOfWebinar(
     webinarId: string,
     participantId: string,
     tx?: DbExecutor,
-  ): Promise<{ id: string; sessionId: string; userId: string; role: string; providerAttendeeId: string | null } | null> {
+  ): Promise<WebinarParticipantSeat | null> {
     const [row] = await this.exec(tx)
       .select({
         id: callParticipants.id,
@@ -876,11 +889,57 @@ export class WebinarsRepository {
         userId: callParticipants.userId,
         role: callParticipants.role,
         providerAttendeeId: callParticipants.providerAttendeeId,
+        replicaIndex: callParticipants.replicaIndex,
+        floorAttendeeId: callParticipants.floorAttendeeId,
       })
       .from(callParticipants)
       .innerJoin(callSessions, eq(callSessions.id, callParticipants.sessionId))
       .where(and(eq(callParticipants.id, participantId), eq(callSessions.webinarId, webinarId)));
     return row ?? null;
+  }
+
+  // ── Media replication (D-CW-14, T-CW-3.2) ──────────────────────────────
+
+  /** The session's replica meeting ids in replica order; empty for a single meeting. */
+  async replicaMeetingIds(sessionId: string, tx?: DbExecutor): Promise<string[]> {
+    const [row] = await this.exec(tx)
+      .select({ ids: callSessions.replicaMeetingIds })
+      .from(callSessions)
+      .where(eq(callSessions.id, sessionId));
+    return row?.ids ?? [];
+  }
+
+  async setReplicaMeetingIds(sessionId: string, replicaMeetingIds: readonly string[], tx?: DbExecutor): Promise<void> {
+    await this.exec(tx)
+      .update(callSessions)
+      .set({ replicaMeetingIds: [...replicaMeetingIds] })
+      .where(eq(callSessions.id, sessionId));
+  }
+
+  /** The replica (1-based) the participant is seated in; null for the primary. */
+  async setParticipantReplica(participantId: string, replicaIndex: number | null, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx).update(callParticipants).set({ replicaIndex }).where(eq(callParticipants.id, participantId));
+  }
+
+  /** Attendee participants per replica index (absent: none), for `pickReplica`. */
+  async countAttendeesByReplica(sessionId: string, tx?: DbExecutor): Promise<Record<number, number>> {
+    const rows = await this.exec(tx)
+      .select({ replicaIndex: callParticipants.replicaIndex, n: count() })
+      .from(callParticipants)
+      .where(
+        and(
+          eq(callParticipants.sessionId, sessionId),
+          eq(callParticipants.role, 'ATTENDEE'),
+          isNotNull(callParticipants.replicaIndex),
+        ),
+      )
+      .groupBy(callParticipants.replicaIndex);
+    return Object.fromEntries(rows.map((row) => [row.replicaIndex!, row.n]));
+  }
+
+  /** A replica attendee's promotion attendee on the primary while they hold the floor; null clears it. */
+  async setFloorAttendee(participantId: string, floorAttendeeId: string | null, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx).update(callParticipants).set({ floorAttendeeId }).where(eq(callParticipants.id, participantId));
   }
 
   /** Attendee participants of the session. */

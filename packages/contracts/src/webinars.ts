@@ -25,6 +25,7 @@ import {
   ChimeAttendeeSchema,
   ChimeMeetingSchema,
   RecordingStatusSchema,
+  WEBINAR_REPLICATED_CAPACITY,
   WEBINAR_SINGLE_MEETING_CAPACITY,
   WebinarMessageKindSchema,
   WebinarMessageStatusSchema,
@@ -201,17 +202,18 @@ export const WebinarOpsResponseSchema = WebinarSchema;
 export type WebinarOpsResponse = Webinar;
 
 /**
- * Capacity of an occurrence. Refined at `WEBINAR_SINGLE_MEETING_CAPACITY`
- * (250) until media replication lands in M3 (D-CW-36); T-CW-3.2 lifts the
- * refine to 1,000. The issue message is the error code itself, so the
- * controller answers 400 `capacity_above_limit` for an issue at `capacity`
- * with this message, and the form names the limit and the milestone.
+ * Capacity of an occurrence: up to `WEBINAR_REPLICATED_CAPACITY` (1,000),
+ * a single meeting up to 250 and media replication above (D-CW-14,
+ * T-CW-3.2); above 1,000 the IVS path is documented, not built. The issue
+ * message is the error code itself, so the controller answers 400
+ * `capacity_above_limit` for an issue at `capacity` with this message, and
+ * the form names the limit.
  */
 const capacityField = z
   .number()
   .int()
   .min(1)
-  .refine((value) => value <= WEBINAR_SINGLE_MEETING_CAPACITY, {
+  .refine((value) => value <= WEBINAR_REPLICATED_CAPACITY, {
     message: 'capacity_above_limit' satisfies CallErrorCode,
   });
 
@@ -878,7 +880,26 @@ export type WebinarPollClosedPayload = z.infer<typeof WebinarPollClosedPayloadSc
 export const WebinarPollResultsPayloadSchema = WebinarPollResultsSchema;
 export type WebinarPollResultsPayload = WebinarPollResults;
 
-/** `webinar.floor.given`, to that participant's socket only: audio on, video and content stay `receive`. */
+/**
+ * The primary-meeting credentials of an attendee seated in a replica (media
+ * replication, D-CW-14, WEB-09): the client promotes into them with
+ * `promoteToPrimaryMeeting`, audio only (D-CW-35). No meeting id: the
+ * attendee never learns the primary's (D-CW-15). The join token is a
+ * credential, so this travels only on the attendee's own socket (CW-R-69).
+ */
+export const WebinarPrimaryAttendeeSchema = z.strictObject({
+  AttendeeId: z.string().min(1),
+  /** The `call_participants.id` (CW-R-71). */
+  ExternalUserId: z.string().min(1),
+  JoinToken: z.string().min(1),
+});
+export type WebinarPrimaryAttendee = z.infer<typeof WebinarPrimaryAttendeeSchema>;
+
+/**
+ * `webinar.floor.given`, to that participant's socket only: audio on, video
+ * and content stay `receive`. `primaryAttendee` is present only for an
+ * attendee in a replica, who speaks through a promotion (T-CW-3.2).
+ */
 export const WebinarFloorGivenPayloadSchema = z.strictObject({
   participantId: idField,
   capabilities: z.strictObject({
@@ -886,6 +907,7 @@ export const WebinarFloorGivenPayloadSchema = z.strictObject({
     video: z.literal('receive'),
     content: z.literal('receive'),
   }),
+  primaryAttendee: WebinarPrimaryAttendeeSchema.optional(),
 });
 export type WebinarFloorGivenPayload = z.infer<typeof WebinarFloorGivenPayloadSchema>;
 
