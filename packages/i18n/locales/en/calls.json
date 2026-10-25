@@ -385,7 +385,30 @@
       "joinedCount": "Joined: {{count}}",
       "peakCount": "Most at the same time: {{count}}",
       "sampleNotice": "This is sample data. Saving, publishing and canceling change nothing.",
-      "statusLive": "The webinar is live."
+      "statusLive": "The webinar is live.",
+      "edit": "Edit",
+      "saved": "Changes saved.",
+      "recordingTitle": "Recording",
+      "recordingErrorTitle": "The recording state could not be loaded",
+      "recordingStatus": {
+        "scheduled": "Starts with the webinar",
+        "recording": "Recording now",
+        "processing": "Being processed",
+        "ready": "Ready",
+        "handed_off": "Handed to the content team",
+        "failed": "Failed"
+      },
+      "attendanceCaption": "Attendance per registration, without names",
+      "attendanceColumns": {
+        "registration": "Registration",
+        "joined": "Joined",
+        "left": "Left",
+        "minutes": "Minutes",
+        "completed": "Completed"
+      },
+      "attendanceRow": "Registration {{number}}",
+      "attendanceNone": "—",
+      "attendanceEmpty": "No one registered."
     },
     "form": {
       "title": "New webinar",
@@ -429,7 +452,17 @@
       "organizationsRequired": "Enter at least one organisation.",
       "moderatorNotPresenter": "The moderator cannot also be a presenter.",
       "cancel": "Cancel",
-      "organizationsUnavailable": "The list of organisations could not be loaded. Enter their ids instead."
+      "organizationsUnavailable": "The list of organisations could not be loaded. Enter their ids instead.",
+      "editTitle": "Edit webinar",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "audienceLocked": "The audience can be changed only while the webinar is a draft.",
+      "audienceUnits": "Units of one organisation",
+      "organization": "Organisation",
+      "units": "Units",
+      "unitsUnavailable": "The list of units is not available here yet. Enter their ids instead.",
+      "organizationRequired": "Choose the organisation.",
+      "unitsRequired": "Enter at least one unit."
     },
     "console": {
       "prejoinTitle": "Check your setup",

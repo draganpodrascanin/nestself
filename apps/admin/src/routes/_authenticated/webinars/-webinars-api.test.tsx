@@ -372,6 +372,119 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     expect(await screen.findByText(en.webinar.admin.attendanceErrorTitle, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(en.errors.videoProviderUnavailable)).toBeInTheDocument();
   });
+
+  it('edits a published occurrence without its audience, and shows not_editable', async () => {
+    const sent = serve({
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status: 'published' })),
+      'GET /api/ops/webinars/host-candidates': coded(404, 'not_found'),
+      'GET /api/ops/orgs': coded(404, 'not_found'),
+      [`PATCH /api/ops/webinars/${ID}`]: coded(409, 'not_editable'),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/edit`);
+
+    expect(await screen.findByRole('heading', { name: en.webinar.form.editTitle, level: 1 }, { timeout: 5000 })).toBeInTheDocument();
+    const titles = screen.getByRole('group', { name: en.webinar.form.titleLegend });
+    expect(within(titles).getByLabelText(en.webinar.form.languages.en)).toHaveValue('Sleep and rest');
+    expect(screen.getByText(en.webinar.form.audienceLocked)).toBeInTheDocument();
+    expect(screen.getByLabelText(en.webinar.form.capacity)).toHaveValue(120);
+    // 2 December 2030, 17:00 to 18:00 in Belgrade.
+    expect(screen.getByLabelText(en.webinar.form.date)).toHaveValue('2030-12-02');
+    expect(screen.getByLabelText(en.webinar.form.startTime)).toHaveValue('17:00');
+    await waitFor(() => expect(screen.getByLabelText(en.webinar.form.presenters)).toHaveValue('user_milica'));
+
+    const capacity = screen.getByLabelText(en.webinar.form.capacity);
+    await user.clear(capacity);
+    await user.type(capacity, '150');
+    await user.click(screen.getByRole('button', { name: en.webinar.form.save }));
+
+    expect(await screen.findByText(en.errors.notEditable)).toBeInTheDocument();
+    const patch = sent.find((entry) => entry.method === 'PATCH');
+    expect(patch?.path).toBe(`/api/ops/webinars/${ID}`);
+    expect(patch?.body).toMatchObject({ capacity: 150, presenterUserIds: ['user_milica'], moderatorUserId: 'user_nikola', description: null });
+    expect(patch?.body).not.toHaveProperty('audiencePolicy');
+  });
+
+  it('saves a draft with its audience and returns to the detail', async () => {
+    const sent = serve({
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
+      'GET /api/ops/webinars/host-candidates': coded(404, 'not_found'),
+      'GET /api/ops/orgs': coded(404, 'not_found'),
+      [`PATCH /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
+    });
+    const user = userEvent.setup();
+    const router = renderAt(`/webinars/${ID}/edit`);
+    await user.click(await screen.findByRole('button', { name: en.webinar.form.save }, { timeout: 5000 }));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/webinars/${ID}`));
+    expect(sent.find((entry) => entry.method === 'PATCH')?.body).toMatchObject({ audiencePolicy: { type: 'all_eligible' } });
+  });
+
+  it('creates an occurrence for units of one organisation', async () => {
+    const sent = serve({
+      'GET /api/ops/webinars/host-candidates': coded(404, 'not_found'),
+      'GET /api/ops/orgs': coded(404, 'not_found'),
+      'POST /api/ops/webinars': () => json(201, occurrence()),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
+    });
+    const user = userEvent.setup();
+    renderAt('/webinars/new');
+    const titles = await screen.findByRole('group', { name: en.webinar.form.titleLegend }, { timeout: 5000 });
+    await waitFor(() => expect(screen.getByLabelText(en.webinar.form.presenters)).toHaveAttribute('name', 'presenters'));
+    await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
+    await user.click(screen.getByRole('radio', { name: en.webinar.form.audienceUnits }));
+    await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
+    expect((await screen.findAllByText(new RegExp(en.webinar.form.unitsRequired.replace('.', '\\.')))).length).toBeGreaterThan(0);
+
+    await user.type(screen.getByLabelText(en.webinar.form.organization), 'org_sample');
+    await user.type(screen.getByLabelText(en.webinar.form.units), 'unit_hr, unit_sales');
+    await user.type(screen.getByLabelText(en.webinar.form.date), '2030-12-02');
+    await user.type(screen.getByLabelText(en.webinar.form.startTime), '17:00');
+    await user.type(screen.getByLabelText(en.webinar.form.endTime), '18:00');
+    await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
+    await waitFor(() => expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(true));
+    expect(sent.find((entry) => entry.method === 'POST')?.body).toMatchObject({
+      audiencePolicy: { type: 'org_unit', orgId: 'org_sample', orgUnitIds: ['unit_hr', 'unit_sales'] },
+    });
+  });
+
+  it('shows the recording state and an anonymous attendance table for an ended occurrence', async () => {
+    serve({
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status: 'ended' })),
+      [`GET /api/webinars/${ID}/recording`]: () => json(200, { webinarId: ID, status: 'processing', startedAt: '2030-12-02T16:00:00.000Z', stoppedAt: '2030-12-02T17:00:00.000Z' }),
+      [`GET /api/ops/webinars/${ID}/attendance`]: () =>
+        json(200, {
+          webinarId: ID,
+          registeredCount: 2,
+          joinedCount: 1,
+          peakConcurrent: 1,
+          registrants: [
+            { registrationId: 'reg_a', joinedAt: '2030-12-02T16:01:00.000Z', leftAt: '2030-12-02T17:00:00.000Z', attendedMinutes: 59, completionPercent: 98 },
+            { registrationId: 'reg_b', joinedAt: null, leftAt: null, attendedMinutes: null, completionPercent: null },
+          ],
+        }),
+    });
+    renderAt(`/webinars/${ID}`);
+    expect(await screen.findByTestId('webinar-recording-state', {}, { timeout: 5000 })).toHaveTextContent(en.webinar.admin.recordingStatus.processing);
+    const table = await screen.findByRole('table', { name: en.webinar.admin.attendanceCaption });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText('Registration 1')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('17:01')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('98 %')).toBeInTheDocument();
+    expect(within(rows[1]!).getAllByText('—')).toHaveLength(4);
+    expect(within(table).queryByText(/reg_a|reg_b/)).not.toBeInTheDocument();
+  });
+
+  it('shows a failed recording-state load', async () => {
+    serve({
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status: 'live' })),
+      [`GET /api/webinars/${ID}/recording`]: coded(429, 'rate_limited'),
+      [`GET /api/ops/webinars/${ID}/attendance`]: () => json(200, { webinarId: ID, registeredCount: 0, joinedCount: 0, peakConcurrent: 0, registrants: [] }),
+    });
+    renderAt(`/webinars/${ID}`);
+    expect(await screen.findByText(en.webinar.admin.recordingErrorTitle, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(en.webinar.admin.attendanceEmpty)).toBeInTheDocument();
+  });
 });
 
 describe('the moderator console (API mode)', { timeout: 30_000 }, () => {
@@ -434,6 +547,47 @@ describe('the moderator console (API mode)', { timeout: 30_000 }, () => {
     await user.type(within(creator).getByLabelText(new RegExp(`^${en.webinar.console.pollOption.replace('{{number}}', '2')}`)), 'Tea');
     await user.click(within(creator).getByRole('button', { name: en.webinar.console.pollCreate }));
     expect(await within(creator).findByText(en.errors.conflict)).toBeInTheDocument();
+  });
+
+  it('pages through the messages, shows the elapsed time and posts the client events on leave', async () => {
+    const pending = (id: string, text: string) => ({
+      id,
+      webinarId: ID,
+      kind: 'question',
+      status: 'pending',
+      text,
+      authorFirstName: null,
+      answerText: null,
+      publishedAt: null,
+      createdAt: new Date().toISOString(),
+      authorParticipantId: `part_${id}`,
+      authorName: 'Jovan Petrović',
+      showFirstName: false,
+    });
+    const sent = serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, hostView({ status: 'live' })),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, { ...hostJoin(), recordingStatus: 'recording' }),
+      [`GET /api/webinars/${ID}/messages`]: () => {
+        const cursor = new URL(String(fetchMock.mock.lastCall?.[0]), 'http://localhost').searchParams.get('cursor');
+        return cursor
+          ? json(200, { items: [pending('m2', 'Is there a summary afterwards?')], nextCursor: null })
+          : json(200, { items: [pending('m1', 'Could you repeat the example?')], nextCursor: 'page2' });
+      },
+      [`GET /api/webinars/${ID}/polls`]: () => json(200, { items: [] }),
+      'POST /api/calls/sess_1/client-events': () => new Response(null, { status: 204 }),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinConsole(user);
+
+    const queue = await screen.findByTestId('webinar-moderator-queue', {}, { timeout: 5000 });
+    expect(await within(queue).findByText('Could you repeat the example?')).toBeInTheDocument();
+    expect(await within(queue).findByText('Is there a summary afterwards?')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toBeInTheDocument();
+
+    await user.click(within(screen.getByTestId('webinar-host-controls')).getAllByRole('button', { name: en.consultation.leave })[0]!);
+    await waitFor(() => expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/calls/sess_1/client-events')).toBe(true));
+    expect(sent.find((entry) => entry.path === '/api/calls/sess_1/client-events')?.body).toMatchObject({ events: [{ eventName: 'meetingStartSucceeded' }] });
   });
 
   it('shows a failed end on the stage', async () => {

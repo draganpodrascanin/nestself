@@ -32,6 +32,7 @@ import { Route as AuthenticatedWebinarsNewRouteImport } from './routes/_authenti
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
+import { Route as AuthenticatedWebinarsWebinarIdEditRouteImport } from './routes/_authenticated/webinars/$webinarId.edit'
 import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -162,6 +163,12 @@ const AuthenticatedOrganizationsOrgIdAccessRoute =
     path: '/access',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
   } as any)
+const AuthenticatedWebinarsWebinarIdEditRoute =
+  AuthenticatedWebinarsWebinarIdEditRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
+  } as any)
 const AuthenticatedWebinarsWebinarIdLiveRoute =
   AuthenticatedWebinarsWebinarIdLiveRouteImport.update({
     id: '/live',
@@ -190,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
@@ -213,6 +221,7 @@ export interface FileRoutesByTo {
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
   '/webinars': typeof AuthenticatedWebinarsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
@@ -240,6 +249,7 @@ export interface FileRoutesById {
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/organizations/'
     | '/webinars/'
     | '/organizations/$orgId/access'
+    | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
     | '/organizations/$orgId/'
   fileRoutesByTo: FileRoutesByTo
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/organizations'
     | '/webinars'
     | '/organizations/$orgId/access'
+    | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
     | '/organizations/$orgId'
   id:
@@ -315,6 +327,7 @@ export interface FileRouteTypes {
     | '/_authenticated/organizations/'
     | '/_authenticated/webinars/'
     | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/webinars/$webinarId/edit'
     | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/organizations/$orgId/'
   fileRoutesById: FileRoutesById
@@ -487,6 +500,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
     }
+    '/_authenticated/webinars/$webinarId/edit': {
+      id: '/_authenticated/webinars/$webinarId/edit'
+      path: '/edit'
+      fullPath: '/webinars/$webinarId/edit'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdEditRouteImport
+      parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
+    }
     '/_authenticated/webinars/$webinarId/live': {
       id: '/_authenticated/webinars/$webinarId/live'
       path: '/live'
@@ -516,11 +536,14 @@ const AuthenticatedOrganizationsOrgIdRouteWithChildren =
   )
 
 interface AuthenticatedWebinarsWebinarIdRouteChildren {
+  AuthenticatedWebinarsWebinarIdEditRoute: typeof AuthenticatedWebinarsWebinarIdEditRoute
   AuthenticatedWebinarsWebinarIdLiveRoute: typeof AuthenticatedWebinarsWebinarIdLiveRoute
 }
 
 const AuthenticatedWebinarsWebinarIdRouteChildren: AuthenticatedWebinarsWebinarIdRouteChildren =
   {
+    AuthenticatedWebinarsWebinarIdEditRoute:
+      AuthenticatedWebinarsWebinarIdEditRoute,
     AuthenticatedWebinarsWebinarIdLiveRoute:
       AuthenticatedWebinarsWebinarIdLiveRoute,
   }

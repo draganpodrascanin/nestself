@@ -21,7 +21,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, AnimatePresence, Heading, MotionFeatures, m, useMotionPreset } from '@nestself/ui';
-import { createWebinarTransport, webinarKeys } from '@nestself/api-client';
+import { createWebinarTransport, startClientEventPoster, webinarKeys } from '@nestself/api-client';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RecordingStatus, WebinarJoinResponse, WebinarResponse } from '@nestself/contracts';
 import {
@@ -39,6 +39,7 @@ import { WebinarStage } from '@nestself/video';
 import { useAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { useConsultationController } from '../calls/use-consultation-controller';
+import { callsApi } from '../calls/calls-api';
 import { isWebinarNotOpen, mapWebinarError } from './map-webinar-error';
 import { webinarRoomClient } from './webinar-room-client';
 import { webinarsApi } from './webinars-api';
@@ -139,6 +140,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
   const [waiting, setWaiting] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   const queryClient = useQueryClient();
   const { principal } = useAuth();
@@ -191,6 +193,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
     }
     setWaiting(false);
     setRoomUnavailable(false);
+    setSessionId(response.sessionId);
     const joined = createAttendeeClient(clientOptions, response.participantId, client);
     setAttendee({ participantId: response.participantId, client: joined });
     setPhase('stage');
@@ -214,6 +217,19 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
       () => undefined,
     );
   };
+
+  // PLT-18: the controller's client-event log goes to `POST /calls/:sessionId/client-events` every 30 s and on leave.
+  const inCall = stagePhase === 'stage' && !waiting;
+  useEffect(() => {
+    if (!inCall) return undefined;
+    const poster = startClientEventPoster({
+      drain: () => controller.drainClientEvents(),
+      post: (events) => (isSampleDataMode || !sessionId ? Promise.resolve() : callsApi.postClientEvents(sessionId, events)),
+    });
+    return () => {
+      void poster.stop();
+    };
+  }, [inCall, sessionId, controller]);
 
   // The chat so far, once joined (published and answered messages only, CW-R-104).
   useEffect(() => {

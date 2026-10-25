@@ -3,11 +3,11 @@
  * fixtures in sample mode (CW-R-56), in the same shapes.
  */
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { webinarAttendanceQuery, webinarDetailQuery, webinarOpsDetailQuery, webinarOpsListQuery } from '@nestself/api-client';
-import type { Webinar, WebinarAttendanceResponse, WebinarResponse } from '@nestself/contracts';
+import { webinarAttendanceQuery, webinarDetailQuery, webinarKeys, webinarOpsDetailQuery, webinarOpsListQuery } from '@nestself/api-client';
+import type { RecordingStatus, Webinar, WebinarAttendanceResponse, WebinarResponse } from '@nestself/contracts';
 import { isSampleDataMode } from '../data-source';
 import { useAuth } from '../auth';
-import { sampleHostView, sampleOccurrence, sampleOccurrences } from './sample';
+import { sampleAttendance, sampleHostView, sampleOccurrence, sampleOccurrences, sampleRecordingStatus } from './sample';
 import { webinarsApi } from './webinars-api';
 
 export interface OccurrenceListState {
@@ -83,6 +83,26 @@ export interface AttendanceState {
 /** `GET /ops/webinars/:id/attendance` once the webinar ran (WBN-33): counts only, never names. */
 export function useAttendance(webinarId: string, enabled: boolean): AttendanceState {
   const query = useQuery({ ...webinarAttendanceQuery(webinarsApi, webinarId), enabled: enabled && !isSampleDataMode });
-  if (isSampleDataMode || !enabled) return { status: 'success', attendance: null, error: null };
+  if (!enabled) return { status: 'success', attendance: null, error: null };
+  if (isSampleDataMode) return { status: 'success', attendance: sampleAttendance(webinarId), error: null };
   return { status: query.status, attendance: query.data ?? null, error: query.error };
+}
+
+export interface RecordingState {
+  status: 'pending' | 'error' | 'success';
+  recording: RecordingStatus | null;
+  error: unknown;
+}
+
+/** `GET /webinars/:id/recording` for a live or ended occurrence (WBN-34). */
+export function useRecordingState(webinar: Webinar, enabled: boolean): RecordingState {
+  const query = useQuery({
+    queryKey: [...webinarKeys.detail(webinar.id), 'recording'],
+    queryFn: () => webinarsApi.recording(webinar.id),
+    enabled: enabled && !isSampleDataMode,
+    retry: false,
+  });
+  if (!enabled) return { status: 'success', recording: null, error: null };
+  if (isSampleDataMode) return { status: 'success', recording: sampleRecordingStatus(webinar), error: null };
+  return { status: query.status, recording: query.data?.status ?? null, error: query.error };
 }

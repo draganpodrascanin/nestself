@@ -5,8 +5,8 @@
  * organisation picker from `SAMPLE_ORG`. Nothing is created, published or
  * canceled.
  */
-import { SAMPLE_ORG, SAMPLE_PRINCIPALS, SAMPLE_WEBINARS } from '@nestself/sample-data';
-import type { Webinar, WebinarResponse } from '@nestself/contracts';
+import { SAMPLE_ORG, SAMPLE_PRINCIPALS, SAMPLE_WEBINAR_ATTENDANCE, SAMPLE_WEBINARS } from '@nestself/sample-data';
+import type { RecordingStatus, Webinar, WebinarAttendanceResponse, WebinarResponse } from '@nestself/contracts';
 
 type SampleWebinar = (typeof SAMPLE_WEBINARS)[number];
 
@@ -54,6 +54,20 @@ export function sampleHostView(webinarId: string): WebinarResponse | null {
     presenters: webinar.hosts.filter((host) => host.role === 'presenter').map((host) => ({ displayName: host.displayName })),
     registered: false,
   };
+}
+
+/** The ended sample webinar's attendance (`SAMPLE_WEBINAR_ATTENDANCE`); the others have none yet. */
+export function sampleAttendance(webinarId: string): WebinarAttendanceResponse | null {
+  if (SAMPLE_WEBINAR_ATTENDANCE.webinarId !== webinarId) return null;
+  const { sample: _sample, ...attendance } = SAMPLE_WEBINAR_ATTENDANCE;
+  return { ...attendance, registrants: attendance.registrants.map((row) => ({ ...row })) };
+}
+
+/** The sample recording state: recording while live, ready once ended (every webinar is recorded, D-CW-34). */
+export function sampleRecordingStatus(webinar: Pick<Webinar, 'status'>): RecordingStatus | null {
+  if (webinar.status === 'live') return 'recording';
+  if (webinar.status === 'ended') return 'ready';
+  return null;
 }
 
 export interface PickerOption {

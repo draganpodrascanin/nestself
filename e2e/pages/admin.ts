@@ -19,6 +19,8 @@ export const adminPages: PageEntry[] = [
   { name: 'admin-webinar-detail', url: 'http://localhost:5174/webinars/webinar_sample_upcoming?role=operations' },
   { name: 'admin-webinar-console', url: 'http://localhost:5174/webinars/webinar_sample_upcoming/live?role=operations' },
   { name: 'admin-webinars-presenter', url: 'http://localhost:5174/webinars?role=expert' },
+  { name: 'admin-webinar-edit', url: 'http://localhost:5174/webinars/webinar_sample_upcoming/edit?role=operations' },
+  { name: 'admin-webinar-ended', url: 'http://localhost:5174/webinars/webinar_sample_ended?role=operations' },
   { name: 'admin-organizations', url: 'http://localhost:5174/organizations' },
   { name: 'admin-content', url: 'http://localhost:5174/content' },
   { name: 'admin-event-requests', url: 'http://localhost:5174/event-requests' },

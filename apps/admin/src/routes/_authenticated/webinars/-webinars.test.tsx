@@ -158,6 +158,27 @@ describe('admin webinars (sample mode)', () => {
     expect(screen.queryByRole('heading', { name: calls.webinar.console.pollTitle })).not.toBeInTheDocument();
   });
 
+  it('shows the ended sample webinar\'s recording state and anonymous attendance rows', async () => {
+    renderAt('/webinars/webinar_sample_ended', 'operations');
+    expect(await screen.findByTestId('webinar-recording-state')).toHaveTextContent(calls.webinar.admin.recordingStatus.ready);
+    expect(screen.getByTestId('webinar-attendance')).toHaveTextContent('Registered: 4');
+    const table = screen.getByRole('table', { name: calls.webinar.admin.attendanceCaption });
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(4);
+    expect(within(table).getByText('Registration 4')).toBeInTheDocument();
+  });
+
+  it('edits the sample occurrence with the audience locked and saves nothing', async () => {
+    const user = userEvent.setup();
+    renderAt(`/webinars/${UPCOMING}`, 'operations');
+    await user.click(await screen.findByRole('link', { name: calls.webinar.admin.edit }));
+    expect(await screen.findByRole('heading', { name: calls.webinar.form.editTitle, level: 1 })).toBeInTheDocument();
+    expect(screen.getByText(calls.webinar.form.audienceLocked)).toBeInTheDocument();
+    const titles = screen.getByRole('group', { name: calls.webinar.form.titleLegend });
+    expect(within(titles).getByLabelText(calls.webinar.form.languages.en)).toHaveValue(TITLE);
+    await user.click(screen.getByRole('button', { name: calls.webinar.form.save }));
+    expect(await screen.findByText(calls.sample.actionNoop)).toBeInTheDocument();
+  });
+
   it('keeps an employee out of the webinar admin', async () => {
     renderAt('/webinars', 'employee');
     expect(await screen.findByText(common.state.permission.title)).toBeInTheDocument();

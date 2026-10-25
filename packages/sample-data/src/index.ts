@@ -30,7 +30,7 @@ export {
   SAMPLE_APPROVER_USER_ID,
 } from './fixtures/approvals.ts';
 export type { SampleApprovalAuthority, SampleApprovalItem } from './fixtures/approvals.ts';
-export { SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES, SAMPLE_WEBINAR_POLLS } from './fixtures/webinars.ts';
+export { SAMPLE_WEBINARS, SAMPLE_WEBINAR_ATTENDANCE, SAMPLE_WEBINAR_MESSAGES, SAMPLE_WEBINAR_POLLS } from './fixtures/webinars.ts';
 export type {
   SampleWebinar,
   SampleWebinarHost,
@@ -39,5 +39,7 @@ export type {
   SampleWebinarPoll,
   SampleWebinarPollOption,
   SampleWebinarPollResult,
+  SampleWebinarAttendance,
+  SampleWebinarAttendanceRow,
 } from './fixtures/webinars.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';

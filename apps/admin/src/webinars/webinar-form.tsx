@@ -1,6 +1,8 @@
 /**
- * The occurrence form (WBN-30, D-CW-34, D-CW-36): title and description per
- * locale, audience (every eligible organisation, or chosen organisations),
+ * The occurrence form (WBN-30, D-CW-34, D-CW-36), for a new draft and in
+ * edit mode (`PATCH /ops/webinars/:id`, prefilled; the audience only while a
+ * draft): title and description per locale, audience (every eligible
+ * organisation, chosen organisations, or units of one organisation),
  * capacity from 1 to 1,000 (media replication, T-CW-3.2), presenters and the moderator, and the
  * schedule in Europe/Belgrade, shown with the time zone. There is no
  * recording switch: every webinar is recorded, and the form says so.
@@ -42,7 +44,7 @@ import {
   WEBINAR_SINGLE_MEETING_CAPACITY,
   WEBINAR_TITLE_MAX_LENGTH,
 } from '@nestself/contracts';
-import type { Webinar, WebinarAudiencePolicy, WebinarLocalizedText } from '@nestself/contracts';
+import type { Webinar, WebinarAudiencePolicy, WebinarAudiencePolicyType, WebinarLocalizedText, WebinarUpdateRequest } from '@nestself/contracts';
 import { zonedDateTimeToIso } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
 import { Reveal } from '../calls/reveal';
@@ -62,6 +64,7 @@ const FIELD = {
   description: 'webinar-description',
   audience: 'webinar-audience',
   organizations: 'webinar-organizations',
+  units: 'webinar-units',
   capacity: 'webinar-capacity',
   presenters: 'webinar-presenters',
   moderator: 'webinar-moderator',
@@ -88,23 +91,48 @@ const splitIds = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+/** `YYYY-MM-DD` and `HH:mm` of an instant in a time zone, for the date and time inputs in edit mode. */
+function zonedParts(iso: string, timeZone: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
+}
+
 function localized(data: FormData, prefix: string): WebinarLocalizedText | undefined {
   const entries = LOCALES.map((locale) => [locale, String(data.get(`${prefix}-${locale}`) ?? '').trim()] as const).filter(([, value]) => value);
   return entries.length > 0 ? (Object.fromEntries(entries) as WebinarLocalizedText) : undefined;
 }
 
 export interface WebinarFormProps {
-  onCreated: (webinar: Webinar) => void;
+  /** Edit mode (`PATCH /ops/webinars/:id`): the occurrence to change. Without it the form creates a draft. */
+  webinar?: Webinar;
+  /** The saved occurrence, as the API answered it. */
+  onSaved: (webinar: Webinar) => void;
 }
 
-export function WebinarForm({ onCreated }: WebinarFormProps) {
+export function WebinarForm({ webinar, onSaved }: WebinarFormProps) {
   const { t, i18n } = useTranslation('calls');
   const formatCount = (value: number) => new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language).format(value);
   const summary = useRef<FormErrorSummaryHandle>(null);
-  const [audience, setAudience] = useState<'all_eligible' | 'organization'>('all_eligible');
-  const [organizations, setOrganizations] = useState<string[]>([]);
-  const [presenters, setPresenters] = useState<string[]>([]);
-  const [moderator, setModerator] = useState('');
+  const policy = webinar?.audiencePolicy;
+  const timeZone = webinar?.timeZone ?? WEBINAR_FORM_TIME_ZONE;
+  // The audience (and with it the organisation) changes only while the occurrence is a draft; the server answers `not_editable` otherwise.
+  const audienceLocked = !!webinar && webinar.status !== 'draft';
+  const start = webinar ? zonedParts(webinar.startsAt, timeZone) : null;
+  const end = webinar ? zonedParts(webinar.endsAt, timeZone) : null;
+  const [audience, setAudience] = useState<WebinarAudiencePolicyType>(policy?.type ?? 'all_eligible');
+  const [organizations, setOrganizations] = useState<string[]>(policy?.type === 'organization' ? [...policy.orgIds] : []);
+  const [unitOrganization, setUnitOrganization] = useState(policy?.type === 'org_unit' ? policy.orgId : '');
+  const [presenters, setPresenters] = useState<string[]>(webinar?.hosts.filter((host) => host.role === 'presenter').map((host) => host.userId) ?? []);
+  const [moderator, setModerator] = useState(webinar?.hosts.find((host) => host.role === 'moderator')?.userId ?? '');
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -118,6 +146,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     description: t('webinar.form.descriptionLegend'),
     audience: t('webinar.form.audience'),
     organizations: t('webinar.form.organizations'),
+    units: t('webinar.form.units'),
     capacity: t('webinar.form.capacity'),
     presenters: t('webinar.form.presenters'),
     moderator: t('webinar.form.moderator'),
@@ -141,9 +170,19 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
       problems.description = t('webinar.form.descriptionTooLong', { max: WEBINAR_DESCRIPTION_MAX_LENGTH });
     }
 
-    const orgIds = organizationChoices.options ? organizations : splitIds(String(data.get('organizations') ?? ''));
-    if (audience === 'organization' && orgIds.length === 0) problems.organizations = t('webinar.form.organizationsRequired');
-    const audiencePolicy: WebinarAudiencePolicy = audience === 'organization' ? { type: 'organization', orgIds } : { type: 'all_eligible' };
+    let audiencePolicy: WebinarAudiencePolicy = { type: 'all_eligible' };
+    if (audience === 'organization') {
+      const orgIds = organizationChoices.options ? organizations : splitIds(String(data.get('organizations') ?? ''));
+      if (orgIds.length === 0) problems.organizations = t('webinar.form.organizationsRequired');
+      audiencePolicy = { type: 'organization', orgIds };
+    } else if (audience === 'org_unit') {
+      // Units of one organisation (D-CW-17); the units are entered as ids until a unit list is served for operations.
+      const orgId = (organizationChoices.options ? unitOrganization : String(data.get('unitOrganization') ?? '')).trim();
+      const orgUnitIds = splitIds(String(data.get('units') ?? ''));
+      if (!orgId) problems.organizations = t('webinar.form.organizationRequired');
+      if (orgUnitIds.length === 0) problems.units = t('webinar.form.unitsRequired');
+      audiencePolicy = { type: 'org_unit', orgId, orgUnitIds };
+    }
 
     const capacityText = String(data.get('capacity') ?? '').trim();
     const capacity = Number(capacityText);
@@ -156,11 +195,11 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     if (moderatorUserId && presenterUserIds.includes(moderatorUserId)) problems.moderator = t('webinar.form.moderatorNotPresenter');
 
     const date = String(data.get('date') ?? '');
-    const start = String(data.get('startTime') ?? '');
-    const end = String(data.get('endTime') ?? '');
+    const startTime = String(data.get('startTime') ?? '');
+    const endTime = String(data.get('endTime') ?? '');
     if (!date) problems.date = t('webinar.form.dateRequired');
-    const startsAt = date && start ? zonedDateTimeToIso(date, start, WEBINAR_FORM_TIME_ZONE) : null;
-    const endsAt = date && end ? zonedDateTimeToIso(date, end, WEBINAR_FORM_TIME_ZONE) : null;
+    const startsAt = date && startTime ? zonedDateTimeToIso(date, startTime, timeZone) : null;
+    const endsAt = date && endTime ? zonedDateTimeToIso(date, endTime, timeZone) : null;
     if (date && (!startsAt || !endsAt)) problems.times = t('webinar.form.timeRequired');
     else if (startsAt && endsAt && Date.parse(endsAt) <= Date.parse(startsAt)) problems.times = t('webinar.form.endAfterStart');
 
@@ -173,7 +212,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         moderatorUserId,
         startsAt,
         endsAt,
-        timeZone: WEBINAR_FORM_TIME_ZONE,
+        timeZone,
         audiencePolicy,
         capacity,
       },
@@ -194,7 +233,14 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     }
     setPending(true);
     try {
-      onCreated(await webinarsApi.createOps(body));
+      if (webinar) {
+        // Every field is sent; the audience only while a draft, and an emptied description clears it.
+        const { audiencePolicy, description, ...rest } = body;
+        const update: WebinarUpdateRequest = { ...rest, description: description ?? null, ...(audienceLocked ? {} : { audiencePolicy }) };
+        onSaved(await webinarsApi.updateOps(webinar.id, update));
+      } else {
+        onSaved(await webinarsApi.createOps(body));
+      }
     } catch (err) {
       // The server names its limit in `details.limit`; the copy shows it in the reader's number format.
       const limit = err instanceof ApiError && typeof err.details?.limit === 'number' ? err.details.limit : WEBINAR_REPLICATED_CAPACITY;
@@ -220,7 +266,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     ));
 
   return (
-    <form noValidate onSubmit={(event) => void submit(event)} className="gap-6 max-w-2xl flex flex-col" aria-label={t('webinar.form.title')}>
+    <form noValidate onSubmit={(event) => void submit(event)} className="gap-6 max-w-2xl flex flex-col" aria-label={t(webinar ? 'webinar.form.editTitle' : 'webinar.form.title')}>
       <FormErrorSummary ref={summary} title={t('webinar.form.errorSummary')} errors={summaryErrors} />
       <Reveal show={failure !== null}>
         <Alert tone="danger">{failure}</Alert>
@@ -233,7 +279,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         <div className="gap-3 flex flex-col">
           {LOCALES.map((locale: FormLocale) => (
             <Field key={locale} label={t(`webinar.form.languages.${locale}`)} error={locale === 'en' ? errors.title : undefined}>
-              <Input id={`webinar-title-${locale}`} name={`title-${locale}`} autoComplete="off" />
+              <Input id={`webinar-title-${locale}`} name={`title-${locale}`} autoComplete="off" defaultValue={webinar?.title[locale] ?? ''} />
             </Field>
           ))}
         </div>
@@ -244,7 +290,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
           <div className="gap-3 flex flex-col">
             {LOCALES.map((locale) => (
               <Field key={locale} label={t(`webinar.form.languages.${locale}`)} error={locale === 'en' ? errors.description : undefined}>
-                <Textarea name={`description-${locale}`} rows={3} />
+                <Textarea name={`description-${locale}`} rows={3} defaultValue={webinar?.description?.[locale] ?? ''} />
               </Field>
             ))}
           </div>
@@ -253,11 +299,18 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
 
       <div id={FIELD.audience} tabIndex={-1} className="gap-3 flex flex-col">
         <p className="type-label text-text">{t('webinar.form.audience')}</p>
-        <RadioGroup label={t('webinar.form.audience')} value={audience} onValueChange={(value) => setAudience(value === 'organization' ? 'organization' : 'all_eligible')}>
+        {audienceLocked ? <p className="type-metadata text-text-secondary">{t('webinar.form.audienceLocked')}</p> : null}
+        <RadioGroup
+          label={t('webinar.form.audience')}
+          value={audience}
+          disabled={audienceLocked}
+          onValueChange={(value) => setAudience(value === 'organization' || value === 'org_unit' ? value : 'all_eligible')}
+        >
           <RadioItem value="all_eligible">{t('webinar.admin.audienceAll')}</RadioItem>
           <RadioItem value="organization">{t('webinar.form.audienceOrganizations')}</RadioItem>
+          <RadioItem value="org_unit">{t('webinar.form.audienceUnits')}</RadioItem>
         </RadioGroup>
-        <Reveal show={audience === 'organization'}>
+        <Reveal show={audience === 'organization' && !audienceLocked}>
           {organizationChoices.options ? (
             <div id={FIELD.organizations} tabIndex={-1}>
               <CheckboxGroup legend={t('webinar.form.organizations')}>
@@ -268,9 +321,31 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
             </div>
           ) : (
             <Field label={t('webinar.form.organizations')} description={`${t('webinar.form.organizationsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.organizations}>
-              <Input id={FIELD.organizations} name="organizations" autoComplete="off" />
+              <Input id={FIELD.organizations} name="organizations" autoComplete="off" defaultValue={policy?.type === 'organization' ? policy.orgIds.join(', ') : ''} />
             </Field>
           )}
+        </Reveal>
+        <Reveal show={audience === 'org_unit' && !audienceLocked}>
+          <div className="gap-3 flex flex-col">
+            {organizationChoices.options ? (
+              <div id={FIELD.organizations} tabIndex={-1}>
+                <Field label={t('webinar.form.organization')} error={errors.organizations}>
+                  <Select
+                    options={[{ value: '', label: t('webinar.form.organization') }, ...organizationChoices.options]}
+                    value={unitOrganization}
+                    onValueChange={(value) => setUnitOrganization(value ?? '')}
+                  />
+                </Field>
+              </div>
+            ) : (
+              <Field label={t('webinar.form.organization')} description={`${t('webinar.form.organizationsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.organizations}>
+                <Input id={FIELD.organizations} name="unitOrganization" autoComplete="off" defaultValue={policy?.type === 'org_unit' ? policy.orgId : ''} />
+              </Field>
+            )}
+            <Field label={t('webinar.form.units')} description={`${t('webinar.form.unitsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.units}>
+              <Input id={FIELD.units} name="units" autoComplete="off" defaultValue={policy?.type === 'org_unit' ? policy.orgUnitIds.join(', ') : ''} />
+            </Field>
+          </div>
         </Reveal>
       </div>
 
@@ -280,7 +355,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
           name="capacity"
           type="number"
           // The contract's default: one meeting's capacity.
-          defaultValue={String(WEBINAR_SINGLE_MEETING_CAPACITY)}
+          defaultValue={String(webinar?.capacity ?? WEBINAR_SINGLE_MEETING_CAPACITY)}
           className="max-w-40"
           // `Input` passes these through to the native input; its props do not list them.
           {...({ min: '1', max: String(WEBINAR_REPLICATED_CAPACITY) } as Record<string, string>)}
@@ -303,7 +378,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
           description={`${t('webinar.form.presentersHint')} ${t('webinar.form.hostsUnavailable')} ${t('webinar.form.idsHint')}`}
           error={errors.presenters}
         >
-          <Input id={FIELD.presenters} name="presenters" autoComplete="off" />
+          <Input id={FIELD.presenters} name="presenters" autoComplete="off" defaultValue={presenters.join(', ')} />
         </Field>
       )}
 
@@ -319,20 +394,20 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         </div>
       ) : (
         <Field label={t('webinar.form.moderator')} description={`${t('webinar.form.moderatorHint')} ${t('webinar.form.hostsUnavailable')}`} error={errors.moderator}>
-          <Input id={FIELD.moderator} name="moderator" autoComplete="off" />
+          <Input id={FIELD.moderator} name="moderator" autoComplete="off" defaultValue={moderator} />
         </Field>
       )}
 
-      <Fieldset legend={t('webinar.form.schedule')} description={t('webinar.form.timeZoneHint', { zone: WEBINAR_FORM_TIME_ZONE })}>
+      <Fieldset legend={t('webinar.form.schedule')} description={t('webinar.form.timeZoneHint', { zone: timeZone })}>
         <div className="gap-3 flex flex-wrap">
           <Field label={t('webinar.form.date')} error={errors.date} className="min-w-44">
-            <Input id={FIELD.date} name="date" type="date" />
+            <Input id={FIELD.date} name="date" type="date" defaultValue={start?.date ?? ''} />
           </Field>
           <Field label={t('webinar.form.startTime')} error={errors.times} className="min-w-32">
-            <Input id={FIELD.times} name="startTime" type="time" />
+            <Input id={FIELD.times} name="startTime" type="time" defaultValue={start?.time ?? ''} />
           </Field>
           <Field label={t('webinar.form.endTime')} className="min-w-32">
-            <Input id="webinar-end" name="endTime" type="time" />
+            <Input id="webinar-end" name="endTime" type="time" defaultValue={end?.time ?? ''} />
           </Field>
         </div>
       </Fieldset>
@@ -340,12 +415,18 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
       <p className="gap-2 p-3 flex items-start rounded-control bg-info-surface text-info type-body">{t('webinar.recordingNotice')}</p>
 
       <div className="gap-3 flex flex-wrap items-center">
-        <Button type="submit" loading={pending} loadingLabel={t('webinar.form.submitting')}>
-          {t('webinar.form.submit')}
+        <Button type="submit" loading={pending} loadingLabel={t(webinar ? 'webinar.form.saving' : 'webinar.form.submitting')}>
+          {t(webinar ? 'webinar.form.save' : 'webinar.form.submit')}
         </Button>
-        <Link to="/webinars" className="type-body text-primary underline underline-offset-[0.2em]">
-          {t('webinar.form.cancel')}
-        </Link>
+        {webinar ? (
+          <Link to="/webinars/$webinarId" params={{ webinarId: webinar.id }} className="type-body text-primary underline underline-offset-[0.2em]">
+            {t('webinar.form.cancel')}
+          </Link>
+        ) : (
+          <Link to="/webinars" className="type-body text-primary underline underline-offset-[0.2em]">
+            {t('webinar.form.cancel')}
+          </Link>
+        )}
       </div>
     </form>
   );

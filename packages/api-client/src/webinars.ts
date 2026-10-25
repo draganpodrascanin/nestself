@@ -201,6 +201,20 @@ export function createWebinarsApi(client: ApiClient) {
         schema: WebinarFloorResponseSchema,
       }),
 
+    /**
+     * Hosts mute the attendee who has the floor, and ask them to unmute; the
+     * attendee consents with `unmuteParticipant` (WBN-26). The answers are
+     * parsed by the webinar client; the contract names them with the API.
+     */
+    muteParticipant: (webinarId: string, participantId: string) =>
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/mute`), { ...json('POST'), schema: z.unknown() }),
+
+    requestUnmute: (webinarId: string, participantId: string) =>
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute-request`), { ...json('POST'), schema: z.unknown() }),
+
+    unmuteParticipant: (webinarId: string, participantId: string) =>
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute`), { ...json('POST'), schema: z.unknown() }),
+
     // ── Polls (D-CW-16) ────────────────────────────────────────────────────
 
     createPoll: (webinarId: string, body: WebinarPollCreateRequest) =>
@@ -352,8 +366,8 @@ export function createWebinarRoomClient(connect: () => RoomSocket): WebinarRoomC
 // ---------------------------------------------------------------------------
 
 /**
- * The webinar client's actions: `WEBINAR_ACTIONS` of `@nestself/video`, and
- * `webinar.end` (`POST /webinars/:id/end`), which the video package is adding.
+ * The webinar client's actions: `WEBINAR_ACTIONS` of `@nestself/video`,
+ * including the floor's mute, unmute request and unmute (WBN-26).
  */
 export const WEBINAR_TRANSPORT_ACTIONS = [
   'message.send',
@@ -369,6 +383,9 @@ export const WEBINAR_TRANSPORT_ACTIONS = [
   'poll.vote',
   'recording.stop',
   'webinar.end',
+  'floor.mute',
+  'floor.unmuteRequest',
+  'floor.unmute',
 ] as const;
 export type WebinarTransportAction = (typeof WEBINAR_TRANSPORT_ACTIONS)[number];
 
@@ -387,6 +404,9 @@ export const WEBINAR_TRANSPORT_ROUTES = {
   'poll.vote': { method: 'POST', path: '/webinars/:id/polls/:pollId/vote' },
   'recording.stop': { method: 'POST', path: '/webinars/:id/recording/stop' },
   'webinar.end': { method: 'POST', path: '/webinars/:id/end' },
+  'floor.mute': { method: 'POST', path: '/webinars/:id/participants/:participantId/mute' },
+  'floor.unmuteRequest': { method: 'POST', path: '/webinars/:id/participants/:participantId/unmute-request' },
+  'floor.unmute': { method: 'POST', path: '/webinars/:id/participants/:participantId/unmute' },
 } as const satisfies Record<WebinarTransportAction, { method: 'POST' | 'DELETE'; path: string }>;
 
 /** An action's path ids and body; the webinar client validates the body against the contract first. */
@@ -408,10 +428,11 @@ export interface WebinarTransportOptions {
 
 export interface WebinarTransportImpl {
   subscribe(room: string, handler: (event: string, payload: unknown) => void): () => void;
-  post(action: WebinarTransportAction, input: WebinarTransportInput): Promise<unknown>;
+  /** Takes any action name, so a newer client's action is refused with a code rather than breaking the build. */
+  post(action: WebinarTransportAction | (string & {}), input: WebinarTransportInput): Promise<unknown>;
 }
 
-function pathId(value: string | undefined, action: WebinarTransportAction): string {
+function pathId(value: string | undefined, action: string): string {
   if (value) return value;
   throw new ApiError({ status: 0, code: 'validation', message: `Missing path id for ${action}`, requestId: null });
 }
@@ -459,6 +480,14 @@ export function createWebinarTransport({ api, rooms, webinarId, userId, onUnavai
             return api.stopRecording(webinarId);
           case 'webinar.end':
             return api.end(webinarId);
+          case 'floor.mute':
+            return api.muteParticipant(webinarId, pathId(input.participantId, action));
+          case 'floor.unmuteRequest':
+            return api.requestUnmute(webinarId, pathId(input.participantId, action));
+          case 'floor.unmute':
+            return api.unmuteParticipant(webinarId, pathId(input.participantId, action));
+          default:
+            throw new ApiError({ status: 0, code: 'unknown', message: `No route for ${action}`, requestId: null });
         }
       };
       try {

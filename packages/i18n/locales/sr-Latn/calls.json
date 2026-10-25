@@ -385,7 +385,30 @@
       "joinedCount": "Pridružilo se: {{count}}",
       "peakCount": "Najviše istovremeno: {{count}}",
       "sampleNotice": "Ovo su primeri podataka. Čuvanje, objavljivanje i otkazivanje ništa ne menjaju.",
-      "statusLive": "Vebinar je u toku."
+      "statusLive": "Vebinar je u toku.",
+      "edit": "Izmeni",
+      "saved": "Izmene su sačuvane.",
+      "recordingTitle": "Snimak",
+      "recordingErrorTitle": "Stanje snimka nije moglo da se učita",
+      "recordingStatus": {
+        "scheduled": "Počinje sa vebinarom",
+        "recording": "Snima se",
+        "processing": "Obrađuje se",
+        "ready": "Spreman",
+        "handed_off": "Predat timu za sadržaj",
+        "failed": "Neuspešan"
+      },
+      "attendanceCaption": "Prisustvo po prijavi, bez imena",
+      "attendanceColumns": {
+        "registration": "Prijava",
+        "joined": "Pridružio se",
+        "left": "Napustio",
+        "minutes": "Minuti",
+        "completed": "Završeno"
+      },
+      "attendanceRow": "Prijava {{number}}",
+      "attendanceNone": "—",
+      "attendanceEmpty": "Niko se nije prijavio."
     },
     "form": {
       "title": "Novi vebinar",
@@ -429,7 +452,17 @@
       "organizationsRequired": "Unesite bar jednu organizaciju.",
       "moderatorNotPresenter": "Moderator ne može istovremeno biti predavač.",
       "cancel": "Otkaži",
-      "organizationsUnavailable": "Lista organizacija nije mogla da se učita. Umesto toga unesite njihove identifikatore."
+      "organizationsUnavailable": "Lista organizacija nije mogla da se učita. Umesto toga unesite njihove identifikatore.",
+      "editTitle": "Izmena vebinara",
+      "save": "Sačuvaj izmene",
+      "saving": "Čuvanje…",
+      "audienceLocked": "Publika može da se menja samo dok je vebinar nacrt.",
+      "audienceUnits": "Jedinice jedne organizacije",
+      "organization": "Organizacija",
+      "units": "Jedinice",
+      "unitsUnavailable": "Lista jedinica ovde još nije dostupna. Umesto toga unesite njihove identifikatore.",
+      "organizationRequired": "Izaberite organizaciju.",
+      "unitsRequired": "Unesite bar jednu jedinicu."
     },
     "console": {
       "prejoinTitle": "Proverite opremu",

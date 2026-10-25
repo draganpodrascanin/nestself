@@ -2,8 +2,10 @@
  * One occurrence for operations (WBN-30 to WBN-33): title, schedule in the
  * occurrence's time zone, audience, capacity, presenters and moderator;
  * Publish (draft to published, WBN-31) and Cancel (WBN-32), each confirmed
- * first, for `event.manage`; the live view for hosts; and, once the webinar
- * ran, the attendance counts (never names, D-CW-30).
+ * first, and the edit form, for `event.manage`; the live view for hosts;
+ * and, once the webinar ran, the recording state (WBN-34) and the
+ * attendance counts with one anonymous row per registration (WBN-33, never
+ * names, D-CW-30).
  *
  * The live view (`$webinarId.live.tsx`) is this route's child: when it
  * matches, this route renders only the outlet.
@@ -12,7 +14,7 @@ import { useState } from 'react';
 import { createFileRoute, Link, Outlet, useChildMatches } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, AlertDialog, AlertDialogContent, AlertDialogTrigger, Button, Heading, StatusBlock } from '@nestself/ui';
+import { Alert, AlertDialog, AlertDialogContent, AlertDialogTrigger, Button, Heading, StatusBlock, Table, Td, Th } from '@nestself/ui';
 import { ApiError, webinarKeys } from '@nestself/api-client';
 import type { Webinar, WebinarAudiencePolicy, WebinarStatus } from '@nestself/contracts';
 import type { AlertTone } from '@nestself/ui';
@@ -21,7 +23,8 @@ import { isSampleDataMode } from '../../../data-source';
 import { Reveal } from '../../../calls/reveal';
 import { canHostWebinars, canListWebinars, canManageWebinars, requireWebinarListOrHost } from '../../../webinars/route-gate';
 import { mapWebinarError } from '../../../webinars/map-webinar-error';
-import { useAttendance, useOccurrence } from '../../../webinars/use-webinars';
+import { useAttendance, useOccurrence, useRecordingState } from '../../../webinars/use-webinars';
+import { useZonedFormat } from '../../../calls/format';
 import { useLocalized, useWebinarWhen } from '../../../webinars/webinar-format';
 import { WebinarStatusBadge } from '../../../webinars/webinar-parts';
 import { webinarsApi } from '../../../webinars/webinars-api';
@@ -129,13 +132,40 @@ function Actions({ webinar }: { webinar: Webinar }) {
   );
 }
 
+/** WBN-34: the recording pipeline's state for a live or ended occurrence. */
+function Recording({ webinar }: { webinar: Webinar }) {
+  const { t } = useTranslation('calls');
+  const ran = webinar.status === 'live' || webinar.status === 'ended';
+  const { status, recording, error } = useRecordingState(webinar, ran);
+  if (!ran) return null;
+  return (
+    <section aria-labelledby="webinar-recording-title" className="gap-2 flex flex-col">
+      <Heading level={2} typeRole="sectionTitle" id="webinar-recording-title">
+        {t('webinar.admin.recordingTitle')}
+      </Heading>
+      {status === 'error' ? (
+        <Alert tone="danger" title={t('webinar.admin.recordingErrorTitle')}>
+          {mapWebinarError(error, t)}
+        </Alert>
+      ) : null}
+      {recording ? (
+        <p className="type-body" data-testid="webinar-recording-state">
+          {t(`webinar.admin.recordingStatus.${recording}`)}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function Attendance({ webinar }: { webinar: Webinar }) {
   const { t } = useTranslation('calls');
+  const format = useZonedFormat();
   const ran = webinar.status === 'live' || webinar.status === 'ended';
   const { status, attendance, error } = useAttendance(webinar.id, ran);
   if (!ran) return null;
+  const time = (iso: string | null) => (iso ? format.time(iso, webinar.timeZone) : t('webinar.admin.attendanceNone'));
   return (
-    <section aria-labelledby="webinar-attendance-title" className="gap-2 flex flex-col">
+    <section aria-labelledby="webinar-attendance-title" className="gap-3 flex flex-col">
       <Heading level={2} typeRole="sectionTitle" id="webinar-attendance-title">
         {t('webinar.admin.attendanceTitle')}
       </Heading>
@@ -145,11 +175,40 @@ function Attendance({ webinar }: { webinar: Webinar }) {
         </Alert>
       ) : null}
       {attendance ? (
-        <ul className="gap-1 m-0 p-0 flex list-none flex-col type-body" data-testid="webinar-attendance">
-          <li>{t('webinar.admin.registeredCount', { count: attendance.registeredCount })}</li>
-          <li>{t('webinar.admin.joinedCount', { count: attendance.joinedCount })}</li>
-          <li>{t('webinar.admin.peakCount', { count: attendance.peakConcurrent })}</li>
-        </ul>
+        <>
+          <ul className="gap-1 m-0 p-0 flex list-none flex-col type-body" data-testid="webinar-attendance">
+            <li>{t('webinar.admin.registeredCount', { count: attendance.registeredCount })}</li>
+            <li>{t('webinar.admin.joinedCount', { count: attendance.joinedCount })}</li>
+            <li>{t('webinar.admin.peakCount', { count: attendance.peakConcurrent })}</li>
+          </ul>
+          {attendance.registrants.length === 0 ? (
+            <p className="type-metadata text-text-secondary">{t('webinar.admin.attendanceEmpty')}</p>
+          ) : (
+            // WBN-33, D-CW-30: one row per registration, numbered; never a name, an email or a user id.
+            <Table caption={t('webinar.admin.attendanceCaption')}>
+              <thead>
+                <tr>
+                  <Th>{t('webinar.admin.attendanceColumns.registration')}</Th>
+                  <Th>{t('webinar.admin.attendanceColumns.joined')}</Th>
+                  <Th>{t('webinar.admin.attendanceColumns.left')}</Th>
+                  <Th numeric>{t('webinar.admin.attendanceColumns.minutes')}</Th>
+                  <Th numeric>{t('webinar.admin.attendanceColumns.completed')}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendance.registrants.map((row, index) => (
+                  <tr key={row.registrationId}>
+                    <Td>{t('webinar.admin.attendanceRow', { number: index + 1 })}</Td>
+                    <Td>{time(row.joinedAt)}</Td>
+                    <Td>{time(row.leftAt)}</Td>
+                    <Td numeric>{row.attendedMinutes ?? t('webinar.admin.attendanceNone')}</Td>
+                    <Td numeric>{row.completionPercent === null ? t('webinar.admin.attendanceNone') : `${row.completionPercent} %`}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </>
       ) : null}
     </section>
   );
@@ -233,6 +292,11 @@ function WebinarAdminDetail() {
       {description ? <p className="type-body max-w-2xl">{description}</p> : null}
       <p className="p-3 rounded-control bg-info-surface text-info type-body">{t('calls:webinar.recordingNotice')}</p>
 
+      {canManageWebinars(principal, effectiveActions) && (webinar.status === 'draft' || webinar.status === 'published') ? (
+        <Link to="/webinars/$webinarId/edit" params={{ webinarId: webinar.id }} className="type-body text-primary underline underline-offset-[0.2em]">
+          {t('calls:webinar.admin.edit')}
+        </Link>
+      ) : null}
       {canManageWebinars(principal, effectiveActions) ? <Actions webinar={webinar} /> : null}
 
       {live ? (
@@ -241,6 +305,7 @@ function WebinarAdminDetail() {
         </Link>
       ) : null}
 
+      <Recording webinar={webinar} />
       <Attendance webinar={webinar} />
     </div>
   );

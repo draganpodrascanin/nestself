@@ -38,7 +38,7 @@ function NewWebinarPage() {
       </Heading>
       {isSampleDataMode ? <Alert tone="info">{t('calls:webinar.admin.sampleNotice')}</Alert> : null}
       <WebinarForm
-        onCreated={(webinar) => {
+        onSaved={(webinar) => {
           void queryClient.invalidateQueries({ queryKey: webinarKeys.ops() });
           void navigate({ to: '/webinars/$webinarId', params: { webinarId: webinar.id } });
         }}

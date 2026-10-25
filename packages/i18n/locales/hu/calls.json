@@ -382,7 +382,30 @@
       "joinedCount": "Csatlakozott: {{count}}",
       "peakCount": "Egyszerre legtöbben: {{count}}",
       "sampleNotice": "Ezek mintaadatok. A mentés, a közzététel és a lemondás semmit sem változtat.",
-      "statusLive": "A webinárium most zajlik."
+      "statusLive": "A webinárium most zajlik.",
+      "edit": "Szerkesztés",
+      "saved": "A módosítások elmentve.",
+      "recordingTitle": "Felvétel",
+      "recordingErrorTitle": "A felvétel állapotát nem sikerült betölteni",
+      "recordingStatus": {
+        "scheduled": "A webináriummal indul",
+        "recording": "Felvétel folyamatban",
+        "processing": "Feldolgozás alatt",
+        "ready": "Elkészült",
+        "handed_off": "Átadva a tartalomcsapatnak",
+        "failed": "Sikertelen"
+      },
+      "attendanceCaption": "Részvétel regisztrációnként, nevek nélkül",
+      "attendanceColumns": {
+        "registration": "Regisztráció",
+        "joined": "Csatlakozott",
+        "left": "Kilépett",
+        "minutes": "Perc",
+        "completed": "Teljesítve"
+      },
+      "attendanceRow": "{{number}}. regisztráció",
+      "attendanceNone": "—",
+      "attendanceEmpty": "Senki sem regisztrált."
     },
     "form": {
       "title": "Új webinárium",
@@ -426,7 +449,17 @@
       "organizationsRequired": "Adjon meg legalább egy szervezetet.",
       "moderatorNotPresenter": "A moderátor nem lehet egyben előadó is.",
       "cancel": "Mégse",
-      "organizationsUnavailable": "A szervezetek listáját nem sikerült betölteni. Adja meg helyette az azonosítóikat."
+      "organizationsUnavailable": "A szervezetek listáját nem sikerült betölteni. Adja meg helyette az azonosítóikat.",
+      "editTitle": "Webinárium szerkesztése",
+      "save": "Módosítások mentése",
+      "saving": "Mentés…",
+      "audienceLocked": "A közönség csak addig módosítható, amíg a webinárium piszkozat.",
+      "audienceUnits": "Egy szervezet egységei",
+      "organization": "Szervezet",
+      "units": "Egységek",
+      "unitsUnavailable": "Az egységek listája itt még nem érhető el. Adja meg helyette az azonosítóikat.",
+      "organizationRequired": "Válassza ki a szervezetet.",
+      "unitsRequired": "Adjon meg legalább egy egységet."
     },
     "console": {
       "prejoinTitle": "Ellenőrizze a beállításokat",

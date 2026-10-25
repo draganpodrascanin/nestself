@@ -441,6 +441,9 @@ describe('webinar transport', () => {
     'poll.vote': { pollId: 'poll_1', body: { optionId: 'opt_a' } },
     'recording.stop': { body: {} },
     'webinar.end': { body: {} },
+    'floor.mute': { participantId: 'part_1', body: {} },
+    'floor.unmuteRequest': { participantId: 'part_1', body: {} },
+    'floor.unmute': { participantId: 'part_1', body: {} },
   } as const;
 
   function transportSetup() {
@@ -476,6 +479,13 @@ describe('webinar transport', () => {
     const api = createWebinarsApi(createApiClient({ baseUrl: 'http://x', mode: 'cookie', fetchImpl }));
     const transport = createWebinarTransport({ api, rooms: noopWebinarRoomClient, webinarId: 'web_1' });
     await expect(transport.post('floor.give', { participantId: 'part_1', body: {} })).rejects.toMatchObject({ code: 'floor_not_available' });
+  });
+
+  it('refuses an action it has no route for', async () => {
+    const { api, sent } = transportSetup();
+    const transport = createWebinarTransport({ api, rooms: noopWebinarRoomClient, webinarId: 'web_1' });
+    await expect(transport.post('floor.teleport', { body: {} })).rejects.toMatchObject({ code: 'unknown' });
+    expect(sent).toHaveLength(0);
   });
 
   it('refuses an action without its path id', async () => {

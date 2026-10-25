@@ -33,9 +33,9 @@ import {
   m,
   useMotionPreset,
 } from '@nestself/ui';
-import { createWebinarTransport, webinarKeys } from '@nestself/api-client';
+import { createWebinarTransport, startClientEventPoster, webinarKeys } from '@nestself/api-client';
 import { useQueryClient } from '@tanstack/react-query';
-import { WEBINAR_POLL_OPTIONS_MAX, WEBINAR_POLL_OPTIONS_MIN, WebinarPollCreateRequestSchema } from '@nestself/contracts';
+import { WEBINAR_MESSAGE_LIST_MAX_LIMIT, WEBINAR_POLL_OPTIONS_MAX, WEBINAR_POLL_OPTIONS_MIN, WebinarPollCreateRequestSchema } from '@nestself/contracts';
 import type {
   RecordingStatus,
   WebinarHostRole,
@@ -52,6 +52,7 @@ import {
   ModeratorQueue,
   PollPanel,
   PreJoinCheck,
+  SessionTimer,
   WebinarClient,
   WebinarStage,
   createSampleWebinarServer,
@@ -60,6 +61,7 @@ import type { CallSessionControllerApi, WebinarClientApi } from '@nestself/video
 import { useAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { useConsultationController } from '../calls/use-consultation-controller';
+import { callsApi } from '../calls/calls-api';
 import { Reveal } from '../calls/reveal';
 import { mapWebinarError } from './map-webinar-error';
 import { hostJoinWindow, useLocalized, useNow, useWebinarWhen } from './webinar-format';
@@ -182,6 +184,22 @@ function PollCreator({ webinarId, client }: { webinarId: string; client: Webinar
   );
 }
 
+/** At most this many pages of 200 messages are read when the console opens. */
+const MESSAGE_PAGES_MAX = 20;
+
+/** `GET /webinars/:id/messages` page by page through `nextCursor`. */
+async function loadAllMessages(webinarId: string): Promise<(WebinarMessage | WebinarModerationMessage)[]> {
+  const items: (WebinarMessage | WebinarModerationMessage)[] = [];
+  let cursor: string | undefined;
+  for (let pageNumber = 0; pageNumber < MESSAGE_PAGES_MAX; pageNumber += 1) {
+    const page = await webinarsApi.listMessages(webinarId, { cursor, limit: WEBINAR_MESSAGE_LIST_MAX_LIMIT });
+    items.push(...page.items);
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return items;
+}
+
 function Frame({ children }: { children: ReactNode }) {
   return <div className="gap-4 flex flex-col">{children}</div>;
 }
@@ -205,6 +223,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   const [starting, setStarting] = useState(false);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   // The join response's recording state; undefined until joined, null when the response carries none.
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [joinRecording, setJoinRecording] = useState<RecordingStatus | null | undefined>(undefined);
   const queryClient = useQueryClient();
   const format = useZonedFormat();
@@ -217,6 +236,18 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   const title = localized(webinar.title);
   const registered = webinar.capacity - webinar.capacityRemaining;
   const isModerator = (client?.getSnapshot().role ?? role) === 'moderator';
+
+  // PLT-18: the controller's client-event log goes to `POST /calls/:sessionId/client-events` every 30 s and on leave.
+  useEffect(() => {
+    if (!joined) return undefined;
+    const poster = startClientEventPoster({
+      drain: () => controller.drainClientEvents(),
+      post: (events) => (isSampleDataMode || !sessionId ? Promise.resolve() : callsApi.postClientEvents(sessionId, events)),
+    });
+    return () => {
+      void poster.stop();
+    };
+  }, [joined, sessionId, controller]);
 
   const join = async () => {
     setJoinError(null);
@@ -237,6 +268,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
       if (response.role === 'attendee') throw new Error('An attendee cannot open the host view');
       setRoomUnavailable(false);
       setJoinRecording(response.recordingStatus ?? null);
+      setSessionId(response.sessionId);
       setRole(response.role);
       setJoined(true);
       // A failure to connect media is shown by the stage through the controller's state.
@@ -252,11 +284,10 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   useEffect(() => {
     if (isSampleDataMode || !client || !role) return undefined;
     let current = true;
-    webinarsApi.listMessages(webinar.id).then(
-      (page) => {
+    loadAllMessages(webinar.id).then(
+      (items) => {
         if (!current) return;
         setChatError(null);
-        const items: readonly (WebinarMessage | WebinarModerationMessage)[] = page.items;
         const moderation = items.filter((item): item is WebinarModerationMessage => 'authorName' in item);
         if (moderation.length > 0 || role === 'moderator') client.hydrate({ moderationMessages: moderation });
         else client.hydrate({ publicMessages: items });
@@ -392,6 +423,8 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
               startPending={starting}
               // The stage's own "End webinar for everyone" (WBN-21) ends it through the client; the lists then refresh.
               onEnd={() => void queryClient.invalidateQueries({ queryKey: webinarKeys.all })}
+              // WBN-19: the elapsed and remaining time of the scheduled window.
+              header={<SessionTimer startsAt={webinar.startsAt} endsAt={webinar.endsAt} participantRole={client.getSnapshot().role} />}
               error={stageError}
             />
           </div>

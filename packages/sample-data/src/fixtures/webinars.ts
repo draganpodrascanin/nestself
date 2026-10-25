@@ -277,3 +277,40 @@ export const SAMPLE_WEBINAR_POLLS: readonly SampleWebinarPoll[] = [
     sample: true,
   },
 ];
+
+/** One registration's attendance (WBN-33): keyed by the registration id, never a name. */
+export interface SampleWebinarAttendanceRow {
+  readonly registrationId: string;
+  readonly joinedAt: string | null;
+  readonly leftAt: string | null;
+  readonly attendedMinutes: number | null;
+  readonly completionPercent: number | null;
+}
+
+/** `GET /ops/webinars/:id/attendance` of the ended webinar: counts and anonymous rows (D-CW-17, D-CW-30). */
+export interface SampleWebinarAttendance {
+  readonly webinarId: string;
+  readonly registeredCount: number;
+  readonly joinedCount: number;
+  readonly peakConcurrent: number;
+  readonly registrants: readonly SampleWebinarAttendanceRow[];
+  readonly sample: true;
+}
+
+/**
+ * Four registrations of the ended webinar: two stayed to the end, one left
+ * early and one did not join. The counts follow from the rows.
+ */
+export const SAMPLE_WEBINAR_ATTENDANCE: SampleWebinarAttendance = {
+  webinarId: ENDED_ID,
+  registeredCount: 4,
+  joinedCount: 3,
+  peakConcurrent: 3,
+  registrants: [
+    { registrationId: 'webinar_registration_sample_1', joinedAt: '2026-10-15T14:58:00.000Z', leftAt: '2026-10-15T16:00:00.000Z', attendedMinutes: 60, completionPercent: 100 },
+    { registrationId: 'webinar_registration_sample_2', joinedAt: '2026-10-15T15:02:00.000Z', leftAt: '2026-10-15T16:00:00.000Z', attendedMinutes: 58, completionPercent: 97 },
+    { registrationId: 'webinar_registration_sample_3', joinedAt: '2026-10-15T15:05:00.000Z', leftAt: '2026-10-15T15:35:00.000Z', attendedMinutes: 30, completionPercent: 50 },
+    { registrationId: 'webinar_registration_sample_4', joinedAt: null, leftAt: null, attendedMinutes: null, completionPercent: null },
+  ],
+  sample: true,
+};

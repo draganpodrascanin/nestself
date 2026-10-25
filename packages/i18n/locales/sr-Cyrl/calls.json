@@ -385,7 +385,30 @@
       "joinedCount": "Придружило се: {{count}}",
       "peakCount": "Највише истовремено: {{count}}",
       "sampleNotice": "Ово су примери података. Чување, објављивање и отказивање ништа не мењају.",
-      "statusLive": "Вебинар је у току."
+      "statusLive": "Вебинар је у току.",
+      "edit": "Измени",
+      "saved": "Измене су сачуване.",
+      "recordingTitle": "Снимак",
+      "recordingErrorTitle": "Стање снимка није могло да се учита",
+      "recordingStatus": {
+        "scheduled": "Почиње са вебинаром",
+        "recording": "Снима се",
+        "processing": "Обрађује се",
+        "ready": "Спреман",
+        "handed_off": "Предат тиму за садржај",
+        "failed": "Неуспешан"
+      },
+      "attendanceCaption": "Присуство по пријави, без имена",
+      "attendanceColumns": {
+        "registration": "Пријава",
+        "joined": "Придружио се",
+        "left": "Напустио",
+        "minutes": "Минути",
+        "completed": "Завршено"
+      },
+      "attendanceRow": "Пријава {{number}}",
+      "attendanceNone": "—",
+      "attendanceEmpty": "Нико се није пријавио."
     },
     "form": {
       "title": "Нови вебинар",
@@ -429,7 +452,17 @@
       "organizationsRequired": "Унесите бар једну организацију.",
       "moderatorNotPresenter": "Модератор не може истовремено бити предавач.",
       "cancel": "Откажи",
-      "organizationsUnavailable": "Листа организација није могла да се учита. Уместо тога унесите њихове идентификаторе."
+      "organizationsUnavailable": "Листа организација није могла да се учита. Уместо тога унесите њихове идентификаторе.",
+      "editTitle": "Измена вебинара",
+      "save": "Сачувај измене",
+      "saving": "Чување…",
+      "audienceLocked": "Публика може да се мења само док је вебинар нацрт.",
+      "audienceUnits": "Јединице једне организације",
+      "organization": "Организација",
+      "units": "Јединице",
+      "unitsUnavailable": "Листа јединица овде још није доступна. Уместо тога унесите њихове идентификаторе.",
+      "organizationRequired": "Изаберите организацију.",
+      "unitsRequired": "Унесите бар једну јединицу."
     },
     "console": {
       "prejoinTitle": "Проверите опрему",
