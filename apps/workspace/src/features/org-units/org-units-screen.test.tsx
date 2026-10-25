@@ -103,6 +103,20 @@ describe('OrgUnitsScreen: tree', () => {
     expect(adminApi.listOrgUnits).not.toHaveBeenCalled();
   });
 
+  it('asks to choose an organization in the header when the context is personal and there are two', async () => {
+    const auth = makeAuth({
+      principal: {
+        ...HR_PRINCIPAL,
+        memberships: [...HR_PRINCIPAL.memberships, { ...HR_PRINCIPAL.memberships[0]!, membershipId: 'mem_org_b', orgId: 'org_b', orgName: 'Second Example d.o.o.' }],
+        context: { kind: 'personal' },
+      },
+    });
+    const { adminApi } = renderScreen({ auth });
+    expect(await screen.findByText(t('workspace:orgUnits.chooseOrganization'))).toBeInTheDocument();
+    expect(auth.switchContext).not.toHaveBeenCalled();
+    expect(adminApi.listOrgUnits).not.toHaveBeenCalled();
+  });
+
   it('sample mode shows fixtures with actions disabled', async () => {
     const { adminApi } = renderScreen({ sampleMode: true });
     expect(screen.getByText(t('workspace:orgUnits.sampleNote'))).toBeInTheDocument();

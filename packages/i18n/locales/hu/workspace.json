@@ -127,6 +127,7 @@
     "loading": "Hozzáférés betöltése",
     "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
     "noOrganization": "A hozzáférés-kezeléshez a fiókodnak pontosan egy aktív szervezeti tagsággal kell rendelkeznie.",
+    "chooseOrganization": "A fiókod több szervezethez tartozik. Válaszd ki a kezelendőt a felső kontextusmenüben.",
     "tableCaption": "Jogosultságok a szervezetedben",
     "columns": {
       "template": "Sablon",
@@ -268,6 +269,7 @@
     "lead": "A szervezeted tagjai és az elfogadásra váró meghívók.",
     "sampleNote": "Mintaadatok: az áthelyezés, a tagság megszüntetése, a meghívás, az importálás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül elküldésre.",
     "noOrganization": "A munkatársak kezeléséhez pontosan egy aktív szervezeti tagság szükséges.",
+    "chooseOrganization": "A fiókod több szervezethez tartozik. Válaszd ki a kezelendőt a felső kontextusmenüben.",
     "loading": "Betöltés",
     "choose": "Válassz",
     "cancel": "Mégse",
@@ -430,6 +432,7 @@
     "lead": "A szervezeted felépítése: osztályok és csapatok a vállalat alatt.",
     "sampleNote": "Mintaadatok: a szervezeti egységek átnevezése, hozzáadása és áthelyezése ki van kapcsolva. Semmi sem jön létre és nem módosul.",
     "noOrganization": "A szervezeti egységekhez pontosan egy aktív szervezeti tagság szükséges.",
+    "chooseOrganization": "A fiókod több szervezethez tartozik. Válaszd ki a kezelendőt a felső kontextusmenüben.",
     "loading": "Betöltés",
     "empty": "Ennek a szervezetnek még nincsenek szervezeti egységei.",
     "treeLabel": "Szervezeti egységek fája",

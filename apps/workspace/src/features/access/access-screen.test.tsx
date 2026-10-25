@@ -285,6 +285,35 @@ describe('AccessScreen: organization context', () => {
     expect(auth.switchContext).not.toHaveBeenCalled();
   });
 
+  it('uses the organization chosen in the header when the account has two active memberships', async () => {
+    const auth = makeAuth({
+      principal: {
+        ...BASE_PRINCIPAL,
+        memberships: [...BASE_PRINCIPAL.memberships, { ...BASE_PRINCIPAL.memberships[0]!, membershipId: 'mem_org_b', orgId: 'org_b', orgName: 'Second Example d.o.o.' }],
+        context: { kind: 'organization', orgId: 'org_b' },
+      },
+    });
+    const { adminApi } = renderScreen({ auth });
+    expect(await screen.findByText('Stefan Marković')).toBeInTheDocument();
+    expect(vi.mocked(adminApi.listGrants).mock.calls.every((call) => call[0] === 'org_b')).toBe(true);
+    expect(auth.switchContext).not.toHaveBeenCalled();
+    expect(screen.queryByText(t('workspace:access.noOrganization'))).not.toBeInTheDocument();
+  });
+
+  it('asks to choose an organization in the header when the context is personal and there are two', async () => {
+    const auth = makeAuth({
+      principal: {
+        ...BASE_PRINCIPAL,
+        memberships: [...BASE_PRINCIPAL.memberships, { ...BASE_PRINCIPAL.memberships[0]!, membershipId: 'mem_org_b', orgId: 'org_b', orgName: 'Second Example d.o.o.' }],
+        context: { kind: 'personal' },
+      },
+    });
+    const { adminApi } = renderScreen({ auth });
+    expect(await screen.findByText(t('workspace:access.chooseOrganization'))).toBeInTheDocument();
+    expect(auth.switchContext).not.toHaveBeenCalled();
+    expect(adminApi.listGrants).not.toHaveBeenCalled();
+  });
+
   it('shows the mapped message when the context switch fails', async () => {
     const auth = makeAuth({
       principal: { ...BASE_PRINCIPAL, context: { kind: 'personal' } },

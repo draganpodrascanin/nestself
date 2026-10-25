@@ -34,7 +34,7 @@ export interface OrgUnitsScreenProps {
 export function OrgUnitsScreen({ adminApi, sampleMode }: OrgUnitsScreenProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const { principal, effectiveActions } = useAuth();
-  const { orgId, apiOrgId, switchError } = useOrgContext(sampleMode);
+  const { orgId, needsChoice, apiOrgId, switchError } = useOrgContext(sampleMode);
   const query = useOrgUnitList(adminApi, apiOrgId);
   const [action, setAction] = useState<OrgUnitAction | null>(null);
   const canManage = principal ? can(principal, 'org_units.manage', undefined, effectiveActions) : false;
@@ -50,7 +50,9 @@ export function OrgUnitsScreen({ adminApi, sampleMode }: OrgUnitsScreenProps) {
     return (
       <div className="space-y-6">
         {header}
-        <Alert tone="info">{t('workspace:orgUnits.noOrganization')}</Alert>
+        <Alert tone="info">
+          {t(needsChoice ? 'workspace:orgUnits.chooseOrganization' : 'workspace:orgUnits.noOrganization')}
+        </Alert>
       </div>
     );
   }

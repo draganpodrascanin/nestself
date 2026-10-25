@@ -26,7 +26,7 @@ export interface PeopleScreenProps {
 export function PeopleScreen({ adminApi, sampleMode }: PeopleScreenProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const { principal, effectiveActions } = useAuth();
-  const { orgId, apiOrgId, switchError } = useOrgContext(sampleMode);
+  const { orgId, needsChoice, apiOrgId, switchError } = useOrgContext(sampleMode);
   const orgUnitsQuery = useOrgUnitList(adminApi, apiOrgId);
   const [tab, setTab] = useState('members');
 
@@ -47,7 +47,9 @@ export function PeopleScreen({ adminApi, sampleMode }: PeopleScreenProps) {
     return (
       <div className="space-y-6">
         {header}
-        <Alert tone="info">{t('workspace:people.noOrganization')}</Alert>
+        <Alert tone="info">
+          {t(needsChoice ? 'workspace:people.chooseOrganization' : 'workspace:people.noOrganization')}
+        </Alert>
       </div>
     );
   }

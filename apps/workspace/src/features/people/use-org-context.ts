@@ -1,15 +1,43 @@
 /**
- * The organization an HR screen administers: the signed-in user's single
- * active membership, never a URL or body value. On mount the session is moved
- * into that organization's context once (the access screen pattern), and the
- * API queries stay disabled until the principal is in it.
+ * The organization an HR screen administers, never a URL or body value: the
+ * organization chosen in the header context picker when the user has an
+ * active membership there, otherwise the user's single active membership. On
+ * mount the session is moved into that organization's context once (the
+ * access screen pattern), and the API queries stay disabled until the
+ * principal is in it.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { Principal } from '@nestself/contracts';
 import { useAuth } from '../../auth';
 
-export interface OrgContextState {
-  /** The organization, or `null` when the user has no single active membership. */
+export interface ResolvedOrganization {
+  /** The organization, or `null` when none can be chosen for the user. */
   orgId: string | null;
+  /** Several active memberships and none chosen: pick one in the header. */
+  needsChoice: boolean;
+}
+
+/**
+ * 1. `principal.context.orgId` when the context is an organization the user
+ *    has an ACTIVE membership in;
+ * 2. else the single ACTIVE membership;
+ * 3. else none (`needsChoice` when there are several to choose from).
+ */
+export function resolveOrganization(principal: Principal | null | undefined): ResolvedOrganization {
+  const active = principal?.memberships.filter((m) => m.status === 'ACTIVE') ?? [];
+  const context = principal?.context;
+  if (context?.kind === 'organization' && active.some((m) => m.orgId === context.orgId)) {
+    return { orgId: context.orgId, needsChoice: false };
+  }
+  if (active.length === 1) return { orgId: active[0]!.orgId, needsChoice: false };
+  return { orgId: null, needsChoice: active.length > 1 };
+}
+
+export interface OrgContextState {
+  /** The organization, or `null` when none can be chosen (see `resolveOrganization`). */
+  orgId: string | null;
+  /** Several active memberships and none chosen in the header. */
+  needsChoice: boolean;
   /** The organization id once the API may be called; `null` in sample mode or before the switch. */
   apiOrgId: string | null;
   /** The failed context switch, if any. */
@@ -18,8 +46,7 @@ export interface OrgContextState {
 
 export function useOrgContext(sampleMode: boolean): OrgContextState {
   const { principal, switchContext } = useAuth();
-  const activeMemberships = principal?.memberships.filter((m) => m.status === 'ACTIVE') ?? [];
-  const orgId = activeMemberships.length === 1 ? activeMemberships[0]!.orgId : null;
+  const { orgId, needsChoice } = resolveOrganization(principal);
   const inOrgContext =
     orgId !== null && principal?.context.kind === 'organization' && principal.context.orgId === orgId;
 
@@ -36,5 +63,5 @@ export function useOrgContext(sampleMode: boolean): OrgContextState {
     });
   }, [sampleMode, orgId, inOrgContext, switchContext]);
 
-  return { orgId, apiOrgId: !sampleMode && inOrgContext ? orgId : null, switchError };
+  return { orgId, needsChoice, apiOrgId: !sampleMode && inOrgContext ? orgId : null, switchError };
 }

@@ -5,6 +5,7 @@ import { can } from '@nestself/contracts';
 import type { GrantResponse } from '@nestself/contracts';
 import type { OrgAdminApi } from '@nestself/api-client';
 import { useAuth } from '../../auth';
+import { resolveOrganization } from '../people/use-org-context';
 import { accessErrorKey } from './access-errors';
 import type { AccessErrorKey } from './access-errors';
 import { grantStatus, templateLabel } from './access-labels';
@@ -24,8 +25,9 @@ export interface AccessScreenProps {
 }
 
 /**
- * Access management for an organization (T-2.2). The organization is the
- * signed-in user's single active membership, never a URL or body value; the
+ * Access management for an organization (T-2.2). The organization is the one
+ * chosen in the header, or the signed-in user's single active membership,
+ * never a URL or body value (`resolveOrganization`); the
  * screen moves the session into that organization's context before loading.
  * Actions are shown by effective action, and the server enforces them again.
  */
@@ -33,8 +35,7 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const { principal, effectiveActions, switchContext } = useAuth();
 
-  const activeMemberships = principal?.memberships.filter((m) => m.status === 'ACTIVE') ?? [];
-  const orgId = activeMemberships.length === 1 ? activeMemberships[0]!.orgId : null;
+  const { orgId, needsChoice } = resolveOrganization(principal);
   const inOrgContext =
     orgId !== null && principal?.context.kind === 'organization' && principal.context.orgId === orgId;
 
@@ -80,7 +81,9 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
     return (
       <div className="space-y-6">
         {header}
-        <Alert tone="info">{t('workspace:access.noOrganization')}</Alert>
+        <Alert tone="info">
+          {t(needsChoice ? 'workspace:access.chooseOrganization' : 'workspace:access.noOrganization')}
+        </Alert>
       </div>
     );
   }

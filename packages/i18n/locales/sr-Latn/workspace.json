@@ -127,6 +127,7 @@
     "loading": "Učitavanje pristupa",
     "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
     "noOrganization": "Za upravljanje pristupom tvoj nalog mora imati tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
     "tableCaption": "Dozvole u tvojoj organizaciji",
     "columns": {
       "template": "Šablon",
@@ -268,6 +269,7 @@
     "lead": "Članovi tvoje organizacije i pozivnice koje još čekaju prihvatanje.",
     "sampleNote": "Primer podataka: premeštanje ljudi, završavanje članstva, pozivanje, uvoz i opoziv su isključeni. Ništa se ne kreira, ne menja i ne šalje.",
     "noOrganization": "Za upravljanje ljudima potrebno je tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
     "loading": "Učitavanje",
     "choose": "Izaberi",
     "cancel": "Otkaži",
@@ -434,6 +436,7 @@
     "lead": "Struktura tvoje organizacije: sektori i timovi ispod kompanije.",
     "sampleNote": "Primer podataka: preimenovanje, dodavanje i premeštanje organizacionih jedinica su isključeni. Ništa se ne kreira i ne menja.",
     "noOrganization": "Za organizacione jedinice potrebno je tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
     "loading": "Učitavanje",
     "empty": "Ova organizacija još nema organizacionih jedinica.",
     "treeLabel": "Stablo organizacionih jedinica",

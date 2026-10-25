@@ -127,6 +127,7 @@
     "loading": "Loading access",
     "empty": "No grants in this organization yet.",
     "noOrganization": "Access management needs exactly one active organization membership on your account.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
     "tableCaption": "Grants in your organization",
     "columns": {
       "template": "Template",
@@ -268,6 +269,7 @@
     "lead": "Members of your organization and the invitations still waiting to be accepted.",
     "sampleNote": "Sample mode: moving people, ending memberships, inviting, importing and revoking are turned off. Nothing is created, changed or sent.",
     "noOrganization": "People management needs exactly one active organization membership.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
     "loading": "Loading",
     "choose": "Choose",
     "cancel": "Cancel",
@@ -434,6 +436,7 @@
     "lead": "The structure of your organization: departments and teams under the company.",
     "sampleNote": "Sample mode: renaming, adding and moving org units are turned off. Nothing is created or changed.",
     "noOrganization": "Org units need exactly one active organization membership.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
     "loading": "Loading",
     "empty": "This organization has no org units yet.",
     "treeLabel": "Org unit tree",
