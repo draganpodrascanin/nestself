@@ -417,6 +417,8 @@
       "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
       "alreadyMember": "Ez a személy már aktív tagja a szervezetnek.",
       "cannotEndSelf": "A saját tagságodat nem szüntetheted meg. Kérj meg egy másik adminisztrátort.",
+      "forbidden": "A fiókod ennél a szervezetnél ehhez nem jogosult.",
+      "contextMismatch": "A munkameneted másik kontextusban van. Válaszd ki ezt a szervezetet a felső kontextusmenüben, és próbáld újra.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
       "unknown": "Valami hiba történt. Próbáld újra.",
       "noChange": "Válassz másik szervezeti egységet vagy közvetlen vezetőt.",

@@ -421,6 +421,8 @@
       "duplicateInvitation": "A pending invitation already exists for this email address.",
       "alreadyMember": "This person is already an active member of the organization.",
       "cannotEndSelf": "You cannot end your own membership. Ask another administrator.",
+      "forbidden": "Your account is not allowed to do this for this organization.",
+      "contextMismatch": "Your session is in a different context. Choose this organization in the context menu at the top and try again.",
       "rateLimited": "Too many attempts. Wait a moment and try again.",
       "unknown": "Something went wrong. Try again.",
       "noChange": "Choose a different org unit or line manager.",

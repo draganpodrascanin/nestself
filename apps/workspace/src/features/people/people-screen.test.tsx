@@ -193,7 +193,7 @@ describe('PeopleScreen: members', () => {
     });
     renderScreen({ auth });
     expect(await screen.findByText(t('workspace:people.errors.loadTitle'))).toBeInTheDocument();
-    expect(screen.getByText(t('workspace:people.errors.unknown'))).toBeInTheDocument();
+    expect(screen.getByText(t('workspace:people.errors.forbidden'))).toBeInTheDocument();
   });
 
   it('hides Move and End membership without people.move and people.deactivate', async () => {
@@ -332,6 +332,8 @@ describe('PeopleScreen: end membership (Review Focus 1)', () => {
     ['not_found', apiError(404, 'not_found'), 'notFound'],
     ['conflict', apiError(409, 'conflict'), 'conflict'],
     ['cannot_end_self', apiError(409, 'cannot_end_self'), 'cannotEndSelf'],
+    ['forbidden', apiError(403, 'forbidden'), 'forbidden'],
+    ['context_mismatch', apiError(403, 'context_mismatch'), 'contextMismatch'],
     ['validation', apiError(400, 'validation'), 'validation'],
     ['429', apiError(429, 'rate_limited'), 'rateLimited'],
     ['unknown', apiError(500, 'internal'), 'unknown'],

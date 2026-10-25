@@ -19,6 +19,8 @@ export type PeopleErrorKey =
   | 'duplicateInvitation'
   | 'alreadyMember'
   | 'cannotEndSelf'
+  | 'forbidden'
+  | 'contextMismatch'
   | 'rateLimited'
   | 'unknown';
 
@@ -31,6 +33,8 @@ const BY_CODE: Record<string, PeopleErrorKey> = {
   duplicate_invitation: 'duplicateInvitation',
   already_member: 'alreadyMember',
   cannot_end_self: 'cannotEndSelf',
+  forbidden: 'forbidden',
+  context_mismatch: 'contextMismatch',
   rate_limited: 'rateLimited',
 };
 

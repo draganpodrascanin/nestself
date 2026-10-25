@@ -421,6 +421,8 @@
       "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
       "alreadyMember": "Ova osoba je već aktivan član organizacije.",
       "cannotEndSelf": "Ne možeš da okončaš sopstveno članstvo. Zamoli drugog administratora.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo u ovoj organizaciji.",
+      "contextMismatch": "Tvoja sesija je u drugom kontekstu. Izaberi ovu organizaciju u meniju konteksta na vrhu i pokušaj ponovo.",
       "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
       "unknown": "Nešto nije u redu. Pokušaj ponovo.",
       "noChange": "Izaberi drugu organizacionu jedinicu ili neposrednog rukovodioca.",
