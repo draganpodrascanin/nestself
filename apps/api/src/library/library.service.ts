@@ -10,7 +10,6 @@
  * saved-item reads happen inside the transaction and availability/detail
  * lookups run after it, preventing pool deadlocks (C1).
  */
-import { createHmac } from 'node:crypto';
 import { Inject, Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -49,94 +48,11 @@ import {
   filterDocumentBody,
   extractCtaFromBody,
 } from './body-filter.js';
-
-// ---------------------------------------------------------------------------
-// Cursor helpers (RTE-R-06: HMAC-signed opaque JSON keysets)
-// ---------------------------------------------------------------------------
-
-interface ListCursorKeyset { s: string; p: number; id: string }
-interface SavedCursorKeyset { t: string; id: string }
-
-/** PostgreSQL int4 range. */
-const INT4_MIN = -2_147_483_648;
-const INT4_MAX = 2_147_483_647;
-
-/** PostgreSQL timestamp range (very generous). */
-const PG_DATE_MIN = new Date('0001-01-01T00:00:00Z');
-const PG_DATE_MAX = new Date('9999-12-31T23:59:59Z');
-
-/** UUID / content-id pattern. */
-const CURSOR_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-
-function hmacSign(payload: string, key: string): string {
-  return createHmac('sha256', key).update(payload).digest('base64url');
-}
-
-function encodeCursor(keyset: Record<string, unknown>, key: string): string {
-  const payload = JSON.stringify(keyset);
-  const sig = hmacSign(payload, key);
-  return Buffer.from(`${payload}\n${sig}`).toString('base64url');
-}
-
-function decodeCursorRaw(raw: string, key: string): Record<string, unknown> {
-  let decoded: string;
-  try {
-    decoded = Buffer.from(raw, 'base64url').toString();
-  } catch {
-    throw cursorError();
-  }
-  const newlineIdx = decoded.lastIndexOf('\n');
-  if (newlineIdx === -1) throw cursorError();
-
-  const payload = decoded.slice(0, newlineIdx);
-  const sig = decoded.slice(newlineIdx + 1);
-
-  // Verify HMAC
-  const expected = hmacSign(payload, key);
-  if (sig !== expected) throw cursorError();
-
-  try {
-    const json = JSON.parse(payload);
-    if (typeof json !== 'object' || json === null) throw 0;
-    return json as Record<string, unknown>;
-  } catch {
-    throw cursorError();
-  }
-}
-
-function decodeListCursor(raw: string, key: string): ListCursorKeyset {
-  const json = decodeCursorRaw(raw, key);
-  const { s, p, id } = json as { s: unknown; p: unknown; id: unknown };
-  if (typeof s !== 'string' || typeof p !== 'number' || typeof id !== 'string') throw cursorError();
-
-  // Validate types within PG ranges
-  if (!Number.isSafeInteger(p) || p < INT4_MIN || p > INT4_MAX) throw cursorError();
-  const d = new Date(s);
-  if (isNaN(d.getTime()) || d < PG_DATE_MIN || d > PG_DATE_MAX) throw cursorError();
-  if (!CURSOR_ID_RE.test(id)) throw cursorError();
-
-  return { s, p, id };
-}
-
-function decodeSavedCursor(raw: string, key: string): SavedCursorKeyset {
-  const json = decodeCursorRaw(raw, key);
-  const { t, id } = json as { t: unknown; id: unknown };
-  if (typeof t !== 'string' || typeof id !== 'string') throw cursorError();
-
-  const d = new Date(t);
-  if (isNaN(d.getTime()) || d < PG_DATE_MIN || d > PG_DATE_MAX) throw cursorError();
-  if (!CURSOR_ID_RE.test(id)) throw cursorError();
-
-  return { t, id };
-}
-
-function cursorError(): ApiHttpException {
-  return new ApiHttpException({
-    status: HttpStatus.BAD_REQUEST,
-    code: 'validation',
-    message: 'Invalid cursor',
-  });
-}
+import {
+  encodeCursor,
+  decodeListCursor,
+  decodeSavedCursor,
+} from './cursor.js';
 
 // ---------------------------------------------------------------------------
 // Source normalization (I3)
@@ -169,7 +85,7 @@ const ALL_READER_LOCALES = ['sr-Latn', 'sr-Cyrl', 'hu', 'en'] as const;
 @Injectable()
 export class LibraryService {
   private readonly logger = new Logger(LibraryService.name);
-  private readonly cursorKey: string;
+  private readonly cursorKey: Buffer;
 
   constructor(
     private readonly dbService: DbService,
@@ -177,7 +93,8 @@ export class LibraryService {
     private readonly contextLoader: AvailabilityContextLoader,
     @Inject(ConfigService) configService: ConfigService,
   ) {
-    this.cursorKey = configService.get<string>('resolvedLibraryCursorKey')!;
+    const hex = configService.get<string>('resolvedLibraryCursorKey')!;
+    this.cursorKey = Buffer.from(hex, 'hex');
   }
 
   // == Content detail ======================================================
@@ -263,15 +180,17 @@ export class LibraryService {
       };
     }
 
-    // ---- Ancillary data (second batch, one connection) ----
-    const [category, authorUser, reviewerUser, mediaRefs] = await Promise.all([
+    // ---- Ancillary data (second batch, max 2 concurrent connections) ----
+    // Combine author + reviewer into a single inArray query.
+    const userIds = [row.authorUserId, ...(row.approvedByUserId ? [row.approvedByUserId] : [])];
+    const [category, userRows] = await Promise.all([
       this.getCategoryDetail(db, row.primaryCategoryId, authored),
-      db.select({ displayName: users.displayName }).from(users).where(eq(users.id, row.authorUserId)).limit(1),
-      row.approvedByUserId
-        ? db.select({ displayName: users.displayName }).from(users).where(eq(users.id, row.approvedByUserId)).limit(1)
-        : Promise.resolve([]),
-      this.getMediaReferences(db, row.revisionId, isCyrillic, authored),
+      db.select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, userIds)),
     ]);
+    const userMap = new Map(userRows.map((u) => [u.id, u.displayName]));
+    const mediaRefs = await this.getMediaReferences(db, row.revisionId, isCyrillic, authored);
 
     // Related resources: single-statement with availability subquery (C2/I1).
     const relatedResources = await this.getRelatedResources(ctx, db, row.relatedResourceIds ?? [], authored, contentResourceId);
@@ -280,11 +199,11 @@ export class LibraryService {
     const title = isCyrillic ? transliterateText(row.title) : row.title;
     const summary = isCyrillic ? transliterateText(row.summary) : row.summary;
     const outcome = row.outcome ? (isCyrillic ? transliterateText(row.outcome) : row.outcome) : '';
-    const authorName = isCyrillic
-      ? transliterateText(authorUser[0]?.displayName ?? '')
-      : (authorUser[0]?.displayName ?? '');
-    const reviewerName = row.approvedByUserId && reviewerUser[0]
-      ? (isCyrillic ? transliterateText(reviewerUser[0].displayName) : reviewerUser[0].displayName)
+    const rawAuthorName = userMap.get(row.authorUserId) ?? '';
+    const authorName = isCyrillic ? transliterateText(rawAuthorName) : rawAuthorName;
+    const rawReviewerName = row.approvedByUserId ? (userMap.get(row.approvedByUserId) ?? null) : null;
+    const reviewerName = rawReviewerName
+      ? (isCyrillic ? transliterateText(rawReviewerName) : rawReviewerName)
       : null;
 
     const catSlug = category?.slug ?? '';
@@ -301,7 +220,7 @@ export class LibraryService {
       body,
       durationSeconds: row.durationSeconds,
       durationBand: row.durationBand as LibraryContentDetail['durationBand'],
-      difficulty: row.difficulty,
+      difficulty: row.difficulty as LibraryContentDetail['difficulty'],
       category: {
         id: row.primaryCategoryId,
         slug: catSlug,
@@ -442,19 +361,29 @@ export class LibraryService {
       cursorId = k.id;
     }
 
-    // Single statement inside withOrgScope: read saved items with availability
-    // join in one query (minor 3).
+    // Single statement inside withOrgScope: saved items LEFT JOIN availability (minor 3).
     const fetchLimit = opts.limit + 1;
 
-    const { savedRows, detailRows } = await withOrgScope(db, ctx.orgId, async (tx) => {
-      // Read saved items
-      const saved = await tx
+    const rows = await withOrgScope(db, ctx.orgId, async (tx) => {
+      const avail = this.availabilityService
+        .availablePublications(ctx, tx)
+        .as('avail');
+
+      return tx
         .select({
           id: savedItems.id,
           contentResourceId: savedItems.contentResourceId,
           createdAt: savedItems.createdAt,
+          resourceType: contentResources.type,
+          title: contentRevisions.title,
+          categoryId: contentResources.primaryCategoryId,
         })
         .from(savedItems)
+        .leftJoin(avail, eq(avail.contentResourceId, savedItems.contentResourceId))
+        .leftJoin(contentPublications, eq(contentPublications.id, avail.publicationId))
+        .leftJoin(contentVariants, eq(contentVariants.id, contentPublications.contentVariantId))
+        .leftJoin(contentResources, eq(contentResources.id, contentVariants.contentResourceId))
+        .leftJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId))
         .where(
           and(
             eq(savedItems.membershipId, ctx.membershipId),
@@ -465,53 +394,20 @@ export class LibraryService {
         )
         .orderBy(desc(savedItems.createdAt), desc(savedItems.id))
         .limit(fetchLimit);
-
-      if (saved.length === 0) {
-        return { savedRows: saved, detailRows: [] as Array<{ resourceId: string; type: string; title: string; categoryId: string }> };
-      }
-
-      // Availability join in same transaction (minor 3: one statement)
-      const resourceIds = saved.map((r) => r.contentResourceId);
-      const avail = this.availabilityService
-        .availablePublications(ctx, tx, { resourceIds })
-        .as('avail');
-
-      const details = await tx
-        .select({
-          resourceId: contentResources.id,
-          type: contentResources.type,
-          title: contentRevisions.title,
-          categoryId: contentResources.primaryCategoryId,
-        })
-        .from(contentPublications)
-        .innerJoin(avail, eq(avail.publicationId, contentPublications.id))
-        .innerJoin(contentVariants, eq(contentVariants.id, contentPublications.contentVariantId))
-        .innerJoin(contentResources, eq(contentResources.id, contentVariants.contentResourceId))
-        .innerJoin(contentRevisions, eq(contentRevisions.id, contentPublications.contentRevisionId));
-
-      return { savedRows: saved, detailRows: details };
     });
 
-    const hasMore = savedRows.length > opts.limit;
-    const page = hasMore ? savedRows.slice(0, opts.limit) : savedRows;
+    const hasMore = rows.length > opts.limit;
+    const page = hasMore ? rows.slice(0, opts.limit) : rows;
     if (page.length === 0) {
       return { items: [], nextCursor: null };
     }
 
-    const availableDetails = new Map<string, { type: string; title: string; categoryId: string }>();
-    for (const r of detailRows) {
-      if (!availableDetails.has(r.resourceId)) {
-        availableDetails.set(r.resourceId, r);
-      }
-    }
-
     // Category labels for available items
-    const catIds = [...new Set([...availableDetails.values()].map((d) => d.categoryId))];
+    const catIds = [...new Set(page.filter((r) => r.categoryId).map((r) => r.categoryId!))];
     const catMap = await this.getCategoryLabels(db, catIds, authored);
 
     const items: SavedItem[] = page.map((r) => {
-      const detail = availableDetails.get(r.contentResourceId);
-      if (!detail) {
+      if (!r.resourceType || !r.title) {
         return {
           resourceId: r.contentResourceId,
           type: null,
@@ -522,11 +418,11 @@ export class LibraryService {
           savedAt: r.createdAt,
         };
       }
-      const catLabel = catMap.get(detail.categoryId)?.name ?? '';
+      const catLabel = r.categoryId ? (catMap.get(r.categoryId)?.name ?? '') : '';
       return {
         resourceId: r.contentResourceId,
-        type: detail.type as SavedItem['type'],
-        title: isCyrillic ? transliterateText(detail.title) : detail.title,
+        type: r.resourceType as SavedItem['type'],
+        title: isCyrillic ? transliterateText(r.title) : r.title,
         status: 'available' as const,
         categoryName: isCyrillic ? transliterateText(catLabel) : catLabel,
         coverImageUrl: null,
@@ -554,37 +450,35 @@ export class LibraryService {
     const ctx = await this.contextLoader.forReader(principal, readerLocale);
     const db = this.dbService.db;
 
-    // Verify available and save in one withOrgScope call (minor 3)
+    // Single statement: CTE checks availability, INSERT selects from it (minor 3).
     await withOrgScope(db, ctx.orgId, async (tx) => {
-      const avail = this.availabilityService
-        .availablePublications(ctx, tx, { resourceIds: [contentResourceId] })
-        .as('avail');
+      const availQuery = this.availabilityService
+        .availablePublications(ctx, tx, { resourceIds: [contentResourceId] });
 
-      const available = await tx
-        .select({ publicationId: sql<string>`${contentPublications.id}` })
-        .from(contentPublications)
-        .innerJoin(avail, eq(avail.publicationId, contentPublications.id))
-        .limit(1);
+      const result = await tx.execute<{ available_count: string; inserted_count: string }>(sql`
+        WITH avail_check AS (
+          SELECT count(*)::int AS cnt FROM (${availQuery}) _a LIMIT 1
+        ),
+        do_insert AS (
+          INSERT INTO saved_items (user_id, membership_id, org_id, content_resource_id)
+          SELECT ${ctx.userId}, ${ctx.membershipId}, ${ctx.orgId}, ${contentResourceId}
+          WHERE (SELECT cnt FROM avail_check) > 0
+          ON CONFLICT (membership_id, content_resource_id) DO NOTHING
+          RETURNING 1
+        )
+        SELECT
+          (SELECT cnt FROM avail_check)::text AS available_count,
+          (SELECT count(*) FROM do_insert)::text AS inserted_count
+      `);
 
-      if (available.length === 0) {
+      const row = result.rows[0];
+      if (!row || Number(row.available_count) === 0) {
         throw new ApiHttpException({
           status: HttpStatus.NOT_FOUND,
           code: 'content_not_available',
           message: 'The requested content is not available',
         });
       }
-
-      await tx
-        .insert(savedItems)
-        .values({
-          userId: ctx.userId,
-          membershipId: ctx.membershipId,
-          orgId: ctx.orgId,
-          contentResourceId,
-        })
-        .onConflictDoNothing({
-          target: [savedItems.membershipId, savedItems.contentResourceId],
-        });
     });
   }
 
@@ -835,26 +729,18 @@ export class LibraryService {
     const currentAuthored = authoredLocale(ctx.readerLocale);
     // Fire and forget: do not await, catch all errors
     (async () => {
-      // Single query: check if any other locale has an available publication
       const otherLocales = (['sr-Latn', 'hu', 'en'] as const).filter(
         (l) => l !== currentAuthored,
       );
       if (otherLocales.length === 0) return;
 
-      const otherAvailCount = await db
-        .select({ cnt: sql<number>`count(*)` })
-        .from(contentVariants)
-        .innerJoin(contentPublications, eq(contentPublications.contentVariantId, contentVariants.id))
-        .where(
-          and(
-            eq(contentVariants.contentResourceId, contentResourceId),
-            inArray(contentVariants.locale, [...otherLocales]),
-            sql`${contentPublications.withdrawnAt} IS NULL`,
-            sql`${contentPublications.startsAt} <= ${ctx.now}`,
-          ),
-        );
+      // Use the real availability formula with locale overrides (AV-24)
+      const rows = await this.availabilityService.availablePublications(ctx, db, {
+        resourceIds: [contentResourceId],
+        localeOverrides: [...otherLocales],
+      });
 
-      if (otherAvailCount[0] && Number(otherAvailCount[0].cnt) > 0) {
+      if (rows.length > 0) {
         this.logger.error(
           `AV-24 locale inconsistency: resource=${contentResourceId} has publications in other locales but not in ${currentAuthored} for org=${ctx.orgId}`,
         );

@@ -6,6 +6,7 @@
  * contract schemas without a database.
  */
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { parseAcceptLanguageLocale } from './locale-header.js';
 import { transliterateText } from '@nestself/content/schema';
 import {
@@ -13,6 +14,28 @@ import {
   LibraryCardSchema,
   SavedItemSchema,
 } from '@nestself/contracts';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod v4 $ZodType vs ZodTypeAny compat
+function deepStrict(schema: any): any {
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(shape)) out[k] = deepStrict(v);
+    return z.object(out as any).strict();
+  }
+  if (schema instanceof z.ZodArray) {
+    let arr = z.array(deepStrict(schema.element));
+    for (const c of schema._def.checks ?? []) {
+      const d = c._zod?.def as any;
+      if (d?.check === 'min_length') arr = arr.min(d.minimum);
+      if (d?.check === 'max_length') arr = arr.max(d.maximum);
+    }
+    return arr;
+  }
+  if (schema instanceof z.ZodNullable) return deepStrict(schema.unwrap()).nullable();
+  if (schema instanceof z.ZodOptional) return deepStrict(schema.unwrap()).optional();
+  return schema;
+}
 import {
   collectReferencedResourceIds,
   filterDocumentBody,
@@ -217,7 +240,7 @@ describe('LibraryService unit -- DTO field set', () => {
       replacementLink: null,
     };
 
-    const result = LibraryContentDetailSchema.strict().safeParse(dto);
+    const result = deepStrict(LibraryContentDetailSchema).safeParse(dto);
     expect(result.success).toBe(true);
 
     for (const key of FORBIDDEN_KEYS) {
@@ -253,7 +276,7 @@ describe('LibraryService unit -- DTO field set', () => {
       replacementLink: null,
     };
 
-    const result = LibraryContentDetailSchema.strict().safeParse(dto);
+    const result = deepStrict(LibraryContentDetailSchema).safeParse(dto);
     expect(result.success).toBe(true);
   });
 
@@ -271,7 +294,7 @@ describe('LibraryService unit -- DTO field set', () => {
       availableLocales: ['sr-Latn', 'sr-Cyrl', 'hu', 'en'],
     };
 
-    const result = LibraryCardSchema.strict().safeParse(card);
+    const result = deepStrict(LibraryCardSchema).safeParse(card);
     expect(result.success).toBe(true);
   });
 
@@ -286,7 +309,7 @@ describe('LibraryService unit -- DTO field set', () => {
       savedAt: new Date().toISOString(),
     };
 
-    const result = SavedItemSchema.strict().safeParse(saved);
+    const result = deepStrict(SavedItemSchema).safeParse(saved);
     expect(result.success).toBe(true);
   });
 });

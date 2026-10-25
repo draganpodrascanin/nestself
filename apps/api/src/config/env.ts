@@ -117,9 +117,9 @@ export const envSchema = z
     // Content link host allowlist (FMT-R-06, Appendix A)
     CONTENT_LINK_HOST_ALLOWLIST: optionalString,
 
-    // Library cursor HMAC key (RTE-R-06). Required in production; in dev/test
-    // the key is derived from JWT_SECRET when absent.
-    LIBRARY_CURSOR_KEY: optionalString,
+    // Library cursor encryption key (RTE-R-06). Required in production; in
+    // dev/test the key is derived from JWT_SECRET when absent.
+    LIBRARY_CURSOR_KEY: optionalHexKey64,
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -214,7 +214,7 @@ export type AppEnv = Env & {
   resolvedSessionEncryptionKey: string | undefined;
   /** Derived Cognito issuer URL. */
   resolvedCognitoIssuer: string | undefined;
-  /** Resolved library cursor HMAC key. */
+  /** Resolved library cursor encryption key (64 hex chars = 32 bytes for AES-256-GCM). */
   resolvedLibraryCursorKey: string;
 };
 
@@ -238,16 +238,17 @@ export function resolveAppEnv(env: Env): AppEnv {
       ? `https://cognito-idp.${env.COGNITO_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}`
       : undefined);
 
-  // RTE-R-06: library cursor HMAC key. In dev/test, derive from JWT_SECRET.
+  // RTE-R-06: library cursor encryption key. In dev/test, derive from JWT_SECRET.
   let resolvedLibraryCursorKey = env.LIBRARY_CURSOR_KEY;
   if (!resolvedLibraryCursorKey && env.JWT_SECRET) {
     resolvedLibraryCursorKey = createHash('sha256')
       .update(`library-cursor:${env.JWT_SECRET}`)
       .digest('hex');
   }
-  // Fallback for test environments that might not even have JWT_SECRET
   if (!resolvedLibraryCursorKey) {
-    resolvedLibraryCursorKey = 'test-cursor-key-not-for-production';
+    throw new Error(
+      'LIBRARY_CURSOR_KEY is required (or JWT_SECRET to derive it)',
+    );
   }
 
   return {

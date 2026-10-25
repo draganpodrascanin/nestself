@@ -36,17 +36,13 @@ import { AvailabilityContextLoader } from '../library/availability/availability-
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { DbService } from '../db/db.service.js';
 import { deliverRendition, type DeliverReq, type DeliverRes } from './deliver-rendition.js';
-import type { ReaderLocale } from '../library/availability/availability-context.js';
+import { parseAcceptLanguageLocale } from '../library/locale-header.js';
 
 const NOT_AVAILABLE = new ApiHttpException({
   status: 404,
   code: 'content_not_available',
   message: 'The requested content is not available',
 });
-
-/** Supported reader locales (I5). */
-const SUPPORTED_LOCALES: readonly ReaderLocale[] = ['sr-Latn', 'sr-Cyrl', 'hu', 'en'];
-const DEFAULT_LOCALE: ReaderLocale = 'sr-Latn';
 
 /** Route-parameter id extractor for `personalOrgResource`. */
 const assetIdParam = (req: Record<string, unknown>): string | undefined => {
@@ -124,8 +120,11 @@ export class MediaLibraryController {
     const membership = principal.memberships.find((m) => m.orgId === ctx.orgId);
     if (!membership) throw NOT_AVAILABLE;
 
-    // I5: Parse Accept-Language to determine the reader's locale
-    const readerLocale = parseAcceptLocale(req.headers['accept-language']);
+    // I5: Parse Accept-Language with the shared parser (locale-header.ts)
+    const rawHeader = req.headers['accept-language'];
+    const readerLocale = parseAcceptLanguageLocale(
+      Array.isArray(rawHeader) ? rawHeader[0] : rawHeader,
+    );
 
     // Build reader context
     const readerCtx = await this.availabilityContextLoader.forReader(
@@ -164,40 +163,3 @@ export class MediaLibraryController {
   }
 }
 
-/**
- * Parse Accept-Language header to determine the reader's locale (I5).
- * Restricts to the four supported locales; defaults to sr-Latn.
- */
-function parseAcceptLocale(
-  header: string | string[] | undefined,
-): ReaderLocale {
-  if (!header) return DEFAULT_LOCALE;
-  const raw = Array.isArray(header) ? header[0] : header;
-  if (!raw) return DEFAULT_LOCALE;
-
-  // Parse "en, sr-Latn;q=0.9, hu;q=0.8" into weighted entries
-  const entries = raw.split(',').map((part) => {
-    const [lang, ...params] = part.trim().split(';');
-    const qParam = params.find((p) => p.trim().startsWith('q='));
-    const q = qParam ? parseFloat(qParam.trim().slice(2)) : 1;
-    return { lang: lang!.trim().toLowerCase(), q: isNaN(q) ? 0 : q };
-  });
-
-  entries.sort((a, b) => b.q - a.q);
-
-  for (const entry of entries) {
-    // Exact match
-    const exact = SUPPORTED_LOCALES.find((l) => l.toLowerCase() === entry.lang);
-    if (exact) return exact;
-    // Prefix match (e.g., "sr" → "sr-Latn")
-    const prefix = SUPPORTED_LOCALES.find(
-      (l) => l.toLowerCase().startsWith(entry.lang + '-') ||
-             entry.lang.startsWith(l.toLowerCase() + '-'),
-    );
-    if (prefix) return prefix;
-    // "sr" without subtag → sr-Latn
-    if (entry.lang === 'sr') return 'sr-Latn';
-  }
-
-  return DEFAULT_LOCALE;
-}

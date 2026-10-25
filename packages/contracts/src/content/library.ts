@@ -17,6 +17,9 @@ export type ContentLocale = z.infer<typeof ContentLocaleSchema>;
 export const DurationBandSchema = z.enum(['under_5', '5_to_15', 'over_15']);
 export type DurationBand = z.infer<typeof DurationBandSchema>;
 
+export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
+export type Difficulty = z.infer<typeof DifficultySchema>;
+
 export const CategorySummarySchema = z.object({
   id: z.string(),
   slug: z.string(),
@@ -80,7 +83,7 @@ export const LibraryContentDetailSchema = z.object({
   body: z.unknown(),
   durationSeconds: z.number().nullable(),
   durationBand: DurationBandSchema.nullable(),
-  difficulty: z.string().nullable(),
+  difficulty: DifficultySchema.nullable(),
   category: CategorySummarySchema,
   secondaryCategories: z.array(CategorySummarySchema),
   topics: z.array(TopicSummarySchema),

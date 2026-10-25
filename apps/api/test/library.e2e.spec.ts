@@ -9,7 +9,7 @@
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
 import 'dotenv/config';
-import { createHmac, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
@@ -20,6 +20,7 @@ import {
   LibraryContentListSchema,
   SavedItemsListSchema,
 } from '@nestself/contracts';
+import { z } from 'zod';
 import { ContentDocumentSchema } from '@nestself/content/schema';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
@@ -72,24 +73,67 @@ function findForbiddenKeys(obj: unknown, path = ''): string[] {
   return found;
 }
 
-/**
- * LIB-R-32 Cyrillic check: no Latin letters except the exception list.
- * Exceptions: Roman numerals (I, V, X, L, C, D, M) in contexts like
- * "WHO-5", units, abbreviations that are kept in Latin in Cyrillic text.
- * We use a simpler check: no Latin a-z except in URLs and well-known
- * acronyms. For practical purposes, we check that no Serbian Latin
- * diacritics appear (these are the definitive proof of un-transliterated text).
- */
-const SERBIAN_LATIN_DIACRITICS = /[čćžšđ]/i;
+// LIB-R-32: protected terms kept in Latin inside Cyrillic text
+const CYRILLIC_PROTECTED_TERMS = [
+  'NestSelf', 'Pexels', 'Phosphor', 'Onest', 'Europe/Belgrade',
+  'English', 'Enterprise',
+  'Lelki Elsősegély Telefonszolgálat', 'Lelki Elsősegély',
+];
 
-/** Collect all text content from a body document's text nodes. */
+function stripProtectedContent(text: string): string {
+  let result = text;
+  result = result.replace(/https?:\/\/\S+/g, '');
+  result = result.replace(/\{\{[^}]+\}\}/g, '');
+  for (const term of CYRILLIC_PROTECTED_TERMS) {
+    result = result.replaceAll(term, '');
+  }
+  return result;
+}
+
+function assertNoCyrillicLeak(text: string, field: string) {
+  const stripped = stripProtectedContent(text);
+  const latin = stripped.match(/[A-Za-z]+/);
+  expect(
+    latin,
+    `LIB-R-32: Latin "${latin?.[0]}" in Cyrillic ${field}. Stripped: "${stripped.slice(0, 80)}"`,
+  ).toBeNull();
+}
+
 function collectBodyTextNodes(node: unknown): string[] {
   if (!node || typeof node !== 'object') return [];
   const n = node as Record<string, unknown>;
-  if (n.type === 'text' && typeof n.text === 'string') return [n.text];
+  const results: string[] = [];
+  if (n.type === 'text' && typeof n.text === 'string') results.push(n.text);
+  if (n.attrs && typeof n.attrs === 'object') {
+    for (const [key, val] of Object.entries(n.attrs as Record<string, unknown>)) {
+      if (typeof val === 'string' && key === 'label') results.push(val);
+    }
+  }
   const content = n.content as unknown[] | undefined;
-  if (!Array.isArray(content)) return [];
-  return content.flatMap(collectBodyTextNodes);
+  if (Array.isArray(content)) results.push(...content.flatMap(collectBodyTextNodes));
+  return results;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod v4 $ZodType vs ZodTypeAny compat
+function deepStrict(schema: any): any {
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(shape)) out[k] = deepStrict(v);
+    return z.object(out as any).strict();
+  }
+  if (schema instanceof z.ZodArray) {
+    let arr = z.array(deepStrict(schema.element));
+    for (const c of schema._def.checks ?? []) {
+      const d = c._zod?.def as any;
+      if (d?.check === 'min_length') arr = arr.min(d.minimum);
+      if (d?.check === 'max_length') arr = arr.max(d.maximum);
+    }
+    return arr;
+  }
+  if (schema instanceof z.ZodNullable) return deepStrict(schema.unwrap()).nullable();
+  if (schema instanceof z.ZodOptional) return deepStrict(schema.unwrap()).optional();
+  return schema;
 }
 
 describe.skipIf(!shouldRun)('Library (e2e)', () => {
@@ -199,7 +243,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(200);
 
       // Strict contract parse
-      const parsed = LibraryContentDetailSchema.strict().safeParse(res.body);
+      const parsed = deepStrict(LibraryContentDetailSchema).safeParse(res.body);
       expect(parsed.success).toBe(true);
 
       // Body parses against ContentDocumentSchema
@@ -288,47 +332,47 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body.locale).toBe('sr-Cyrl');
 
-      // Detail text fields
-      expect(res.body.title).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-      expect(res.body.summary).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-      expect(res.body.outcome).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-      expect(res.body.category.label).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      // Detail text fields — full Latin check (LIB-R-32)
+      assertNoCyrillicLeak(res.body.title, 'title');
+      assertNoCyrillicLeak(res.body.summary, 'summary');
+      assertNoCyrillicLeak(res.body.outcome, 'outcome');
+      assertNoCyrillicLeak(res.body.category.label, 'category.label');
       if (res.body.category.description) {
-        expect(res.body.category.description).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(res.body.category.description, 'category.description');
       }
-      expect(res.body.authorName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      assertNoCyrillicLeak(res.body.authorName, 'authorName');
       if (res.body.reviewerName) {
-        expect(res.body.reviewerName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(res.body.reviewerName, 'reviewerName');
       }
 
       // Sources
       for (const src of res.body.sources) {
-        expect(src.label).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(src.label, 'source.label');
       }
 
-      // Body text nodes
+      // Body text nodes (including label attrs)
       const bodyTexts = collectBodyTextNodes(res.body.body);
-      for (const text of bodyTexts) {
-        expect(text).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      for (const t of bodyTexts) {
+        assertNoCyrillicLeak(t, 'body text');
       }
 
       // Related resources
       for (const rel of res.body.relatedResources) {
-        expect(rel.title).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        expect(rel.summary).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        expect(rel.categoryName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(rel.title, 'related.title');
+        assertNoCyrillicLeak(rel.summary, 'related.summary');
+        assertNoCyrillicLeak(rel.categoryName, 'related.categoryName');
       }
 
       // Media alt text
       for (const m of res.body.media) {
         if (m.altText) {
-          expect(m.altText).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+          assertNoCyrillicLeak(m.altText, 'media.altText');
         }
       }
 
       // CTA label
       if (res.body.cta?.label) {
-        expect(res.body.cta.label).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(res.body.cta.label, 'cta.label');
       }
     });
 
@@ -372,7 +416,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(200);
 
-      const parsed = LibraryContentDetailSchema.strict().safeParse(res.body);
+      const parsed = deepStrict(LibraryContentDetailSchema).safeParse(res.body);
       expect(parsed.success).toBe(true);
       expect(res.body.sources[0].label).toBe('WHO, Mental health at work, 2022');
       expect(res.body.sources[0].url).toBeNull();
@@ -448,7 +492,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(200);
 
-      const parsed = LibraryContentListSchema.strict().safeParse(res.body);
+      const parsed = deepStrict(LibraryContentListSchema).safeParse(res.body);
       expect(parsed.success).toBe(true);
 
       // Employee A (org A) should see all_eligible and org_a articles (3 total)
@@ -480,9 +524,9 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(200);
 
       for (const item of res.body.items) {
-        expect(item.title).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        expect(item.summary).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        expect(item.categoryName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+        assertNoCyrillicLeak(item.title, 'list item title');
+        assertNoCyrillicLeak(item.summary, 'list item summary');
+        assertNoCyrillicLeak(item.categoryName, 'list item categoryName');
       }
     });
 
@@ -522,37 +566,49 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('tampered cursor (modified payload) returns 400', async () => {
+    it('bit-flipped cursor returns 400', async () => {
       const session = await signInPersonal(JOVAN);
-      // Get a valid cursor first
       const page1 = await session.agent
         .get('/api/library/content?limit=1')
         .set('accept-language', 'sr-Latn');
       expect(page1.status).toBe(200);
       expect(page1.body.nextCursor).toBeTruthy();
 
-      // Decode, tamper, re-encode without valid signature
-      const decoded = Buffer.from(page1.body.nextCursor, 'base64url').toString();
-      const [payload] = decoded.split('\n');
-      const tampered = payload!.replace(/"p":\d+/, '"p":999');
-      const fakeSig = createHmac('sha256', 'wrong-key').update(tampered).digest('base64url');
-      const tamperedCursor = Buffer.from(`${tampered}\n${fakeSig}`).toString('base64url');
+      const raw = Buffer.from(page1.body.nextCursor, 'base64url');
+      const mid = Math.floor(raw.length / 2);
+      raw[mid] = raw[mid]! ^ 0xff;
+      const flipped = raw.toString('base64url');
 
       const res = await session.agent
-        .get(`/api/library/content?cursor=${tamperedCursor}`)
+        .get(`/api/library/content?cursor=${flipped}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
     });
 
-    it('cursor with float priority returns 400', async () => {
+    it('truncated cursor returns 400', async () => {
       const session = await signInPersonal(JOVAN);
-      // Craft a cursor with p:1.5 (not safe integer)
-      const payload = JSON.stringify({ s: '2026-10-01T00:00:00.000Z', p: 1.5, id: 'pub_123' });
-      const sig = createHmac('sha256', 'wrong-key').update(payload).digest('base64url');
-      const cursor = Buffer.from(`${payload}\n${sig}`).toString('base64url');
+      const page1 = await session.agent
+        .get('/api/library/content?limit=1')
+        .set('accept-language', 'sr-Latn');
+      expect(page1.status).toBe(200);
+      expect(page1.body.nextCursor).toBeTruthy();
+
+      const truncated = Buffer.from(page1.body.nextCursor, 'base64url')
+        .subarray(0, 8)
+        .toString('base64url');
 
       const res = await session.agent
-        .get(`/api/library/content?cursor=${cursor}`)
+        .get(`/api/library/content?cursor=${truncated}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(400);
+    });
+
+    it('random noise cursor returns 400', async () => {
+      const session = await signInPersonal(JOVAN);
+      const noise = randomBytes(64).toString('base64url');
+
+      const res = await session.agent
+        .get(`/api/library/content?cursor=${noise}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
     });
@@ -590,7 +646,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(list.status).toBe(200);
 
       // Strict parse
-      const parsed = SavedItemsListSchema.strict().safeParse(list.body);
+      const parsed = deepStrict(SavedItemsListSchema).safeParse(list.body);
       expect(parsed.success).toBe(true);
 
       // Forbidden keys in saved items
@@ -707,12 +763,8 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(list.status).toBe(200);
 
       for (const item of list.body.items) {
-        if (item.title) {
-          expect(item.title).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        }
-        if (item.categoryName) {
-          expect(item.categoryName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
-        }
+        if (item.title) assertNoCyrillicLeak(item.title, 'saved item title');
+        if (item.categoryName) assertNoCyrillicLeak(item.categoryName, 'saved item categoryName');
       }
     });
 
@@ -781,6 +833,195 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(page2.status).toBe(200);
       expect(page2.body.items.length).toBeGreaterThanOrEqual(1);
       expect(page2.body.items[0].resourceId).not.toBe(page1.body.items[0].resourceId);
+    });
+  });
+
+  // -- HTTP edge-case scenarios (item 8) ------------------------------------
+
+  describe('HTTP edge-case scenarios', () => {
+    it('expired media rights make the detail 404', async () => {
+      // Insert a media asset with expired rights attached to a live resource
+      const revId = 'rev_var_evening_wind_down_sr-Latn_1';
+      const assetId = 'test_expired_media_asset';
+
+      await testDb.pool.query(
+        `INSERT INTO media_assets (id, kind, state, original_filename_hash, byte_size, mime_type, uploaded_by_user_id, rights_expires_at)
+         VALUES ($1, 'image', 'ready', 'hash', 1000, 'image/jpeg', $2, $3) ON CONFLICT (id) DO NOTHING`,
+        [assetId, JOVAN, new Date('2025-01-01T00:00:00Z')], // expired
+      );
+      await testDb.pool.query(
+        `INSERT INTO content_revision_media (id, content_revision_id, media_asset_id, usage_kind)
+         VALUES ($1, $2, $3, 'cover') ON CONFLICT (id) DO NOTHING`,
+        ['test_crm_expired', revId, assetId],
+      );
+
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('content_not_available');
+
+      // Also not in list
+      const list = await session.agent
+        .get('/api/library/content')
+        .set('accept-language', 'sr-Latn');
+      expect(list.status).toBe(200);
+      const ids = list.body.items.map((i: { resourceId: string }) => i.resourceId);
+      expect(ids).not.toContain(RES_ALL_ELIGIBLE_1);
+
+      // Cleanup
+      await testDb.pool.query(`DELETE FROM content_revision_media WHERE id = 'test_crm_expired'`);
+      await testDb.pool.query(`DELETE FROM media_assets WHERE id = $1`, [assetId]);
+    });
+
+    it('ended membership returns 404 for detail', async () => {
+      const session = await signInPersonal(JOVAN);
+
+      // End Jovan's membership in org A in the past
+      await testDb.pool.query(
+        `UPDATE memberships SET end_date = $1 WHERE user_id = $2 AND org_id = 'org_sample_a'`,
+        [new Date('2025-06-01T00:00:00Z'), JOVAN],
+      );
+
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('content_not_available');
+
+      // List also returns empty
+      const list = await session.agent
+        .get('/api/library/content')
+        .set('accept-language', 'sr-Latn');
+      expect(list.status).toBe(200);
+      expect(list.body.items.length).toBe(0);
+
+      // Restore
+      await testDb.pool.query(
+        `UPDATE memberships SET end_date = NULL WHERE user_id = $1 AND org_id = 'org_sample_a'`,
+        [JOVAN],
+      );
+    });
+
+    it('superseded publication: newer publication makes the old one still available (latest content)', async () => {
+      // When a newer publication exists for the same variant, the availability
+      // formula takes the newest non-withdrawn one. Insert a new revision and
+      // publish it -- the detail should reflect the newer revision's content.
+      const newRevId = 'test_supersede_rev';
+      const newPubId = 'test_supersede_pub';
+
+      // Create a newer revision
+      await testDb.pool.query(
+        `INSERT INTO content_revisions
+         SELECT (jsonb_populate_record(null::content_revisions, to_jsonb(r) || jsonb_build_object(
+           'id', $1, 'revision_number', 99, 'title', 'SUPERSEDE TITLE', 'summary', 'SUPERSEDE SUMMARY'
+         ))).*
+         FROM content_revisions r WHERE r.id = 'rev_var_evening_wind_down_sr-Latn_1'`,
+        [newRevId],
+      );
+
+      // Publish the newer revision (starts_at slightly later to guarantee ordering)
+      await testDb.pool.query(
+        `INSERT INTO content_publications
+         SELECT (jsonb_populate_record(null::content_publications, to_jsonb(p) || jsonb_build_object(
+           'id', $1, 'content_revision_id', $2, 'state', 'live',
+           'starts_at', (now() - interval '1 hour')
+         ))).*
+         FROM content_publications p WHERE p.id = 'pub_var_evening_wind_down_sr-Latn'`,
+        [newPubId, newRevId],
+      );
+      await testDb.pool.query(
+        `INSERT INTO content_publication_audiences
+         SELECT (jsonb_populate_record(null::content_publication_audiences, to_jsonb(a) || jsonb_build_object(
+           'id', 'test_supersede_aud', 'publication_id', $1
+         ))).*
+         FROM content_publication_audiences a WHERE a.publication_id = 'pub_var_evening_wind_down_sr-Latn'`,
+        [newPubId],
+      );
+
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(200);
+      // The detail should show the newest published revision's content
+      expect(res.body.title).toBe('SUPERSEDE TITLE');
+      expect(res.body.summary).toBe('SUPERSEDE SUMMARY');
+
+      // Cleanup
+      await testDb.pool.query(`DELETE FROM content_publication_audiences WHERE id = 'test_supersede_aud'`);
+      await testDb.pool.query(`DELETE FROM content_publications WHERE id = $1`, [newPubId]);
+      await testDb.pool.query(`DELETE FROM content_revisions WHERE id = $1`, [newRevId]);
+    });
+  });
+
+  // -- TST-R-04: HTTP-level same-set (item 9) --------------------------------
+
+  describe('TST-R-04: HTTP same-set consistency', () => {
+    it('every resource in the list is also available in detail', async () => {
+      const session = await signInPersonal(JOVAN);
+      const list = await session.agent
+        .get('/api/library/content?limit=50')
+        .set('accept-language', 'sr-Latn');
+      expect(list.status).toBe(200);
+      expect(list.body.items.length).toBeGreaterThan(0);
+
+      // Each listed resource must return 200 from detail
+      for (const card of list.body.items) {
+        const detail = await session.agent
+          .get(`/api/library/content/${card.resourceId}`)
+          .set('accept-language', 'sr-Latn');
+        expect(detail.status).toBe(200);
+        expect(detail.body.id).toBe(card.resourceId);
+      }
+    });
+
+    it('unavailable resources are absent from both list and detail', async () => {
+      const session = await signInPersonal(JOVAN);
+      const unavailableIds = [RES_FUTURE, RES_WITHDRAWN];
+
+      const list = await session.agent
+        .get('/api/library/content?limit=50')
+        .set('accept-language', 'sr-Latn');
+      expect(list.status).toBe(200);
+      const listIds = list.body.items.map((i: { resourceId: string }) => i.resourceId);
+
+      for (const resId of unavailableIds) {
+        expect(listIds).not.toContain(resId);
+        const detail = await session.agent
+          .get(`/api/library/content/${resId}`)
+          .set('accept-language', 'sr-Latn');
+        expect(detail.status).toBe(404);
+      }
+    });
+
+    it('saved items of available resources show status=available and appear in list', async () => {
+      const session = await signInPersonal(JOVAN);
+
+      // Save a resource
+      await session.agent
+        .put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
+        .set('x-csrf-token', session.csrf)
+        .set('accept-language', 'sr-Latn');
+
+      // Get list and saved
+      const list = await session.agent
+        .get('/api/library/content?limit=50')
+        .set('accept-language', 'sr-Latn');
+      const saved = await session.agent
+        .get('/api/me/saved?limit=50')
+        .set('accept-language', 'sr-Latn');
+
+      const listIds = new Set(list.body.items.map((i: { resourceId: string }) => i.resourceId));
+      const savedAvailable = saved.body.items.filter(
+        (i: { status: string }) => i.status === 'available',
+      );
+
+      // Every available saved item must be in the list
+      for (const item of savedAvailable) {
+        expect(listIds.has(item.resourceId)).toBe(true);
+      }
     });
   });
 });

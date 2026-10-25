@@ -260,4 +260,316 @@ describe('extractCtaFromBody', () => {
     expect(extractCtaFromBody(null)).toBeNull();
     expect(extractCtaFromBody(undefined)).toBeNull();
   });
+
+  it('returns the first CTA when multiple exist at top level', () => {
+    const d = doc(
+      cta('open_content', 'res_first', 'First'),
+      cta('suggest_topic', null, 'Second'),
+    );
+    const extracted = extractCtaFromBody(d);
+    expect(extracted).toEqual({
+      kind: 'open_content',
+      targetId: 'res_first',
+      label: 'First',
+    });
+  });
+
+  it('does NOT find CTA nested inside another node (top-level only)', () => {
+    const d = doc({
+      type: 'professionalNote',
+      content: [cta('open_content', 'res_nested', 'Nested')],
+    });
+    expect(extractCtaFromBody(d)).toBeNull();
+  });
+
+  it('extracts each known CTA kind correctly', () => {
+    for (const kind of [
+      'open_content', 'open_collection', 'suggest_topic',
+      'ask_general_question', 'express_event_interest', 'open_service',
+    ]) {
+      const d = doc(cta(kind, 'target_1', `Label for ${kind}`));
+      const extracted = extractCtaFromBody(d);
+      expect(extracted).toEqual({
+        kind,
+        targetId: 'target_1',
+        label: `Label for ${kind}`,
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nested structure tests — collectReferencedResourceIds
+// ---------------------------------------------------------------------------
+
+describe('collectReferencedResourceIds (nested structures)', () => {
+  it('collects internal link inside bulletList > listItem > paragraph', () => {
+    const d = doc({
+      type: 'bulletList',
+      content: [{
+        type: 'listItem',
+        content: [paragraph(text('see ', []), text('here', [internalLink('res_nested_link')]))],
+      }],
+    });
+    expect(collectReferencedResourceIds(d)).toEqual(['res_nested_link']);
+  });
+
+  it('collects relatedResource inside blockquote', () => {
+    const d = doc({
+      type: 'blockquote',
+      content: [relatedResource('res_in_quote')],
+    });
+    expect(collectReferencedResourceIds(d)).toEqual(['res_in_quote']);
+  });
+
+  it('collects CTA targetId inside professionalNote', () => {
+    const d = doc({
+      type: 'professionalNote',
+      content: [cta('open_content', 'res_in_note')],
+    });
+    expect(collectReferencedResourceIds(d)).toEqual(['res_in_note']);
+  });
+
+  it('collects mixed references at various depths', () => {
+    const d = doc(
+      relatedResource('res_top'),
+      {
+        type: 'blockquote',
+        content: [
+          paragraph(text('link', [internalLink('res_in_bq')])),
+          {
+            type: 'bulletList',
+            content: [{
+              type: 'listItem',
+              content: [
+                relatedResource('res_in_li'),
+                paragraph(text('deep', [internalLink('res_deep')])),
+              ],
+            }],
+          },
+        ],
+      },
+      cta('open_collection', 'res_cta'),
+    );
+    const ids = collectReferencedResourceIds(d).sort();
+    expect(ids).toEqual(['res_cta', 'res_deep', 'res_in_bq', 'res_in_li', 'res_top']);
+  });
+
+  it('collects deeply nested: blockquote > bulletList > listItem > paragraph > text with link', () => {
+    const d = doc({
+      type: 'blockquote',
+      content: [{
+        type: 'bulletList',
+        content: [{
+          type: 'listItem',
+          content: [paragraph(text('deep link', [internalLink('res_very_deep')]))],
+        }],
+      }],
+    });
+    expect(collectReferencedResourceIds(d)).toEqual(['res_very_deep']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nested structure tests — filterDocumentBody
+// ---------------------------------------------------------------------------
+
+describe('filterDocumentBody (nested structures)', () => {
+  const ctx: FilterContext = {
+    availableIds: new Set(['res_available']),
+    capabilities: ['library'],
+  };
+
+  it('drops relatedResource inside bulletList listItem when unavailable', () => {
+    const d = doc({
+      type: 'bulletList',
+      content: [{
+        type: 'listItem',
+        content: [
+          relatedResource('res_available'),
+          relatedResource('res_gone'),
+          paragraph(text('text')),
+        ],
+      }],
+    });
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const bulletList = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    const listItem = (bulletList.content as unknown[])[0] as Record<string, unknown>;
+    const liContent = listItem.content as unknown[];
+    // relatedResource('res_gone') should be dropped; available one + paragraph remain
+    expect(liContent).toHaveLength(2);
+    expect((liContent[0] as Record<string, unknown>).type).toBe('relatedResource');
+    expect((liContent[1] as Record<string, unknown>).type).toBe('paragraph');
+  });
+
+  it('unwraps internal link inside blockquote paragraph when target unavailable', () => {
+    const d = doc({
+      type: 'blockquote',
+      content: [
+        paragraph(
+          text('click '),
+          text('this', [internalLink('res_gone')]),
+        ),
+      ],
+    });
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const bq = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    const para = (bq.content as unknown[])[0] as Record<string, unknown>;
+    const nodes = para.content as Array<Record<string, unknown>>;
+    const linkNode = nodes.find((n) => n.text === 'this')!;
+    expect(linkNode).toBeTruthy();
+    expect(linkNode.marks).toBeUndefined();
+  });
+
+  it('filters CTA inside professionalNote by capability', () => {
+    const noCalls: FilterContext = {
+      availableIds: new Set(),
+      capabilities: ['library'], // no 'calls'
+    };
+    const d = doc({
+      type: 'professionalNote',
+      content: [cta('open_service', 'calls')],
+    });
+    const filtered = filterDocumentBody(d, noCalls) as Record<string, unknown>;
+    const note = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    expect((note.content as unknown[]).length).toBe(0);
+  });
+
+  it('keeps CTA inside professionalNote when capability is present', () => {
+    const withCalls: FilterContext = {
+      availableIds: new Set(),
+      capabilities: ['library', 'calls'],
+    };
+    const d = doc({
+      type: 'professionalNote',
+      content: [cta('open_service', 'calls')],
+    });
+    const filtered = filterDocumentBody(d, withCalls) as Record<string, unknown>;
+    const note = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    expect((note.content as unknown[]).length).toBe(1);
+  });
+
+  it('handles multiple links in one paragraph: one available, one not', () => {
+    const d = doc(
+      paragraph(
+        text('available ', [internalLink('res_available')]),
+        text(' and '),
+        text('gone', [internalLink('res_gone')]),
+      ),
+    );
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const para = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    const nodes = para.content as Array<Record<string, unknown>>;
+
+    const availNode = nodes.find((n) => n.text === 'available ')!;
+    expect(availNode.marks).toHaveLength(1); // link kept
+
+    const goneNode = nodes.find((n) => n.text === 'gone')!;
+    expect(goneNode.marks).toBeUndefined(); // link unwrapped
+  });
+
+  it('drops unavailable relatedResource inside orderedList, keeps available', () => {
+    const d = doc({
+      type: 'orderedList',
+      content: [{
+        type: 'listItem',
+        content: [
+          relatedResource('res_available'),
+          relatedResource('res_gone'),
+        ],
+      }],
+    });
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const ol = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    const li = (ol.content as unknown[])[0] as Record<string, unknown>;
+    expect((li.content as unknown[]).length).toBe(1);
+    const kept = (li.content as unknown[])[0] as Record<string, unknown>;
+    expect((kept.attrs as Record<string, unknown>).contentResourceId).toBe('res_available');
+  });
+
+  it('deeply nested: blockquote > bulletList > listItem > paragraph > link unwrap', () => {
+    const d = doc({
+      type: 'blockquote',
+      content: [{
+        type: 'bulletList',
+        content: [{
+          type: 'listItem',
+          content: [
+            paragraph(text('deep link', [internalLink('res_gone')])),
+          ],
+        }],
+      }],
+    });
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const bq = (filtered.content as unknown[])[0] as Record<string, unknown>;
+    const bl = (bq.content as unknown[])[0] as Record<string, unknown>;
+    const li = (bl.content as unknown[])[0] as Record<string, unknown>;
+    const para = (li.content as unknown[])[0] as Record<string, unknown>;
+    const textNode = (para.content as Array<Record<string, unknown>>)[0]!;
+    expect(textNode.text).toBe('deep link');
+    expect(textNode.marks).toBeUndefined();
+  });
+
+  it('does not mutate the original nested document', () => {
+    const d = doc({
+      type: 'blockquote',
+      content: [
+        relatedResource('res_gone'),
+        paragraph(text('link', [internalLink('res_gone')])),
+      ],
+    });
+    const original = JSON.parse(JSON.stringify(d));
+    filterDocumentBody(d, ctx);
+    expect(d).toEqual(original);
+  });
+
+  it('complex document: mixed available and unavailable at multiple depths', () => {
+    const d = doc(
+      paragraph(text('intro')),
+      relatedResource('res_available'),
+      relatedResource('res_gone'),
+      {
+        type: 'blockquote',
+        content: [
+          paragraph(
+            text('a link to '),
+            text('available', [internalLink('res_available')]),
+            text(' and '),
+            text('gone', [internalLink('res_gone')]),
+          ),
+          relatedResource('res_gone'),
+        ],
+      },
+      cta('open_content', 'res_available', 'Read'),
+      cta('open_content', 'res_gone', 'Dropped'),
+      cta('unknown_kind', null),
+    );
+
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const content = filtered.content as Array<Record<string, unknown>>;
+
+    // paragraph kept
+    expect(content[0]!.type).toBe('paragraph');
+    // relatedResource('res_available') kept
+    expect(content[1]!.type).toBe('relatedResource');
+    // relatedResource('res_gone') dropped
+    // blockquote kept (but relatedResource inside dropped, link unwrapped)
+    expect(content[2]!.type).toBe('blockquote');
+    const bqContent = content[2]!.content as Array<Record<string, unknown>>;
+    // blockquote should contain just the paragraph (relatedResource dropped)
+    expect(bqContent).toHaveLength(1);
+    expect(bqContent[0]!.type).toBe('paragraph');
+    // Within the paragraph, 'available' link should be kept, 'gone' unwrapped
+    const paraNodes = bqContent[0]!.content as Array<Record<string, unknown>>;
+    const availLink = paraNodes.find((n) => n.text === 'available')!;
+    expect(availLink.marks).toHaveLength(1);
+    const goneLink = paraNodes.find((n) => n.text === 'gone')!;
+    expect(goneLink.marks).toBeUndefined();
+
+    // cta('open_content', 'res_available') kept
+    expect(content[3]!.type).toBe('cta');
+    // cta('open_content', 'res_gone') dropped
+    // cta('unknown_kind') dropped
+    expect(content).toHaveLength(4); // paragraph + relatedResource + blockquote + cta
+  });
 });

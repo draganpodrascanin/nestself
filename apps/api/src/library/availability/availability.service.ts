@@ -30,7 +30,7 @@ import {
 } from '../../db/schema/cms.js';
 import { memberships } from '../../db/schema/organization.js';
 import { mediaAssets } from '../../db/schema/media.js';
-import type { AvailabilityContext } from './availability-context.js';
+import type { AvailabilityContext, AuthoredLocale } from './availability-context.js';
 import { authoredLocale } from './availability-context.js';
 
 /** Filter arguments to push predicates into the SQL (C2). */
@@ -39,6 +39,8 @@ export interface AvailabilityFilter {
   variantIds?: string[];
   publicationIds?: string[];
   mediaAssetId?: string;
+  /** Override the locale condition (AV-24 diagnostic). When set, replaces the single-locale eq with inArray. */
+  localeOverrides?: AuthoredLocale[];
 }
 
 @Injectable()
@@ -143,7 +145,9 @@ export class AvailabilityService {
       ),
 
       // ACC-R-25: locale filter — C-28
-      eq(contentVariants.locale, authoredLocale(ctx.readerLocale)),
+      filter.localeOverrides && filter.localeOverrides.length > 0
+        ? inArray(contentVariants.locale, filter.localeOverrides)
+        : eq(contentVariants.locale, authoredLocale(ctx.readerLocale)),
     ];
 
     // Defense in depth for reader contexts (C3): uncorrelated EXISTS on membership
