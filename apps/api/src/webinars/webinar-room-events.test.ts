@@ -80,6 +80,16 @@ describe('WebinarRoomEvents', () => {
     expect(emit).toHaveBeenCalledTimes(3);
   });
 
+  it('tells the moderators that the recording failed, with a machine reason (CW-R-121)', () => {
+    const { emit, events } = setup();
+    expect(events.toModerationAdded('w1', 'webinar.recording.failed', { webinarId: 'w1', reason: 'concatenation_failed' })).toBe(true);
+    expect(emit.mock.calls).toEqual([
+      ['webinar:w1:moderation', 'webinar.recording.failed', { webinarId: 'w1', reason: 'concatenation_failed' }],
+    ]);
+    expect(events.toModerationAdded('w1', 'webinar.recording.failed', { webinarId: 'w1', reason: '' })).toBe(false);
+    expect(emit).toHaveBeenCalledTimes(1);
+  });
+
   it('never sends a floor flag that names the speaker (D-CW-15)', () => {
     const { emit, events } = setup();
     expect(events.toAudienceAdded('w1', 'webinar.floor.state', { active: true, participantId: 'part_1' } as never)).toBe(false);

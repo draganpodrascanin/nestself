@@ -44,16 +44,30 @@
  *   FAILED with `failure_reason` (an error code or name, never a provider
  *   message) and audit `webinar.recording.failed`. The webinar itself goes on.
  *
- * `webinar.recording` carries `started` and `stopped` only (the contract's
- * REC indicator states); READY and FAILED reach the hosts through
- * `GET /webinars/:id/recording`.
+ * `webinar.recording` on `webinar:{id}` follows every state the room cares
+ * about: `started` (RECORDING), `stopped` (PROCESSING), `ready` (READY) and
+ * `failed` (FAILED); a failure also reaches the moderators as
+ * `webinar.recording.failed { webinarId, reason }` on
+ * `webinar:{id}:moderation` (CW-R-121). `GET /webinars/:id/recording` serves
+ * the same state to a host who reloads.
  *
  * Assumptions until the founder runs the spikes (research/07-spikes.md):
  * SPIKE-CW-03, that the pipeline counts as an attendee of the meeting (the
  * webinar meeting should reserve one seat for it); SPIKE-CW-04, that
  * `SelectedVideoStreams` and `PresenterOnly` combine into a presenter-only
  * composite, and the object name Chime gives the concatenated MP4 under
- * `final/{webinarId}/composited-video/` (the key stored is that folder until then).
+ * `final/{webinarId}/composited-video/` (the key stored is that folder until
+ * then).
+ *
+ * Follow-up proposed in the T-CW-2.5 review, to settle with SPIKE-CW-04: a
+ * presenter who joins after the capture started is not on video, because
+ * `SelectedVideoStreams.AttendeeIds` names the attendees present at the
+ * start. Selecting by `ExternalUserIds` instead (the `call_participants.id`
+ * of every presenter assigned to the occurrence, the rows created with
+ * `CallsRepository.ensureParticipant` when the capture starts, so the join
+ * reuses them as its `ExternalUserId`) would put a late presenter on video
+ * as soon as they join; the spike confirms that Chime matches
+ * `ExternalUserIds` for attendees created after the pipeline.
  *
  * Audit details carry identifiers, a reason or a key only (CW-R-33a).
  */
@@ -402,6 +416,7 @@ export class WebinarRecordingService {
         return moved;
       });
       if (!ready) return { webinarId, finalized: false, recordingId: row.id, skipped: 'status' };
+      this.events.toAudience(webinarId, 'webinar.recording', { webinarId, status: 'ready' });
       await this.record(JOB_ACTOR, webinar, 'webinar.recording.ready', {
         webinarId,
         sessionId,
@@ -463,8 +478,10 @@ export class WebinarRecordingService {
 
   /**
    * FAILED with the reason (the row, when there is one, and the occurrence's
-   * summary), the REC indicator off if it was on, and the audit note. A row
-   * already READY, HANDED_OFF or FAILED is left alone.
+   * summary), `webinar.recording { failed }` on the public room,
+   * `webinar.recording.failed { webinarId, reason }` on the moderation room
+   * (CW-R-121) and the audit note. A row already READY, HANDED_OFF or FAILED
+   * is left alone.
    */
   private async fail(
     webinar: Pick<WebinarRecord, 'id' | 'orgId'>,
@@ -483,9 +500,9 @@ export class WebinarRecordingService {
       return true;
     });
     if (!failed) return;
-    if (row?.status === 'recording') {
-      this.events.toAudience(webinar.id, 'webinar.recording', { webinarId: webinar.id, status: 'stopped' });
-    }
+    // The REC indicator goes off; the moderators get the reason (CW-R-121) and a translated notice in the client.
+    this.events.toAudience(webinar.id, 'webinar.recording', { webinarId: webinar.id, status: 'failed' });
+    this.events.toModerationAdded(webinar.id, 'webinar.recording.failed', { webinarId: webinar.id, reason });
     await this.record(actor, webinar, 'webinar.recording.failed', {
       webinarId: webinar.id,
       sessionId: row?.sessionId ?? null,

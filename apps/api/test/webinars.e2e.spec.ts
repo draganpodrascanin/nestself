@@ -1090,6 +1090,9 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       'webinar.recording.handed_off',
     ]);
     expect((await get(nikola, `/webinars/${liveId}/recording`)).body).toMatchObject({ status: 'ready' });
+    expect(emitted('webinar.recording')).toEqual([
+      [`webinar:${liveId}`, 'webinar.recording', { webinarId: liveId, status: 'ready' }],
+    ]);
   });
 
   it('a webinar whose meeting the provider ended is ended by the session lifecycle, and its recording stops (T-CW-2.5)', async () => {
@@ -1138,6 +1141,11 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       }),
     );
     expect((await get(nikola, `/webinars/${id}/recording`)).body).toMatchObject({ status: 'failed', startedAt: null });
+    // The audience's REC state, and the moderators' notice with the reason (CW-R-121).
+    expect(emitted('webinar.recording')).toEqual([[`webinar:${id}`, 'webinar.recording', { webinarId: id, status: 'failed' }]]);
+    expect(emitted('webinar.recording.failed')).toEqual([
+      [`webinar:${id}:moderation`, 'webinar.recording.failed', { webinarId: id, reason: 'ended_before_start' }],
+    ]);
   });
 
   // ── Audit hygiene (CW-R-33a, CW-R-69) ─────────────────────────────────────

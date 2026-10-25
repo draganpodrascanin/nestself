@@ -184,7 +184,8 @@ async function setup(options: SetupOptions = {}) {
     }),
   };
   const calls = { listParticipants: vi.fn(async () => participants) };
-  const toAudience = vi.fn(() => true);
+  const toAudience = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
+  const toModerationAdded = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
   const audits: AuditEventInput[] = [];
   const audit = { record: vi.fn(async (input: AuditEventInput) => void audits.push(input)) };
   const scheduler = { enqueueRecordingFinalize: vi.fn(async () => true) };
@@ -195,11 +196,11 @@ async function setup(options: SetupOptions = {}) {
     access as unknown as WebinarAccess,
     calls as unknown as CallsRepository,
     video,
-    { toAudience } as unknown as WebinarRoomEvents,
+    { toAudience, toModerationAdded } as unknown as WebinarRoomEvents,
     audit as unknown as AuditWriter,
     scheduler as unknown as WebinarJobSchedulerService,
   );
-  return { service, video, webinar, recordings, participants, toAudience, audits, scheduler, access };
+  return { service, video, webinar, recordings, participants, toAudience, toModerationAdded, audits, scheduler, access };
 }
 
 const startJob = { webinarId: WEBINAR_ID, sessionId: null };
@@ -290,7 +291,7 @@ describe('webinar.recording.start (WBN-28, CW-R-121)', () => {
   });
 
   it('retries a provider failure and records FAILED on the last attempt; the webinar goes on', async () => {
-    const { service, video, recordings, audits, toAudience } = await setup();
+    const { service, video, recordings, audits, toAudience, toModerationAdded } = await setup();
     vi.spyOn(video, 'startRecording').mockRejectedValue(videoProviderUnavailable(429));
 
     await expect(service.start(startJob, context({ attempt: 1 }))).rejects.toMatchObject({ code: 'video_provider_unavailable' });
@@ -299,7 +300,11 @@ describe('webinar.recording.start (WBN-28, CW-R-121)', () => {
     expect(await service.start(startJob, context({ attempt: 3 }))).toMatchObject({ started: false, skipped: 'failed' });
     expect(recordings.only()).toMatchObject({ status: 'failed', failureReason: 'video_provider_unavailable' });
     expect(audits.map((a) => a.action)).toEqual(['webinar.recording.failed']);
-    expect(toAudience).not.toHaveBeenCalled();
+    // The audience's REC state and the moderators' notice with the reason (CW-R-121).
+    expect(toAudience.mock.calls).toEqual([[WEBINAR_ID, 'webinar.recording', { webinarId: WEBINAR_ID, status: 'failed' }]]);
+    expect(toModerationAdded.mock.calls).toEqual([
+      [WEBINAR_ID, 'webinar.recording.failed', { webinarId: WEBINAR_ID, reason: 'video_provider_unavailable' }],
+    ]);
   });
 
   it('stops the pipeline it just started when the webinar ended meanwhile', async () => {
@@ -413,7 +418,7 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
   }
 
   it('stops the capture, concatenates into final/{webinarId}/, sets READY and hands off as pending', async () => {
-    const { service, video, recordings, audits } = await stopped();
+    const { service, video, recordings, audits, toAudience } = await stopped();
     const concatenate = vi.spyOn(video, 'startConcatenation');
 
     expect(await service.finalize(finalizeJob, context())).toMatchObject({ webinarId: WEBINAR_ID, finalized: true });
@@ -435,6 +440,7 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
       failureReason: null,
     });
     expect(recordings.webinarStatus).toBe('ready');
+    expect(toAudience.mock.calls).toEqual([[WEBINAR_ID, 'webinar.recording', { webinarId: WEBINAR_ID, status: 'ready' }]]);
     expect(audits.map((a) => [a.action, a.actorKind, a.details])).toEqual([
       [
         'webinar.recording.ready',
@@ -470,7 +476,7 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
   });
 
   it('retries a failed concatenation with a new pipeline, and records FAILED after the third attempt', async () => {
-    const { service, video, recordings, audits } = await stopped();
+    const { service, video, recordings, audits, toModerationAdded } = await stopped();
     const fake = video as FakeVideoProvider;
 
     fake.failNextConcatenation();
@@ -481,7 +487,12 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
     await expect(service.finalize(finalizeJob, context({ attempt: 2 }))).rejects.toThrow(/concatenation/i);
 
     fake.failNextConcatenation();
+    toModerationAdded.mockClear();
     expect(await service.finalize(finalizeJob, context({ attempt: 3 }))).toMatchObject({ finalized: false, skipped: 'failed' });
+    expect(toModerationAdded).toHaveBeenCalledWith(WEBINAR_ID, 'webinar.recording.failed', {
+      webinarId: WEBINAR_ID,
+      reason: 'concatenation_failed',
+    });
     expect(recordings.only()).toMatchObject({ status: 'failed', failureReason: 'concatenation_failed' });
     expect(recordings.webinarStatus).toBe('failed');
     expect(audits).toEqual([

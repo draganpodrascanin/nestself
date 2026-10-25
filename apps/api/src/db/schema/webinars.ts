@@ -319,9 +319,9 @@ export const webinarPollResults = pgTable(
  * pipeline runs, PROCESSING from the stop until the concatenation finishes,
  * then READY with `concatenated_key`, or FAILED with `failure_reason` (an
  * error name, never a provider message). S3 layout (T-CW-2.5 step 7):
- * `recordings/{webinarId}/raw/` for the capture segments (`raw_segments_prefix`,
- * expired by the bucket lifecycle after 30 days) and
- * `recordings/{webinarId}/final/` for the concatenated MP4.
+ * `raw/{webinarId}/` for the capture segments (`raw_segments_prefix`,
+ * expired by the bucket's `raw/` lifecycle rule after 30 days) and
+ * `final/{webinarId}/` for the concatenated MP4.
  * `handoff_status` stays `pending` with `handoff_location` (the `s3://` URI
  * of the MP4) until the CMS media interface exists (D-CW-03).
  */

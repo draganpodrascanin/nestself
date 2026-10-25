@@ -16,6 +16,9 @@
  *   `webinar.attendance.count`, `webinar.hand.count` and
  *   `webinar.floor.state { active, participantId }`, checked against
  *   `WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS` (counts and ids, never names);
+ * - `webinar:{webinarId}:moderation`, the T-CW-2.3 addition
+ *   `webinar.recording.failed { webinarId, reason }` (CW-R-121), checked
+ *   against `WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS`;
  * - `webinar:{webinarId}`, the canonical additions of T-CW-2.3
  *   (`WEBINAR_ROOM_ADDED_EVENT_NAMES`): `webinar.message.removed` and the
  *   anonymous `webinar.floor.state`, checked against
@@ -32,6 +35,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   userRoomName,
   webinarHostsRoomName,
@@ -41,6 +45,8 @@ import {
   type WebinarEventPayloads,
   type WebinarHostsRoomEventName,
   type WebinarHostsRoomEventPayloads,
+  type WebinarModerationRoomAddedEventName,
+  type WebinarModerationRoomAddedEventPayloads,
   type WebinarModerationRoomEventName,
   type WebinarParticipantEventName,
   type WebinarRoomAddedEventName,
@@ -85,6 +91,20 @@ export class WebinarRoomEvents {
       return false;
     }
     return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarRoomName(webinarId), event, checked.data);
+  }
+
+  /** A T-CW-2.3 addition of the moderators' room: `webinar.recording.failed` (CW-R-121). */
+  toModerationAdded<E extends WebinarModerationRoomAddedEventName>(
+    webinarId: string,
+    event: E,
+    payload: WebinarModerationRoomAddedEventPayloads[E],
+  ): boolean {
+    const checked = WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload);
+    if (!checked.success) {
+      this.logger.error({ event }, 'Webinar room event failed its contract schema; not emitted');
+      return false;
+    }
+    return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarModerationRoomName(webinarId), event, checked.data);
   }
 
   /** An event of the hosts' room `webinar:{webinarId}:hosts` (T-CW-2.3): counts and the floor holder's id. */
