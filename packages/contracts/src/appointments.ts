@@ -333,7 +333,7 @@ export function stripControlCharacters(value: string): string {
  * employee, never written to the audit log; stripped of control characters,
  * trimmed, 1 to 300 characters.
  */
-export const AppointmentApprovalDecisionRequestSchema = z.object({
+export const AppointmentApprovalDecisionRequestSchema = z.strictObject({
   safeReason: z
     .string()
     .transform(stripControlCharacters)

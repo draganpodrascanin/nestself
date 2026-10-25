@@ -9,9 +9,11 @@
  *   `includeDescendants`; an authority without a unit covers the whole
  *   organization (and is the only kind that covers an employee without one);
  * - its `categories` are empty or contain `consultation_follow_up`;
- * - its validity window covers now (`validFrom <= now < validUntil`);
- * - it is not a confidential approver (a follow-up item carries no category,
- *   LAW-14).
+ * - its validity window covers now (`validFrom <= now < validUntil`).
+ *
+ * `isConfidentialApprover` is not considered: it is an extra capability (the
+ * holder may also decide confidential items), not a reservation, and a
+ * follow-up item carries no category (LAW-14).
  *
  * The selected authority is the covering one closest to the employee's unit
  * (organization-wide last), then the earliest created, then by id. An
@@ -30,7 +32,6 @@ export interface AuthorityCandidate {
   validFrom: Date;
   validUntil: Date | null;
   alternateUserId: string | null;
-  isConfidentialApprover: boolean;
   createdAt: Date;
 }
 
@@ -74,12 +75,7 @@ function coversFollowUps(authority: AuthorityCandidate): boolean {
 
 /** True when the authority covers the employee's unit for follow-ups now. */
 export function isAuthorityCovering(authority: AuthorityCandidate, ancestry: UnitAncestry | null, now: Date): boolean {
-  return (
-    !authority.isConfidentialApprover &&
-    coversFollowUps(authority) &&
-    isCurrent(authority, now) &&
-    coverageDepth(authority, ancestry) !== null
-  );
+  return coversFollowUps(authority) && isCurrent(authority, now) && coverageDepth(authority, ancestry) !== null;
 }
 
 function alternateOf(authority: AuthorityCandidate): string | null {

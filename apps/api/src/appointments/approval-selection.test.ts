@@ -21,7 +21,6 @@ function authority(overrides: Partial<AuthorityCandidate> = {}): AuthorityCandid
     validFrom: new Date('2026-01-01T00:00:00.000Z'),
     validUntil: null,
     alternateUserId: 'user_ivana',
-    isConfidentialApprover: false,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -72,8 +71,9 @@ describe('selectApprover', () => {
     expect(select([authority({ validUntil: new Date('2026-11-05') })])?.authorityId).toBe('aa_1');
   });
 
-  it('skips confidential approvers: a follow-up carries no category (LAW-14)', () => {
-    expect(select([authority({ isConfidentialApprover: true })])).toBeNull();
+  it('a confidential approver routes follow-ups like any other: the flag adds a capability, it reserves nothing', () => {
+    const confidential = { ...authority(), isConfidentialApprover: true } as AuthorityCandidate;
+    expect(select([confidential])?.authorityId).toBe('aa_1');
   });
 
   it('skips an authority only the employee could decide, unless self-approval is allowed', () => {

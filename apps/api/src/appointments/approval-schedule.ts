@@ -1,7 +1,8 @@
 /**
  * When an undecided follow-up approval is chased and when it lapses
  * (T-CW-1.10, D-CW-37, CALL-40, guidelines 4.5): `appointment.approval.remind`
- * after five working days, `appointment.approval.expire` after ten.
+ * after five working days, `appointment.approval.expire` after ten or at the
+ * proposed start, whichever comes first.
  *
  * Working days are Monday to Friday in `Europe/Belgrade`; public holidays are
  * not modelled in this epic. The deadline keeps the request's wall-clock time
@@ -94,10 +95,16 @@ export function addWorkingDays(from: Date, days: number, timeZone: string = APPR
   return new Date(instant);
 }
 
-/** The reminder and expiry instants of an approval requested at `requestedAt`. */
-export function approvalDeadlines(requestedAt: Date): { remindAt: Date; expireAt: Date } {
-  return {
-    remindAt: addWorkingDays(requestedAt, APPROVAL_REMIND_AFTER_WORKING_DAYS),
-    expireAt: addWorkingDays(requestedAt, APPROVAL_EXPIRE_AFTER_WORKING_DAYS),
-  };
+/**
+ * The reminder and expiry instants of an approval requested at `requestedAt`
+ * for a session starting at `startsAt`. The item lapses at the earlier of the
+ * start and ten working days: an approval after the start would book a
+ * session in the past. The reminder is null when it would not come before
+ * the lapse.
+ */
+export function approvalDeadlines(requestedAt: Date, startsAt: Date): { remindAt: Date | null; expireAt: Date } {
+  const tenDays = addWorkingDays(requestedAt, APPROVAL_EXPIRE_AFTER_WORKING_DAYS);
+  const expireAt = startsAt.getTime() < tenDays.getTime() ? new Date(startsAt.getTime()) : tenDays;
+  const remindAt = addWorkingDays(requestedAt, APPROVAL_REMIND_AFTER_WORKING_DAYS);
+  return { remindAt: remindAt.getTime() < expireAt.getTime() ? remindAt : null, expireAt };
 }

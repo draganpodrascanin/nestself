@@ -143,6 +143,15 @@ describe('CallsJobSchedulerService approval jobs (T-CW-1.10, CALL-40)', () => {
     );
   });
 
+  it('schedules the expiry alone when there is no reminder before it', async () => {
+    const scheduler = new CallsJobSchedulerService(config, dbWith(null));
+    const add = vi.fn(async () => ({}));
+    vi.spyOn(scheduler as unknown as { ensureQueue: () => unknown }, 'ensureQueue').mockReturnValue({ add });
+    const expireAt = new Date(NOW.getTime() + 2 * 24 * 60 * MINUTE);
+    expect(await scheduler.scheduleApprovalJobs('appr_1', { remindAt: null, expireAt }, NOW)).toBe(true);
+    expect(add.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['appointment.approval.expire']);
+  });
+
   it('removes both jobs of a decided approval', async () => {
     const scheduler = new CallsJobSchedulerService(config, dbWith(null));
     const remove = vi.fn(async () => 1);

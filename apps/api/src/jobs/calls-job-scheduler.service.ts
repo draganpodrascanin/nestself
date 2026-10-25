@@ -273,21 +273,24 @@ export class CallsJobSchedulerService implements OnModuleDestroy {
   }
 
   /**
-   * `appointment.approval.remind` at `remindAt` and `appointment.approval.expire`
-   * at `expireAt` for one approval item (T-CW-1.10). False without Redis.
+   * `appointment.approval.remind` at `remindAt` (none when null) and
+   * `appointment.approval.expire` at `expireAt` for one approval item
+   * (T-CW-1.10). False without Redis.
    */
   async scheduleApprovalJobs(
     approvalId: string,
-    at: { remindAt: Date; expireAt: Date },
+    at: { remindAt: Date | null; expireAt: Date },
     now: Date = new Date(),
   ): Promise<boolean> {
     if (!this.ensureQueue()) return false;
-    await this.add(
-      'appointment.approval.remind',
-      { approvalId },
-      callsJobId('appointment.approval.remind', approvalId),
-      at.remindAt.getTime() - now.getTime(),
-    );
+    if (at.remindAt) {
+      await this.add(
+        'appointment.approval.remind',
+        { approvalId },
+        callsJobId('appointment.approval.remind', approvalId),
+        at.remindAt.getTime() - now.getTime(),
+      );
+    }
     await this.add(
       'appointment.approval.expire',
       { approvalId },

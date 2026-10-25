@@ -21,7 +21,6 @@
  * never takes a second pool connection while the confirming transaction
  * holds one, and is never lost with the rollback.
  */
-import { Injectable } from '@nestjs/common';
 import { ApiHttpException } from '../common/api-error.js';
 import type { DbExecutor } from '../db/db.service.js';
 import type { AppointmentRecord } from './appointments.repository.js';
@@ -54,17 +53,4 @@ export function approverMissing(): ApiHttpException {
     code: 'approver_missing',
     message: 'No approver covers this employee; ask HR to name one',
   });
-}
-
-/**
- * A binding with no approver: every confirmation under `manager_approval` is
- * refused with 409 `approver_missing`. No longer bound by `AppointmentsModule`
- * (T-CW-1.10 binds `ApprovalService`); kept for tests that wire the follow-up
- * service alone.
- */
-@Injectable()
-export class NotConfiguredFollowUpApproval implements FollowUpApprovalRequester {
-  request(_appointment: AppointmentRecord, _tx: DbExecutor, _actorUserId: string): Promise<void> {
-    return Promise.reject(approverMissing());
-  }
 }

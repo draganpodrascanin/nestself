@@ -111,13 +111,19 @@ function ApprovalCard({ item, onApprove, onReject, approving = false, disabled =
 }
 
 interface RejectDialogProps {
+  /**
+   * The item being declined; it stays set after the dialog closes, so the
+   * title and the name keep their text through the exit animation (Motion
+   * rule). `open` alone decides whether the dialog is shown.
+   */
   item: AppointmentApprovalItem | null;
+  open: boolean;
   api: CallsApi;
   onClose: () => void;
   onRejected: (item: AppointmentApprovalItem) => void;
 }
 
-function RejectApprovalDialog({ item, api, onClose, onRejected }: RejectDialogProps) {
+function RejectApprovalDialog({ item, open, api, onClose, onRejected }: RejectDialogProps) {
   const { t } = useTranslation(['calls', 'common']);
   const reject = useMutation(rejectApprovalMutation(api));
   const formRef = useRef<HTMLFormElement>(null);
@@ -134,7 +140,7 @@ function RejectApprovalDialog({ item, api, onClose, onRejected }: RejectDialogPr
   const fail = (message: string) => setErrors([{ id: REASON_ID, label: t('calls:approval.reasonLabel'), message }]);
 
   const confirm = async () => {
-    if (!item || reject.isPending) return;
+    if (!item || !open || reject.isPending) return;
     const raw = String(new FormData(formRef.current ?? undefined).get('reason') ?? '');
     const reason = stripControlCharacters(raw).trim();
     if (reason.length === 0) return fail(t('calls:approval.reasonRequired'));
@@ -163,7 +169,7 @@ function RejectApprovalDialog({ item, api, onClose, onRejected }: RejectDialogPr
   };
 
   return (
-    <AlertDialog open={item !== null} onOpenChange={handleOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent
         title={t('calls:approval.rejectTitle')}
         description={item ? t('calls:approval.rejectDescription', { name: item.employeeDisplayName }) : undefined}
@@ -206,7 +212,9 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
   const approve = useMutation(approveApprovalMutation(api));
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [decideError, setDecideError] = useState<string | null>(null);
+  /** The last item opened for declining: kept after closing, for the dialog's exit animation. */
   const [rejecting, setRejecting] = useState<AppointmentApprovalItem | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   const refresh = () => {
     if (orgId) void queryClient.invalidateQueries({ queryKey: approvalKeys.list(orgId) });
@@ -285,6 +293,7 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
                     onReject={(i) => {
                       setDecideError(null);
                       setRejecting(i);
+                      setRejectOpen(true);
                     }}
                     approving={approvingId === item.id}
                     disabled={approve.isPending}
@@ -308,7 +317,13 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
         </>
       )}
 
-      <RejectApprovalDialog item={rejecting} api={api} onClose={() => setRejecting(null)} onRejected={handleRejected} />
+      <RejectApprovalDialog
+        item={rejecting}
+        open={rejectOpen}
+        api={api}
+        onClose={() => setRejectOpen(false)}
+        onRejected={handleRejected}
+      />
     </div>
   );
 }

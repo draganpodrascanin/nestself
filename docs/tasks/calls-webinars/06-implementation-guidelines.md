@@ -159,11 +159,11 @@ The follow-up state machine:
 3. `awaiting_approval` -- waiting for the approver's decision.
    - `approved` by the approver: the appointment transitions to `confirmed`, both parties are notified, reminders are scheduled.
    - `rejected` by the approver: the appointment transitions to `declined` with the approver's safe reason shown to the employee.
-   - No decision within 5 working days (in `Europe/Belgrade`, weekends skipped; Serbian public holidays are not modelled in this epic): the `appointment.approval.remind` job fires, sending a reminder to the approver and the alternate. If the approval expires (configurable, default 10 working days), the approval status becomes `expired` and the appointment returns to `proposed` so the employee can act again.
+   - No decision within 5 working days (in `Europe/Belgrade`, weekends skipped; Serbian public holidays are not modelled in this epic): the `appointment.approval.remind` job fires, sending a reminder to the approver and the alternate. The approval lapses at the earlier of the proposed start and 10 working days after the request (the `appointment.approval.expire` job; no reminder is scheduled when it would not come before the lapse): the approval status becomes `expired`, the appointment becomes `declined`, its jobs are removed and the employee is told (`appointment.approval.decided`, expired). Because jobs are best effort, a decision or a reminder after the start runs the same lapse first; the decision answers 409 `approval_not_pending` (amended 2026-10-25, T-CW-1.10).
 4. `declined` -- the employee declined the proposal, or the approver rejected it.
 5. Either party can cancel a confirmed follow-up through `POST /appointments/:id/cancel`.
 
-**CW-R-106**: the follow-up state transitions are enforced in a `CASE` expression on the appointment row. The only valid transitions are `proposed -> confirmed`, `proposed -> awaiting_approval`, `proposed -> declined`, `awaiting_approval -> confirmed`, `awaiting_approval -> declined`, `awaiting_approval -> proposed` (on expiry with reminder), `confirmed -> canceled`, `confirmed -> completed`, `confirmed -> no_show` [D-CW-37].
+**CW-R-106**: the follow-up state transitions are enforced in a `CASE` expression on the appointment row. The only valid transitions are `proposed -> confirmed`, `proposed -> awaiting_approval`, `proposed -> declined`, `awaiting_approval -> confirmed`, `awaiting_approval -> declined` (rejection or lapse), `confirmed -> canceled`, `confirmed -> completed`, `confirmed -> no_show` [D-CW-37].
 
 ### 4.6 Webinar recording lifecycle
 
@@ -662,7 +662,8 @@ When the row is missing, returning an orgId that no grant can match makes the gu
 | `GET /orgs/:orgId/appointment-approvals` | `approval.decide` | `orgResourceFromContext('appointment')` | none |
 | `POST /appointment-approvals/:id/approve` | `approval.decide` | `approvalResource('approval.decide')` | 10/60s |
 | `POST /appointment-approvals/:id/reject` | `approval.decide` | `approvalResource('approval.decide')` | 10/60s |
-| `PATCH /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('org')` | 5/60s |
+| `GET /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('organization')` | none |
+| `PATCH /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('organization')` | 5/60s |
 
 `POST /appointments/:id/follow-up` is the expert's proposal. The request body is validated against `AppointmentFollowUpRequestSchema`. The service verifies the linked appointment's outcome is `COMPLETED` (error: 409 `follow_up_not_allowed`), creates a new appointment with status `proposed` and `followUpOf` set, and emits `appointment.follow_up.proposed` on the `call:{sessionId}` room. Audit: `appointment.follow_up.proposed`. **CW-R-111** [D-CW-37].
 
@@ -737,7 +738,7 @@ When a follow-up appointment enters `awaiting_approval`, the service selects an 
 2. Find approval authorities of the same organisation whose unit covers the employee's unit: `orgUnitId` equals the employee's unit or, with `includeDescendants = true`, is an ancestor of the employee's unit through the `org_unit_closure` table.
 3. Filter to authorities whose `categories` array is empty (covers all categories) or includes `consultation_follow_up`.
 4. Filter to authorities whose validity window covers today (`validFrom <= now` and `validUntil` is null or `>= now`).
-5. Exclude authorities with `isConfidentialApprover = true` only (these are reserved for confidential items; follow-up approval items carry no service category per LAW-14).
+5. `isConfidentialApprover` does not exclude an authority: the flag is an extra capability (its holder may also decide confidential items), not a reservation, and follow-up approval items carry no service category (LAW-14). When the employee is the authority's own holder and the organisation does not allow self-approval, the authority is used only if it names a different alternate; the employee then gets no request email, does not see the item and may not decide it. At decision time the guard's `authorize()` call checks `approval.decide` on the item's organisation, and the approval service runs `authorize()` a second time with the employee as `requesterId` so the engine's self-approval step applies (403 `self_approval_denied`); the decider's authority must also still cover the employee's unit, otherwise 404 (amended 2026-10-25, T-CW-1.10).
 6. Pick the first by unit depth (closest to the employee's unit in the closure table), with ties broken by `createdAt` ascending.
 7. The selected authority's `userId` becomes the approver; `alternateUserId` (if present) becomes the alternate.
 8. If no authority matches, the proposal fails visibly with error code `approver_missing` (409). The audit event `appointment.approval.missing_approver` is recorded with `{ appointmentId, orgId, orgUnitId }`.
@@ -964,7 +965,7 @@ New email template keys in `calls.email.*` [D-CW-37]:
 | `followUp.proposed` | Employee | "A follow-up session was proposed" |
 | `followUp.confirmed` | Expert and employee | "Your follow-up session is confirmed" |
 | `followUp.declined` | Expert | "The follow-up session was declined" |
-| `approval.requested` | Approver | "A session approval is waiting for your decision" |
+| `approval.requested` | Approver and alternate | "A session approval is waiting for your decision" |
 | `approval.reminder` | Approver and alternate | "A session approval is still waiting" |
 | `approval.decided` | Employee | "Your session approval has a decision" |
 | `webinar.recorded_notice` | Presenters | "Your webinar recording is ready for review" |

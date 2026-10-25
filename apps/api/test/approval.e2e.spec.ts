@@ -428,11 +428,14 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     expect(scheduleApprovalJobs).toHaveBeenCalledTimes(1);
     const [id, deadlines] = scheduleApprovalJobs.mock.calls[0]!;
     expect(id).toBe(approvalId);
+    // The follow-up starts in about ten days, before ten working days have passed: the item lapses at its start.
+    const startsAt = (await appointmentRow(followUpId)).startsAt;
+    expect(deadlines.expireAt.getTime()).toBe(startsAt.getTime());
     const days = (d: Date) => Math.round((d.getTime() - Date.now()) / DAY);
-    expect(days(deadlines.remindAt)).toBeGreaterThanOrEqual(5);
-    expect(days(deadlines.remindAt)).toBeLessThanOrEqual(9);
-    expect(days(deadlines.expireAt)).toBeGreaterThanOrEqual(12);
-    expect(days(deadlines.expireAt)).toBeLessThanOrEqual(16);
+    expect(deadlines.remindAt).not.toBeNull();
+    expect(days(deadlines.remindAt!)).toBeGreaterThanOrEqual(5);
+    expect(days(deadlines.remindAt!)).toBeLessThanOrEqual(9);
+    expect(deadlines.remindAt!.getTime()).toBeLessThan(startsAt.getTime());
   });
 
   it('missing approver: a visible 409, the missing approver audited, the follow-up stays proposed', async () => {
@@ -526,6 +529,9 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
   it('reject: the appointment is declined and the employee alone gets the stripped reason; never audited', async () => {
     const { followUpId, approvalId } = await awaitingApproval(7);
     expect((await post(stefan, `/appointment-approvals/${approvalId}/reject`, {})).status).toBe(400);
+    expect(
+      (await post(stefan, `/appointment-approvals/${approvalId}/reject`, { safeReason: 'No', category: 'x' })).status,
+    ).toBe(400);
     expect((await post(stefan, `/appointment-approvals/${approvalId}/reject`, { safeReason: '   ' })).status).toBe(400);
     expect((await post(stefan, `/appointment-approvals/${approvalId}/reject`, { safeReason: 'x'.repeat(301) })).status).toBe(400);
     send.mockClear();
@@ -568,9 +574,18 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     await grantApprover('user_jovan');
     await addAuthority({ id: 'aa_jovan', userId: 'user_jovan', orgUnitId: 'team_product', alternateUserId: 'user_stefan' });
     try {
+      send.mockClear();
       const first = await awaitingApproval(8);
       const [routed] = await approvalsOf(first.followUpId);
       expect(routed).toMatchObject({ approverUserId: 'user_jovan', alternateUserId: 'user_stefan' });
+      // Not Jovan's to decide: no request email to him and not in his list; the alternate gets both.
+      const requested = send.mock.calls.map((call) => call[0]).filter((mail) => mail.template === 'appointment.approval.requested');
+      expect(requested.map((mail) => mail.to)).toEqual(['user_stefan@example.com']);
+      const jovanList = await get(jovan, `/orgs/${ORG}/appointment-approvals`);
+      expect(jovanList.status).toBe(200);
+      expect((jovanList.body.items as { id: string }[]).map((i) => i.id)).not.toContain(first.approvalId);
+      const stefanList = await get(stefan, `/orgs/${ORG}/appointment-approvals`);
+      expect((stefanList.body.items as { id: string }[]).map((i) => i.id)).toContain(first.approvalId);
 
       expectCode(await post(jovan, `/appointment-approvals/${first.approvalId}/approve`), 403, 'self_approval_denied');
       expect((await approvalsOf(first.followUpId))[0]!.status).toBe('PENDING');
@@ -581,6 +596,8 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
       await setSelfApprovalAllowed(true);
       try {
         const second = await awaitingApproval(9);
+        const listed = await get(jovan, `/orgs/${ORG}/appointment-approvals`);
+        expect((listed.body.items as { id: string }[]).map((i) => i.id)).toContain(second.approvalId);
         expect((await post(jovan, `/appointment-approvals/${second.approvalId}/approve`)).status).toBe(200);
       } finally {
         await setSelfApprovalAllowed(false);
@@ -598,6 +615,9 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
 
     await setAuthority('aa_stefan', { orgUnitId: 'team_sales', includeDescendants: false });
     try {
+      // A former approver no longer lists the pending item.
+      const list = await get(stefan, `/orgs/${ORG}/appointment-approvals`);
+      expect((list.body.items as { id: string }[]).map((i) => i.id)).not.toContain(approvalId);
       expectNotFound(await post(stefan, `/appointment-approvals/${approvalId}/approve`));
       const [denied] = await auditOf('access.denied', approvalId);
       expect(denied!.details).toMatchObject({ reason: 'approval_authority_not_covering' });
@@ -622,6 +642,49 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     expect(list.status).toBe(200);
     expect((list.body.items as { id: string }[]).map((a) => a.id)).not.toContain(followUpId);
     expect((await post(stefan, `/appointment-approvals/${approvalId}/approve`)).status).toBe(200);
+  });
+
+  // ── Lapse at the proposed start (D-CW-37 as amended) ──────────────────────
+
+  async function startNow(followUpId: string) {
+    const startsAt = new Date(Date.now() - HOUR);
+    await testDb.db
+      .update(appointments)
+      .set({ startsAt, endsAt: new Date(startsAt.getTime() + 50 * 60_000) })
+      .where(eq(appointments.id, followUpId));
+  }
+
+  it('a decision after the proposed start is 409: the item expires, the follow-up is declined, the employee told', async () => {
+    const { followUpId, approvalId } = await awaitingApproval(14);
+    await startNow(followUpId);
+    send.mockClear();
+
+    expectCode(await post(stefan, `/appointment-approvals/${approvalId}/approve`), 409, 'approval_not_pending');
+    expect((await approvalsOf(followUpId))[0]).toMatchObject({ status: 'EXPIRED' });
+    expect((await appointmentRow(followUpId)).status).toBe('DECLINED');
+    expect(cancelApprovalJobs).toHaveBeenCalledWith(approvalId);
+    const [event] = await auditOf('appointment.approval.expired', approvalId);
+    expect(event).toMatchObject({ actorKind: 'SYSTEM', actorUserId: null });
+    const toEmployee = send.mock.calls.map((call) => call[0]).find((mail) => mail.to === 'user_jovan@example.com');
+    expect(toEmployee).toMatchObject({ template: 'appointment.approval.decided', data: { decision: 'expired' } });
+    expect(await auditOf('appointment.approval.approved', approvalId)).toEqual([]);
+    expectCode(
+      await post(ivana, `/appointment-approvals/${approvalId}/reject`, { safeReason: 'Late' }),
+      409,
+      'approval_not_pending',
+    );
+  });
+
+  it('a reminder after the proposed start lapses the item instead of chasing anybody', async () => {
+    const { followUpId, approvalId } = await awaitingApproval(15);
+    await startNow(followUpId);
+    send.mockClear();
+    const approvals = app.get(ApprovalService, { strict: false });
+    expect(await approvals.remindDeciders({ approvalId }, { updateData: async () => undefined })).toMatchObject({
+      skipped: 'started',
+    });
+    expect((await approvalsOf(followUpId))[0]).toMatchObject({ status: 'EXPIRED' });
+    expect(send.mock.calls.map((call) => call[0].template)).not.toContain('appointment.approval.reminder');
   });
 
   // ── Jobs (CALL-40) ─────────────────────────────────────────────────────────
@@ -652,6 +715,7 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     send.mockClear();
     expect(await approvals.expire(approvalId)).toEqual({ approvalId, expired: true });
     expect((await approvalsOf(followUpId))[0]).toMatchObject({ status: 'EXPIRED' });
+    expect(cancelApprovalJobs).toHaveBeenCalledWith(approvalId);
     expect((await appointmentRow(followUpId)).status).toBe('DECLINED');
     const [event] = await auditOf('appointment.approval.expired', approvalId);
     expect(event).toMatchObject({ actorKind: 'JOB', actorUserId: null });

@@ -1,7 +1,8 @@
 /**
  * Working days of the approval reminder and expiry (T-CW-1.10, CALL-40):
  * Monday to Friday in Europe/Belgrade, no holiday table, the same wall-clock
- * time on the target day, daylight saving time respected.
+ * time on the target day, daylight saving time respected; an item lapses at
+ * the proposed start at the latest.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -46,13 +47,30 @@ describe('addWorkingDays', () => {
 });
 
 describe('approvalDeadlines', () => {
-  it('reminds after five working days and expires after ten', () => {
+  const requestedAt = new Date('2026-11-04T12:00:00.000Z'); // Wednesday
+
+  it('reminds after five working days and expires after ten when the session is later', () => {
     expect(APPROVAL_REMIND_AFTER_WORKING_DAYS).toBe(5);
     expect(APPROVAL_EXPIRE_AFTER_WORKING_DAYS).toBe(10);
-    const requestedAt = new Date('2026-11-04T12:00:00.000Z'); // Wednesday
-    expect(approvalDeadlines(requestedAt)).toEqual({
+    expect(approvalDeadlines(requestedAt, new Date('2026-12-01T09:00:00.000Z'))).toEqual({
       remindAt: new Date('2026-11-11T12:00:00.000Z'),
       expireAt: new Date('2026-11-18T12:00:00.000Z'),
     });
+  });
+
+  it('lapses at the proposed start when that comes first, still reminding before it', () => {
+    const startsAt = new Date('2026-11-13T09:00:00.000Z');
+    expect(approvalDeadlines(requestedAt, startsAt)).toEqual({
+      remindAt: new Date('2026-11-11T12:00:00.000Z'),
+      expireAt: startsAt,
+    });
+  });
+
+  it('schedules no reminder when the session starts before it would be sent', () => {
+    const startsAt = new Date('2026-11-09T09:00:00.000Z');
+    expect(approvalDeadlines(requestedAt, startsAt)).toEqual({ remindAt: null, expireAt: startsAt });
+    // A reminder at the very start would be useless too.
+    const atReminder = new Date('2026-11-11T12:00:00.000Z');
+    expect(approvalDeadlines(requestedAt, atReminder)).toEqual({ remindAt: null, expireAt: atReminder });
   });
 });

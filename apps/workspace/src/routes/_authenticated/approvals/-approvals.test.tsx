@@ -195,6 +195,19 @@ describe('the approvals dashboard (API mode)', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   }, 20_000);
 
+  it('keeps the name in the decline dialog while it closes (exit animation)', async () => {
+    serve({ [`GET ${LIST}`]: () => json(200, { items: [item()] }) });
+    renderAt('/approvals');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: en.approval.reject }, { timeout: 5000 }));
+    const dialog = await screen.findByRole('alertdialog', { name: en.approval.rejectTitle });
+    const description = en.approval.rejectDescription.replace('{{name}}', 'Jovan Petrović');
+    await user.click(within(dialog).getByRole('button', { name: en.approval.cancel }));
+    // The dialog stays mounted for its exit animation and keeps its copy meanwhile.
+    expect(screen.getByText(description)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
   it('renders a failed load as translated copy with a retry', async () => {
     let fail = true;
     serve({ [`GET ${LIST}`]: () => (fail ? json(500, { code: 'internal', message: 'English' }) : json(200, { items: [] })) });

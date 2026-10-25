@@ -16,6 +16,7 @@ import type { FollowUpApprovalPolicy } from '@nestself/contracts';
 import { DbService, type DbExecutor } from '../db/db.service.js';
 import {
   appointmentApprovals,
+  appointments,
   approvalAuthorities,
   organizations,
   orgUnitClosure,
@@ -26,6 +27,14 @@ import { toContractFollowUpPolicy, toDbFollowUpPolicy } from './follow-up-policy
 
 export type ApprovalRow = typeof appointmentApprovals.$inferSelect;
 export type DbApprovalStatus = ApprovalRow['status'];
+/** What the approver's view needs from an appointment. */
+export interface ApprovalAppointmentFacts {
+  id: string;
+  employeeUserId: string;
+  startsAt: Date;
+  endsAt: Date;
+}
+
 export type NewApproval = Omit<typeof appointmentApprovals.$inferInsert, 'status' | 'createdAt' | 'decidedAt' | 'reason'>;
 
 /** At most this many items in the approver's list: pending ones first, then the latest decisions. */
@@ -107,7 +116,6 @@ export class ApprovalRepository {
         validFrom: approvalAuthorities.validFrom,
         validUntil: approvalAuthorities.validUntil,
         alternateUserId: approvalAuthorities.alternateUserId,
-        isConfidentialApprover: approvalAuthorities.isConfidentialApprover,
         createdAt: approvalAuthorities.createdAt,
       })
       .from(approvalAuthorities)
@@ -124,6 +132,22 @@ export class ApprovalRepository {
     const depthByAncestor = new Map(rows.map((row) => [row.ancestorId, row.depth]));
     depthByAncestor.set(unitId, 0);
     return { unitId, depthByAncestor };
+  }
+
+  /** The employee, start and end of each appointment, by id, in one query. */
+  async appointmentFactsOf(appointmentIds: readonly string[], tx?: DbExecutor): Promise<Map<string, ApprovalAppointmentFacts>> {
+    const ids = [...new Set(appointmentIds)];
+    if (ids.length === 0) return new Map();
+    const rows = await this.exec(tx)
+      .select({
+        id: appointments.id,
+        employeeUserId: appointments.employeeUserId,
+        startsAt: appointments.startsAt,
+        endsAt: appointments.endsAt,
+      })
+      .from(appointments)
+      .where(inArray(appointments.id, ids));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   /** Display names by user id. */

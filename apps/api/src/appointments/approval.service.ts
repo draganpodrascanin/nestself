@@ -28,10 +28,15 @@
  *   appointment from `awaiting_approval` to `confirmed` (reminders scheduled,
  *   calendar emails) or `declined` (the safe reason goes to the employee and
  *   nowhere else, never into the audit log).
- * - Jobs: {@link remindDeciders} emails the approver and the alternate while
- *   the item is pending; {@link expire} moves a still-pending item to
- *   `expired` and its appointment to `declined`, audits
- *   `appointment.approval.expired` and tells the employee.
+ * - Lapse: an item is decidable until the earlier of the proposed start and
+ *   ten working days. {@link remindDeciders} emails the approver and the
+ *   alternate while the item is pending; {@link expire} moves a still-pending
+ *   item to `expired` and its appointment to `declined`, removes its jobs,
+ *   audits `appointment.approval.expired` and tells the employee. A decision
+ *   or a reminder after the start runs the same lapse first (409
+ *   `approval_not_pending` for the decision), since the jobs are best effort.
+ * - Self-approval off and the employee routed their own follow-up: they get
+ *   no email, do not see the item and may not decide it; the alternate can.
  * - Policy (`GET|PATCH /orgs/:orgId/settings/follow-up-approval`, HR with
  *   `program.overview`): a change audits `org.follow_up_policy.changed`.
  *
@@ -70,7 +75,7 @@ import { toApprovalItem } from './approval-dto.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ApprovalNotifier } from './approval-notifier.js';
 import { approvalDeadlines } from './approval-schedule.js';
-import { mayDecide, selectApprover, type SelectedApprover } from './approval-selection.js';
+import { mayDecide, selectApprover, type SelectedApprover, type UnitAncestry } from './approval-selection.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ApprovalRepository, type ApprovalRow } from './approval.repository.js';
 import { APPROVAL_RESOURCE_TYPE, isNamedDecider } from './approval.resolver.js';
@@ -82,7 +87,8 @@ export type ApprovalDecision = { decision: 'approve' } | { decision: 'reject'; r
 
 export interface ApprovalJobResult {
   approvalId: string;
-  skipped?: 'not_found' | 'status';
+  /** `started`: the proposed start has passed, so the item lapsed instead. */
+  skipped?: 'not_found' | 'status' | 'started';
   sentTo?: ApprovalReminderRecipient[];
   expired?: boolean;
 }
@@ -163,12 +169,27 @@ export class ApprovalService implements FollowUpApprovalRequester {
     await this.record('appointment.approval.requested', actorUserId, 'USER', row, {
       approverUserId: row.approverUserId,
     });
-    await this.scheduleApprovalJobs(row);
+    await this.scheduleApprovalJobs(row, appointment);
     const names = await this.repo.displayNamesOf([appointment.employeeUserId]);
     const name = names.get(appointment.employeeUserId) ?? '';
-    for (const userId of [row.approverUserId, row.alternateUserId]) {
-      if (userId) await this.notifier.requested(appointment, userId, name);
+    for (const userId of await this.decidersToNotify(row, appointment)) {
+      await this.notifier.requested(appointment, userId, name);
     }
+  }
+
+  /**
+   * The approver and the alternate, without the employee when they were routed
+   * their own follow-up and the organization does not allow self-approval: the
+   * item is not theirs to decide, so they get no email and do not see it.
+   */
+  private async decidersToNotify(
+    row: Pick<ApprovalRow, 'orgId' | 'approverUserId' | 'alternateUserId'>,
+    appointment: Pick<AppointmentRecord, 'employeeUserId'>,
+  ): Promise<string[]> {
+    const selfApprovalAllowed = await this.repo.selfApprovalAllowed(row.orgId);
+    return [row.approverUserId, row.alternateUserId].filter(
+      (userId): userId is string => !!userId && (selfApprovalAllowed || userId !== appointment.employeeUserId),
+    );
   }
 
   /** The `pending` row routed to the approver chosen for the employee's unit; 409 `approver_missing` without one. */
@@ -191,21 +212,44 @@ export class ApprovalService implements FollowUpApprovalRequester {
 
   // ── List ──────────────────────────────────────────────────────────────────
 
+  /**
+   * The caller's items, read in one organization-scoped transaction with the
+   * appointments batched. A pending item is listed only while the caller may
+   * still decide it: their authority still covers the employee's unit, and
+   * they are not the employee unless the organization allows self-approval.
+   * Decided items stay listed as history.
+   */
   async list(orgId: string, principal: Principal): Promise<AppointmentApprovalListResponse> {
-    const rows = await this.repo.listForDecider(orgId, principal.userId);
-    const items: AppointmentApprovalItem[] = [];
-    const appointments = new Map<string, AppointmentRecord>();
-    for (const row of rows) {
-      const appointment = await this.appointments.findById(row.appointmentId);
-      if (appointment) appointments.set(row.id, appointment);
-    }
-    const names = await this.repo.displayNamesOf([...appointments.values()].map((a) => a.employeeUserId));
-    for (const row of rows) {
-      const appointment = appointments.get(row.id);
-      if (!appointment) continue;
-      items.push(toApprovalItem(row, appointment, names.get(appointment.employeeUserId) ?? ''));
-    }
-    return { items };
+    return this.dbs.withOrgScope(orgId, async (tx) => {
+      const rows = await this.repo.listForDecider(orgId, principal.userId, tx);
+      if (rows.length === 0) return { items: [] };
+      const facts = await this.repo.appointmentFactsOf(
+        rows.map((row) => row.appointmentId),
+        tx,
+      );
+      const authorities = await this.repo.authoritiesOf(orgId, tx);
+      const selfApprovalAllowed = await this.repo.selfApprovalAllowed(orgId, tx);
+      const ancestries = new Map<string | null, UnitAncestry | null>();
+      for (const unitId of new Set(rows.map((row) => row.orgUnitId))) {
+        ancestries.set(unitId, await this.repo.ancestryOf(unitId, tx));
+      }
+      const names = await this.repo.displayNamesOf(
+        [...facts.values()].map((a) => a.employeeUserId),
+        tx,
+      );
+      const now = new Date();
+      const items: AppointmentApprovalItem[] = [];
+      for (const row of rows) {
+        const appointment = facts.get(row.appointmentId);
+        if (!appointment) continue;
+        if (row.status === 'PENDING') {
+          if (!mayDecide(principal.userId, authorities, ancestries.get(row.orgUnitId) ?? null, now)) continue;
+          if (!selfApprovalAllowed && appointment.employeeUserId === principal.userId) continue;
+        }
+        items.push(toApprovalItem(row, appointment, names.get(appointment.employeeUserId) ?? ''));
+      }
+      return { items };
+    });
   }
 
   // ── Approve and reject (CW-R-116) ─────────────────────────────────────────
@@ -220,6 +264,11 @@ export class ApprovalService implements FollowUpApprovalRequester {
     if (row.status !== 'PENDING') throw approvalNotPending();
 
     const now = new Date();
+    if (appointment.startsAt.getTime() <= now.getTime()) {
+      // Too late to book: the item lapses now, whether or not the expiry job ran.
+      await this.expire(row.id, now, 'SYSTEM');
+      throw approvalNotPending();
+    }
     const approve = decision.decision === 'approve';
     const reason = decision.decision === 'reject' ? decision.reason : null;
     const { decided, moved } = await this.dbs.withOrgScope(row.orgId, async (tx) => {
@@ -312,14 +361,19 @@ export class ApprovalService implements FollowUpApprovalRequester {
     if (row.status !== 'PENDING' || appointment?.status !== 'awaiting_approval') {
       return { approvalId: row.id, skipped: 'status', sentTo };
     }
+    if (appointment.startsAt.getTime() <= Date.now()) {
+      await this.expire(row.id);
+      return { approvalId: row.id, skipped: 'started', sentTo };
+    }
     const names = await this.repo.displayNamesOf([appointment.employeeUserId]);
     const name = names.get(appointment.employeeUserId) ?? '';
+    const deciders = await this.decidersToNotify(row, appointment);
     const recipients: [ApprovalReminderRecipient, string | null][] = [
       ['approver', row.approverUserId],
       ['alternate', row.alternateUserId],
     ];
     for (const [role, userId] of recipients) {
-      if (!userId || sentTo.includes(role)) continue;
+      if (!userId || sentTo.includes(role) || !deciders.includes(userId)) continue;
       await this.notifier.reminder(appointment, userId, name);
       sentTo.push(role);
       await context.updateData({ ...data, sentTo });
@@ -328,8 +382,12 @@ export class ApprovalService implements FollowUpApprovalRequester {
     return { approvalId: row.id, sentTo };
   }
 
-  /** `appointment.approval.expire`: a still-pending item expires and its follow-up is declined. */
-  async expire(approvalId: string, now: Date = new Date()): Promise<ApprovalJobResult> {
+  /**
+   * `appointment.approval.expire`, and the lapse at the proposed start: a
+   * still-pending item expires, its follow-up is declined, its jobs are removed
+   * and the employee is told.
+   */
+  async expire(approvalId: string, now: Date = new Date(), actorKind: 'JOB' | 'SYSTEM' = 'JOB'): Promise<ApprovalJobResult> {
     const row = await this.repo.findById(approvalId);
     if (!row) return { approvalId, skipped: 'not_found', expired: false };
     if (row.status !== 'PENDING') return { approvalId, skipped: 'status', expired: false };
@@ -342,7 +400,8 @@ export class ApprovalService implements FollowUpApprovalRequester {
     });
     if (!result) return { approvalId, skipped: 'status', expired: false };
 
-    await this.record('appointment.approval.expired', null, 'JOB', result.expired, {});
+    await this.record('appointment.approval.expired', null, actorKind, result.expired, {});
+    await this.bestEffort(result.expired, 'cancelApprovalJobs', () => this.callsJobs.cancelApprovalJobs(approvalId));
     if (result.moved) {
       const moved = result.moved;
       await this.bestEffort(result.expired, 'cancelAppointmentJobs', () => this.callsJobs.cancelAppointmentJobs(moved.id));
@@ -381,7 +440,7 @@ export class ApprovalService implements FollowUpApprovalRequester {
   private async record(
     action: AuditAction,
     actorUserId: string | null,
-    actorKind: 'USER' | 'JOB',
+    actorKind: 'USER' | 'JOB' | 'SYSTEM',
     row: ApprovalRow,
     details: Record<string, unknown>,
   ): Promise<void> {
@@ -397,10 +456,14 @@ export class ApprovalService implements FollowUpApprovalRequester {
     });
   }
 
-  /** The reminder and expiry jobs; best effort: a lost job leaves the item pending until decided. */
-  private async scheduleApprovalJobs(row: ApprovalRow): Promise<void> {
+  /**
+   * The reminder and expiry jobs (expiry at the earlier of ten working days and
+   * the proposed start). Best effort: without them, a decision or a reminder
+   * after the start still lapses the item.
+   */
+  private async scheduleApprovalJobs(row: ApprovalRow, appointment: Pick<AppointmentRecord, 'startsAt'>): Promise<void> {
     await this.bestEffort(row, 'scheduleApprovalJobs', () =>
-      this.callsJobs.scheduleApprovalJobs(row.id, approvalDeadlines(row.createdAt)),
+      this.callsJobs.scheduleApprovalJobs(row.id, approvalDeadlines(row.createdAt, appointment.startsAt)),
     );
   }
 
