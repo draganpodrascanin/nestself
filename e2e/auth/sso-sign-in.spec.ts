@@ -16,7 +16,7 @@
  *    her workspace page.
  * 2. Nikola (staff, platform_owner staged) creates the SAML connection for
  *    org_sample, adds and verifies acme.example, and starts the test.
- * 3. The tester completes the test sign-in (`test=1`): bound through the
+ * 3. The tester completes the test sign-in (`test=<nonce>`): bound through the
  *    invitation, lands on the workspace, `lastTestedAt` is set.
  * 4. Nikola activates the connection.
  * 5. `invited@acme.example` enters the address on the workspace sign-in,
@@ -77,7 +77,8 @@ async function signInAtIdpAs(context: BrowserContext, email: string): Promise<vo
     }
     const target = new URL(location);
     if (target.pathname === '/api/auth/sso/_fake/authorize') target.searchParams.set('as', email);
-    await route.fulfill({ status: 302, headers: { location: target.toString(), 'cache-control': 'no-store' } });
+    // Keep the API's headers: the browser-binding cookie must reach the browser.
+    await route.fulfill({ response, headers: { ...response.headers(), location: target.toString() } });
   });
 }
 
@@ -116,7 +117,8 @@ test.describe('Federated sign-in through the identity provider', () => {
     const tested = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/test`);
     expect(tested.status, JSON.stringify(tested.body)).toBe(200);
     const startUrl = tested.body.startUrl as string;
-    expect(startUrl).toContain('test=1');
+    // A single-use test nonce, not a literal flag.
+    expect(new URL(startUrl).searchParams.get('test')).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     // Not yet tested: activation is refused.
     const early = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/activate`);

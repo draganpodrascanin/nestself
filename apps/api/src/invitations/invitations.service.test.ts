@@ -84,6 +84,7 @@ describe('InvitationsService', () => {
   let audit: ReturnType<typeof createMockAudit>;
   let mailer: ReturnType<typeof createMockMailer>;
   let authzRepo: ReturnType<typeof createMockAuthz>;
+  let sso: { findActiveConnectionForDomain: ReturnType<typeof vi.fn> };
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -94,6 +95,7 @@ describe('InvitationsService', () => {
     audit = createMockAudit();
     mailer = createMockMailer();
     authzRepo = createMockAuthz();
+    sso = { findActiveConnectionForDomain: vi.fn().mockResolvedValue(null) };
 
     service = new InvitationsService(
       dbs as never,
@@ -103,7 +105,55 @@ describe('InvitationsService', () => {
       audit as never,
       mailer as never,
       authzRepo as never,
+      sso as never,
     );
+  });
+
+  // -- SSO domains of another organization ----------------------------------
+
+  describe('SSO domain claimed by another organization', () => {
+    const OTHER = { orgId: 'org_other', cognitoProviderName: 'org-other-saml' };
+
+    it('create refuses with 409 conflict, details.reason sso_domain_claimed, before any write', async () => {
+      sso.findActiveConnectionForDomain.mockResolvedValue(OTHER);
+      const err = await service
+        .create('org_sample', { email: 'person@other.example', templateKey: 'employee' }, 'user_ivana', false)
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'conflict', details: { reason: 'sso_domain_claimed' } });
+      expect((err as { getStatus(): number }).getStatus()).toBe(409);
+      expect(sso.findActiveConnectionForDomain).toHaveBeenCalledWith('other.example');
+      expect(dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(invitations.create).not.toHaveBeenCalled();
+    });
+
+    it('create accepts a domain of the inviting organization\'s own connection', async () => {
+      sso.findActiveConnectionForDomain.mockResolvedValue({ ...OTHER, orgId: 'org_sample' });
+      await service.create('org_sample', { email: 'person@acme.example', templateKey: 'employee' }, 'user_ivana', false);
+      expect(invitations.create).toHaveBeenCalledOnce();
+    });
+
+    it('import puts the claimed rows in errors and creates the rest', async () => {
+      sso.findActiveConnectionForDomain.mockImplementation(async (d: string) => (d === 'other.example' ? OTHER : null));
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'a@other.example', templateKey: 'employee' },
+            { email: 'b@other.example', templateKey: 'employee' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([
+        { email: 'a@other.example', reason: 'sso_domain_claimed' },
+        { email: 'b@other.example', reason: 'sso_domain_claimed' },
+      ]);
+      // One lookup per domain.
+      expect(sso.findActiveConnectionForDomain).toHaveBeenCalledTimes(2);
+    });
   });
 
   // -- create ---------------------------------------------------------------

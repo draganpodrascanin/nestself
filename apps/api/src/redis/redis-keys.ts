@@ -34,6 +34,9 @@ export const CHALLENGE_TTL = 300;
 /** PKCE state: 10 min. */
 export const PKCE_TTL = 600;
 
+/** Single-use staff test sign-in of a TESTING SSO connection (`sso_test:{nonce}`). */
+export const SSO_TEST_TTL = 900;
+
 /** WebSocket ticket: 30 s. */
 export const WS_TICKET_TTL = 30;
 
@@ -118,6 +121,11 @@ export function challengeKey(challengeToken: string): string {
 /** `pkce:{state}` */
 export function pkceKey(state: string): string {
   return `pkce:${state}`;
+}
+
+/** `sso_test:{nonce}` -> `{ connectionId }`, issued by `POST /ops/sso-connections/:id/test`. */
+export function ssoTestKey(nonce: string): string {
+  return `sso_test:${nonce}`;
 }
 
 /** `ws_ticket:{hash}` */

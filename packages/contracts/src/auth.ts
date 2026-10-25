@@ -65,8 +65,11 @@ export const SsoStartQuerySchema = z.object({
   connection: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/),
   surface: z.enum(['workspace', 'admin']),
   returnPath: SsoReturnPathSchema.optional(),
-  /** Staff test sign-in of a TESTING connection (`POST /ops/sso-connections/:id/test`). */
-  test: z.literal('1').optional(),
+  /**
+   * Staff test sign-in of a TESTING connection: the single-use nonce
+   * `POST /ops/sso-connections/:id/test` put into its `startUrl`.
+   */
+  test: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/).optional(),
 });
 export type SsoStartQuery = z.infer<typeof SsoStartQuerySchema>;
 

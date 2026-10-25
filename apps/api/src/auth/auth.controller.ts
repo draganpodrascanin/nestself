@@ -57,6 +57,7 @@ import { StepUpService } from './step-up.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
   EmailOtpStartRequestSchema,
@@ -156,7 +157,11 @@ export class AuthController {
   @Throttle(SSO_THROTTLE)
   async ssoStart(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = validate(SsoStartQuerySchema, query);
-    this.sendRedirect(res, await this.ssoCallback.start(parsed, extractMeta(req)));
+    const result = await this.ssoCallback.start(parsed, extractMeta(req));
+    if (result.browserNonce) {
+      res.setHeader('Set-Cookie', [this.cookies.serializeSsoNonce(result.browserNonce, PKCE_TTL)]);
+    }
+    this.sendRedirect(res, result);
   }
 
   // -----------------------------------------------------------------------
@@ -172,8 +177,13 @@ export class AuthController {
   @Throttle(SSO_THROTTLE)
   async ssoCallbackRoute(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = SsoCallbackQuerySchema.safeParse(query);
-    const result = await this.ssoCallback.callback(parsed.success ? parsed.data : {}, extractMeta(req));
-    this.sendRedirect(res, result);
+    const result = await this.ssoCallback.callback(
+      parsed.success ? parsed.data : {},
+      extractMeta(req),
+      this.cookies.parseSsoNonce(req.headers),
+    );
+    // The browser-binding cookie is spent on every outcome.
+    this.sendRedirect(res, result, [this.cookies.clearSsoNonce()]);
   }
 
   // -----------------------------------------------------------------------
@@ -549,11 +559,16 @@ export class AuthController {
   // Cookie helpers
   // -----------------------------------------------------------------------
 
-  private sendRedirect(res: HttpRes, result: SsoRedirect): void {
+  private sendRedirect(res: HttpRes, result: SsoRedirect, extraCookies: string[] = []): void {
+    const cookies = [...extraCookies];
     if (result.session) {
       const { sessionId, csrfToken, absoluteExpiresAt } = result.session;
-      this.setSessionCookies(res, sessionId, csrfToken, absoluteExpiresAt);
+      cookies.push(
+        this.cookies.serializeSession(sessionId, absoluteExpiresAt),
+        this.cookies.serializeCsrf(csrfToken, absoluteExpiresAt),
+      );
     }
+    if (cookies.length > 0) res.setHeader('Set-Cookie', cookies);
     res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, result.location);
   }

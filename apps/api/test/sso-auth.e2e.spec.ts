@@ -34,6 +34,8 @@ import {
 } from '../src/db/schema/index.js';
 import { SsoRepository, type SsoConnectionPatch } from '../src/db/repositories/sso.repository.js';
 import { NEUTRAL_DELAY_MS } from '../src/auth/neutral-delay.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
+import { ssoTestKey } from '../src/redis/redis-keys.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -130,6 +132,13 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   });
 
   const setConnection = (patch: SsoConnectionPatch) => repo.updateConnection(connectionId, patch);
+
+  /** What `POST /ops/sso-connections/:id/test` stores (the staff route is covered in sso.e2e). */
+  async function issueTestNonce(): Promise<string> {
+    const nonce = randomBytes(32).toString('base64url');
+    await app.get<KeyValueStore>(KEY_VALUE_STORE).set(ssoTestKey(nonce), JSON.stringify({ connectionId }), { ttlSeconds: 900 });
+    return nonce;
+  }
 
   async function invite(email: string, orgId = ORG): Promise<string> {
     const [row] = await testDb.db
@@ -469,13 +478,99 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
           .query({ connection: PROVIDER, surface: 'workspace' });
         expect(plain.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
 
-        const { location } = await federatedSignIn(email, { test: '1' });
+        // The literal flag of the first version is not a nonce.
+        const literal = await request(app.getHttpServer())
+          .get('/api/auth/sso/start')
+          .query({ connection: PROVIDER, surface: 'workspace', test: '1' });
+        expect(literal.status).toBe(400);
+        const unknown = await request(app.getHttpServer())
+          .get('/api/auth/sso/start')
+          .query({ connection: PROVIDER, surface: 'workspace', test: 'u'.repeat(43) });
+        expect(unknown.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+
+        const nonce = await issueTestNonce();
+        const { location } = await federatedSignIn(email, { test: nonce });
         expect(location).toBe(`${WORKSPACE}/`);
         const conn = await repo.findConnection(connectionId);
         expect(conn!.lastTestedAt).not.toBeNull();
+
+        // Single use: the callback spent it.
+        const again = await request(app.getHttpServer())
+          .get('/api/auth/sso/start')
+          .query({ connection: PROVIDER, surface: 'workspace', test: nonce });
+        expect(again.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
       } finally {
         await setConnection({ status: 'ACTIVE' });
       }
+    });
+
+    it('JIT never provisions on a TESTING connection, even on a test flow', async () => {
+      await setConnection({ status: 'TESTING', jitProvisioning: true, lastTestedAt: null });
+      try {
+        const { location } = await federatedSignIn('jit.tester@acme.example', { test: await issueTestNonce() });
+        expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+        expect(await testDb.db.select().from(users).where(eq(users.email, 'jit.tester@acme.example'))).toHaveLength(0);
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).toBeNull();
+      } finally {
+        await setConnection({ status: 'ACTIVE', jitProvisioning: false });
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Review fixes: verified-domain rule, browser binding
+  // -------------------------------------------------------------------------
+
+  describe('review fixes', () => {
+    it('an OIDC assertion of an off-domain address (email_verified true) with a pending invitation binds nothing', async () => {
+      const email = 'invited@othermail.com';
+      const invitationId = await invite(email);
+      const { callback, location } = await federatedSignIn(email);
+      expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_email_unverified&email=invited%40othermail.com`);
+      expect(sessionCookie(callback)).toBeUndefined();
+      const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
+      expect(inv!.acceptedAt).toBeNull();
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+    });
+
+    it('the same flow for an on-domain address binds', async () => {
+      const email = 'ondomain@acme.example';
+      await invite(email);
+      const { callback, location } = await federatedSignIn(email);
+      expect(location).toBe(`${WORKSPACE}/`);
+      expect(sessionCookie(callback)).toBeDefined();
+    });
+
+    it('start sets the browser-binding cookie, HttpOnly, SameSite=Lax, callback path only', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/auth/sso/start')
+        .query({ connection: PROVIDER, surface: 'workspace' });
+      const cookie = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('nestself_sso='))!;
+      expect(cookie).toMatch(/HttpOnly/i);
+      expect(cookie).toMatch(/SameSite=Lax/i);
+      expect(cookie).toMatch(/Path=\/api\/auth\/sso\/callback/);
+      expect(cookie).toMatch(/Max-Age=600/);
+    });
+
+    it('a callback from a browser without the cookie is denied (login CSRF) and clears the cookie', async () => {
+      seedFederated('sub-jovana', 'jovana@acme.example');
+      const victim = request.agent(app.getHttpServer());
+      const attacker = request.agent(app.getHttpServer());
+      // The attacker starts and authorizes; the victim's browser gets the callback URL.
+      const start = await attacker.get('/api/auth/sso/start').query({ connection: PROVIDER, surface: 'workspace' });
+      const authorizeUrl = new URL(start.headers.location as string);
+      authorizeUrl.searchParams.set('as', 'jovana@acme.example');
+      const authorize = await attacker.get(authorizeUrl.pathname + authorizeUrl.search);
+      const cb = new URL(authorize.headers.location as string);
+      const before = (await auditFor('auth.sign_in.failed')).length;
+      const res = await victim.get(cb.pathname + cb.search);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      expect(sessionCookie(res)).toBeUndefined();
+      expect((res.headers['set-cookie'] as unknown as string[]).some((c) => c.startsWith('nestself_sso=;') && /Max-Age=0/.test(c))).toBe(true);
+      const failed = await auditFor('auth.sign_in.failed');
+      expect(failed.length).toBe(before + 1);
+      expect(failed.some((e) => (e.details as { reason?: string }).reason === 'sso_browser')).toBe(true);
     });
   });
 });

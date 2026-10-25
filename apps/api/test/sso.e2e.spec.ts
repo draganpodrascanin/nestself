@@ -23,6 +23,7 @@ import { auditEvents, externalIdentities, grants } from '../src/db/schema/index.
 import { SsoRepository } from '../src/db/repositories/sso.repository.js';
 import { DNS_TXT_RESOLVER, type FakeDnsTxtResolver } from '../src/sso/dns-txt-resolver.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const shouldRun = !!TEST_DB_URL;
@@ -225,8 +226,14 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     const res = await post(`/${connectionId}/test`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      startUrl: 'http://api.sso.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace&test=1',
+      startUrl: expect.stringMatching(
+        /^http:\/\/api\.sso\.test\/api\/auth\/sso\/start\?connection=org-acme-saml&surface=workspace&test=[A-Za-z0-9_-]{43}$/,
+      ),
     });
+    // The single-use test nonce is bound to this connection.
+    const nonce = new URL(res.body.startUrl as string).searchParams.get('test')!;
+    const stored = await app.get<KeyValueStore>(KEY_VALUE_STORE).get(`sso_test:${nonce}`);
+    expect(JSON.parse(stored!)).toEqual({ connectionId });
     expect(await idp.listProviders()).toContain('org-acme-saml');
     const list = await nikola.agent.get('/api/ops/sso-connections').query({ orgId: ORG });
     expect(list.status).toBe(200);

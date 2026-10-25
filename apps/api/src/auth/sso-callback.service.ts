@@ -7,20 +7,24 @@
  * `pkce:{state}` for `PKCE_TTL`; the browser goes to the identity
  * provider's authorize URL.
  *
+ * `start` also sets a browser-binding nonce (cookie, its hash in the record);
+ * the callback refuses a request without the matching cookie (login CSRF).
+ *
  * `callback`: the record is taken with GETDEL (a replayed or unknown state
  * finds nothing: Review Focus 1), the code is exchanged with the verifier,
  * and the federated identity is resolved:
  *   1. an existing `external_identities(cognito:<providerName>, sub)` signs
  *      in whatever the connection's status (Review Focus 4);
  *   2. new bindings need the connection ACTIVE, or TESTING on a staff test
- *      sign-in (`test=1`), and a verified email (SSO-R-08: OIDC
- *      `email_verified === true`; SAML also when the email's domain is a
- *      verified domain of that connection);
+ *      sign-in (`test=<nonce>` from `POST /ops/sso-connections/:id/test`,
+ *      single use), and a verified email: the email's domain is a verified
+ *      domain of that connection, and for OIDC also `email_verified === true`
+ *      (SSO-R-08; SAML relies on the domain inference);
  *   3. a pending invitation of the connection's organization (Review Focus 2)
  *      for the same email (lowercased, trimmed, timing-safe: SSO-R-09) binds
  *      and activates the membership;
- *   4. else JIT when the connection enables it and the domain is verified
- *      for it: user (reused by email), ACTIVE membership in the default unit
+ *   4. else JIT when the connection is ACTIVE (never while TESTING), enables
+ *      it and the domain is verified for it: user (reused by email), ACTIVE membership in the default unit
  *      with the `employee` grant;
  *   5. else denied: the orphan federated pool user is deleted (SSO-R-10),
  *      `identity.denied`, neutral `/sign-in?reason=sso_denied`.
@@ -48,7 +52,7 @@ import {
   type TokenSet,
 } from '../identity/identity-provider.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
-import { PKCE_TTL, pkceKey } from '../redis/redis-keys.js';
+import { PKCE_TTL, pkceKey, ssoTestKey } from '../redis/redis-keys.js';
 import { DbService, type DbExecutor } from '../db/db.service.js';
 import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
@@ -72,13 +76,18 @@ export interface PkceRecord {
   surface: Surface;
   returnPath: string | null;
   connection: string;
-  test: boolean;
+  /** The single-use `sso_test:{nonce}` of a staff test sign-in, else null. */
+  testNonce: string | null;
+  /** SHA-256 (hex) of the browser-binding cookie set at start (login CSRF). */
+  browserNonceHash: string;
 }
 
 export interface SsoRedirect {
   location: string;
   /** Set on a successful callback: the controller writes the cookies. */
   session?: { sessionId: string; csrfToken: string; absoluteExpiresAt: Date };
+  /** Set by `start`: the controller writes it as the SSO browser-binding cookie. */
+  browserNonce?: string;
 }
 
 const DEFAULT_SURFACE_URLS: Record<Surface, string> = {
@@ -100,6 +109,18 @@ export function sameEmail(a: string, b: string): boolean {
   return timingSafeEqual(x, y);
 }
 
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+/** Timing-safe: the cookie's hash against the one stored at start. */
+function browserNonceMatches(nonce: string | null, expectedHash: string): boolean {
+  if (!nonce) return false;
+  const actual = Buffer.from(sha256Hex(nonce), 'hex');
+  const expected = Buffer.from(expectedHash, 'hex');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
 function domainOf(email: string): string {
   return email.slice(email.lastIndexOf('@') + 1);
 }
@@ -110,12 +131,14 @@ function parseRecord(raw: string | null): PkceRecord | null {
     const r = JSON.parse(raw) as Partial<PkceRecord>;
     if (typeof r.verifier !== 'string' || typeof r.connection !== 'string') return null;
     if (r.surface !== 'workspace' && r.surface !== 'admin') return null;
+    if (typeof r.browserNonceHash !== 'string') return null;
     return {
       verifier: r.verifier,
       surface: r.surface,
       returnPath: typeof r.returnPath === 'string' ? r.returnPath : null,
       connection: r.connection,
-      test: r.test === true,
+      testNonce: typeof r.testNonce === 'string' ? r.testNonce : null,
+      browserNonceHash: r.browserNonceHash,
     };
   } catch {
     return null;
@@ -157,27 +180,34 @@ export class SsoCallbackService {
   // -------------------------------------------------------------------------
 
   async start(query: SsoStartQuery, meta: RequestMeta): Promise<SsoRedirect> {
-    const test = query.test === '1';
     const connection = await this.sso.findConnectionByProviderName(query.connection);
-    const usable =
-      connection && (connection.status === 'ACTIVE' || (test && connection.status === 'TESTING'));
-    if (!usable) {
+    let testNonce: string | null = null;
+    let usable = connection?.status === 'ACTIVE';
+    if (connection?.status === 'TESTING' && query.test) {
+      // Only with the nonce `POST /ops/sso-connections/:id/test` issued for it.
+      usable = await this.testNonceIsFor(query.test, connection.id);
+      if (usable) testNonce = query.test;
+    }
+    if (!connection || !usable) {
       this.auditFailed('sso_connection', meta, connection);
       return { location: this.signInUrl(query.surface, 'sso_denied') };
     }
 
     const verifier = randomBytes(32).toString('base64url');
     const state = randomBytes(32).toString('base64url');
+    const browserNonce = randomBytes(32).toString('base64url');
     const record: PkceRecord = {
       verifier,
       surface: query.surface,
       returnPath: query.returnPath ?? null,
       connection: connection.cognitoProviderName,
-      test,
+      testNonce,
+      browserNonceHash: sha256Hex(browserNonce),
     };
     await this.store.set(pkceKey(state), JSON.stringify(record), { ttlSeconds: PKCE_TTL });
 
     return {
+      browserNonce,
       location: this.idp.buildAuthorizeUrl({
         providerName: connection.cognitoProviderName,
         state,
@@ -191,7 +221,12 @@ export class SsoCallbackService {
   // GET /auth/sso/callback
   // -------------------------------------------------------------------------
 
-  async callback(query: SsoCallbackQuery, meta: RequestMeta): Promise<SsoRedirect> {
+  async callback(
+    query: SsoCallbackQuery,
+    meta: RequestMeta,
+    /** The SSO browser-binding cookie of this request (null when absent). */
+    browserNonce: string | null,
+  ): Promise<SsoRedirect> {
     // Single use: GETDEL, so a replayed state finds nothing (Review Focus 1).
     const record = query.state ? parseRecord(await this.store.getDel(pkceKey(query.state))) : null;
     if (!record) {
@@ -199,6 +234,15 @@ export class SsoCallbackService {
       return { location: this.signInUrl('workspace', 'sso_denied') };
     }
     const deny = () => ({ location: this.signInUrl(record.surface, 'sso_denied') });
+
+    // A test flow's nonce is spent by its first callback, whatever the outcome.
+    const testConnectionId = record.testNonce ? await this.consumeTestNonce(record.testNonce) : null;
+
+    // Login CSRF: the callback must reach the browser that started the flow.
+    if (!browserNonceMatches(browserNonce, record.browserNonceHash)) {
+      this.auditFailed('sso_browser', meta, null, record.connection);
+      return deny();
+    }
 
     if (query.error || !query.code) {
       this.auditFailed('sso_idp_error', meta, null, record.connection);
@@ -234,20 +278,25 @@ export class SsoCallbackService {
     // 1. Existing identity: signs in whatever the connection's status.
     const existing = await this.identities.findExternalIdentity(provider, claims.sub);
     if (existing) {
-      return this.signIn(exchanged, email, record, connection, meta);
+      return this.signIn(exchanged, email, record, connection, meta, testConnectionId);
     }
 
     // 2. New bindings need a usable connection and a verified email.
+    const isTest = !!connection && testConnectionId === connection.id;
     const usable =
-      connection && (connection.status === 'ACTIVE' || (record.test && connection.status === 'TESTING'));
+      connection && (connection.status === 'ACTIVE' || (isTest && connection.status === 'TESTING'));
     if (!usable) {
       await this.denyBinding(claims, email, connection, meta, 'connection_inactive');
       return deny();
     }
 
+    // SSO-R-08 plus the domain rule: a connection vouches only for addresses
+    // of its own verified domains, so a tenant's IdP cannot assert someone
+    // else's address and take over that user. OIDC must also assert
+    // `email_verified`; SAML relies on the domain inference.
     const domainVerified = await this.isDomainVerifiedFor(connection, domainOf(email));
     const emailVerified =
-      claims.emailVerified === true || (connection.protocol === 'SAML' && domainVerified);
+      domainVerified && (connection.protocol === 'SAML' || claims.emailVerified === true);
     if (!emailVerified) {
       await this.denyBinding(claims, email, connection, meta, 'email_unverified');
       return { location: this.signInUrl(record.surface, 'sso_email_unverified', email) };
@@ -285,7 +334,7 @@ export class SsoCallbackService {
     }
     await this.principalLoader.invalidateUser(binding.userId, [connection.orgId]);
 
-    return this.signIn(exchanged, email, record, connection, meta);
+    return this.signIn(exchanged, email, record, connection, meta, testConnectionId);
   }
 
   // -------------------------------------------------------------------------
@@ -313,7 +362,8 @@ export class SsoCallbackService {
       return { kind: 'invitation', userId, invitationId: invitation.id, templateKey: invitation.templateKey };
     }
 
-    if (connection.jitProvisioning && domainVerified) {
+    // JIT never runs while the connection is only being tested.
+    if (connection.status === 'ACTIVE' && connection.jitProvisioning && domainVerified) {
       const userId = await this.resolveOrCreateUser(email, connection, tx, 'sso_jit');
       await this.audit.record({
         action: 'identity.created',
@@ -410,6 +460,24 @@ export class SsoCallbackService {
     });
   }
 
+  private async testNonceIsFor(nonce: string, connectionId: string): Promise<boolean> {
+    return this.parseTestRecord(await this.store.get(ssoTestKey(nonce))) === connectionId;
+  }
+
+  private async consumeTestNonce(nonce: string): Promise<string | null> {
+    return this.parseTestRecord(await this.store.getDel(ssoTestKey(nonce)));
+  }
+
+  private parseTestRecord(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+      const r = JSON.parse(raw) as { connectionId?: unknown };
+      return typeof r.connectionId === 'string' ? r.connectionId : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** The email's domain is a verified domain of this connection. */
   private async isDomainVerifiedFor(connection: SsoConnectionRow, domain: string): Promise<boolean> {
     const row = await this.sso.findDomainByName(domain);
@@ -422,6 +490,7 @@ export class SsoCallbackService {
     record: PkceRecord,
     connection: SsoConnectionRow | null,
     meta: RequestMeta,
+    testConnectionId: string | null,
   ): Promise<SsoRedirect> {
     let session;
     try {
@@ -441,7 +510,8 @@ export class SsoCallbackService {
       return { location: this.signInUrl(record.surface, 'sso_denied') };
     }
 
-    if (record.test && connection?.status === 'TESTING') {
+    // Only a valid test flow that bound or signed in marks the connection tested.
+    if (connection?.status === 'TESTING' && testConnectionId === connection.id) {
       await this.dbs.withOrgScope(connection.orgId, (tx) =>
         this.sso.updateConnection(connection.id, { lastTestedAt: new Date() }, tx, { fromStatus: 'TESTING' }),
       );

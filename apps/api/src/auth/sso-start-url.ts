@@ -11,10 +11,10 @@ export function apiPublicUrlFrom(value: string | undefined | null): string {
 
 export function buildSsoStartUrl(
   apiPublicUrl: string,
-  input: { connection: string; surface: 'workspace' | 'admin'; returnPath?: string; test?: boolean },
+  input: { connection: string; surface: 'workspace' | 'admin'; returnPath?: string; testNonce?: string },
 ): string {
   const query = new URLSearchParams({ connection: input.connection, surface: input.surface });
   if (input.returnPath) query.set('returnPath', input.returnPath);
-  if (input.test) query.set('test', '1');
+  if (input.testNonce) query.set('test', input.testNonce);
   return `${apiPublicUrl}/api/auth/sso/start?${query.toString()}`;
 }

@@ -250,8 +250,10 @@ describe('sanitizeDetails', () => {
     expect(result).toEqual({ nested: { domain: 'acme.example' } });
   });
 
-  it('removes the SSO PKCE verifier and OAuth state (API-R-06/07)', () => {
-    const result = sanitizeDetails({ codeVerifier: 'v', verifier: 'v', state: 's', reason: 'sso_state' });
+  it('removes the SSO PKCE verifier, OAuth state and nonces (API-R-06/07)', () => {
+    const result = sanitizeDetails({
+      codeVerifier: 'v', verifier: 'v', state: 's', nonce: 'n', testNonce: 't', browserNonce: 'b', reason: 'sso_state',
+    });
     expect(result).toEqual({ reason: 'sso_state' });
   });
 

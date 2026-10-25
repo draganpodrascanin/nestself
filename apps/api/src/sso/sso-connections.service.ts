@@ -26,6 +26,9 @@
  * verification token.
  */
 import { Inject, Injectable } from '@nestjs/common';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { SSO_TEST_TTL, ssoTestKey } from '../redis/redis-keys.js';
+import { buildSsoStartUrl } from '../auth/sso-start-url.js';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type {
   Principal,
@@ -150,6 +153,7 @@ export class SsoConnectionsService {
     private readonly audit: AuditWriter,
     @Inject(DNS_TXT_RESOLVER) private readonly dns: DnsTxtResolver,
     @Inject(SSO_CONFIG) private readonly config: SsoConfig,
+    @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
   ) {}
 
   // ── Read ──────────────────────────────────────────────────────────────
@@ -453,12 +457,17 @@ export class SsoConnectionsService {
       );
     });
 
-    const query = new URLSearchParams({
-      connection: conn.cognitoProviderName,
-      surface: 'workspace',
-      test: '1',
-    });
-    return { startUrl: `${this.config.apiPublicUrl}/api/auth/sso/start?${query.toString()}` };
+    // A single-use nonce: only this staff test flow may start (and bind) on
+    // the TESTING connection; the callback spends it.
+    const testNonce = randomBytes(32).toString('base64url');
+    await this.store.set(ssoTestKey(testNonce), JSON.stringify({ connectionId: conn.id }), { ttlSeconds: SSO_TEST_TTL });
+    return {
+      startUrl: buildSsoStartUrl(this.config.apiPublicUrl, {
+        connection: conn.cognitoProviderName,
+        surface: 'workspace',
+        testNonce,
+      }),
+    };
   }
 
   async activate(id: string, actor: Principal): Promise<SsoConnectionResponse> {

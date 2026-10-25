@@ -65,8 +65,8 @@ function setup(opts: { conn?: Conn | null; domainVerified?: boolean; domainConne
   const dbs = { withOrgScope: vi.fn(async (_org: string, fn: (t: unknown) => Promise<unknown>) => fn(tx)) };
   const sso = {
     findConnectionByProviderName: vi.fn().mockResolvedValue(conn),
-    findDomainByName: vi.fn().mockResolvedValue(
-      opts.domainVerified === false
+    findDomainByName: vi.fn(async (domain: string) =>
+      opts.domainVerified === false || domain !== 'acme.example'
         ? null
         : { connectionId: opts.domainConnectionId ?? 'conn_1', verifiedAt: new Date(), domain: 'acme.example' },
     ),
@@ -111,7 +111,7 @@ type Ctx = ReturnType<typeof setup>;
 async function startAndAuthorize(
   ctx: Ctx,
   user: { subject?: string; email?: string; emailVerified?: boolean } = {},
-  query: { surface?: 'workspace' | 'admin'; returnPath?: string; test?: '1' } = {},
+  query: { surface?: 'workspace' | 'admin'; returnPath?: string; test?: string } = {},
 ) {
   const subject = user.subject ?? 'idp-subject-1';
   ctx.idp.seedFederatedUsers([
@@ -124,7 +124,15 @@ async function startAndAuthorize(
   const url = new URL(started.location);
   const state = url.searchParams.get('state')!;
   const code = ctx.idp.issueAuthorizationCode(PROVIDER, subject, url.searchParams.get('code_challenge')!, CALLBACK);
-  return { state, code, url };
+  return { state, code, url, nonce: started.browserNonce! };
+}
+
+const TEST_NONCE = 't'.repeat(43);
+
+/** What `POST /ops/sso-connections/:id/test` stores. */
+async function issueTestNonce(ctx: Ctx, connectionId = 'conn_1', nonce = TEST_NONCE): Promise<string> {
+  await ctx.store.set(`sso_test:${nonce}`, JSON.stringify({ connectionId }), { ttlSeconds: 900 });
+  return nonce;
 }
 
 function auditActions(ctx: Ctx): string[] {
@@ -150,7 +158,7 @@ describe('SsoCallbackService', () => {
       expect(Buffer.from(state, 'base64url')).toHaveLength(32);
       const raw = await ctx.store.get(pkceKey(state));
       const record = JSON.parse(raw!);
-      expect(record).toMatchObject({ surface: 'admin', returnPath: '/people', connection: PROVIDER, test: false });
+      expect(record).toMatchObject({ surface: 'admin', returnPath: '/people', connection: PROVIDER, testNonce: null });
       expect(url.searchParams.get('code_challenge')).toBe(pkceChallenge(record.verifier));
       expect(await ctx.store.ttl(pkceKey(state))).toBeGreaterThan(590);
     });
@@ -167,17 +175,36 @@ describe('SsoCallbackService', () => {
       expect(res.session).toBeUndefined();
     });
 
-    it('lets a staff test sign-in start on a TESTING connection', async () => {
+    it('lets a staff test sign-in start on a TESTING connection with the issued nonce', async () => {
       const ctx = setup({ conn: connection({ status: 'TESTING' }) });
-      const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace', test: '1' }, META);
+      const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace', test: await issueTestNonce(ctx) }, META);
       expect(res.location).toContain('/api/auth/sso/_fake/authorize?');
+    });
+
+    it.each([
+      ['an unknown nonce', async (_ctx: Ctx) => TEST_NONCE],
+      ['a nonce issued for another connection', async (ctx: Ctx) => issueTestNonce(ctx, 'conn_other')],
+    ])('refuses a TESTING start with %s', async (_label, nonceFor) => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace', test: await nonceFor(ctx) }, META);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+    });
+
+    it('sets a browser-binding nonce whose hash (not the nonce) is in the record', async () => {
+      const ctx = setup();
+      const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace' }, META);
+      expect(res.browserNonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      const state = new URL(res.location).searchParams.get('state')!;
+      const raw = (await ctx.store.get(pkceKey(state)))!;
+      expect(raw).not.toContain(res.browserNonce!);
+      expect(JSON.parse(raw).browserNonceHash).toMatch(/^[0-9a-f]{64}$/);
     });
   });
 
   describe('callback: state (Review Focus 1)', () => {
     it('answers a never-issued state with the neutral redirect and audits auth.sign_in.failed', async () => {
       const ctx = setup();
-      const res = await ctx.service.callback({ code: 'x', state: 'never-issued' }, META);
+      const res = await ctx.service.callback({ code: 'x', state: 'never-issued' }, META, null);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'auth.sign_in.failed', details: { reason: 'sso_state' } }),
@@ -188,37 +215,37 @@ describe('SsoCallbackService', () => {
     it('answers a replayed state the same way: the record was consumed', async () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
-      const { state, code, url } = await startAndAuthorize(ctx);
-      const first = await ctx.service.callback({ code, state }, META);
+      const { state, code, url, nonce } = await startAndAuthorize(ctx);
+      const first = await ctx.service.callback({ code, state }, META, nonce);
       expect(first.session).toBeDefined();
       // Even with a fresh, valid code the consumed state is gone.
       const fresh = ctx.idp.issueAuthorizationCode(PROVIDER, 'idp-subject-1', url.searchParams.get('code_challenge')!, CALLBACK);
-      const second = await ctx.service.callback({ code: fresh, state }, META);
+      const second = await ctx.service.callback({ code: fresh, state }, META, nonce);
       expect(second).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(ctx.identity.resolveIdentityAndCreateSession).toHaveBeenCalledTimes(1);
     });
 
     it('denies when the IdP returned an error instead of a code', async () => {
       const ctx = setup();
-      const { state } = await startAndAuthorize(ctx, {}, { surface: 'admin' });
-      const res = await ctx.service.callback({ error: 'access_denied', state }, META);
+      const { state, nonce } = await startAndAuthorize(ctx, {}, { surface: 'admin' });
+      const res = await ctx.service.callback({ error: 'access_denied', state }, META, nonce);
       expect(res.location).toBe('http://admin.test/sign-in?reason=sso_denied');
     });
 
     it('denies when the code exchange fails (wrong verifier, used code)', async () => {
       const ctx = setup();
-      const { state } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code: 'not-a-code', state }, META);
+      const { state, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code: 'not-a-code', state }, META, nonce);
       expect(res.location).toBe('http://ws.test/sign-in?reason=sso_denied');
       expect(auditActions(ctx)).toContain('auth.sign_in.failed');
     });
 
     it('never puts the code, verifier, state or tokens into an audit row', async () => {
       const ctx = setup();
-      const { state, code } = await startAndAuthorize(ctx);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
       const record = JSON.parse((await ctx.store.get(pkceKey(state)))!);
-      await ctx.service.callback({ code, state }, META);
-      await ctx.service.callback({ code, state }, META);
+      await ctx.service.callback({ code, state }, META, nonce);
+      await ctx.service.callback({ code, state }, META, nonce);
       const dump = allAuditDetails(ctx);
       expect(dump).not.toContain(code);
       expect(dump).not.toContain(state);
@@ -230,8 +257,8 @@ describe('SsoCallbackService', () => {
     it('signs in with sso + second factor and redirects to the return path', async () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
-      const { state, code } = await startAndAuthorize(ctx, {}, { returnPath: '/people?x=1' });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, {}, { returnPath: '/people?x=1' });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toBe('http://ws.test/people?x=1');
       expect(res.session).toEqual({ sessionId: 'sess_1', csrfToken: 'csrf_1', absoluteExpiresAt: new Date('2026-11-01') });
       expect(ctx.identities.findExternalIdentity).toHaveBeenCalledWith(`cognito:${PROVIDER}`, expect.any(String));
@@ -244,9 +271,9 @@ describe('SsoCallbackService', () => {
     it('still signs in when the connection is SUSPENDED (Review Focus 4)', async () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
-      const { state, code } = await startAndAuthorize(ctx);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
       ctx.sso.findConnectionByProviderName.mockResolvedValue(connection({ status: 'SUSPENDED' }));
-      const res = await ctx.service.callback({ code, state }, META);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.session).toBeDefined();
       expect(res.location).toBe('http://ws.test/');
     });
@@ -255,8 +282,8 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
       ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('suspended'));
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
     });
   });
@@ -265,8 +292,8 @@ describe('SsoCallbackService', () => {
     it('binds, activates the membership, accepts the invitation and audits identity.linked + invitation.accepted', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      const { state, code } = await startAndAuthorize(ctx, { email: 'New@Acme.example' });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, { email: 'New@Acme.example' });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
 
       expect(res.session).toBeDefined();
       expect(ctx.dbs.withOrgScope).toHaveBeenCalledWith('org_sample', expect.any(Function));
@@ -291,8 +318,8 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       ctx.identities.findUserByEmail.mockResolvedValue({ id: 'user_existing' });
-      const { state, code } = await startAndAuthorize(ctx);
-      await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
       expect(ctx.identities.createUser).not.toHaveBeenCalled();
       expect(ctx.invitations.accept).toHaveBeenCalledWith('inv_1', expect.any(Date), 'user_existing', ctx.tx);
     });
@@ -302,8 +329,8 @@ describe('SsoCallbackService', () => {
       // Even if a lookup returned one, an invitation outside the connection's org never binds.
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation({ orgId: 'org_other' }));
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(ctx.invitations.accept).not.toHaveBeenCalled();
       expect(deleteUser).toHaveBeenCalledWith(`${PROVIDER}_idp-subject-1`);
@@ -313,8 +340,8 @@ describe('SsoCallbackService', () => {
     it('does not bind when the invitation email differs', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation({ email: 'other@acme.example' }));
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toContain('reason=sso_denied');
     });
 
@@ -322,8 +349,8 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       ctx.identities.createExternalIdentity.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
     });
@@ -332,8 +359,8 @@ describe('SsoCallbackService', () => {
   describe('callback: JIT', () => {
     it('creates user, ACTIVE membership in the default unit with the employee grant, identity; audits identity.created + identity.linked', async () => {
       const ctx = setup({ conn: connection({ jitProvisioning: true }) });
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.session).toBeDefined();
       const values = ctx.tx.insert.mock.results[0]!.value.values as ReturnType<typeof vi.fn>;
       expect(values).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user_new', orgId: 'org_sample', orgUnitId: 'unit_1', status: 'ACTIVE' }));
@@ -344,17 +371,18 @@ describe('SsoCallbackService', () => {
 
     it('does not provision when the domain is not verified for this connection', async () => {
       const ctx = setup({ conn: connection({ jitProvisioning: true }), domainConnectionId: 'conn_other' });
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
-      expect(res.location).toContain('reason=sso_denied');
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      // The connection does not vouch for the address: treated as unverified.
+      expect(res.location).toContain('reason=sso_email_unverified');
       expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
     });
 
     it('denies, deletes the orphan and audits identity.denied with JIT off and no invitation', async () => {
       const ctx = setup();
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
-      const { state, code } = await startAndAuthorize(ctx);
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(deleteUser).toHaveBeenCalledTimes(1);
       expect(ctx.audit.record).toHaveBeenCalledWith(
@@ -368,8 +396,8 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
-      const { state, code } = await startAndAuthorize(ctx, { emailVerified: false });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toBe('http://ws.test/sign-in?reason=sso_email_unverified&email=new%40acme.example');
       expect(res.session).toBeUndefined();
       expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
@@ -379,16 +407,16 @@ describe('SsoCallbackService', () => {
     it('SAML: an unverified claim is inferred verified when the domain is verified for the connection', async () => {
       const ctx = setup({ conn: connection({ protocol: 'SAML' }) });
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      const { state, code } = await startAndAuthorize(ctx, { emailVerified: false });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.session).toBeDefined();
     });
 
     it('SAML: no inference when the domain is not verified for it', async () => {
       const ctx = setup({ conn: connection({ protocol: 'SAML' }), domainVerified: false });
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      const { state, code } = await startAndAuthorize(ctx, { emailVerified: false });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toContain('reason=sso_email_unverified');
     });
   });
@@ -397,9 +425,9 @@ describe('SsoCallbackService', () => {
     it('denies a new binding through a SUSPENDED connection', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      const { state, code } = await startAndAuthorize(ctx);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
       ctx.sso.findConnectionByProviderName.mockResolvedValue(connection({ status: 'SUSPENDED' }));
-      const res = await ctx.service.callback({ code, state }, META);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toContain('reason=sso_denied');
       expect(ctx.invitations.accept).not.toHaveBeenCalled();
     });
@@ -407,8 +435,8 @@ describe('SsoCallbackService', () => {
     it('test flag on a TESTING connection: binds and sets lastTestedAt', async () => {
       const ctx = setup({ conn: connection({ status: 'TESTING' }) });
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      const { state, code } = await startAndAuthorize(ctx, {}, { test: '1' });
-      const res = await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx, {}, { test: await issueTestNonce(ctx) });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.session).toBeDefined();
       expect(ctx.sso.updateConnection).toHaveBeenCalledWith(
         'conn_1', { lastTestedAt: expect.any(Date) }, ctx.tx, { fromStatus: 'TESTING' },
@@ -418,8 +446,8 @@ describe('SsoCallbackService', () => {
     it('does not touch lastTestedAt without the test flag', async () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
-      const { state, code } = await startAndAuthorize(ctx);
-      await ctx.service.callback({ code, state }, META);
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
       expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
     });
 
@@ -427,11 +455,106 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       await ctx.idp.createProvider({ name: 'org-other-oidc', protocol: 'OIDC', oidcIssuer: 'https://o', oidcClientId: 'c', attributeMapping: {} });
       ctx.idp.seedFederatedUsers([{ providerName: 'org-other-oidc', subject: 's2', email: 'x@other.example', emailVerified: true }]);
-      const { state, url } = await startAndAuthorize(ctx);
+      const { state, url, nonce } = await startAndAuthorize(ctx);
       const code = ctx.idp.issueAuthorizationCode('org-other-oidc', 's2', url.searchParams.get('code_challenge')!, CALLBACK);
-      const res = await ctx.service.callback({ code, state }, META);
+      const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toContain('reason=sso_denied');
       expect(ctx.identities.findExternalIdentity).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('SsoCallbackService review fixes', () => {
+  describe('browser binding (login CSRF)', () => {
+    it.each([
+      ['without the cookie', null],
+      ['with another browser\'s cookie', 'x'.repeat(43)],
+    ])('denies a callback %s and never exchanges the code', async (_label, cookie) => {
+      const ctx = setup();
+      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      const exchange = vi.spyOn(ctx.idp, 'exchangeAuthorizationCode');
+      const { state, code } = await startAndAuthorize(ctx);
+      const res = await ctx.service.callback({ code, state }, META, cookie);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(exchange).not.toHaveBeenCalled();
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'auth.sign_in.failed', details: { reason: 'sso_browser' } }),
+      );
+      expect(allAuditDetails(ctx)).not.toContain(cookie ?? '\u0000');
+    });
+  });
+
+  describe('verified domain rule for new bindings', () => {
+    it('OIDC: email_verified true for an off-domain address binds nothing (sso_email_unverified)', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation({ email: 'victim@othermail.com' }));
+      ctx.identities.findUserByEmail.mockResolvedValue({ id: 'user_victim' });
+      const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
+      const { state, code, nonce } = await startAndAuthorize(ctx, { email: 'victim@othermail.com', emailVerified: true });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_email_unverified&email=victim%40othermail.com' });
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+      expect(deleteUser).toHaveBeenCalled();
+    });
+
+    it('SAML: an off-domain address is not inferred verified', async () => {
+      const ctx = setup({ conn: connection({ protocol: 'SAML', jitProvisioning: true }) });
+      const { state, code, nonce } = await startAndAuthorize(ctx, { email: 'victim@othermail.com', emailVerified: true });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(res.location).toContain('reason=sso_email_unverified');
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+    });
+
+    it('an existing identity with an off-domain address still signs in', async () => {
+      const ctx = setup();
+      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      const { state, code, nonce } = await startAndAuthorize(ctx, { email: 'someone@othermail.com' });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(res.session).toBeDefined();
+    });
+  });
+
+  describe('single-use test flows', () => {
+    it('the callback spends the nonce even when the sign-in is denied; lastTestedAt stays', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      const nonce = await issueTestNonce(ctx);
+      const flow = await startAndAuthorize(ctx, {}, { test: nonce });
+      const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
+      expect(res.location).toContain('reason=sso_denied');
+      expect(await ctx.store.get(`sso_test:${nonce}`)).toBeNull();
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+      const again = await ctx.service.start({ connection: PROVIDER, surface: 'workspace', test: nonce }, META);
+      expect(again).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+    });
+
+    it('never provisions JIT while TESTING, even on a test flow', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING', jitProvisioning: true }) });
+      const flow = await startAndAuthorize(ctx, {}, { test: await issueTestNonce(ctx) });
+      const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
+      expect(res.location).toContain('reason=sso_denied');
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+    });
+
+    it('an existing identity on a test flow marks the connection tested', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      const flow = await startAndAuthorize(ctx, {}, { test: await issueTestNonce(ctx) });
+      const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
+      expect(res.session).toBeDefined();
+      expect(ctx.sso.updateConnection).toHaveBeenCalledWith('conn_1', { lastTestedAt: expect.any(Date) }, ctx.tx, { fromStatus: 'TESTING' });
+    });
+
+    it('a test flow whose nonce was spent meanwhile cannot bind on TESTING', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const nonce = await issueTestNonce(ctx);
+      const flow = await startAndAuthorize(ctx, {}, { test: nonce });
+      await ctx.store.del(`sso_test:${nonce}`);
+      const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
+      expect(res.location).toContain('reason=sso_denied');
+      expect(ctx.invitations.accept).not.toHaveBeenCalled();
     });
   });
 });

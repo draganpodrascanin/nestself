@@ -29,11 +29,13 @@ describe('isRelativeReturnPath (API-R-06)', () => {
   });
 });
 
+const NONCE = 'n'.repeat(43);
+
 describe('SsoStartQuerySchema', () => {
   it('accepts connection, surface, returnPath and the test flag', () => {
     expect(
-      SsoStartQuerySchema.parse({ connection: 'org-acme-saml', surface: 'admin', returnPath: '/x', test: '1' }),
-    ).toEqual({ connection: 'org-acme-saml', surface: 'admin', returnPath: '/x', test: '1' });
+      SsoStartQuerySchema.parse({ connection: 'org-acme-saml', surface: 'admin', returnPath: '/x', test: NONCE }),
+    ).toEqual({ connection: 'org-acme-saml', surface: 'admin', returnPath: '/x', test: NONCE });
   });
 
   it('requires a known surface and a well-formed connection', () => {
@@ -42,11 +44,12 @@ describe('SsoStartQuerySchema', () => {
     expect(SsoStartQuerySchema.safeParse({ surface: 'workspace' }).success).toBe(false);
   });
 
-  it('rejects an absolute or protocol-relative returnPath and any test value but 1', () => {
+  it('rejects an absolute or protocol-relative returnPath and a test value that is not a nonce', () => {
     const base = { connection: 'org-acme-saml', surface: 'workspace' };
     expect(SsoStartQuerySchema.safeParse({ ...base, returnPath: 'https://evil.example' }).success).toBe(false);
     expect(SsoStartQuerySchema.safeParse({ ...base, returnPath: '//evil.example' }).success).toBe(false);
     expect(SsoStartQuerySchema.safeParse({ ...base, test: 'true' }).success).toBe(false);
+    expect(SsoStartQuerySchema.safeParse({ ...base, test: '1' }).success).toBe(false);
   });
 });
 

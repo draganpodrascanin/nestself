@@ -17,6 +17,7 @@ import { InvitationsRepository } from '../db/repositories/invitations.repository
 import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
+import { SsoRepository } from '../db/repositories/sso.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { generateToken, hashToken } from './invitation-token.js';
@@ -28,6 +29,18 @@ import { OWNER_TEMPLATE_KEY, findInvitableTemplate, ownerExists } from '../grant
 
 /** Milliseconds in 7 days. */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** `details.reason` (and import row reason) for an address another organization's SSO owns. */
+export const SSO_DOMAIN_CLAIMED = 'sso_domain_claimed';
+
+function ssoDomainClaimed(): ApiHttpException {
+  return new ApiHttpException({
+    status: 409,
+    code: 'conflict',
+    message: 'This email domain signs in through another organization\'s identity provider',
+    details: { reason: SSO_DOMAIN_CLAIMED },
+  });
+}
 
 @Injectable()
 export class InvitationsService {
@@ -41,6 +54,7 @@ export class InvitationsService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => InvitationMailer)) private readonly mailer: InvitationMailer,
     @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
+    @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -54,6 +68,7 @@ export class InvitationsService {
     isProduction: boolean,
   ) {
     this.validateTemplateKey(body.templateKey);
+    if (await this.domainClaimedElsewhere(body.email, orgId)) throw ssoDomainClaimed();
 
     const token = generateToken();
     const tokenHash = hashToken(token);
@@ -149,6 +164,7 @@ export class InvitationsService {
 
     // Detect duplicates within the batch.
     const seenEmails = new Set<string>();
+    const claimedCache = new Map<string, boolean>();
 
     for (const inv of body.invitations) {
       // Template key check.
@@ -163,6 +179,11 @@ export class InvitationsService {
         continue;
       }
       seenEmails.add(inv.email);
+
+      if (await this.domainClaimedElsewhere(inv.email, orgId, claimedCache)) {
+        errors.push({ email: inv.email, reason: SSO_DOMAIN_CLAIMED });
+        continue;
+      }
 
       validRows.push(inv);
     }
@@ -419,5 +440,25 @@ export class InvitationsService {
       response['devToken'] = devToken;
     }
     return response;
+  }
+
+  /**
+   * The address's domain is a verified domain of an ACTIVE SSO connection of
+   * another organization: its sign-ins go to that organization's IdP, which
+   * would never bind this invitation. Read in the system context (not the
+   * inviting tenant's), because RLS hides other tenants' connections.
+   */
+  private async domainClaimedElsewhere(
+    email: string,
+    orgId: string,
+    cache?: Map<string, boolean>,
+  ): Promise<boolean> {
+    const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+    const cached = cache?.get(domain);
+    if (cached !== undefined) return cached;
+    const connection = await this.sso.findActiveConnectionForDomain(domain);
+    const claimed = !!connection && connection.orgId !== orgId;
+    cache?.set(domain, claimed);
+    return claimed;
   }
 }

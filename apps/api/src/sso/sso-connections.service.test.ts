@@ -4,6 +4,7 @@
  * repository is an in-memory stand-in; the identity provider is the real
  * in-memory fake.
  */
+import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Principal, SsoConnectionCreateRequest } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
@@ -106,6 +107,7 @@ function setup() {
   const audit = { record: vi.fn(async (e: AuditEventInput) => void events.push(e)) };
   const dns = new FakeDnsTxtResolver();
   const db = { withOrgScope: vi.fn(async (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
+  const store = new MemoryKeyValueStore();
   const service = new SsoConnectionsService(
     db as never,
     repo as never,
@@ -116,8 +118,9 @@ function setup() {
     audit as never,
     dns,
     { apiPublicUrl: 'http://api.test', spMetadata: SP },
+    store,
   );
-  return { repo, idp, events, dns, db, service };
+  return { repo, idp, events, dns, db, service, store };
 }
 
 const SAML: SsoConnectionCreateRequest = {
@@ -284,7 +287,15 @@ describe('SsoConnectionsService', () => {
     it('registers the provider, moves to TESTING, returns the start URL and audits changed + tested', async () => {
       const conn = await connectionIn(ctx, 'DRAFT');
       const res = await ctx.service.test(conn.id, ACTOR);
-      expect(res.startUrl).toBe('http://api.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace&test=1');
+      const url = new URL(res.startUrl);
+      expect(url.origin + url.pathname).toBe('http://api.test/api/auth/sso/start');
+      expect(url.searchParams.get('connection')).toBe('org-acme-saml');
+      expect(url.searchParams.get('surface')).toBe('workspace');
+      // A single-use nonce bound to this connection, 15 minutes.
+      const nonce = url.searchParams.get('test')!;
+      expect(nonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(JSON.parse((await ctx.store.get(`sso_test:${nonce}`))!)).toEqual({ connectionId: conn.id });
+      expect(await ctx.store.ttl(`sso_test:${nonce}`)).toBeGreaterThan(890);
       expect(await ctx.idp.listProviders()).toEqual(['org-acme-saml']);
       expect(ctx.repo.connections.get(conn.id)?.status).toBe('TESTING');
       expect(ctx.events.map((e) => [e.action, e.details])).toEqual([
