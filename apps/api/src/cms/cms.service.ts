@@ -327,25 +327,27 @@ export class CmsService {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
     };
 
-    await this.dbService.db.transaction(async (tx) => {
-      await tx.insert(contentVariants).values({
-        id: variantId,
-        contentResourceId: resourceId,
-        locale,
-        slug: `${resource[0]!.type}-${resourceId.slice(0, 8)}-${locale}`,
-      });
+    await this.withUniqueViolationAs409(async () => {
+      await this.dbService.db.transaction(async (tx) => {
+        await tx.insert(contentVariants).values({
+          id: variantId,
+          contentResourceId: resourceId,
+          locale,
+          slug: `${resource[0]!.type}-${resourceId.slice(0, 8)}-${locale}`,
+        });
 
-      await tx.insert(contentRevisions).values({
-        id: revisionId,
-        contentVariantId: variantId,
-        revisionNumber: 1,
-        state: 'draft',
-        body: emptyDoc,
-        title: '',
-        summary: '',
-        authorUserId: principal.userId,
-        lastEditorUserId: principal.userId,
-        lockVersion: 1,
+        await tx.insert(contentRevisions).values({
+          id: revisionId,
+          contentVariantId: variantId,
+          revisionNumber: 1,
+          state: 'draft',
+          body: emptyDoc,
+          title: '',
+          summary: '',
+          authorUserId: principal.userId,
+          lastEditorUserId: principal.userId,
+          lockVersion: 1,
+        });
       });
     });
 
@@ -493,83 +495,92 @@ export class CmsService {
     variantId: string,
     principal: Principal,
   ) {
-    // Check that no working revision exists
-    const existing = await this.dbService.db
-      .select({ id: contentRevisions.id })
-      .from(contentRevisions)
-      .where(
-        and(
-          eq(contentRevisions.contentVariantId, variantId),
-          inArray(contentRevisions.state, ['draft', 'changes_requested']),
-        ),
-      )
-      .limit(1);
-
-    if (existing.length > 0) {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_not_submittable',
-        message: 'A working revision already exists for this variant',
-      });
-    }
-
-    // Find the source revision to copy from (WRK-R-02)
-    const sourceRows = await this.dbService.db
-      .select()
-      .from(contentRevisions)
-      .where(eq(contentRevisions.contentVariantId, variantId))
-      .orderBy(
-        sql`CASE WHEN state = 'approved' THEN 0 ELSE 1 END`,
-        desc(contentRevisions.revisionNumber),
-      )
-      .limit(1);
-
-    const source = sourceRows[0];
-
-    // Get current max revision number
-    const maxRevResult = await this.dbService.db
-      .select({ max: sql<number>`COALESCE(MAX(revision_number), 0)` })
-      .from(contentRevisions)
-      .where(eq(contentRevisions.contentVariantId, variantId));
-    const nextRevisionNumber = (maxRevResult[0]?.max ?? 0) + 1;
-
     const newRevisionId = randomUUID();
 
-    await this.dbService.db.transaction(async (tx) => {
-      await tx.insert(contentRevisions).values({
-        id: newRevisionId,
-        contentVariantId: variantId,
-        revisionNumber: nextRevisionNumber,
-        state: 'draft',
-        body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] },
-        title: source?.title ?? '',
-        summary: source?.summary ?? '',
-        outcome: source?.outcome ?? null,
-        durationSeconds: source?.durationSeconds ?? null,
-        difficulty: source?.difficulty ?? null,
-        sources: source?.sources ?? null,
-        cta: source?.cta ?? null,
-        relatedResourceIds: source?.relatedResourceIds ?? [],
-        authorUserId: principal.userId,
-        lastEditorUserId: principal.userId,
-        lockVersion: 1,
-      });
+    await this.withUniqueViolationAs409(async () => {
+      await this.dbService.db.transaction(async (tx) => {
+        // Serialize concurrent callers by locking the parent variant row.
+        // Without this, two requests can both pass the "no draft exists" check
+        // and both insert, producing two draft revisions or a 500.
+        await tx.execute(
+          sql`SELECT id FROM content_variants WHERE id = ${variantId} FOR UPDATE`,
+        );
 
-      // Copy content_revision_media rows from source (WRK-R-02 media carry)
-      if (source) {
-        const sourceMedia = await tx
-          .select()
-          .from(contentRevisionMedia)
-          .where(eq(contentRevisionMedia.contentRevisionId, source.id));
-        for (const m of sourceMedia) {
-          await tx.insert(contentRevisionMedia).values({
-            id: randomUUID(),
-            contentRevisionId: newRevisionId,
-            mediaAssetId: m.mediaAssetId,
-            usageKind: m.usageKind,
+        // Re-check under the lock
+        const existing = await tx
+          .select({ id: contentRevisions.id })
+          .from(contentRevisions)
+          .where(
+            and(
+              eq(contentRevisions.contentVariantId, variantId),
+              inArray(contentRevisions.state, ['draft', 'changes_requested']),
+            ),
+          )
+          .limit(1);
+
+        if (existing.length > 0) {
+          throw new ApiHttpException({
+            status: 409,
+            code: 'content_not_submittable',
+            message: 'A working revision already exists for this variant',
           });
         }
-      }
+
+        // Find the source revision to copy from (WRK-R-02)
+        const sourceRows = await tx
+          .select()
+          .from(contentRevisions)
+          .where(eq(contentRevisions.contentVariantId, variantId))
+          .orderBy(
+            sql`CASE WHEN state = 'approved' THEN 0 ELSE 1 END`,
+            desc(contentRevisions.revisionNumber),
+          )
+          .limit(1);
+
+        const source = sourceRows[0];
+
+        // Get current max revision number
+        const maxRevResult = await tx
+          .select({ max: sql<number>`COALESCE(MAX(revision_number), 0)` })
+          .from(contentRevisions)
+          .where(eq(contentRevisions.contentVariantId, variantId));
+        const nextRevisionNumber = (maxRevResult[0]?.max ?? 0) + 1;
+
+        await tx.insert(contentRevisions).values({
+          id: newRevisionId,
+          contentVariantId: variantId,
+          revisionNumber: nextRevisionNumber,
+          state: 'draft',
+          body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] },
+          title: source?.title ?? '',
+          summary: source?.summary ?? '',
+          outcome: source?.outcome ?? null,
+          durationSeconds: source?.durationSeconds ?? null,
+          difficulty: source?.difficulty ?? null,
+          sources: source?.sources ?? null,
+          cta: source?.cta ?? null,
+          relatedResourceIds: source?.relatedResourceIds ?? [],
+          authorUserId: principal.userId,
+          lastEditorUserId: principal.userId,
+          lockVersion: 1,
+        });
+
+        // Copy content_revision_media rows from source (WRK-R-02 media carry)
+        if (source) {
+          const sourceMedia = await tx
+            .select()
+            .from(contentRevisionMedia)
+            .where(eq(contentRevisionMedia.contentRevisionId, source.id));
+          for (const m of sourceMedia) {
+            await tx.insert(contentRevisionMedia).values({
+              id: randomUUID(),
+              contentRevisionId: newRevisionId,
+              mediaAssetId: m.mediaAssetId,
+              usageKind: m.usageKind,
+            });
+          }
+        }
+      });
     });
 
     return this.getRevision(newRevisionId);
@@ -821,6 +832,7 @@ export class CmsService {
     // Track superseded publications' audience org ids for availability bump
     const supersededOrgIds = new Set<string>();
 
+    await this.withUniqueViolationAs409(async () => {
     await this.dbService.db.transaction(async (tx) => {
       // Lock the resource row FIRST inside the transaction (prevent concurrent publishes)
       const resourceLockRows = await tx.execute(
@@ -1118,6 +1130,7 @@ export class CmsService {
         });
       }
     });
+    }); // withUniqueViolationAs409
 
     // Audit AFTER the transaction commits
     for (const pubId of publicationIds) {
@@ -1402,6 +1415,41 @@ export class CmsService {
         mediaAssetId: ref.mediaAssetId,
         usageKind: ref.usageKind,
       });
+    }
+  }
+
+  // =========================================================================
+  // Belt-and-braces: map PostgreSQL unique_violation to 409
+  // =========================================================================
+
+  /**
+   * Wrap a CMS write so that a PostgreSQL 23505 (unique_violation) that
+   * somehow slips past the application-level checks still surfaces as a
+   * 409 Conflict rather than an opaque 500.
+   */
+  private async withUniqueViolationAs409<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      if (
+        err instanceof ApiHttpException ||
+        !(err instanceof Error)
+      ) {
+        throw err;
+      }
+      const pgCode = (err as { code?: string }).code;
+      if (pgCode === '23505') {
+        this.logger.warn(
+          { constraint: (err as { constraint?: string }).constraint },
+          'CMS unique violation mapped to 409',
+        );
+        throw new ApiHttpException({
+          status: 409,
+          code: 'conflict',
+          message: 'A conflicting record already exists',
+        });
+      }
+      throw err;
     }
   }
 }
