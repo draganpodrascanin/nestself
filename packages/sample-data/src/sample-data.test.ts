@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { InvitationResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { EmergencyAccessResponseSchema, InvitationResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -18,6 +18,8 @@ import {
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_CASE,
   SAMPLE_INVITATIONS,
+  SAMPLE_EMERGENCY_ACCESS,
+  SAMPLE_PRINCIPALS,
   isSampleMode,
   assertNotProduction,
 } from './index.ts';
@@ -40,6 +42,7 @@ describe('sample-data fixtures', () => {
     ...SAMPLE_EXPERT_CREDENTIALS,
     SAMPLE_CASE,
     ...SAMPLE_INVITATIONS,
+    ...SAMPLE_EMERGENCY_ACCESS,
   ];
 
   it('every fixture has sample === true', () => {
@@ -164,6 +167,41 @@ describe('SAMPLE_INVITATIONS', () => {
       expect(tpl?.isActive).toBe(true);
       expect(['organization', 'employee']).toContain(tpl?.workspace);
       if (inv.orgUnitId !== null) expect(unitIds.has(inv.orgUnitId)).toBe(true);
+    }
+  });
+});
+
+describe('SAMPLE_EMERGENCY_ACCESS', () => {
+  it('has two records: one pending request and one revoked window', () => {
+    expect(SAMPLE_EMERGENCY_ACCESS).toHaveLength(2);
+    const [pending, revoked] = SAMPLE_EMERGENCY_ACCESS;
+    expect(pending?.approvedByUserId).toBeNull();
+    expect(pending?.revokedAt).toBeNull();
+    expect(revoked?.approvedByUserId).not.toBeNull();
+    expect(revoked?.revokedAt).not.toBeNull();
+  });
+
+  it('parses as emergency access responses within the API limits', () => {
+    for (const row of SAMPLE_EMERGENCY_ACCESS) {
+      const { sample: _sample, ...rest } = row;
+      expect(EmergencyAccessResponseSchema.parse(rest)).toEqual(rest);
+      expect(row.purpose.length).toBeGreaterThanOrEqual(10);
+      expect(row.purpose).toMatch(/fixture/);
+      expect(row.durationMinutes).toBeGreaterThanOrEqual(15);
+      expect(row.durationMinutes).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it('uses sample principals and sample scopes, and nobody approves their own request', () => {
+    const userIds = new Set(Object.values(SAMPLE_PRINCIPALS).map((p) => p.principal.userId));
+    for (const row of SAMPLE_EMERGENCY_ACCESS) {
+      expect(userIds.has(row.userId)).toBe(true);
+      if (row.approvedByUserId !== null) {
+        expect(userIds.has(row.approvedByUserId)).toBe(true);
+        expect(row.approvedByUserId).not.toBe(row.userId);
+      }
+      const scope = row.scopeKind === 'CASE' ? SAMPLE_CASE.id : SAMPLE_CASE.employeeUserId;
+      expect(row.scopeId).toBe(scope);
     }
   });
 });
