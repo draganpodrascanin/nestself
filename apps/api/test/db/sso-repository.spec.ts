@@ -115,6 +115,13 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
     expect((await repo.listActiveConnectionsWithCertificates()).map((c) => c.id)).toEqual([acmeId]);
   });
 
+  it('listActiveConnections returns every ACTIVE connection, with or without an expiry', async () => {
+    expect((await repo.listActiveConnections()).map((c) => c.id)).toEqual([acmeId]);
+    await repo.updateConnection(acmeId, { certificateExpiresAt: null });
+    expect((await repo.listActiveConnections()).map((c) => c.id)).toEqual([acmeId]);
+    await repo.updateConnection(acmeId, { certificateExpiresAt: new Date('2027-01-01T00:00:00Z') });
+  });
+
   it('updateConnection with fromStatus only applies while the status still matches', async () => {
     expect(await repo.updateConnection(otherId, { status: 'TESTING' }, undefined, { fromStatus: 'ACTIVE' })).toBeNull();
     expect((await repo.findConnection(otherId))?.status).toBe('DRAFT');

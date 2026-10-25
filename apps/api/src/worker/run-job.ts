@@ -9,6 +9,7 @@
  *   pnpm --filter @nestself/api job:run audit.ensure-partitions
  *   pnpm --filter @nestself/api job:run grants.reconcile
  *   pnpm --filter @nestself/api job:run mobile.prune-stale-families
+ *   pnpm --filter @nestself/api job:run sso.certificate-expiry
  */
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';

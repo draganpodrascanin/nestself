@@ -11,7 +11,9 @@
  * - `listConnections` without a tenant transaction: the staff list spans
  *   organizations (`sso.manage` is a platform action);
  * - `findActiveConnectionForDomain`: home-realm discovery runs before any
- *   organization is known.
+ *   organization is known;
+ * - `listActiveConnections` / `listActiveConnectionsWithCertificates`: the
+ *   nightly certificate-expiry job spans organizations.
  */
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
@@ -179,6 +181,15 @@ export class SsoRepository {
         ),
       );
     return row?.connection ?? null;
+  }
+
+  /** Every ACTIVE connection, soonest certificate expiry first (certificate-expiry job, system context). */
+  async listActiveConnections(tx?: DbExecutor): Promise<SsoConnectionRow[]> {
+    return this.exec(tx)
+      .select()
+      .from(ssoConnections)
+      .where(eq(ssoConnections.status, 'ACTIVE'))
+      .orderBy(asc(ssoConnections.certificateExpiresAt), asc(ssoConnections.id));
   }
 
   /** ACTIVE connections with a known signing-certificate expiry (certificate-expiry job). */
