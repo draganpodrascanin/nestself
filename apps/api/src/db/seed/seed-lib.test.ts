@@ -80,12 +80,13 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     expect(Object.values(EXTRA_SAMPLE_TEMPLATES).flat().every((key) => known.has(key))).toBe(true);
   });
 
-  it('seeds the same 18 grant ids as SAMPLE_GRANTS', () => {
+  it('seeds the same 19 grant ids as SAMPLE_GRANTS', () => {
     const derived = SAMPLE_PEOPLE.filter((p) => p.orgId || p.platformRole).flatMap((p) =>
       templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => `grant_${p.id}_${tmpl.key}`),
     );
     const seeded = [...derived, ...extraSampleGrantIds()].sort();
-    expect(seeded).toHaveLength(18);
+    // 19 since the platform administrator joined SAMPLE_PEOPLE (platform_owner, T-CW-2.1).
+    expect(seeded).toHaveLength(19);
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
   });
 });
@@ -160,9 +161,10 @@ describe('sample webinars (T-CW-2.1)', () => {
       expect(WebinarAudiencePolicySchema.safeParse(rows.webinar.audiencePolicy).success).toBe(true);
       // Every webinar is recorded (D-CW-34): there is no recording switch to seed.
       expect(Object.keys(rows.webinar)).not.toContain('recordingPolicy');
+      // The org-less occurrence is moderated by the platform administrator (a platform-scoped event.moderate).
       expect(rows.hosts.map((h) => [h.userId, h.role])).toEqual([
         ['user_milica', 'PRESENTER'],
-        ['user_nikola', 'MODERATOR'],
+        [rows.webinar.orgId === null ? 'user_admin' : 'user_nikola', 'MODERATOR'],
       ]);
       expect(rows.presenterAssignments).toEqual([
         expect.objectContaining({ userId: 'user_milica', kind: 'CASE', targetId: rows.webinar.id, reason: 'webinar_presenter' }),

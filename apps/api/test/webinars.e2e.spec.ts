@@ -34,7 +34,10 @@ import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import {
+  OpsOrganizationsResponseSchema,
   WEBINAR_SINGLE_MEETING_CAPACITY,
+  WebinarHostCandidatesResponseSchema,
+  WebinarPollListResponseSchema,
   WebinarRecordingStatusResponseSchema,
   WebinarAttendanceResponseSchema,
   WebinarJoinResponseSchema,
@@ -79,8 +82,8 @@ const ORG = 'org_sample';
 const MINUTE = 60_000;
 /** Fixed TOTP secret for the staff and expert users of this suite (base32). */
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
-const STAFF = ['user_milica', 'user_nikola'];
-const PEOPLE = ['user_milica', 'user_nikola', 'user_jovan', 'user_ana', 'user_ivana', 'user_stefan'];
+const STAFF = ['user_milica', 'user_nikola', 'user_admin'];
+const PEOPLE = ['user_milica', 'user_nikola', 'user_admin', 'user_jovan', 'user_ana', 'user_ivana', 'user_stefan'];
 /** A unit of the sample organisation nobody belongs to: its audience is empty of our employees. */
 const ELSEWHERE_UNIT = 'ou_wbn_elsewhere';
 
@@ -152,6 +155,8 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
   let ana: SignedIn;
   let ivana: SignedIn;
   let stefan: SignedIn;
+  /** The platform administrator (platform_owner): manages and moderates occurrences open to all. */
+  let admin: SignedIn;
 
   /** The live webinar of the golden flow: org_sample, capacity 2, starts in 5 minutes. */
   let liveId: string;
@@ -309,6 +314,7 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     ana = await signInMember('user_ana');
     ivana = await signInMember('user_ivana');
     stefan = await signInMember('user_stefan');
+    admin = await signInStaff('user_admin', { kind: 'operations' });
   }, 180_000);
 
   beforeEach(() => {
@@ -405,6 +411,96 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
 
   // ── Registration (WBN-02, WBN-03, CW-R-31) ────────────────────────────────
 
+  it('operations read one occurrence; the form looks up host candidates and organisations (T-CW-2.1 additions)', async () => {
+    const detail = WebinarOpsResponseSchema.parse((await get(nikola, `/ops/webinars/${liveId}`)).body);
+    expect(detail).toMatchObject({ id: liveId, status: 'published', orgId: ORG });
+    for (const who of [ivana, stefan, milica, jovan]) expectNotFound(await get(who, `/ops/webinars/${liveId}`));
+
+    const presenters = WebinarHostCandidatesResponseSchema.parse(
+      (await get(nikola, '/ops/webinars/host-candidates?role=presenter')).body,
+    );
+    expect(presenters.items).toContainEqual({ userId: 'user_milica', displayName: 'Milica Ristić' });
+    expect(presenters.items.map((c) => c.userId)).not.toContain('user_jovan');
+    const moderators = WebinarHostCandidatesResponseSchema.parse(
+      (await get(nikola, '/ops/webinars/host-candidates?role=moderator')).body,
+    );
+    expect(moderators.items.map((c) => c.userId)).toEqual(expect.arrayContaining(['user_nikola', 'user_admin']));
+    expect(moderators.items.map((c) => c.userId)).not.toContain('user_milica');
+    const named = WebinarHostCandidatesResponseSchema.parse(
+      (await get(nikola, '/ops/webinars/host-candidates?role=presenter&q=mil')).body,
+    );
+    expect(named.items.map((c) => c.userId)).toEqual(['user_milica']);
+    expectNotFound(await get(ivana, '/ops/webinars/host-candidates?role=presenter'));
+    expectNotFound(await get(milica, '/ops/webinars/host-candidates?role=presenter'));
+
+    // Nikola manages the sample organisation through his CLIENT assignment; the administrator every one.
+    const own = OpsOrganizationsResponseSchema.parse((await get(nikola, '/ops/orgs')).body);
+    expect(own.items.map((o) => o.id)).toEqual([ORG]);
+    const all = OpsOrganizationsResponseSchema.parse((await get(admin, '/ops/orgs?q=a')).body);
+    expect(all.items.map((o) => o.id)).toContain(ORG);
+    expectNotFound(await get(ivana, '/ops/orgs'));
+
+    // The hosts' own list, from the expert context too (`mine=true`).
+    const mine = WebinarOpsListResponseSchema.parse((await get(milica, '/ops/webinars?mine=true')).body);
+    expect(mine.items.map((w) => w.id)).toContain(liveId);
+    const moderated = WebinarOpsListResponseSchema.parse((await get(nikola, '/ops/webinars?mine=true')).body);
+    expect(moderated.items.map((w) => w.id)).toContain(liveId);
+    expect(WebinarOpsListResponseSchema.parse((await get(jovan, '/ops/webinars?mine=true')).body).items).toEqual([]);
+  });
+
+  it('publishing checks that the engine lets the hosts present and moderate this occurrence (WBN-31)', async () => {
+    // An occurrence open to all: Nikola (client_operations) moderates his client organisation only.
+    const created = await post(admin, '/ops/webinars', occurrence({ audiencePolicy: { type: 'all_eligible' }, capacity: 50 }));
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.id as string;
+    const refused = await post(admin, `/ops/webinars/${id}/publish`);
+    expectCode(refused, 400, 'validation');
+    expect(refused.body.details).toEqual({ field: 'moderatorUserId' });
+
+    expect((await patch(admin, `/ops/webinars/${id}`, { moderatorUserId: 'user_admin' })).status).toBe(200);
+    expect((await post(admin, `/ops/webinars/${id}/publish`)).body).toEqual({ webinarId: id, status: 'published' });
+
+    // While published, an edit re-runs the publish checks (hosts, their rights, the start).
+    const noRight = await patch(admin, `/ops/webinars/${id}`, { moderatorUserId: 'user_nikola' });
+    expectCode(noRight, 400, 'validation');
+    expect(noRight.body.details).toEqual({ field: 'moderatorUserId' });
+    const notPresenter = await patch(admin, `/ops/webinars/${id}`, { presenterUserIds: ['user_nikola'] });
+    expectCode(notPresenter, 400, 'validation');
+    expect(notPresenter.body.details).toEqual({ field: 'presenterUserIds' });
+    const noModerator = await patch(admin, `/ops/webinars/${id}`, { moderatorUserId: null });
+    expect(noModerator.body.details).toEqual({ field: 'moderatorUserId' });
+    const past = new Date(Date.now() - 60 * MINUTE);
+    const started = await patch(admin, `/ops/webinars/${id}`, {
+      startsAt: past.toISOString(),
+      endsAt: new Date(past.getTime() + 120 * MINUTE).toISOString(),
+    });
+    expect(started.body.details).toEqual({ field: 'startsAt' });
+
+    // The organisation of a published occurrence is fixed (409 not_editable); a draft's may move.
+    expectCode(
+      await patch(admin, `/ops/webinars/${id}`, { audiencePolicy: { type: 'organization', orgIds: [ORG] } }),
+      409,
+      'not_editable',
+    );
+    const draft = await post(admin, '/ops/webinars', occurrence({ audiencePolicy: { type: 'all_eligible' } }));
+    const moved = await patch(admin, `/ops/webinars/${draft.body.id}`, { audiencePolicy: { type: 'organization', orgIds: [ORG] } });
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(moved.body.orgId).toBe(ORG);
+  });
+
+  it('a presenter acting on an occurrence she does not host is refused (CW-R-31a)', async () => {
+    const other = await post(nikola, '/ops/webinars', occurrence({ presenterUserIds: [] }));
+    const id = other.body.id as string;
+    expectNotFound(await post(milica, `/webinars/${id}/start`));
+    expectNotFound(await post(milica, `/webinars/${id}/end`));
+    expectNotFound(await post(milica, `/webinars/${id}/join`));
+    expectNotFound(await post(milica, `/webinars/${id}/messages`, { kind: 'host', text: 'Hello' }));
+    expectNotFound(await get(milica, `/webinars/${id}/messages`));
+    expectNotFound(await post(milica, `/webinars/${id}/participants/part_x/give-floor`));
+    expectNotFound(await post(milica, `/webinars/${id}/polls`, { question: 'Which?', options: ['A', 'B'] }));
+    expectNotFound(await get(milica, `/webinars/${id}/polls`));
+  });
+
   it('registers within capacity, refuses a duplicate with already_registered and a full webinar with webinar_full', async () => {
     const first = await post(jovan, `/webinars/${liveId}/register`);
     expect(first.status, JSON.stringify(first.body)).toBe(200);
@@ -469,6 +565,9 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     // A canceled occurrence refuses registration with webinar_not_open (WBN-32).
     expect((await post(nikola, `/ops/webinars/${id}/cancel`)).body).toEqual({ webinarId: id, status: 'canceled' });
     expectCode(await post(ana, `/webinars/${id}/register`), 409, 'webinar_not_open');
+    // The presenter's CASE assignment on a canceled occurrence ends.
+    const caseRows = await testDb.db.select().from(assignments).where(and(eq(assignments.targetId, id), eq(assignments.kind, 'CASE')));
+    expect(caseRows.map((row) => row.endAt)).toEqual([expect.any(Date)]);
   });
 
   // ── Start (WBN-17, CW-R-31a) ──────────────────────────────────────────────
@@ -500,6 +599,10 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(webinar).toMatchObject({ status: 'live', recordingStatus: 'scheduled' });
   });
 
+  it('a live occurrence is no longer editable (409 not_editable)', async () => {
+    expectCode(await patch(nikola, `/ops/webinars/${liveId}`, { title: { en: 'Renamed' } }), 409, 'not_editable');
+  });
+
   it('registration after the start returns 409 registration_closed (WBN-03)', async () => {
     expectCode(await post(ivana, `/webinars/${liveId}/register`), 409, 'registration_closed');
     expectCode(await del(ana, `/webinars/${liveId}/register`), 409, 'registration_closed');
@@ -510,7 +613,10 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
   it('attendees wait until a host opened the meeting; hosts join with send capabilities', async () => {
     expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
 
+    const createSession = vi.spyOn(video, 'createSession');
     const res = await post(milica, `/webinars/${liveId}/join`);
+    // One seat more than the capacity of 2, for the media capture pipeline (SPIKE-CW-03).
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ format: 'webinar', capacity: 3 }));
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
     presenterJoin = WebinarJoinResponseSchema.parse(res.body);
@@ -532,7 +638,7 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expectCode(await post(nikola, `/webinars/${liveId}/recording/stop`), 409, 'recording_not_allowed');
   });
 
-  it('the start job captures the presenter only, under recordings/{webinarId}/raw/, and shows the REC indicator', async () => {
+  it('the start job captures the presenter only, under raw/{webinarId}/, and shows the REC indicator', async () => {
     const startRecording = vi.spyOn(video, 'startRecording');
     const result = await app
       .get(WebinarJobsService)
@@ -544,7 +650,7 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       sessionId: presenterJoin.sessionId,
       providerMeetingId: presenterJoin.meeting.MeetingId,
       presenterAttendeeIds: [presenterJoin.attendee.AttendeeId],
-      s3Prefix: `recordings/${liveId}/raw/`,
+      s3Prefix: `raw/${liveId}/`,
     });
     const [row] = await testDb.db.select().from(webinarRecordings).where(eq(webinarRecordings.webinarId, liveId));
     expect(row).toMatchObject({
@@ -552,7 +658,7 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       orgId: ORG,
       status: 'RECORDING',
       providerPipelineId: `fake-pipeline-${presenterJoin.sessionId}`,
-      rawSegmentsPrefix: `recordings/${liveId}/raw/`,
+      rawSegmentsPrefix: `raw/${liveId}/`,
       handoffStatus: 'pending',
     });
     expect(emitted('webinar.recording')).toEqual([
@@ -581,6 +687,8 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       capabilities: { audio: 'receive', video: 'receive', content: 'receive' },
     });
     expect(attendeeJoin.attendee.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+    // The REC indicator's state at join: the session's pipeline is running.
+    expect(attendeeJoin.recordingStatus).toBe('recording');
     expect(attendeeJoin.attendee.ExternalUserId).toBe(attendeeJoin.participantId);
     expect(attendeeJoin.attendee.ExternalUserId).not.toBe('user_jovan');
     expect(emitted('webinar.attendance.count')).toContainEqual([
@@ -591,6 +699,13 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     // A rejoin returns the cached credentials.
     const again = WebinarJoinResponseSchema.parse((await post(jovan, `/webinars/${liveId}/join`)).body);
     expect(again.attendee.AttendeeId).toBe(attendeeJoin.attendee.AttendeeId);
+  });
+
+  it('an eligible employee who is not registered cannot join or read the chat (WBN-07)', async () => {
+    // Ivana is in the audience and holds event.register, but the webinar was full when she tried.
+    expectCode(await post(ivana, `/webinars/${liveId}/join`), 403, 'forbidden');
+    expectCode(await get(ivana, `/webinars/${liveId}/messages`), 403, 'forbidden');
+    expectCode(await get(ivana, `/webinars/${liveId}/polls`), 403, 'forbidden');
   });
 
   it('an attendee cannot list the roster: no roster route, no names in the detail, 404 on attendance (WBN-08)', async () => {
@@ -829,7 +944,28 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expectCode(await post(jovan, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: tea!.id }), 409, 'conflict');
     expect((await post(ana, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: tea!.id, userId: 'x' })).status).toBe(400);
 
+    // A late joiner recovers the poll: opened, voted, no results before the close.
+    const open = WebinarPollListResponseSchema.parse((await get(jovan, `/webinars/${liveId}/polls`)).body);
+    expect(open.items).toEqual([{ poll: expect.objectContaining({ id: pollId }), results: null, voted: true }]);
+    expectNotFound(await get(jovan, `/webinars/${liveId}/polls/${pollId}/results`));
+    expectCode(await get(nikola, `/webinars/${liveId}/polls/${pollId}/results`), 409, 'conflict');
+
+    // While the poll is open, the vote row and the voter's marker were written by one transaction (CW-R-24).
+    const xmin = async () => {
+      const { rows } = await testDb.pool.query<{ vote: string; voter: string }>(
+        `SELECT (SELECT xmin::text FROM webinar_poll_results WHERE poll_id = $1) AS vote,
+                (SELECT xmin::text FROM webinar_registrations WHERE webinar_id = $2 AND user_id = 'user_jovan') AS voter`,
+        [pollId, liveId],
+      );
+      return rows[0]!;
+    };
+    const before = await xmin();
+    expect(before.voter).toBe(before.vote);
+
     const closed = await post(nikola, `/webinars/${liveId}/polls/${pollId}/close`);
+    // The close rewrote the voter's row: the transaction ids no longer match.
+    const after = await xmin();
+    expect(after.voter).not.toBe(after.vote);
     const results = WebinarPollResultsSchema.parse(closed.body);
     expect(results).toEqual({
       pollId,
@@ -840,6 +976,9 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       ],
     });
     expect(emitted('webinar.poll.results').at(-1)![2]).toEqual(results);
+    expect((await get(milica, `/webinars/${liveId}/polls/${pollId}/results`)).body).toEqual(results);
+    const recovered = WebinarPollListResponseSchema.parse((await get(jovan, `/webinars/${liveId}/polls`)).body);
+    expect(recovered.items[0]).toMatchObject({ results, voted: true });
 
     const votes = await testDb.db.select().from(webinarPollResults).where(eq(webinarPollResults.pollId, pollId));
     expect(votes.map((v) => Object.keys(v).sort())).toEqual([['id', 'optionId', 'orgId', 'pollId']]);
@@ -920,10 +1059,17 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(await video.describeSession({ providerMeetingId: presenterJoin.meeting.MeetingId })).toBeNull();
 
     expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
-    expect((await post(milica, `/webinars/${liveId}/end`)).body).toEqual({ webinarId: liveId, status: 'ended' });
+    // The presenter's CASE assignment ends with the occurrence (her right to act on it goes with it).
+    const caseRows = await testDb.db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.targetId, liveId), eq(assignments.userId, 'user_milica')));
+    expect(caseRows.map((row) => row.endAt)).toEqual([expect.any(Date)]);
+    expect((await post(nikola, `/webinars/${liveId}/end`)).body).toEqual({ webinarId: liveId, status: 'ended' });
+    expectNotFound(await post(milica, `/webinars/${liveId}/end`));
   });
 
-  it('the finalize job stops the capture, concatenates into recordings/{webinarId}/final/ and hands off as pending (WBN-34)', async () => {
+  it('the finalize job stops the capture, concatenates into final/{webinarId}/ and hands off as pending (WBN-34)', async () => {
     const result = await app
       .get(WebinarJobsService)
       .handle('webinar.recording.finalize', { webinarId: liveId, sessionId: presenterJoin.sessionId }, RECORDING_JOB_CONTEXT());
@@ -934,9 +1080,9 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(row).toMatchObject({
       status: 'READY',
       concatenationPipelineId: `fake-concat-${presenterJoin.sessionId}-1`,
-      concatenatedKey: `recordings/${liveId}/final/composited-video/`,
+      concatenatedKey: `final/${liveId}/composited-video/`,
       handoffStatus: 'pending',
-      handoffLocation: `s3://fake-recordings/recordings/${liveId}/final/composited-video/`,
+      handoffLocation: `s3://fake-recordings/final/${liveId}/composited-video/`,
       readyAt: expect.any(Date),
     });
     expect((auditRecord.mock.calls as [AuditEventInput][]).map(([event]) => event.action)).toEqual([
@@ -975,8 +1121,9 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(auditRecord).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'webinar.recording.stopped', actorKind: 'SYSTEM', details: expect.objectContaining({ reason: 'ended' }) }),
     );
-    // A host's end afterwards is a no-op.
-    expect((await post(milica, `/webinars/${id}/end`)).body).toEqual({ webinarId: id, status: 'ended' });
+    // A host's end afterwards is a no-op; the presenter's CASE assignment ended with the occurrence.
+    expect((await post(nikola, `/webinars/${id}/end`)).body).toEqual({ webinarId: id, status: 'ended' });
+    expectNotFound(await post(milica, `/webinars/${id}/end`));
   });
 
   it('an end before the recording started records it as failed, with no recording to stop', async () => {

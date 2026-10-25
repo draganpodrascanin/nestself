@@ -55,7 +55,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(13);
+    expect(Number(rows[0]!.n)).toBe(14);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -488,6 +488,17 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(leak).toBeInstanceOf(Error);
       const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
       expect(cause.message).toMatch(/row-level security policy/);
+
+      // A registration always carries the registrant's organisation (migration 0013): no platform-wide registration.
+      await expect(
+        owner.db
+          .insert(webinarRegistrations)
+          .values({ webinarId: 'rls_webinar_all', orgId: null as unknown as string, userId: 'rls_user', registeredAt: base.startsAt }),
+      ).rejects.toThrow();
+      const { rows: policies } = await owner.pool.query<{ qual: string }>(
+        `SELECT qual FROM pg_policies WHERE tablename = 'webinar_registrations'`,
+      );
+      expect(policies.map((p) => p.qual).join(' ')).not.toMatch(/IS NULL/);
 
       // One registration per person and occurrence (CW-R-24a); capacity within 1 to 1,000; host posts are published.
       await expect(

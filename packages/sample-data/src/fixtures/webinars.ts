@@ -107,8 +107,20 @@ const ENDED_SESSION_ID = 'call_session_sample_webinar';
 const PRESENTER_PARTICIPANT_ID = 'call_participant_sample_presenter';
 const MODERATOR_PARTICIPANT_ID = 'call_participant_sample_moderator';
 
-const HOSTS: readonly SampleWebinarHost[] = [
-  { userId: 'user_milica', role: 'presenter', displayName: 'Milica' },
+const PRESENTER: SampleWebinarHost = { userId: 'user_milica', role: 'presenter', displayName: 'Milica' };
+
+/**
+ * The org-less occurrence needs a moderator whose `event.moderate` reaches
+ * every organisation (a platform-scoped grant): the platform administrator.
+ * Nikola (`client_operations`) reaches only the sample organisation, so he
+ * moderates its own occurrence, as in its session (`appointments.ts`).
+ */
+const UPCOMING_HOSTS: readonly SampleWebinarHost[] = [
+  PRESENTER,
+  { userId: 'user_admin', role: 'moderator', displayName: 'Platform' },
+];
+const ENDED_HOSTS: readonly SampleWebinarHost[] = [
+  PRESENTER,
   { userId: 'user_nikola', role: 'moderator', displayName: 'Nikola' },
 ];
 
@@ -140,7 +152,7 @@ export const SAMPLE_WEBINARS: readonly SampleWebinar[] = [
     status: 'published',
     chatPolicy: 'moderated',
     createdByUserId: 'user_nikola',
-    hosts: HOSTS,
+    hosts: UPCOMING_HOSTS,
     sample: true,
   },
   {
@@ -168,7 +180,7 @@ export const SAMPLE_WEBINARS: readonly SampleWebinar[] = [
     status: 'ended',
     chatPolicy: 'moderated',
     createdByUserId: 'user_nikola',
-    hosts: HOSTS,
+    hosts: ENDED_HOSTS,
     sample: true,
   },
 ];

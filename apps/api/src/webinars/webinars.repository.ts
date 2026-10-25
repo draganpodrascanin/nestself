@@ -15,6 +15,7 @@
  */
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { WEBINAR_STATUSES, canTransitionWebinar } from '@nestself/contracts';
 import type {
   RecordingStatus,
   WebinarAudiencePolicy,
@@ -30,6 +31,7 @@ import {
   assignments,
   callParticipants,
   callSessions,
+  grants,
   memberships,
   organizations,
   orgUnitClosure,
@@ -99,7 +101,8 @@ export interface WebinarHostRecord {
 export interface WebinarRegistrationRecord {
   id: string;
   webinarId: string;
-  orgId: string | null;
+  /** The registrant's organisation; never null (migration 0013). */
+  orgId: string;
   userId: string;
   registeredAt: Date;
   canceledAt: Date | null;
@@ -194,6 +197,8 @@ export interface WebinarListFilter {
   orgIds?: readonly string[] | null;
   /** The person's memberships: only occurrences whose audience includes them (the employee list). */
   audience?: readonly MembershipFact[];
+  /** Only occurrences where this person is a host (`GET /ops/webinars?mine=true`). */
+  hostUserId?: string;
   after?: PageKey;
   limit: number;
 }
@@ -344,14 +349,20 @@ export class WebinarsRepository {
     return row ? toWebinarRecord(row) : null;
   }
 
-  /** Moves the occurrence to `to` when its status is one of `from`; null when another request moved it first. */
+  /**
+   * Moves the occurrence to `to` from any status the lifecycle allows
+   * (`WEBINAR_STATUS_TRANSITIONS`, `canTransitionWebinar`); null when the
+   * occurrence is in none of them, for example because another request moved
+   * it first.
+   */
   async transitionStatus(
     id: string,
-    from: readonly WebinarStatus[],
     to: WebinarStatus,
     fields: Partial<Pick<WebinarRow, 'startedAt' | 'endedAt'>> = {},
     tx?: DbExecutor,
   ): Promise<WebinarRecord | null> {
+    const from = WEBINAR_STATUSES.filter((status) => canTransitionWebinar(status, to));
+    if (from.length === 0) return null;
     const [row] = await this.exec(tx)
       .update(webinars)
       .set({ ...fields, status: toDbWebinarStatus(to) })
@@ -373,6 +384,17 @@ export class WebinarsRepository {
       conditions.push(inArray(webinars.orgId, [...filter.orgIds]));
     }
     if (filter.audience) conditions.push(audienceClause(filter.audience));
+    if (filter.hostUserId) {
+      conditions.push(
+        inArray(
+          webinars.id,
+          this.exec(tx)
+            .select({ webinarId: webinarHosts.webinarId })
+            .from(webinarHosts)
+            .where(eq(webinarHosts.userId, filter.hostUserId)),
+        ),
+      );
+    }
     if (filter.after) {
       const { at, id } = filter.after;
       conditions.push(or(gt(webinars.startsAt, at), and(eq(webinars.startsAt, at), gt(webinars.id, id)))!);
@@ -499,6 +521,65 @@ export class WebinarsRepository {
           isNull(assignments.endAt),
         ),
       );
+  }
+
+  /**
+   * Ends every presenter's CASE assignment on the occurrence (cancel and end):
+   * the occurrence is over, so `event.present` no longer reaches it. The user
+   * ids whose assignment ended.
+   */
+  async endPresenterAssignments(webinarId: string, tx?: DbExecutor): Promise<string[]> {
+    const rows = await this.exec(tx)
+      .update(assignments)
+      .set({ endAt: new Date() })
+      .where(
+        and(
+          eq(assignments.kind, 'CASE'),
+          eq(assignments.targetId, webinarId),
+          eq(assignments.reason, PRESENTER_ASSIGNMENT_REASON),
+          isNull(assignments.endAt),
+        ),
+      )
+      .returning({ userId: assignments.userId });
+    return rows.map((row) => row.userId);
+  }
+
+  /**
+   * NestSelf experts and staff with a current grant that lists `action`
+   * (`event.present` or `event.moderate`), by name: the host candidates of the
+   * occurrence form. Read in the system context; at most `limit`.
+   */
+  async hostCandidates(action: string, q: string | undefined, now: Date, limit: number): Promise<{ userId: string; displayName: string }[]> {
+    const conditions: SQL[] = [
+      sql`${grants.actions} @> ARRAY[${action}]::text[]`,
+      isNull(grants.revokedAt),
+      sql`${grants.validFrom} <= ${now}`,
+      or(isNull(grants.validUntil), gt(grants.validUntil, now))!,
+      isNull(users.deactivatedAt),
+      isNull(users.suspendedAt),
+    ];
+    if (q) conditions.push(sql`${users.displayName} ILIKE ${`%${q.replace(/[\\%_]/g, '\\$&')}%`}`);
+    return this.dbs.db
+      .selectDistinct({ userId: users.id, displayName: users.displayName })
+      .from(grants)
+      .innerJoin(users, eq(users.id, grants.subjectUserId))
+      .where(and(...conditions))
+      .orderBy(asc(users.displayName), asc(users.id))
+      .limit(limit);
+  }
+
+  /** Active organisations by name, all of them or those in `orgIds`; at most `limit`. */
+  async organisations(orgIds: readonly string[] | null, q: string | undefined, limit: number): Promise<{ id: string; name: string }[]> {
+    if (orgIds && orgIds.length === 0) return [];
+    const conditions: SQL[] = [eq(organizations.status, 'ACTIVE')];
+    if (orgIds) conditions.push(inArray(organizations.id, [...orgIds]));
+    if (q) conditions.push(sql`${organizations.name} ILIKE ${`%${q.replace(/[\\%_]/g, '\\$&')}%`}`);
+    return this.dbs.db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(and(...conditions))
+      .orderBy(asc(organizations.name), asc(organizations.id))
+      .limit(limit);
   }
 
   // ── People ────────────────────────────────────────────────────────────────
@@ -637,7 +718,7 @@ export class WebinarsRepository {
 
   /** A new registration, or the person's canceled one made active again (one row per person, CW-R-24a). */
   async register(
-    input: { webinarId: string; orgId: string | null; userId: string; registeredAt: Date },
+    input: { webinarId: string; orgId: string; userId: string; registeredAt: Date },
     tx: DbExecutor,
   ): Promise<WebinarRegistrationRecord> {
     const [row] = await tx
@@ -720,6 +801,32 @@ export class WebinarsRepository {
       )
       .returning({ id: webinarRegistrations.id });
     return rows.length === 1;
+  }
+
+  /**
+   * Rewrites the rows of every registration that voted in the poll, in the
+   * caller's transaction (the poll's close). A vote and its registration
+   * marker are written in one transaction, so until the close the two rows
+   * share a transaction id (`xmin`) that a database administrator could
+   * match; rewriting every voter's row at once gives them the close's
+   * transaction id and breaks that link. The open-poll window is the only
+   * time the link exists (CW-R-24). `updated_at` is kept.
+   */
+  async rewriteVoters(webinarId: string, pollId: string, tx: DbExecutor): Promise<number> {
+    const rows = await tx
+      .update(webinarRegistrations)
+      .set({
+        votedPollIds: sql`${webinarRegistrations.votedPollIds}`,
+        updatedAt: sql`${webinarRegistrations.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(webinarRegistrations.webinarId, webinarId),
+          sql`${pollId}::text = ANY(${webinarRegistrations.votedPollIds})`,
+        ),
+      )
+      .returning({ id: webinarRegistrations.id });
+    return rows.length;
   }
 
   // ── Sessions (call_sessions with format WEBINAR) ──────────────────────────
@@ -917,6 +1024,35 @@ export class WebinarsRepository {
       closedAt: poll.closedAt,
       options: options.map((option) => ({ id: option.id, label: option.label, position: option.position })),
     };
+  }
+
+  /** The occurrence's polls with their options, oldest first; `openedOnly` leaves out the ones never opened. */
+  async listPolls(webinarId: string, openedOnly: boolean, tx?: DbExecutor): Promise<WebinarPollRecord[]> {
+    const conditions: SQL[] = [eq(webinarPolls.webinarId, webinarId)];
+    if (openedOnly) conditions.push(isNotNull(webinarPolls.openedAt));
+    const polls = await this.exec(tx)
+      .select()
+      .from(webinarPolls)
+      .where(and(...conditions))
+      .orderBy(asc(webinarPolls.createdAt), asc(webinarPolls.id));
+    if (polls.length === 0) return [];
+    const options = await this.exec(tx)
+      .select()
+      .from(webinarPollOptions)
+      .where(inArray(webinarPollOptions.pollId, polls.map((poll) => poll.id)))
+      .orderBy(asc(webinarPollOptions.position));
+    return polls.map((poll) => ({
+      id: poll.id,
+      webinarId: poll.webinarId,
+      orgId: poll.orgId,
+      sessionId: poll.sessionId,
+      question: poll.question,
+      openedAt: poll.openedAt,
+      closedAt: poll.closedAt,
+      options: options
+        .filter((option) => option.pollId === poll.id)
+        .map((option) => ({ id: option.id, label: option.label, position: option.position })),
+    }));
   }
 
   /** Opens a poll that was never opened; false otherwise. */

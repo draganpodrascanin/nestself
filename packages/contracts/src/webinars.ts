@@ -341,10 +341,28 @@ export type WebinarListResponse = z.infer<typeof WebinarListResponseSchema>;
  * `GET /ops/webinars`: the admin index of the occurrences the caller may
  * manage or moderate (T-CW-2.1, an addition to the decision record's route
  * list). Same filters and paging as `GET /webinars`, every status; `orgId`
- * narrows to one organisation's occurrences.
+ * narrows to one organisation's occurrences. `mine=true` lists the
+ * occurrences where the caller is a host instead (the presenter's and the
+ * moderator's own list, from the expert context too).
  */
-export const WebinarOpsListQuerySchema = WebinarListQuerySchema;
-export type WebinarOpsListQuery = WebinarListQuery;
+export const WebinarOpsListQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(WEBINAR_LIST_MAX_LIMIT).default(WEBINAR_LIST_DEFAULT_LIMIT),
+    status: WebinarStatusSchema.optional(),
+    from: isoDateTime.optional(),
+    to: isoDateTime.optional(),
+    orgId: idField.optional(),
+    mine: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
+  })
+  .refine((q) => !q.from || !q.to || Date.parse(q.to) > Date.parse(q.from), {
+    path: ['to'],
+    message: 'to must be after from',
+  });
+export type WebinarOpsListQuery = z.infer<typeof WebinarOpsListQuerySchema>;
 
 export const WebinarOpsListResponseSchema = z.strictObject({
   items: z.array(WebinarSchema),
@@ -352,6 +370,46 @@ export const WebinarOpsListResponseSchema = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 export type WebinarOpsListResponse = z.infer<typeof WebinarOpsListResponseSchema>;
+
+/**
+ * `GET /ops/webinars/host-candidates?role=presenter|moderator&q=` (T-CW-2.1,
+ * the occurrence form, `event.manage`): NestSelf experts and staff who hold
+ * `event.present` (presenters) or `event.moderate` (moderators) in a current
+ * grant, filtered by name. Hosts are never client-organisation users, and an
+ * `all_eligible` occurrence has no organisation, so the list is not per
+ * organisation; the publish check decides per occurrence.
+ */
+export const WebinarHostCandidatesQuerySchema = z.object({
+  role: WebinarHostRoleSchema,
+  q: z.string().trim().max(100).optional(),
+});
+export type WebinarHostCandidatesQuery = z.infer<typeof WebinarHostCandidatesQuerySchema>;
+
+export const WebinarHostCandidateSchema = z.strictObject({
+  userId: idField,
+  displayName: z.string().min(1),
+});
+export type WebinarHostCandidate = z.infer<typeof WebinarHostCandidateSchema>;
+
+export const WebinarHostCandidatesResponseSchema = z.strictObject({
+  items: z.array(WebinarHostCandidateSchema),
+});
+export type WebinarHostCandidatesResponse = z.infer<typeof WebinarHostCandidatesResponseSchema>;
+
+/**
+ * `GET /ops/orgs?q=` (T-CW-2.1, the audience picker, `event.manage`): the
+ * active client organisations whose occurrences the caller may manage, by
+ * name.
+ */
+export const OpsOrganizationsQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+});
+export type OpsOrganizationsQuery = z.infer<typeof OpsOrganizationsQuerySchema>;
+
+export const OpsOrganizationsResponseSchema = z.strictObject({
+  items: z.array(z.strictObject({ id: idField, name: z.string().min(1) })),
+});
+export type OpsOrganizationsResponse = z.infer<typeof OpsOrganizationsResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Registration (`POST` and `DELETE /webinars/:id/register`, WBN-02, WBN-03)
@@ -692,6 +750,25 @@ export const WebinarPollResultsSchema = z
     message: 'One result per option',
   });
 export type WebinarPollResults = z.infer<typeof WebinarPollResultsSchema>;
+
+/**
+ * `GET /webinars/:id/polls` (T-CW-2.1): the polls a late joiner or a
+ * reloaded console needs. Registrants and presenters get the opened polls,
+ * moderating principals every poll; `results` only once a poll is closed
+ * (aggregate counts, D-CW-16). `voted` tells a registrant that they already
+ * voted, never what (CW-R-24); it is false for hosts.
+ */
+export const WebinarPollStateSchema = z.strictObject({
+  poll: WebinarPollSchema,
+  results: WebinarPollResultsSchema.nullable(),
+  voted: z.boolean(),
+});
+export type WebinarPollState = z.infer<typeof WebinarPollStateSchema>;
+
+export const WebinarPollListResponseSchema = z.strictObject({
+  items: z.array(WebinarPollStateSchema),
+});
+export type WebinarPollListResponse = z.infer<typeof WebinarPollListResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Attendance (`GET /ops/webinars/:id/attendance`, WBN-33, D-CW-17, D-CW-30)

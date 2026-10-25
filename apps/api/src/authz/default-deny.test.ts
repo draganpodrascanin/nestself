@@ -253,6 +253,9 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       openPoll: 'event.moderate',
       closePoll: 'event.moderate',
       vote: 'event.register',
+      // Poll state for registrants and hosts, results for hosts after the close: decided in the service.
+      listPolls: 'authenticated',
+      pollResults: 'authenticated',
       // The moderator's early stop (T-CW-2.5); the status for hosts and operations, decided in the service.
       stopRecording: 'event.moderate',
       recordingStatus: 'authenticated',
@@ -261,6 +264,10 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     expect(policiesOf('WebinarsOpsController')).toEqual({
       // The admin index (an addition to the canonical routes): manage or moderate, in the service.
       list: 'authenticated',
+      // The occurrence form's lookups and the detail: event.manage (or event.moderate for the detail), in the service.
+      hostCandidates: 'authenticated',
+      get: 'authenticated',
+      organisations: 'authenticated',
       create: 'event.manage',
       update: 'event.manage',
       publish: 'event.manage',

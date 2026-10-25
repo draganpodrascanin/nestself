@@ -133,6 +133,8 @@ export const CALL_ERROR_CODES = [
   'recording_not_allowed',
   'capacity_above_limit',
   'invalid_ticket',
+  // The occurrence form (T-CW-2.1): an edit the occurrence's status no longer allows.
+  'not_editable',
 ] as const;
 export type CallErrorCode = (typeof CALL_ERROR_CODES)[number];
 

@@ -92,6 +92,13 @@
       "when": 1792894985189,
       "tag": "0012_webinar_recording_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792897304583,
+      "tag": "0013_webinar_registrations_org",
+      "breakpoints": true
     }
   ]
 }

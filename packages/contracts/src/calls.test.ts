@@ -154,6 +154,7 @@ describe('CALL_ERROR_CODES (CW-R-27)', () => {
       'recording_not_allowed',
       'capacity_above_limit',
       'invalid_ticket',
+      'not_editable',
     ]);
   });
 

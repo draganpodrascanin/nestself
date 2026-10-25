@@ -7,18 +7,29 @@
  *   `WEBINAR_SINGLE_MEETING_CAPACITY` until M3: 400 `capacity_above_limit`),
  *   presenters and the moderator. No recording field: every webinar is
  *   recorded. A new occurrence is `draft`; editing is allowed while `draft`
- *   or `published`. The occurrence takes the organisation its audience names
- *   (CW-R-23); changing it needs `event.manage` on the new organisation too.
- *   Each presenter gets a CASE assignment on the occurrence, so the `expert`
- *   template's `event.present` reaches it; a removed presenter's assignment
- *   ends. A capacity below the active registrations is refused.
- * - Publish (WBN-31): at least one presenter and the moderator, a start in
- *   the future and an audience that names at least one active organisation.
- * - Cancel (WBN-32): from `draft` or `published`; every registrant's
- *   reminders are removed and the cancellation email goes out.
+ *   or `published` (409 `not_editable` after). The occurrence takes the
+ *   organisation its audience names (CW-R-23); an audience edit that changes
+ *   it is a draft-only edit (409 `not_editable`) and needs `event.manage` on
+ *   the new organisation too. An edit of a published occurrence re-runs the
+ *   publish checks. Each presenter gets a CASE assignment on the occurrence,
+ *   so the `expert` template's `event.present` reaches it; a removed
+ *   presenter's assignment ends. A capacity below the active registrations,
+ *   counted under the row lock, is refused.
+ * - Publish (WBN-31): at least one presenter and the moderator, whom the
+ *   engine lets present (`event.present`) and moderate (`event.moderate`)
+ *   this occurrence, a start in the future and an audience that names active
+ *   organisations; 400 `validation` naming the field otherwise.
+ * - Cancel (WBN-32): from `draft` or `published`; the presenters' CASE
+ *   assignments end, every registrant's reminders are removed and the
+ *   cancellation email goes out.
  * - List (`GET /ops/webinars`, an addition to the canonical route list for
  *   the admin index): the occurrences the caller may manage or moderate,
- *   every status, paged on `(startsAt, id)`.
+ *   every status, paged on `(startsAt, id)`; with `mine=true` the ones the
+ *   caller hosts, from any context (the presenter's list). Detail
+ *   (`GET /ops/webinars/:id`): `event.manage` or `event.moderate`.
+ * - The form's lookups (`event.manage`): `GET /ops/webinars/host-candidates`
+ *   (experts and staff whose grants list `event.present` or `event.moderate`)
+ *   and `GET /ops/orgs` (the organisations the caller may manage).
  * - Attendance (`GET /ops/webinars/:id/attendance`, WBN-33, D-CW-17,
  *   D-CW-30): `event.manage` or `event.moderate` on the occurrence in the
  *   operations context; anyone else, an employer-scoped principal included,
@@ -30,6 +41,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   ACTIONS,
   WEBINAR_LIST_DEFAULT_LIMIT,
+  type AssignmentInput,
+  type OpsOrganizationsQuery,
+  type OpsOrganizationsResponse,
+  type WebinarHostCandidatesQuery,
+  type WebinarHostCandidatesResponse,
   WEBINAR_STATUSES,
   type Principal,
   type Webinar,
@@ -47,14 +63,18 @@ import { firstNameOf } from '../appointments/appointment-mapper.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuthorizationService } from '../authz/authorization.service.js';
+import { authorize } from '../authz/authorize.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ContextLoader } from '../authz/context-loader.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { PrincipalLoader } from '../principal/principal-loader.js';
+import { assemblePrincipal } from '../principal/assemble-principal.js';
 import { assertCapacityWithinLimit } from '../video/video-provider.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { WebinarAccess, conflict, invalidField } from './webinar-access.js';
+import { WebinarAccess, conflict, invalidField, notEditable, notFound } from './webinar-access.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarMailer } from './webinar-mailer.js';
 import {
@@ -79,6 +99,8 @@ import {
 } from './webinars.repository.js';
 
 const MINUTE_MS = 60_000;
+/** Most rows of the form's lookups (host candidates, organisations). */
+const LOOKUP_LIMIT = 50;
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
@@ -112,36 +134,87 @@ export class WebinarOpsService {
     private readonly access: WebinarAccess,
     private readonly authz: AuthorizationService,
     private readonly principals: PrincipalLoader,
+    private readonly contextLoader: ContextLoader,
     private readonly audit: AuditWriter,
     private readonly scheduler: WebinarJobSchedulerService,
     private readonly mail: WebinarMailer,
     private readonly events: WebinarRoomEvents,
   ) {}
 
-  // ── List ──────────────────────────────────────────────────────────────────
+  // ── List, detail and the form's lookups ───────────────────────────────────
 
   async list(principal: Principal, query: WebinarOpsListQuery): Promise<WebinarOpsListResponse> {
-    assertOperationsSession(principal);
     const after = query.cursor ? decodePageCursor(query.cursor) : undefined;
     if (after === null) throw invalidField('cursor', 'The cursor is not valid');
     const limit = query.limit ?? WEBINAR_LIST_DEFAULT_LIMIT;
+    const filter = {
+      statuses: query.status ? [query.status] : WEBINAR_STATUSES,
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined,
+      after,
+      limit: limit + 1,
+    };
+    const keyOf = (webinar: WebinarRecord) => ({ at: webinar.startsAt, id: webinar.id });
 
+    if (query.mine) {
+      // The caller's own occurrences, from the expert context too: a host row the engine still backs.
+      const rows = await this.repo.list({ ...filter, hostUserId: principal.userId, orgIds: query.orgId ? [query.orgId] : null });
+      const page = paginate(rows, limit, keyOf);
+      const hosted: WebinarRecord[] = [];
+      for (const webinar of page.items) if (await this.access.host(webinar, principal)) hosted.push(webinar);
+      const hosts = await this.repo.listHostsFor(hosted.map((webinar) => webinar.id));
+      return { items: hosted.map((webinar) => toWebinar(webinar, hosts.get(webinar.id) ?? [])), nextCursor: page.nextCursor };
+    }
+
+    assertOperationsSession(principal);
     const scope = await this.access.organisationsFor(principal, [ACTIONS['event.manage'], ACTIONS['event.moderate']]);
     if (scope !== null && scope.length === 0) return this.access.deny(principal, ACTIONS['event.manage'], null);
     let orgIds: string[] | null = scope;
     if (query.orgId) orgIds = scope === null || scope.includes(query.orgId) ? [query.orgId] : [];
 
-    const rows = await this.repo.list({
-      statuses: query.status ? [query.status] : WEBINAR_STATUSES,
-      from: query.from ? new Date(query.from) : undefined,
-      to: query.to ? new Date(query.to) : undefined,
-      orgIds,
-      after,
-      limit: limit + 1,
-    });
-    const page = paginate(rows, limit, (webinar) => ({ at: webinar.startsAt, id: webinar.id }));
+    const rows = await this.repo.list({ ...filter, orgIds });
+    const page = paginate(rows, limit, keyOf);
     const hosts = await this.repo.listHostsFor(page.items.map((webinar) => webinar.id));
     return { items: page.items.map((webinar) => toWebinar(webinar, hosts.get(webinar.id) ?? [])), nextCursor: page.nextCursor };
+  }
+
+  /** `GET /ops/webinars/:id`: `event.manage` or `event.moderate` on the occurrence, in the operations context. */
+  async get(webinarId: string, principal: Principal): Promise<Webinar> {
+    assertOperationsSession(principal);
+    const webinar = await this.access.load(webinarId);
+    await this.assertManagesOrModerates(webinar, principal);
+    const hosts = await this.access.scoped(webinar.orgId, (tx) => this.repo.listHosts(webinarId, tx));
+    return toWebinar(webinar, hosts);
+  }
+
+  /** `GET /ops/webinars/host-candidates`: experts and staff whose grants list the role's action (`event.manage`). */
+  async hostCandidates(principal: Principal, query: WebinarHostCandidatesQuery): Promise<WebinarHostCandidatesResponse> {
+    await this.assertManagesSomewhere(principal);
+    const action = query.role === 'presenter' ? ACTIONS['event.present'] : ACTIONS['event.moderate'];
+    const items = await this.repo.hostCandidates(action, query.q || undefined, new Date(), LOOKUP_LIMIT);
+    return { items };
+  }
+
+  /** `GET /ops/orgs`: the active organisations whose occurrences the caller may manage (the audience picker). */
+  async organisations(principal: Principal, query: OpsOrganizationsQuery): Promise<OpsOrganizationsResponse> {
+    const scope = await this.assertManagesSomewhere(principal);
+    return { items: await this.repo.organisations(scope, query.q || undefined, LOOKUP_LIMIT) };
+  }
+
+  /** The organisations the caller may manage occurrences of (null: every one); 404 when none, in the operations context. */
+  private async assertManagesSomewhere(principal: Principal): Promise<string[] | null> {
+    assertOperationsSession(principal);
+    const scope = await this.access.organisationsFor(principal, [ACTIONS['event.manage']]);
+    if (scope !== null && scope.length === 0) return this.access.deny(principal, ACTIONS['event.manage'], null);
+    return scope;
+  }
+
+  private async assertManagesOrModerates(webinar: WebinarRecord, principal: Principal): Promise<void> {
+    const resource = webinarStaffResourceOf(webinar);
+    const allowed =
+      (await this.access.allows(principal, ACTIONS['event.manage'], resource)) ||
+      (await this.access.allows(principal, ACTIONS['event.moderate'], resource));
+    if (!allowed) await this.access.deny(principal, ACTIONS['event.manage'], webinar);
   }
 
   // ── Create and edit (WBN-30) ──────────────────────────────────────────────
@@ -178,10 +251,18 @@ export class WebinarOpsService {
     return toWebinar(webinar, saved);
   }
 
+  /**
+   * WBN-30: while `draft` or `published` (409 `not_editable` otherwise). An
+   * audience change that moves the occurrence to another organisation is a
+   * draft-only edit: once published, registrations were taken under the old
+   * audience. A published occurrence must still pass the publish checks
+   * afterwards (hosts, their rights, a start in the future, the audience), and
+   * its capacity is compared with the registrations under the row lock.
+   */
   async update(webinarId: string, body: WebinarUpdateRequest, principal: Principal): Promise<Webinar> {
     const current = await this.access.load(webinarId);
     if (current.status !== 'draft' && current.status !== 'published') {
-      throw conflict('not_editable', 'Only a draft or published webinar can be edited');
+      throw notEditable('Only a draft or published webinar can be edited');
     }
     if (body.capacity !== undefined) assertCapacityWithinLimit('webinar', body.capacity);
 
@@ -191,43 +272,61 @@ export class WebinarOpsService {
     if (body.timeZone !== undefined) patch.timeZone = body.timeZone;
     if (body.startsAt !== undefined) patch.startsAt = new Date(body.startsAt);
     if (body.endsAt !== undefined) patch.endsAt = new Date(body.endsAt);
+    if (body.capacity !== undefined) patch.capacity = body.capacity;
     if ((patch.endsAt ?? current.endsAt).getTime() <= (patch.startsAt ?? current.startsAt).getTime()) {
       throw invalidField('endsAt', 'endsAt must be after startsAt');
     }
     if (body.audiencePolicy !== undefined) {
       await this.assertAudience(body.audiencePolicy);
       patch.audiencePolicy = body.audiencePolicy;
-      patch.orgId = occurrenceOrgId(body.audiencePolicy);
-      if (patch.orgId !== current.orgId) {
+      const orgId = occurrenceOrgId(body.audiencePolicy);
+      if (orgId !== current.orgId) {
+        if (current.status !== 'draft') {
+          throw notEditable('The organisation of an occurrence can change only while it is a draft');
+        }
         // The guard checked the occurrence where it is; moving it needs the right where it goes.
         await this.authz.require(
           principal,
           ACTIONS['event.manage'],
-          patch.orgId ? { type: WEBINAR_RESOURCE_TYPE, orgId: patch.orgId } : { type: WEBINAR_RESOURCE_TYPE },
+          orgId ? { type: WEBINAR_RESOURCE_TYPE, orgId } : { type: WEBINAR_RESOURCE_TYPE },
         );
+        patch.orgId = orgId;
       }
-    }
-    if (body.capacity !== undefined) {
-      const registered = await this.access.scoped(current.orgId, (tx) => this.repo.countActiveRegistrations(webinarId, tx));
-      if (body.capacity < registered) {
-        throw conflict('capacity_below_registrations', 'The capacity cannot be below the number of registrations');
-      }
-      patch.capacity = body.capacity;
     }
 
+    const before = await this.access.scoped(current.orgId, (tx) => this.repo.listHosts(webinarId, tx));
     let hosts: NewWebinarHost[] | null = null;
     if (body.presenterUserIds !== undefined || body.moderatorUserId !== undefined) {
-      const before = await this.repo.listHosts(webinarId);
       const presenters = body.presenterUserIds ?? before.filter((h) => h.role === 'presenter').map((h) => h.userId);
       const moderator =
         body.moderatorUserId !== undefined ? body.moderatorUserId : (before.find((h) => h.role === 'moderator')?.userId ?? null);
       hosts = await this.hostsFor(presenters, moderator);
     }
+    if (current.status === 'published') {
+      // WBN-31: what was checked at publication must still hold after the edit.
+      await this.assertPublishable(
+        { ...current, ...patch },
+        hosts ?? before.map((h) => ({ userId: h.userId, role: h.role, displayName: h.displayName })),
+      );
+    }
 
-    const orgChanged = patch.orgId !== undefined && patch.orgId !== current.orgId;
+    const orgChanged = patch.orgId !== undefined;
     // A move between organisations runs in the system context: the row leaves the old tenant's scope.
     const { webinar, saved, changed } = await this.access.transaction(orgChanged ? null : current.orgId, async (tx) => {
-      const updated = (await this.repo.update(webinarId, patch, tx)) ?? current;
+      const locked = await this.repo.lockById(webinarId, tx);
+      if (!locked) throw notFound();
+      if (locked.status !== 'draft' && locked.status !== 'published') {
+        throw notEditable('Only a draft or published webinar can be edited');
+      }
+      if (orgChanged && locked.status !== 'draft') {
+        throw notEditable('The organisation of an occurrence can change only while it is a draft');
+      }
+      // Registrations count under the lock, as at registration (CW-R-31).
+      if (patch.capacity !== undefined && patch.capacity < (await this.repo.countActiveRegistrations(webinarId, tx))) {
+        throw conflict('capacity_below_registrations', 'The capacity cannot be below the number of registrations');
+      }
+      // A host-only edit changes no column of the occurrence itself.
+      const updated = Object.keys(patch).length > 0 ? ((await this.repo.update(webinarId, patch, tx)) ?? locked) : locked;
       if (orgChanged) await this.repo.setHostsOrg(webinarId, updated.orgId, tx);
       let presenters = { removedPresenters: [] as string[], addedPresenters: [] as string[] };
       if (hosts) {
@@ -251,17 +350,10 @@ export class WebinarOpsService {
     if (webinar.status === 'published') return { webinarId, status: 'published' };
     if (webinar.status !== 'draft') throw conflict('not_publishable', 'Only a draft webinar can be published');
 
-    const hosts = await this.repo.listHosts(webinarId);
-    if (!hosts.some((host) => host.role === 'presenter')) {
-      throw invalidField('presenterUserIds', 'Publishing needs at least one presenter');
-    }
-    if (!hosts.some((host) => host.role === 'moderator')) throw invalidField('moderatorUserId', 'Publishing needs a moderator');
-    if (webinar.startsAt.getTime() <= Date.now()) throw invalidField('startsAt', 'The webinar must start in the future');
-    await this.assertAudience(webinar.audiencePolicy);
+    const hosts = await this.access.scoped(webinar.orgId, (tx) => this.repo.listHosts(webinarId, tx));
+    await this.assertPublishable(webinar, hosts);
 
-    const published = await this.access.scoped(webinar.orgId, (tx) =>
-      this.repo.transitionStatus(webinarId, ['draft'], 'published', {}, tx),
-    );
+    const published = await this.access.scoped(webinar.orgId, (tx) => this.repo.transitionStatus(webinarId, 'published', {}, tx));
     if (!published) throw conflict('not_publishable', 'Only a draft webinar can be published');
     await this.record(principal.userId, webinar, 'webinar.published', { webinarId });
     this.events.toAudience(webinarId, 'webinar.state', { webinarId, status: 'published' });
@@ -271,12 +363,13 @@ export class WebinarOpsService {
   async cancel(webinarId: string, principal: Principal): Promise<WebinarStatusResponse> {
     const webinar = await this.access.load(webinarId);
     if (webinar.status === 'canceled') return { webinarId, status: 'canceled' };
-    const canceled = await this.access.scoped(webinar.orgId, (tx) =>
-      this.repo.transitionStatus(webinarId, ['draft', 'published'], 'canceled', {}, tx),
-    );
     // A live webinar is ended, not canceled (WEBINAR_STATUS_TRANSITIONS).
+    const canceled = await this.access.scoped(webinar.orgId, (tx) => this.repo.transitionStatus(webinarId, 'canceled', {}, tx));
     if (!canceled) throw conflict('not_cancelable', 'Only a draft or published webinar can be canceled');
 
+    // The occurrence will not take place: the presenters' CASE assignments on it end.
+    const unassigned = await this.access.scoped(webinar.orgId, (tx) => this.repo.endPresenterAssignments(webinarId, tx));
+    await this.invalidate(unassigned);
     await this.record(principal.userId, webinar, 'webinar.canceled', { webinarId });
     this.events.toAudience(webinarId, 'webinar.state', { webinarId, status: 'canceled' });
     const registrations = await this.access.scoped(webinar.orgId, (tx) => this.repo.listActiveRegistrations(webinarId, tx));
@@ -292,16 +385,39 @@ export class WebinarOpsService {
     return { webinarId, status: 'canceled' };
   }
 
+  /**
+   * The publish checks (WBN-31 criterion 5), also re-run on an edit of a
+   * published occurrence: at least one presenter and the moderator, each of
+   * whom the engine lets take the role on the occurrence (`event.present`,
+   * `event.moderate`), a start in the future and an audience naming active
+   * organisations. A failure is 400 `validation` naming the field.
+   */
+  private async assertPublishable(
+    webinar: Pick<WebinarRecord, 'id' | 'orgId' | 'startsAt' | 'audiencePolicy'>,
+    hosts: readonly { userId: string; role: 'presenter' | 'moderator' }[],
+  ): Promise<void> {
+    const presenters = hosts.filter((host) => host.role === 'presenter');
+    const moderator = hosts.find((host) => host.role === 'moderator');
+    if (presenters.length === 0) throw invalidField('presenterUserIds', 'Publishing needs at least one presenter');
+    if (!moderator) throw invalidField('moderatorUserId', 'Publishing needs a moderator');
+    if (webinar.startsAt.getTime() <= Date.now()) throw invalidField('startsAt', 'The webinar must start in the future');
+    await this.assertAudience(webinar.audiencePolicy);
+    if (!(await this.mayHost(moderator.userId, 'moderator', webinar))) {
+      throw invalidField('moderatorUserId', 'The moderator cannot moderate this webinar');
+    }
+    for (const presenter of presenters) {
+      if (!(await this.mayHost(presenter.userId, 'presenter', webinar))) {
+        throw invalidField('presenterUserIds', 'A presenter cannot present this webinar');
+      }
+    }
+  }
+
   // ── Attendance (WBN-33) ───────────────────────────────────────────────────
 
   async attendance(webinarId: string, principal: Principal): Promise<WebinarAttendanceResponse> {
     assertOperationsSession(principal);
     const webinar = await this.access.load(webinarId);
-    const resource = webinarStaffResourceOf(webinar);
-    const allowed =
-      (await this.access.allows(principal, ACTIONS['event.manage'], resource)) ||
-      (await this.access.allows(principal, ACTIONS['event.moderate'], resource));
-    if (!allowed) return this.access.deny(principal, ACTIONS['event.manage'], webinar);
+    await this.assertManagesOrModerates(webinar, principal);
 
     const { registrations, presence } = await this.access.scoped(webinar.orgId, async (tx) => ({
       registrations: await this.repo.listActiveRegistrations(webinarId, tx),
@@ -343,6 +459,29 @@ export class WebinarOpsService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /**
+   * Whether the engine lets `userId` take the host `role` on the occurrence
+   * (WBN-31, T-CW-2.1 review): `event.moderate` on the staff resource for the
+   * moderator, in the operations context; `event.present` for a presenter, in
+   * the expert context, with the CASE assignment the occurrence form gives
+   * presenters (added here as planned, so a presenter named in the same
+   * request is judged as they will be). User state, context validity, scope
+   * and conditions are the engine's.
+   */
+  private async mayHost(userId: string, role: 'presenter' | 'moderator', webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<boolean> {
+    const loaded = await this.principals.load(userId);
+    if (!loaded) return false;
+    const principal = assemblePrincipal(loaded, role === 'presenter' ? { kind: 'expert' } : { kind: 'operations' });
+    const action = role === 'presenter' ? ACTIONS['event.present'] : ACTIONS['event.moderate'];
+    const resource = webinarStaffResourceOf(webinar);
+    const ctx = await this.contextLoader.build(principal, resource, { action, loadedPrincipal: loaded });
+    const planned: AssignmentInput[] =
+      role === 'presenter'
+        ? [{ id: `planned_${webinar.id}`, userId, kind: 'CASE', targetId: webinar.id, startAt: ctx.now, endAt: null }]
+        : [];
+    return authorize(principal, action, resource, { ...ctx, assignments: [...ctx.assignments, ...planned] }).allowed;
+  }
 
   /** The audience names organisations and units that exist (WBN-31 criterion 5). */
   private async assertAudience(policy: WebinarAudiencePolicy): Promise<void> {

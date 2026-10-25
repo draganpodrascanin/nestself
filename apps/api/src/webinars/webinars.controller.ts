@@ -22,6 +22,8 @@
  * POST   /webinars/:id/polls/:pollId/open               10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/close              10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/vote               30/60 s   event.register  webinarRegistrantResource
+ * GET    /webinars/:id/polls                                      authenticated   registrants and presenters: opened polls; moderating: all (service)
+ * GET    /webinars/:id/polls/:pollId/results                      authenticated   a host or moderating, once closed (service)
  * POST   /webinars/:id/recording/stop                    5/60 s   event.moderate  webinarStaffResource (early stop, T-CW-2.5)
  * GET    /webinars/:id/recording                                  authenticated   a host, moderating staff or event.manage (service, T-CW-2.5)
  *
@@ -68,6 +70,7 @@ import {
   type WebinarModerationMessageListResponse,
   type WebinarPoll,
   type WebinarPollCreateRequest,
+  type WebinarPollListResponse,
   type WebinarPollResults,
   type WebinarPollVoteRequest,
   type WebinarPollVoteResponse,
@@ -313,6 +316,24 @@ export class WebinarsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<WebinarPollResults> {
     return this.live.closePoll(id, pollId, principal);
+  }
+
+  /** Poll state for late joiners and reloaded consoles (canonical addition, T-CW-2.1). */
+  @Get(':id/polls')
+  @Authenticated()
+  listPolls(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<WebinarPollListResponse> {
+    return this.live.listPolls(id, principal);
+  }
+
+  /** The hosts' results after the close (canonical addition, T-CW-2.1). */
+  @Get(':id/polls/:pollId/results')
+  @Authenticated()
+  pollResults(
+    @Param('id') id: string,
+    @Param('pollId') pollId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<WebinarPollResults> {
+    return this.live.pollResults(id, pollId, principal);
   }
 
   @Post(':id/polls/:pollId/vote')

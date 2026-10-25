@@ -29,7 +29,13 @@
  * - Polls (WBN-11, WBN-27, CW-R-24): created, opened and closed by moderating
  *   principals; an attendee votes once per poll; a vote row holds the option
  *   only and the registration holds only the fact that it voted. Results
- *   are counts per option.
+ *   are counts per option. The vote and the marker are written in one
+ *   transaction, so while the poll is open the two rows share a transaction
+ *   id (`xmin`); closing the poll rewrites every voter's registration row in
+ *   the close's transaction, after which nothing in the rows links a vote to
+ *   a voter. `GET /webinars/:id/polls` returns the poll state for late
+ *   joiners and reloaded consoles; `GET .../polls/:pollId/results` the counts
+ *   for the hosts once a poll is closed.
  *
  * No route here returns a roster (WBN-08): a participant id appears only in
  * the moderation views.
@@ -51,6 +57,7 @@ import {
   type WebinarModerationMessageListResponse,
   type WebinarPoll,
   type WebinarPollCreateRequest,
+  type WebinarPollListResponse,
   type WebinarPollResults,
   type WebinarPollVoteRequest,
   type WebinarPollVoteResponse,
@@ -431,7 +438,9 @@ export class WebinarLiveService {
     if (session?.status !== 'active' || !session.providerMeetingId || !participant.providerAttendeeId) {
       floorNotAvailable('The participant is not in the live meeting');
     }
-    const registration = await this.repo.findRegistration(webinarId, participant.userId);
+    const registration = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.findRegistration(webinarId, participant.userId, tx),
+    );
     if (!registration) floorNotAvailable('The participant is no longer registered');
     return {
       webinar,
@@ -480,7 +489,13 @@ export class WebinarLiveService {
     const webinar = await this.access.load(webinarId);
     const poll = await this.poll(webinar, pollId);
     const closedAt = new Date();
-    const closed = await this.access.scoped(webinar.orgId, (tx) => this.repo.closePoll(pollId, closedAt, tx));
+    // The close also rewrites every voter's registration row in the same transaction: until now a vote and
+    // its voter's marker shared a transaction id (`xmin`); afterwards nothing in the rows links them (CW-R-24).
+    const closed = await this.access.transaction(webinar.orgId, async (tx) => {
+      if (!(await this.repo.closePoll(pollId, closedAt, tx))) return false;
+      await this.repo.rewriteVoters(webinarId, pollId, tx);
+      return true;
+    });
     if (!closed) throw conflict('poll_not_open', 'The poll is not open');
     const results = await this.results(webinar, poll);
     this.events.toAudience(webinarId, 'webinar.poll.closed', { pollId, closedAt: closedAt.toISOString() });
@@ -508,6 +523,41 @@ export class WebinarLiveService {
     return { pollId, voted: true };
   }
 
+  /**
+   * `GET /webinars/:id/polls`: the poll state a late joiner or a reloaded
+   * console needs. Moderating principals get every poll, presenters and
+   * registrants the opened ones; results only for closed polls (D-CW-16);
+   * `voted` from the registrant's marker, never the option (CW-R-24).
+   */
+  async listPolls(webinarId: string, principal: Principal): Promise<WebinarPollListResponse> {
+    const webinar = await this.access.load(webinarId);
+    let openedOnly = true;
+    let voted: readonly string[] = [];
+    if (await this.access.canModerate(webinar, principal)) openedOnly = false;
+    else if (!(await this.access.host(webinar, principal))) voted = (await this.registrant(webinar, principal)).votedPollIds;
+    const polls = await this.access.scoped(webinar.orgId, (tx) => this.repo.listPolls(webinarId, openedOnly, tx));
+    const items = [];
+    for (const poll of polls) {
+      items.push({
+        poll: toPoll(poll),
+        results: poll.closedAt ? await this.results(webinar, poll) : null,
+        voted: voted.includes(poll.id),
+      });
+    }
+    return { items };
+  }
+
+  /** `GET /webinars/:id/polls/:pollId/results`: the aggregate counts for the hosts, once the poll is closed. */
+  async pollResults(webinarId: string, pollId: string, principal: Principal): Promise<WebinarPollResults> {
+    const webinar = await this.access.load(webinarId);
+    if (!(await this.access.host(webinar, principal)) && !(await this.access.canModerate(webinar, principal))) {
+      return this.access.deny(principal, ACTIONS['event.moderate'], webinar);
+    }
+    const poll = await this.poll(webinar, pollId);
+    if (!poll.closedAt) throw conflict('poll_not_closed', 'Results are shown once the poll is closed');
+    return this.results(webinar, poll);
+  }
+
   private async poll(webinar: WebinarRecord, pollId: string): Promise<WebinarPollRecord> {
     const poll = await this.access.scoped(webinar.orgId, (tx) => this.repo.findPoll(webinar.id, pollId, tx));
     if (!poll) throw notFound();
@@ -527,7 +577,9 @@ export class WebinarLiveService {
     if (!(await this.access.canRegister(webinar, principal))) {
       return this.access.deny(principal, ACTIONS['event.register'], webinar);
     }
-    const registration = await this.repo.findRegistration(webinar.id, principal.userId);
+    const registration = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.findRegistration(webinar.id, principal.userId, tx),
+    );
     if (!registration) throw new ParticipantForbiddenException('Register for the webinar first');
     return registration;
   }

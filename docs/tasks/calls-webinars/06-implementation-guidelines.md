@@ -598,6 +598,7 @@ export const CALL_ERROR_CODES = [
   'recording_not_allowed',
   'capacity_above_limit',
   'invalid_ticket',
+  'not_editable',
 ] as const;
 export type CallErrorCode = (typeof CALL_ERROR_CODES)[number];
 ```
@@ -721,6 +722,14 @@ The expert's access to appointments in organisations they are assigned to uses t
 | `POST /ops/webinars/:id/cancel` | `event.manage` | `operationsResource('webinar', idFn)` | 5/60s |
 | `GET /ops/webinars/:id/attendance` | `event.manage` | `operationsResource('webinar', idFn)` | none |
 | `GET /webinars/:id/certificate` | `event.register` | registered participant | 10/60s |
+| `GET /webinars/:id/polls` (addition, T-CW-2.1) | `@Authenticated()` | registrants and presenters: opened polls; moderating: all; results once closed (service) | none |
+| `GET /webinars/:id/polls/:pollId/results` (addition, T-CW-2.1) | `@Authenticated()` | a host or moderating principal, after the close (service) | none |
+| `GET /ops/webinars` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage` or `event.moderate`, operations context; `mine=true`: the caller's hosted occurrences, any context (service) | none |
+| `GET /ops/webinars/:id` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage` or `event.moderate` on the occurrence, operations context (service) | none |
+| `GET /ops/webinars/host-candidates` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage`, operations context (service) | none |
+| `GET /ops/orgs` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage`, operations context: the organisations the caller may manage (service) | none |
+
+**CW-R-31b** (T-CW-2.1 review): publishing an occurrence, and editing a published one, checks through `authorize()` that the moderator holds `event.moderate` and each presenter `event.present` on the occurrence (the presenter with the CASE assignment the occurrence form gives) and answers 400 `validation` naming the field. A published occurrence also keeps the other publish checks (a moderator, at least one presenter, a start in the future); its capacity is compared with the registrations under the row lock; an audience change that moves it to another organisation answers 409 `not_editable`, as does any edit once it is live, ended or canceled. Cancel and end close the presenters' CASE assignments on the occurrence. The media capture pipeline takes one meeting seat (SPIKE-CW-03 assumption), so the session is created for the capacity plus one.
 
 `POST /webinars/:id/start` and `POST /webinars/:id/end` use `@Authenticated()` on the route (not `@Authorize()`), because the check requires loading the webinar occurrence to determine whether the caller is its presenter (`event.present`) or its moderator (`event.moderate`). The service loads the occurrence, checks the caller against `webinar_hosts`, and verifies the caller holds either `event.present` (a presenter of this occurrence) or `event.moderate` (its moderator) through `authorize()` called inside the service; if neither matches, the service throws 404. The default-deny CI test accepts `@Authenticated()` on these routes, and the authorisation golden cases prove the service-level check rejects non-hosts. **CW-R-31a**: `POST /webinars/:id/start` and `POST /webinars/:id/end` accept `event.present` or `event.moderate`; a caller who holds neither gets 404 [D-CW-17].
 
@@ -795,6 +804,9 @@ Every mutation in this epic records an audit event through `AuditWriter.record(i
 | `webinar.recording.ready` | CONTENT_ACCESS | `{ webinarId, recordingId }` |
 | `webinar.recording.handed_off` | CONTENT_ACCESS | `{ webinarId, recordingId }` |
 | `webinar.certificate.issued` | ADMIN | `{ webinarId, certificateId, userId }` |
+| `webinar.updated` (addition) | ADMIN | `{ webinarId, changedFields }` |
+| `webinar.attendance.viewed` (addition, WBN-33) | CONTENT_ACCESS | `{ webinarId }`, recorded after the read is allowed |
+| `webinar.recording.failed` (addition, T-CW-2.5) | CONTENT_ACCESS | `{ webinarId, sessionId, recordingId, reason }` |
 
 **CW-R-33a**: audit event details never include `token`, `JoinToken`, `credentials`, `email`, `body`, `notes` or any key in the `FORBIDDEN_KEYS` set. A colocated test scans every `audit.record()` call site in the calls and webinars modules and asserts that no forbidden key appears in the details argument [D-CW-08].
 

@@ -49,6 +49,7 @@ import {
   ACTIONS,
   CALL_TICKET_TTL_SECONDS,
   WEBINAR_LIST_DEFAULT_LIMIT,
+  WEBINAR_REPLICATED_CAPACITY,
   WebinarJoinResponseSchema,
   type CallParticipantRole,
   type Principal,
@@ -76,6 +77,8 @@ import { VideoMetrics } from '../calls/video-metrics.js';
 import type { WebinarSessionClosedHandler } from '../calls/session-lifecycle.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { PrincipalLoader } from '../principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { callCreateLockKey, callParticipantCredentialsKey } from '../redis/redis-keys.js';
 import {
@@ -99,6 +102,8 @@ import {
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarRecordingService, type RecordingActor } from './recording.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarRecordingsRepository } from './recording.repository.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarMailer } from './webinar-mailer.js';
 import {
   attendeeCapabilities,
@@ -111,6 +116,9 @@ import {
 import { WebinarRoomEvents } from './webinar-room-events.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarsRepository, type WebinarRecord, type WebinarRegistrationRecord } from './webinars.repository.js';
+
+/** Meeting seats the recording pipeline takes (SPIKE-CW-03: a media capture pipeline counts as an attendee). */
+const RECORDING_PIPELINE_SEATS = 1;
 
 /** CW-R-12: the creation lock lives as long as a call ticket, 30 seconds. */
 const CREATE_LOCK_TTL_SECONDS = CALL_TICKET_TTL_SECONDS;
@@ -149,6 +157,8 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     private readonly mail: WebinarMailer,
     private readonly metrics: VideoMetrics,
     private readonly recording: WebinarRecordingService,
+    private readonly recordings: WebinarRecordingsRepository,
+    private readonly principals: PrincipalLoader,
   ) {}
 
   // ── Discovery (WBN-01) ────────────────────────────────────────────────────
@@ -185,7 +195,9 @@ export class WebinarsService implements WebinarSessionClosedHandler {
       return (await this.toResponses([webinar], principal.userId))[0]!;
     }
     if (!(await this.access.canRegister(webinar, principal))) return this.access.deny(principal, ACTIONS['event.register'], webinar);
-    const registration = await this.repo.findRegistration(webinar.id, principal.userId);
+    const registration = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.findRegistration(webinar.id, principal.userId, tx),
+    );
     const visible =
       (registration !== null && webinar.status !== 'draft') ||
       (EMPLOYEE_VISIBLE_STATUSES.includes(webinar.status) && (await this.access.eligibleOrg(webinar, principal)) !== null);
@@ -308,7 +320,9 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     if (!(await this.access.canRegister(webinar, principal))) {
       return this.access.deny(principal, ACTIONS['event.register'], webinar);
     }
-    const registration = await this.repo.findRegistration(webinar.id, principal.userId);
+    const registration = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.findRegistration(webinar.id, principal.userId, tx),
+    );
     if (!registration) throw new ParticipantForbiddenException('Register for the webinar before joining');
     // Eligibility is evaluated again at join (D-CW-17).
     if (!(await this.access.eligibleOrg(webinar, principal))) throw notEligible();
@@ -381,8 +395,11 @@ export class WebinarsService implements WebinarSessionClosedHandler {
       joiner.kind === 'attendee'
         ? { audio: 'receive', video: 'receive', content: 'receive' }
         : toContractCapabilities(capabilitiesForRole(joiner.role));
+    // The REC indicator's state before the first `webinar.recording` event (UX-45): the session's pipeline, or the occurrence's.
+    const recording = await this.access.scoped(webinar.orgId, (tx) => this.recordings.findBySession(session.id, tx));
     return WebinarJoinResponseSchema.parse({
       webinarId: webinar.id,
+      recordingStatus: recording?.status ?? webinar.recordingStatus,
       sessionId: session.id,
       participantId: participant.id,
       format: 'webinar',
@@ -461,7 +478,10 @@ export class WebinarsService implements WebinarSessionClosedHandler {
       created = await this.video.createSession({
         sessionId: session.id,
         format: 'webinar',
-        capacity: webinar.capacity,
+        // One seat more than the audience for the media capture pipeline, which joins the meeting as an
+        // attendee (SPIKE-CW-03 assumption, D-CW-18): a full single meeting otherwise has no room for it.
+        // The adapter plans replicas from this number; the documented ceiling is never exceeded.
+        capacity: Math.min(webinar.capacity + RECORDING_PIPELINE_SEATS, WEBINAR_REPLICATED_CAPACITY),
         orgId: webinar.orgId,
         webinarId: webinar.id,
         participant: { participantId: participant.id, role: participant.role },
@@ -570,7 +590,7 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     if (!isWithinWebinarWindow(webinar, new Date(), 'host')) throw joinWindowClosed();
 
     const live = await this.access.scoped(webinar.orgId, (tx) =>
-      this.repo.transitionStatus(webinarId, ['published'], 'live', { startedAt: new Date() }, tx),
+      this.repo.transitionStatus(webinarId, 'live', { startedAt: new Date() }, tx),
     );
     if (!live) {
       const current = await this.access.load(webinarId);
@@ -597,12 +617,13 @@ export class WebinarsService implements WebinarSessionClosedHandler {
 
     const endedAt = new Date();
     const ended = await this.access.scoped(webinar.orgId, (tx) =>
-      this.repo.transitionStatus(webinarId, ['live'], 'ended', { endedAt }, tx),
+      this.repo.transitionStatus(webinarId, 'ended', { endedAt }, tx),
     );
     if (!ended) return { webinarId, status: (await this.access.load(webinarId)).status };
 
     const session = await this.closeSession(webinar, endedAt);
     await this.access.scoped(webinar.orgId, (tx) => this.repo.clearHandsAndFloors(webinarId, tx));
+    await this.endPresenterAssignments(webinar);
     // WBN-28 criterion 4: the recording stops with the webinar (never throws).
     await this.recording.stopForEnd(webinar, { userId: principal.userId, kind: 'USER' });
     await this.record(principal.userId, webinar, 'webinar.ended', { webinarId, sessionId: session?.id ?? null });
@@ -626,11 +647,12 @@ export class WebinarsService implements WebinarSessionClosedHandler {
 
     const endedAt = session.endedAt ?? new Date();
     const ended = await this.access.scoped(webinar.orgId, (tx) =>
-      this.repo.transitionStatus(webinar.id, ['live'], 'ended', { endedAt }, tx),
+      this.repo.transitionStatus(webinar.id, 'ended', { endedAt }, tx),
     );
     if (!ended) return false;
 
     await this.access.scoped(webinar.orgId, (tx) => this.repo.clearHandsAndFloors(webinar.id, tx));
+    await this.endPresenterAssignments(webinar);
     const actor: RecordingActor =
       session.endReason === 'cleanup' || session.endReason === 'reconcile' ? { userId: null, kind: 'JOB' } : { userId: null, kind: 'SYSTEM' };
     await this.recording.stopForEnd(webinar, actor);
@@ -650,6 +672,12 @@ export class WebinarsService implements WebinarSessionClosedHandler {
       'Webinar ended after its session closed',
     );
     return true;
+  }
+
+  /** The occurrence is over: the presenters' CASE assignments on it end, and their next decision sees it. */
+  private async endPresenterAssignments(webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<void> {
+    const userIds = await this.access.scoped(webinar.orgId, (tx) => this.repo.endPresenterAssignments(webinar.id, tx));
+    for (const userId of new Set(userIds)) await this.principals.invalidateUser(userId);
   }
 
   /** `webinar.state` ended and `webinar.ended` on both rooms (CW-R-36b). */

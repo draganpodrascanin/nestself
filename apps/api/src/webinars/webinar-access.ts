@@ -70,6 +70,11 @@ export function notEligible(): ApiHttpException {
   return apiError(403, 'not_eligible', 'You are not in the audience of this webinar');
 }
 
+/** 409 `not_editable`: an edit the occurrence's status no longer allows (T-CW-2.1). */
+export function notEditable(message: string): ApiHttpException {
+  return apiError(409, 'not_editable', message);
+}
+
 @Injectable()
 export class WebinarAccess {
   constructor(
@@ -128,7 +133,7 @@ export class WebinarAccess {
 
   /** The caller's host row, if the engine backs it: `event.present` for a presenter, `event.moderate` for the moderator. */
   async host(webinar: WebinarRecord, principal: Principal): Promise<WebinarHostRecord | null> {
-    const host = await this.repo.findHost(webinar.id, principal.userId);
+    const host = await this.scoped(webinar.orgId, (tx) => this.repo.findHost(webinar.id, principal.userId, tx));
     if (!host) return null;
     const action = host.role === 'moderator' ? ACTIONS['event.moderate'] : ACTIONS['event.present'];
     return (await this.allows(principal, action, webinarStaffResourceOf(webinar))) ? host : null;

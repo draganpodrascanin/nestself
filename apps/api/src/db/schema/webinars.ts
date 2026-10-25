@@ -151,8 +151,15 @@ export const webinarRegistrations = pgTable(
   {
     id: idColumn(),
     webinarId: webinarIdColumn(),
-    /** The registrant's organisation: the membership that made them eligible. */
-    orgId: orgIdColumn(),
+    /**
+     * The registrant's organisation: the membership that made them eligible.
+     * Never null, so a registration is visible only in its organisation's
+     * tenant scope (and the system context), even for an occurrence open to
+     * all (migration 0013).
+     */
+    orgId: text()
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
     userId: text()
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -175,7 +182,11 @@ export const webinarRegistrations = pgTable(
     uniqueIndex('webinar_registrations_user_idx').on(t.webinarId, t.userId),
     index('webinar_registrations_user_id_idx').on(t.userId),
     check('webinar_registrations_attended_minutes_check', sql`${t.attendedMinutes} IS NULL OR ${t.attendedMinutes} >= 0`),
-    tenantIsolation('webinar_registrations_tenant_isolation', t.orgId),
+    pgPolicy('webinar_registrations_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicate(t.orgId),
+      withCheck: tenantPredicate(t.orgId),
+    }),
   ],
 ).enableRLS();
 
