@@ -7,8 +7,23 @@ export { createOrgAdminApi } from './org-admin';
 export type { OrgAdminApi, OpsAdminApi, OrgAdminBase, GrantListParams } from './org-admin';
 export { healthQueryOptions } from './queries/health';
 export { meQueryOptions } from './queries/auth';
-export { createCallsApi } from './calls';
-export type { CallsApi, AppointmentListParams } from './calls';
+export {
+  APPROVAL_OUTCOMES,
+  AppointmentViewSchema,
+  AppointmentViewerSchema,
+  ProblemReportItemSchema,
+  ProblemReportListResponseSchema,
+  createCallsApi,
+} from './calls';
+export type {
+  AppointmentListParams,
+  AppointmentView,
+  AppointmentViewer,
+  CallsApi,
+  ProblemReportItem,
+  ProblemReportListParams,
+  ProblemReportListResponse,
+} from './calls';
 export { joinWindowBounds, joinWindowState, nextJoinWindowChange } from './join-window';
 export type { JoinWindowOptions, JoinWindowState } from './join-window';
 export { USER_ROOM_EVENTS, createUserRoomClient, noopUserRoomClient, userRoomSubscribeMessage } from './user-room';
@@ -53,4 +68,9 @@ export {
   followUpPolicyKeys,
   followUpPolicyQuery,
   setFollowUpPolicyMutation,
+  supportKeys,
+  createAppointmentMutation,
+  diagnosticsQuery,
+  problemReportListQuery,
 } from './queries/calls';
+export * from './webinars';
