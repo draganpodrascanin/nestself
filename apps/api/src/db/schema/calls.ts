@@ -41,6 +41,8 @@ import {
 } from './enums.js';
 import { users } from './identity.js';
 import { organizations } from './organization.js';
+// Circular with webinars.ts (which references call_sessions); both sides reference lazily.
+import { webinars } from './webinars.js';
 import { createdAt, idColumn, tenantPredicate, ts, updatedAt } from './_shared.js';
 
 /** Tenant isolation on `org_id`; a null organization is a platform-wide row (webinars open to all). */
@@ -57,8 +59,8 @@ export const callSessions = pgTable(
   {
     id: idColumn(),
     appointmentId: text().references(() => appointments.id, { onDelete: 'restrict' }),
-    /** The `webinars` table and its foreign key arrive with T-CW-2.1. */
-    webinarId: text(),
+    /** The webinar occurrence of a `WEBINAR` session (foreign key since 0012, T-CW-2.5). */
+    webinarId: text().references((): AnyPgColumn => webinars.id, { onDelete: 'restrict' }),
     orgId: orgIdColumn(),
     format: callFormat().notNull(),
     /** Set once `CreateMeeting` succeeds (CW-R-20). */

@@ -53,7 +53,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(12);
+    expect(Number(rows[0]!.n)).toBe(13);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -506,6 +506,42 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       );
       expect(voteColumns.map((r) => r.column_name)).toEqual(['id', 'option_id', 'org_id', 'poll_id']);
       expect(Object.keys(webinarPollResults)).not.toContain('userId');
+    });
+
+    it('0012: a webinar session names an existing occurrence; a message can lose its author (T-CW-2.5, D-CW-29)', async () => {
+      const window = { startsAt: new Date('2026-11-20T15:00:00Z'), endsAt: new Date('2026-11-20T16:00:00Z') };
+      await expect(
+        owner.db.insert(callSessions).values({ ...window, id: 'rls_ws_ghost', format: 'WEBINAR', webinarId: 'no_such_webinar' }),
+      ).rejects.toThrow();
+      await owner.db
+        .insert(callSessions)
+        .values({ ...window, id: 'rls_ws_all', format: 'WEBINAR', webinarId: 'rls_webinar_all', orgId: null });
+
+      // The 12-month anonymisation removes the author link and keeps the message.
+      await owner.db
+        .insert(webinarMessages)
+        .values({ id: 'rls_msg_anon', webinarId: 'rls_webinar_all', authorUserId: 'rls_user', kind: 'ATTENDEE', text: 'kept' });
+      await owner.db.update(webinarMessages).set({ authorUserId: null }).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      const [anon] = await owner.db.select().from(webinarMessages).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      expect(anon).toMatchObject({ authorUserId: null, text: 'kept' });
+      // Leave the seed assertions below their own webinar session.
+      await owner.db.delete(webinarMessages).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      await owner.db.delete(callSessions).where(eq(callSessions.id, 'rls_ws_all'));
+
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'webinar_recordings' ORDER BY column_name`,
+      );
+      expect(rows.map((r) => r.column_name)).toEqual(
+        expect.arrayContaining([
+          'provider_pipeline_arn',
+          'concatenation_pipeline_id',
+          'concatenated_key',
+          'handoff_status',
+          'handoff_location',
+          'failure_reason',
+          'failed_at',
+        ]),
+      );
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

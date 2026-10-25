@@ -216,9 +216,12 @@ export class WebinarLiveService {
         this.repo.listMessages(webinarId, { after, limit: limit + 1 }, tx),
       );
       const page = paginate(rows, limit, keyOf);
-      const names = await this.repo.displayNames(page.items.map((message) => message.authorUserId));
+      // An author link removed after 12 months (D-CW-29) has no name to show.
+      const names = await this.repo.displayNames(page.items.flatMap((message) => message.authorUserId ?? []));
       return {
-        items: page.items.map((message) => toModerationMessage(message, names.get(message.authorUserId) ?? null)),
+        items: page.items.map((message) =>
+          toModerationMessage(message, (message.authorUserId && names.get(message.authorUserId)) ?? null),
+        ),
         nextCursor: page.nextCursor,
       };
     }
@@ -309,6 +312,7 @@ export class WebinarLiveService {
   }
 
   private async moderationView(message: WebinarMessageRecord): Promise<WebinarModerationMessage> {
+    if (!message.authorUserId) return toModerationMessage(message, null);
     const names = await this.repo.displayNames([message.authorUserId]);
     return toModerationMessage(message, names.get(message.authorUserId) ?? null);
   }

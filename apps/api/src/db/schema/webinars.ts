@@ -198,9 +198,11 @@ export const webinarMessages = pgTable(
     sessionId: text().references(() => callSessions.id, { onDelete: 'restrict' }),
     /** Null for a host post by a moderator who has not joined the meeting. */
     authorParticipantId: text().references(() => callParticipants.id, { onDelete: 'restrict' }),
-    authorUserId: text()
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict' }),
+    /**
+     * Null once the author link is removed, 12 months after the occurrence
+     * (D-CW-29, guidelines 16.3); every message is written with its author.
+     */
+    authorUserId: text().references(() => users.id, { onDelete: 'restrict' }),
     kind: webinarMessageKind().notNull(),
     status: webinarMessageStatus().notNull().default('PENDING'),
     text: text().notNull(),
@@ -302,8 +304,15 @@ export const webinarPollResults = pgTable(
 
 /**
  * The recording pipeline of one webinar session (D-CW-18, CW-R-24b). Written
- * by the recording jobs (T-CW-2.5); `handoff_status` stays `pending` until
- * the CMS media interface exists (D-CW-03).
+ * by the recording jobs (T-CW-2.5): SCHEDULED, RECORDING while the capture
+ * pipeline runs, PROCESSING from the stop until the concatenation finishes,
+ * then READY with `concatenated_key`, or FAILED with `failure_reason` (an
+ * error name, never a provider message). S3 layout (T-CW-2.5 step 7):
+ * `recordings/{webinarId}/raw/` for the capture segments (`raw_segments_prefix`,
+ * expired by the bucket lifecycle after 30 days) and
+ * `recordings/{webinarId}/final/` for the concatenated MP4.
+ * `handoff_status` stays `pending` with `handoff_location` (the `s3://` URI
+ * of the MP4) until the CMS media interface exists (D-CW-03).
  */
 export const webinarRecordings = pgTable(
   'webinar_recordings',
@@ -315,14 +324,24 @@ export const webinarRecordings = pgTable(
       .notNull()
       .references(() => callSessions.id, { onDelete: 'restrict' }),
     status: recordingStatus().notNull().default('SCHEDULED'),
+    /** The media capture pipeline. */
     providerPipelineId: text(),
+    /** Its ARN, the source of the concatenation pipeline (WEB-29). */
+    providerPipelineArn: text(),
     rawSegmentsPrefix: text(),
+    /** The media concatenation pipeline the finalize job polls. */
+    concatenationPipelineId: text(),
     concatenatedKey: text(),
     handoffStatus: text().notNull().default('pending'),
+    /** Where the CMS picks the MP4 up: `s3://{bucket}/{concatenated_key}`. */
+    handoffLocation: text(),
+    /** Error name of the last failure; never a provider message or personal data. */
+    failureReason: text(),
     startedAt: ts(),
     stoppedAt: ts(),
     readyAt: ts(),
     handedOffAt: ts(),
+    failedAt: ts(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -114,7 +114,8 @@ export interface WebinarMessageRecord {
   orgId: string | null;
   sessionId: string | null;
   authorParticipantId: string | null;
-  authorUserId: string;
+  /** Null once the author link is removed, 12 months after the occurrence (D-CW-29). */
+  authorUserId: string | null;
   kind: WebinarMessageKind;
   status: WebinarMessageStatus;
   text: string;
