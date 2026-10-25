@@ -4,6 +4,7 @@
  * problem reports and the expert's decline notice on the user room.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { APPROVAL_FOLLOW_UP_DESCRIPTION } from '@nestself/contracts';
 import { createApiClient } from './client';
 import { createCallsApi } from './calls';
 import { createUserRoomClient } from './user-room';
@@ -44,7 +45,7 @@ describe('appointment reads with the viewer fields', () => {
     const body = {
       ...APPOINTMENT,
       status: 'declined',
-      viewer: { hasJoined: false, pendingSignal: { type: 'running_late', etaMinutes: 10, sentAt: '2030-01-20T08:55:00.000Z' } },
+      viewer: { hasJoined: false, sessionEnded: false, pendingSignal: { type: 'running_late', etaMinutes: 10, sentAt: '2030-01-20T08:55:00.000Z' } },
       declineReason: 'Please book it after the quarter ends.',
       approvalOutcome: 'rejected',
     };
@@ -56,9 +57,9 @@ describe('appointment reads with the viewer fields', () => {
   });
 
   it('accepts an appointment without them, and lists with them', async () => {
-    const { api } = setup({ items: [{ ...APPOINTMENT, viewer: { hasJoined: true } }], nextCursor: null });
+    const { api } = setup({ items: [{ ...APPOINTMENT, viewer: { hasJoined: true, sessionEnded: false } }], nextCursor: null });
     const page = await api.listAppointments({ from: '2030-01-19T09:00:00.000Z' });
-    expect(page.items[0]?.viewer).toEqual({ hasJoined: true });
+    expect(page.items[0]?.viewer).toEqual({ hasJoined: true, sessionEnded: false });
     const plain = setup(APPOINTMENT);
     expect((await plain.api.getAppointment('appt_1')).viewer).toBeUndefined();
   });
@@ -137,5 +138,40 @@ describe('user room: follow-up declined (CALL-38)', () => {
     listeners.get('appointment.follow_up.declined')?.({ appointmentId: 'appt_done' });
     expect(onFollowUpDeclined).toHaveBeenCalledTimes(1);
     expect(onFollowUpDeclined).toHaveBeenCalledWith({ appointmentId: 'appt_done', followUpId: 'appt_next' });
+  });
+});
+
+describe('review follow-ups: order, session ended, organisations, experts, approval zone', () => {
+  it('sends the list order and keeps viewer.sessionEnded and orgName', async () => {
+    const { api, last } = setup({ items: [{ ...APPOINTMENT, viewer: { hasJoined: true, sessionEnded: true }, orgName: 'Example d.o.o.' }], nextCursor: null });
+    const page = await api.listAppointments({ to: '2030-01-19T09:00:00.000Z', order: 'desc' });
+    expect(last().url).toBe('http://x/api/appointments?to=2030-01-19T09%3A00%3A00.000Z&order=desc');
+    expect(page.items[0]?.viewer?.sessionEnded).toBe(true);
+    expect(page.items[0]?.orgName).toBe('Example d.o.o.');
+  });
+
+  it('lists the operations organisations and the experts for a service', async () => {
+    const orgs = setup({ items: [{ id: 'org_1', name: 'Example d.o.o.' }] });
+    await expect(orgs.api.listOpsOrganizations('exa')).resolves.toEqual({ items: [{ id: 'org_1', name: 'Example d.o.o.' }] });
+    expect(orgs.last().url).toBe('http://x/api/ops/orgs?q=exa');
+    const experts = setup({ items: [{ userId: 'user_milica', displayName: 'Milica Ristić' }] });
+    await experts.api.listAppointmentExperts({ serviceCategory: 'psychological' });
+    expect(experts.last().url).toBe('http://x/api/ops/appointment-experts?serviceCategory=psychological');
+  });
+
+  it("keeps the approval item's time zone", async () => {
+    const item = {
+      id: 'approval_1',
+      appointmentId: 'appt_1',
+      status: 'pending',
+      employeeDisplayName: 'Jovan Petrović',
+      description: APPROVAL_FOLLOW_UP_DESCRIPTION,
+      startsAt: APPOINTMENT.startsAt,
+      durationMinutes: 50,
+      timeZone: 'Europe/Belgrade',
+    };
+    const { api } = setup({ items: [item] });
+    const parsed = await api.listApprovals('org_1');
+    expect(parsed.items[0]?.timeZone).toBe('Europe/Belgrade');
   });
 });

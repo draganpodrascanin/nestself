@@ -23,6 +23,7 @@ const ITEM = {
   description: 'follow-up session with a NestSelf expert',
   startsAt: '2030-01-20T09:00:00.000Z',
   durationMinutes: 50,
+  timeZone: 'Europe/Belgrade',
 };
 
 interface Call {

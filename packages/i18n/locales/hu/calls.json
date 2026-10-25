@@ -128,7 +128,8 @@
       "sampleNote": "Mintaadatok: a választás nem kerül mentésre.",
       "sampleSaved": "Mintaadatok: semmi sem lett elmentve."
     },
-    "sampleItemsNote": "Mintaadatok: ezek a kérelmek kitaláltak. A jóváhagyás vagy elutasítás semmit sem küld el."
+    "sampleItemsNote": "Mintaadatok: ezek a kérelmek kitaláltak. A jóváhagyás vagy elutasítás semmit sem küld el.",
+    "whenInZone": "{{date}}, {{time}} ({{timeZone}})"
   },
   "webinar": {
     "register": "Regisztráció",
@@ -541,7 +542,8 @@
     "forbidden": "Ez a művelet Ön számára nem érhető el.",
     "validation": "A kérés egy része nem lett elfogadva. Ellenőrizze, és próbálja újra.",
     "conflict": "Ez a lépés a webinárium jelenlegi állapotában nem lehetséges.",
-    "notEditable": "Ez a webinárium már nem módosítható így. A szervezet és a közönség csak vázlat állapotban változtatható."
+    "notEditable": "Ez a webinárium már nem módosítható így. A szervezet és a közönség csak vázlat állapotban változtatható.",
+    "sessionExpired": "A munkamenete lejárt. Jelentkezzen be újra, majd próbálja meg ismét."
   },
   "email": {
     "reminderSubject": "Az Ön NestSelf alkalma",
@@ -888,7 +890,10 @@
       "required": "Töltse ki ezt a mezőt.",
       "expertCategory": "Ez a szakértő nincs jóváhagyva erre a szolgáltatásra.",
       "notMember": "Ez a munkavállaló nem tagja a szervezetnek."
-    }
+    },
+    "chooseOrganisation": "Válasszon szervezetet",
+    "organisationsFailed": "A szervezeteket nem sikerült betölteni. Adja meg helyette a szervezetazonosítót.",
+    "expertsFailed": "A szolgáltatás szakértőit nem sikerült betölteni. Adja meg helyette a szakértő felhasználói azonosítóját."
   },
   "supportCalls": {
     "nav": "Hívástámogatás",
@@ -949,6 +954,7 @@
       "facilitator": "Facilitátor",
       "participant": "Műhelyrésztvevő"
     },
-    "reportsUnavailable": "A hibabejelentések listázásához platformszintű diagnosztikai hozzáférés kell. Ehelyett keressen rá egy munkamenetre az azonosítója alapján fent."
+    "reportsUnavailable": "A hibabejelentések listázásához platformszintű diagnosztikai hozzáférés kell. Ehelyett keressen rá egy munkamenetre az azonosítója alapján fent.",
+    "sessionReportsCaption": "A(z) {{id}} munkamenet hibabejelentései"
   }
 }

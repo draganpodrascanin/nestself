@@ -71,16 +71,17 @@ const json = (status: number, body: unknown) =>
 interface Sent {
   method: string;
   path: string;
+  search: string;
   body: unknown;
 }
 
-function serve(routes: Record<string, () => Response>): Sent[] {
+function serve(routes: Record<string, () => Response>, me: { principal: unknown; effectiveActions: readonly string[] } = employee): Sent[] {
   const sent: Sent[] = [];
   fetchMock.mockImplementation((input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
-    sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: employee.principal, effectiveActions: employee.effectiveActions }));
+    sent.push({ method, path: url.pathname, search: url.search, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: me.principal, effectiveActions: me.effectiveActions }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
@@ -186,7 +187,7 @@ describe('appointment pages, M1 completion (API mode)', { timeout: 20_000 }, () 
           appointment({
             startsAt: new Date(startsAt).toISOString(),
             endsAt: new Date(startsAt + 50 * MINUTE).toISOString(),
-            viewer: { hasJoined: false },
+            viewer: { hasJoined: false, sessionEnded: false },
           }),
         ),
     });
@@ -205,11 +206,46 @@ describe('appointment pages, M1 completion (API mode)', { timeout: 20_000 }, () 
       'GET /api/appointments/appt_1': () =>
         json(
           200,
-          appointment({ startsAt: new Date(startsAt).toISOString(), endsAt: new Date(startsAt + 50 * MINUTE).toISOString(), viewer: { hasJoined: true } }),
+          appointment({ startsAt: new Date(startsAt).toISOString(), endsAt: new Date(startsAt + 50 * MINUTE).toISOString(), viewer: { hasJoined: true, sessionEnded: false } }),
         ),
     });
     renderAt('/appointments/appt_1');
     expect(await screen.findByRole('link', { name: en.join.button }, { timeout: 5000 })).toHaveAttribute('href', '/call/appt_1');
     expect(screen.queryByText(en.join.windowClosed)).not.toBeInTheDocument();
+  });
+
+  it('hides Appointments and the next appointment from a principal without consultation.join', async () => {
+    const hr = SAMPLE_PRINCIPALS.hr_admin;
+    const sent = serve({}, { principal: hr.principal, effectiveActions: hr.effectiveActions.filter((action) => action !== 'consultation.join') });
+    renderAt('/');
+    expect(await screen.findByRole('heading', { level: 1 }, { timeout: 5000 })).toBeInTheDocument();
+    await screen.findAllByRole('link', { name: 'Support' });
+    expect(screen.queryByRole('link', { name: 'Appointments' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your next appointment' })).not.toBeInTheDocument();
+    expect(sent.some((s) => s.path === '/api/appointments')).toBe(false);
+  });
+
+  it('lists upcoming appointments ascending and past ones descending (two queries)', async () => {
+    const sent = serve({ 'GET /api/appointments': () => json(200, { items: [], nextCursor: null }) });
+    renderAt('/appointments');
+    await waitFor(() => expect(sent.filter((s) => s.path === '/api/appointments')).toHaveLength(2));
+    const searches = sent.filter((s) => s.path === '/api/appointments').map((s) => new URLSearchParams(s.search));
+    expect(searches.some((q) => q.get('order') === 'asc' && q.has('from'))).toBe(true);
+    expect(searches.some((q) => q.get('order') === 'desc' && q.has('to'))).toBe(true);
+  });
+
+  it('offers neither Join nor Rejoin once the session was ended for everyone', async () => {
+    const startsAt = Date.now() - 5 * MINUTE;
+    serve({
+      'GET /api/appointments/appt_1': () =>
+        json(
+          200,
+          appointment({ startsAt: new Date(startsAt).toISOString(), endsAt: new Date(startsAt + 50 * MINUTE).toISOString(), viewer: { hasJoined: true, sessionEnded: true } }),
+        ),
+    });
+    renderAt('/appointments/appt_1');
+    expect(await screen.findByText(en.consultation.sessionEnded, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: en.join.button })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: en.join.rejoin })).not.toBeInTheDocument();
   });
 });

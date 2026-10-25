@@ -74,11 +74,10 @@ function SharedLocation({ appointment, joined, waiting, refetchSignal }: { appoi
       <h2 id="shared-location-title" className="type-label text-text">
         {t('consultations.location.title')}
       </h2>
-      {query.isError ? (
+      <Reveal show={query.isError}>
         <p className="type-metadata text-danger">{mapCallError(query.error, t)}</p>
-      ) : (
-        <p className="type-body text-text">{text ?? t('consultations.location.none')}</p>
-      )}
+      </Reveal>
+      {query.isError ? null : <p className="type-body text-text">{text ?? t('consultations.location.none')}</p>}
       <p className="type-metadata text-text-secondary">{t('consultations.location.hint')}</p>
     </section>
   );

@@ -44,7 +44,7 @@ export function useConsultationList(params: ConsultationListParams = {}): Consul
     const items = sampleConsultationsFor(principal?.userId, !isConsultingExpert(principal, effectiveActions)).filter((item) => matches(item, params));
     return {
       status: 'success',
-      items: items.sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
+      items: items.sort((a, b) => (params.order === 'desc' ? -1 : 1) * (Date.parse(a.startsAt) - Date.parse(b.startsAt))),
       error: null,
       hasNextPage: false,
       isFetchingNextPage: false,
@@ -73,9 +73,9 @@ export interface ConsultationState {
 type ListPages = InfiniteData<{ items: AppointmentView[] }>;
 
 /**
- * One consultation. Operations cannot read `GET /appointments/:id` (it needs
- * `consultation.join`), so their read-only view uses the row the list
- * already loaded and only asks the API when no list holds it.
+ * One consultation. For operations' read-only view (`fromListOnly`), the row
+ * the list already loaded shows at once while `GET /appointments/:id`
+ * (the row shape for operations) refreshes it.
  */
 export function useConsultation(appointmentId: string, options: { fromListOnly?: boolean } = {}): ConsultationState {
   const { principal, effectiveActions } = useAuth();
@@ -86,11 +86,13 @@ export function useConsultation(appointmentId: string, options: { fromListOnly?:
         .flatMap(([, data]) => data?.pages.flatMap((page) => page.items) ?? [])
         .find((item) => item.id === appointmentId)
     : undefined;
-  const query = useQuery({ ...appointmentDetailQuery(callsApi, appointmentId), enabled: !isSampleDataMode && !fromList });
+  // Operations may read the row shape on `GET /appointments/:id`; the listed row shows at once meanwhile.
+  const query = useQuery({ ...appointmentDetailQuery(callsApi, appointmentId), enabled: !isSampleDataMode, placeholderData: fromList });
   if (isSampleDataMode) {
     const operations = !isConsultingExpert(principal, effectiveActions);
     return { status: 'success', appointment: sampleConsultation(appointmentId, principal?.userId, operations), error: null, refetch: () => undefined };
   }
-  if (fromList) return { status: 'success', appointment: fromList, error: null, refetch: () => undefined };
-  return { status: query.status, appointment: query.data ?? null, error: query.error, refetch: () => void query.refetch() };
+  const appointment = query.data ?? fromList ?? null;
+  if (appointment && query.status !== 'success') return { status: 'success', appointment, error: null, refetch: () => void query.refetch() };
+  return { status: query.status, appointment, error: query.error, refetch: () => void query.refetch() };
 }

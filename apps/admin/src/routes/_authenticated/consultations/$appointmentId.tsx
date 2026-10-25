@@ -11,7 +11,6 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Button, Card, Field, Heading, Select, StatusBlock } from '@nestself/ui';
 import { ApiError } from '@nestself/api-client';
-import { can } from '@nestself/contracts';
 import type { Appointment, CallOutcomeStatus } from '@nestself/contracts';
 import type { AppointmentView } from '@nestself/api-client';
 import { useAuth } from '../../../auth';
@@ -23,6 +22,7 @@ import type { ExpertCallEnd } from '../../../calls/expert-call';
 import { STATUS_TONE, outcomeColumn, roomClosesAt, useCategoryLabel, useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
 import { CancelAppointment } from '../../../calls/cancel-appointment';
+import { useCanBook } from '../../../calls/use-ops-organizations';
 import { OutcomeDialog } from '../../../calls/outcome-dialog';
 import { TechnicalSupportLink } from '../../../calls/support-contact';
 import { Reveal } from '../../../calls/reveal';
@@ -82,14 +82,6 @@ function RunningLate({ appointment }: { appointment: Appointment }) {
   );
 }
 
-/**
- * CALL-27: in the admin app, client operations cancel through `bookings.coordinate`
- * (queue-scoped coordinators cannot; the API's service decides either way).
- */
-function canCancel(principal: Parameters<typeof can>[0] | null, effectiveActions: readonly string[]): boolean {
-  return !!principal && can(principal, 'bookings.coordinate', undefined, effectiveActions);
-}
-
 function ConsultationRoute() {
   const { principal, effectiveActions } = useAuth();
   const { t } = useTranslation('common');
@@ -107,12 +99,13 @@ function OperationsConsultationView() {
   const { appointmentId } = Route.useParams();
   const { t } = useTranslation('calls');
   const { t: tCommon } = useTranslation('common');
-  const { principal, effectiveActions } = useAuth();
   const { status, appointment: loaded, error, refetch } = useConsultation(appointmentId, { fromListOnly: true });
   const [canceled, setCanceled] = useState<Appointment | null>(null);
   const format = useZonedFormat();
   const categoryLabel = useCategoryLabel();
   const [now] = useState(() => Date.now());
+  // CALL-27: client operations cancel through bookings.coordinate, for an organisation they coordinate.
+  const canBook = useCanBook();
 
   const back = (
     <Link to="/consultations" className="text-primary underline underline-offset-[0.2em]">
@@ -171,7 +164,7 @@ function OperationsConsultationView() {
         </dl>
         <p className="mt-4 type-metadata text-text-secondary">{t('followUp.timeZoneNote', { timeZone: appointment.timeZone })}</p>
       </Card>
-      {canCancel(principal, effectiveActions) ? <CancelAppointment appointment={appointment} onCanceled={setCanceled} /> : null}
+      {canBook ? <CancelAppointment appointment={appointment} onCanceled={setCanceled} /> : null}
     </div>
   );
 }
@@ -190,6 +183,7 @@ function ConsultationPage() {
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [recorded, setRecorded] = useState<CallOutcomeStatus | null>(null);
   const [now] = useState(() => Date.now());
+  const canBook = useCanBook();
 
   const permission = <StatusBlock state="permission" title={tCommon('state.permission.title')} body={tCommon('state.permission.body')} />;
   if (!isConsultingExpert(principal, effectiveActions)) return permission;
@@ -222,7 +216,9 @@ function ConsultationPage() {
   const canRecordOutcome = !recorded && appointment.status === 'confirmed' && (ended !== null || Date.parse(appointment.startsAt) <= now);
   const showFollowUp = recorded === 'completed' || (!recorded && appointment.status === 'completed');
   // After "End for everyone" the page is the post-call state: no Join or Rejoin (the server refuses both, D-CW-09).
-  const joinable = !recorded && ended !== 'ended';
+  // The session was ended for everyone (here or earlier, viewer.sessionEnded): no Join or Rejoin.
+  const sessionEnded = ended === 'ended' || appointment.viewer?.sessionEnded === true;
+  const joinable = !recorded && !sessionEnded;
 
   const onCallEnded = (how: ExpertCallEnd) => {
     setInCall(false);
@@ -247,7 +243,7 @@ function ConsultationPage() {
       {back}
       <Heading level={1}>{categoryLabel(appointment.serviceCategory)}</Heading>
 
-      <Reveal show={ended === 'ended'}>
+      <Reveal show={sessionEnded}>
         <Alert tone="info">{t('postCall.ended')}</Alert>
       </Reveal>
 
@@ -329,7 +325,7 @@ function ConsultationPage() {
               {isSampleDataMode ? ` ${t('sample.actionNoop')}` : null}
             </Alert>
           </Reveal>
-          {canCancel(principal, effectiveActions) ? <CancelAppointment appointment={appointment} /> : null}
+          {canBook ? <CancelAppointment appointment={appointment} /> : null}
           {showFollowUp ? <ExpertFollowUp appointment={appointment} /> : null}
           <ScheduleFollowUpCard appointment={appointment} />
         </>

@@ -88,16 +88,18 @@ export function ExpertFollowUp({ appointment }: { appointment: AppointmentRespon
   // The lookup decides between the form and an existing proposal: never show the form on a failed or pending lookup.
   if (!sent && existing.isError) {
     return (
-      <Alert tone="warning">
-        <span className="gap-2 flex flex-col items-start">
-          <span>
-            {t('followUp.lookupFailed')} {mapCallError(existing.error, t)}
+      <Reveal show appear>
+        <Alert tone="warning">
+          <span className="gap-2 flex flex-col items-start">
+            <span>
+              {t('followUp.lookupFailed')} {mapCallError(existing.error, t)}
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => void existing.refetch()}>
+              {tCommon('action.retry')}
+            </Button>
           </span>
-          <Button variant="secondary" size="sm" onClick={() => void existing.refetch()}>
-            {tCommon('action.retry')}
-          </Button>
-        </span>
-      </Alert>
+        </Alert>
+      </Reveal>
     );
   }
   if (!sent && !isSampleDataMode && existing.isPending) return null;

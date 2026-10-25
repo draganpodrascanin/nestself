@@ -46,6 +46,7 @@ function item(overrides: Record<string, unknown> = {}) {
     description: 'follow-up session with a NestSelf expert',
     startsAt: '2030-03-05T14:00:00.000Z',
     durationMinutes: 50,
+    timeZone: 'Europe/Belgrade',
     ...overrides,
   };
 }
@@ -104,7 +105,8 @@ describe('the approvals dashboard (API mode)', () => {
     expect(within(card!).getByRole('heading', { name: 'Jovan Petrović' })).toBeInTheDocument();
     expect(within(card!).getByText(en.approval.followUpLabel)).toBeInTheDocument();
     expect(within(card!).getByText('50 minutes')).toBeInTheDocument();
-    expect(within(card!).getByText(/ at /)).toBeInTheDocument();
+    // The time in the appointment's own zone, named next to it (D-CW-37, T-CW-1.5).
+    expect(within(card!).getByText(/ at .*\(Europe\/Belgrade\)$/)).toBeInTheDocument();
     expect(within(card!).getByText(en.approval.pending)).toBeInTheDocument();
 
     const decided = screen.getByRole('region', { name: en.approval.decidedTitle });

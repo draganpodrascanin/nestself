@@ -22,6 +22,7 @@ import type { FollowUpApprovalPolicy } from '@nestself/contracts';
 import { useAuth } from '../../../auth';
 import { callsApi } from '../../../calls/calls-api';
 import { mapCallError } from '../../../calls/map-call-error';
+import { Reveal } from '../../../calls/reveal';
 import { isSampleDataMode } from '../../../data-source';
 import type { TFunction } from 'i18next';
 
@@ -103,11 +104,11 @@ function FollowUpPolicyScreen({ api, sampleMode }: { api: CallsApi; sampleMode: 
         </Alert>
       ) : (
         <div className="space-y-6">
-          {saveError ? (
+          <Reveal show={saveError !== null}>
             <Alert tone="danger" title={t('calls:approval.policy.saveFailedTitle')}>
               {saveError}
             </Alert>
-          ) : null}
+          </Reveal>
           <RadioGroup
             label={t('calls:approval.policy.label')}
             name="followUpApprovalPolicy"

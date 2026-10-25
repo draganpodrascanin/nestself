@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Alert,
   AnimatePresence,
+  Avatar,
   Button,
   Field,
   Heading,
@@ -109,9 +110,16 @@ function WaitingPanel({
       aria-labelledby="waiting-title"
       className="gap-3 p-4 max-w-md mx-auto flex w-full flex-col rounded-card border border-border-subtle bg-surface text-text shadow-low"
     >
-      <h2 id="waiting-title" className="type-label text-text">
-        {expertName ? t('waiting.expertSoonNamed', { name: expertName }) : t('waiting.expertSoon')}
-      </h2>
+      <div className="gap-3 flex items-center">
+        {/* The expert profile's photo and credentials, never the video provider's (D-CW-21, CALL-05). */}
+        {expertName ? <Avatar initials={expertName.slice(0, 1)} name={expertName} size="md" src={appointment.expert?.photoUrl} /> : null}
+        <div className="gap-0.5 min-w-0 flex flex-col">
+          <h2 id="waiting-title" className="type-label text-text">
+            {expertName ? t('waiting.expertSoonNamed', { name: expertName }) : t('waiting.expertSoon')}
+          </h2>
+          {appointment.expert?.credentials ? <p className="type-metadata text-text-secondary">{appointment.expert.credentials}</p> : null}
+        </div>
+      </div>
       <p className="type-metadata text-text-secondary">
         {t('waiting.scheduled', { time: format.time(appointment.startsAt, appointment.timeZone) })}
       </p>
@@ -137,6 +145,8 @@ function JoinGate({ appointment }: { appointment: AppointmentView }) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const window = useJoinWindow(appointment);
+  // Ended for everyone: no Join or Rejoin (viewer.sessionEnded, D-CW-09).
+  if (appointment.viewer?.sessionEnded) return <Alert tone="info">{t('consultation.sessionEnded')}</Alert>;
   if (!window || window.kind === 'open') return null;
   if (window.kind === 'before') {
     return (
@@ -215,9 +225,10 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
   // A proposal already waiting when the post-call screen opens (CALL-42): the room event may have come first.
   const waiting = useQuery({
     queryKey: [...appointmentKeys.lists(), 'follow-up-of', appointment.id],
-    queryFn: () => callsApi.listAppointments({ status: 'proposed', from: appointment.startsAt }),
+    // The server narrows the list to this consultation's open proposals (followUpOf, CALL-42).
+    queryFn: () => callsApi.listAppointments({ followUpOf: appointment.id, status: 'proposed' }),
     enabled: phase === 'post' && !isSampleDataMode,
-    select: (page) => page.items.find((item) => item.followUpOf === appointment.id) ?? null,
+    select: (page) => page.items[0] ?? null,
   });
   const proposal: FollowUpProposedEvent | null =
     liveProposal ??
@@ -424,7 +435,8 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
 
   let content: ReactNode;
   if (phase === 'prejoin') {
-    const open = isSampleDataMode || window?.kind === 'open' || (window?.kind === 'closed' && window.rejoinable);
+    const open =
+      isSampleDataMode || (!appointment.viewer?.sessionEnded && (window?.kind === 'open' || (window?.kind === 'closed' && window.rejoinable)));
     content = (
       <PageFrame>
         {backLink}

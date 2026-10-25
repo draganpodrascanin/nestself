@@ -66,11 +66,6 @@ function mapApprovalError(err: unknown, t: CallsT): string {
   return mapCallError(err, t);
 }
 
-/** The reader's own time zone: the item carries no zone (it is not one of the four facts). */
-function readerTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
-
 interface ItemProps {
   item: AppointmentApprovalItem;
   onApprove?: (item: AppointmentApprovalItem) => void;
@@ -82,7 +77,8 @@ interface ItemProps {
 function ApprovalCard({ item, onApprove, onReject, approving = false, disabled = false }: ItemProps) {
   const { t, i18n } = useTranslation('calls');
   const language = i18n.resolvedLanguage ?? i18n.language;
-  const zone = readerTimeZone();
+  // The appointment's own zone, named next to the time (D-CW-37: still only the four facts).
+  const zone = item.timeZone;
   const date = formatZonedDate(item.startsAt, zone, language);
   const time = formatZonedTime(item.startsAt, zone, language);
   return (
@@ -93,7 +89,7 @@ function ApprovalCard({ item, onApprove, onReject, approving = false, disabled =
             {item.employeeDisplayName}
           </Heading>
           <p className="type-body text-text">{t('approval.followUpLabel')}</p>
-          <p className="type-body text-text-secondary">{t('approval.when', { date, time })}</p>
+          <p className="type-body text-text-secondary">{t('approval.whenInZone', { date, time, timeZone: zone })}</p>
           <p className="type-metadata text-text-secondary">{t('approval.duration', { count: item.durationMinutes })}</p>
         </div>
         <Badge tone={STATUS_TONE[item.status]}>{t(`approval.${item.status}`)}</Badge>
@@ -295,11 +291,11 @@ export function ApprovalsScreen({ api, sampleMode }: ApprovalsScreenProps) {
         </Alert>
       ) : (
         <>
-          {decideError ? (
+          <Reveal show={decideError !== null}>
             <Alert tone="danger" title={t('calls:approval.decideFailedTitle')}>
               {decideError}
             </Alert>
-          ) : null}
+          </Reveal>
           {items.length === 0 ? (
             <StatusBlock state="empty" title={t('calls:approval.emptyTitle')} body={t('calls:approval.emptyBody')} />
           ) : null}

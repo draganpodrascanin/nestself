@@ -3,7 +3,7 @@ import i18next from 'i18next';
 import type { Resource, TFunction } from 'i18next';
 import { resourcesFor } from '@nestself/i18n';
 import { ApiError } from '@nestself/api-client';
-import { CALL_ERROR_CODES, WEBINAR_SINGLE_MEETING_CAPACITY } from '@nestself/contracts';
+import { CALL_ERROR_CODES, WEBINAR_REPLICATED_CAPACITY } from '@nestself/contracts';
 import { CALL_ERROR_MESSAGES, mapCallError } from './map-call-error';
 
 const i18n = i18next.createInstance();
@@ -33,8 +33,10 @@ describe('mapCallError', () => {
     expect(mapCallError(apiError('appointment_not_joinable', 409), t)).toBe(t('errors.appointmentNotJoinable'));
   });
 
-  it('interpolates the single-meeting limit for capacity_above_limit', () => {
-    expect(mapCallError(apiError('capacity_above_limit'), t)).toContain(String(WEBINAR_SINGLE_MEETING_CAPACITY));
+  it("interpolates the server's limit for capacity_above_limit, else the replicated capacity", () => {
+    const withLimit = new ApiError({ status: 400, code: 'capacity_above_limit', message: 'English', requestId: null, details: { limit: 750 } });
+    expect(mapCallError(withLimit, t)).toContain('750');
+    expect(mapCallError(apiError('capacity_above_limit'), t)).toContain(String(WEBINAR_REPLICATED_CAPACITY));
   });
 
   it('maps generic codes and statuses', () => {
@@ -42,6 +44,11 @@ describe('mapCallError', () => {
     expect(mapCallError(apiError('not_found', 404), t)).toBe(t('errors.notFound'));
     expect(mapCallError(apiError('something_new', 404), t)).toBe(t('errors.notFound'));
     expect(mapCallError(apiError('rate_limited', 429), t)).toBe(t('errors.rateLimited'));
+    expect(mapCallError(apiError('forbidden', 403), t)).toBe(t('errors.forbidden'));
+    expect(mapCallError(apiError('validation', 400), t)).toBe(t('errors.validation'));
+    expect(mapCallError(apiError('conflict', 409), t)).toBe(t('errors.conflict'));
+    expect(mapCallError(apiError('unauthenticated', 401), t)).toBe(t('errors.sessionExpired'));
+    expect(mapCallError(apiError('session_expired', 401), t)).toBe(t('errors.sessionExpired'));
   });
 
   it('falls back to errors.unknown for an unknown code or a non-API error', () => {

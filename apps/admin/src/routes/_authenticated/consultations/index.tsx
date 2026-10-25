@@ -10,7 +10,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Field, Heading, Input, Select, StatusBlock, Table, Td, Text, Th, buttonClassNames } from '@nestself/ui';
 import type { AppointmentView } from '@nestself/api-client';
-import { APPOINTMENT_STATUSES, AppointmentStatusSchema, can } from '@nestself/contracts';
+import { APPOINTMENT_STATUSES, AppointmentStatusSchema } from '@nestself/contracts';
 import { SAMPLE_ORG } from '@nestself/sample-data';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
@@ -19,6 +19,7 @@ import { mapCallError } from '../../../calls/map-call-error';
 import { canListConsultations, isConsultingExpert, requireConsultationList } from '../../../calls/route-gate';
 import { sampleFirstName } from '../../../calls/sample';
 import { useConsultationList } from '../../../calls/use-consultations';
+import { useCanBook, useOpsOrganizations } from '../../../calls/use-ops-organizations';
 import type { ConsultationListParams, ConsultationListState } from '../../../calls/use-consultations';
 
 export const Route = createFileRoute('/_authenticated/consultations/')({
@@ -28,9 +29,9 @@ export const Route = createFileRoute('/_authenticated/consultations/')({
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The organisation's name where it is known (sample mode), otherwise its id. */
-function organisationLabel(orgId: string): string {
-  return isSampleDataMode && orgId === SAMPLE_ORG.id ? SAMPLE_ORG.name : orgId;
+/** The organisation's name: from the row (`orgName`), the organisation list, or the sample organisation; its id otherwise. */
+function organisationLabel(orgId: string, names: ReadonlyMap<string, string>): string {
+  return names.get(orgId) ?? (isSampleDataMode && orgId === SAMPLE_ORG.id ? SAMPLE_ORG.name : orgId);
 }
 
 function firstName(appointment: AppointmentView, who: 'employee' | 'expert'): string | null {
@@ -51,9 +52,10 @@ interface RowProps {
   now: number;
   /** Operations: expert and organisation columns, and a read-only view. */
   operations: boolean;
+  orgNames: ReadonlyMap<string, string>;
 }
 
-function ConsultationRow({ appointment, now, operations }: RowProps) {
+function ConsultationRow({ appointment, now, operations, orgNames }: RowProps) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const categoryLabel = useCategoryLabel();
@@ -68,7 +70,7 @@ function ConsultationRow({ appointment, now, operations }: RowProps) {
     <tr>
       <Td>{operations ? employee : link}</Td>
       {operations ? <Td>{firstName(appointment, 'expert') ?? t('appointments.yourExpert')}</Td> : null}
-      {operations ? <Td>{organisationLabel(appointment.orgId)}</Td> : null}
+      {operations ? <Td>{appointment.orgName ?? organisationLabel(appointment.orgId, orgNames)}</Td> : null}
       <Td>{categoryLabel(appointment.serviceCategory)}</Td>
       <Td>
         <time dateTime={appointment.startsAt}>{format.short(appointment.startsAt, appointment.timeZone)}</time>
@@ -84,7 +86,21 @@ function ConsultationRow({ appointment, now, operations }: RowProps) {
   );
 }
 
-function ConsultationTable({ caption, items, now, operations }: { caption: string; items: readonly AppointmentView[]; now: number; operations: boolean }) {
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+function ConsultationTable({
+  caption,
+  items,
+  now,
+  operations,
+  orgNames = NO_NAMES,
+}: {
+  caption: string;
+  items: readonly AppointmentView[];
+  now: number;
+  operations: boolean;
+  orgNames?: ReadonlyMap<string, string>;
+}) {
   const { t } = useTranslation('calls');
   return (
     <Table caption={caption}>
@@ -102,7 +118,7 @@ function ConsultationTable({ caption, items, now, operations }: { caption: strin
       </thead>
       <tbody>
         {items.map((appointment) => (
-          <ConsultationRow key={appointment.id} appointment={appointment} now={now} operations={operations} />
+          <ConsultationRow key={appointment.id} appointment={appointment} now={now} operations={operations} orgNames={orgNames} />
         ))}
       </tbody>
     </Table>
@@ -143,8 +159,9 @@ function LoadMore({ list }: { list: ConsultationListState }) {
 function ExpertConsultations({ now }: { now: number }) {
   const { t } = useTranslation('calls');
   const [since] = useState(() => new Date(now - DAY_MS).toISOString());
-  const recent = useConsultationList({ from: since });
-  const history = useConsultationList({ to: since });
+  const recent = useConsultationList({ from: since, order: 'asc' });
+  // History newest first from the API, so the first page is the latest sessions.
+  const history = useConsultationList({ to: since, order: 'desc' });
   // Upcoming until the room closes; anything finished or no longer active is past.
   const isUpcoming = (item: AppointmentView) =>
     (item.status === 'confirmed' || item.status === 'proposed' || item.status === 'awaiting_approval') && roomClosesAt(item).getTime() > now;
@@ -195,6 +212,8 @@ const NO_FILTERS: FilterValues = { orgId: '', status: '', from: '', to: '' };
 function toParams(values: FilterValues): ConsultationListParams {
   const status = AppointmentStatusSchema.safeParse(values.status);
   return {
+    // Operations look back first: newest first unless they narrow the dates.
+    order: 'desc',
     orgId: values.orgId.trim() || undefined,
     status: status.success ? status.data : undefined,
     from: dayStart(values.from),
@@ -209,9 +228,19 @@ function OperationsConsultations({ now }: { now: number }) {
   const [draft, setDraft] = useState<FilterValues>(NO_FILTERS);
   const [applied, setApplied] = useState<FilterValues>(NO_FILTERS);
   const list = useConsultationList(toParams(applied));
-  // No organisation list exists on the API yet: offer the organisations the rows show, and the one filtered on.
+  // Names from GET /ops/orgs and the rows' orgName; ids only when neither has one.
+  const organizations = useOpsOrganizations();
+  const orgNames = new Map<string, string>([
+    ...organizations.items.map((org): [string, string] => [org.id, org.name]),
+    ...list.items.flatMap((item): [string, string][] => (item.orgName ? [[item.orgId, item.orgName]] : [])),
+  ]);
   const orgOptions = [
-    ...new Set([...(isSampleDataMode ? [SAMPLE_ORG.id] : []), ...(applied.orgId ? [applied.orgId] : []), ...list.items.map((item) => item.orgId)]),
+    ...new Set([
+      ...organizations.items.map((org) => org.id),
+      ...(isSampleDataMode ? [SAMPLE_ORG.id] : []),
+      ...(applied.orgId ? [applied.orgId] : []),
+      ...list.items.map((item) => item.orgId),
+    ]),
   ];
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -234,7 +263,7 @@ function OperationsConsultations({ now }: { now: number }) {
             <Select
               options={[
                 { value: '', label: t('consultations.filters.allOrganisations') },
-                ...orgOptions.map((orgId) => ({ value: orgId, label: organisationLabel(orgId) })),
+                ...orgOptions.map((orgId) => ({ value: orgId, label: organisationLabel(orgId, orgNames) })),
               ]}
               value={draft.orgId}
               onValueChange={(value) => setDraft({ ...draft, orgId: value ?? '' })}
@@ -265,7 +294,7 @@ function OperationsConsultations({ now }: { now: number }) {
         </div>
       </form>
       <LoadState list={list} />
-      {list.items.length > 0 ? <ConsultationTable caption={t('consultations.title')} items={list.items} now={now} operations /> : null}
+      {list.items.length > 0 ? <ConsultationTable caption={t('consultations.title')} items={list.items} now={now} operations orgNames={orgNames} /> : null}
       <LoadMore list={list} />
     </>
   );
@@ -275,12 +304,12 @@ function ConsultationsPage() {
   const { t } = useTranslation(['calls', 'common']);
   const { principal, effectiveActions } = useAuth();
   const [now] = useState(() => Date.now());
+  const canCreate = useCanBook();
 
   if (!canListConsultations(principal, effectiveActions)) {
     return <StatusBlock state="permission" title={t('common:state.permission.title')} body={t('common:state.permission.body')} />;
   }
   const expert = isConsultingExpert(principal, effectiveActions);
-  const canCreate = !!principal && can(principal, 'bookings.coordinate', undefined, effectiveActions);
 
   return (
     <div className="space-y-6">

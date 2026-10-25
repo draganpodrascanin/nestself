@@ -8,11 +8,12 @@ import {
   StatusBlock,
   PhotoFigure,
 } from '@nestself/ui';
-import { supportAreaIcon } from '@nestself/contracts';
+import { can, supportAreaIcon } from '@nestself/contracts';
 import type { SupportArea } from '@nestself/contracts';
 import { SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { useAuth } from '../../auth';
 import { NextAppointment } from '../../calls/next-appointment';
+import { isSampleDataMode } from '../../data-source';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
@@ -25,13 +26,14 @@ export const Route = createFileRoute('/_authenticated/')({
 
 function HomePage() {
   const { t } = useTranslation(['workspace', 'common']);
-  const { principal } = useAuth();
+  const { principal, effectiveActions } = useAuth();
   const { denied } = Route.useSearch();
 
   const supportAreas: SupportArea[] = ['psychological', 'legal', 'financial'];
+  const showUpcoming = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
 
-  // Latest two posts
-  const latestPosts = SAMPLE_POSTS.slice(0, 2);
+  // Latest two posts: fixtures, so sample mode only (sample-data rule); the channels API arrives with its epic.
+  const latestPosts = isSampleDataMode ? SAMPLE_POSTS.slice(0, 2) : [];
 
   const findPersonName = (authorId: string) => {
     const person = SAMPLE_PEOPLE.find((p) => p.id === authorId);
@@ -74,33 +76,37 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Next appointment (CALL-02): the same list as /appointments, never a fixture in API mode */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.upcoming')}
-        </Heading>
-        <NextAppointment />
-      </section>
+      {/* Next appointment (CALL-02): the same list as /appointments, for those who hold consultations */}
+      {showUpcoming ? (
+        <section>
+          <Heading level={2} typeRole="sectionTitle" className="mb-4">
+            {t('workspace:home.upcoming')}
+          </Heading>
+          <NextAppointment />
+        </section>
+      ) : null}
 
-      {/* Channel digest */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.recentMessages')}
-        </Heading>
-        <div className="space-y-3">
-          {latestPosts.map((post) => (
-            <div
-              key={post.id}
-              className="rounded-card border border-border-subtle bg-surface p-4"
-            >
-              <Text className="font-[var(--font-weight-label)] mb-1">
-                {findPersonName(post.authorId)}
-              </Text>
-              <Text className="text-text-secondary">{post.content}</Text>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Channel digest: sample posts in sample mode only */}
+      {latestPosts.length > 0 ? (
+        <section>
+          <Heading level={2} typeRole="sectionTitle" className="mb-4">
+            {t('workspace:home.recentMessages')}
+          </Heading>
+          <div className="space-y-3">
+            {latestPosts.map((post) => (
+              <div
+                key={post.id}
+                className="rounded-card border border-border-subtle bg-surface p-4"
+              >
+                <Text className="font-[var(--font-weight-label)] mb-1">
+                  {findPersonName(post.authorId)}
+                </Text>
+                <Text className="text-text-secondary">{post.content}</Text>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* One optional photo */}
       <PhotoFigure

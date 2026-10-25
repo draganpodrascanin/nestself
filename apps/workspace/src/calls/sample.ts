@@ -28,7 +28,7 @@ export function sampleFirstName(userId: string): string | null {
   return person ? (person.displayName.split(' ')[0] ?? null) : null;
 }
 
-const APPROVAL_ITEM_FIELDS = ['id', 'appointmentId', 'status', 'employeeDisplayName', 'description', 'startsAt', 'durationMinutes'] as const;
+const APPROVAL_ITEM_FIELDS = ['id', 'appointmentId', 'status', 'employeeDisplayName', 'description', 'startsAt', 'durationMinutes', 'timeZone'] as const;
 
 /**
  * The sample approver's follow-up approval items (`SAMPLE_APPROVAL_ITEMS`),

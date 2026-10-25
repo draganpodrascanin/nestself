@@ -49,6 +49,8 @@ export function JoinPanel({ appointment }: { appointment: JoinWindowAppointment 
   const format = useZonedFormat();
   const window = useJoinWindow(appointment);
   if (!window || window.kind === 'not_joinable') return null;
+  // Ended for everyone: no Join or Rejoin (viewer.sessionEnded, D-CW-09).
+  if (appointment.viewer?.sessionEnded) return <Alert tone="info">{t('consultation.sessionEnded')}</Alert>;
 
   const sampleDemo =
     isSampleDataMode && window.kind !== 'open' ? (

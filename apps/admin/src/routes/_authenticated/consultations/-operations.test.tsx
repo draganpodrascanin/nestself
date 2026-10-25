@@ -164,14 +164,15 @@ describe('operations and support (API mode)', { timeout: 20_000 }, () => {
 
   it('opens a read-only view from the list and cancels for operations (CALL-27, CALL-28)', async () => {
     const sent = serve({
-      'GET /api/appointments': () => json(200, { items: [appointment()], nextCursor: null }),
+      'GET /api/ops/orgs': () => json(200, { items: [{ id: 'org_1', name: 'Example d.o.o.' }] }),
+      'GET /api/appointments': () => json(200, { items: [appointment({ orgName: 'Example d.o.o.' })], nextCursor: null }),
       'POST /api/appointments/appt_1/cancel': () => json(200, appointment({ status: 'canceled' })),
     });
     const user = userEvent.setup();
     renderAt('/consultations');
     const table = await screen.findByRole('table', {}, { timeout: 5000 });
     expect(within(table).getByText('Milica')).toBeInTheDocument();
-    expect(within(table).getByText('org_1')).toBeInTheDocument();
+    expect(within(table).getByText('Example d.o.o.')).toBeInTheDocument();
     await user.click(within(table).getByRole('link', { name: en.consultations.view }));
 
     expect(await screen.findByText(en.consultations.readOnly)).toBeInTheDocument();
@@ -179,8 +180,8 @@ describe('operations and support (API mode)', { timeout: 20_000 }, () => {
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: en.cancel.confirm }));
     expect(await screen.findByText(en.cancel.done)).toBeInTheDocument();
     expect(sent.some((s) => s.method === 'POST' && s.path === '/api/appointments/appt_1/cancel')).toBe(true);
-    // The read-only view never reads the expert's detail route.
-    expect(sent.some((s) => s.method === 'GET' && s.path === '/api/appointments/appt_1')).toBe(false);
+    // Operations list newest first by default.
+    expect(new URLSearchParams(sent.find((s) => s.path === '/api/appointments')?.search).get('order')).toBe('desc');
   });
 
   it('sends the list filters to the API (CALL-28)', async () => {
@@ -214,7 +215,7 @@ describe('operations and support (API mode)', { timeout: 20_000 }, () => {
       participants: [
         { role: 'employee', joinedAt: '2030-01-20T09:01:00.000Z', leftAt: null, reconnectCount: 2, qualityMetrics: { rtt: 400 }, errorCodes: ['audioInputFailed'], browser: 'chrome', os: 'mac' },
       ],
-      problemReports: [],
+      problemReports: [{ category: 'video', reportedAt: '2030-01-20T09:30:00.000Z', role: 'expert' }],
     };
     const sent = serve({
       'GET /api/ops/calls/problem-reports': () => json(200, { items: [report], nextCursor: null }),
@@ -230,6 +231,9 @@ describe('operations and support (API mode)', { timeout: 20_000 }, () => {
     expect(await screen.findByRole('heading', { name: 'Session sess_9' })).toBeInTheDocument();
     expect(screen.getByText('meeting_9')).toBeInTheDocument();
     expect(screen.getByText('audioInputFailed')).toBeInTheDocument();
+    const sessionReports = screen.getByRole('table', { name: en.supportCalls.sessionReportsCaption.replace('{{id}}', 'sess_9') });
+    expect(within(sessionReports).getByText(en.report.categories.video)).toBeInTheDocument();
+    expect(within(sessionReports).getByText(en.supportCalls.roles.expert)).toBeInTheDocument();
     expect(sent.some((s) => s.path === '/api/ops/calls/sess_9/diagnostics')).toBe(true);
   });
 
@@ -243,5 +247,27 @@ describe('operations and support (API mode)', { timeout: 20_000 }, () => {
     await user.type(screen.getByRole('textbox', { name: en.supportCalls.sessionId }), 'sess_missing');
     await user.click(screen.getByRole('button', { name: en.supportCalls.lookup }));
     expect(await screen.findByText(en.supportCalls.notFound)).toBeInTheDocument();
+  });
+
+  it('offers New consultation only with an organisation to book for, and picks organisation and expert from the lists', async () => {
+    serve({ 'GET /api/ops/orgs': () => json(200, { items: [] }), 'GET /api/appointments': () => json(200, { items: [], nextCursor: null }) });
+    renderAt('/consultations');
+    await screen.findByText(en.consultations.operationsNote, {}, { timeout: 5000 });
+    expect(screen.queryByRole('link', { name: en.consultations.newConsultation })).not.toBeInTheDocument();
+    cleanup();
+
+    const sent = serve({
+      'GET /api/ops/orgs': () => json(200, { items: [{ id: 'org_1', name: 'Example d.o.o.' }] }),
+      'GET /api/ops/appointment-experts': () => json(200, { items: [{ userId: 'user_milica', displayName: 'Milica Ristić' }] }),
+      'GET /api/appointments': () => json(200, { items: [], nextCursor: null }),
+    });
+    const user = userEvent.setup();
+    renderAt('/consultations');
+    await user.click(await screen.findByRole('link', { name: en.consultations.newConsultation }, { timeout: 5000 }));
+    // Pickers, not the ids-only fallback.
+    expect(await screen.findByText(en.create.chooseOrganisation)).toBeInTheDocument();
+    expect(await screen.findByText(en.create.chooseExpert)).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: new RegExp(en.create.organisationId) })).not.toBeInTheDocument();
+    expect(new URLSearchParams(sent.find((s) => s.path === '/api/ops/appointment-experts')?.search).get('serviceCategory')).toBe('psychological');
   });
 });

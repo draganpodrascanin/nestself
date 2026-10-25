@@ -130,7 +130,8 @@
       "sampleNote": "Sample mode: your choice is not saved.",
       "sampleSaved": "Sample mode: nothing was saved."
     },
-    "sampleItemsNote": "Sample mode: these requests are fictional. Approving or declining sends nothing."
+    "sampleItemsNote": "Sample mode: these requests are fictional. Approving or declining sends nothing.",
+    "whenInZone": "{{date}} at {{time}} ({{timeZone}})"
   },
   "webinar": {
     "register": "Register",
@@ -544,7 +545,8 @@
     "forbidden": "This action is not available to you.",
     "validation": "Something in the request was not accepted. Check it and try again.",
     "conflict": "This step is not possible in the webinar's current state.",
-    "notEditable": "This webinar can no longer be changed this way. Organisation and audience changes are possible only while it is a draft."
+    "notEditable": "This webinar can no longer be changed this way. Organisation and audience changes are possible only while it is a draft.",
+    "sessionExpired": "Your session has ended. Sign in again, then try once more."
   },
   "email": {
     "reminderSubject": "Your NestSelf session",
@@ -894,7 +896,10 @@
       "required": "Fill in this field.",
       "expertCategory": "This expert is not approved for this service.",
       "notMember": "This employee is not a member of the organisation."
-    }
+    },
+    "chooseOrganisation": "Choose an organisation",
+    "organisationsFailed": "The organisations could not be loaded. Enter the organisation ID instead.",
+    "expertsFailed": "The experts for this service could not be loaded. Enter the expert user ID instead."
   },
   "supportCalls": {
     "nav": "Call support",
@@ -955,6 +960,7 @@
       "facilitator": "Facilitator",
       "participant": "Participant"
     },
-    "reportsUnavailable": "Listing problem reports needs platform-wide diagnostics access. Look up a session by its ID above instead."
+    "reportsUnavailable": "Listing problem reports needs platform-wide diagnostics access. Look up a session by its ID above instead.",
+    "sessionReportsCaption": "Problem reports of session {{id}}"
   }
 }

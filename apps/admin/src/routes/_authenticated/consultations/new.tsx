@@ -11,10 +11,10 @@ import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Field, FormErrorSummary, Heading, Input, Select, StatusBlock, Text } from '@nestself/ui';
 import type { FormError, FormErrorSummaryHandle } from '@nestself/ui';
-import { ApiError, appointmentKeys } from '@nestself/api-client';
+import { ApiError, appointmentKeys, retryUnlessClientError } from '@nestself/api-client';
 import { SupportAreaSchema, can } from '@nestself/contracts';
 import { SAMPLE_ORG, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { zonedDateTimeToIso } from '@nestself/video';
@@ -25,6 +25,7 @@ import { useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
 import { Reveal } from '../../../calls/reveal';
 import { opsAdminApi, useOrgMembers } from '../../../features/access/use-ops-admin';
+import { useOpsOrganizations } from '../../../calls/use-ops-organizations';
 
 const BOOKING_ACTION = 'bookings.coordinate';
 /** The organisation default zone (D-CW-38). */
@@ -74,7 +75,20 @@ function NewConsultationPage() {
     end: '',
   });
   const [memberOrg, setMemberOrg] = useState<string | null>(null);
-  const members = useOrgMembers(opsAdminApi, isSampleDataMode ? null : memberOrg);
+  const organizations = useOpsOrganizations();
+  // A picked organisation loads its members at once; a typed id (the ids-only fallback) on leaving the field.
+  const orgPicker = !isSampleDataMode && organizations.status === 'success' && organizations.items.length > 0;
+  const members = useOrgMembers(opsAdminApi, isSampleDataMode ? null : orgPicker ? values.orgId || null : memberOrg);
+  const experts = useQuery({
+    queryKey: ['ops-appointment-experts', values.serviceCategory],
+    queryFn: () => callsApi.listAppointmentExperts({ serviceCategory: values.serviceCategory }),
+    enabled: !isSampleDataMode && values.serviceCategory !== '',
+    retry: retryUnlessClientError,
+  });
+  const expertPicker = isSampleDataMode || (experts.isSuccess && experts.data.items.length > 0);
+  const expertOptions = isSampleDataMode
+    ? SAMPLE_EXPERTS.map((person) => ({ value: person.id, label: person.displayName }))
+    : (experts.data?.items ?? []).map((expert) => ({ value: expert.userId, label: expert.displayName }));
   const [errors, setErrors] = useState<FormError[]>([]);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ tone: 'success' | 'info'; message: string } | null>(null);
@@ -166,16 +180,29 @@ function NewConsultationPage() {
         <Reveal show={errors.length > 0}>
           <FormErrorSummary ref={summaryRef} title={tCalls('create.errorSummary')} errors={errors} />
         </Reveal>
-        <Field id={FIELD_ID.orgId} label={isSampleDataMode ? labels.orgId : tCalls('create.organisationId')} error={errorOf('orgId')} required>
+        <Field id={FIELD_ID.orgId} label={isSampleDataMode || orgPicker ? labels.orgId : tCalls('create.organisationId')} error={errorOf('orgId')} required>
           {isSampleDataMode ? (
             <Select options={[{ value: SAMPLE_ORG.id, label: SAMPLE_ORG.name }]} value={values.orgId} onValueChange={set('orgId')} />
+          ) : orgPicker ? (
+            <Select
+              options={organizations.items.map((org) => ({ value: org.id, label: org.name }))}
+              placeholder={tCalls('create.chooseOrganisation')}
+              value={values.orgId}
+              onValueChange={(value) => {
+                set('orgId')(value);
+                set('employeeUserId')('');
+              }}
+            />
           ) : (
-            // The member list loads once the organisation ID is complete (focus leaves the field).
+            // Ids only (the organisation list failed): the member list loads once focus leaves the field.
             <div className="contents" onBlur={() => setMemberOrg(values.orgId.trim() || null)}>
               <Input value={values.orgId} onChange={(event) => set('orgId')(event.target.value)} autoComplete="off" />
             </div>
           )}
         </Field>
+        <Reveal show={organizations.status === 'error'}>
+          <Alert tone="warning">{`${tCalls('create.organisationsFailed')} ${mapCallError(organizations.error, tCalls)}`}</Alert>
+        </Reveal>
         <Field id={FIELD_ID.employeeUserId} label={employeeAsSelect ? labels.employeeUserId : tCalls('create.employeeId')} error={errorOf('employeeUserId')} required>
           {employeeAsSelect ? (
             <Select
@@ -188,19 +215,19 @@ function NewConsultationPage() {
             <Input value={values.employeeUserId} onChange={(event) => set('employeeUserId')(event.target.value)} autoComplete="off" />
           )}
         </Field>
-        {members.isError ? <Alert tone="warning">{`${tCalls('create.membersFailed')} ${mapCallError(members.error, tCalls)}`}</Alert> : null}
-        <Field id={FIELD_ID.expertUserId} label={isSampleDataMode ? labels.expertUserId : tCalls('create.expertId')} error={errorOf('expertUserId')} required>
-          {isSampleDataMode ? (
-            <Select
-              options={SAMPLE_EXPERTS.map((person) => ({ value: person.id, label: person.displayName }))}
-              placeholder={tCalls('create.chooseExpert')}
-              value={values.expertUserId}
-              onValueChange={set('expertUserId')}
-            />
+        <Reveal show={members.isError}>
+          <Alert tone="warning">{`${tCalls('create.membersFailed')} ${mapCallError(members.error, tCalls)}`}</Alert>
+        </Reveal>
+        <Field id={FIELD_ID.expertUserId} label={expertPicker ? labels.expertUserId : tCalls('create.expertId')} error={errorOf('expertUserId')} required>
+          {expertPicker ? (
+            <Select options={expertOptions} placeholder={tCalls('create.chooseExpert')} value={values.expertUserId} onValueChange={set('expertUserId')} />
           ) : (
             <Input value={values.expertUserId} onChange={(event) => set('expertUserId')(event.target.value)} autoComplete="off" />
           )}
         </Field>
+        <Reveal show={experts.isError}>
+          <Alert tone="warning">{`${tCalls('create.expertsFailed')} ${mapCallError(experts.error, tCalls)}`}</Alert>
+        </Reveal>
         <Field id={FIELD_ID.serviceCategory} label={labels.serviceCategory} error={errorOf('serviceCategory')} required>
           <Select
             options={SupportAreaSchema.options.map((area) => ({ value: area, label: t(`common:area.${area}`) }))}

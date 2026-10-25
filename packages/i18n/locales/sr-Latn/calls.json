@@ -130,7 +130,8 @@
       "sampleNote": "Primer podataka: vaš izbor se ne čuva.",
       "sampleSaved": "Primer podataka: ništa nije sačuvano."
     },
-    "sampleItemsNote": "Primer podataka: ovi zahtevi su izmišljeni. Odobravanje ili odbijanje ništa ne šalje."
+    "sampleItemsNote": "Primer podataka: ovi zahtevi su izmišljeni. Odobravanje ili odbijanje ništa ne šalje.",
+    "whenInZone": "{{date}} u {{time}} ({{timeZone}})"
   },
   "webinar": {
     "register": "Registruj se",
@@ -544,7 +545,8 @@
     "forbidden": "Ova radnja vam nije dostupna.",
     "validation": "Nešto u zahtevu nije prihvaćeno. Proverite i pokušajte ponovo.",
     "conflict": "Ovaj korak nije moguć u trenutnom stanju vebinara.",
-    "notEditable": "Ovaj vebinar se više ne može menjati na ovaj način. Organizacija i publika mogu da se menjaju samo dok je u pripremi."
+    "notEditable": "Ovaj vebinar se više ne može menjati na ovaj način. Organizacija i publika mogu da se menjaju samo dok je u pripremi.",
+    "sessionExpired": "Vaša sesija je istekla. Ponovo se prijavite, pa pokušajte još jednom."
   },
   "email": {
     "reminderSubject": "Vaša NestSelf sesija",
@@ -894,7 +896,10 @@
       "required": "Popunite ovo polje.",
       "expertCategory": "Ovaj stručnjak nije odobren za ovu uslugu.",
       "notMember": "Ovaj zaposleni nije član organizacije."
-    }
+    },
+    "chooseOrganisation": "Izaberite organizaciju",
+    "organisationsFailed": "Organizacije nisu mogle da se učitaju. Umesto toga unesite ID organizacije.",
+    "expertsFailed": "Stručnjaci za ovu uslugu nisu mogli da se učitaju. Umesto toga unesite ID korisnika stručnjaka."
   },
   "supportCalls": {
     "nav": "Podrška za pozive",
@@ -955,6 +960,7 @@
       "facilitator": "Voditelj",
       "participant": "Učesnik radionice"
     },
-    "reportsUnavailable": "Za pregled prijava problema potreban je pristup dijagnostici na nivou platforme. Umesto toga potražite sesiju po ID-ju iznad."
+    "reportsUnavailable": "Za pregled prijava problema potreban je pristup dijagnostici na nivou platforme. Umesto toga potražite sesiju po ID-ju iznad.",
+    "sessionReportsCaption": "Prijave problema za sesiju {{id}}"
   }
 }

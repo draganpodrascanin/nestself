@@ -44,10 +44,14 @@ function AuthenticatedLayout() {
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
+  // Appointments only for someone who can hold consultations (an HR-only principal has none).
+  const showAppointments = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
+  const appointmentsNav = showAppointments ? [{ to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') }] : [];
+
   const navItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
     { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
+    ...appointmentsNav,
     { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
     { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
     { to: '/polls' as const, icon: ChartBar, label: t('nav.polls') },
@@ -97,7 +101,7 @@ function AuthenticatedLayout() {
   const bottomBarItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
     { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
+    ...appointmentsNav,
     { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
     { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
   ];

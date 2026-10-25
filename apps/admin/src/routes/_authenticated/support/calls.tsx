@@ -129,6 +129,29 @@ function DiagnosticsView({ diagnostics }: { diagnostics: DiagnosticsResponse }) 
           </tbody>
         </Table>
       )}
+      <h3 className="type-label text-text">{t('supportCalls.reportsTitle')}</h3>
+      {diagnostics.problemReports.length === 0 ? (
+        <Text className="text-text-secondary">{t('supportCalls.reportsEmpty')}</Text>
+      ) : (
+        <Table caption={t('supportCalls.sessionReportsCaption', { id: diagnostics.sessionId })}>
+          <thead>
+            <tr>
+              <Th>{t('supportCalls.reportColumns.reportedAt')}</Th>
+              <Th>{t('supportCalls.reportColumns.role')}</Th>
+              <Th>{t('supportCalls.reportColumns.category')}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {diagnostics.problemReports.map((report, index) => (
+              <tr key={`${report.reportedAt}-${index}`}>
+                <Td>{when(report.reportedAt, none)}</Td>
+                <Td>{t(`supportCalls.roles.${report.role}`)}</Td>
+                <Td>{t(`report.categories.${report.category}`)}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
     </Card>
   );
 }

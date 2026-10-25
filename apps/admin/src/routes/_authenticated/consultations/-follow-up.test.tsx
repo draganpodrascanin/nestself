@@ -308,4 +308,33 @@ describe("the expert's follow-ups (API mode)", { timeout: 20_000 }, () => {
     renderAt('/consultations/appt_2');
     expect(await screen.findByText(en.followUp.awaitingApprovalExpert, {}, { timeout: 5000 })).toBeInTheDocument();
   });
+
+  it('hides Join once the session was ended for everyone', async () => {
+    const startsAt = Date.now() - 5 * 60_000;
+    serve({
+      'GET /api/appointments/appt_1': () =>
+        json(
+          200,
+          appointment({
+            status: 'confirmed',
+            startsAt: new Date(startsAt).toISOString(),
+            endsAt: new Date(startsAt + 50 * 60_000).toISOString(),
+            viewer: { hasJoined: true, sessionEnded: true },
+          }),
+        ),
+    });
+    renderAt('/consultations/appt_1');
+    expect(await screen.findByText(en.postCall.ended, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.join.button })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.join.rejoin })).not.toBeInTheDocument();
+  });
+
+  it('asks for the past consultations newest first', async () => {
+    const sent = serve({ 'GET /api/appointments': () => json(200, { items: [appointment()], nextCursor: null }) });
+    renderAt('/consultations');
+    await screen.findByRole('table', {}, { timeout: 5000 });
+    const searches = sent.filter((s) => s.path === '/api/appointments').map((s) => new URLSearchParams(s.search));
+    expect(searches.some((q) => q.has('to') && q.get('order') === 'desc')).toBe(true);
+    expect(searches.some((q) => q.has('from') && q.get('order') === 'asc')).toBe(true);
+  });
 });

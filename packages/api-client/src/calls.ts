@@ -29,12 +29,16 @@ import {
   CallLocationResponseSchema,
   DiagnosticsResponseSchema,
   FollowUpApprovalPolicyResponseSchema,
+  AppointmentExpertCandidatesResponseSchema,
+  OpsOrganizationsResponseSchema,
   ProblemReportListItemSchema,
   ProblemReportListResponseSchema,
 } from '@nestself/contracts';
 import type {
   AppointmentApprovalDecisionRequest,
+  AppointmentApprovalItem,
   AppointmentCreateRequest,
+  AppointmentExpertCandidatesResponse,
   AppointmentResponse,
   ProblemReportListItem,
   ProblemReportListResponse,
@@ -64,6 +68,8 @@ export interface AppointmentListParams {
   to?: string;
   /** Only the follow-ups of this consultation. */
   followUpOf?: string;
+  /** `startsAt` order: `asc` (the default) for what is ahead, `desc` for history, newest first. */
+  order?: 'asc' | 'desc';
 }
 
 /** Query of `GET /ops/calls/problem-reports` (PLT-05, CALL-16); every field is optional. */
@@ -86,8 +92,17 @@ export interface ProblemReportListParams {
  */
 export { APPROVAL_OUTCOMES, AppointmentViewerSchema } from '@nestself/contracts';
 export type { AppointmentViewer } from '@nestself/contracts';
+/** The contracts' response: `viewer` (with `sessionEnded`), the follow-up outcome and, on operations rows, `orgName`. */
 export const AppointmentViewSchema = AppointmentResponseSchema;
 export type AppointmentView = AppointmentResponse;
+
+/** An approval item; it carries the appointment's own time zone (T-CW-1.5). */
+export const ApprovalItemViewSchema = AppointmentApprovalItemSchema;
+export type ApprovalItemView = AppointmentApprovalItem;
+
+/** `GET /ops/appointment-experts`: experts approved for a service category, for the booking form (CALL-26). */
+export const AppointmentExpertOptionsSchema = AppointmentExpertCandidatesResponseSchema;
+export type AppointmentExpertOptions = AppointmentExpertCandidatesResponse;
 
 /** One technical problem report as operations list it (`GET /ops/calls/problem-reports`). */
 export const ProblemReportItemSchema = ProblemReportListItemSchema;
@@ -141,7 +156,21 @@ export function createCallsApi(client: ApiClient) {
     getAppointment: (appointmentId: string) =>
       client.request(appointmentPath(appointmentId), {
         method: 'GET',
-        schema: AppointmentResponseSchema,
+        schema: AppointmentViewSchema,
+      }),
+
+    /** GET /ops/orgs?q=: the client organisations the caller coordinates or manages, by name. */
+    listOpsOrganizations: (q?: string) =>
+      client.request(`/api/ops/orgs${queryString({ q })}`, {
+        method: 'GET',
+        schema: OpsOrganizationsResponseSchema,
+      }),
+
+    /** GET /ops/appointment-experts?serviceCategory=&q=: experts approved for the service (CALL-26). */
+    listAppointmentExperts: (params: { serviceCategory?: string; q?: string } = {}) =>
+      client.request(`/api/ops/appointment-experts${queryString(params)}`, {
+        method: 'GET',
+        schema: AppointmentExpertOptionsSchema,
       }),
 
     /**
@@ -299,14 +328,14 @@ export function createCallsApi(client: ApiClient) {
     approveApproval: (approvalId: string) =>
       client.request(approvalPath(approvalId, '/approve'), {
         ...jsonPost({}),
-        schema: AppointmentApprovalItemSchema,
+        schema: ApprovalItemViewSchema,
       }),
 
     /** POST /appointment-approvals/:id/reject: the safe reason goes to the employee only. */
     rejectApproval: (approvalId: string, body: AppointmentApprovalDecisionRequest) =>
       client.request(approvalPath(approvalId, '/reject'), {
         ...jsonPost(body),
-        schema: AppointmentApprovalItemSchema,
+        schema: ApprovalItemViewSchema,
       }),
 
     /** GET /orgs/:orgId/settings/follow-up-approval (HR). */

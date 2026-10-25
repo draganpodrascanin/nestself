@@ -10,6 +10,7 @@ import { useZonedFormat } from '../../../calls/format';
 import { mapCallError } from '../../../calls/map-call-error';
 import { canJoinConsultations, requireConsultationAccess } from '../../../calls/route-gate';
 import { useAppointmentList } from '../../../calls/use-appointments';
+import type { AppointmentListState } from '../../../calls/use-appointments';
 
 export const Route = createFileRoute('/_authenticated/appointments/')({
   beforeLoad: ({ context, location }) => requireConsultationAccess(context.auth, location.pathname),
@@ -59,7 +60,19 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
   );
 }
 
-function AppointmentSection({ id, title, items }: { id: string; title: string; items: readonly Appointment[] }) {
+function AppointmentSection({
+  id,
+  title,
+  items,
+  list,
+}: {
+  id: string;
+  title: string;
+  items: readonly Appointment[];
+  /** The query behind the section, for its own "Load more". */
+  list: AppointmentListState;
+}) {
+  const { t } = useTranslation('calls');
   if (items.length === 0) return null;
   return (
     <section aria-labelledby={id} className="gap-3 flex flex-col">
@@ -71,23 +84,41 @@ function AppointmentSection({ id, title, items }: { id: string; title: string; i
           <AppointmentRow key={appointment.id} appointment={appointment} />
         ))}
       </ul>
+      {list.hasNextPage ? (
+        <div>
+          <Button variant="secondary" onClick={list.fetchNextPage} loading={list.isFetchingNextPage} loadingLabel={t('appointments.loadingMore')}>
+            {t('appointments.loadMore')}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function AppointmentsPage() {
   const { t } = useTranslation(['calls', 'common']);
   const { t: tCalls } = useTranslation('calls');
   const { principal, effectiveActions } = useAuth();
-  const list = useAppointmentList();
   // Read once per visit: a row moving between sections while open would be jarring.
   const [now] = useState(() => Date.now());
+  // What is ahead, soonest first; the history, newest first (the API orders both).
+  const [since] = useState(() => new Date(now - DAY_MS).toISOString());
+  const recent = useAppointmentList({ from: since, order: 'asc' });
+  const history = useAppointmentList({ to: since, order: 'desc' });
 
   if (!canJoinConsultations(principal, effectiveActions)) {
     return <StatusBlock state="permission" title={t('common:state.permission.title')} body={t('common:state.permission.body')} />;
   }
 
-  const { upcoming, past } = split(list.items, now);
+  const fromRecent = split(recent.items, now);
+  const upcoming = fromRecent.upcoming;
+  const past = [...new Map([...fromRecent.past, ...history.items].map((item) => [item.id, item])).values()].sort(
+    (a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt),
+  );
+  const status = recent.status === 'error' || history.status === 'error' ? 'error' : recent.status === 'pending' || history.status === 'pending' ? 'pending' : 'success';
+  const failed = recent.status === 'error' ? recent : history;
 
   return (
     <div className="space-y-6">
@@ -95,29 +126,23 @@ function AppointmentsPage() {
         {t('common:nav.appointments')}
       </Heading>
 
-      {list.status === 'pending' ? <StatusBlock state="loading" title={t('common:state.loading')} body="" /> : null}
+      {status === 'pending' ? <StatusBlock state="loading" title={t('common:state.loading')} body="" /> : null}
 
-      {list.status === 'error' ? (
+      {status === 'error' ? (
         <StatusBlock
           state="offline"
           title={t('calls:appointments.errorTitle')}
-          body={mapCallError(list.error, tCalls)}
-          action={{ label: t('common:action.retry'), onClick: list.refetch }}
+          body={mapCallError(failed.error, tCalls)}
+          action={{ label: t('common:action.retry'), onClick: failed.refetch }}
         />
       ) : null}
 
-      {list.status === 'success' && list.items.length === 0 ? (
+      {status === 'success' && upcoming.length === 0 && past.length === 0 ? (
         <StatusBlock state="empty" title={t('common:state.empty.title')} body={t('common:state.empty.body')} />
       ) : null}
 
-      <AppointmentSection id="appointments-upcoming" title={t('calls:appointments.upcoming')} items={upcoming} />
-      <AppointmentSection id="appointments-past" title={t('calls:appointments.past')} items={past} />
-
-      {list.hasNextPage ? (
-        <Button variant="secondary" onClick={list.fetchNextPage} loading={list.isFetchingNextPage} loadingLabel={t('calls:appointments.loadingMore')}>
-          {t('calls:appointments.loadMore')}
-        </Button>
-      ) : null}
+      <AppointmentSection id="appointments-upcoming" title={t('calls:appointments.upcoming')} items={upcoming} list={recent} />
+      <AppointmentSection id="appointments-past" title={t('calls:appointments.past')} items={past} list={history} />
     </div>
   );
 }

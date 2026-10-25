@@ -21,15 +21,23 @@ export interface AppointmentListState {
   refetch: () => void;
 }
 
-/** `params.from` bounds `startsAt` from below (the home page asks for what is still ahead). */
-export function useAppointmentList(params: Pick<AppointmentListParams, 'from'> = {}): AppointmentListState {
+/**
+ * One cursor-paged list: `from` and `to` bound `startsAt` (inclusive and
+ * exclusive), `order` is `asc` (what is ahead) or `desc` (history, newest
+ * first). Sample mode applies the same bounds and order to the fixtures.
+ */
+export function useAppointmentList(params: Pick<AppointmentListParams, 'from' | 'to' | 'order'> = {}): AppointmentListState {
   const { principal } = useAuth();
   const query = useInfiniteQuery({ ...appointmentListQuery(callsApi, params), enabled: !isSampleDataMode });
   if (isSampleDataMode) {
     const from = params.from ? Date.parse(params.from) : null;
+    const to = params.to ? Date.parse(params.to) : null;
+    const direction = params.order === 'desc' ? -1 : 1;
     return {
       status: 'success',
-      items: sampleAppointmentsFor(principal?.userId).filter((item) => from === null || Date.parse(item.startsAt) >= from),
+      items: sampleAppointmentsFor(principal?.userId)
+        .filter((item) => (from === null || Date.parse(item.startsAt) >= from) && (to === null || Date.parse(item.startsAt) < to))
+        .sort((a, b) => direction * (Date.parse(a.startsAt) - Date.parse(b.startsAt))),
       error: null,
       hasNextPage: false,
       isFetchingNextPage: false,

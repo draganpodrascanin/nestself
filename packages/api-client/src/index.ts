@@ -9,15 +9,19 @@ export { healthQueryOptions } from './queries/health';
 export { meQueryOptions } from './queries/auth';
 export {
   APPROVAL_OUTCOMES,
+  AppointmentExpertOptionsSchema,
   AppointmentViewSchema,
   AppointmentViewerSchema,
+  ApprovalItemViewSchema,
   ProblemReportItemSchema,
   ProblemReportListResponseSchema,
   createCallsApi,
 } from './calls';
 export type {
+  AppointmentExpertOptions,
   AppointmentListParams,
   AppointmentView,
+  ApprovalItemView,
   AppointmentViewer,
   CallsApi,
   ProblemReportItem,
