@@ -9,11 +9,19 @@
 import { ApiError } from '@nestself/api-client';
 import { StepUpCancelledError } from '../../auth';
 
-export type UserErrorKey = 'notFound' | 'conflict' | 'forbidden' | 'validation' | 'rateLimited' | 'unknown';
+export type UserErrorKey =
+  | 'notFound'
+  | 'conflict'
+  | 'cannotSuspendSelf'
+  | 'forbidden'
+  | 'validation'
+  | 'rateLimited'
+  | 'unknown';
 
 const BY_CODE: Record<string, UserErrorKey> = {
   not_found: 'notFound',
   conflict: 'conflict',
+  cannot_suspend_self: 'cannotSuspendSelf',
   forbidden: 'forbidden',
   validation: 'validation',
   rate_limited: 'rateLimited',

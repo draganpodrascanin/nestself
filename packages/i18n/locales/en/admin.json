@@ -438,7 +438,8 @@
       "title": "Suspend this user?",
       "description": "{{userId}} is signed out everywhere and cannot sign in until the suspension is lifted.",
       "confirm": "Suspend user",
-      "success": "{{userId}} is suspended."
+      "success": "{{userId}} is suspended.",
+      "self": "You cannot suspend your own account."
     },
     "reinstate": {
       "open": "Reinstate user",
@@ -450,6 +451,7 @@
     "errors": {
       "notFound": "No user with this ID exists.",
       "conflict": "This account has already changed. Look the user up again.",
+      "cannotSuspendSelf": "You cannot suspend your own account. Ask another staff member.",
       "forbidden": "Your account is not allowed to suspend or reinstate this user.",
       "validation": "Enter a reason between 3 and 500 characters.",
       "rateLimited": "Too many attempts. Wait a moment and try again.",

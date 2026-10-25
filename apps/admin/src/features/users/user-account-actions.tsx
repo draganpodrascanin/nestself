@@ -27,6 +27,8 @@ export function UserAccountActions({ opsApi, userId, suspended, sampleMode, head
   const headingId = useId();
   const { principal, effectiveActions } = useAuth();
   const canManage = principal ? can(principal, 'people.deactivate', undefined, effectiveActions) : false;
+  // The server refuses it too (409 `cannot_suspend_self`).
+  const isSelf = principal?.userId === userId;
   const [dialog, setDialog] = useState<'suspend' | 'reinstate' | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
 
@@ -52,6 +54,8 @@ export function UserAccountActions({ opsApi, userId, suspended, sampleMode, head
             <Button variant="secondary" disabled={sampleMode} onClick={() => open('reinstate')}>
               {t('admin:users.reinstate.open')}
             </Button>
+          ) : isSelf ? (
+            <Text tone="secondary">{t('admin:users.suspend.self')}</Text>
           ) : (
             <Button variant="danger" disabled={sampleMode} onClick={() => open('suspend')}>
               {t('admin:users.suspend.open')}

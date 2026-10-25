@@ -434,7 +434,8 @@
       "title": "Felfüggeszted ezt a felhasználót?",
       "description": "{{userId}} mindenhol kijelentkezik, és a felfüggesztés feloldásáig nem tud bejelentkezni.",
       "confirm": "Felhasználó felfüggesztése",
-      "success": "{{userId}} felfüggesztve."
+      "success": "{{userId}} felfüggesztve.",
+      "self": "A saját fiókodat nem függesztheted fel."
     },
     "reinstate": {
       "open": "Felfüggesztés feloldása",
@@ -446,6 +447,7 @@
     "errors": {
       "notFound": "Nincs ilyen azonosítójú felhasználó.",
       "conflict": "Ez a fiók időközben megváltozott. Keresd meg újra a felhasználót.",
+      "cannotSuspendSelf": "A saját fiókodat nem függesztheted fel. Kérj meg egy másik munkatársat.",
       "forbidden": "A fiókod nem függesztheti fel és nem oldhatja fel ezt a felhasználót.",
       "validation": "Adj meg 3–500 karakter hosszú indoklást.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",

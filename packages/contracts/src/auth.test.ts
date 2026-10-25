@@ -154,6 +154,7 @@ describe('AUTH_ERROR_CODES', () => {
     'csrf_rejected',
     'session_expired',
     'unavailable',
+    'cannot_suspend_self',
   ];
 
   it('contains all required error codes', () => {

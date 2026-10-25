@@ -121,7 +121,7 @@ describe('OrganizationsScreen', () => {
     expect(screen.getByRole('link', { name: 'Alpha' })).toBeInTheDocument();
   });
 
-  it('turns a 403 into the assigned-clients note, not an error', async () => {
+  it('turns a 403 forbidden into the assigned-clients note, not an error', async () => {
     renderList({ opsApi: makeOpsApi({ listOrganizations: vi.fn().mockRejectedValue(apiError(403, 'forbidden')) }) });
     expect(await screen.findByText(t('admin:organizations.limited'))).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -131,6 +131,7 @@ describe('OrganizationsScreen', () => {
 
   it.each([
     ['rate_limited', 429, 'rateLimited'],
+    ['csrf_rejected', 403, 'unknown'],
     ['internal_error', 500, 'unknown'],
   ] as const)('shows the %s list failure as organizations.errors.%s', async (code, status, key) => {
     renderList({ opsApi: makeOpsApi({ listOrganizations: vi.fn().mockRejectedValue(apiError(status, code)) }) });

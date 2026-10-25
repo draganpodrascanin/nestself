@@ -11,7 +11,9 @@ export function organizationErrorKey(err: unknown): OrganizationErrorKey {
   if (err instanceof ApiError) {
     if (err.status === 429 || err.code === 'rate_limited') return 'rateLimited';
     if (err.code === 'not_found' || err.status === 404) return 'notFound';
-    if (err.code === 'forbidden' || err.status === 403) return 'forbidden';
+    // Only a plain `forbidden` means "not your client"; other 403 codes
+    // (for example `csrf_rejected`) are not an access limit.
+    if (err.code === 'forbidden') return 'forbidden';
   }
   return 'unknown';
 }

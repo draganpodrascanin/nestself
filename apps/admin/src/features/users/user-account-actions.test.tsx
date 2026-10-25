@@ -5,7 +5,7 @@ import type { UserEvent } from '@testing-library/user-event';
 import { OrgAccessScreen } from '../access/org-access-screen';
 import { PlatformAccessScreen } from '../access/platform-access-screen';
 import { UserAccessLookup } from '../access/user-access-lookup';
-import { ORG_ID, apiError, makeAuth, makeOpsApi, renderOps, t } from '../organizations/ops-test-harness';
+import { OPS_PRINCIPAL, ORG_ID, apiError, makeAuth, makeOpsApi, renderOps, t } from '../organizations/ops-test-harness';
 import type { RenderOpts } from '../organizations/ops-test-harness';
 
 const renderLookup = (opts: RenderOpts = {}) =>
@@ -70,6 +70,17 @@ describe('user account actions on the access lookup', () => {
     expect(within(account).getByText(t('admin:users.state.suspended'))).toBeInTheDocument();
     expect(within(account).getByRole('button', { name: REINSTATE() })).toBeInTheDocument();
     expect(within(account).queryByRole('button', { name: SUSPEND() })).not.toBeInTheDocument();
+  });
+
+  it('offers no Suspend on the signed-in user\'s own account and says why', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderLookup({
+      opsApi: makeOpsApi({ userAccess: vi.fn().mockResolvedValue({ userId: OPS_PRINCIPAL.userId, suspended: false, contexts: [] }) }),
+    });
+    const account = await lookUp(user, OPS_PRINCIPAL.userId);
+    expect(within(account).getByText(t('admin:users.suspend.self'))).toBeInTheDocument();
+    expect(within(account).queryByRole('button', { name: SUSPEND() })).not.toBeInTheDocument();
+    expect(opsApi.suspendUser).not.toHaveBeenCalled();
   });
 
   it('hides both actions without people.deactivate', async () => {
@@ -152,6 +163,7 @@ describe('user account actions on the access lookup', () => {
   it.each([
     ['not_found', 404, 'notFound'],
     ['conflict', 409, 'conflict'],
+    ['cannot_suspend_self', 409, 'cannotSuspendSelf'],
     ['forbidden', 403, 'forbidden'],
     ['rate_limited', 429, 'rateLimited'],
     ['internal_error', 500, 'unknown'],

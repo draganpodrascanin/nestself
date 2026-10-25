@@ -38,6 +38,16 @@ export class UsersService {
     body: UserSuspendRequest,
     actorUserId: string,
   ): Promise<UserSuspendResponse> {
+    // Suspending yourself signs you out everywhere and locks the account
+    // with nobody left in the session to undo it: refuse before any change.
+    if (userId === actorUserId) {
+      throw new ApiHttpException({
+        status: 409,
+        code: 'cannot_suspend_self',
+        message: 'A user cannot suspend their own account',
+      });
+    }
+
     const user = await this.identities.findUserById(userId);
     if (!user) {
       throw new ApiHttpException({

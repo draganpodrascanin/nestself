@@ -313,6 +313,8 @@ export const AUTH_ERROR_CODES = [
   'self_approval_denied',
   'emergency_not_active',
   'owner_exists',
+  /** `POST /ops/users/:userId/suspend` on the caller's own account (409). */
+  'cannot_suspend_self',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

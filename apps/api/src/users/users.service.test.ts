@@ -91,6 +91,19 @@ describe('UsersService', () => {
   // ── suspend ─────────────────────────────────────────────────────────────
 
   describe('suspendUser()', () => {
+    it('refuses to suspend the caller\'s own account and changes nothing', async () => {
+      identities.findUserById.mockResolvedValue(ACTIVE_USER);
+
+      const err = await service.suspendUser('user-1', { reason: 'Testing myself' }, 'user-1').catch((e: unknown) => e);
+
+      expect(err).toEqual(expect.objectContaining({ code: 'cannot_suspend_self' }));
+      expect((err as { getStatus(): number }).getStatus()).toBe(409);
+      expect(identities.setSuspended).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(idp.disableUser).not.toHaveBeenCalled();
+      expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    });
+
     it('throws 404 when user does not exist', async () => {
       identities.findUserById.mockResolvedValue(null);
 

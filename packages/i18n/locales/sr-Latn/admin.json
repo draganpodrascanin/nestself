@@ -438,7 +438,8 @@
       "title": "Suspendovati ovog korisnika?",
       "description": "Korisnik {{userId}} se odjavljuje svuda i ne može da se prijavi dok se suspenzija ne ukine.",
       "confirm": "Suspenduj korisnika",
-      "success": "Korisnik {{userId}} je suspendovan."
+      "success": "Korisnik {{userId}} je suspendovan.",
+      "self": "Ne možeš da suspenduješ sopstveni nalog."
     },
     "reinstate": {
       "open": "Ukini suspenziju",
@@ -450,6 +451,7 @@
     "errors": {
       "notFound": "Ne postoji korisnik sa ovim ID-jem.",
       "conflict": "Ovaj nalog se u međuvremenu promenio. Ponovo potraži korisnika.",
+      "cannotSuspendSelf": "Ne možeš da suspenduješ sopstveni nalog. Zamoli drugog člana osoblja.",
       "forbidden": "Tvoj nalog nema dozvolu da suspenduje ili vrati ovog korisnika.",
       "validation": "Unesi razlog dužine od 3 do 500 znakova.",
       "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",

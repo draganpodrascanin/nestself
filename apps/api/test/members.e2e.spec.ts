@@ -377,6 +377,20 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
       expect(res.body.principal.context).toEqual({ kind: 'operations' });
     });
 
+    it('nikola cannot suspend his own account: 409, nothing revoked', async () => {
+      const res = await nikolaAgent
+        .post('/api/ops/users/user_nikola/suspend')
+        .set('X-CSRF-Token', nikolaCsrf)
+        .send({ reason: 'Suspending myself by mistake' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('cannot_suspend_self');
+
+      const [self] = await testDb.db.select().from(users).where(eq(users.id, 'user_nikola'));
+      expect(self!.suspendedAt).toBeNull();
+      const me = await nikolaAgent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+    });
+
     it('suspends stefan', async () => {
       const suspendRes = await nikolaAgent
         .post('/api/ops/users/user_stefan/suspend')
