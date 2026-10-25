@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { z } from 'zod';
 import {
   Heading,
@@ -10,9 +11,9 @@ import {
   ContentCard,
   DurationBadge,
   ShowMore,
-  SampleDataBanner,
 } from '@nestself/ui';
 import type { LibraryCard } from '@nestself/contracts';
+import { LibraryContentListSchema } from '@nestself/contracts';
 import { libraryKeys } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { isSampleDataMode } from '../../data-source';
@@ -20,13 +21,21 @@ import { api } from '../../api';
 import { sampleContentCards } from '../../library/sample-library-data';
 import { mapLibraryError } from '../../library/map-library-error';
 import type { Locale } from '@nestself/i18n';
-import {
-  LibraryContentListSchema,
-} from '@nestself/contracts';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
 });
+
+/** Resolve a card's content type to its i18n label key. */
+function cardFormatKey(type: string): string {
+  switch (type) {
+    case 'video': return 'library:card.video';
+    case 'audio': return 'library:card.audio';
+    case 'practical': return 'library:card.guide';
+    case 'collection': return 'library:card.course';
+    default: return 'library:card.article';
+  }
+}
 
 export const Route = createFileRoute('/_authenticated/')({
   validateSearch: searchSchema,
@@ -45,6 +54,8 @@ function HomePage() {
   return <ApiHomePage locale={locale} denied={denied} />;
 }
 
+// No per-route SampleDataBanner — root __root.tsx renders it (Minor: duplicate banner)
+
 function SampleHomePage({ locale, denied }: { locale: string; denied?: string }) {
   const { t } = useTranslation(['library', 'common']);
   const { principal } = useAuth();
@@ -52,7 +63,6 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
 
   return (
     <div className="space-y-8">
-      <SampleDataBanner message={t('common:sample.banner')} />
       {denied ? (
         <StatusBlock
           state="permission"
@@ -83,7 +93,7 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
                 resourceId={card.resourceId}
                 title={card.title}
                 outcome={card.summary}
-                formatLabel={t('library:card.article')}
+                formatLabel={t(cardFormatKey(card.type))}
                 durationBadge={
                   card.durationBand ? (
                     <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
@@ -112,6 +122,7 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
 function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
   const { t } = useTranslation(['library', 'common']);
   const { principal } = useAuth();
+  const firstNewCardRef = useRef<HTMLDivElement | null>(null);
 
   const ctx = principal?.context ?? { kind: 'personal' as const };
 
@@ -139,7 +150,8 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
   });
 
   const allCards: LibraryCard[] = data?.pages.flatMap((page) => page.items) ?? [];
-  const addedCount = isFetchingNextPage ? 0 : (data?.pages[data.pages.length - 1]?.items.length ?? 0);
+  const lastPageCount = data?.pages[data.pages.length - 1]?.items.length ?? 0;
+  const addedCount = isFetchingNextPage ? 0 : lastPageCount;
 
   if (isLoading) {
     return (
@@ -185,32 +197,37 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {allCards.map((card) => (
-                <ContentCard
-                  key={card.resourceId}
-                  resourceId={card.resourceId}
-                  title={card.title}
-                  outcome={card.summary}
-                  formatLabel={t('library:card.article')}
-                  imageUrl={card.coverImageUrl}
-                  durationBadge={
-                    card.durationBand ? (
-                      <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
-                    ) : null
-                  }
-                  saved={card.saved}
-                  href={`/content/${card.resourceId}`}
-                  renderLink={({ className, children }) => (
-                    <Link
-                      to="/content/$contentId"
-                      params={{ contentId: card.resourceId }}
-                      className={className}
-                    >
-                      {children}
-                    </Link>
-                  )}
-                />
-              ))}
+              {allCards.map((card, index) => {
+                const lastPageStart = allCards.length - lastPageCount;
+                const isFirstOfLastPage = index === lastPageStart && data != null && data.pages.length > 1;
+                return (
+                  <div key={card.resourceId} ref={isFirstOfLastPage ? firstNewCardRef : undefined} tabIndex={isFirstOfLastPage ? -1 : undefined}>
+                    <ContentCard
+                      resourceId={card.resourceId}
+                      title={card.title}
+                      outcome={card.summary}
+                      formatLabel={t(cardFormatKey(card.type))}
+                      imageUrl={card.coverImageUrl}
+                      durationBadge={
+                        card.durationBand ? (
+                          <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
+                        ) : null
+                      }
+                      saved={card.saved}
+                      href={`/content/${card.resourceId}`}
+                      renderLink={({ className, children }) => (
+                        <Link
+                          to="/content/$contentId"
+                          params={{ contentId: card.resourceId }}
+                          className={className}
+                        >
+                          {children}
+                        </Link>
+                      )}
+                    />
+                  </div>
+                );
+              })}
             </div>
             <ShowMore
               label={t('library:home.showMore')}
@@ -223,6 +240,7 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
                   ? t('library:home.showMoreAnnouncement', { count: addedCount })
                   : undefined
               }
+              focusTargetRef={firstNewCardRef}
             />
           </>
         )}

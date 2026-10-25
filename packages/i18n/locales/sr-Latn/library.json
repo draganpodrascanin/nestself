@@ -10,7 +10,9 @@
     "availableResources": "Dostupni resursi",
     "showMore": "Prikaži više",
     "showMoreLoading": "Učitavanje",
-    "showMoreAnnouncement": "{{count}} više stavki učitano",
+    "showMoreAnnouncement_one": "{{count}} stavka više učitana",
+    "showMoreAnnouncement_few": "{{count}} stavke više učitane",
+    "showMoreAnnouncement_other": "{{count}} stavki više učitano",
     "empty": {
       "title": "Nema dostupnih resursa",
       "body": "Sadržaj se priprema. Navratite uskoro."
@@ -19,7 +21,11 @@
   "card": {
     "save": "Sačuvaj",
     "unsave": "Ukloni iz sačuvanih",
-    "article": "Članak"
+    "article": "Članak",
+    "video": "Video",
+    "audio": "Audio",
+    "guide": "Vodič",
+    "course": "Kurs"
   },
   "detail": {
     "outcome": "Šta dobijate",
@@ -31,7 +37,16 @@
     "save": "Sačuvaj ovaj resurs",
     "unsave": "Ukloni iz sačuvanih",
     "saveDemo": "Ovo je demonstracija. Ništa nije sačuvano.",
-    "backToHome": "Nazad na početnu"
+    "backToHome": "Nazad na početnu",
+    "cta": {
+      "open_content": "Otvori",
+      "open_collection": "Pregledaj kolekciju",
+      "suggest_topic": "Predloži temu",
+      "ask_general_question": "Postavi pitanje",
+      "express_event_interest": "Prijavi zainteresovanost",
+      "open_service": "Otvori uslugu",
+      "default": "Nastavi"
+    }
   },
   "saved": {
     "title": "Sačuvano",
@@ -41,6 +56,7 @@
     },
     "unavailable": "Ovaj sadržaj više nije dostupan",
     "remove": "Ukloni",
+    "removeItem": "Ukloni {{title}}",
     "removeDemo": "Ovo je demonstracija. Ništa nije uklonjeno."
   },
   "content": {
@@ -49,13 +65,13 @@
   "explore": {
     "comingSoon": {
       "title": "Istraži",
-      "body": "Pregledajte i filtrirajte resurse po temi, formatu i trajanju. Dolazi u sledećoj verziji."
+      "body": "Pregledajte i filtrirajte resurse po temi, formatu i trajanju. Ova funkcionalnost je u razvoju."
     }
   },
   "requests": {
     "comingSoon": {
       "title": "Moji zahtevi",
-      "body": "Pošaljite i pratite zahteve za sadržaj. Dolazi u sledećoj verziji."
+      "body": "Pošaljite i pratite zahteve za sadržaj. Ova funkcionalnost je u razvoju."
     }
   },
   "prototype": {
@@ -77,10 +93,17 @@
     "5_to_15": "5–15 min",
     "over_15": "Preko 15 min"
   },
+  "durationFormat": {
+    "minutes": "{{count}} min",
+    "lessThanMinute": "<1 min"
+  },
   "error": {
     "contentNotAvailable": "Ovaj sadržaj nije dostupan.",
     "invalidContext": "Prebacite se u odgovarajući kontekst da biste videli ovaj sadržaj.",
+    "orgContextExpired": "Pristup vašoj organizaciji je istekao. Obratite se administratoru.",
     "network": "Nije moguće učitati sadržaj. Proverite vezu i pokušajte ponovo.",
+    "saveFailed": "Nije moguće sačuvati ovaj resurs. Pokušajte ponovo.",
+    "unsaveFailed": "Nije moguće ukloniti ovaj resurs iz sačuvanih. Pokušajte ponovo.",
     "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
   }
 }

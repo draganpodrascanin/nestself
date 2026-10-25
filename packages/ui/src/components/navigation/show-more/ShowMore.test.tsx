@@ -1,5 +1,6 @@
+import { createRef } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ShowMore } from './ShowMore';
 import { expectNoA11yViolations } from '../../../test/axe';
@@ -10,11 +11,15 @@ describe('ShowMore', () => {
     expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
   });
 
-  it('renders nothing when hasMore is false', () => {
+  it('still renders the container when hasMore is false (no focus loss)', () => {
     const { container } = render(
       <ShowMore label="Show more" onLoadMore={() => {}} hasMore={false} />,
     );
-    expect(container.innerHTML).toBe('');
+    // Container is in the DOM, but button is not
+    expect(container.innerHTML).not.toBe('');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    // Live region remains mounted
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('calls onLoadMore when clicked', async () => {
@@ -45,13 +50,18 @@ describe('ShowMore', () => {
         loadingLabel="Loading"
       />,
     );
-    // Button's accessible name includes the sr-only loading status span,
-    // so use a regex to match the label portion.
     const btn = screen.getByRole('button', { name: /Show more/i });
     expect(btn).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('announces added items via live region', () => {
+  it('live region is always in the DOM (even without announcement)', () => {
+    render(<ShowMore label="Show more" onLoadMore={() => {}} hasMore />);
+    const liveRegion = screen.getByRole('status');
+    expect(liveRegion).toBeInTheDocument();
+    expect(liveRegion).toHaveTextContent('');
+  });
+
+  it('defers the announcement so screen readers detect the change', async () => {
     render(
       <ShowMore
         label="Show more"
@@ -60,9 +70,47 @@ describe('ShowMore', () => {
         addedAnnouncement="5 more items loaded"
       />,
     );
-    expect(screen.getByText('5 more items loaded')).toBeInTheDocument();
     const liveRegion = screen.getByRole('status');
-    expect(liveRegion).toHaveTextContent('5 more items loaded');
+    // Initially empty (deferred)
+    // After the timeout it fills
+    await waitFor(() => {
+      expect(liveRegion).toHaveTextContent('5 more items loaded');
+    });
+  });
+
+  it('moves focus to focusTargetRef when load completes', async () => {
+    const ref = createRef<HTMLDivElement>();
+    const { rerender } = render(
+      <div>
+        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          loading
+          focusTargetRef={ref}
+        />
+      </div>,
+    );
+
+    // Simulate load completing: loading goes from true to false, announcement set
+    rerender(
+      <div>
+        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          loading={false}
+          addedAnnouncement="3 items loaded"
+          focusTargetRef={ref}
+        />
+      </div>,
+    );
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByTestId('target'));
+    });
   });
 
   it('has no a11y violations', async () => {

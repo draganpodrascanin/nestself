@@ -33,3 +33,12 @@ export const WithAnnouncement: StoryObj<typeof ShowMore> = {
     addedAnnouncement: '5 more items loaded',
   },
 };
+
+export const NoMoreItems: StoryObj<typeof ShowMore> = {
+  args: {
+    label: 'Show more',
+    onLoadMore: () => {},
+    hasMore: false,
+    addedAnnouncement: 'All items loaded',
+  },
+};

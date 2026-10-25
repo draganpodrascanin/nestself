@@ -1,14 +1,23 @@
 /**
- * Explore route placeholder — coming in M2 (T-C1.13).
- *
- * Routes to a translated "coming in the next release" StatusBlock.
+ * Explore route placeholder — in development (T-C1.13).
  */
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { StatusBlock, SampleDataBanner } from '@nestself/ui';
+import { Heading, StatusBlock } from '@nestself/ui';
+import { can } from '@nestself/contracts';
 import { isSampleDataMode } from '../../../data-source';
 
 export const Route = createFileRoute('/_authenticated/explore/')({
+  beforeLoad: ({ context }) => {
+    const { principal, effectiveActions } = context.auth;
+    if (
+      !isSampleDataMode &&
+      principal &&
+      !can(principal, 'content.read', undefined, effectiveActions)
+    ) {
+      throw redirect({ to: '/', search: { denied: 'explore' } });
+    }
+  },
   component: ExplorePlaceholder,
 });
 
@@ -17,7 +26,9 @@ function ExplorePlaceholder() {
 
   return (
     <div className="space-y-6">
-      {isSampleDataMode ? <SampleDataBanner message={t('common:sample.banner')} /> : null}
+      <Heading level={1} typeRole="screenTitle">
+        {t('library:explore.comingSoon.title')}
+      </Heading>
       <StatusBlock
         state="empty"
         title={t('library:explore.comingSoon.title')}

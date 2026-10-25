@@ -22,3 +22,10 @@ export const BandLabel: StoryObj<typeof DurationBadge> = {
 export const TenMinutes: StoryObj<typeof DurationBadge> = {
   args: { durationSeconds: 600 },
 };
+
+export const CustomFormatter: StoryObj<typeof DurationBadge> = {
+  args: {
+    durationSeconds: 300,
+    formatLabel: (s: number) => `${Math.round(s / 60)} perc`,
+  },
+};

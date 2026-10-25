@@ -26,10 +26,14 @@ function findVariant(
   );
 }
 
-function categoryLabel(categoryId: string): string {
-  const label = SAMPLE_CATEGORY_LABELS.find(
-    (l) => l.categoryId === categoryId && l.locale === 'en',
-  );
+function categoryLabel(categoryId: string, locale: string): string {
+  const label =
+    SAMPLE_CATEGORY_LABELS.find(
+      (l) => l.categoryId === categoryId && l.locale === locale,
+    ) ??
+    SAMPLE_CATEGORY_LABELS.find(
+      (l) => l.categoryId === categoryId && l.locale === 'en',
+    );
   return label?.name ?? categoryId;
 }
 
@@ -48,10 +52,11 @@ export function sampleContentCards(locale: string): LibraryCard[] {
         locale: variant.locale,
         title: variant.title,
         summary: variant.summary,
-        categoryName: categoryLabel(r.primaryCategoryId),
+        categoryName: categoryLabel(r.primaryCategoryId, locale),
         durationBand: r.durationBand,
         coverImageUrl: null,
         saved: false,
+        availableLocales: r.variants.map((v) => v.locale),
       };
     });
 }
@@ -83,7 +88,7 @@ export function sampleContentDetail(
     category: {
       id: resource.primaryCategoryId,
       slug: resource.primaryCategoryId,
-      label: categoryLabel(resource.primaryCategoryId),
+      label: categoryLabel(resource.primaryCategoryId, locale),
       description: null,
     },
     secondaryCategories: [],

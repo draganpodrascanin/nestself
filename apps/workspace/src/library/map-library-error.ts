@@ -18,6 +18,9 @@ export function mapLibraryError(
     if (err.code === 'invalid_context') {
       return t('error.invalidContext');
     }
+    if (err.code === 'org_context_expired') {
+      return t('error.orgContextExpired');
+    }
     if (err.code === 'network') {
       return t('error.network');
     }

@@ -31,6 +31,32 @@ describe('DurationBadge', () => {
     expect(screen.queryByText('Under 5 min')).not.toBeInTheDocument();
   });
 
+  it('uses formatLabel when provided', () => {
+    render(
+      <DurationBadge
+        durationSeconds={300}
+        formatLabel={(s) => `${Math.round(s / 60)} perc`}
+      />,
+    );
+    expect(screen.getByText('5 perc')).toBeInTheDocument();
+    expect(screen.queryByText('5 min')).not.toBeInTheDocument();
+  });
+
+  it('formatLabel receives sub-minute seconds', () => {
+    render(
+      <DurationBadge
+        durationSeconds={20}
+        formatLabel={(s) => `${s}s`}
+      />,
+    );
+    expect(screen.getByText('20s')).toBeInTheDocument();
+  });
+
+  it('falls back to built-in English when formatLabel is not provided', () => {
+    render(<DurationBadge durationSeconds={120} />);
+    expect(screen.getByText('2 min')).toBeInTheDocument();
+  });
+
   it('renders nothing when no data', () => {
     const { container } = render(<DurationBadge />);
     expect(container.innerHTML).toBe('');

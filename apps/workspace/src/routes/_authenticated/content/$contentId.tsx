@@ -7,7 +7,7 @@
  * - network error: alert with retry
  * - populated: title, summary, outcome, duration, reviewer, date, ContentRenderer, save
  */
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,17 +19,21 @@ import {
   Button,
   Badge,
   DurationBadge,
+  useToast,
 } from '@nestself/ui';
 import { ContentRenderer } from '@nestself/content/render';
 import type {
   MediaUrlResolver,
+  MediaAssetMeta,
   ContentRendererLabels,
   LinkComponentType,
+  ResolvedCta,
 } from '@nestself/content/render';
 import type { LibraryContentDetail } from '@nestself/contracts';
+import { can } from '@nestself/contracts';
 import { ApiError, libraryKeys, savedKeys } from '@nestself/api-client';
 import type { Locale } from '@nestself/i18n';
-import { formatDateTime } from '@nestself/i18n';
+import { formatDate } from '@nestself/i18n';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
 import { api } from '../../../api';
@@ -39,6 +43,16 @@ import { libraryContentDetailOptions, saveItem, unsaveItem } from '../../../libr
 import { useState } from 'react';
 
 export const Route = createFileRoute('/_authenticated/content/$contentId')({
+  beforeLoad: ({ context }) => {
+    const { principal, effectiveActions } = context.auth;
+    if (
+      !isSampleDataMode &&
+      principal &&
+      !can(principal, 'content.read', undefined, effectiveActions)
+    ) {
+      throw redirect({ to: '/', search: { denied: 'content' } });
+    }
+  },
   component: ContentDetailPage,
 });
 
@@ -65,11 +79,16 @@ function SampleDetailPage({ contentId, locale }: { contentId: string; locale: st
 
   if (!detail) {
     return (
-      <StatusBlock
-        state="empty"
-        title={t('library:content.unavailable')}
-        body=""
-      />
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:content.unavailable')}
+        </Heading>
+        <StatusBlock
+          state="empty"
+          title={t('library:content.unavailable')}
+          body=""
+        />
+      </div>
     );
   }
 
@@ -92,6 +111,7 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
   const { principal } = useAuth();
   const ctx = principal?.context ?? { kind: 'personal' as const };
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const { data, isLoading, isError, error, refetch } = useQuery(
     libraryContentDetailOptions(api, ctx, contentId, locale),
@@ -101,7 +121,14 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     mutationFn: () => saveItem(api, contentId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.contentDetail(ctx, contentId, locale) });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all(ctx) });
       void queryClient.invalidateQueries({ queryKey: savedKeys.all(ctx) });
+    },
+    onError: (err) => {
+      toast.add({
+        title: mapLibraryError(err, t as Parameters<typeof mapLibraryError>[1]),
+        tone: 'danger',
+      });
     },
   });
 
@@ -109,7 +136,14 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     mutationFn: () => unsaveItem(api, contentId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.contentDetail(ctx, contentId, locale) });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all(ctx) });
       void queryClient.invalidateQueries({ queryKey: savedKeys.all(ctx) });
+    },
+    onError: (err) => {
+      toast.add({
+        title: mapLibraryError(err, t as Parameters<typeof mapLibraryError>[1]),
+        tone: 'danger',
+      });
     },
   });
 
@@ -121,37 +155,55 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     // 404: neutral message, never reveal a title (9.10)
     if (error instanceof ApiError && error.status === 404) {
       return (
-        <StatusBlock
-          state="empty"
-          title={t('library:error.contentNotAvailable')}
-          body=""
-        />
+        <div className="space-y-6 max-w-reading">
+          <Heading level={1} className="sr-only">
+            {t('library:error.contentNotAvailable')}
+          </Heading>
+          <StatusBlock
+            state="empty"
+            title={t('library:error.contentNotAvailable')}
+            body=""
+          />
+        </div>
       );
     }
 
     return (
-      <Alert tone="danger" title={t('library:error.network')}>
-        {mapLibraryError(error, t as Parameters<typeof mapLibraryError>[1])}
-        <div className="mt-3">
-          <Button variant="secondary" size="sm" onClick={() => void refetch()}>
-            {t('common:action.retry', { defaultValue: 'Try again' })}
-          </Button>
-        </div>
-      </Alert>
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:error.contentNotAvailable')}
+        </Heading>
+        <Alert tone="danger">
+          {mapLibraryError(error, t as Parameters<typeof mapLibraryError>[1])}
+          <div className="mt-3">
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              {t('common:action.retry', { defaultValue: 'Try again' })}
+            </Button>
+          </div>
+        </Alert>
+      </div>
     );
   }
 
   if (!data) {
     return (
-      <StatusBlock
-        state="empty"
-        title={t('library:error.contentNotAvailable')}
-        body=""
-      />
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:error.contentNotAvailable')}
+        </Heading>
+        <StatusBlock
+          state="empty"
+          title={t('library:error.contentNotAvailable')}
+          body=""
+        />
+      </div>
     );
   }
 
+  const isMutating = saveMutation.isPending || unsaveMutation.isPending;
+
   const handleToggleSave = () => {
+    if (isMutating) return;
     if (data.saved) {
       unsaveMutation.mutate();
     } else {
@@ -159,18 +211,35 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     }
   };
 
-  return <DetailView detail={data} locale={locale} onToggleSave={handleToggleSave} />;
+  return (
+    <DetailView
+      detail={data}
+      locale={locale}
+      onToggleSave={handleToggleSave}
+      savePending={isMutating}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Shared detail view
 // ---------------------------------------------------------------------------
 
-const RendererLinkComponent: LinkComponentType = ({ href, children, className }) => (
-  <a href={href} className={className}>
-    {children}
-  </a>
-);
+const RendererLinkComponent: LinkComponentType = ({ href, children, className }) => {
+  // Internal links (starting with /) use TanStack Router Link (FMT-R-17)
+  if (href.startsWith('/')) {
+    return (
+      <Link to={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+};
 
 function mediaUrl(assetId: string, rendition: string): string {
   return `/api/library/media/${encodeURIComponent(assetId)}/${rendition}`;
@@ -180,10 +249,11 @@ interface DetailViewProps {
   detail: LibraryContentDetail;
   locale: string;
   onToggleSave?: () => void;
+  savePending?: boolean;
   saveDemoMessage?: string;
 }
 
-function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailViewProps) {
+function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage }: DetailViewProps) {
   const { t } = useTranslation(['library', 'common']);
 
   const rendererLabels: ContentRendererLabels = {
@@ -198,13 +268,47 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
     imageUnavailable: t('library:renderer.imageUnavailable'),
   };
 
-  const mediaMeta: Record<string, { kind: 'image'; renditions: string[] }> = {};
+  // Build media metadata with width/height/focalPoint (FMT-R-18)
+  const mediaMeta: Record<string, MediaAssetMeta> = {};
   for (const m of detail.media) {
     mediaMeta[m.assetId] = {
-      kind: m.kind as 'image',
+      kind: m.kind as MediaAssetMeta['kind'],
       renditions: m.renditions.map((r) => r.kind),
+      width: m.width ?? undefined,
+      height: m.height ?? undefined,
+      focalPoint: m.focalPoint ?? undefined,
     };
   }
+
+  /** Translated fallback label for a CTA kind when the API label is null. */
+  const ctaLabel = (kind: string, apiLabel?: string | null): string => {
+    if (apiLabel) return apiLabel;
+    // Known CTA kinds get a translated default; unknown kinds fall back
+    const key = `library:detail.cta.${kind}` as const;
+    const translated = t(key, { defaultValue: '' });
+    return translated || t('library:detail.cta.default');
+  };
+
+  // Resolve CTA from the read model (LIB-R-23).
+  // The API drops unavailable targets, so if `detail.cta.target` is present,
+  // the CTA is actionable. When `label` becomes optional (contract change),
+  // we fall back to a translated label per kind.
+  const resolveCta = (cta: { ctaKind: string; targetId?: string | null; label?: string | null }): ResolvedCta | null => {
+    if (!detail.cta) return null;
+    if (detail.cta.target) {
+      return {
+        kind: 'link' as const,
+        href: detail.cta.target,
+        label: ctaLabel(detail.cta.kind, cta.label ?? detail.cta.label),
+      };
+    }
+    // CTA without a target: nothing to link to
+    return null;
+  };
+
+  // LIB-R-27: replacement link for unavailable content.
+  // The contract field is being added; when it lands, render a Link here.
+  // TODO(T-C1.13): Wire `detail.replacementResourceId` once the field name is settled.
 
   return (
     <div className="space-y-6 max-w-reading">
@@ -222,7 +326,14 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
       <div className="flex flex-wrap items-center gap-3">
         <Badge tone="neutral">{detail.category.label}</Badge>
         {detail.durationSeconds != null ? (
-          <DurationBadge durationSeconds={detail.durationSeconds} />
+          <DurationBadge
+            durationSeconds={detail.durationSeconds}
+            formatLabel={(seconds) => {
+              const minutes = Math.round(seconds / 60);
+              if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+              return t('library:durationFormat.minutes', { count: minutes });
+            }}
+          />
         ) : detail.durationBand ? (
           <DurationBadge bandLabel={t(`library:duration.${detail.durationBand}`)} />
         ) : null}
@@ -236,7 +347,7 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
         <Text>{detail.outcome}</Text>
       </section>
 
-      {/* Reviewer and date */}
+      {/* Reviewer and date — use formatDate not formatDateTime (Minor) */}
       {detail.reviewerName ? (
         <div className="type-metadata text-text-secondary">
           <span>{t('library:detail.reviewedBy', { name: detail.reviewerName })}</span>
@@ -244,7 +355,7 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
             <span>
               {' · '}
               {t('library:detail.reviewedOn', {
-                date: formatDateTime(new Date(detail.reviewedAt), locale as Locale),
+                date: formatDate(new Date(detail.reviewedAt), locale as Locale),
               })}
             </span>
           ) : null}
@@ -263,9 +374,9 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
               content: unknown[];
             }
           }
-          media={mediaMeta as Record<string, Parameters<typeof ContentRenderer>[0]['media'][string]>}
+          media={mediaMeta}
           mediaUrl={mediaUrl as MediaUrlResolver}
-          resolveCta={() => null}
+          resolveCta={resolveCta}
           resolveRelated={(id) => {
             const rel = detail.relatedResources.find((r) => r.resourceId === id);
             if (!rel) return null;
@@ -279,7 +390,6 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
           linkComponent={RendererLinkComponent}
           labels={rendererLabels}
           documentKey={detail.id}
-          headingOffset={1}
         />
       ) : null}
 
@@ -290,6 +400,8 @@ function DetailView({ detail, locale, onToggleSave, saveDemoMessage }: DetailVie
             variant="secondary"
             onClick={onToggleSave}
             aria-pressed={detail.saved}
+            loading={savePending}
+            disabled={savePending}
           >
             {detail.saved
               ? t('library:detail.unsave')

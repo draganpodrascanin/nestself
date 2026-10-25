@@ -10,7 +10,9 @@
     "availableResources": "Available resources",
     "showMore": "Show more",
     "showMoreLoading": "Loading more",
-    "showMoreAnnouncement": "{{count}} more items loaded",
+    "showMoreAnnouncement_one": "{{count}} more item loaded",
+    "showMoreAnnouncement_few": "{{count}} more items loaded",
+    "showMoreAnnouncement_other": "{{count}} more items loaded",
     "empty": {
       "title": "No resources available yet",
       "body": "Content is being prepared. Check back soon."
@@ -19,7 +21,11 @@
   "card": {
     "save": "Save",
     "unsave": "Remove from saved",
-    "article": "Article"
+    "article": "Article",
+    "video": "Video",
+    "audio": "Audio",
+    "guide": "Guide",
+    "course": "Course"
   },
   "detail": {
     "outcome": "What you get",
@@ -31,7 +37,16 @@
     "save": "Save this resource",
     "unsave": "Remove from saved",
     "saveDemo": "This is a demonstration. Nothing was saved.",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "cta": {
+      "open_content": "Open",
+      "open_collection": "Browse collection",
+      "suggest_topic": "Suggest a topic",
+      "ask_general_question": "Ask a question",
+      "express_event_interest": "Register interest",
+      "open_service": "Open service",
+      "default": "Continue"
+    }
   },
   "saved": {
     "title": "Saved",
@@ -41,6 +56,7 @@
     },
     "unavailable": "This content is no longer available",
     "remove": "Remove",
+    "removeItem": "Remove {{title}}",
     "removeDemo": "This is a demonstration. Nothing was removed."
   },
   "content": {
@@ -49,13 +65,13 @@
   "explore": {
     "comingSoon": {
       "title": "Explore",
-      "body": "Browse and filter resources by topic, format and duration. Coming in the next release."
+      "body": "Browse and filter resources by topic, format and duration. This feature is in development."
     }
   },
   "requests": {
     "comingSoon": {
       "title": "My requests",
-      "body": "Submit and track content requests. Coming in the next release."
+      "body": "Submit and track content requests. This feature is in development."
     }
   },
   "prototype": {
@@ -77,10 +93,17 @@
     "5_to_15": "5–15 min",
     "over_15": "Over 15 min"
   },
+  "durationFormat": {
+    "minutes": "{{count}} min",
+    "lessThanMinute": "<1 min"
+  },
   "error": {
     "contentNotAvailable": "This content is not available.",
     "invalidContext": "Please switch to a valid context to view this content.",
+    "orgContextExpired": "Your organization access has expired. Please contact your administrator.",
     "network": "Could not load content. Check your connection and try again.",
+    "saveFailed": "Could not save this resource. Please try again.",
+    "unsaveFailed": "Could not remove this resource from saved items. Please try again.",
     "unknown": "Something went wrong. Please try again."
   }
 }

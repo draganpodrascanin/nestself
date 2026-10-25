@@ -24,6 +24,11 @@ describe('mapLibraryError', () => {
     expect(mapLibraryError(err, t)).toBe('error.network');
   });
 
+  it('maps org_context_expired to the correct key', () => {
+    const err = new ApiError({ status: 403, code: 'org_context_expired', message: '', requestId: null });
+    expect(mapLibraryError(err, t)).toBe('error.orgContextExpired');
+  });
+
   it('maps unknown ApiError code to error.unknown', () => {
     const err = new ApiError({ status: 500, code: 'server_error', message: '', requestId: null });
     expect(mapLibraryError(err, t)).toBe('error.unknown');

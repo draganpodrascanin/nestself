@@ -10,7 +10,9 @@
     "availableResources": "Elérhető anyagok",
     "showMore": "Továbbiak",
     "showMoreLoading": "Betöltés",
-    "showMoreAnnouncement": "{{count}} további elem betöltve",
+    "showMoreAnnouncement_one": "{{count}} további elem betöltve",
+    "showMoreAnnouncement_few": "{{count}} további elem betöltve",
+    "showMoreAnnouncement_other": "{{count}} további elem betöltve",
     "empty": {
       "title": "Még nincsenek elérhető anyagok",
       "body": "A tartalom előkészítés alatt áll. Nézz vissza hamarosan."
@@ -19,7 +21,11 @@
   "card": {
     "save": "Mentés",
     "unsave": "Eltávolítás a mentettekből",
-    "article": "Cikk"
+    "article": "Cikk",
+    "video": "Videó",
+    "audio": "Hang",
+    "guide": "Útmutató",
+    "course": "Tanfolyam"
   },
   "detail": {
     "outcome": "Mit kapsz",
@@ -31,7 +37,16 @@
     "save": "Anyag mentése",
     "unsave": "Eltávolítás a mentettekből",
     "saveDemo": "Ez egy bemutató. Semmi sem lett mentve.",
-    "backToHome": "Vissza a kezdőlapra"
+    "backToHome": "Vissza a kezdőlapra",
+    "cta": {
+      "open_content": "Megnyitás",
+      "open_collection": "Gyűjtemény böngészése",
+      "suggest_topic": "Téma javaslása",
+      "ask_general_question": "Kérdés feltevése",
+      "express_event_interest": "Érdeklődés jelzése",
+      "open_service": "Szolgáltatás megnyitása",
+      "default": "Tovább"
+    }
   },
   "saved": {
     "title": "Mentett",
@@ -41,6 +56,7 @@
     },
     "unavailable": "Ez a tartalom már nem elérhető",
     "remove": "Eltávolítás",
+    "removeItem": "{{title}} eltávolítása",
     "removeDemo": "Ez egy bemutató. Semmi sem lett eltávolítva."
   },
   "content": {
@@ -49,13 +65,13 @@
   "explore": {
     "comingSoon": {
       "title": "Felfedezés",
-      "body": "Böngéssz és szűrj anyagokat téma, formátum és időtartam szerint. A következő verzióban érkezik."
+      "body": "Böngéssz és szűrj anyagokat téma, formátum és időtartam szerint. Ez a funkció fejlesztés alatt áll."
     }
   },
   "requests": {
     "comingSoon": {
       "title": "Kéréseim",
-      "body": "Küldj be és kövess tartalomkéréseket. A következő verzióban érkezik."
+      "body": "Küldj be és kövess tartalomkéréseket. Ez a funkció fejlesztés alatt áll."
     }
   },
   "prototype": {
@@ -77,10 +93,17 @@
     "5_to_15": "5–15 perc",
     "over_15": "Több mint 15 perc"
   },
+  "durationFormat": {
+    "minutes": "{{count}} perc",
+    "lessThanMinute": "<1 perc"
+  },
   "error": {
     "contentNotAvailable": "Ez a tartalom nem elérhető.",
     "invalidContext": "Válts érvényes kontextusra a tartalom megtekintéséhez.",
+    "orgContextExpired": "A szervezeti hozzáférésed lejárt. Fordulj a rendszergazdához.",
     "network": "Nem sikerült betölteni a tartalmat. Ellenőrizd a kapcsolatot, és próbáld újra.",
+    "saveFailed": "Nem sikerült menteni az anyagot. Kérjük, próbáld újra.",
+    "unsaveFailed": "Nem sikerült eltávolítani az anyagot a mentettekből. Kérjük, próbáld újra.",
     "unknown": "Valami hiba történt. Kérjük, próbáld újra."
   }
 }

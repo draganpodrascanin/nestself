@@ -47,20 +47,26 @@ function AuthenticatedLayout() {
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
-  // In api mode: Home, Explore, Saved, My requests (CLI-R-04)
-  const apiNavItems: NavEntry[] = [
-    { to: '/', icon: House, label: t('library:nav.home') },
-    { to: '/explore', icon: Compass, label: t('library:nav.explore') },
-    { to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') },
-    { to: '/requests', icon: PaperPlaneTilt, label: t('library:nav.myRequests') },
-    { to: '/settings', icon: Gear, label: t('common:nav.settings') },
-  ];
+  // Permission checks
+  const canBookmark = principal
+    ? can(principal, 'content.bookmark', undefined, effectiveActions)
+    : false;
+  const showManager = principal
+    ? can(principal, 'events.request', undefined, effectiveActions)
+    : false;
+  const showHr = principal
+    ? can(principal, 'program.overview', undefined, effectiveActions)
+    : false;
+  const showAccess =
+    showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
-  // Legacy sample-mode nav
-  const sampleNavItems: NavEntry[] = [
+  // Build nav items — Saved shown only when content.bookmark is available
+  const coreNavItems: NavEntry[] = [
     { to: '/', icon: House, label: t('library:nav.home') },
     { to: '/explore', icon: Compass, label: t('library:nav.explore') },
-    { to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') },
+    ...(canBookmark
+      ? [{ to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') }]
+      : []),
     { to: '/requests', icon: PaperPlaneTilt, label: t('library:nav.myRequests') },
     { to: '/settings', icon: Gear, label: t('common:nav.settings') },
   ];
@@ -76,21 +82,9 @@ function AuthenticatedLayout() {
       ]
     : [];
 
-  const mainItems = isSampleDataMode ? sampleNavItems : apiNavItems;
-
-  const showManager = principal
-    ? can(principal, 'events.request', undefined, effectiveActions)
-    : false;
-  const showHr = principal
-    ? can(principal, 'program.overview', undefined, effectiveActions)
-    : false;
-
   const managerNav: NavEntry[] = showManager
     ? [{ to: '/manage', icon: Users, label: t('common:nav.manage') }]
     : [];
-
-  const showAccess =
-    showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
   const hrNav: NavEntry[] = showHr
     ? [{ to: '/hr', icon: Buildings, label: t('common:nav.hr') }]
@@ -100,10 +94,13 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr/access', icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...mainItems, ...prototypeItems, ...managerNav, ...hrNav, ...accessNav];
+  const allNavItems = [...coreNavItems, ...prototypeItems, ...managerNav, ...hrNav, ...accessNav];
 
-  /** Bottom bar: at most 5 items (main nav only). */
-  const bottomBarItems = mainItems.slice(0, 4);
+  /**
+   * Bottom bar: 5 slots. Home, Explore, (Saved if permitted), My requests, Settings.
+   * Settings was unreachable below 1024 px when slice(0,4) excluded it.
+   */
+  const bottomBarItems = coreNavItems.slice(0, 5);
 
   const renderNavItemList = (
     items: typeof allNavItems,
@@ -119,7 +116,7 @@ function AuthenticatedLayout() {
       return (
         <div key={item.to}>
           {groupLabel ? (
-            <p className="px-2 pt-4 pb-1 type-metadata text-text-secondary">
+            <p className="px-2 pt-4 pb-1 type-metadata text-text-secondary" role="presentation">
               {groupLabel}
             </p>
           ) : null}

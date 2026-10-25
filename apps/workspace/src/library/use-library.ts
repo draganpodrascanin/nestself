@@ -10,38 +10,12 @@
  */
 import { queryOptions } from '@tanstack/react-query';
 import {
-  LibraryContentListSchema,
   LibraryContentDetailSchema,
   SavedItemsListSchema,
 } from '@nestself/contracts';
 import type { ActiveContext } from '@nestself/contracts';
 import type { ApiClient } from '@nestself/api-client';
-import { libraryKeys, savedKeys } from '@nestself/api-client';
-
-// ---------------------------------------------------------------------------
-// Content list
-// ---------------------------------------------------------------------------
-
-export function libraryContentListOptions(
-  client: ApiClient,
-  ctx: ActiveContext,
-  locale: string,
-  cursor?: string | null,
-) {
-  return queryOptions({
-    queryKey: [...libraryKeys.contentList(ctx, locale), cursor ?? 'initial'] as const,
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (cursor) params.set('cursor', cursor);
-      const qs = params.toString();
-      return client.request(`/api/library/content${qs ? `?${qs}` : ''}`, {
-        schema: LibraryContentListSchema,
-        headers: { 'Accept-Language': locale },
-      });
-    },
-    staleTime: 60_000,
-  });
-}
+import { ApiError, libraryKeys, savedKeys } from '@nestself/api-client';
 
 // ---------------------------------------------------------------------------
 // Content detail
@@ -61,6 +35,11 @@ export function libraryContentDetailOptions(
         headers: { 'Accept-Language': locale },
       }),
     staleTime: 5 * 60_000,
+    // 404 is a definitive "not found"; retrying wastes time.
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 404) return false;
+      return failureCount < 1;
+    },
   });
 }
 
@@ -91,7 +70,7 @@ export function savedItemsListOptions(
 export function saveItem(client: ApiClient, contentId: string) {
   return client.request(`/api/me/saved/${encodeURIComponent(contentId)}`, {
     method: 'PUT',
-    schema: undefined as unknown as never,
+    schema: SavedItemsListSchema, // Unused — expectBody: false skips parsing
     expectBody: false,
   });
 }
@@ -99,7 +78,7 @@ export function saveItem(client: ApiClient, contentId: string) {
 export function unsaveItem(client: ApiClient, contentId: string) {
   return client.request(`/api/me/saved/${encodeURIComponent(contentId)}`, {
     method: 'DELETE',
-    schema: undefined as unknown as never,
+    schema: SavedItemsListSchema, // Unused — expectBody: false skips parsing
     expectBody: false,
   });
 }
