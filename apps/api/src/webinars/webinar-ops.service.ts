@@ -240,6 +240,7 @@ export class WebinarOpsService {
 
     await this.invalidate([...changed.addedPresenters, ...changed.removedPresenters]);
     if (patch.startsAt && patch.startsAt.getTime() !== current.startsAt.getTime()) await this.rescheduleReminders(webinar);
+    await this.record(principal.userId, webinar, 'webinar.updated', { webinarId, changedFields: Object.keys(body).sort() });
     return toWebinar(webinar, saved);
   }
 
@@ -330,6 +331,8 @@ export class WebinarOpsService {
         completionPercent: completionPercent(minutes, length),
       };
     });
+    // WBN-33 criterion 5: viewing per-registrant attendance is audited.
+    await this.record(principal.userId, webinar, 'webinar.attendance.viewed', { webinarId });
     return {
       webinarId,
       registeredCount: registrations.length,

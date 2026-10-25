@@ -12,11 +12,14 @@ import { REMINDER_OFFSETS_MINUTES } from '@nestself/contracts';
 import {
   WEBINARS_QUEUE,
   WEBINAR_JOB_NAMES,
+  WebinarJobDelay,
   WebinarJobSchedulerService,
   isWebinarJobName,
+  webinarJobContext,
   webinarJobId,
   webinarReminderJobIds,
   webinarReminderSchedule,
+  type WebinarJobContext,
   type WebinarJobData,
   type WebinarJobName,
 } from './webinar-job-scheduler.service.js';
@@ -63,6 +66,17 @@ describe('webinar job rules', () => {
       { offsetMinutes: 60, delayMs: 2 * 60 * MINUTE },
     ]);
     expect(webinarReminderSchedule(new Date(NOW.getTime() + 30 * MINUTE), NOW)).toEqual([]);
+  });
+});
+
+describe('webinar job context (T-CW-2.5)', () => {
+  it('counts attempts from 1 and keeps the first enqueue time for deadlines', () => {
+    expect(webinarJobContext({ attemptsMade: 0, opts: { attempts: 3 }, timestamp: NOW.getTime() })).toEqual({
+      attempt: 1,
+      maxAttempts: 3,
+      enqueuedAt: NOW,
+    });
+    expect(webinarJobContext({ attemptsMade: 2, opts: {}, timestamp: NOW.getTime() })).toMatchObject({ attempt: 3, maxAttempts: 1 });
   });
 });
 
@@ -115,5 +129,34 @@ describe('WebinarJobSchedulerService on Redis', async () => {
     expect(await scheduler.enqueueRecordingStart('w_rt', 'session_rt')).toBe(true);
     await done;
     expect(handled).toEqual([['webinar.recording.start', { webinarId: 'w_rt', sessionId: 'session_rt' }]]);
+  });
+
+  it.skipIf(!redisUp)('runs a delayed job again without spending an attempt (WebinarJobDelay)', async () => {
+    const delayedPrefix = `${prefix}-delay`;
+    const delayed = new WebinarJobSchedulerService(config(REDIS_URL));
+    delayed.prefix = delayedPrefix;
+    const contexts: WebinarJobContext[] = [];
+    try {
+      const done = new Promise<void>((resolve) => {
+        void delayed.start({
+          handle: async (_name, _data, context) => {
+            contexts.push(context!);
+            if (contexts.length === 1) throw new WebinarJobDelay(10);
+            resolve();
+            return { ok: true };
+          },
+        });
+      });
+      expect(await delayed.enqueueRecordingFinalize('w_delay', 'session_delay')).toBe(true);
+      await done;
+      expect(contexts.map((c) => [c.attempt, c.maxAttempts])).toEqual([
+        [1, 3],
+        [1, 3],
+      ]);
+      expect(contexts[1]!.enqueuedAt).toEqual(contexts[0]!.enqueuedAt);
+    } finally {
+      await delayed.getQueue()?.obliterate({ force: true }).catch(() => undefined);
+      await delayed.onModuleDestroy();
+    }
   });
 });

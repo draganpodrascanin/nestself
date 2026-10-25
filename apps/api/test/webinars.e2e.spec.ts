@@ -35,6 +35,7 @@ import { and, eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import {
   WEBINAR_SINGLE_MEETING_CAPACITY,
+  WebinarRecordingStatusResponseSchema,
   WebinarAttendanceResponseSchema,
   WebinarJoinResponseSchema,
   WebinarListResponseSchema,
@@ -56,6 +57,7 @@ import type { FakeVideoProvider } from '../src/video/fake-video-provider.js';
 import { RoomEmitter } from '../src/ws/room-emitter.js';
 import { WebinarJobSchedulerService, webinarReminderJobIds } from '../src/jobs/webinar-job-scheduler.service.js';
 import { WebinarsRepository } from '../src/webinars/webinars.repository.js';
+import { WebinarJobsService } from '../src/webinars/webinar-jobs.service.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
   assignments,
@@ -63,7 +65,9 @@ import {
   grants,
   orgUnits,
   webinarPollResults,
+  webinarRecordings,
   webinarRegistrations,
+  webinars,
 } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
@@ -98,7 +102,18 @@ const WEBINAR_AUDIT_DETAIL_KEYS: Record<string, string[]> = {
   'webinar.floor.taken': ['participantId', 'webinarId'],
   'webinar.poll.opened': ['pollId', 'webinarId'],
   'webinar.poll.closed': ['pollId', 'webinarId'],
+  // T-CW-2.5
+  'webinar.updated': ['changedFields', 'webinarId'],
+  'webinar.attendance.viewed': ['webinarId'],
+  'webinar.recording.started': ['recordingId', 'sessionId', 'webinarId'],
+  'webinar.recording.stopped': ['reason', 'recordingId', 'sessionId', 'webinarId'],
+  'webinar.recording.ready': ['concatenatedKey', 'recordingId', 'sessionId', 'webinarId'],
+  'webinar.recording.handed_off': ['handoffStatus', 'recordingId', 'sessionId', 'webinarId'],
+  'webinar.recording.failed': ['reason', 'recordingId', 'sessionId', 'webinarId'],
 };
+
+/** A worker run of a recording job: first attempt of three, just enqueued. */
+const RECORDING_JOB_CONTEXT = () => ({ attempt: 1, maxAttempts: 3, enqueuedAt: new Date() });
 
 interface SignedIn {
   agent: request.Agent;
@@ -319,6 +334,20 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expectCode(patched, 400, 'capacity_above_limit');
   });
 
+  it('an edit is audited as webinar.updated with the names of the fields it changed (WBN-30, T-CW-2.5)', async () => {
+    const created = await post(nikola, '/ops/webinars', occurrence());
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const res = await patch(nikola, `/ops/webinars/${created.body.id}`, { capacity: 3, timeZone: 'Europe/Belgrade' });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'webinar.updated',
+        actorUserId: 'user_nikola',
+        details: { webinarId: created.body.id, changedFields: ['capacity', 'timeZone'] },
+      }),
+    );
+  });
+
   it('operations create a draft occurrence without a recording switch; the presenter gets her CASE assignment', async () => {
     expectCode(await post(nikola, '/ops/webinars', occurrence({ recordingPolicy: 'off' })), 400, 'validation');
 
@@ -495,6 +524,51 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
 
     const moderatorJoin = WebinarJoinResponseSchema.parse((await post(nikola, `/webinars/${liveId}/join`)).body);
     expect(moderatorJoin).toMatchObject({ role: 'moderator', sessionId: presenterJoin.sessionId });
+  });
+
+  // ── Recording (WBN-28, D-CW-18, D-CW-34, T-CW-2.5) ─────────────────────
+
+  it('the recording cannot be stopped before it started (409 recording_not_allowed)', async () => {
+    expectCode(await post(nikola, `/webinars/${liveId}/recording/stop`), 409, 'recording_not_allowed');
+  });
+
+  it('the start job captures the presenter only, under recordings/{webinarId}/raw/, and shows the REC indicator', async () => {
+    const startRecording = vi.spyOn(video, 'startRecording');
+    const result = await app
+      .get(WebinarJobsService)
+      .handle('webinar.recording.start', { webinarId: liveId, sessionId: null }, RECORDING_JOB_CONTEXT());
+    expect(result).toMatchObject({ webinarId: liveId, started: true });
+
+    // The presenter's attendee only: the moderator is in the meeting and is not selected (D-CW-18).
+    expect(startRecording).toHaveBeenCalledWith({
+      sessionId: presenterJoin.sessionId,
+      providerMeetingId: presenterJoin.meeting.MeetingId,
+      presenterAttendeeIds: [presenterJoin.attendee.AttendeeId],
+      s3Prefix: `recordings/${liveId}/raw/`,
+    });
+    const [row] = await testDb.db.select().from(webinarRecordings).where(eq(webinarRecordings.webinarId, liveId));
+    expect(row).toMatchObject({
+      sessionId: presenterJoin.sessionId,
+      orgId: ORG,
+      status: 'RECORDING',
+      providerPipelineId: `fake-pipeline-${presenterJoin.sessionId}`,
+      rawSegmentsPrefix: `recordings/${liveId}/raw/`,
+      handoffStatus: 'pending',
+    });
+    expect(emitted('webinar.recording')).toEqual([
+      [`webinar:${liveId}`, 'webinar.recording', { webinarId: liveId, status: 'started' }],
+    ]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.recording.started', actorKind: 'JOB', actorUserId: null }),
+    );
+    expect(await app.get(WebinarsRepository).findById(liveId)).toMatchObject({ recordingStatus: 'recording' });
+
+    const status = await get(milica, `/webinars/${liveId}/recording`);
+    expect(status.status, JSON.stringify(status.body)).toBe(200);
+    expect(WebinarRecordingStatusResponseSchema.parse(status.body)).toMatchObject({ status: 'recording', stoppedAt: null });
+    expect((await get(nikola, `/webinars/${liveId}/recording`)).status).toBe(200);
+    expectNotFound(await get(jovan, `/webinars/${liveId}/recording`));
+    expectNotFound(await get(ivana, `/webinars/${liveId}/recording`));
   });
 
   it('an attendee joins receive-only on audio, video and content (WBN-07, CW-R-75, CW-R-71)', async () => {
@@ -776,6 +850,45 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(index.items.map((w) => w.id)).toEqual(expect.arrayContaining([liveId, 'webinar_sample_ended']));
   });
 
+  it('viewing the attendance report is audited (WBN-33 criterion 5)', async () => {
+    expect((await get(nikola, `/ops/webinars/${liveId}/attendance`)).status).toBe(200);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.attendance.viewed', actorUserId: 'user_nikola', details: { webinarId: liveId } }),
+    );
+  });
+
+  it('only moderating staff stop the recording early; the stop is idempotent and schedules the finalize job', async () => {
+    const path = `/webinars/${liveId}/recording/stop`;
+    expectNotFound(await post(jovan, path));
+    // The presenter holds event.present, not event.moderate.
+    expectNotFound(await post(milica, path));
+
+    const res = await post(nikola, path);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(WebinarRecordingStatusResponseSchema.parse(res.body)).toMatchObject({
+      webinarId: liveId,
+      status: 'processing',
+      startedAt: expect.any(String),
+      stoppedAt: expect.any(String),
+    });
+    expect(emitted('webinar.recording')).toEqual([
+      [`webinar:${liveId}`, 'webinar.recording', { webinarId: liveId, status: 'stopped' }],
+    ]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'webinar.recording.stopped',
+        actorUserId: 'user_nikola',
+        details: expect.objectContaining({ webinarId: liveId, sessionId: presenterJoin.sessionId, reason: 'moderator' }),
+      }),
+    );
+    if (redisUp) {
+      const job = await scheduler.getQueue()!.getJob(`webinar.recording.finalize/${presenterJoin.sessionId}`);
+      expect(job?.data).toEqual({ webinarId: liveId, sessionId: presenterJoin.sessionId });
+    }
+    expect((await post(nikola, path)).body).toMatchObject({ status: 'processing' });
+    expect(emitted('webinar.recording')).toHaveLength(1);
+  });
+
   // ── End (WBN-21, WBN-29) ──────────────────────────────────────────────────
 
   it('an attendee cannot end; a host ends for everyone and the room closes (WBN-21, CW-R-36b)', async () => {
@@ -791,6 +904,76 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
 
     expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
     expect((await post(milica, `/webinars/${liveId}/end`)).body).toEqual({ webinarId: liveId, status: 'ended' });
+  });
+
+  it('the finalize job stops the capture, concatenates into recordings/{webinarId}/final/ and hands off as pending (WBN-34)', async () => {
+    const result = await app
+      .get(WebinarJobsService)
+      .handle('webinar.recording.finalize', { webinarId: liveId, sessionId: presenterJoin.sessionId }, RECORDING_JOB_CONTEXT());
+    expect(result).toMatchObject({ webinarId: liveId, finalized: true });
+    expect(video.isRecording(`fake-pipeline-${presenterJoin.sessionId}`)).toBe(false);
+
+    const [row] = await testDb.db.select().from(webinarRecordings).where(eq(webinarRecordings.webinarId, liveId));
+    expect(row).toMatchObject({
+      status: 'READY',
+      concatenationPipelineId: `fake-concat-${presenterJoin.sessionId}-1`,
+      concatenatedKey: `recordings/${liveId}/final/composited-video/`,
+      handoffStatus: 'pending',
+      handoffLocation: `s3://fake-recordings/recordings/${liveId}/final/composited-video/`,
+      readyAt: expect.any(Date),
+    });
+    expect((auditRecord.mock.calls as [AuditEventInput][]).map(([event]) => event.action)).toEqual([
+      'webinar.recording.ready',
+      'webinar.recording.handed_off',
+    ]);
+    expect((await get(nikola, `/webinars/${liveId}/recording`)).body).toMatchObject({ status: 'ready' });
+  });
+
+  it('a webinar whose meeting the provider ended is ended by the session lifecycle, and its recording stops (T-CW-2.5)', async () => {
+    const id = await createPublished();
+    expect((await post(milica, `/webinars/${id}/start`)).status).toBe(200);
+    const host = WebinarJoinResponseSchema.parse((await post(milica, `/webinars/${id}/join`)).body);
+    await app.get(WebinarJobsService).handle('webinar.recording.start', { webinarId: id, sessionId: null }, RECORDING_JOB_CONTEXT());
+
+    // Chime ends a meeting on its own, for example once it has been empty for 5 minutes.
+    video.simulateEvent('MeetingEnded', host.meeting.MeetingId);
+    // The event is applied asynchronously; the end is announced last.
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && emitted('webinar.ended').length < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const [webinar] = await testDb.db.select().from(webinars).where(eq(webinars.id, id));
+    expect(webinar).toMatchObject({ status: 'ENDED', recordingStatus: 'PROCESSING' });
+    const [session] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, host.sessionId));
+    expect(session).toMatchObject({ status: 'ENDED', endReason: 'PROVIDER' });
+    const [row] = await testDb.db.select().from(webinarRecordings).where(eq(webinarRecordings.webinarId, id));
+    expect(row).toMatchObject({ status: 'PROCESSING', stoppedAt: expect.any(Date) });
+
+    expect(emitted('webinar.state')).toContainEqual([`webinar:${id}`, 'webinar.state', { webinarId: id, status: 'ended' }]);
+    expect(emitted('webinar.ended').map((call) => call[0])).toEqual([`webinar:${id}`, `webinar:${id}:moderation`]);
+    expect(emitted('webinar.recording')).toContainEqual([`webinar:${id}`, 'webinar.recording', { webinarId: id, status: 'stopped' }]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.ended', actorUserId: null, actorKind: 'SYSTEM', details: { webinarId: id, sessionId: host.sessionId } }),
+    );
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.recording.stopped', actorKind: 'SYSTEM', details: expect.objectContaining({ reason: 'ended' }) }),
+    );
+    // A host's end afterwards is a no-op.
+    expect((await post(milica, `/webinars/${id}/end`)).body).toEqual({ webinarId: id, status: 'ended' });
+  });
+
+  it('an end before the recording started records it as failed, with no recording to stop', async () => {
+    const id = await createPublished();
+    expect((await post(milica, `/webinars/${id}/start`)).status).toBe(200);
+    expect((await post(nikola, `/webinars/${id}/end`)).status).toBe(200);
+    expect(await app.get(WebinarsRepository).findById(id)).toMatchObject({ status: 'ended', recordingStatus: 'failed' });
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'webinar.recording.failed',
+        details: { webinarId: id, sessionId: null, recordingId: null, reason: 'ended_before_start' },
+      }),
+    );
+    expect((await get(nikola, `/webinars/${id}/recording`)).body).toMatchObject({ status: 'failed', startedAt: null });
   });
 
   // ── Audit hygiene (CW-R-33a, CW-R-69) ─────────────────────────────────────

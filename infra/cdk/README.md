@@ -127,7 +127,7 @@ pnpm --filter @nestself/cdk typecheck
 | `nestself-<stage>-chime-events` queue | SSE-KMS, visibility timeout 60 s, long polling 20 s, dead-letter queue after 5 receives. Queue policy lets `meetings.chime.amazonaws.com` send (`CreateMeeting` `NotificationsConfiguration`) with `aws:SourceAccount` and `aws:SourceArn` conditions; the key policy lets it encrypt (OPS-16). |
 | `nestself-<stage>-chime-events-dlq` | SSE-KMS, 14-day retention. |
 | `nestself-<stage>-chime-meeting-state-change` rule | `source: aws.chime`, `detail-type: Chime Meeting State Change`, to the queue: the backstop to the direct notifications, so events arrive at least once (D-CW-12). |
-| `nestself-<stage>-recordings-<account>` bucket | SSE-KMS with an S3 bucket key, block public access, TLS only, server access logs to `nestself-<stage>-recordings-logs-<account>`. Capture pipelines write under `raw/` (expired after 30 days), concatenation writes under `concatenated/`. Bucket and key policies let `mediapipelines.chime.amazonaws.com` put, read and list with `aws:SourceAccount` and `aws:SourceArn` conditions (WEB-27). |
+| `nestself-<stage>-recordings-<account>` bucket | SSE-KMS with an S3 bucket key, block public access, TLS only, server access logs to `nestself-<stage>-recordings-logs-<account>`. Webinar recordings (T-CW-2.5): capture segments under `recordings/{webinarId}/raw/`, the concatenated MP4 under `recordings/{webinarId}/final/composited-video/`. The `ExpireRawSegments` rule expires `raw/` after 30 days (the spike scripts' prefix); see "Recordings: raw-segment expiry" below. Bucket and key policies let `mediapipelines.chime.amazonaws.com` put, read and list with `aws:SourceAccount` and `aws:SourceArn` conditions (WEB-27). |
 | `nestself-<stage>-video-api` managed policy | Meeting and attendee actions plus `chime:TagResource` on `*` (the meetings actions have no resource-level permissions). No media pipeline actions (CW-R-79a). |
 | `nestself-<stage>-video-worker` managed policy | Consume the queue, meeting cleanup (`chime:GetMeeting` and `chime:DeleteMeeting` on `*`, for `calls.cleanup` and `calls.reconcile`, D-CW-31), media capture and concatenation pipelines (on `*`), the media pipelines service-linked role, put, get, list and read the bucket policy on the recordings bucket, decrypt and generate data keys on the key. |
 
@@ -163,6 +163,16 @@ node infra/cdk/scripts/env-from-outputs.mjs dev   # replace the COGNITO_* block,
 ```
 
 Tearing the dev stack down: the buckets keep `DESTROY` but have no auto-delete, so empty `nestself-dev-recordings-<account>` and `nestself-dev-recordings-logs-<account>` first (`aws s3 rm s3://<bucket> --recursive`), otherwise `cdk destroy NestSelf-dev-Video` stops at the non-empty buckets.
+
+### Recordings: raw-segment expiry
+
+Every webinar is recorded (D-CW-34). The worker writes the capture pipeline's 5-second segments to `recordings/{webinarId}/raw/` and the concatenation's MP4 to `recordings/{webinarId}/final/` (`recordingRawPrefix` and `recordingFinalPrefix` in `apps/api/src/video/video-provider.ts`). An S3 lifecycle filter matches a literal key prefix (or tags, which the media pipelines cannot set), never a wildcard such as `recordings/*/raw/`, so the bucket's 30-day rule cannot reach the webinar segments in this layout. The `ExpireRawSegments` rule stays on `raw/`, where the spike scripts write. Until one of these is chosen, webinar raw segments are kept (retention 16.3 says 30 days): move the layout to `raw/{webinarId}/` and `final/{webinarId}/` (two helpers, the existing rule then applies), delete the segments from the finalize job once the recording is READY (needs `@aws-sdk/client-s3` and `s3:DeleteObject` for the worker), or run a scheduled S3 Batch Operations job.
+
+### Media pipeline quota
+
+The default quota for concurrent media pipelines in eu-central-1 is 10 (WEB-41; us-east-1 has 100), and every webinar runs one capture pipeline for its whole length plus a short concatenation pipeline after it. Request a quota increase (Service Quotas, Amazon Chime SDK, concurrent media pipelines in eu-central-1) before the first month with more than 5 recorded webinars, so overlapping webinars and their concatenations never meet the limit. A refused `CreateMediaCapturePipeline` (`LimitExceededException`, 429) is retried by `webinar.recording.start` three times and then recorded as `failed`; the webinar itself goes on.
+
+### Developer identity in dev
 
 The local API and worker run as the developer identity, so in dev both managed policies are attached to the identity behind the `nestself-dev` profile (D-CW-31): `aws iam attach-user-policy` (or `attach-role-policy`) with the two ARNs the script prints. That needs IAM rights the day-to-day profile may not have. In staging and production the compute stack is to attach them to the API and worker task roles when `videoEnabled` is set for the stage; that wiring is not in place yet.
 

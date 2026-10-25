@@ -1,10 +1,11 @@
 /**
  * WebinarJobsService (T-CW-2.1, WBN-05, CW-R-37): a reminder re-reads the
  * registration and the occurrence and sends only for an active registration
- * of an occurrence that is still to start; the recording jobs leave the
- * status alone until T-CW-2.5.
+ * of an occurrence that is still to start; the recording jobs go to the
+ * recording pipeline with their attempt context (T-CW-2.5).
  */
 import { describe, expect, it, vi } from 'vitest';
+import type { WebinarRecordingService } from './recording.service.js';
 import type { WebinarMailer } from './webinar-mailer.js';
 import { WebinarJobsService } from './webinar-jobs.service.js';
 import type { WebinarRecord, WebinarRegistrationRecord, WebinarsRepository } from './webinars.repository.js';
@@ -19,8 +20,12 @@ function setup(found: { registration?: Partial<WebinarRegistrationRecord> | null
     findById: async () => (found.webinar === null ? null : { ...webinar, ...found.webinar }),
   } as unknown as WebinarsRepository;
   const reminder = vi.fn(async () => true);
-  const service = new WebinarJobsService(repo, { reminder } as unknown as WebinarMailer);
-  return { service, reminder };
+  const recording = {
+    start: vi.fn(async () => ({ webinarId: 'w1', started: true })),
+    finalize: vi.fn(async () => ({ webinarId: 'w1', finalized: true })),
+  };
+  const service = new WebinarJobsService(repo, { reminder } as unknown as WebinarMailer, recording as unknown as WebinarRecordingService);
+  return { service, reminder, recording };
 }
 
 const job = { webinarId: 'w1', registrationId: 'reg_1', offsetMinutes: 1440 };
@@ -47,16 +52,19 @@ describe('webinar.remind', () => {
   });
 });
 
-describe('recording jobs before T-CW-2.5', () => {
-  it('log and leave the recording SCHEDULED', async () => {
-    const { service } = setup({});
-    expect(await service.handle('webinar.recording.start', { webinarId: 'w1', sessionId: null })).toEqual({
+describe('recording jobs (T-CW-2.5)', () => {
+  it('hand the job and its attempt context to the recording pipeline', async () => {
+    const { service, recording } = setup({});
+    const context = { attempt: 2, maxAttempts: 3, enqueuedAt: NOW };
+    expect(await service.handle('webinar.recording.start', { webinarId: 'w1', sessionId: null }, context)).toEqual({
       webinarId: 'w1',
-      started: false,
+      started: true,
     });
-    expect(await service.handle('webinar.recording.finalize', { webinarId: 'w1', sessionId: 's1' })).toEqual({
+    expect(recording.start).toHaveBeenCalledWith({ webinarId: 'w1', sessionId: null }, context);
+    expect(await service.handle('webinar.recording.finalize', { webinarId: 'w1', sessionId: 's1' }, context)).toEqual({
       webinarId: 'w1',
-      finalized: false,
+      finalized: true,
     });
+    expect(recording.finalize).toHaveBeenCalledWith({ webinarId: 'w1', sessionId: 's1' }, context);
   });
 });

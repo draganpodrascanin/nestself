@@ -27,7 +27,9 @@ import {
 import {
   ChimeSDKMediaPipelinesClient,
   CreateMediaCapturePipelineCommand,
+  CreateMediaConcatenationPipelineCommand,
   DeleteMediaCapturePipelineCommand,
+  GetMediaPipelineCommand,
   NotFoundException as PipelineNotFoundException,
   ServiceUnavailableException as PipelineServiceUnavailableException,
 } from '@aws-sdk/client-chime-sdk-media-pipelines';
@@ -746,16 +748,20 @@ describe('ChimeVideoProvider', () => {
   });
 
   describe('startRecording', () => {
-    it('captures presenter-only composited HD video into the raw prefix (D-CW-18)', async () => {
+    const RAW_PREFIX = `recordings/${WEBINAR_ID}/raw/`;
+    const PIPELINE_ARN = 'arn:aws:chime:eu-central-1:111122223333:media-pipeline/pipeline-1';
+
+    it('captures presenter-only composited HD video into recordings/{webinarId}/raw/ (D-CW-18, T-CW-2.5)', async () => {
       meetings.on(GetMeetingCommand).resolves({ Meeting: MEETING });
       pipelines.on(CreateMediaCapturePipelineCommand).resolves({
-        MediaCapturePipeline: { MediaPipelineId: 'pipeline-1' },
+        MediaCapturePipeline: { MediaPipelineId: 'pipeline-1', MediaPipelineArn: PIPELINE_ARN },
       });
 
       const recording = await provider.startRecording({
         sessionId: SESSION_ID,
         providerMeetingId: 'meeting-1',
         presenterAttendeeIds: ['attendee-1', 'attendee-3'],
+        s3Prefix: RAW_PREFIX,
       });
 
       const request = pipelines.commandCalls(CreateMediaCapturePipelineCommand)[0]!.args[0].input;
@@ -763,7 +769,7 @@ describe('ChimeVideoProvider', () => {
         SourceType: 'ChimeSdkMeeting',
         SourceArn: 'arn:aws:chime::111122223333:meeting:meeting-1',
         SinkType: 'S3Bucket',
-        SinkArn: `arn:aws:s3:::${BUCKET}/raw/${SESSION_ID}`,
+        SinkArn: `arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/raw`,
         ChimeSdkMeetingConfiguration: {
           SourceConfiguration: { SelectedVideoStreams: { AttendeeIds: ['attendee-1', 'attendee-3'] } },
           ArtifactsConfiguration: {
@@ -778,14 +784,41 @@ describe('ChimeVideoProvider', () => {
           },
         },
       });
-      expect(recording).toEqual({ pipelineId: 'pipeline-1', rawSegmentsPrefix: `raw/${SESSION_ID}/` });
+      expect(recording).toEqual({ pipelineId: 'pipeline-1', pipelineArn: PIPELINE_ARN, rawSegmentsPrefix: RAW_PREFIX });
+    });
+
+    it('refuses a prefix that is empty, absolute or not a folder, and an empty presenter list, before any SDK call', async () => {
+      const base = { sessionId: SESSION_ID, providerMeetingId: 'meeting-1', presenterAttendeeIds: ['attendee-1'] };
+      for (const s3Prefix of ['', '/recordings/w/raw/', 'recordings/w/raw', 'recordings/../raw/']) {
+        await expect(provider.startRecording({ ...base, s3Prefix })).rejects.toThrow(/prefix/);
+      }
+      await expect(provider.startRecording({ ...base, presenterAttendeeIds: [], s3Prefix: RAW_PREFIX })).rejects.toThrow(
+        /presenter/,
+      );
+      expect(meetings.commandCalls(GetMeetingCommand)).toHaveLength(0);
+      expect(pipelines.commandCalls(CreateMediaCapturePipelineCommand)).toHaveLength(0);
+    });
+
+    it('answers 502 when the capture response has no pipeline ARN (the concatenation source)', async () => {
+      meetings.on(GetMeetingCommand).resolves({ Meeting: MEETING });
+      pipelines.on(CreateMediaCapturePipelineCommand).resolves({ MediaCapturePipeline: { MediaPipelineId: 'pipeline-1' } });
+      await expectApiError(
+        provider.startRecording({ sessionId: SESSION_ID, providerMeetingId: 'meeting-1', presenterAttendeeIds: ['a'], s3Prefix: RAW_PREFIX }),
+        502,
+        'video_provider_unavailable',
+      );
     });
 
     it('maps NotFoundException on the meeting to appointment_not_joinable', async () => {
       meetings.on(GetMeetingCommand).rejects(new NotFoundException({ message: 'gone', $metadata: {} }));
 
       await expectApiError(
-        provider.startRecording({ sessionId: SESSION_ID, providerMeetingId: 'meeting-1', presenterAttendeeIds: ['attendee-1'] }),
+        provider.startRecording({
+          sessionId: SESSION_ID,
+          providerMeetingId: 'meeting-1',
+          presenterAttendeeIds: ['attendee-1'],
+          s3Prefix: RAW_PREFIX,
+        }),
         409,
         'appointment_not_joinable',
       );
@@ -799,10 +832,108 @@ describe('ChimeVideoProvider', () => {
         .rejects(new PipelineServiceUnavailableException({ message: 'down', $metadata: {} }));
 
       await expectApiError(
-        provider.startRecording({ sessionId: SESSION_ID, providerMeetingId: 'meeting-1', presenterAttendeeIds: ['attendee-1'] }),
+        provider.startRecording({
+          sessionId: SESSION_ID,
+          providerMeetingId: 'meeting-1',
+          presenterAttendeeIds: ['attendee-1'],
+          s3Prefix: RAW_PREFIX,
+        }),
         503,
         'video_provider_unavailable',
       );
+    });
+  });
+
+  describe('startConcatenation and describeConcatenation (WEB-29, T-CW-2.5)', () => {
+    const CAPTURE_ARN = 'arn:aws:chime:eu-central-1:111122223333:media-pipeline/pipeline-1';
+    const FINAL_PREFIX = `recordings/${WEBINAR_ID}/final/`;
+
+    it('concatenates the capture into one composited MP4 with the audio under recordings/{webinarId}/final/', async () => {
+      pipelines.on(CreateMediaConcatenationPipelineCommand).resolves({
+        MediaConcatenationPipeline: { MediaPipelineId: 'concat-1', Status: 'Initializing' },
+      });
+
+      const started = await provider.startConcatenation({
+        sessionId: SESSION_ID,
+        capturePipelineArn: CAPTURE_ARN,
+        s3Prefix: FINAL_PREFIX,
+        attempt: 2,
+      });
+
+      expect(started).toEqual({ pipelineId: 'concat-1' });
+      expect(pipelines.commandCalls(CreateMediaConcatenationPipelineCommand)[0]!.args[0].input).toEqual({
+        // One token per attempt: a retry after a failed concatenation starts a new pipeline.
+        ClientRequestToken: `${SESSION_ID}-c2`,
+        Sources: [
+          {
+            Type: 'MediaCapturePipeline',
+            MediaCapturePipelineSourceConfiguration: {
+              MediaPipelineArn: CAPTURE_ARN,
+              ChimeSdkMeetingConfiguration: {
+                ArtifactsConfiguration: {
+                  Audio: { State: 'Enabled' },
+                  Video: { State: 'Disabled' },
+                  Content: { State: 'Disabled' },
+                  DataChannel: { State: 'Disabled' },
+                  TranscriptionMessages: { State: 'Disabled' },
+                  MeetingEvents: { State: 'Disabled' },
+                  CompositedVideo: { State: 'Enabled' },
+                },
+              },
+            },
+          },
+        ],
+        Sinks: [
+          { Type: 'S3Bucket', S3BucketSinkConfiguration: { Destination: `arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/final` } },
+        ],
+      });
+    });
+
+    it('maps a concatenation ServiceUnavailableException to video_provider_unavailable', async () => {
+      pipelines
+        .on(CreateMediaConcatenationPipelineCommand)
+        .rejects(new PipelineServiceUnavailableException({ message: 'down', $metadata: {} }));
+      await expectApiError(
+        provider.startConcatenation({ sessionId: SESSION_ID, capturePipelineArn: CAPTURE_ARN, s3Prefix: FINAL_PREFIX, attempt: 1 }),
+        503,
+        'video_provider_unavailable',
+      );
+    });
+
+    it.each([
+      ['Initializing', 'in_progress'],
+      ['InProgress', 'in_progress'],
+      ['NotStarted', 'in_progress'],
+      ['Stopping', 'in_progress'],
+      ['Failed', 'failed'],
+    ] as const)('reports %s as %s without a key', async (status, expected) => {
+      pipelines.on(GetMediaPipelineCommand).resolves({
+        MediaPipeline: { MediaConcatenationPipeline: { MediaPipelineId: 'concat-1', Status: status } },
+      });
+      expect(await provider.describeConcatenation({ pipelineId: 'concat-1', s3Prefix: FINAL_PREFIX })).toEqual({
+        status: expected,
+        concatenatedKey: null,
+        location: null,
+      });
+      expect(pipelines.commandCalls(GetMediaPipelineCommand)[0]!.args[0].input).toEqual({ MediaPipelineId: 'concat-1' });
+    });
+
+    it('reports Stopped as completed, with the composited-video key prefix and its s3 location', async () => {
+      pipelines.on(GetMediaPipelineCommand).resolves({
+        MediaPipeline: { MediaConcatenationPipeline: { MediaPipelineId: 'concat-1', Status: 'Stopped' } },
+      });
+      expect(await provider.describeConcatenation({ pipelineId: 'concat-1', s3Prefix: FINAL_PREFIX })).toEqual({
+        status: 'completed',
+        concatenatedKey: `${FINAL_PREFIX}composited-video/`,
+        location: `s3://${BUCKET}/${FINAL_PREFIX}composited-video/`,
+      });
+    });
+
+    it('reports a pipeline the provider no longer knows as failed', async () => {
+      pipelines.on(GetMediaPipelineCommand).rejects(new PipelineNotFoundException({ message: 'gone', $metadata: {} }));
+      expect(await provider.describeConcatenation({ pipelineId: 'concat-1', s3Prefix: FINAL_PREFIX })).toMatchObject({
+        status: 'failed',
+      });
     });
   });
 
@@ -1324,18 +1455,55 @@ describe('FakeVideoProvider', () => {
     await expectApiError(fake.createSession({ ...workshopInput, capacity: WORKSHOP_CAPACITY + 1 }), 400, 'capacity_above_limit');
   });
 
-  it('starts and stops a stub recording', async () => {
+  it('starts and stops a stub recording under the given prefix', async () => {
     const session = await fake.createSession(webinarInput);
 
     const recording = await fake.startRecording({
       sessionId: SESSION_ID,
       providerMeetingId: session.providerMeetingId,
       presenterAttendeeIds: [session.participant.providerAttendeeId],
+      s3Prefix: `recordings/${WEBINAR_ID}/raw/`,
     });
 
-    expect(recording).toEqual({ pipelineId: `fake-pipeline-${SESSION_ID}`, rawSegmentsPrefix: `raw/${SESSION_ID}/` });
+    expect(recording).toEqual({
+      pipelineId: `fake-pipeline-${SESSION_ID}`,
+      pipelineArn: `arn:aws:chime:eu-central-1:000000000000:media-pipeline/fake-pipeline-${SESSION_ID}`,
+      rawSegmentsPrefix: `recordings/${WEBINAR_ID}/raw/`,
+    });
+    expect(fake.isRecording(recording.pipelineId)).toBe(true);
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
+    expect(fake.isRecording(recording.pipelineId)).toBe(false);
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
+  });
+
+  it('refuses a recording without a presenter or with a bad prefix, as the Chime adapter does', async () => {
+    const session = await fake.createSession(webinarInput);
+    const base = { sessionId: SESSION_ID, providerMeetingId: session.providerMeetingId };
+    await expect(fake.startRecording({ ...base, presenterAttendeeIds: [], s3Prefix: 'recordings/w/raw/' })).rejects.toThrow(
+      /presenter/,
+    );
+    await expect(fake.startRecording({ ...base, presenterAttendeeIds: ['a'], s3Prefix: 'raw' })).rejects.toThrow(/prefix/);
+  });
+
+  it('completes a stub concatenation at once, unless told to fail it', async () => {
+    const finalPrefix = `recordings/${WEBINAR_ID}/final/`;
+    const capturePipelineArn = 'arn:aws:chime:eu-central-1:000000000000:media-pipeline/fake-pipeline-x';
+    const started = await fake.startConcatenation({ sessionId: SESSION_ID, capturePipelineArn, s3Prefix: finalPrefix, attempt: 1 });
+    expect(started).toEqual({ pipelineId: `fake-concat-${SESSION_ID}-1` });
+    expect(await fake.describeConcatenation({ pipelineId: started.pipelineId, s3Prefix: finalPrefix })).toEqual({
+      status: 'completed',
+      concatenatedKey: `${finalPrefix}composited-video/`,
+      location: `s3://fake-recordings/${finalPrefix}composited-video/`,
+    });
+
+    fake.failNextConcatenation();
+    const failing = await fake.startConcatenation({ sessionId: SESSION_ID, capturePipelineArn, s3Prefix: finalPrefix, attempt: 2 });
+    expect(await fake.describeConcatenation({ pipelineId: failing.pipelineId, s3Prefix: finalPrefix })).toEqual({
+      status: 'failed',
+      concatenatedKey: null,
+      location: null,
+    });
+    expect(await fake.describeConcatenation({ pipelineId: 'unknown', s3Prefix: finalPrefix })).toMatchObject({ status: 'failed' });
   });
 
   describe('media replication (T-CW-3.2)', () => {

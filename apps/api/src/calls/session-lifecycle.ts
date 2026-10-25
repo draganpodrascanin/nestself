@@ -19,8 +19,17 @@
  * credential, the keys expire when the room closes anyway, and a failed
  * audit is logged (a redelivered event would be a duplicate, so throwing
  * would not bring it back).
+ *
+ * A closed `WEBINAR` session (T-CW-2.5) is then handed to the webinars
+ * module's {@link WebinarSessionClosedHandler}, looked up by
+ * {@link WEBINAR_SESSION_CLOSED_HANDLER} (`WebinarsService`): a webinar still
+ * `live` is ended and its recording stopped, as `POST /webinars/:id/end`
+ * does. It is looked up rather than injected because `WebinarsModule`
+ * imports the calls modules.
  */
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ModuleRef } from '@nestjs/core';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditWriter } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -38,6 +47,14 @@ export interface SessionClose {
   reason: CallSessionEndReason;
 }
 
+/** Ends a live webinar whose session closed; provided by the webinars module (T-CW-2.5). */
+export interface WebinarSessionClosedHandler {
+  markEndedFromLifecycle(session: CallSessionRecord): Promise<unknown>;
+}
+
+/** Injection token of the {@link WebinarSessionClosedHandler}. */
+export const WEBINAR_SESSION_CLOSED_HANDLER = Symbol('WEBINAR_SESSION_CLOSED_HANDLER');
+
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
 }
@@ -52,6 +69,7 @@ export class CallSessionLifecycle {
     @Inject(KEY_VALUE_STORE) private readonly kv: KeyValueStore,
     private readonly rooms: RoomEmitter,
     private readonly audit: AuditWriter,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
   /**
@@ -107,6 +125,26 @@ export class CallSessionLifecycle {
       }
     }
     this.logger.log({ sessionId: session.id, operation: 'close', endReason: reason }, 'Call session closed');
+    if (session.format === 'webinar' && session.webinarId) await this.webinarSessionClosed(session);
+  }
+
+  /** A live webinar whose session closed ends, and its recording stops (T-CW-2.5). Never throws. */
+  private async webinarSessionClosed(session: CallSessionRecord): Promise<void> {
+    let handler: WebinarSessionClosedHandler | undefined;
+    try {
+      handler = this.moduleRef?.get<WebinarSessionClosedHandler>(WEBINAR_SESSION_CLOSED_HANDLER, { strict: false });
+    } catch {
+      handler = undefined;
+    }
+    if (!handler) {
+      this.logger.warn({ sessionId: session.id, operation: 'webinarEnded' }, 'No webinars module; the webinar is not ended');
+      return;
+    }
+    try {
+      await handler.markEndedFromLifecycle(session);
+    } catch (error) {
+      this.logger.error({ sessionId: session.id, operation: 'webinarEnded', error: errorName(error) }, 'Webinar not ended after its session closed');
+    }
   }
 
   /** Both halves in a transaction of its own (the jobs). Null when the session was not ACTIVE. */

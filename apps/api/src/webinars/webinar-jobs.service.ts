@@ -6,13 +6,20 @@
  *   occurrence (CW-R-37) and sends the `webinar.reminder` email only while
  *   the registration is active, the occurrence `published` or `live` and
  *   not yet started; otherwise it exits without action.
- * - `webinar.recording.start` (CW-R-107): enqueued by `POST
- *   /webinars/:id/start`. For now it logs and leaves `recording_status` at
- *   `SCHEDULED`; T-CW-2.5 replaces it with the media capture pipeline.
- * - `webinar.recording.finalize`: a placeholder for T-CW-2.5.
+ * - `webinar.recording.start` (CW-R-107, CW-R-121) and
+ *   `webinar.recording.finalize` (CW-R-79d, CW-R-79e): the recording
+ *   pipeline of `WebinarRecordingService` (T-CW-2.5), with the run's attempt
+ *   context for its retry policy.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import type { WebinarJobData, WebinarJobHandler, WebinarJobName } from '../jobs/webinar-job-scheduler.service.js';
+import type {
+  WebinarJobContext,
+  WebinarJobData,
+  WebinarJobHandler,
+  WebinarJobName,
+} from '../jobs/webinar-job-scheduler.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarRecordingService, type RecordingFinalizeResult, type RecordingStartResult } from './recording.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarMailer } from './webinar-mailer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -31,16 +38,17 @@ export class WebinarJobsService implements WebinarJobHandler {
   constructor(
     private readonly repo: WebinarsRepository,
     private readonly mail: WebinarMailer,
+    private readonly recording: WebinarRecordingService,
   ) {}
 
-  async handle<N extends WebinarJobName>(name: N, data: WebinarJobData[N]): Promise<unknown> {
+  async handle<N extends WebinarJobName>(name: N, data: WebinarJobData[N], context?: WebinarJobContext): Promise<unknown> {
     switch (name) {
       case 'webinar.remind':
         return this.remind(data as WebinarJobData['webinar.remind']);
       case 'webinar.recording.start':
-        return this.recordingStart(data as WebinarJobData['webinar.recording.start']);
+        return this.recordingStart(data as WebinarJobData['webinar.recording.start'], context);
       case 'webinar.recording.finalize':
-        return this.recordingFinalize(data as WebinarJobData['webinar.recording.finalize']);
+        return this.recordingFinalize(data as WebinarJobData['webinar.recording.finalize'], context);
       default:
         throw new Error(`Unknown webinar job: ${String(name)}`);
     }
@@ -61,21 +69,13 @@ export class WebinarJobsService implements WebinarJobHandler {
     return { registrationId, sent };
   }
 
-  /** T-CW-2.5 starts the media capture pipeline here; until then the status stays SCHEDULED. */
-  async recordingStart(data: WebinarJobData['webinar.recording.start']): Promise<{ webinarId: string; started: false }> {
-    this.logger.log(
-      { webinarId: data.webinarId, sessionId: data.sessionId, operation: 'recording.start' },
-      'Webinar recording start requested; the pipeline arrives with T-CW-2.5',
-    );
-    return { webinarId: data.webinarId, started: false };
+  /** The media capture pipeline, once the host's meeting has a presenter (T-CW-2.5). */
+  recordingStart(data: WebinarJobData['webinar.recording.start'], context?: WebinarJobContext): Promise<RecordingStartResult> {
+    return this.recording.start(data, context);
   }
 
-  /** T-CW-2.5 concatenates the segments and hands the recording off here. */
-  async recordingFinalize(data: WebinarJobData['webinar.recording.finalize']): Promise<{ webinarId: string; finalized: false }> {
-    this.logger.log(
-      { webinarId: data.webinarId, sessionId: data.sessionId, operation: 'recording.finalize' },
-      'Webinar recording finalize requested; the pipeline arrives with T-CW-2.5',
-    );
-    return { webinarId: data.webinarId, finalized: false };
+  /** Capture stop, concatenation, READY and the CMS handoff (T-CW-2.5). */
+  recordingFinalize(data: WebinarJobData['webinar.recording.finalize'], context?: WebinarJobContext): Promise<RecordingFinalizeResult> {
+    return this.recording.finalize(data, context);
   }
 }

@@ -33,8 +33,12 @@
  *   occurrence; anyone else gets 404. Start moves `published` to `live` and
  *   enqueues `webinar.recording.start` (CW-R-107); end moves `live` to
  *   `ended`, deletes the meeting, lowers every hand and takes back every
- *   floor, and announces `webinar.ended` on both rooms (CW-R-36b). Stopping
- *   the recording pipeline arrives with T-CW-2.5.
+ *   floor, stops the recording (`WebinarRecordingService.stopForEnd`,
+ *   T-CW-2.5) and announces `webinar.ended` on both rooms (CW-R-36b).
+ * - {@link markEndedFromLifecycle} (T-CW-2.5): when the session lifecycle
+ *   closes the occurrence's session (Chime's `MeetingEnded`, `calls.cleanup`,
+ *   `calls.reconcile`) while the webinar is still `live`, the webinar ends the
+ *   same way, audited as the system or the job that closed it.
  *
  * A join token never reaches PostgreSQL, a log line, an audit `details`
  * object or a room event (CW-R-69).
@@ -69,6 +73,7 @@ import {
 import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } from '../calls/calls.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { VideoMetrics } from '../calls/video-metrics.js';
+import type { WebinarSessionClosedHandler } from '../calls/session-lifecycle.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
@@ -91,6 +96,8 @@ import {
   webinarNotOpen,
   type WebinarHostRole,
 } from './webinar-access.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarRecordingService, type RecordingActor } from './recording.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarMailer } from './webinar-mailer.js';
 import {
@@ -123,7 +130,7 @@ function errorName(error: unknown): string {
 type Joiner = { kind: 'host'; role: WebinarHostRole } | { kind: 'attendee'; registration: WebinarRegistrationRecord };
 
 @Injectable()
-export class WebinarsService {
+export class WebinarsService implements WebinarSessionClosedHandler {
   private readonly logger = new Logger(WebinarsService.name);
 
   /** Interval and limit of an attendee's wait for a meeting a host is creating. Tests shorten them. */
@@ -141,6 +148,7 @@ export class WebinarsService {
     private readonly scheduler: WebinarJobSchedulerService,
     private readonly mail: WebinarMailer,
     private readonly metrics: VideoMetrics,
+    private readonly recording: WebinarRecordingService,
   ) {}
 
   // ── Discovery (WBN-01) ────────────────────────────────────────────────────
@@ -592,12 +600,61 @@ export class WebinarsService {
 
     const session = await this.closeSession(webinar, endedAt);
     await this.access.scoped(webinar.orgId, (tx) => this.repo.clearHandsAndFloors(webinarId, tx));
+    // WBN-28 criterion 4: the recording stops with the webinar (never throws).
+    await this.recording.stopForEnd(webinar, { userId: principal.userId, kind: 'USER' });
     await this.record(principal.userId, webinar, 'webinar.ended', { webinarId, sessionId: session?.id ?? null });
+    this.announceEnded(webinarId, endedAt);
+    return { webinarId, status: 'ended' };
+  }
+
+  /**
+   * The session lifecycle closed the occurrence's session (T-CW-2.5): a
+   * webinar still `live` ends as `end()` ends it, with the session's end
+   * time, and its recording stops. The meeting is already gone, so nothing is
+   * deleted. A session that is not the occurrence's newest (an older one the
+   * provider closed late) changes nothing. True when the webinar ended here.
+   */
+  async markEndedFromLifecycle(session: CallSessionRecord): Promise<boolean> {
+    if (session.format !== 'webinar' || !session.webinarId) return false;
+    const webinar = await this.repo.findById(session.webinarId);
+    if (webinar?.status !== 'live') return false;
+    const open = await this.access.scoped(webinar.orgId, (tx) => this.repo.findOpenSession(webinar.id, tx));
+    if (open && open.id !== session.id) return false;
+
+    const endedAt = session.endedAt ?? new Date();
+    const ended = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.transitionStatus(webinar.id, ['live'], 'ended', { endedAt }, tx),
+    );
+    if (!ended) return false;
+
+    await this.access.scoped(webinar.orgId, (tx) => this.repo.clearHandsAndFloors(webinar.id, tx));
+    const actor: RecordingActor =
+      session.endReason === 'cleanup' || session.endReason === 'reconcile' ? { userId: null, kind: 'JOB' } : { userId: null, kind: 'SYSTEM' };
+    await this.recording.stopForEnd(webinar, actor);
+    await this.audit.record({
+      action: 'webinar.ended',
+      actorUserId: null,
+      actorKind: actor.kind,
+      orgId: webinar.orgId,
+      recordType: 'webinar',
+      recordId: webinar.id,
+      result: 'ALLOWED',
+      details: { webinarId: webinar.id, sessionId: session.id },
+    });
+    this.announceEnded(webinar.id, endedAt);
+    this.logger.log(
+      { webinarId: webinar.id, sessionId: session.id, operation: 'endedFromLifecycle', endReason: session.endReason ?? 'provider' },
+      'Webinar ended after its session closed',
+    );
+    return true;
+  }
+
+  /** `webinar.state` ended and `webinar.ended` on both rooms (CW-R-36b). */
+  private announceEnded(webinarId: string, endedAt: Date): void {
     const payload = { webinarId, endedAt: endedAt.toISOString() };
     this.events.toAudience(webinarId, 'webinar.state', { webinarId, status: 'ended' });
     this.events.toAudience(webinarId, 'webinar.ended', payload);
     this.events.toModeration(webinarId, 'webinar.ended', payload);
-    return { webinarId, status: 'ended' };
   }
 
   /** Deletes the meeting and closes the open session; drops every cached credential (D-CW-08). */

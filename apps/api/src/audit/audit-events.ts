@@ -85,6 +85,7 @@ export const AUDIT_ACTIONS = [
   'call.ticket.issued',
   'call.problem.reported',
   'webinar.created',
+  'webinar.updated',
   'webinar.published',
   'webinar.canceled',
   'webinar.started',
@@ -104,6 +105,8 @@ export const AUDIT_ACTIONS = [
   'webinar.recording.stopped',
   'webinar.recording.ready',
   'webinar.recording.handed_off',
+  'webinar.recording.failed',
+  'webinar.attendance.viewed',
   'webinar.certificate.issued',
 ] as const;
 
@@ -148,6 +151,8 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action === 'call.diagnostics.viewed' || action === 'call.problem.reported') return 'CONTENT_ACCESS';
   if (action.startsWith('call.')) return 'ADMIN';
   if (action === 'webinar.joined') return 'SECURITY';
+  // Per-registrant presence is personal data, read like the call diagnostics (WBN-33, T-CW-2.5).
+  if (action === 'webinar.attendance.viewed') return 'CONTENT_ACCESS';
   if (
     action.startsWith('webinar.message.') ||
     action.startsWith('webinar.floor.') ||

@@ -9,15 +9,21 @@
  * `webinar:{id}:moderation` room resolvers of T-CW-2.3 (`findById`,
  * `findRegistration`, `findHost`), `WebinarAccess` for the same
  * authorization rules, and `WebinarJobsService` for the worker, which starts
- * `WebinarJobSchedulerService` with it.
+ * `WebinarJobSchedulerService` with it. Provides `WebinarsService` under
+ * `WEBINAR_SESSION_CLOSED_HANDLER`, which the session lifecycle looks up to
+ * end a live webinar whose meeting closed, and the recording pipeline
+ * (`WebinarRecordingService`, T-CW-2.5).
  */
 import { Module, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { CallsModule } from '../calls/calls.module.js';
+import { WEBINAR_SESSION_CLOSED_HANDLER } from '../calls/session-lifecycle.js';
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 import { MailerModule } from '../mailer/mailer.module.js';
 import { VideoModule } from '../video/video.module.js';
 import { WsModule } from '../ws/ws.module.js';
+import { WebinarRecordingsRepository } from './recording.repository.js';
+import { WebinarRecordingService } from './recording.service.js';
 import { WebinarAccess } from './webinar-access.js';
 import { WebinarJobsService } from './webinar-jobs.service.js';
 import { WebinarLiveService } from './webinar-live.service.js';
@@ -43,6 +49,10 @@ import { WebinarsService } from './webinars.service.js';
     WebinarMailer,
     WebinarJobSchedulerService,
     WebinarJobsService,
+    WebinarRecordingsRepository,
+    WebinarRecordingService,
+    // The session lifecycle (CallsJobsModule) ends a live webinar whose session closed (T-CW-2.5).
+    { provide: WEBINAR_SESSION_CLOSED_HANDLER, useExisting: WebinarsService },
   ],
   exports: [WebinarsRepository, WebinarAccess, WebinarJobSchedulerService, WebinarJobsService],
 })

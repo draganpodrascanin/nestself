@@ -11,7 +11,8 @@ import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { callParticipantCredentialsKey } from '../redis/redis-keys.js';
 import type { RoomEmitter } from '../ws/room-emitter.js';
 import type { CallParticipantRecord, CallSessionEndReason, CallSessionRecord, CallsRepository } from './calls.repository.js';
-import { CallSessionLifecycle } from './session-lifecycle.js';
+import type { ModuleRef } from '@nestjs/core';
+import { CallSessionLifecycle, WEBINAR_SESSION_CLOSED_HANDLER, type WebinarSessionClosedHandler } from './session-lifecycle.js';
 
 const ENDED_AT = new Date('2026-11-10T16:00:00.000Z');
 
@@ -107,5 +108,67 @@ describe('CallSessionLifecycle.announceClosed', () => {
     });
     await expect(lifecycle.announceClosed(endedSession('cleanup'))).resolves.toBeUndefined();
     expect(record).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CallSessionLifecycle: a closed webinar session ends a live webinar (T-CW-2.5)', () => {
+  function setup(handler: WebinarSessionClosedHandler | null) {
+    vi.restoreAllMocks();
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const repo = { listParticipants: async () => [] } as unknown as CallsRepository;
+    const dbs = {
+      withOrgScope: <T>(_org: string, fn: (tx: undefined) => Promise<T>) => fn(undefined),
+      withTransaction: <T>(fn: (tx: undefined) => Promise<T>) => fn(undefined),
+    } as unknown as DbService;
+    const moduleRef = {
+      get: vi.fn((token: unknown) => {
+        if (token !== WEBINAR_SESSION_CLOSED_HANDLER || !handler) throw new Error('not found');
+        return handler;
+      }),
+    } as unknown as ModuleRef;
+    const lifecycle = new CallSessionLifecycle(
+      repo,
+      dbs,
+      new MemoryKeyValueStore(),
+      { emit: vi.fn(() => true) } as unknown as RoomEmitter,
+      { record: vi.fn(async () => undefined) } as unknown as AuditWriter,
+      moduleRef,
+    );
+    return { lifecycle, moduleRef, warn, error };
+  }
+
+  const webinarSession = (endReason: CallSessionEndReason): CallSessionRecord => ({
+    ...endedSession(endReason),
+    appointmentId: null,
+    webinarId: 'w1',
+    format: 'webinar',
+  });
+
+  it('hands a closed webinar session to the webinars module with its end reason', async () => {
+    const markEndedFromLifecycle = vi.fn(async () => true);
+    const { lifecycle } = setup({ markEndedFromLifecycle });
+    const session = webinarSession('provider');
+    await lifecycle.announceClosed(session);
+    expect(markEndedFromLifecycle).toHaveBeenCalledWith(session);
+  });
+
+  it('leaves consultation sessions alone', async () => {
+    const markEndedFromLifecycle = vi.fn(async () => true);
+    const { lifecycle, moduleRef } = setup({ markEndedFromLifecycle });
+    await lifecycle.announceClosed(endedSession('provider'));
+    expect(markEndedFromLifecycle).not.toHaveBeenCalled();
+    expect(moduleRef.get).not.toHaveBeenCalled();
+  });
+
+  it('never throws: a failing handler is logged, a missing webinars module is a warning', async () => {
+    const failing = setup({ markEndedFromLifecycle: vi.fn(async () => Promise.reject(new Error('db down'))) });
+    await expect(failing.lifecycle.announceClosed(webinarSession('reconcile'))).resolves.toBeUndefined();
+    expect(failing.error).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session_1', operation: 'webinarEnded' }), expect.any(String));
+
+    const missing = setup(null);
+    await expect(missing.lifecycle.announceClosed(webinarSession('provider'))).resolves.toBeUndefined();
+    expect(missing.warn).toHaveBeenCalled();
   });
 });

@@ -22,6 +22,8 @@
  * POST   /webinars/:id/polls/:pollId/open               10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/close              10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/vote               30/60 s   event.register  webinarRegistrantResource
+ * POST   /webinars/:id/recording/stop                    5/60 s   event.moderate  webinarStaffResource (early stop, T-CW-2.5)
+ * GET    /webinars/:id/recording                                  authenticated   a host, moderating staff or event.manage (service, T-CW-2.5)
  *
  * Deviations from the 7.3 table, each because the route serves more than
  * one role: `GET /webinars/:id`, `POST .../messages`, `GET .../messages`,
@@ -30,8 +32,9 @@
  * (WBN-16, WBN-25, WBN-37: hosts hold no `event.register`, attendees no
  * `event.moderate`). The moderation routes resolve the occurrence by `:id`
  * (`webinarStaffResource`): there is no `:orgId` for
- * `orgResourceFromContext`. `POST /webinars/:id/recording/stop` arrives with
- * T-CW-2.5 and `GET /webinars/:id/certificate` with T-CW-3.3.
+ * `orgResourceFromContext`. `GET /webinars/:id/recording` is an addition to
+ * the decision record's route list (the hosts' and operations' view of the
+ * pipeline, T-CW-2.5); `GET /webinars/:id/certificate` arrives with T-CW-3.3.
  *
  * Every authorization denial answers 404 (D-CW-30,
  * `AppointmentNonDisclosureFilter`); coded errors keep their status. There is
@@ -68,6 +71,7 @@ import {
   type WebinarPollResults,
   type WebinarPollVoteRequest,
   type WebinarPollVoteResponse,
+  type WebinarRecordingStatusResponse,
   type WebinarRegistrationResponse,
   type WebinarResponse,
   type WebinarStatusResponse,
@@ -77,6 +81,8 @@ import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { Authenticated } from '../authz/authenticated.decorator.js';
 import { Authorize } from '../authz/authorize.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarRecordingService } from './recording.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarLiveService } from './webinar-live.service.js';
 import { webinarListResource, webinarRegistrantResource, webinarStaffResource } from './webinar.resolver.js';
@@ -95,6 +101,7 @@ export class WebinarsController {
   constructor(
     private readonly webinars: WebinarsService,
     private readonly live: WebinarLiveService,
+    private readonly recording: WebinarRecordingService,
   ) {}
 
   // ── Discovery and registration ────────────────────────────────────────────
@@ -319,5 +326,26 @@ export class WebinarsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<WebinarPollVoteResponse> {
     return this.live.vote(id, pollId, principal, body);
+  }
+
+  // ── Recording (D-CW-18, D-CW-34, WBN-28) ──────────────────────────────────
+
+  /** The moderator's early stop; the start is automatic and there is no restart. */
+  @Post(':id/recording/stop')
+  @HttpCode(200)
+  @Throttle(perMinute(5))
+  @Authorize(ACTIONS['event.moderate'], webinarStaffResource)
+  stopRecording(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(emptyBody)) _body: Record<string, never>,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<WebinarRecordingStatusResponse> {
+    return this.recording.stopByModerator(id, principal);
+  }
+
+  @Get(':id/recording')
+  @Authenticated()
+  recordingStatus(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<WebinarRecordingStatusResponse> {
+    return this.recording.status(id, principal);
   }
 }

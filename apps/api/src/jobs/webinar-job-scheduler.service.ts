@@ -18,9 +18,17 @@
  *     unregistration and cancellation (CW-R-37a).
  *   - `webinar.recording.start` at once when a host starts the webinar
  *     (CW-R-107, CW-R-121).
- *   - `webinar.recording.finalize` at once when recording stops (T-CW-2.5).
+ *   - `webinar.recording.finalize` at once when recording stops, once per
+ *     session (T-CW-2.5).
+ *   Retried 3 times with exponential backoff from 30 seconds (the recording
+ *   jobs' failure policy, T-CW-2.5).
  * - Consumer (worker only, {@link start}): the `Worker` that hands every job
- *   to the {@link WebinarJobHandler} (`WebinarJobsService`).
+ *   to the {@link WebinarJobHandler} (`WebinarJobsService`) with its
+ *   {@link WebinarJobContext}. A handler that throws {@link WebinarJobDelay}
+ *   (the recording is not ready yet, the concatenation still runs) is moved
+ *   back to the delayed set for that long without spending an attempt
+ *   (BullMQ `moveToDelayed` and `DelayedError`); its own deadline comes from
+ *   `enqueuedAt`.
  *
  * Job ids join the job name and the entity ids with `/` (BullMQ 6 refuses
  * most custom ids with `:`). `prefix` is the BullMQ key prefix; tests set a
@@ -29,7 +37,7 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ConfigService } from '@nestjs/config';
-import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
+import { DelayedError, Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import { REMINDER_OFFSETS_MINUTES } from '@nestself/contracts';
 
@@ -50,9 +58,36 @@ export interface WebinarJobData {
   'webinar.recording.finalize': { webinarId: string; sessionId: string };
 }
 
+/** Where a run stands among the job's attempts (BullMQ's counters). */
+export interface WebinarJobContext {
+  /** 1-based attempt of this run; a {@link WebinarJobDelay} does not spend one. */
+  attempt: number;
+  /** Attempts the job has in all; the last one records a failure instead of retrying. */
+  maxAttempts: number;
+  /** When the job was first added: the deadline of a wait or a poll counts from here. */
+  enqueuedAt: Date;
+}
+
+/** Thrown by a handler to run the job again after `delayMs` without spending an attempt. */
+export class WebinarJobDelay extends Error {
+  constructor(readonly delayMs: number) {
+    super(`Webinar job delayed by ${delayMs} ms`);
+    this.name = 'WebinarJobDelay';
+  }
+}
+
 /** Runs one job of the queue; implemented by `WebinarJobsService`. */
 export interface WebinarJobHandler {
-  handle<N extends WebinarJobName>(name: N, data: WebinarJobData[N]): Promise<unknown>;
+  handle<N extends WebinarJobName>(name: N, data: WebinarJobData[N], context?: WebinarJobContext): Promise<unknown>;
+}
+
+/** The context of a BullMQ job run. */
+export function webinarJobContext(job: Pick<Job, 'attemptsMade' | 'opts' | 'timestamp'>): WebinarJobContext {
+  return {
+    attempt: job.attemptsMade + 1,
+    maxAttempts: Math.max(1, job.opts.attempts ?? 1),
+    enqueuedAt: new Date(job.timestamp),
+  };
 }
 
 const MINUTE_MS = 60_000;
@@ -113,9 +148,15 @@ export class WebinarJobSchedulerService implements OnModuleDestroy {
     this.workerConnection = new Redis(redisUrl, { maxRetriesPerRequest: null });
     this.worker = new Worker(
       WEBINARS_QUEUE,
-      async (job: Job) => {
+      async (job: Job, token?: string) => {
         if (!isWebinarJobName(job.name)) throw new Error(`Unknown webinar job: ${job.name}`);
-        return handler.handle(job.name, job.data as WebinarJobData[typeof job.name]);
+        try {
+          return await handler.handle(job.name, job.data as WebinarJobData[typeof job.name], webinarJobContext(job));
+        } catch (error) {
+          if (!(error instanceof WebinarJobDelay)) throw error;
+          await job.moveToDelayed(Date.now() + error.delayMs, token);
+          throw new DelayedError();
+        }
       },
       { connection: this.workerConnection, prefix: this.prefix, concurrency: 4 },
     );

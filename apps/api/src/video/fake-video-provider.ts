@@ -25,12 +25,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import {
+  CONCATENATED_VIDEO_FOLDER,
   HOST_ROLES,
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoProvider,
   assertCapabilitiesAllowed,
   assertCapacityWithinLimit,
+  assertPresenterStreams,
+  assertRecordingPrefix,
   floorCapabilities,
   pickReplica,
   replicaCapacities,
@@ -42,11 +45,14 @@ import {
   type CreateParticipantInput,
   type CreateSessionInput,
   type DemoteFromPrimaryInput,
+  type DescribeConcatenationInput,
   type DescribeSessionInput,
   type EndSessionInput,
   type ParticipantCapabilities,
   type ProviderAttendee,
   type ProviderMeeting,
+  type ProviderConcatenation,
+  type ProviderConcatenationState,
   type ProviderParticipant,
   type ProviderRecording,
   type ProviderReplica,
@@ -56,6 +62,7 @@ import {
   type PromoteToPrimaryInput,
   type SessionParticipantInput,
   type RemoveParticipantInput,
+  type StartConcatenationInput,
   type StartRecordingInput,
   type StopRecordingInput,
   type UpdateCapabilitiesInput,
@@ -83,6 +90,8 @@ interface FakeMeeting {
 
 const EVENT = 'video-provider-event';
 const FAKE_HOST = 'fake-chime.invalid';
+/** The bucket name in the fake's `s3://` locations. */
+const FAKE_BUCKET = 'fake-recordings';
 
 function toParticipant(state: FakeMeeting, attendee: ProviderAttendee): ProviderParticipant {
   return {
@@ -98,6 +107,9 @@ export class FakeVideoProvider extends VideoProvider {
   private readonly emitter = new EventEmitter();
   private readonly meetings = new Map<string, FakeMeeting>();
   private readonly pipelines = new Set<string>();
+  /** Concatenation pipelines and whether each failed. */
+  private readonly concatenations = new Map<string, boolean>();
+  private failNext = false;
   private readonly now: () => Date;
 
   constructor(options: FakeVideoProviderOptions = {}) {
@@ -162,6 +174,18 @@ export class FakeVideoProvider extends VideoProvider {
   reset(): void {
     this.meetings.clear();
     this.pipelines.clear();
+    this.concatenations.clear();
+    this.failNext = false;
+  }
+
+  /** Whether a capture pipeline is running (tests). */
+  isRecording(pipelineId: string): boolean {
+    return this.pipelines.has(pipelineId);
+  }
+
+  /** The next concatenation started reports `failed` (tests of the finalize retry). */
+  failNextConcatenation(): void {
+    this.failNext = true;
   }
 
   async createSession(input: CreateSessionInput): Promise<ProviderSession> {
@@ -249,14 +273,38 @@ export class FakeVideoProvider extends VideoProvider {
   }
 
   async startRecording(input: StartRecordingInput): Promise<ProviderRecording> {
+    assertRecordingPrefix(input.s3Prefix);
+    assertPresenterStreams(input.presenterAttendeeIds);
     if (!this.meetings.has(input.providerMeetingId)) throw sessionNotJoinable();
     const pipelineId = this.pipelineId(input.sessionId);
     this.pipelines.add(pipelineId);
-    return { pipelineId, rawSegmentsPrefix: `raw/${input.sessionId}/` };
+    return {
+      pipelineId,
+      pipelineArn: `arn:aws:chime:${VIDEO_MEDIA_REGION}:000000000000:media-pipeline/${pipelineId}`,
+      rawSegmentsPrefix: input.s3Prefix,
+    };
   }
 
   async stopRecording(input: StopRecordingInput): Promise<void> {
     this.pipelines.delete(input.pipelineId);
+  }
+
+  /** Completes at once (or fails, after {@link failNextConcatenation}); one pipeline per session and attempt. */
+  async startConcatenation(input: StartConcatenationInput): Promise<ProviderConcatenation> {
+    assertRecordingPrefix(input.s3Prefix);
+    const pipelineId = `fake-concat-${input.sessionId}-${input.attempt}`;
+    if (!this.concatenations.has(pipelineId)) {
+      this.concatenations.set(pipelineId, this.failNext);
+      this.failNext = false;
+    }
+    return { pipelineId };
+  }
+
+  async describeConcatenation(input: DescribeConcatenationInput): Promise<ProviderConcatenationState> {
+    const failed = this.concatenations.get(input.pipelineId);
+    if (failed === undefined || failed) return { status: 'failed', concatenatedKey: null, location: null };
+    const concatenatedKey = `${input.s3Prefix}${CONCATENATED_VIDEO_FOLDER}`;
+    return { status: 'completed', concatenatedKey, location: `s3://${FAKE_BUCKET}/${concatenatedKey}` };
   }
 
   // -- Helpers --------------------------------------------------------------

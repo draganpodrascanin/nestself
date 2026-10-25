@@ -253,6 +253,9 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       openPoll: 'event.moderate',
       closePoll: 'event.moderate',
       vote: 'event.register',
+      // The moderator's early stop (T-CW-2.5); the status for hosts and operations, decided in the service.
+      stopRecording: 'event.moderate',
+      recordingStatus: 'authenticated',
     });
 
     expect(policiesOf('WebinarsOpsController')).toEqual({

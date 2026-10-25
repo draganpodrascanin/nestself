@@ -55,11 +55,17 @@ const CALLS_WEBINARS_AUDIT_CATEGORIES: ReadonlyArray<readonly [AuditAction, Audi
   ['webinar.recording.ready', 'CONTENT_ACCESS'],
   ['webinar.recording.handed_off', 'CONTENT_ACCESS'],
   ['webinar.certificate.issued', 'ADMIN'],
+  // T-CW-2.5 additions: the occurrence form's edit (WBN-30), the attendance report view (WBN-33
+  // criterion 5: per-registrant presence is personal data, read like the diagnostics), and a
+  // recording that could not start or finish (CW-R-121, the audit note of a failure).
+  ['webinar.updated', 'ADMIN'],
+  ['webinar.attendance.viewed', 'CONTENT_ACCESS'],
+  ['webinar.recording.failed', 'CONTENT_ACCESS'],
 ];
 
 describe('calls and webinars audit events', () => {
-  it('catalogues all 43 canonical events exactly once', () => {
-    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(43);
+  it('catalogues all 46 canonical events exactly once', () => {
+    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(46);
     for (const [action] of CALLS_WEBINARS_AUDIT_CATEGORIES) {
       expect(AUDIT_ACTIONS.filter((a) => a === action), action).toHaveLength(1);
     }

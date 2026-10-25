@@ -36,15 +36,21 @@ import {
 import {
   ChimeSDKMediaPipelinesClient,
   CreateMediaCapturePipelineCommand,
+  CreateMediaConcatenationPipelineCommand,
   DeleteMediaCapturePipelineCommand,
+  GetMediaPipelineCommand,
+  type ArtifactsConcatenationConfiguration,
 } from '@aws-sdk/client-chime-sdk-media-pipelines';
 import {
+  CONCATENATED_VIDEO_FOLDER,
   HOST_ROLES,
   MEETING_FEATURES,
   VIDEO_MEDIA_REGION,
   VideoProvider,
   assertCapabilitiesAllowed,
   assertCapacityWithinLimit,
+  assertPresenterStreams,
+  assertRecordingPrefix,
   floorCapabilities,
   pickReplica,
   replicaCapacities,
@@ -57,10 +63,13 @@ import {
   type CreateParticipantInput,
   type CreateSessionInput,
   type DemoteFromPrimaryInput,
+  type DescribeConcatenationInput,
   type DescribeSessionInput,
   type EndSessionInput,
   type ParticipantCapabilities,
   type ProviderMeeting,
+  type ProviderConcatenation,
+  type ProviderConcatenationState,
   type ProviderParticipant,
   type ProviderRecording,
   type ProviderReplica,
@@ -69,6 +78,7 @@ import {
   type ProviderSessionInfo,
   type PromoteToPrimaryInput,
   type RemoveParticipantInput,
+  type StartConcatenationInput,
   type StartRecordingInput,
   type StopRecordingInput,
   type UpdateCapabilitiesInput,
@@ -77,7 +87,11 @@ import {
 export interface ChimeVideoProviderOptions {
   /** `CHIME_EVENTS_QUEUE_ARN`: every meeting notifies this queue (D-CW-12). */
   eventsQueueArn: string;
-  /** `RECORDINGS_BUCKET`: webinar captures land under `raw/{sessionId}/` (D-CW-18). */
+  /**
+   * `RECORDINGS_BUCKET`: webinar captures land under the caller's prefix,
+   * `recordings/{webinarId}/raw/`, and the concatenated MP4 under
+   * `recordings/{webinarId}/final/` (D-CW-18, T-CW-2.5).
+   */
   recordingsBucket: string;
   /** Deployment stage for the `stage` tag (D-CW-11). */
   stage: string;
@@ -93,8 +107,23 @@ interface CallContext {
 /** Returned by {@link ChimeVideoProvider.send} when the SDK reports `NotFoundException`. */
 const NOT_FOUND = Symbol('NOT_FOUND');
 
-/** Prefix the recordings bucket expires after 30 days (infra video stack, D-CW-18). */
-const RAW_SEGMENTS_PREFIX = 'raw';
+/**
+ * What a webinar concatenation keeps: the composited video with the audio
+ * muxed in (`AudioWithCompositedVideo` at capture); nothing per attendee, no
+ * content, data channel, transcript or event artifacts (D-CW-18, WEB-29).
+ */
+const CONCATENATION_ARTIFACTS: ArtifactsConcatenationConfiguration = {
+  Audio: { State: 'Enabled' },
+  Video: { State: 'Disabled' },
+  Content: { State: 'Disabled' },
+  DataChannel: { State: 'Disabled' },
+  TranscriptionMessages: { State: 'Disabled' },
+  MeetingEvents: { State: 'Disabled' },
+  CompositedVideo: { State: 'Enabled' },
+};
+
+/** `ClientRequestToken`: 2 to 64 characters of `[-_a-zA-Z0-9]`. */
+const CLIENT_REQUEST_TOKEN_PATTERN = /^[-_a-zA-Z0-9]{2,64}$/;
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : 'UnknownError';
@@ -309,12 +338,14 @@ export class ChimeVideoProvider extends VideoProvider {
   }
 
   async startRecording(input: StartRecordingInput): Promise<ProviderRecording> {
+    assertRecordingPrefix(input.s3Prefix);
+    assertPresenterStreams(input.presenterAttendeeIds);
     const context = { sessionId: input.sessionId, providerMeetingId: input.providerMeetingId };
     const meeting = await this.getMeeting(input.providerMeetingId, context);
     if (!meeting) throw sessionNotJoinable();
 
-    const prefix = `${RAW_SEGMENTS_PREFIX}/${input.sessionId}`;
-    const arns = captureArns(meeting, this.options.recordingsBucket, prefix);
+    // The sink names the folder without its trailing slash; the pipeline adds `audio/`, `composited-video/` and so on.
+    const arns = captureArns(meeting, this.options.recordingsBucket, input.s3Prefix.slice(0, -1));
     if (!arns) throw this.incomplete('GetMeeting', context, 'MeetingArn');
 
     const response = await this.send('CreateMediaCapturePipeline', context, () =>
@@ -345,14 +376,67 @@ export class ChimeVideoProvider extends VideoProvider {
     if (response === NOT_FOUND) throw sessionNotJoinable();
 
     const pipelineId = response.MediaCapturePipeline?.MediaPipelineId;
-    if (!pipelineId) throw this.incomplete('CreateMediaCapturePipeline', context);
-    return { pipelineId, rawSegmentsPrefix: `${prefix}/` };
+    const pipelineArn = response.MediaCapturePipeline?.MediaPipelineArn;
+    if (!pipelineId || !pipelineArn) throw this.incomplete('CreateMediaCapturePipeline', context);
+    return { pipelineId, pipelineArn, rawSegmentsPrefix: input.s3Prefix };
   }
 
   async stopRecording(input: StopRecordingInput): Promise<void> {
     await this.send('DeleteMediaCapturePipeline', { pipelineId: input.pipelineId }, () =>
       this.pipelinesClient.send(new DeleteMediaCapturePipelineCommand({ MediaPipelineId: input.pipelineId })),
     );
+  }
+
+  async startConcatenation(input: StartConcatenationInput): Promise<ProviderConcatenation> {
+    assertRecordingPrefix(input.s3Prefix);
+    const context = { sessionId: input.sessionId };
+    const token = `${input.sessionId}-c${input.attempt}`;
+    const response = await this.send('CreateMediaConcatenationPipeline', context, () =>
+      this.pipelinesClient.send(
+        new CreateMediaConcatenationPipelineCommand({
+          ...(CLIENT_REQUEST_TOKEN_PATTERN.test(token) ? { ClientRequestToken: token } : {}),
+          Sources: [
+            {
+              Type: 'MediaCapturePipeline',
+              MediaCapturePipelineSourceConfiguration: {
+                MediaPipelineArn: input.capturePipelineArn,
+                ChimeSdkMeetingConfiguration: { ArtifactsConfiguration: CONCATENATION_ARTIFACTS },
+              },
+            },
+          ],
+          Sinks: [
+            {
+              Type: 'S3Bucket',
+              S3BucketSinkConfiguration: {
+                Destination: `arn:aws:s3:::${this.options.recordingsBucket}/${input.s3Prefix.slice(0, -1)}`,
+              },
+            },
+          ],
+        }),
+      ),
+    );
+    // The capture pipeline is gone (older than 30 days, WEB-29): nothing left to concatenate.
+    if (response === NOT_FOUND) throw this.incomplete('CreateMediaConcatenationPipeline', context, 'source not found');
+    const pipelineId = response.MediaConcatenationPipeline?.MediaPipelineId;
+    if (!pipelineId) throw this.incomplete('CreateMediaConcatenationPipeline', context);
+    return { pipelineId };
+  }
+
+  /**
+   * `GetMediaPipeline`: `Stopped` is a finished concatenation, `Failed` a
+   * failed one, anything else still running. Chime names the MP4 itself, so
+   * the key is the `composited-video/` folder under the destination, which
+   * holds that one object (SPIKE-CW-04 records the object name).
+   */
+  async describeConcatenation(input: DescribeConcatenationInput): Promise<ProviderConcatenationState> {
+    const response = await this.send('GetMediaPipeline', { pipelineId: input.pipelineId }, () =>
+      this.pipelinesClient.send(new GetMediaPipelineCommand({ MediaPipelineId: input.pipelineId })),
+    );
+    const status = response === NOT_FOUND ? 'Failed' : response.MediaPipeline?.MediaConcatenationPipeline?.Status;
+    if (status === 'Failed') return { status: 'failed', concatenatedKey: null, location: null };
+    if (status !== 'Stopped') return { status: 'in_progress', concatenatedKey: null, location: null };
+    const concatenatedKey = `${input.s3Prefix}${CONCATENATED_VIDEO_FOLDER}`;
+    return { status: 'completed', concatenatedKey, location: `s3://${this.options.recordingsBucket}/${concatenatedKey}` };
   }
 
   // -- Helpers --------------------------------------------------------------

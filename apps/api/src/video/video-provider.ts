@@ -227,8 +227,30 @@ export interface ProviderParticipant {
 export interface ProviderRecording {
   /** Media capture pipeline id (`webinar_recordings.provider_pipeline_id`). */
   pipelineId: string;
-  /** Key prefix of the raw segments (`webinar_recordings.raw_segments_prefix`). */
+  /** Its ARN, the source of the concatenation pipeline (`webinar_recordings.provider_pipeline_arn`, WEB-29). */
+  pipelineArn: string;
+  /** Key prefix of the raw segments (`webinar_recordings.raw_segments_prefix`), the input's `s3Prefix`. */
   rawSegmentsPrefix: string;
+}
+
+/** A started media concatenation pipeline (WEB-29). */
+export interface ProviderConcatenation {
+  /** `webinar_recordings.concatenation_pipeline_id`. */
+  pipelineId: string;
+}
+
+/** Where a concatenation stands: running, finished with its MP4, or failed. */
+export type ProviderConcatenationStatus = 'in_progress' | 'completed' | 'failed';
+
+export interface ProviderConcatenationState {
+  status: ProviderConcatenationStatus;
+  /**
+   * Once completed: the key of the composited MP4, or (Chime) the key prefix
+   * that holds it, since Chime names the object (SPIKE-CW-04 records the name).
+   */
+  concatenatedKey: string | null;
+  /** Once completed: `s3://{bucket}/{concatenatedKey}`, for the CMS handoff (D-CW-03). */
+  location: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,12 +342,74 @@ export interface DescribeSessionInput extends ReplicaMeetingIds {
 export interface StartRecordingInput {
   sessionId: string;
   providerMeetingId: string;
-  /** Only these attendees' video is captured (D-CW-18). */
+  /** Only these attendees' video is captured (D-CW-18); at least one. */
   presenterAttendeeIds: string[];
+  /**
+   * Key prefix of the capture segments in the recordings bucket, ending in
+   * `/`: `recordings/{webinarId}/raw/` (T-CW-2.5 step 7, {@link recordingRawPrefix}).
+   */
+  s3Prefix: string;
 }
 
 export interface StopRecordingInput {
   pipelineId: string;
+}
+
+export interface StartConcatenationInput {
+  /** For the log line and the idempotency token. */
+  sessionId: string;
+  /** The capture pipeline's ARN, created within 30 days (WEB-29). */
+  capturePipelineArn: string;
+  /** Destination key prefix, ending in `/`: `recordings/{webinarId}/final/` ({@link recordingFinalPrefix}). */
+  s3Prefix: string;
+  /** 1-based attempt: the idempotency token is per attempt, so a retry after a failed concatenation starts anew. */
+  attempt: number;
+}
+
+export interface DescribeConcatenationInput {
+  pipelineId: string;
+  /** The destination prefix it was started with. */
+  s3Prefix: string;
+}
+
+// ---------------------------------------------------------------------------
+// Recordings bucket layout (T-CW-2.5 step 7, D-CW-18)
+// ---------------------------------------------------------------------------
+
+/** `recordings/{webinarId}/raw/`: the capture pipeline's 5-second segments. */
+export function recordingRawPrefix(webinarId: string): string {
+  return `recordings/${webinarId}/raw/`;
+}
+
+/** `recordings/{webinarId}/final/`: the concatenated MP4. */
+export function recordingFinalPrefix(webinarId: string): string {
+  return `recordings/${webinarId}/final/`;
+}
+
+/**
+ * The folder a concatenation pipeline writes the composited video (with the
+ * audio muxed in) under its destination prefix.
+ */
+export const CONCATENATED_VIDEO_FOLDER = 'composited-video/';
+
+/** `SelectedVideoStreams` takes at most 25 attendee ids (WEB-24, WEB-25). */
+export const MAX_SELECTED_VIDEO_STREAMS = 25;
+
+/** A relative S3 key prefix that names a folder: no leading `/`, no `..`, ends in `/`. */
+const RECORDING_PREFIX_PATTERN = /^(?!\/)(?!.*\.\.)[A-Za-z0-9!_.*'()/-]+\/$/;
+
+/** Both adapters refuse a recording prefix that is not a relative folder, before any provider call. */
+export function assertRecordingPrefix(prefix: string): void {
+  if (!RECORDING_PREFIX_PATTERN.test(prefix)) {
+    throw new Error('A recording prefix is a relative folder key ending in "/" (recordings/{webinarId}/raw/)');
+  }
+}
+
+/** A capture records presenters only, 1 to 25 of them (D-CW-18, WEB-25). */
+export function assertPresenterStreams(presenterAttendeeIds: readonly string[]): void {
+  if (presenterAttendeeIds.length === 0 || presenterAttendeeIds.length > MAX_SELECTED_VIDEO_STREAMS) {
+    throw new Error(`A webinar capture selects 1 to ${MAX_SELECTED_VIDEO_STREAMS} presenter video streams (D-CW-18)`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -572,6 +656,14 @@ export abstract class VideoProvider {
   abstract startRecording(input: StartRecordingInput): Promise<ProviderRecording>;
   /** Idempotent: a pipeline that is already gone counts as stopped. */
   abstract stopRecording(input: StopRecordingInput): Promise<void>;
+  /**
+   * One MP4 from a stopped capture (`CreateMediaConcatenationPipeline`,
+   * WEB-29): composited video with the audio, nothing else. Chime waits for the
+   * capture to finish before it starts. Idempotent per capture pipeline.
+   */
+  abstract startConcatenation(input: StartConcatenationInput): Promise<ProviderConcatenation>;
+  /** The concatenation's state (`GetMediaPipeline`); a pipeline the provider no longer knows is `failed`. */
+  abstract describeConcatenation(input: DescribeConcatenationInput): Promise<ProviderConcatenationState>;
   /** Null when the provider no longer knows the meeting. */
   abstract describeSession(input: DescribeSessionInput): Promise<ProviderSessionInfo | null>;
 }
