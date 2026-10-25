@@ -55,6 +55,7 @@ describe('ops-admin schemas', () => {
   it('UserAccessResponseSchema accepts organization and platform contexts', () => {
     const response = {
       userId: 'user_ana',
+      suspended: false,
       contexts: [
         { orgId: 'org_sample', actions: ['content.read'], grantIds: ['grant_1'], assignmentIds: [] },
         { orgId: null, actions: [], grantIds: [], assignmentIds: ['asg_1'] },
@@ -67,7 +68,8 @@ describe('ops-admin schemas', () => {
     expect(
       UserAccessResponseSchema.safeParse({ userId: 'user_ana', contexts: [{ orgId: 'org_sample' }] }).success,
     ).toBe(false);
-    expect(UserAccessResponseSchema.safeParse({ userId: '', contexts: [] }).success).toBe(false);
+    expect(UserAccessResponseSchema.safeParse({ userId: '', suspended: false, contexts: [] }).success).toBe(false);
+    expect(UserAccessResponseSchema.safeParse({ userId: 'user_ana', contexts: [] }).success).toBe(false);
   });
 
   const emergencyRequest = {

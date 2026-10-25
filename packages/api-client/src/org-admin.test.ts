@@ -431,8 +431,8 @@ describe('createOrgAdminApi', () => {
     });
 
     it('reads user access', async () => {
-      const { api, last } = setupOps({ userId: 'user_1', contexts: [] });
-      await expect(api.userAccess('user_1')).resolves.toEqual({ userId: 'user_1', contexts: [] });
+      const { api, last } = setupOps({ userId: 'user_1', suspended: false, contexts: [] });
+      await expect(api.userAccess('user_1')).resolves.toEqual({ userId: 'user_1', suspended: false, contexts: [] });
       expect(last().url).toBe('http://x/api/ops/users/user_1/access');
       expect(last().method).toBe('GET');
     });

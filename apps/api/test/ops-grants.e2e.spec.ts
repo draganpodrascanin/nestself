@@ -178,6 +178,7 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
     const res = await nikola.agent.get('/api/ops/users/user_ana/access');
     expect(res.status).toBe(200);
     expect(res.body.userId).toBe('user_ana');
+    expect(res.body.suspended).toBe(false);
     const contexts = res.body.contexts as Array<{ orgId: string | null; actions: string[] }>;
     const org = contexts.find((c) => c.orgId === ORG);
     expect(org).toBeDefined();

@@ -25,6 +25,7 @@ import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_a
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
+import { Route as AuthenticatedOrganizationsOrgIdPeopleRouteImport } from './routes/_authenticated/organizations/$orgId/people'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -112,6 +113,12 @@ const AuthenticatedOrganizationsOrgIdAccessRoute =
     path: '/access',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
   } as any)
+const AuthenticatedOrganizationsOrgIdPeopleRoute =
+  AuthenticatedOrganizationsOrgIdPeopleRouteImport.update({
+    id: '/people',
+    path: '/people',
+    getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -142,6 +150,7 @@ export interface FileRoutesByTo {
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesById {
@@ -161,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/experts/'
     | '/organizations/'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/people'
     | '/organizations/$orgId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/experts'
     | '/organizations'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/people'
     | '/organizations/$orgId'
   id:
     | '__root__'
@@ -212,6 +224,7 @@ export interface FileRouteTypes {
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
     | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/organizations/$orgId/people'
     | '/_authenticated/organizations/$orgId/'
   fileRoutesById: FileRoutesById
 }
@@ -334,11 +347,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
     }
+    '/_authenticated/organizations/$orgId/people': {
+      id: '/_authenticated/organizations/$orgId/people'
+      path: '/people'
+      fullPath: '/organizations/$orgId/people'
+      preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRouteImport
+      parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
   }
 }
 
 interface AuthenticatedOrganizationsOrgIdRouteChildren {
   AuthenticatedOrganizationsOrgIdAccessRoute: typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  AuthenticatedOrganizationsOrgIdPeopleRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   AuthenticatedOrganizationsOrgIdIndexRoute: typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 
@@ -346,6 +367,8 @@ const AuthenticatedOrganizationsOrgIdRouteChildren: AuthenticatedOrganizationsOr
   {
     AuthenticatedOrganizationsOrgIdAccessRoute:
       AuthenticatedOrganizationsOrgIdAccessRoute,
+    AuthenticatedOrganizationsOrgIdPeopleRoute:
+      AuthenticatedOrganizationsOrgIdPeopleRoute,
     AuthenticatedOrganizationsOrgIdIndexRoute:
       AuthenticatedOrganizationsOrgIdIndexRoute,
   }

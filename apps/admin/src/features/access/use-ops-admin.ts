@@ -34,12 +34,31 @@ export const accessKeys = {
   orgMembers: (orgId: string) => ['ops-admin', 'org', orgId, 'members'] as const,
   platformGrants: ['ops-admin', 'platform', 'grants'] as const,
   userAccess: (userId: string) => ['ops-admin', 'user-access', userId] as const,
+  /** The client list, one cache entry per search text. */
+  organizationList: (search: string) => ['ops-admin', 'organization-list', search] as const,
+  organization: (orgId: string) => ['ops-admin', 'organization', orgId] as const,
 };
 
 /**
+ * One in-flight switch per `switchContext` function: the organization layout
+ * and the tab below it both use this hook, and their effects run in the same
+ * commit, so without it each would ask for the switch.
+ */
+const pendingSwitches = new WeakMap<object, Promise<void>>();
+
+function switchToOperations(switchContext: ReturnType<typeof useAuth>['switchContext']): Promise<void> {
+  const pending = pendingSwitches.get(switchContext);
+  if (pending) return pending;
+  const started = switchContext({ kind: 'operations' }).finally(() => pendingSwitches.delete(switchContext));
+  pendingSwitches.set(switchContext, started);
+  return started;
+}
+
+/**
  * Every `/ops/*` route needs the operations context. When the session is in
- * another one, this switches once (never again on re-render) and reports a
- * failed switch. `ready` is true once the principal is in that context.
+ * another one, this switches once (never again on re-render, and once for
+ * every screen mounted together) and reports a failed switch. `ready` is true
+ * once the principal is in that context.
  */
 export function useOperationsContext(sampleMode: boolean): { ready: boolean; error: AccessErrorKey | null } {
   const { principal, switchContext } = useAuth();
@@ -50,7 +69,7 @@ export function useOperationsContext(sampleMode: boolean): { ready: boolean; err
   useEffect(() => {
     if (sampleMode || !principal || inOperations || switchRequested.current) return;
     switchRequested.current = true;
-    switchContext({ kind: 'operations' }).catch((err: unknown) => {
+    switchToOperations(switchContext).catch((err: unknown) => {
       setError(accessErrorKey(err) ?? 'unknown');
     });
   }, [sampleMode, principal, inOperations, switchContext]);
@@ -88,7 +107,7 @@ export function usePlatformGrants(opsApi: OpsAdminApi, enabled: boolean) {
 export function useUserAccess(opsApi: OpsAdminApi, userId: string | null) {
   return useQuery({
     queryKey: accessKeys.userAccess(userId ?? ''),
-    queryFn: async () => (await opsApi.userAccess(userId!)).contexts,
+    queryFn: () => opsApi.userAccess(userId!),
     enabled: userId !== null,
   });
 }

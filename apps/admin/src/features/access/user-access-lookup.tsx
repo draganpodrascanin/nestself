@@ -9,6 +9,7 @@ import { accessErrorKey, userErrorMessageKey } from './access-errors';
 import { groupByPrefix } from './access-labels';
 import { sampleUserAccess } from './sample-access';
 import { useUserAccess } from './use-ops-admin';
+import { UserAccountActions } from '../users/user-account-actions';
 
 const USER_ID_FIELD = 'lookup-user-id';
 
@@ -32,7 +33,9 @@ export function UserAccessLookup({ opsApi, enabled, sampleMode, headingLevel }: 
   const query = useUserAccess(opsApi, !sampleMode && enabled ? userId : null);
 
   const sampleContexts = sampleMode && userId ? sampleUserAccess(userId) : undefined;
-  const contexts: UserAccessContext[] | undefined = sampleMode ? (sampleContexts ?? undefined) : query.data;
+  const contexts: UserAccessContext[] | undefined = sampleMode ? (sampleContexts ?? undefined) : query.data?.contexts;
+  // Sample people are never suspended.
+  const suspended = sampleMode ? false : (query.data?.suspended ?? false);
   const errorKey = sampleMode
     ? sampleContexts === null
       ? 'notFound'
@@ -77,10 +80,16 @@ export function UserAccessLookup({ opsApi, enabled, sampleMode, headingLevel }: 
         <Alert tone="danger">{t(userErrorMessageKey(errorKey))}</Alert>
       ) : userId && !sampleMode && query.isPending ? (
         <Text tone="secondary">{t('admin:access.lookup.loading')}</Text>
-      ) : contexts && contexts.length === 0 ? (
-        <Text tone="secondary">{t('admin:access.lookup.empty')}</Text>
-      ) : contexts ? (
+      ) : contexts && userId ? (
         <div className="space-y-6">
+          <UserAccountActions
+            opsApi={opsApi}
+            userId={userId}
+            suspended={suspended}
+            sampleMode={sampleMode}
+            headingLevel={(headingLevel + 1) as 3 | 4}
+          />
+          {contexts.length === 0 ? <Text tone="secondary">{t('admin:access.lookup.empty')}</Text> : null}
           {contexts.map((context) => (
             <ContextSection
               key={context.orgId ?? 'platform'}

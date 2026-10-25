@@ -321,7 +321,7 @@ export class GrantsService {
       contexts.push(await this.evaluateAccess(loaded, orgId));
     }
     contexts.push(await this.evaluateAccess(loaded, null));
-    return { userId, contexts };
+    return { userId, suspended: loaded.isSuspended, contexts };
   }
 
   // ── Update ────────────────────────────────────────────────────────────

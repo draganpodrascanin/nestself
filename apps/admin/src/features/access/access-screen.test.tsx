@@ -129,6 +129,7 @@ function makeOpsApi(overrides: Partial<Record<keyof OpsAdminApi, unknown>> = {})
     revokePlatformGrant: vi.fn().mockResolvedValue(PLATFORM_GRANTS[0]),
     userAccess: vi.fn().mockResolvedValue({
       userId: 'user_stefan',
+      suspended: false,
       contexts: [
         { orgId: null, actions: ['support.troubleshoot', 'account.help'], grantIds: ['pg_x'], assignmentIds: [] },
         {
@@ -692,7 +693,7 @@ describe('UserAccessLookup', () => {
   it('says so when the user has no access in any context', async () => {
     const user = userEvent.setup();
     renderPlatform({
-      opsApi: makeOpsApi({ userAccess: vi.fn().mockResolvedValue({ userId: 'user_x', contexts: [] }) }),
+      opsApi: makeOpsApi({ userAccess: vi.fn().mockResolvedValue({ userId: 'user_x', suspended: false, contexts: [] }) }),
     });
     const region = await lookUp(user, 'user_x');
     expect(await within(region).findByText(t('admin:access.lookup.empty'))).toBeInTheDocument();
@@ -971,5 +972,28 @@ describe('access routes and navigation', () => {
     await user.click(within(sections).getByRole('link', { name: t('admin:organizations.tabs.access') }));
     expect(await screen.findByRole('heading', { name: t('admin:access.org.title') })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: t('admin:organizations.detail') })).toBeInTheDocument();
+  });
+
+  it('the organization detail shows the sample overview and links to its people page', async () => {
+    const user = userEvent.setup();
+    renderRoute(`/organizations/${ORG_ID}`, 'admin');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Example d.o.o.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: t('admin:organizations.owner.title') })).toBeInTheDocument();
+    const sections = screen.getByRole('navigation', { name: t('admin:organizations.tabsLabel') });
+    await user.click(within(sections).getByRole('link', { name: t('admin:organizations.tabs.people') }));
+    expect(await screen.findByRole('heading', { name: t('admin:people.title') })).toBeInTheDocument();
+    expect(screen.getByText(t('admin:people.sampleNote'))).toBeInTheDocument();
+  });
+
+  it('the organizations page lists the sample organization', async () => {
+    renderRoute('/organizations', 'operations');
+    expect(await screen.findByRole('link', { name: 'Example d.o.o.' })).toBeInTheDocument();
+  });
+
+  it('an operations user sees the people tab but not the access tab', async () => {
+    renderRoute(`/organizations/${ORG_ID}`, 'operations');
+    const sections = await screen.findByRole('navigation', { name: t('admin:organizations.tabsLabel') });
+    expect(within(sections).getByRole('link', { name: t('admin:organizations.tabs.people') })).toBeInTheDocument();
+    expect(within(sections).queryByRole('link', { name: t('admin:organizations.tabs.access') })).not.toBeInTheDocument();
   });
 });

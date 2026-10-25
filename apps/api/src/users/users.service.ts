@@ -13,6 +13,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { IdentityProviderService } from '../identity/identity-provider.service.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { AccessRevocationService } from '../auth/access-revocation.service.js';
+import { PrincipalLoader } from '../principal/principal-loader.js';
 
 @Injectable()
 export class UsersService {
@@ -23,6 +24,7 @@ export class UsersService {
     @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => AccessRevocationService)) private readonly revocation: AccessRevocationService,
+    @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
   ) {}
 
   /**
@@ -101,6 +103,14 @@ export class UsersService {
     }
 
     await this.identities.setSuspended(userId, null);
+
+    // The cached principal still says suspended: without this the user stays
+    // locked out (and the access lookup shows them suspended) until it expires.
+    try {
+      await this.principalLoader.invalidateUser(userId);
+    } catch (err) {
+      this.logger.error(err, `Failed to invalidate principal ${userId}`);
+    }
 
     // Re-enable each external identity in the IdP.
     await this.enableIdpIdentities(userId);

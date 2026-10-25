@@ -1128,6 +1128,7 @@ describe('GrantsService', () => {
       expect(platformResource.orgId).toBeUndefined();
 
       expect(res.userId).toBe('user_ana');
+      expect(res.suspended).toBe(false);
       expect(res.contexts.map((c) => c.orgId)).toEqual([ORG, null]);
       expect(res.contexts[0]!.actions).toContain('content.read');
       expect(res.contexts[0]!.actions).not.toContain('conversation.participate');

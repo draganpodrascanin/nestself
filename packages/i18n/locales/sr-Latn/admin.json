@@ -40,7 +40,39 @@
     "tabsLabel": "Delovi organizacije",
     "tabs": {
       "overview": "Pregled",
-      "access": "Pristup"
+      "access": "Pristup",
+      "people": "Ljudi"
+    },
+    "search": "Pretraga",
+    "searchHint": "Početak naziva ili kratkog naziva",
+    "searchSubmit": "Pretraži",
+    "loading": "Učitavanje organizacija",
+    "empty": "Još nema organizacija.",
+    "noMatch": "Nijedna organizacija ne odgovara pretrazi.",
+    "limited": "Tvoj pristup je ograničen na dodeljene klijente. Dodeljenog klijenta otvori preko linka koji si dobio/la.",
+    "slug": "Kratki naziv",
+    "id": "ID",
+    "created": "Kreirano",
+    "sampleNote": "Režim uzoraka: ovo je organizacija iz uzorka, a prenos vlasništva je isključen. Ništa se ne kreira, ne menja niti šalje.",
+    "statuses": {
+      "ONBOARDING": "U uvođenju",
+      "ACTIVE": "Aktivna",
+      "SUSPENDED": "Suspendovana",
+      "ENDED": "Završena"
+    },
+    "owner": {
+      "title": "Vlasnik",
+      "current": "Vlasnik ove organizacije: {{name}}.",
+      "none": "Ova organizacija još nema vlasnika.",
+      "set": "Odredi vlasnika",
+      "loadTitle": "Vlasnik nije mogao da se učita"
+    },
+    "errors": {
+      "loadTitle": "Organizacija nije mogla da se učita",
+      "notFound": "Ova organizacija ne postoji.",
+      "forbidden": "Tvoj nalog nema dozvolu da otvori ovu organizaciju.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
     }
   },
   "tables": {
@@ -249,6 +281,179 @@
       "userIdRequired": "Unesi ID korisnika.",
       "alreadyOwner": "Ova osoba je već vlasnik organizacije.",
       "ownerExists": "Ova organizacija već ima vlasnika. Umesto toga prenesi vlasništvo."
+    }
+  },
+  "paging": {
+    "showing_one": "Prikazan je {{count}} red",
+    "showing_few": "Prikazana su {{count}} reda",
+    "showing_other": "Prikazano je {{count}} redova",
+    "showingMore_one": "Prikazan je {{count}} red, ima ih još",
+    "showingMore_few": "Prikazana su {{count}} reda, ima ih još",
+    "showingMore_other": "Prikazano je {{count}} redova, ima ih još",
+    "loadMore": "Učitaj još",
+    "loadMoreFailed": "Dodatni redovi nisu mogli da se učitaju"
+  },
+  "people": {
+    "title": "Ljudi",
+    "lead": "Članovi ove organizacije i pozivnice koje još čekaju prihvatanje.",
+    "sampleNote": "Režim uzoraka: završavanje članstva, pozivanje, uvoz i opoziv su isključeni. Ništa se ne kreira, ne menja niti šalje.",
+    "loading": "Učitavanje",
+    "choose": "Izaberi",
+    "cancel": "Otkaži",
+    "tabs": {
+      "label": "Odeljci o ljudima",
+      "members": "Članovi",
+      "invitations": "Pozivnice"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "Svi statusi",
+      "search": "Pretraga",
+      "searchHint": "Ime ili imejl adresa"
+    },
+    "status": {
+      "ACTIVE": "Aktivan",
+      "INVITED": "Pozvan",
+      "ENDED": "Završeno"
+    },
+    "columns": {
+      "name": "Ime",
+      "email": "Imejl",
+      "orgUnit": "Organizaciona jedinica",
+      "status": "Status",
+      "startDate": "Datum početka",
+      "actions": "Radnje",
+      "template": "Šablon",
+      "expires": "Ističe"
+    },
+    "members": {
+      "caption": "Članovi",
+      "empty": "Nijedan član ne odgovara ovim filterima."
+    },
+    "end": {
+      "open": "Završi članstvo",
+      "openFor": "Završi članstvo: {{name}}",
+      "title": "Završavanje članstva",
+      "description": "Završiti članstvo za: {{name}}? Dozvole u ovoj organizaciji se opozivaju i pristup njoj prestaje. Ovo se ne može poništiti sa ove stranice.",
+      "reason": "Razlog",
+      "confirm": "Završi članstvo",
+      "success": "Članstvo je završeno: {{name}}.",
+      "reasons": {
+        "LEFT": "Napustio/la organizaciju",
+        "CONTRACT_ENDED": "Ugovor je istekao",
+        "DEACTIVATED_BY_HR": "Deaktivirano na zahtev poslodavca",
+        "SUSPENDED_BY_PLATFORM": "Završila operativa NestSelfa",
+        "MERGED": "Spojeno sa drugim nalogom"
+      }
+    },
+    "invitations": {
+      "caption": "Pozivnice na čekanju",
+      "empty": "Nema pozivnica na čekanju.",
+      "noOrgUnit": "Bez organizacione jedinice"
+    },
+    "invite": {
+      "open": "Pozovi",
+      "title": "Pozivanje osobe",
+      "email": "Imejl adresa",
+      "template": "Šablon dozvola",
+      "submit": "Pošalji pozivnicu",
+      "success": "Pozivnica je kreirana za {{email}}.",
+      "description": "Pozivnica važi za celu organizaciju. HR kasnije može da rasporedi osobu u organizacionu jedinicu."
+    },
+    "import": {
+      "open": "Uvoz",
+      "title": "Uvoz pozivnica",
+      "description": "Nalepi jednu osobu po redu u obliku imejl,šablon[,id organizacione jedinice].",
+      "rows": "Redovi",
+      "rowsHint": "Primer: ana@example.com,employee,team_product",
+      "preview_one": "{{count}} red je spreman za uvoz",
+      "preview_few": "{{count}} reda su spremna za uvoz",
+      "preview_other": "{{count}} redova je spremno za uvoz",
+      "problemsLabel": "Redovi za ispravku",
+      "problems": {
+        "columns": "Red {{line}}: očekuje se imejl,šablon i opciono organizaciona jedinica.",
+        "email": "Red {{line}}: „{{value}}” nije ispravna imejl adresa.",
+        "template": "Red {{line}}: „{{value}}” nije šablon sa kojim se ljudi mogu pozvati.",
+        "tooMany": "{{rows}} redova: jedan uvoz prima najviše {{max}}."
+      },
+      "fixProblems": "Ispravi redove navedene ispod, pa pokreni uvoz ponovo.",
+      "noRows": "Nalepi bar jedan red.",
+      "submit": "Uvezi",
+      "success_one": "Kreirana je {{count}} pozivnica.",
+      "success_few": "Kreirane su {{count}} pozivnice.",
+      "success_other": "Kreirano je {{count}} pozivnica.",
+      "resultTitle": "Uvoz je završen",
+      "resultSummary": "Kreirano: {{created}}. Preskočeno: {{skipped}}. Nije uvezeno: {{failed}}.",
+      "errorsCaption": "Redovi koji nisu uvezeni",
+      "reason": "Razlog",
+      "done": "Gotovo",
+      "reasons": {
+        "invalidTemplate": "Ovaj šablon se ne može koristiti za pozivnice.",
+        "duplicateInBatch": "Ova imejl adresa se pojavljuje više puta u uvozu.",
+        "invalidOrgUnit": "Organizaciona jedinica ne pripada ovoj organizaciji.",
+        "ownerExists": "Organizacija već ima vlasnika.",
+        "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+        "alreadyMember": "Ova osoba je već aktivan član.",
+        "unknown": "Ovaj red nije mogao da se uveze."
+      }
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "openFor": "Opozovi pozivnicu za {{email}}",
+      "title": "Opoziv pozivnice",
+      "description": "Opozvati pozivnicu za {{email}}? Link iz pozivnice prestaje da radi.",
+      "confirm": "Opozovi pozivnicu",
+      "success": "Pozivnica za {{email}} je opozvana."
+    },
+    "errors": {
+      "loadTitle": "Ljudi nisu mogli da se učitaju",
+      "membersLoadTitle": "Članovi nisu mogli da se učitaju",
+      "invitationsLoadTitle": "Pozivnice nisu mogle da se učitaju",
+      "validation": "Neki podaci nisu ispravni. Proveri ih i pokušaj ponovo.",
+      "conflict": "Ovo se već promenilo. Osveži listu i pokušaj ponovo.",
+      "ownerExists": "Organizacija već ima vlasnika. Vlasništvo se može samo preneti.",
+      "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
+      "notFound": "Ova osoba ili pozivnica više ne postoji. Osveži listu i pokušaj ponovo.",
+      "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+      "alreadyMember": "Ova osoba je već aktivan član organizacije.",
+      "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "emailInvalid": "Unesi ispravnu imejl adresu.",
+      "templateRequired": "Izaberi šablon.",
+      "templateInvalid": "Ovaj šablon se ne može koristiti za pozivnice.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo u ovoj organizaciji.",
+      "reasonRequired": "Izaberi razlog."
+    }
+  },
+  "users": {
+    "title": "Nalog",
+    "stateLabel": "Stanje naloga:",
+    "cancel": "Otkaži",
+    "state": {
+      "active": "Aktivan",
+      "suspended": "Suspendovan"
+    },
+    "suspend": {
+      "open": "Suspenduj korisnika",
+      "title": "Suspendovati ovog korisnika?",
+      "description": "Korisnik {{userId}} se odjavljuje svuda i ne može da se prijavi dok se suspenzija ne ukine.",
+      "confirm": "Suspenduj korisnika",
+      "success": "Korisnik {{userId}} je suspendovan."
+    },
+    "reinstate": {
+      "open": "Ukini suspenziju",
+      "title": "Ukinuti suspenziju ovog korisnika?",
+      "description": "Korisnik {{userId}} ponovo može da se prijavi. Članstva i dozvole ostaju kakvi su bili.",
+      "confirm": "Ukini suspenziju",
+      "success": "Suspenzija korisnika {{userId}} je ukinuta."
+    },
+    "errors": {
+      "notFound": "Ne postoji korisnik sa ovim ID-jem.",
+      "conflict": "Ovaj nalog se u međuvremenu promenio. Ponovo potraži korisnika.",
+      "forbidden": "Tvoj nalog nema dozvolu da suspenduje ili vrati ovog korisnika.",
+      "validation": "Unesi razlog dužine od 3 do 500 znakova.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
     }
   }
 }

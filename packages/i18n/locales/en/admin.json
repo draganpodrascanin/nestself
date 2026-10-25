@@ -40,7 +40,39 @@
     "tabsLabel": "Organisation sections",
     "tabs": {
       "overview": "Overview",
-      "access": "Access"
+      "access": "Access",
+      "people": "People"
+    },
+    "search": "Search",
+    "searchHint": "Start of the name or slug",
+    "searchSubmit": "Search",
+    "loading": "Loading organisations",
+    "empty": "There are no organisations yet.",
+    "noMatch": "No organisation matches this search.",
+    "limited": "Your access is limited to assigned clients. Open an assigned client from a link you were given.",
+    "slug": "Slug",
+    "id": "ID",
+    "created": "Created",
+    "sampleNote": "Sample mode: this is the sample organisation, and transferring ownership is turned off. Nothing is created, changed or sent.",
+    "statuses": {
+      "ONBOARDING": "Onboarding",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "ENDED": "Ended"
+    },
+    "owner": {
+      "title": "Owner",
+      "current": "{{name}} owns this organisation.",
+      "none": "This organisation has no owner yet.",
+      "set": "Set the owner",
+      "loadTitle": "The owner could not be loaded"
+    },
+    "errors": {
+      "loadTitle": "The organisation could not be loaded",
+      "notFound": "This organisation does not exist.",
+      "forbidden": "Your account is not allowed to open this organisation.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again."
     }
   },
   "tables": {
@@ -249,6 +281,179 @@
       "userIdRequired": "Enter a user ID.",
       "alreadyOwner": "This person is already the owner of the organisation.",
       "ownerExists": "This organisation already has an owner. Transfer ownership instead."
+    }
+  },
+  "paging": {
+    "showing_one": "Showing {{count}} row",
+    "showing_few": "Showing {{count}} rows",
+    "showing_other": "Showing {{count}} rows",
+    "showingMore_one": "Showing {{count}} row, more are available",
+    "showingMore_few": "Showing {{count}} rows, more are available",
+    "showingMore_other": "Showing {{count}} rows, more are available",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More rows could not be loaded"
+  },
+  "people": {
+    "title": "People",
+    "lead": "Members of this organisation and the invitations still waiting to be accepted.",
+    "sampleNote": "Sample mode: ending memberships, inviting, importing and revoking are turned off. Nothing is created, changed or sent.",
+    "loading": "Loading",
+    "choose": "Choose",
+    "cancel": "Cancel",
+    "tabs": {
+      "label": "People sections",
+      "members": "Members",
+      "invitations": "Invitations"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "search": "Search",
+      "searchHint": "Name or email address"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "INVITED": "Invited",
+      "ENDED": "Ended"
+    },
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "orgUnit": "Org unit",
+      "status": "Status",
+      "startDate": "Start date",
+      "actions": "Actions",
+      "template": "Template",
+      "expires": "Expires"
+    },
+    "members": {
+      "caption": "Members",
+      "empty": "No members match these filters."
+    },
+    "end": {
+      "open": "End membership",
+      "openFor": "End the membership of {{name}}",
+      "title": "End membership",
+      "description": "End the membership of {{name}}? Their permissions in this organisation are revoked and they lose access to it. This cannot be undone from this page.",
+      "reason": "Reason",
+      "confirm": "End membership",
+      "success": "The membership of {{name}} has ended.",
+      "reasons": {
+        "LEFT": "Left the organization",
+        "CONTRACT_ENDED": "Contract ended",
+        "DEACTIVATED_BY_HR": "Deactivated at the employer's request",
+        "SUSPENDED_BY_PLATFORM": "Ended by NestSelf operations",
+        "MERGED": "Merged into another account"
+      }
+    },
+    "invitations": {
+      "caption": "Pending invitations",
+      "empty": "There are no pending invitations.",
+      "noOrgUnit": "No org unit"
+    },
+    "invite": {
+      "open": "Invite",
+      "title": "Invite a person",
+      "email": "Email address",
+      "template": "Permission template",
+      "submit": "Send invitation",
+      "success": "An invitation was created for {{email}}.",
+      "description": "The invitation covers the whole organisation. HR can place the person in an org unit later."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import invitations",
+      "description": "Paste one person per line as email,template[,org unit id].",
+      "rows": "Rows",
+      "rowsHint": "Example: ana@example.com,employee,team_product",
+      "preview_one": "{{count}} row ready to import",
+      "preview_few": "{{count}} rows ready to import",
+      "preview_other": "{{count}} rows ready to import",
+      "problemsLabel": "Rows to fix",
+      "problems": {
+        "columns": "Line {{line}}: expected email,template and an optional org unit.",
+        "email": "Line {{line}}: \"{{value}}\" is not a valid email address.",
+        "template": "Line {{line}}: \"{{value}}\" is not a template people can be invited with.",
+        "tooMany": "{{rows}} rows: one import takes at most {{max}}."
+      },
+      "fixProblems": "Fix the rows listed below, then import again.",
+      "noRows": "Paste at least one row.",
+      "submit": "Import",
+      "success_one": "{{count}} invitation was created.",
+      "success_few": "{{count}} invitations were created.",
+      "success_other": "{{count}} invitations were created.",
+      "resultTitle": "Import finished",
+      "resultSummary": "Created: {{created}}. Skipped: {{skipped}}. Not imported: {{failed}}.",
+      "errorsCaption": "Rows that were not imported",
+      "reason": "Reason",
+      "done": "Done",
+      "reasons": {
+        "invalidTemplate": "This template cannot be used for invitations.",
+        "duplicateInBatch": "This email address appears more than once in the import.",
+        "invalidOrgUnit": "The org unit does not belong to this organization.",
+        "ownerExists": "The organization already has an owner.",
+        "duplicateInvitation": "A pending invitation already exists for this email address.",
+        "alreadyMember": "This person is already an active member.",
+        "unknown": "This row could not be imported."
+      }
+    },
+    "revoke": {
+      "open": "Revoke",
+      "openFor": "Revoke the invitation for {{email}}",
+      "title": "Revoke invitation",
+      "description": "Revoke the invitation for {{email}}? The invitation link stops working.",
+      "confirm": "Revoke invitation",
+      "success": "The invitation for {{email}} was revoked."
+    },
+    "errors": {
+      "loadTitle": "People could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "invitationsLoadTitle": "Invitations could not be loaded",
+      "validation": "Some of the details are not valid. Check them and try again.",
+      "conflict": "This has already changed. Refresh the list and try again.",
+      "ownerExists": "The organization already has an owner. Ownership can only be transferred.",
+      "subjectNotMember": "This person is not an active member of the organization.",
+      "notFound": "This person or invitation no longer exists. Refresh the list and try again.",
+      "duplicateInvitation": "A pending invitation already exists for this email address.",
+      "alreadyMember": "This person is already an active member of the organization.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "emailInvalid": "Enter a valid email address.",
+      "templateRequired": "Choose a template.",
+      "templateInvalid": "This template cannot be used for invitations.",
+      "forbidden": "Your account is not allowed to do this for this organisation.",
+      "reasonRequired": "Choose a reason."
+    }
+  },
+  "users": {
+    "title": "Account",
+    "stateLabel": "Account state:",
+    "cancel": "Cancel",
+    "state": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "suspend": {
+      "open": "Suspend user",
+      "title": "Suspend this user?",
+      "description": "{{userId}} is signed out everywhere and cannot sign in until the suspension is lifted.",
+      "confirm": "Suspend user",
+      "success": "{{userId}} is suspended."
+    },
+    "reinstate": {
+      "open": "Reinstate user",
+      "title": "Reinstate this user?",
+      "description": "{{userId}} can sign in again. Their memberships and grants are as they were.",
+      "confirm": "Reinstate user",
+      "success": "{{userId}} is reinstated."
+    },
+    "errors": {
+      "notFound": "No user with this ID exists.",
+      "conflict": "This account has already changed. Look the user up again.",
+      "forbidden": "Your account is not allowed to suspend or reinstate this user.",
+      "validation": "Enter a reason between 3 and 500 characters.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again."
     }
   }
 }

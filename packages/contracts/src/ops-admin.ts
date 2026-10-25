@@ -28,6 +28,8 @@ export type UserAccessContext = z.infer<typeof UserAccessContextSchema>;
 
 export const UserAccessResponseSchema = z.object({
   userId: z.string().min(1),
+  /** True while the account is suspended (`POST /ops/users/:userId/suspend`). */
+  suspended: z.boolean(),
   contexts: z.array(UserAccessContextSchema),
 });
 export type UserAccessResponse = z.infer<typeof UserAccessResponseSchema>;

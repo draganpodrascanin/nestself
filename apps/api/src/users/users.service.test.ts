@@ -70,6 +70,7 @@ describe('UsersService', () => {
   let idp: ReturnType<typeof createMockIdp>;
   let audit: ReturnType<typeof createMockAudit>;
   let revocation: ReturnType<typeof createMockRevocation>;
+  let principalLoader: { invalidateUser: ReturnType<typeof vi.fn> };
   let service: UsersService;
 
   beforeEach(() => {
@@ -77,11 +78,13 @@ describe('UsersService', () => {
     idp = createMockIdp();
     audit = createMockAudit();
     revocation = createMockRevocation();
+    principalLoader = { invalidateUser: vi.fn().mockResolvedValue(undefined) };
     service = new UsersService(
       identities as never,
       idp as never,
       audit as never,
       revocation as never,
+      principalLoader as never,
     );
   });
 
@@ -186,6 +189,7 @@ describe('UsersService', () => {
       expect(result.userId).toBe('user-1');
       expect(result.reinstatedAt).toBeTruthy();
       expect(identities.setSuspended).toHaveBeenCalledWith('user-1', null);
+      expect(principalLoader.invalidateUser).toHaveBeenCalledWith('user-1');
       expect(idp.enableUser).toHaveBeenCalledWith('cog-1');
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'user.reactivated' }),
@@ -200,6 +204,7 @@ describe('UsersService', () => {
       expect(result.userId).toBe('user-1');
       expect(identities.setSuspended).not.toHaveBeenCalled();
       expect(audit.record).not.toHaveBeenCalled();
+      expect(principalLoader.invalidateUser).not.toHaveBeenCalled();
     });
   });
 });
