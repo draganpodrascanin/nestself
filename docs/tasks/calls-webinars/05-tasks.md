@@ -1,6 +1,6 @@
 # Development backlog: consultations and webinars on Amazon Chime SDK
 
-Epic `NS-CALLS-01`. Backlog v1.1, 24 October 2026 (restructured from the founder's answers to F-CW-01 through F-CW-10 and decisions D-CW-34 through D-CW-38).
+Epic `NS-CALLS-01`. Backlog v1.2, 24 October 2026 (restructured from the founder's answers to F-CW-01 through F-CW-10 and decisions D-CW-34 through D-CW-38), amended on 25 October 2026 with the implementation status of every task (section "Implementation status" below and a **Status** line under each task heading) and the correction of T-CW-3.1 step 3.
 
 Binding decisions in `02-decisions.md`. Canonical names (module paths, env names, constants, tables, enums, routes, actions, templates, audit events, error codes, Socket.IO rooms, Redis keys, jobs, client package, app routes, i18n namespace, sample fixtures, CDK stack) are in section 7 of that document and must be used verbatim. Research facts are cited as `(OPS-nn)`, `(WEB-nn)`, and decisions as `(D-CW-nn)`.
 
@@ -17,6 +17,19 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ```
 
 Tasks are numbered `T-CW-<milestone>.<n>`. A task's **Depends on** field names the tasks that must be merged first. Tasks without cross-dependencies within a milestone can run in parallel on different lanes.
+
+## Implementation status (25 October 2026)
+
+The tasks below were implemented on branch `feat/calls-p0`, each reviewed after its first commit, with the review findings fixed in the task's later `fix(...)` commits; each task's **Status** line lists its commits (`git log --oneline --grep 'T-CW-'`). The defects the real-browser run found, the frontend-coverage audits and the follow-ups are in `07-implementation-notes.md`.
+
+| Milestone | Tasks | Status |
+| --- | --- | --- |
+| M0 | T-CW-0.1 to T-CW-0.7 | Implemented. The spike scripts exist; no spike has run against AWS yet |
+| M1 | T-CW-1.1 to T-CW-1.10 | Implemented, including the post-call follow-up and the approval items |
+| M2 | T-CW-2.1 to T-CW-2.6 | T-CW-2.1 to T-CW-2.5 implemented; T-CW-2.6 (the webinar journeys) written but not committed when this status was written |
+| M3 | T-CW-3.1, T-CW-3.2 | T-CW-3.1: soak script written, result pending the founder's run against the dev account; T-CW-3.2: implemented ahead of the spike result |
+| M3 | T-CW-3.3, T-CW-3.4 | Not started (P1) |
+| M4 | T-CW-4.1 to T-CW-4.3 | Not started (M4) |
 
 ## Global constraints
 
@@ -76,6 +89,10 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-0.1: Catalog additions
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `92c1f5d` chore(catalog): list Chime SDK and video dependencies for NS-CALLS-01
+
 **Goal.** List every new dependency with its pinned version so a single `pnpm install` can land them all.
 
 **Depends on.** Nothing.
@@ -108,6 +125,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-0.2: Video provider adapter and env schema
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `c1bab4c` feat(api): video provider adapter with Chime and fake implementations (T-CW-0.2)
+- `ecb3dd5` fix(api): encode Chime tenant ids, capacity limits from contracts, fake event hook (T-CW-0.2)
 
 **Goal.** Create the `video` module with `VideoProvider`, `ChimeVideoProvider` and `FakeVideoProvider`, and add video env vars to the validation schema.
 
@@ -149,6 +171,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-0.3: CDK video stack
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `8c41140` feat(cdk): video stack with Chime events queue, recordings bucket and IAM policies (T-CW-0.3)
+- `4b965de` fix(cdk): worker policy covers pipeline bucket policy reads and meeting cleanup (T-CW-0.3)
+
 **Goal.** Create `infra/cdk/lib/video-stack.ts` with the SQS queue, DLQ, EventBridge rule, recordings bucket, IAM policies and cdk-nag suppressions (D-CW-31).
 
 **Depends on.** Nothing (the CDK stack does not import any catalog packages).
@@ -180,6 +207,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-0.4: Spikes
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `de78af4` docs(spikes): Chime SDK spike scripts and results template for NS-CALLS-01 (T-CW-0.4)
+- `82d08fd` fix(spikes): attendee caps, inconclusive pipeline result, region prefix and exit codes (T-CW-0.4)
 
 **Goal.** Write the eight spike scripts and document results in `research/07-spikes.md` (D-CW-07, D-CW-08, D-CW-10, D-CW-18, D-CW-24, D-CW-14, D-CW-12, D-CW-33).
 
@@ -213,6 +245,12 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-0.5: Contracts for appointments and call sessions
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `bde634e` feat(contracts): appointment and call session schemas, constants and error codes (T-CW-0.5)
+- `4fc8015` fix(contracts): follow-up schema names, token key normalisation, provider name type (T-CW-0.5)
+- `fd4bf1c` fix(contracts): time zone case check keeps newer IANA names (T-CW-0.5)
 
 **Goal.** Add constants, enums, Zod schemas and error codes to `packages/contracts` for the appointment spine (including follow-up request schemas and the full status lifecycle), call sessions and webinar messages.
 
@@ -262,6 +300,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-0.6: Appointment spine (table, RLS, module, routes, audit, supertest)
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `f9f6313` feat(api): appointment spine with RLS, CRUD routes and authorization golden cases (T-CW-0.6)
+- `70635fa` fix(api): appointment creation by operations, category check, engine-based expert check, paged list (T-CW-0.6)
 
 **Goal.** Create the `appointments` table with forced RLS (including the `follow_up_of` column and the full status enum), the `appointments` module with CRUD routes, audit, and a supertest suite including authorization golden cases.
 
@@ -320,6 +363,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-0.7: Sample fixtures and i18n namespace
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `dfbc27c` feat(data): sample appointments, webinars and calls i18n namespace skeleton (T-CW-0.7)
+- `f7ae5bd` fix(data): retention rows for every calls table, coverage test, Hungarian term (T-CW-0.7)
+
 **Goal.** Create sample appointment and webinar fixtures in `packages/sample-data` and the `calls` i18n namespace skeleton in four locales, including `followUp.*` and `approval.*` keys and the renamed `SAMPLE_WEBINAR_MESSAGES` fixture.
 
 **Depends on.** T-CW-0.5 (contracts for types).
@@ -365,6 +413,15 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-1.1: Call session schema, join, end, outcome, feedback, signal, client events, diagnostics
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `1318c86` feat(api): call session tables with forced RLS and migration 0007 (T-CW-1.1)
+- `bc94dcc` feat(api): calls module with join, end, outcome, feedback, diagnostics and authorization golden cases (T-CW-1.1)
+- `30c18a8` test(api): seed sample appointments and the consultation call session, call e2e golden cases (T-CW-1.1)
+- `9758ed1` fix(api): location text lifecycle, expert location read, race-proof concurrency test, scoped reads (T-CW-1.1)
+- `228a309` feat(api): technical problem reports for calls (T-CW-1.1)
+- `88180b7` fix(api): effective actions include assignment-scoped grants backed by an active assignment (T-CW-1.1)
+
 **Goal.** Create the `call_sessions`, `call_participants`, `call_events`, `call_client_events`, `call_outcomes`, `call_feedback`, `call_consents` (schema only) tables with RLS, and the `calls` module with the full route set.
 
 **Depends on.** T-CW-0.2, T-CW-0.5, T-CW-0.6.
@@ -406,6 +463,13 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-1.2: SQS consumer, event applier, cleanup and reconcile jobs
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `d509460` feat(api): Chime event consumer, idempotent applier and call lifecycle jobs (T-CW-1.2)
+- `53978d1` feat(infra): video call alarms; video env documented, blank values unset (T-CW-1.2)
+- `07c0fd7` feat(api): join after provider-side end, end-reason stamping, no-show job and video metrics (T-CW-1.2)
+- `17ae828` fix(api): lifecycle audit ownership, audit after commit, no-show delay from endsAt (T-CW-1.2)
+
 **Goal.** Implement the SQS consumer in the worker process, the idempotent event applier, and the `calls.cleanup`, `calls.reconcile`, `appointment.remind` and `calls.no_show_followup` jobs.
 
 **Depends on.** T-CW-1.1.
@@ -440,6 +504,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-1.3: Mailer generalisation, ICS module, four-locale templates and follow-up email
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `54789ab` feat(api): generalised mailer with four-locale templates, ICS generator and follow-up email (T-CW-1.3)
+- `43b56cc` fix(api): calendar invitations carry organizer and attendee, message id, Budapest cases (T-CW-1.3)
+
 **Goal.** Generalise the invitation mailer into `apps/api/src/mailer/` with localised templates, an ICS generator module and the neutral "A follow-up was proposed" email (D-CW-26, D-CW-37).
 
 **Depends on.** T-CW-0.5 (contracts for constants).
@@ -470,6 +539,16 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-1.4: Video client package (packages/video)
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `70821f4` chore(video): package skeleton and i18n contracts link
+- `20482bf` feat(video): CallSessionController, quality thresholds, device preferences and hooks (T-CW-1.4)
+- `e914016` feat(video): client package with CallSessionController, hooks and consultation components (T-CW-1.4)
+- `4b8dbef` test(video): Storybook stories and motion contract coverage for the call client (T-CW-1.4)
+- `4d86334` fix(video): packet loss unit, fullscreen portals, controller lifecycle hook, self-view motion (T-CW-1.4)
+- `bd84698` fix(video): export useCallSessionController (T-CW-1.4)
+- `ee2dc6b` fix(video): define global before loading the Chime SDK (T-CW-1.4)
 
 **Goal.** Create `packages/video` with `CallSessionController`, hooks and the consultation feature components including `FollowUpCard` (D-CW-20).
 
@@ -507,6 +586,22 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-1.5: Api-client calls module and workspace/admin routes
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Includes the frontend-coverage gap closures (`07-implementation-notes.md` section 2) and the Tailwind fix DEF-2. Commits:
+
+- `d20b9c1` chore(web): link @nestself/video and socket.io-client into the workspace and admin apps
+- `c071407` feat(api-client): calls module, appointment queries, join window, call room and client-event poster (T-CW-1.5)
+- `2f99789` feat(web): appointment and call routes in workspace and admin apps (T-CW-1.5)
+- `b98a000` feat(admin): consultations list and detail, expert call and outcome dialog (T-CW-1.5)
+- `298316a` fix(web): scan the video package for Tailwind classes in both apps
+- `1c2aca4` feat(cdk): content security policy response headers for the web apps (T-CW-1.5)
+- `7cff4f7` docs(web): CloudFront now sends the content security policy header
+- `5a94cce` feat(web): api-client viewer fields, booking, diagnostics, problem reports and decline notice (T-CW-1.5)
+- `ab0bebe` feat(api): viewer state on appointments, decline reason, pending signal, coordinator cancel, problem report listing, sample approver (T-CW-1.5)
+- `da1fa08` feat(web): workspace next appointment, cancel, approval outcome, support contact and viewer join state (T-CW-1.5)
+- `97a830a` feat(web): admin booking, operations view and filters, cancel, call support and decline notice (T-CW-1.5)
+- `54e683e` feat(api): session-ended viewer flag, list ordering, bookable organisations and experts, operations detail read (T-CW-1.5)
+- `973635f` fix(web): consultation entry points by role, list ordering, support reports, expert photo, join controls after end (T-CW-1.5)
 
 **Goal.** Add the api-client `calls.ts` module and build the workspace appointment list, detail and call routes and the admin consultations list, detail, call route and outcome dialog.
 
@@ -547,6 +642,11 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-1.6: Socket.IO rooms and subscription authorization for calls
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `3595351` feat(api): Socket.IO rooms and subscription authorization for call sessions (T-CW-1.6)
+- `f97331a` feat(api): room events relay over Redis so worker emits reach sockets, ws follow-ups (T-CW-1.6)
+
 **Goal.** Wire the call rooms (`call:{sessionId}`) into the Socket.IO gateway with subscription authorization and follow-up events.
 
 **Depends on.** T-CW-1.1.
@@ -576,6 +676,13 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-1.7: Playwright consultation journey and motion suite entries
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `d3258c3` test(e2e): Playwright consultation journeys and manual screenshots (T-CW-1.7)
+- `c19e19c` test(e2e): motion suite for video components and nightly video smoke workflow (T-CW-1.7)
+- `f5265eb` fix(e2e): journeys set VITE_API_URL so the header shows the API connected; screenshots recaptured (T-CW-1.7)
+- `415bdfb` chore(e2e): e2e:calls script and lint coverage for the calls Playwright config (T-CW-1.7)
 
 **Goal.** Write Playwright journeys for the pre-join, consultation join and call lifecycle against `FakeVideoProvider`, and add motion suite entries for every new panel.
 
@@ -607,6 +714,10 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-1.8: Docs update (environment table, auth section, Serbian legal checklist)
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `a392019` docs(auth): video authorization model, environment table and Serbian legal checklist (T-CW-1.8)
+
 **Goal.** Update `docs/environment.md` with the new env vars, add a video section to `docs/auth/implementation.md`, and reference the Serbian legal checklist and crisis block with Serbian hotlines (D-CW-38).
 
 **Depends on.** T-CW-0.2, T-CW-1.1.
@@ -632,6 +743,14 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-1.9: Follow-up proposal, confirmation, suggested times and decline
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `82e653a` feat(api): post-call follow-up proposal, confirmation, suggested times and decline (T-CW-1.9)
+- `2a6d28b` fix(api): first join closes 10 minutes after the start, rejoin stays open until the room closes (T-CW-1.9)
+- `5302004` feat(api-client,i18n): follow-up, problem report and user room clients, join window split (T-CW-1.9)
+- `f5f2c38` feat(web): post-call follow-up proposal, confirmation, suggested times and decline (T-CW-1.9)
+- `9a06c7d` fix(api,web): rejoin after the first-join window, expired proposals, suggested-times live update (T-CW-1.9)
 
 **Goal.** Implement the post-call follow-up lifecycle: the expert proposes, the employee confirms, suggests alternative times or declines, the `AUTOMATIC` policy creates the appointment immediately, and the `MANAGER_APPROVAL` policy creates an approval item (D-CW-37).
 
@@ -692,6 +811,12 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-1.10: Follow-up approval items and the organisation policy
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `09c4b72` feat(api): appointment approvals table with forced RLS and migration 0010 (T-CW-1.10)
+- `84b46b4` feat(api,web): follow-up approval items, approver selection and organisation policy (T-CW-1.10)
+- `c95a6de` fix(api,web): approvals lapse at the session start, scoped lists, confidential approvers, docs (T-CW-1.10)
 
 **Goal.** Implement the `appointment_approvals` table, the organisation `follow_up_approval_policy` column, the approval routes, the approver selection logic (based on existing `approvalAuthorities` in `apps/api/src/db/schema/authorization.ts`), the HR settings screen and the approver dashboard (D-CW-37).
 
@@ -778,6 +903,16 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-2.1: Webinar schema and module (tables, RLS, routes, chat, floor)
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `637271c` feat(api): webinar tables with forced RLS and migration 0011 (T-CW-2.1)
+- `05a4d2c` feat(api): webinars module with registration, chat, floor, polls and moderation (T-CW-2.1)
+- `9efbaf0` test(api): webinar seed fixtures and e2e golden cases (T-CW-2.1)
+- `2450b37` fix(api): webinar audits, host rights at publish, draft-only org change, ops detail and presenter listing, scoped reads (T-CW-2.1)
+- `71c7503` fix(api): webinar seed replaces host rows so reseeding an older database works (T-CW-2.1)
+- `647f904` feat(api): mute and unmute request for floor holders, organisation units lookup (T-CW-2.1)
+- `6296ffa` fix(api): unmute request event name (T-CW-2.1)
+
 **Goal.** Create the webinar tables (`webinars`, `webinar_hosts`, `webinar_registrations`, `webinar_messages`, `webinar_polls`, `webinar_poll_options`, `webinar_poll_results`, `webinar_recordings`) with RLS policies for both `org_id = null` and organisation-scoped occurrences, and the `webinars` module with all routes from the canonical list, including the chat model and the give-floor and take-floor routes. The occurrence has no recording switch (every webinar is recorded, D-CW-34). The occurrence form rejects a capacity above 250 with `capacity_above_limit` until M3 (D-CW-36).
 
 **Depends on.** T-CW-0.5, T-CW-0.6, T-CW-1.1.
@@ -820,6 +955,10 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-2.2: Webinar contracts and template updates
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `77999ed` feat(contracts): webinar schemas and template action updates (T-CW-2.2)
+
 **Goal.** Add webinar Zod schemas to contracts and update the `event.manage` and `event.moderate` actions in templates. **Rebase first** (auth phase 2 also edits `actions.ts` and `templates.ts`).
 
 **Depends on.** T-CW-0.5 (base contracts). Run last in the milestone.
@@ -846,6 +985,14 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-2.3: Webinar Socket.IO rooms and chat, floor and poll components
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `b5d1953` feat(video): webinar client, chat, poll, hand-raise and floor dialog (T-CW-2.3)
+- `1e83ad5` feat(video): webinar components with chat, floor, polls, moderator queue and hand raise (T-CW-2.3)
+- `b440b43` feat(api): webinar rooms, subscription authorization and worker wiring (T-CW-2.3)
+- `942a441` fix(api,video): hosts room for presenters, floor state and holder, recording hydration, end for hosts (T-CW-2.3)
+- `d6353b6` fix(i18n): restore the calls copy 942a441 dropped (T-CW-2.3)
 
 **Goal.** Wire webinar rooms and build `WebinarStage`, `ChatPanel`, `PollPanel`, `ModeratorQueue`, `HandRaiseButton` in `packages/video` with give-floor and take-floor UI (D-CW-35).
 
@@ -880,6 +1027,17 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-2.4: Workspace and admin webinar routes
 
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `e186533` feat(api-client): webinar routes, rooms and the webinar client transport (T-CW-2.4)
+- `b2a1c94` feat(web): webinar discovery, detail, lobby and live routes in the workspace app (T-CW-2.4)
+- `92f3be1` feat(web): webinar routes in workspace and admin apps (T-CW-2.4)
+- `94a5e19` fix(api-client): the webinar room client forwards webinar.message.removed and webinar.floor.state (T-CW-2.4)
+- `0339040` fix(api-client): the webinar transport serves webinar.end (T-CW-2.4)
+- `76c94f8` fix(web): webinar form labels and capacity, recording hydration, captions notice, failure-state tests (T-CW-2.4)
+- `2a40d7b` feat(web): wire the T-CW-2.1 fix-round webinar routes (T-CW-2.4)
+- `d8c670e` fix(web): capacity message test and workspace lint (T-CW-2.4)
+
 **Goal.** Build the workspace webinar discovery, detail, lobby and live routes and the admin occurrence form, publish, moderator console and presenter view.
 
 **Depends on.** T-CW-2.1, T-CW-2.2, T-CW-2.3, T-CW-0.7.
@@ -911,6 +1069,16 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-2.5: Recording pipeline (automatic start, stop, concatenation, S3 layout)
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Commits:
+
+- `8b09ea2` feat(api): webinar recording columns, call_sessions.webinar_id foreign key and nullable message author in migration 0012 (T-CW-2.5)
+- `f107f09` feat(api): webinar.message.removed on dismissing a published message and webinar.floor.state on the floor changes (T-CW-2.5)
+- `fad34bd` feat(api): automatic webinar recording pipeline with concatenation and CMS handoff (T-CW-2.5)
+- `3c19a3e` feat(api): hosts room counts, raised hands and the floor holder for presenters (T-CW-2.5)
+- `fd622a0` fix(api): raw recording segments expire, finalize retry, moderator failure notice (T-CW-2.5)
+- `38e2bc3` fix(api): webinar recording jobs run in the API process with the fake provider (T-CW-2.5)
+- `8d2486b` fix(api): recording ready and failed reach the rooms, the moderators get the failure reason (T-CW-2.5)
 
 **Goal.** Implement the automatic recording pipeline for webinars: `webinar.recording.start` is enqueued by `POST /webinars/:id/start`, recording stops at end or by `POST /webinars/:id/recording/stop`, the concatenation job produces an MP4, and the CMS handoff writes `webinar_recordings` with `handoff_status = 'pending'` (D-CW-18, D-CW-34).
 
@@ -945,6 +1113,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-2.6: Playwright webinar journeys
+
+**Status (25 October 2026).** In progress, no commit yet: the webinar journeys (`e2e/calls/webinar-attendee.spec.ts`, `webinar-moderator.spec.ts`, with `webinar-flow.ts`), the follow-up approval journey (`follow-up-approval.spec.ts`), the webinar entries of `e2e/motion/video-components.motion.ts` and the screenshots 60 to 85 under `manual/screenshots/` were in the working tree but not committed when this status was written. The webinar features they drive are implemented (T-CW-2.1 to T-CW-2.5).
 
 **Goal.** Write Playwright journeys for webinar registration, attendee join, moderator flow including the chat and the floor.
 
@@ -981,6 +1151,10 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-3.1: SPIKE-CW-06 replica audio test
 
+**Status (25 October 2026).** Partly done on branch `feat/calls-p0`: the soak script for steps 1 to 4 is written; the result is pending the founder's run against the dev account (`research/07-spikes.md`). Step 3 below is corrected: in a replica meeting the floor is not `UpdateAttendeeCapabilities`. Commits:
+
+- `04d67e4` docs(spikes): SPIKE-CW-06 replica audio soak script and result template (T-CW-3.1)
+
 **Goal.** Run the replica audio dropout spike (SPIKE-CW-06, WEB-39) before building replication. Create a replica meeting, give the floor to an attendee, run a 60-minute soak and record whether audio drops after 40 to 50 minutes.
 
 **Depends on.** T-CW-2.1 (a working webinar to test against), T-CW-0.4 (spike placeholder script).
@@ -994,7 +1168,7 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 **Steps.**
 1. Create a meeting, create a second meeting with `PrimaryMeetingId` set to the first.
 2. Join the primary as a presenter, join the replica as an attendee.
-3. Give the floor to the replica attendee: `UpdateAttendeeCapabilities` with audio `SendReceive`, video `Receive`.
+3. Give the floor to the replica attendee. Corrected on 25 October 2026: a replica attendee cannot be given audio in its replica, so the floor is not `UpdateAttendeeCapabilities` (that is the single-meeting floor of D-CW-15). The server calls `CreateAttendee` on the primary meeting for that attendee (audio `SendReceive`, video and content `Receive`), and the attendee's client promotes itself with `audioVideo.promoteToPrimaryMeeting` using those credentials, then unmutes; taking the floor back is the client's `demoteFromPrimaryMeeting` or `DeleteAttendee` of the promotion attendee on the primary (the soak script `spike-cw-06-replica-audio.ts` and T-CW-3.2 implement it this way).
 4. Run a 60-minute soak (or at least long enough to pass the 40 to 50 minute window reported in WEB-39).
 5. Record whether audio stays stable. If the dropout occurs, document the exact timing and conditions.
 6. Update `research/07-spikes.md` with the result. If the dropout confirms, note the workaround options for T-CW-3.2 (periodic capability refresh or reconnect).
@@ -1010,6 +1184,14 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-3.2: Replication (PrimaryMeetingId)
+
+**Status (25 October 2026).** Implemented on branch `feat/calls-p0`. Built before SPIKE-CW-06 ran (T-CW-3.1 results pending); if the spike finds the WEB-39 dropout, step 6 (the documented workaround) is still to do. Step 4 as built: `capacity_above_limit` stays, now for a capacity above `WEBINAR_REPLICATED_CAPACITY` (1,000). The floor in a replica is a promotion to the primary (T-CW-3.1 step 3). Commits:
+
+- `f546b17` feat(api): media replication in the video adapter for webinars above 250 attendees (T-CW-3.2)
+- `a23dba2` feat(api): media replication for webinars above 250 attendees (T-CW-3.2)
+- `496d887` test(api): webinar capacity limit is 1,000 after replication (T-CW-3.2)
+- `8579421` fix(web): webinar capacity limit 1,000 after replication (T-CW-3.2)
+- `e1da7b6` feat(video): replica attendees take the floor by promotion to the primary meeting (T-CW-3.2)
 
 **Goal.** Implement the replication path in the video provider adapter for webinars above 250 attendees (D-CW-14, D-CW-36). `createSession({ format: 'webinar', capacity })` creates a primary plus replicas. Hosts join the primary, attendees join replicas. The occurrence form accepts up to 1,000.
 
@@ -1043,6 +1225,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-3.3: Certificates
 
+**Status (25 October 2026).** Not started (P1, M3). The retention row `webinar_certificates` is already seeded.
+
 **Goal.** Implement the certificate issue job and `GET /webinars/:id/certificate` (D-CW-03, F-CW-03).
 
 **Depends on.** T-CW-2.1.
@@ -1069,6 +1253,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-3.4: Load test with AWS client launcher
+
+**Status (25 October 2026).** Not started (P1, M3).
 
 **Goal.** Set up and run the AWS client launcher for load testing webinars with 50 to 100 simulated attendees (OPS-34).
 
@@ -1105,6 +1291,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-4.1: Mobile ticket route
 
+**Status (25 October 2026).** Not started (M4). `CALL_TICKET_TTL_SECONDS` exists in the contracts; the route, the Redis key `call_ticket:{hash}` and the mobile screen do not.
+
 **Goal.** Implement `POST /appointments/:id/call-ticket` and the mobile `react-native-webview` screen (D-CW-24).
 
 **Depends on.** T-CW-1.1, T-CW-1.5.
@@ -1134,6 +1322,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 
 ### T-CW-4.2: Workshops (format, gallery layout, facilitator controls, chat)
 
+**Status (25 October 2026).** Not started (M4).
+
 **Goal.** Add the `workshop` format with gallery layout, facilitator controls and session chat in `call_messages` with 24-hour retention (D-CW-27).
 
 **Depends on.** T-CW-1.1, T-CW-1.4, T-CW-2.1.
@@ -1162,6 +1352,8 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 ---
 
 ### T-CW-4.3: Replay captions (Transcribe batch to WebVTT)
+
+**Status (25 October 2026).** Not started (M4).
 
 **Goal.** Add a job that runs Transcribe batch on the concatenated webinar MP4 and converts the output to WebVTT, with a review step before publication (D-CW-23). Serbian is the first language; Hungarian follows for webinars held in Hungarian in a later phase (D-CW-38).
 
