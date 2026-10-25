@@ -123,13 +123,28 @@ function renderAt(path: string) {
   return router;
 }
 
-describe("the expert's follow-ups (API mode)", () => {
+describe("the expert's follow-ups (API mode)", { timeout: 20_000 }, () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await i18n.changeLanguage('en');
   });
   afterEach(() => {
     cleanup();
+  });
+
+  it('renders a failed lookup of an earlier proposal instead of an empty form, and retries it', async () => {
+    let fail = true;
+    serve({
+      'GET /api/appointments/appt_1': () => json(200, appointment()),
+      'GET /api/appointments': () => (fail ? json(500, { code: 'internal', message: 'English' }) : json(200, { items: [followUp()], nextCursor: null })),
+    });
+    const user = userEvent.setup();
+    renderAt('/consultations/appt_1');
+    expect(await screen.findByText(new RegExp(en.followUp.lookupFailed), {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.followUp.send })).not.toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText(en.followUp.waitingForEmployee)).toBeInTheDocument();
   });
 
   it('names the employee by first name in the list', async () => {

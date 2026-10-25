@@ -37,6 +37,7 @@ import { callsApi } from './calls-api';
 import { durationMinutes, supportAreaOf } from './format';
 import { mapCallError } from './map-call-error';
 import { Reveal } from './reveal';
+import { supportMailto } from './support-contact';
 import { useConsultationController } from './use-consultation-controller';
 
 /** While waiting for the employee, the shared location is re-read this often (the room event refetches at once). */
@@ -255,6 +256,7 @@ export function ExpertCall({ appointment, employeeName, onEnded }: ExpertCallPro
           void run(setRejoinError);
         }}
         rejoinPending={joining}
+        supportHref={supportMailto()}
         error={rejoinError}
         className="rounded-card"
         header={

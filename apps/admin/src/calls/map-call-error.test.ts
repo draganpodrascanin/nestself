@@ -14,7 +14,11 @@ const apiError = (code: string, status = 400) => new ApiError({ status, code, me
 
 describe('mapCallError', () => {
   it('has a mapping for every call error code (CW-R-60)', () => {
-    expect(Object.keys(CALL_ERROR_MESSAGES).sort()).toEqual([...CALL_ERROR_CODES].sort());
+    for (const code of CALL_ERROR_CODES) expect(CALL_ERROR_MESSAGES[code], code).toBeTypeOf('function');
+  });
+
+  it('maps not_editable (a webinar past its draft stage) to its copy', () => {
+    expect(mapCallError(apiError('not_editable', 409), t)).toBe(t('errors.notEditable'));
   });
 
   it.each(CALL_ERROR_CODES)('maps %s to its own translated copy', (code) => {

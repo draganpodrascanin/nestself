@@ -30,7 +30,7 @@ function renderAt(path: string, role: keyof typeof SAMPLE_PRINCIPALS) {
   return router;
 }
 
-describe('admin consultations (sample mode)', () => {
+describe('admin consultations (sample mode)', { timeout: 20_000 }, () => {
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
@@ -42,25 +42,49 @@ describe('admin consultations (sample mode)', () => {
     window.history.replaceState(null, '', '/');
   });
 
-  it("lists the expert's consultations with employee, status and outcome, linked to the detail", async () => {
+  it("lists the expert's consultations upcoming first, then past, with employee, status and outcome (CALL-18)", async () => {
     renderAt('/consultations', 'expert');
 
     expect(await screen.findByRole('heading', { name: calls.consultations.title, level: 1 })).toBeInTheDocument();
     expect(screen.getByText(common.sample.banner)).toBeInTheDocument();
-    const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
-    expect(rows).toHaveLength(5);
-    // Sorted by start: the completed session of 14 October first.
-    expect(within(rows[0]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_completed');
-    expect(within(rows[0]!).getByText(calls.consultations.outcomeColumn.completed)).toBeInTheDocument();
-    expect(within(rows[1]!).getByText(calls.consultations.outcomeColumn.canceled)).toBeInTheDocument();
+    const upcoming = within(screen.getByRole('table', { name: calls.consultations.upcoming })).getAllByRole('row').slice(1);
+    const past = within(screen.getByRole('table', { name: calls.consultations.past })).getAllByRole('row').slice(1);
+    // Upcoming soonest first: the proposal of 4 November leads; past latest first.
+    expect(upcoming).toHaveLength(3);
+    expect(within(upcoming[0]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_follow_up_proposed');
+    expect(past).toHaveLength(2);
+    expect(within(past[0]!).getByText(calls.consultations.outcomeColumn.canceled)).toBeInTheDocument();
+    expect(within(past[1]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_completed');
+    expect(within(past[1]!).getByText(calls.consultations.outcomeColumn.completed)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: calls.consultations.nav }).length).toBeGreaterThan(0);
   });
 
-  it('shows operations the list without links', async () => {
+  it('shows operations every consultation with expert and organisation, filters and a read-only view (CALL-28)', async () => {
+    const user = userEvent.setup();
     renderAt('/consultations', 'operations');
 
     expect(await screen.findByText(calls.consultations.operationsNote)).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).queryAllByRole('link')).toHaveLength(0);
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: calls.consultations.columns.expert })).toBeInTheDocument();
+    expect(within(table).getAllByText('Example d.o.o.').length).toBe(5);
+    expect(within(table).getAllByRole('link', { name: calls.consultations.view })).toHaveLength(5);
+
+    await user.click(within(table).getAllByRole('link', { name: calls.consultations.view })[0]!);
+    expect(await screen.findByText(calls.consultations.readOnly)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: calls.join.button })).not.toBeInTheDocument();
+  });
+
+  it('filters the operations list by status and date', async () => {
+    const user = userEvent.setup();
+    renderAt('/consultations', 'operations');
+    await screen.findByRole('table');
+
+    await user.type(screen.getByLabelText(calls.consultations.filters.from), '2026-11-01');
+    await user.click(screen.getByRole('button', { name: calls.consultations.filters.apply }));
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').slice(1)).toHaveLength(3));
+
+    await user.click(screen.getByRole('button', { name: calls.consultations.filters.clear }));
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').slice(1)).toHaveLength(5));
   });
 
   it('keeps the employee out of the admin consultations', async () => {

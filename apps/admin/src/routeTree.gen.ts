@@ -20,10 +20,12 @@ import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as AuthenticatedAccessIndexRouteImport } from './routes/_authenticated/access/index'
 import { Route as AuthenticatedConsultationsIndexRouteImport } from './routes/_authenticated/consultations/index'
 import { Route as AuthenticatedConsultationsAppointmentIdRouteImport } from './routes/_authenticated/consultations/$appointmentId'
+import { Route as AuthenticatedConsultationsNewRouteImport } from './routes/_authenticated/consultations/new'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
+import { Route as AuthenticatedSupportCallsRouteImport } from './routes/_authenticated/support/calls'
 import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authenticated/webinars/index'
 import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
 import { Route as AuthenticatedWebinarsNewRouteImport } from './routes/_authenticated/webinars/new'
@@ -89,6 +91,12 @@ const AuthenticatedConsultationsAppointmentIdRoute =
     path: '/consultations/$appointmentId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedConsultationsNewRoute =
+  AuthenticatedConsultationsNewRouteImport.update({
+    id: '/consultations/new',
+    path: '/consultations/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedExpertsIndexRoute =
   AuthenticatedExpertsIndexRouteImport.update({
     id: '/experts/',
@@ -111,6 +119,12 @@ const AuthenticatedOrganizationsOrgIdRoute =
   AuthenticatedOrganizationsOrgIdRouteImport.update({
     id: '/organizations/$orgId',
     path: '/organizations/$orgId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportCallsRoute =
+  AuthenticatedSupportCallsRouteImport.update({
+    id: '/support/calls',
+    path: '/support/calls',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedWebinarsIndexRoute =
@@ -163,8 +177,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
+  '/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  '/support/calls': typeof AuthenticatedSupportCallsRoute
   '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/invite/$token': typeof PublicInviteTokenRoute
@@ -185,7 +201,9 @@ export interface FileRoutesByTo {
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
+  '/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
+  '/support/calls': typeof AuthenticatedSupportCallsRoute
   '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/invite/$token': typeof PublicInviteTokenRoute
@@ -209,8 +227,10 @@ export interface FileRoutesById {
   '/_public/sign-in': typeof PublicSignInRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
+  '/_authenticated/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/_authenticated/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  '/_authenticated/support/calls': typeof AuthenticatedSupportCallsRoute
   '/_authenticated/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/_authenticated/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
@@ -233,8 +253,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/consultations/$appointmentId'
+    | '/consultations/new'
     | '/experts/$expertId'
     | '/organizations/$orgId'
+    | '/support/calls'
     | '/webinars/$webinarId'
     | '/webinars/new'
     | '/invite/$token'
@@ -255,7 +277,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/consultations/$appointmentId'
+    | '/consultations/new'
     | '/experts/$expertId'
+    | '/support/calls'
     | '/webinars/$webinarId'
     | '/webinars/new'
     | '/invite/$token'
@@ -278,8 +302,10 @@ export interface FileRouteTypes {
     | '/_public/sign-in'
     | '/_authenticated/'
     | '/_authenticated/consultations/$appointmentId'
+    | '/_authenticated/consultations/new'
     | '/_authenticated/experts/$expertId'
     | '/_authenticated/organizations/$orgId'
+    | '/_authenticated/support/calls'
     | '/_authenticated/webinars/$webinarId'
     | '/_authenticated/webinars/new'
     | '/_public/invite/$token'
@@ -377,6 +403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConsultationsAppointmentIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/consultations/new': {
+      id: '/_authenticated/consultations/new'
+      path: '/consultations/new'
+      fullPath: '/consultations/new'
+      preLoaderRoute: typeof AuthenticatedConsultationsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/experts/': {
       id: '/_authenticated/experts/'
       path: '/experts'
@@ -403,6 +436,13 @@ declare module '@tanstack/react-router' {
       path: '/organizations/$orgId'
       fullPath: '/organizations/$orgId'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/calls': {
+      id: '/_authenticated/support/calls'
+      path: '/support/calls'
+      fullPath: '/support/calls'
+      preLoaderRoute: typeof AuthenticatedSupportCallsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/webinars/': {
@@ -496,8 +536,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedConsultationsAppointmentIdRoute: typeof AuthenticatedConsultationsAppointmentIdRoute
+  AuthenticatedConsultationsNewRoute: typeof AuthenticatedConsultationsNewRoute
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
   AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  AuthenticatedSupportCallsRoute: typeof AuthenticatedSupportCallsRoute
   AuthenticatedWebinarsWebinarIdRoute: typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   AuthenticatedWebinarsNewRoute: typeof AuthenticatedWebinarsNewRoute
   AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
@@ -514,9 +556,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedConsultationsAppointmentIdRoute:
     AuthenticatedConsultationsAppointmentIdRoute,
+  AuthenticatedConsultationsNewRoute: AuthenticatedConsultationsNewRoute,
   AuthenticatedExpertsExpertIdRoute: AuthenticatedExpertsExpertIdRoute,
   AuthenticatedOrganizationsOrgIdRoute:
     AuthenticatedOrganizationsOrgIdRouteWithChildren,
+  AuthenticatedSupportCallsRoute: AuthenticatedSupportCallsRoute,
   AuthenticatedWebinarsWebinarIdRoute:
     AuthenticatedWebinarsWebinarIdRouteWithChildren,
   AuthenticatedWebinarsNewRoute: AuthenticatedWebinarsNewRoute,

@@ -81,4 +81,12 @@ describe('admin UserRoomListener', () => {
     );
     expect(await screen.findByText(/^Reminder: your NestSelf session starts at 10:00/)).toBeInTheDocument();
   });
+
+  it('tells the expert when the employee declines a follow-up and refreshes both appointments (CALL-38)', async () => {
+    const { invalidate } = renderListener();
+    act(() => room.handlers?.onFollowUpDeclined?.({ appointmentId: 'appt_1', followUpId: 'appt_2' }));
+    expect(await screen.findByText(testI18n.t('calls:followUp.declinedToast'))).toBeInTheDocument();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.detail('appt_1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.detail('appt_2') });
+  });
 });

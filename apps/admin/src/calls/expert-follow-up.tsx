@@ -52,6 +52,7 @@ function cardStatusOf(existing: AppointmentResponse | null): ExpertFollowUpStatu
 
 export function ExpertFollowUp({ appointment }: { appointment: AppointmentResponse }) {
   const { t } = useTranslation('calls');
+  const { t: tCommon } = useTranslation('common');
   const queryClient = useQueryClient();
   const existing = useQuery({
     queryKey: [...appointmentKeys.lists(), 'follow-up-of', appointment.id],
@@ -83,6 +84,23 @@ export function ExpertFollowUp({ appointment }: { appointment: AppointmentRespon
       setPending(false);
     }
   };
+
+  // The lookup decides between the form and an existing proposal: never show the form on a failed or pending lookup.
+  if (!sent && existing.isError) {
+    return (
+      <Alert tone="warning">
+        <span className="gap-2 flex flex-col items-start">
+          <span>
+            {t('followUp.lookupFailed')} {mapCallError(existing.error, t)}
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => void existing.refetch()}>
+            {tCommon('action.retry')}
+          </Button>
+        </span>
+      </Alert>
+    );
+  }
+  if (!sent && !isSampleDataMode && existing.isPending) return null;
 
   return (
     <div className="gap-3 flex flex-col">

@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera, Presentation } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera, Lifebuoy, Presentation } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
@@ -47,6 +47,11 @@ function AuthenticatedLayout() {
     ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
     : [];
 
+  // PLT-05: call diagnostics and problem reports for support operators.
+  const supportNav = can(principal, 'diagnostic.read', undefined, effectiveActions)
+    ? [{ to: '/support/calls' as const, icon: Lifebuoy, label: t('calls:supportCalls.nav') }]
+    : [];
+
   // Webinars (T-CW-2.4): occurrences for `event.manage` and `event.moderate`.
   const webinarsNav = canListWebinars(principal, effectiveActions)
     ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
@@ -57,6 +62,7 @@ function AuthenticatedLayout() {
         { to: '/' as const, icon: House, label: t('nav.overview') },
         ...consultationsNav,
         ...webinarsNav,
+        ...supportNav,
         { to: '/experts' as const, icon: Users, label: t('nav.experts') },
         { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
         ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),

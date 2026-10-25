@@ -12,8 +12,8 @@ export function sampleConsultationsFor(userId: string | undefined, operations: b
   return SAMPLE_APPOINTMENTS.filter((appointment) => !!userId && appointment.expertUserId === userId);
 }
 
-export function sampleConsultation(appointmentId: string, userId: string | undefined): Appointment | null {
-  return SAMPLE_APPOINTMENTS.find((appointment) => appointment.id === appointmentId && appointment.expertUserId === userId) ?? null;
+export function sampleConsultation(appointmentId: string, userId: string | undefined, operations = false): Appointment | null {
+  return SAMPLE_APPOINTMENTS.find((appointment) => appointment.id === appointmentId && (operations || appointment.expertUserId === userId)) ?? null;
 }
 
 /**

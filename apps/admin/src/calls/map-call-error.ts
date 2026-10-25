@@ -15,8 +15,12 @@ import type { TFunction } from 'i18next';
 
 type CallsT = TFunction<'calls'>;
 
-/** One translated message per call error code (CW-R-60). */
-export const CALL_ERROR_MESSAGES: { readonly [Code in CallErrorCode]: (t: CallsT) => string } = {
+/**
+ * One translated message per call error code (CW-R-60). Keyed by string so a
+ * code the contracts add later can be mapped before it lands; the test
+ * checks that every `CALL_ERROR_CODES` entry has one.
+ */
+export const CALL_ERROR_MESSAGES: Readonly<Record<string, (t: CallsT) => string>> = {
   join_window_closed: (t) => t('errors.joinWindowClosed'),
   appointment_not_joinable: (t) => t('errors.appointmentNotJoinable'),
   appointment_not_proposed: (t) => t('errors.appointmentNotProposed'),
@@ -33,6 +37,7 @@ export const CALL_ERROR_MESSAGES: { readonly [Code in CallErrorCode]: (t: CallsT
   recording_not_allowed: (t) => t('errors.recordingNotAllowed'),
   capacity_above_limit: (t) => t('webinar.capacityAboveLimit', { limit: WEBINAR_SINGLE_MEETING_CAPACITY }),
   invalid_ticket: (t) => t('errors.invalidTicket'),
+  not_editable: (t) => t('errors.notEditable'),
 };
 
 /** Generic API codes every call screen can meet. */
@@ -57,7 +62,8 @@ export function callErrorCode(err: unknown): string | null {
 
 export function mapCallError(err: unknown, t: CallsT): string {
   if (err instanceof ApiError) {
-    if (isCallErrorCode(err.code)) return CALL_ERROR_MESSAGES[err.code](t);
+    const mapped = isCallErrorCode(err.code) || err.code in CALL_ERROR_MESSAGES ? CALL_ERROR_MESSAGES[err.code] : undefined;
+    if (mapped) return mapped(t);
     const generic = GENERIC_MESSAGES[err.code];
     if (generic) return generic(t);
     if (err.status === 404) return t('errors.notFound');
