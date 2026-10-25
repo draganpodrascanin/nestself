@@ -6,7 +6,7 @@
  * `@nestself/sample-data` (sample-data rule). Runs in system context (no RLS
  * tenant setting), as the migration/owner role.
  */
-import { count, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray, notInArray } from 'drizzle-orm';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -489,6 +489,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     const rows = sampleWebinarRows(sample);
     const { id: _webinarId, ...webinarUpdate } = rows.webinar;
     await upsertById(db, t.webinars, rows.webinar, webinarUpdate);
+    // The fixture's hosts replace whatever an older seed left: a moderator that changed would otherwise
+    // collide with the old one on `webinar_hosts_moderator_idx` (one moderator per occurrence).
+    await db.delete(t.webinarHosts).where(
+      and(
+        eq(t.webinarHosts.webinarId, sample.id),
+        notInArray(
+          t.webinarHosts.id,
+          rows.hosts.map((host) => host.id),
+        ),
+      ),
+    );
     for (const host of rows.hosts) {
       const { id: _hostId, ...hostUpdate } = host;
       await upsertById(db, t.webinarHosts, host, hostUpdate);

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import {
   SAMPLE_APPOINTMENTS,
@@ -10,6 +11,8 @@ import {
   SAMPLE_WEBINAR_POLLS,
 } from '@nestself/sample-data';
 import { WebinarAudiencePolicySchema, WebinarLocalizedTextSchema } from '@nestself/contracts';
+import { webinarHosts } from '../schema/index.js';
+import { resetTestDatabase, type TestDatabase } from '../../../test/db/test-database.js';
 import {
   EXTRA_SAMPLE_TEMPLATES,
   extraSampleGrantIds,
@@ -19,6 +22,7 @@ import {
   sampleWebinarMessageRow,
   sampleWebinarPollRows,
   sampleWebinarRows,
+  seed,
   seededSampleCallSessions,
   templatesForLegacyRoles,
 } from './seed-lib.js';
@@ -227,5 +231,44 @@ describe('sample follow-up approval (T-CW-1.5)', () => {
         status: 'PENDING',
       },
     ]);
+  });
+});
+
+const TEST_DB_URL = process.env.TEST_DATABASE_URL;
+
+describe.skipIf(!TEST_DB_URL)('reseeding a database after a fixture change (T-CW-2.1, DEF-6)', () => {
+  let testDb: TestDatabase;
+
+  beforeAll(async () => {
+    testDb = await resetTestDatabase(TEST_DB_URL!, 'reseed');
+  }, 180_000);
+
+  afterAll(async () => {
+    await testDb?.close();
+  });
+
+  it('seeds twice after the upcoming webinar changed its moderator: the fixture hosts replace the old rows', async () => {
+    await seed(testDb.db);
+    // The state a seed before 2450b37 left: Nikola moderated the upcoming webinar.
+    const upcoming = 'webinar_sample_upcoming';
+    await testDb.db.delete(webinarHosts).where(and(eq(webinarHosts.webinarId, upcoming), eq(webinarHosts.role, 'MODERATOR')));
+    await testDb.db.insert(webinarHosts).values({
+      id: `webinar_host_${upcoming}_user_nikola`,
+      webinarId: upcoming,
+      orgId: null,
+      userId: 'user_nikola',
+      role: 'MODERATOR',
+      displayName: 'Nikola',
+    });
+
+    const first = await seed(testDb.db);
+    const second = await seed(testDb.db);
+    expect(second).toEqual(first);
+    const hosts = await testDb.db.select().from(webinarHosts).where(eq(webinarHosts.webinarId, upcoming));
+    expect(hosts.map((h) => [h.id, h.userId, h.role]).sort()).toEqual(
+      sampleWebinarRows(SAMPLE_WEBINARS.find((w) => w.id === upcoming)!)
+        .hosts.map((h) => [h.id, h.userId, h.role])
+        .sort(),
+    );
   });
 });
