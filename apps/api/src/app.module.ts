@@ -29,6 +29,7 @@ import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { SsoModule } from './sso/sso.module.js';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     ProfessionalModule,
     EmergencyModule,
     OrganizationsModule,
+    SsoModule,
     WsModule,
   ],
   providers: [

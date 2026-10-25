@@ -101,6 +101,12 @@ export const envSchema = z
     // Proxy
     TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 
+    // Stub mode: every SSO domain verification passes (Playwright); ignored with AUTH_MODE=cognito
+    FAKE_DNS_TXT_AUTOVERIFY: z
+      .enum(['true', 'false'])
+      .transform((v) => v === 'true')
+      .optional(),
+
     // Fake identity provider
     FAKE_IDP_FIXED_OTP: z.union([
       z.literal('').transform(() => undefined),
