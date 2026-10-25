@@ -1087,14 +1087,17 @@ export const WebinarHandCountPayloadSchema = z.strictObject({
 export type WebinarHandCountPayload = z.infer<typeof WebinarHandCountPayloadSchema>;
 
 /**
- * `webinar.floor.state` on the hosts room: the public flag plus the holder's
- * participant id, so any host can take the floor back after a reload
- * (WBN-25). Never a name. The public room's payload stays `{ active }`.
+ * `webinar.floor.state` on the hosts room: the public flag plus the
+ * participant id of the attendee whose floor changed (given, taken, or
+ * dropped by a rejoin), so any host can take the floor back after a reload
+ * (WBN-25). Every change names its attendee; never a name (D-CW-15). The
+ * public room's payload stays `{ active }`.
  */
 export const WebinarHostsFloorStatePayloadSchema = z.strictObject({
+  /** Whether this attendee has the floor after the change. */
   active: z.boolean(),
-  /** The attendee whose floor changed; absent when the floor is cleared for everyone. */
-  participantId: idField.optional(),
+  /** The `call_participants.id` of the attendee whose floor changed. */
+  participantId: idField,
 });
 export type WebinarHostsFloorStatePayload = z.infer<typeof WebinarHostsFloorStatePayloadSchema>;
 

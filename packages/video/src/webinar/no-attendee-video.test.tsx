@@ -45,7 +45,18 @@ const VIDEO_SEND =
   /\b(setCameraOn|setCameraOff|cameraOn|cameraOff|toggleCamera|setBlur|bindPreview|canSendVideo|startVideoInput|startLocalVideoTile|VideoCamera\w*)\b|selectDevice\(\s*['"]camera|video:\s*['"]send|Video:\s*['"]Send/;
 
 /** Controller methods an attendee's webinar screen may use: rendering received media, the mute and the floor's audio. */
-const ALLOWED = new Set(['getSnapshot', 'subscribe', 'bindAudio', 'bindVideoTile', 'unbindVideoTile', 'setMuted', 'setAudioCapability', 'leave']);
+const ALLOWED = new Set([
+  'getSnapshot',
+  'subscribe',
+  'bindAudio',
+  'bindVideoTile',
+  'unbindVideoTile',
+  'setMuted',
+  'setAudioCapability',
+  'promoteToPrimaryMeeting',
+  'demoteFromPrimaryMeeting',
+  'leave',
+]);
 const FORBIDDEN = ['setCameraOn', 'setCameraOff', 'setBlur', 'bindPreview', 'setScreenShare', 'selectDevice', 'checkReadiness'];
 
 function recording(target: FakeCallSessionController) {
@@ -77,9 +88,12 @@ describe('attendees never send video (D-CW-35)', () => {
     expect(VIDEO_SEND.test(readFileSync(join(SRC, 'components/WebinarStageHostControls.tsx'), 'utf8'))).toBe(true);
   });
 
-  it('the whole attendee flow touches only audio and received media on the controller', async () => {
+  it.each([
+    ['a single meeting', false],
+    ['a replica meeting, through a promotion (T-CW-3.2)', true],
+  ])('the whole attendee flow in %s touches only audio and received media on the controller', async (_label, replicated) => {
     const user = userEvent.setup();
-    const server = new FakeWebinarServer({ status: 'published' });
+    const server = new FakeWebinarServer({ status: 'published', replicated });
     const fake = new FakeCallSessionController({ role: 'attendee', format: 'webinar' });
     await fake.join();
     const { controller, calls } = recording(fake);
@@ -116,7 +130,13 @@ describe('attendees never send video (D-CW-35)', () => {
     const used = new Set(calls.map((call) => call.method));
     expect([...used].filter((method) => !ALLOWED.has(method))).toEqual([]);
     for (const method of FORBIDDEN) expect(used.has(method)).toBe(false);
-    expect(calls.filter((call) => call.method === 'setAudioCapability').map((call) => call.args)).toEqual([[true], [false]]);
+    if (replicated) {
+      expect(calls.filter((call) => call.method === 'promoteToPrimaryMeeting')).toHaveLength(1);
+      expect(calls.filter((call) => call.method === 'demoteFromPrimaryMeeting')).toHaveLength(1);
+      expect(calls.some((call) => call.method === 'setAudioCapability')).toBe(false);
+    } else {
+      expect(calls.filter((call) => call.method === 'setAudioCapability').map((call) => call.args)).toEqual([[true], [false]]);
+    }
     expect(fake.getSnapshot().devices.canSendVideo).toBe(false);
     expect(fake.getSnapshot().media.cameraOn).toBe(false);
     expect(fake.getSnapshot().tiles.localTileId).toBeNull();

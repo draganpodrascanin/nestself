@@ -53,6 +53,12 @@ export interface FakeWebinarServerOptions {
   polls?: WebinarPoll[];
   /** Delay of every action in milliseconds (0 in tests). */
   delayMs?: number;
+  /**
+   * Attendees sit in replica meetings (media replication, T-CW-3.2): giving
+   * the floor sends `primaryAttendee` sample credentials for a promotion
+   * instead of a capability change.
+   */
+  replicated?: boolean;
 }
 
 type FakeEventName = WebinarEventName | WebinarRoomAddedEventName | WebinarHostsRoomEventName | WebinarModerationRoomAddedEventName;
@@ -122,6 +128,7 @@ export class FakeWebinarServer {
   private readonly names = new Map<string, string>();
   private readonly failures = new Map<WebinarAction, string>();
   private readonly delayMs: number;
+  private readonly replicated: boolean;
   private status: WebinarStatus;
   private recordingStatus: RecordingStatus = 'scheduled';
   private recordingStartedAt: string | null = null;
@@ -132,6 +139,7 @@ export class FakeWebinarServer {
     this.webinarId = options.webinarId ?? 'sample-webinar';
     this.status = options.status ?? 'published';
     this.delayMs = options.delayMs ?? 0;
+    this.replicated = options.replicated ?? false;
     for (const poll of options.polls ?? []) this.addPoll(poll);
   }
 
@@ -321,7 +329,17 @@ export class FakeWebinarServer {
     } else {
       this.speakers.delete(participantId);
     }
-    this.emit(this.room, given ? 'webinar.floor.given' : 'webinar.floor.taken', { participantId, capabilities }, participantId);
+    // A replica attendee gets sample primary-meeting credentials to promote with; the API sends real ones (T-CW-3.2).
+    const primaryAttendee =
+      given && this.replicated
+        ? { AttendeeId: this.id('primary-attendee'), ExternalUserId: participantId, JoinToken: this.id('join-token') }
+        : undefined;
+    this.emit(
+      this.room,
+      given ? 'webinar.floor.given' : 'webinar.floor.taken',
+      { participantId, capabilities, ...(primaryAttendee ? { primaryAttendee } : {}) },
+      participantId,
+    );
     this.emit(this.room, 'webinar.floor.state', { active: this.speakers.size > 0 });
     this.emit(this.hostsRoom, 'webinar.floor.state', { active: given, participantId });
     return { participantId, hasFloor: given, capabilities };

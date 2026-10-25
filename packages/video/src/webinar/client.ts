@@ -19,9 +19,13 @@
  *   and the floor holder's id from the hosts' room, never a name (WBN-10,
  *   WBN-20), and see only published and answered messages;
  * - the floor is audio only: `webinar.floor.given` for this participant calls
- *   `setAudioCapability(true)` and stays muted until the attendee unmutes;
- *   `webinar.floor.taken` mutes and calls `setAudioCapability(false)`. The
- *   client has no other media surface, so it cannot turn a camera on.
+ *   `setAudioCapability(true)` in a single meeting, or promotes onto the
+ *   primary meeting with `primaryAttendee` when the attendee sits in a
+ *   replica (T-CW-3.2); either way the attendee stays muted until they
+ *   unmute. `webinar.floor.taken` mutes and reverses it (capability off, or
+ *   demotion). The join token is handed straight to the controller and never
+ *   kept. The client has no other media surface, so it cannot turn a camera
+ *   on.
  */
 import {
   ROOM_EVENT_PAYLOAD_SCHEMAS,
@@ -53,6 +57,7 @@ import type {
   WebinarHostsRoomEventPayloads,
   WebinarJoinResponse,
   WebinarModerationRoomAddedEventName,
+  WebinarPrimaryAttendee,
   WebinarMessage,
   WebinarMessageCreateRequest,
   WebinarModerationMessage,
@@ -178,6 +183,8 @@ export class WebinarClient implements WebinarClientApi {
    * Never filled for anyone else.
    */
   private readonly names = new Map<string, string>();
+  /** This attendee's floor runs through a promotion onto the primary meeting (T-CW-3.2). */
+  private promoted = false;
 
   constructor(options: WebinarClientOptions) {
     this.transport = options.transport;
@@ -286,9 +293,7 @@ export class WebinarClient implements WebinarClientApi {
   private applyFloorHolder({ active, participantId }: WebinarHostsRoomEventPayloads['webinar.floor.state']): void {
     const speakers = this.snapshot.speakers;
     let next: readonly WebinarSpeaker[] = speakers;
-    if (participantId === undefined) {
-      if (!active) next = [];
-    } else if (active) {
+    if (active) {
       if (!speakers.some((entry) => entry.participantId === participantId)) {
         next = [...speakers, { participantId, name: this.nameOf(participantId) }];
       }
@@ -351,9 +356,11 @@ export class WebinarClient implements WebinarClientApi {
         this.update({ polls: { ...this.snapshot.polls, results: { ...this.snapshot.polls.results, [results.pollId]: results } } });
         return;
       }
-      case 'webinar.floor.given':
-        if (this.isMe((payload as WebinarEventPayloads['webinar.floor.given']).participantId)) void this.floorGiven();
+      case 'webinar.floor.given': {
+        const given = payload as WebinarEventPayloads['webinar.floor.given'];
+        if (this.isMe(given.participantId)) void this.floorGiven(given.primaryAttendee);
         return;
+      }
       case 'webinar.floor.taken':
         if (this.isMe((payload as WebinarEventPayloads['webinar.floor.taken']).participantId)) void this.floorTaken();
         return;
@@ -395,9 +402,21 @@ export class WebinarClient implements WebinarClientApi {
   // Floor (audio only, D-CW-35)
   // -------------------------------------------------------------------------
 
-  private async floorGiven(): Promise<void> {
+  private async floorGiven(primaryAttendee?: WebinarPrimaryAttendee): Promise<void> {
     if (this.snapshot.myFloor.status === 'given') return;
     this.update({ myFloor: { status: 'given', acknowledged: false } });
+    if (primaryAttendee) {
+      // A replica attendee speaks through a promotion onto the primary meeting, audio only (T-CW-3.2).
+      this.promoted = true;
+      try {
+        if (!this.audio?.promoteToPrimaryMeeting) throw new Error('Promotion is not supported by this controller');
+        await this.audio.promoteToPrimaryMeeting(primaryAttendee);
+      } catch {
+        this.promoted = false;
+        this.setError('floor', new WebinarActionError('floor.audio', 'unknown'));
+      }
+      return;
+    }
     try {
       await this.audio?.setAudioCapability?.(true);
     } catch (error) {
@@ -410,7 +429,12 @@ export class WebinarClient implements WebinarClientApi {
     this.update({ myFloor: { status: 'taken', acknowledged: false } });
     try {
       this.audio?.setMuted(true);
-      await this.audio?.setAudioCapability?.(false);
+      if (this.promoted) {
+        this.promoted = false;
+        await this.audio?.demoteFromPrimaryMeeting?.();
+      } else {
+        await this.audio?.setAudioCapability?.(false);
+      }
     } catch (error) {
       this.setError('floor', toWebinarActionError('floor.audio', error));
     }

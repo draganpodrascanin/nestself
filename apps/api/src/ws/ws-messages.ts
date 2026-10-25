@@ -173,10 +173,16 @@ export type RoomEventName =
   | WebinarRoomAddedEventName
   | WebinarHostsRoomEventName
   | WebinarModerationRoomAddedEventName;
+/**
+ * `webinar.floor.state` has one payload per room (`{ active }` publicly, with
+ * the holder's `participantId` on the hosts' room): a union, not the
+ * intersection the other events merge into. `checkRoomEvent` picks the room's schema.
+ */
+type FloorStatePayload = WebinarRoomAddedEventPayloads['webinar.floor.state'] | WebinarHostsRoomEventPayloads['webinar.floor.state'];
 export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload } & WebinarEventPayloads &
-  WebinarRoomAddedEventPayloads &
-  WebinarHostsRoomEventPayloads &
-  WebinarModerationRoomAddedEventPayloads;
+  Omit<WebinarRoomAddedEventPayloads, 'webinar.floor.state'> &
+  Omit<WebinarHostsRoomEventPayloads, 'webinar.floor.state'> &
+  WebinarModerationRoomAddedEventPayloads & { 'webinar.floor.state': FloorStatePayload };
 export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
 
 export interface RoomEventSpec {

@@ -6,7 +6,14 @@
  * pattern drawn on the theme tokens where the browser supports
  * `canvas.captureStream` (not in jsdom).
  */
-import type { CallFormat, CallJoinResponse, CallParticipantRole, CallQualityMetrics, ClientEventRequest } from '@nestself/contracts';
+import type {
+  CallFormat,
+  CallJoinResponse,
+  CallParticipantRole,
+  CallQualityMetrics,
+  ClientEventRequest,
+  WebinarPrimaryAttendee,
+} from '@nestself/contracts';
 import { VIDEO_STORAGE_KEYS, createMemoryPreferenceStore, readDevicePreferences } from '../preferences';
 import type { PreferenceStore } from '../preferences';
 import type { ConnectionQuality } from '../quality-thresholds';
@@ -57,6 +64,9 @@ export class FakeCallSessionController implements CallSessionControllerApi {
   private readonly streams = new Map<HTMLVideoElement, () => void>();
   private events: ClientEventRequest[] = [];
   private nextTileId = 10;
+  private failPromotion = false;
+  /** The primary-meeting attendee id while promoted (T-CW-3.2); the join token is never kept. */
+  promotedAs: string | null = null;
 
   constructor(options: FakeCallSessionControllerOptions = {}) {
     this.options = options;
@@ -237,6 +247,22 @@ export class FakeCallSessionController implements CallSessionControllerApi {
     this.update({ devices: { canSendAudio: enabled }, media: { muted: true } });
   }
 
+  async promoteToPrimaryMeeting(attendee: WebinarPrimaryAttendee): Promise<void> {
+    if (this.snapshot.session.status !== 'connected') throw new Error('Not in a meeting');
+    await this.pause();
+    if (this.failPromotion) {
+      this.failPromotion = false;
+      throw new Error('Promotion to the primary meeting failed');
+    }
+    this.promotedAs = attendee.AttendeeId;
+    this.update({ devices: { canSendAudio: true }, media: { muted: true } });
+  }
+
+  async demoteFromPrimaryMeeting(): Promise<void> {
+    this.promotedAs = null;
+    this.update({ devices: { canSendAudio: false }, media: { muted: true } });
+  }
+
   async setCameraOn(on: boolean): Promise<void> {
     if (!this.snapshot.devices.canSendVideo) return;
     this.update({
@@ -305,6 +331,10 @@ export class FakeCallSessionController implements CallSessionControllerApi {
     reconnecting: () => this.update({ session: { status: 'reconnecting', reconnectStartedAt: Date.now() } }),
     reconnectFailed: () => this.update({ session: { status: 'failed', failure: 'reconnect_timeout', reconnectStartedAt: null } }),
     ended: () => this.update({ session: { status: 'left', endReason: 'ended' } }),
+    /** The next promotion onto the primary meeting fails (T-CW-3.2). */
+    failNextPromotion: () => {
+      this.failPromotion = true;
+    },
     /** The browser's microphone permission, for example `denied` when a webinar attendee given the floor blocks it. */
     microphonePermission: (microphone: MediaPermission) =>
       this.update({ devices: { permissions: { ...this.snapshot.devices.permissions, microphone } } }),

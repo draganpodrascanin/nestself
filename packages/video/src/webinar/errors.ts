@@ -5,7 +5,7 @@
  * API's own `message` is English and written for developers, so it is never
  * shown.
  */
-import { CALL_ERROR_CODES, WEBINAR_SINGLE_MEETING_CAPACITY } from '@nestself/contracts';
+import { CALL_ERROR_CODES, WEBINAR_REPLICATED_CAPACITY } from '@nestself/contracts';
 import type { CallErrorCode } from '@nestself/contracts';
 import type { WebinarAction, WebinarActionErrorLike } from './types';
 
@@ -13,20 +13,25 @@ import type { WebinarAction, WebinarActionErrorLike } from './types';
 export class WebinarActionError extends Error implements WebinarActionErrorLike {
   readonly code: string;
   readonly action: WebinarAction | 'floor.audio';
+  readonly details?: Readonly<Record<string, unknown>>;
 
-  constructor(action: WebinarAction | 'floor.audio', code: string, options?: { cause?: unknown }) {
+  constructor(action: WebinarAction | 'floor.audio', code: string, options?: { cause?: unknown; details?: Readonly<Record<string, unknown>> }) {
     super(`Webinar action ${action} failed: ${code}`, options);
     this.name = 'WebinarActionError';
     this.action = action;
     this.code = code;
+    if (options?.details) this.details = options.details;
   }
 }
 
 /** Normalises whatever the transport rejected with: the `code` of an `ApiError`, else `network` or `unknown`. */
 export function toWebinarActionError(action: WebinarAction | 'floor.audio', error: unknown): WebinarActionError {
   if (error instanceof WebinarActionError) return error;
-  const code = (error as { code?: unknown } | null)?.code;
-  if (typeof code === 'string' && code.length > 0) return new WebinarActionError(action, code, { cause: error });
+  const { code, details } = (error ?? {}) as { code?: unknown; details?: unknown };
+  if (typeof code === 'string' && code.length > 0) {
+    const known = details && typeof details === 'object' ? (details as Record<string, unknown>) : undefined;
+    return new WebinarActionError(action, code, { cause: error, ...(known ? { details: known } : {}) });
+  }
   if (error instanceof TypeError) return new WebinarActionError(action, 'network', { cause: error });
   return new WebinarActionError(action, 'unknown', { cause: error });
 }
@@ -72,7 +77,11 @@ export function webinarErrorMessage(error: WebinarActionErrorLike | string | nul
   const code = typeof error === 'string' ? error : error.code;
   const webinarKey = WEBINAR_KEYS[code];
   if (webinarKey) return t(webinarKey);
-  if (isCallErrorCode(code)) return t(callErrorKey(code), { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
+  if (isCallErrorCode(code)) {
+    // The capacity copy names the limit: the server's own `limit` detail, else the replicated ceiling (D-CW-36).
+    const limit = typeof error === 'string' ? undefined : error.details?.['limit'];
+    return t(callErrorKey(code), { limit: typeof limit === 'number' ? limit : WEBINAR_REPLICATED_CAPACITY });
+  }
   const generic = GENERIC_KEYS[code];
   return t(generic ?? 'errors.unknown');
 }

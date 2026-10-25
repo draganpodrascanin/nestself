@@ -10,6 +10,7 @@ import type {
   CallParticipantRole,
   CallQualityMetrics,
   ClientEventRequest,
+  WebinarPrimaryAttendee,
 } from '@nestself/contracts';
 import type { ConnectionQuality } from './quality-thresholds';
 
@@ -155,6 +156,17 @@ export interface CallSessionControllerApi {
    * Never enables video. Optional so existing implementations stay valid.
    */
   setAudioCapability?(enabled: boolean): Promise<void>;
+  /**
+   * A webinar attendee seated in a replica meeting is given the floor (media
+   * replication, T-CW-3.2): promote onto the primary meeting with the
+   * credentials of `webinar.floor.given.primaryAttendee`, audio only, muted
+   * until the attendee unmutes. Never enables video. The credentials are used
+   * for this call only: never stored, logged or put in the snapshot.
+   * Rejects when the promotion fails.
+   */
+  promoteToPrimaryMeeting?(attendee: WebinarPrimaryAttendee): Promise<void>;
+  /** Leaves the primary meeting and mutes; the replica session goes on receive-only. */
+  demoteFromPrimaryMeeting?(): Promise<void>;
   setCameraOn(on: boolean): Promise<void>;
   setScreenShare(on: boolean): Promise<void>;
   bindVideoTile(tileId: number, element: HTMLVideoElement): void;

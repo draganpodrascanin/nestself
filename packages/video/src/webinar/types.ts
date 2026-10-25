@@ -112,8 +112,15 @@ export interface WebinarTransport {
   post<A extends WebinarAction>(action: A, input: WebinarActionInputs[A]): Promise<unknown>;
 }
 
-/** The call controller's audio surface: everything the floor needs, and nothing that sends video. */
-export type WebinarAudioControl = Pick<CallSessionControllerApi, 'setAudioCapability' | 'setMuted'>;
+/**
+ * The call controller's audio surface: everything the floor needs, and
+ * nothing that sends video. A single meeting changes the audio capability;
+ * a replica attendee is promoted onto the primary meeting (T-CW-3.2).
+ */
+export type WebinarAudioControl = Pick<
+  CallSessionControllerApi,
+  'setAudioCapability' | 'setMuted' | 'promoteToPrimaryMeeting' | 'demoteFromPrimaryMeeting'
+>;
 
 /** Action groups for pending and error state; one error per group is shown at a time. */
 export type WebinarActionArea = 'chat' | 'hand' | 'moderation' | 'floor' | 'poll' | 'recording' | 'end';
@@ -209,6 +216,8 @@ export interface WebinarSnapshot {
 export interface WebinarActionErrorLike {
   readonly code: string;
   readonly action: WebinarAction | 'floor.audio';
+  /** The API error's `details`, for copy that names a value (the capacity `limit`). */
+  readonly details?: Readonly<Record<string, unknown>>;
 }
 
 /** Data loaded by the app before or after connecting (`GET /webinars/:id`, `GET .../messages`, polls). */

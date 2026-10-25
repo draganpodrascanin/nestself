@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { WEBINAR_REPLICATED_CAPACITY } from '@nestself/contracts';
 import type { WebinarPoll } from '@nestself/contracts';
 import { t } from '../test/i18n';
+import { FakeCallSessionController } from '../testing/fake-controller';
 import { FakeWebinarClient, FakeWebinarServer } from '../testing/fake-webinar';
 import { WebinarClient } from './client';
-import { WebinarActionError, webinarErrorMessage } from './errors';
+import { WebinarActionError, toWebinarActionError, webinarErrorMessage } from './errors';
 import type { WebinarRoomHandler, WebinarTransport } from './types';
 
 const POLL: WebinarPoll = {
@@ -259,6 +261,96 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
   });
 });
 
+describe('WebinarClient floor in a replica meeting (T-CW-3.2, D-CW-14, D-CW-35)', () => {
+  function promotionSpy() {
+    return {
+      setAudioCapability: vi.fn(async () => undefined),
+      setMuted: vi.fn(),
+      promoteToPrimaryMeeting: vi.fn(async () => undefined),
+      demoteFromPrimaryMeeting: vi.fn(async () => undefined),
+    };
+  }
+
+  it('promotes onto the primary meeting with the primaryAttendee credentials instead of changing the capability', async () => {
+    const server = new FakeWebinarServer({ status: 'live', replicated: true });
+    const audio = promotionSpy();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', audio });
+    const moderator = new FakeWebinarClient({ server, role: 'moderator' });
+    attendee.connect();
+    moderator.connect();
+    const participantId = attendee.getSnapshot().participantId!;
+
+    await moderator.giveFloor(participantId);
+    await vi.waitFor(() => expect(audio.promoteToPrimaryMeeting).toHaveBeenCalledOnce());
+    const [credentials] = audio.promoteToPrimaryMeeting.mock.calls[0] as unknown as [Record<string, string>];
+    expect(credentials).toEqual({ AttendeeId: expect.any(String), ExternalUserId: participantId, JoinToken: expect.any(String) });
+    expect(audio.setAudioCapability).not.toHaveBeenCalled();
+    expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: false });
+    // The token is handed to the controller and never kept in the state.
+    expect(JSON.stringify(attendee.getSnapshot())).not.toContain(credentials['JoinToken']!);
+  });
+
+  it('demotes and mutes when the floor is taken back after a promotion', async () => {
+    const server = new FakeWebinarServer({ status: 'live', replicated: true });
+    const audio = promotionSpy();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', audio });
+    attendee.connect();
+    const participantId = attendee.getSnapshot().participantId!;
+    server.simulate.floorGiven(participantId);
+    await vi.waitFor(() => expect(audio.promoteToPrimaryMeeting).toHaveBeenCalledOnce());
+
+    server.simulate.floorTaken(participantId);
+    await vi.waitFor(() => expect(audio.demoteFromPrimaryMeeting).toHaveBeenCalledOnce());
+    expect(audio.setMuted).toHaveBeenCalledWith(true);
+    expect(audio.setAudioCapability).not.toHaveBeenCalled();
+    expect(attendee.getSnapshot().myFloor.status).toBe('taken');
+  });
+
+  it('keeps the single-meeting path without primaryAttendee: capability on and off, no promotion', async () => {
+    const server = new FakeWebinarServer({ status: 'live' });
+    const audio = promotionSpy();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', audio });
+    attendee.connect();
+    const participantId = attendee.getSnapshot().participantId!;
+    server.simulate.floorGiven(participantId);
+    await vi.waitFor(() => expect(audio.setAudioCapability).toHaveBeenCalledWith(true));
+    server.simulate.floorTaken(participantId);
+    await vi.waitFor(() => expect(audio.setAudioCapability).toHaveBeenLastCalledWith(false));
+    expect(audio.promoteToPrimaryMeeting).not.toHaveBeenCalled();
+    expect(audio.demoteFromPrimaryMeeting).not.toHaveBeenCalled();
+    expect(server.emitted.find((entry) => entry.event === 'webinar.floor.given')?.payload).not.toHaveProperty('primaryAttendee');
+  });
+
+  it('shows a floor error when the promotion fails, on the fake controller too', async () => {
+    const server = new FakeWebinarServer({ status: 'live', replicated: true });
+    const controller = new FakeCallSessionController({ role: 'attendee', format: 'webinar' });
+    await controller.join();
+    controller.simulate.failNextPromotion();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', audio: controller });
+    attendee.connect();
+    server.simulate.floorGiven(attendee.getSnapshot().participantId!);
+    await vi.waitFor(() => expect(attendee.getSnapshot().errors.floor).toMatchObject({ code: 'unknown', action: 'floor.audio' }));
+    expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+    expect(controller.promotedAs).toBeNull();
+  });
+
+  it('promotes the fake controller audio only, and demotes it', async () => {
+    const server = new FakeWebinarServer({ status: 'live', replicated: true });
+    const controller = new FakeCallSessionController({ role: 'attendee', format: 'webinar' });
+    await controller.join();
+    const attendee = new FakeWebinarClient({ server, role: 'attendee', audio: controller });
+    attendee.connect();
+    const participantId = attendee.getSnapshot().participantId!;
+    server.simulate.floorGiven(participantId);
+    await vi.waitFor(() => expect(controller.promotedAs).toMatch(/^sample-primary-attendee-/));
+    expect(controller.getSnapshot().devices).toMatchObject({ canSendAudio: true, canSendVideo: false });
+    expect(controller.getSnapshot().media).toMatchObject({ muted: true, cameraOn: false });
+    server.simulate.floorTaken(participantId);
+    await vi.waitFor(() => expect(controller.promotedAs).toBeNull());
+    expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+  });
+});
+
 describe('WebinarClient polls and recording (WBN-11, WBN-27, WBN-28)', () => {
   it('votes with the option only, and shows the aggregate after the close', async () => {
     const server = new FakeWebinarServer({ status: 'live', polls: [POLL] });
@@ -382,6 +474,11 @@ describe('webinarErrorMessage (error visibility rule)', () => {
     expect(webinarErrorMessage(new WebinarActionError('message.send', 'network'), t)).toBe(t('errors.network'));
     expect(webinarErrorMessage('something_new', t)).toBe(t('errors.unknown'));
     expect(webinarErrorMessage('not_editable', t)).toBe(t('webinar.errors.notEditable'));
+    // The capacity copy names the server's limit, else the replicated ceiling (D-CW-36).
+    expect(webinarErrorMessage('capacity_above_limit', t)).toBe(t('webinar.capacityAboveLimit', { limit: WEBINAR_REPLICATED_CAPACITY }));
+    expect(webinarErrorMessage(toWebinarActionError('message.send', { code: 'capacity_above_limit', details: { limit: 250 } }), t)).toBe(
+      t('webinar.capacityAboveLimit', { limit: 250 }),
+    );
     expect(webinarErrorMessage(null, t)).toBeNull();
   });
 });

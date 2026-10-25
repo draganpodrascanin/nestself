@@ -13,6 +13,7 @@ const h = vi.hoisted(() => {
   type Observer = Record<string, ((...args: unknown[]) => void) | undefined>;
 
   const state = {
+    promotionFails: false,
     sessions: [] as Array<{ configuration: Record<string, unknown>; eventController: { reporter: unknown }; audioVideo: ReturnType<typeof createAudioVideo>; destroy: () => Promise<void> }>,
     eventControllers: [] as Array<{ reporter: unknown }>,
     audioInputFeedback: 0,
@@ -78,6 +79,8 @@ const h = vi.hoisted(() => {
       realtimeUnsubscribeToMuteAndUnmuteLocalAudio: vi.fn(),
       startContentShareFromScreenCapture: vi.fn(async () => ({})),
       stopContentShare: vi.fn(),
+      promoteToPrimaryMeeting: vi.fn(async (_credentials: unknown) => ({ isFailure: () => state.promotionFails })),
+      demoteFromPrimaryMeeting: vi.fn(),
     };
   }
 
@@ -502,6 +505,57 @@ describe('CallSessionController: audio capability for an attendee given the floo
     expect(av.stopAudioInput).toHaveBeenCalled();
     expect(av.startVideoInput).not.toHaveBeenCalled();
     expect(av.startLocalVideoTile).not.toHaveBeenCalled();
+  });
+});
+
+describe('CallSessionController: a replica attendee promoted onto the primary meeting (T-CW-3.2)', () => {
+  const PRIMARY = { AttendeeId: 'primary-attendee-1', ExternalUserId: 'participant-1', JoinToken: 'secret-join-token' };
+
+  it('promotes with the primary credentials, audio only and muted, and demotes back to receive-only', async () => {
+    const logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => undefined));
+    const controller = create('attendee');
+    const { av } = await joined(controller, { ...JOIN, role: 'attendee', format: 'webinar' });
+
+    await controller.promoteToPrimaryMeeting(PRIMARY);
+    expect(av.promoteToPrimaryMeeting).toHaveBeenCalledOnce();
+    expect(av.promoteToPrimaryMeeting.mock.calls[0]![0]).toMatchObject({ attendeeId: 'primary-attendee-1', externalUserId: 'participant-1', joinToken: 'secret-join-token' });
+    expect(controller.getSnapshot().devices).toMatchObject({ canSendAudio: true, canSendVideo: false });
+    expect(controller.getSnapshot().media).toMatchObject({ muted: true, cameraOn: false });
+    expect(av.startAudioInput).toHaveBeenCalledOnce();
+    controller.setMuted(false);
+    expect(av.realtimeUnmuteLocalAudio).toHaveBeenCalled();
+
+    await controller.demoteFromPrimaryMeeting();
+    expect(av.demoteFromPrimaryMeeting).toHaveBeenCalledOnce();
+    expect(av.stopAudioInput).toHaveBeenCalled();
+    expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+    expect(controller.getSnapshot().media.muted).toBe(true);
+    expect(av.startVideoInput).not.toHaveBeenCalled();
+    expect(av.startLocalVideoTile).not.toHaveBeenCalled();
+    // The join token lives in the call only: never in the state, never logged.
+    expect(JSON.stringify(controller.getSnapshot())).not.toContain('secret-join-token');
+    for (const spy of logs) expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-join-token');
+  });
+
+  it('reverts to receive-only and rejects when the promotion fails', async () => {
+    const controller = create('attendee');
+    const { av } = await joined(controller, { ...JOIN, role: 'attendee', format: 'webinar' });
+    h.state.promotionFails = true;
+    await expect(controller.promoteToPrimaryMeeting(PRIMARY)).rejects.toThrow(/Promotion/);
+    h.state.promotionFails = false;
+    expect(controller.getSnapshot().devices.canSendAudio).toBe(false);
+    expect(controller.getSnapshot().media.muted).toBe(true);
+    expect(av.demoteFromPrimaryMeeting).not.toHaveBeenCalled();
+  });
+
+  it('goes back to receive-only when the SDK demotes on its own (disconnection, DeleteAttendee)', async () => {
+    const controller = create('attendee');
+    const { av } = await joined(controller, { ...JOIN, role: 'attendee', format: 'webinar' });
+    await controller.promoteToPrimaryMeeting(PRIMARY);
+    controller.setMuted(false);
+    av.emit('audioVideoWasDemotedFromPrimaryMeeting', status(0));
+    await vi.waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(false));
+    expect(controller.getSnapshot().media.muted).toBe(true);
   });
 });
 

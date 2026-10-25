@@ -22,6 +22,7 @@ import type {
   CallQualityMetrics,
   ClientEventName,
   ClientEventRequest,
+  WebinarPrimaryAttendee,
 } from '@nestself/contracts';
 import type * as ChimeSdkModule from 'amazon-chime-sdk-js';
 import type {
@@ -180,6 +181,8 @@ export class CallSessionController implements CallSessionControllerApi {
   private audioElement: HTMLAudioElement | null = null;
   private videoInputActive = false;
   private audioInputActive = false;
+  /** Promoted onto the primary meeting (a replica attendee with the floor, T-CW-3.2). */
+  private promoted = false;
   private attendeeId: string | null = null;
   private videoAtStart = false;
   private hasStarted = false;
@@ -753,6 +756,8 @@ export class CallSessionController implements CallSessionControllerApi {
     videoTileDidUpdate: (tile: VideoTileState) => this.onTileUpdated(tile),
     videoTileWasRemoved: (tileId: number) => this.onTileRemoved(tileId),
     metricsDidReceive: (report: ClientMetricReport) => this.onMetrics(report),
+    // A disconnection or a DeleteAttendee on the primary demotes on its own: back to receive-only (T-CW-3.2).
+    audioVideoWasDemotedFromPrimaryMeeting: () => void this.leavePrimaryMeeting(false),
   };
 
   private readonly contentShareObserver: ContentShareObserver = {
@@ -885,6 +890,53 @@ export class CallSessionController implements CallSessionControllerApi {
       return;
     }
     av?.realtimeMuteLocalAudio();
+    if (this.audioInputActive) await av?.stopAudioInput().catch(() => undefined);
+    this.audioInputActive = false;
+    this.update({ devices: { canSendAudio: false }, media: { muted: true } });
+  }
+
+  /**
+   * A replica attendee given the floor (media replication, T-CW-3.2): the
+   * microphone starts muted, then the session is promoted onto the primary
+   * meeting with the credentials of `webinar.floor.given.primaryAttendee`,
+   * audio only; video is never started (D-CW-35). The credentials live in
+   * this call only and are never logged. A failed promotion reverts to
+   * receive-only and rejects.
+   */
+  async promoteToPrimaryMeeting(attendee: WebinarPrimaryAttendee): Promise<void> {
+    const av = this.session?.audioVideo;
+    const sdk = this.sdk;
+    if (!av || !sdk || !this.isActive) throw new Error('Not in a meeting');
+    const credentials = new sdk.MeetingSessionCredentials();
+    credentials.attendeeId = attendee.AttendeeId;
+    credentials.externalUserId = attendee.ExternalUserId;
+    credentials.joinToken = attendee.JoinToken;
+    this.update({ devices: { canSendAudio: true }, media: { muted: true } });
+    av.realtimeMuteLocalAudio();
+    await this.startAudioInputSafely();
+    this.promoted = true;
+    let failed = false;
+    try {
+      failed = (await av.promoteToPrimaryMeeting(credentials)).isFailure();
+    } catch {
+      failed = true;
+    }
+    if (failed) {
+      await this.leavePrimaryMeeting(false);
+      throw new Error('Promotion to the primary meeting failed');
+    }
+  }
+
+  /** Leaves the primary meeting and mutes; the replica session goes on receive-only (T-CW-3.2). */
+  async demoteFromPrimaryMeeting(): Promise<void> {
+    await this.leavePrimaryMeeting(true);
+  }
+
+  private async leavePrimaryMeeting(demote: boolean): Promise<void> {
+    const av = this.session?.audioVideo;
+    av?.realtimeMuteLocalAudio();
+    if (demote && this.promoted) av?.demoteFromPrimaryMeeting();
+    this.promoted = false;
     if (this.audioInputActive) await av?.stopAudioInput().catch(() => undefined);
     this.audioInputActive = false;
     this.update({ devices: { canSendAudio: false }, media: { muted: true } });
