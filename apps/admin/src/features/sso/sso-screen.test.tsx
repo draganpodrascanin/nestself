@@ -237,6 +237,10 @@ describe('SsoScreen create dialog', () => {
     [apiError(422, 'validation', { field: 'defaultOrgUnitId' }), 'admin:sso.errors.fieldDefaultOrgUnit'],
     [apiError(422, 'validation', { field: 'idpInitiatedAllowed' }), 'admin:sso.errors.fieldIdpInitiated'],
     [apiError(422, 'validation'), 'admin:sso.errors.idpRefused'],
+    [apiError(400, 'validation'), 'admin:sso.errors.validation'],
+    [apiError(404, 'not_found'), 'admin:sso.errors.organizationNotFound'],
+    [apiError(429, 'rate_limited'), 'admin:sso.errors.rateLimited'],
+    [apiError(503, 'unavailable'), 'admin:sso.errors.unavailable'],
   ])('renders a refused create (%s) in the dialog', async (err, key) => {
     const user = userEvent.setup();
     renderScreen({ opsApi: ssoApi({ createSsoConnection: vi.fn().mockRejectedValue(err) }) });
@@ -245,6 +249,26 @@ describe('SsoScreen create dialog', () => {
     await submitCreate(user, dialog);
     expect(await within(dialog).findAllByText(t(key))).not.toHaveLength(0);
     expect(within(dialog).queryByText(/English/)).not.toBeInTheDocument();
+  });
+
+  it('forgets the OIDC client secret after a successful create', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderScreen();
+    let dialog = await openCreate(user);
+    await choose(user, t('admin:sso.create.organization'), 'Example d.o.o.');
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.slug'), { exact: false }), 'acme');
+    await user.click(within(dialog).getByRole('radio', { name: t('admin:sso.protocols.OIDC') }));
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.oidcIssuer'), { exact: false }), 'https://login.acme.test');
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.oidcClientId'), { exact: false }), 'client-9');
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.oidcClientSecret'), { exact: false }), 's3cret');
+    await submitCreate(user, dialog);
+    await waitFor(() => expect(opsApi.createSsoConnection).toHaveBeenCalled());
+    await screen.findByText(t('admin:sso.create.success'));
+    await waitFor(() => expect(screen.queryByDisplayValue('s3cret')).not.toBeInTheDocument());
+
+    dialog = await openCreate(user);
+    await user.click(within(dialog).getByRole('radio', { name: t('admin:sso.protocols.OIDC') }));
+    expect(within(dialog).getByLabelText(t('admin:sso.create.oidcClientSecret'), { exact: false })).toHaveValue('');
   });
 });
 
@@ -484,6 +508,83 @@ describe('SsoScreen lifecycle', () => {
     expect(within(alert).getByText(t(key))).toBeInTheDocument();
     expect(within(alert).queryByText(/English/)).not.toBeInTheDocument();
     expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('forgets a replaced client secret after a successful edit', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    const detail = await openDetail(user, SUSPENDED.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    let dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    await user.type(within(dialog).getByLabelText(t('admin:sso.edit.secretReplace'), { exact: false }), 'rotated');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
+    await screen.findByText(t('admin:sso.edit.success'));
+    await waitFor(() => expect(screen.queryByDisplayValue('rotated')).not.toBeInTheDocument());
+
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    expect(within(dialog).getByLabelText(t('admin:sso.edit.secretReplace'), { exact: false })).toHaveValue('');
+  });
+
+  it('drops the single-use start URL when the test note is dismissed', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    const detail = await openDetail(user, DRAFT.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.test') }));
+    expect(await within(detail).findByRole('link', { name: t('admin:sso.actions.testLink') })).toHaveAttribute('href', START_URL);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.testDismiss') }));
+    expect(within(detail).queryByText(t('admin:sso.actions.testNote'))).not.toBeInTheDocument();
+    expect(within(detail).queryByRole('link', { name: t('admin:sso.actions.testLink') })).not.toBeInTheDocument();
+    expect(document.querySelector(`a[href="${START_URL}"]`)).toBeNull();
+  });
+
+  it('refreshes the list after a failed mutation', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderScreen({ opsApi: ssoApi({ activateSsoConnection: vi.fn().mockRejectedValue(apiError(409, 'conflict')) }) });
+    const detail = await openDetail(user, TESTING.id);
+    expect(opsApi.listSsoConnections).toHaveBeenCalledTimes(1);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.activate') }));
+    await actionAlert();
+    await waitFor(() => expect(opsApi.listSsoConnections).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the suspend confirmation open with the message when suspending fails', async () => {
+    const user = userEvent.setup();
+    renderScreen({ opsApi: ssoApi({ updateSsoConnection: vi.fn().mockRejectedValue(apiError(409, 'sso_connection_state')) }) });
+    const detail = await openDetail(user, ACTIVE.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.suspend') }));
+    const confirm = await screen.findByRole('alertdialog', { name: t('admin:sso.actions.suspendTitle') });
+    await user.click(within(confirm).getByRole('button', { name: t('admin:sso.actions.suspend') }));
+    expect(await within(confirm).findByText(t('admin:sso.errors.connectionState'))).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog', { name: t('admin:sso.actions.suspendTitle') })).toBeInTheDocument();
+  });
+
+  it.each([
+    [apiError(409, 'sso_connection_state'), 'admin:sso.errors.connectionState'],
+    [apiError(409, 'conflict'), 'admin:sso.errors.conflict'],
+    [apiError(404, 'not_found'), 'admin:sso.errors.notFound'],
+  ])('renders a refused reactivate (%s) as translated copy', async (err, key) => {
+    const user = userEvent.setup();
+    renderScreen({ opsApi: ssoApi({ updateSsoConnection: vi.fn().mockRejectedValue(err) }) });
+    const detail = await openDetail(user, SUSPENDED.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.reactivate') }));
+    expect(within(await actionAlert()).getByText(t(key))).toBeInTheDocument();
+  });
+
+  it.each([
+    [apiError(409, 'conflict'), 'admin:sso.errors.conflict'],
+    [apiError(404, 'not_found'), 'admin:sso.errors.notFound'],
+    [apiError(429, 'rate_limited'), 'admin:sso.errors.rateLimited'],
+    [apiError(503, 'unavailable'), 'admin:sso.errors.unavailable'],
+  ])('renders a refused edit (%s) in the dialog', async (err, key) => {
+    const user = userEvent.setup();
+    renderScreen({ opsApi: ssoApi({ updateSsoConnection: vi.fn().mockRejectedValue(err) }) });
+    const detail = await openDetail(user, SUSPENDED.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    const dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    await user.type(within(dialog).getByLabelText(t('admin:sso.edit.secretReplace'), { exact: false }), 'x');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
+    expect(await within(dialog).findByText(t(key))).toBeInTheDocument();
   });
 
   it('renders a refused status change (sso_connection_state) as translated copy', async () => {

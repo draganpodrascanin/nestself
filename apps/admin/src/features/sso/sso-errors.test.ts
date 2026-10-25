@@ -29,6 +29,8 @@ describe('ssoProblem', () => {
     [apiError(400, 'validation'), 'create', 'validation', null],
     [apiError(400, 'validation', { issues: [{ path: ['metadataUrl'], message: 'Invalid url', code: 'invalid_string' }] }), 'create', 'validation', 'metadataUrl'],
     [apiError(404, 'not_found'), 'activate', 'notFound', null],
+    [apiError(404, 'not_found'), 'create', 'organizationNotFound', null],
+    [apiError(404, 'not_found'), 'update', 'notFound', null],
     [apiError(403, 'forbidden'), 'load', 'forbidden', null],
     [apiError(429, 'rate_limited'), 'test', 'rateLimited', null],
     [apiError(429, 'whatever'), 'test', 'rateLimited', null],

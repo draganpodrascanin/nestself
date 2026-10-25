@@ -75,8 +75,14 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
   };
   const problem = (name: FieldName, message: string): FormError => ({ id: ID[name], label: labels[name], message });
 
+  /** Closes and forgets the write-only secret: the dialog stays mounted for its exit animation. */
+  const finish = () => {
+    setOidcClientSecret('');
+    onOpenChange(false);
+  };
+
   const close = () => {
-    if (!update.isPending) onOpenChange(false);
+    if (!update.isPending) finish();
   };
 
   const saml = connection.protocol === 'SAML';
@@ -122,12 +128,14 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
     }
     try {
       await update.mutateAsync({ id: connection.id, body: patch });
+      // Drop the request (and a replaced secret) from the mutation state.
+      update.reset();
       addToast({ title: t('admin:sso.edit.success'), tone: 'success' });
-      onOpenChange(false);
+      finish();
     } catch (err) {
       const found = ssoProblem(err, 'update');
       if (found === null) {
-        onOpenChange(false);
+        finish();
         return;
       }
       const name = fieldName(found.field);

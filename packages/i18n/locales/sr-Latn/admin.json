@@ -702,7 +702,8 @@
       "suspendDescription": "Prijava više ne šalje ljude na {{provider}}; koriste kod iz e-pošte dok se veza ponovo ne aktivira.",
       "suspended": "Veza je obustavljena.",
       "reactivate": "Ponovo aktiviraj",
-      "reactivated": "Veza je ponovo aktivirana."
+      "reactivated": "Veza je ponovo aktivirana.",
+      "testDismiss": "Sakrij probni link"
     },
     "errors": {
       "loadTitle": "SSO veze nije moguće učitati",
@@ -718,6 +719,7 @@
       "validation": "Proveri polja pa pokušaj ponovo.",
       "idpRefused": "Provajder identiteta je odbio ovu konfiguraciju. Proveri metapodatke ili podatke o izdavaocu i klijentu.",
       "notFound": "Ova veza ili domen više ne postoje. Lista je osvežena.",
+      "organizationNotFound": "Ova organizacija više ne postoji. Izaberi drugu.",
       "forbidden": "Tvoj nalog nema dozvolu da upravlja SSO vezama.",
       "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
       "unavailable": "Provajder identiteta trenutno nije dostupan. Pokušaj kasnije.",

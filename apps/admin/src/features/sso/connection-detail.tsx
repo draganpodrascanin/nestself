@@ -68,7 +68,11 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
   const [editOpen, setEditOpen] = useState(false);
   const [editKey, setEditKey] = useState(0);
   const [suspendOpen, setSuspendOpen] = useState(false);
-  /** Ignores the alert dialog's own close request while the confirm runs, so a failure stays visible. */
+  /**
+   * The confirm button is a `Close` part, so the alert dialog asks to close in
+   * the same click, before the mutation is pending; this ignores that request
+   * so a failure stays visible in the dialog.
+   */
   const confirming = useRef(false);
 
   const { status } = connection;
@@ -95,6 +99,8 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
       setStartUrl(url);
       // A new tab without an opener: the IdP page never gets a handle on this one.
       window.open(url, '_blank', 'noopener,noreferrer');
+      // The single-use URL lives only in the note's state, not in the mutation cache.
+      test.reset();
       return t('admin:sso.actions.testStarted');
     });
 
@@ -109,6 +115,7 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
       t('admin:sso.actions.reactivated'),
     );
 
+  /** Closes the confirmation only on success; a failure stays visible in the dialog. */
   const confirmSuspend = () => {
     confirming.current = true;
     queueMicrotask(() => {
@@ -116,7 +123,9 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
     });
     void run('update', () => update.mutateAsync({ id: connection.id, body: { status: 'SUSPENDED' } }), () =>
       t('admin:sso.actions.suspended'),
-    ).then(() => setSuspendOpen(false));
+    ).then((ok) => {
+      if (ok) setSuspendOpen(false);
+    });
   };
 
   const verifyDomain = (domainId: string) =>
@@ -127,6 +136,15 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
   const headerClass = 'bg-tint border-b border-border-subtle';
   const cellClass = 'border-b border-border-subtle align-top';
   const canTest = status === 'DRAFT' || status === 'TESTING';
+
+  // The single-use start URL is kept only while its note can show: another
+  // connection remounts this panel (it is keyed by id), and a status that
+  // can no longer be tested drops it (state adjusted during render, no effect).
+  const [testable, setTestable] = useState(canTest);
+  if (testable !== canTest) {
+    setTestable(canTest);
+    if (!canTest) setStartUrl(null);
+  }
 
   return (
     <section
@@ -178,7 +196,7 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
         ) : null}
       </div>
 
-      {actionError ? (
+      {actionError && !suspendOpen ? (
         <Alert tone="danger" title={t('admin:sso.errors.actionTitle')}>
           {t(`admin:sso.errors.${actionError}`)}
         </Alert>
@@ -196,6 +214,11 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
           >
             {t('admin:sso.actions.testLink')}
           </a>
+          <div className="mt-3">
+            <Button size="sm" variant="secondary" onClick={() => setStartUrl(null)}>
+              {t('admin:sso.actions.testDismiss')}
+            </Button>
+          </div>
         </Alert>
       ) : null}
 
@@ -319,7 +342,9 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
           <AlertDialog
             open={suspendOpen}
             onOpenChange={(next) => {
-              if (!next && !confirming.current && !update.isPending) setSuspendOpen(false);
+              if (next || confirming.current || update.isPending) return;
+              setSuspendOpen(false);
+              setActionError(null);
             }}
           >
             <AlertDialogContent
@@ -330,7 +355,9 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
               destructive
               onConfirm={confirmSuspend}
               confirmPending={update.isPending}
-            />
+            >
+              {actionError ? <Alert tone="danger">{t(`admin:sso.errors.${actionError}`)}</Alert> : null}
+            </AlertDialogContent>
           </AlertDialog>
         </>
       ) : null}

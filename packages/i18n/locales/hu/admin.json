@@ -698,7 +698,8 @@
       "suspendDescription": "A bejelentkezés többé nem irányít senkit a(z) {{provider}} szolgáltatóhoz; az újraaktiválásig e-mailes kóddal lépnek be.",
       "suspended": "A kapcsolat felfüggesztve.",
       "reactivate": "Újraaktiválás",
-      "reactivated": "A kapcsolat újra aktív."
+      "reactivated": "A kapcsolat újra aktív.",
+      "testDismiss": "Tesztlink elrejtése"
     },
     "errors": {
       "loadTitle": "Az SSO-kapcsolatok nem tölthetők be",
@@ -714,6 +715,7 @@
       "validation": "Ellenőrizd a mezőket, és próbáld újra.",
       "idpRefused": "Az identitásszolgáltató elutasította ezt a beállítást. Ellenőrizd a metaadatokat vagy a kibocsátó és a kliens adatait.",
       "notFound": "Ez a kapcsolat vagy domain már nem létezik. A listát frissítettük.",
+      "organizationNotFound": "Ez a szervezet már nem létezik. Válassz másikat.",
       "forbidden": "A fiókod nem kezelhet SSO-kapcsolatokat.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
       "unavailable": "Az identitásszolgáltató jelenleg nem érhető el. Próbáld újra később.",

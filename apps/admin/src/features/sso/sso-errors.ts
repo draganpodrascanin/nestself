@@ -9,7 +9,8 @@
  * `sso_connection_state`, `conflict` (provider name on create, domain on
  * add), `validation` (422 with `details.field` or `details.fields`, or none
  * when the identity provider refused the configuration; 400 from the body
- * schema), `not_found`, `forbidden`, `rate_limited`, `unavailable` (identity
+ * schema), `not_found` (the organization on create, otherwise the
+ * connection or domain), `forbidden`, `rate_limited`, `unavailable` (identity
  * provider down). `step_up_required` is answered by `withStepUp`; it reaches
  * this mapper only when the retry is refused again and then shows `unknown`.
  *
@@ -32,6 +33,7 @@ export type SsoErrorKey =
   | 'validation'
   | 'idpRefused'
   | 'notFound'
+  | 'organizationNotFound'
   | 'forbidden'
   | 'rateLimited'
   | 'unavailable'
@@ -127,7 +129,8 @@ function classify(err: ApiError, op: SsoOperation): { key: SsoErrorKey; field: s
     case 'validation':
       return validationProblem(err, op);
     case 'not_found':
-      return { key: 'notFound', field: null };
+      // On create the only lookup is the organization (`Organization not found`).
+      return { key: op === 'create' ? 'organizationNotFound' : 'notFound', field: null };
     case 'forbidden':
       return { key: 'forbidden', field: null };
     case 'unavailable':
@@ -138,7 +141,7 @@ function classify(err: ApiError, op: SsoOperation): { key: SsoErrorKey; field: s
     if (op === 'addDomain') return { key: 'conflictDomain', field: 'domain' };
     return { key: 'conflict', field: null };
   }
-  if (err.status === 404) return { key: 'notFound', field: null };
+  if (err.status === 404) return { key: op === 'create' ? 'organizationNotFound' : 'notFound', field: null };
   if (err.status === 503) return { key: 'unavailable', field: null };
   return { key: 'unknown', field: null };
 }

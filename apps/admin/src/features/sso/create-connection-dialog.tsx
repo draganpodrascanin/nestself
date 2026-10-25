@@ -91,8 +91,14 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
   };
   const problem = (name: FieldName, message: string): FormError => ({ id: ID[name], label: labels[name], message });
 
+  /** Closes and forgets the write-only secret: the dialog stays mounted for its exit animation. */
+  const finish = () => {
+    setOidcClientSecret('');
+    onOpenChange(false);
+  };
+
   const close = () => {
-    if (!create.isPending) onOpenChange(false);
+    if (!create.isPending) finish();
   };
 
   const validate = (): FormError[] => {
@@ -130,12 +136,14 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
     if (problems.length > 0) return;
     try {
       await create.mutateAsync(body());
+      // Drop the request (and its secret) from the mutation state.
+      create.reset();
       addToast({ title: t('admin:sso.create.success'), tone: 'success' });
-      onOpenChange(false);
+      finish();
     } catch (err) {
       const found = ssoProblem(err, 'create');
       if (found === null) {
-        onOpenChange(false);
+        finish();
         return;
       }
       const message = t(`admin:sso.errors.${found.key}`);

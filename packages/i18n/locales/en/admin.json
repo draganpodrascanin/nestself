@@ -702,7 +702,8 @@
       "suspendDescription": "Sign-in no longer sends people to {{provider}}; they use the email code until the connection is reactivated.",
       "suspended": "Connection suspended.",
       "reactivate": "Reactivate",
-      "reactivated": "Connection reactivated."
+      "reactivated": "Connection reactivated.",
+      "testDismiss": "Hide the test link"
     },
     "errors": {
       "loadTitle": "SSO connections could not be loaded",
@@ -718,6 +719,7 @@
       "validation": "Check the fields and try again.",
       "idpRefused": "The identity provider refused this configuration. Check the metadata or the issuer and client details.",
       "notFound": "This connection or domain no longer exists. The list has been refreshed.",
+      "organizationNotFound": "This organisation no longer exists. Choose another one.",
       "forbidden": "Your account is not allowed to manage SSO connections.",
       "rateLimited": "Too many attempts. Wait a moment and try again.",
       "unavailable": "The identity provider is not reachable right now. Try again later.",
