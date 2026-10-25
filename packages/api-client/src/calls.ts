@@ -20,6 +20,7 @@
  */
 import { z } from 'zod';
 import {
+  APPROVAL_SAFE_REASON_MAX_LENGTH,
   AppointmentApprovalItemSchema,
   AppointmentApprovalListResponseSchema,
   AppointmentListResponseSchema,
@@ -27,10 +28,15 @@ import {
   CLIENT_EVENT_BATCH_MAX,
   CallJoinResponseSchema,
   CallLocationResponseSchema,
+  CallParticipantRoleSchema,
+  CallProblemCategorySchema,
+  CallProblemSummarySchema,
+  DiagnosticsResponseSchema,
   FollowUpApprovalPolicyResponseSchema,
 } from '@nestself/contracts';
 import type {
   AppointmentApprovalDecisionRequest,
+  AppointmentCreateRequest,
   AppointmentStatus,
   CallFeedbackRequest,
   CallProblemReportRequest,
@@ -58,6 +64,71 @@ export interface AppointmentListParams {
   /** Only the follow-ups of this consultation. */
   followUpOf?: string;
 }
+
+/** Query of `GET /ops/calls/problem-reports` (PLT-05, CALL-16); every field is optional. */
+export interface ProblemReportListParams {
+  orgId?: string;
+  /** Inclusive lower bound of `reportedAt` (ISO date-time). */
+  from?: string;
+  /** Exclusive upper bound of `reportedAt` (ISO date-time). */
+  to?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+/**
+ * What the appointment routes add for the person reading them (CALL-05,
+ * CALL-07): whether they already joined this session, and a running-late
+ * signal the expert sent before they opened the page. Declared here until the
+ * contracts carry it; the field names are the API's.
+ */
+export const AppointmentViewerSchema = z.object({
+  hasJoined: z.boolean(),
+  pendingSignal: z
+    .object({
+      type: z.literal('running_late'),
+      etaMinutes: z.number().int().positive().optional(),
+      sentAt: z.string().datetime(),
+    })
+    .optional(),
+});
+export type AppointmentViewer = z.infer<typeof AppointmentViewerSchema>;
+
+/** Why a follow-up the employee confirmed did not go ahead (CALL-39): rejected by the approver, or the approval lapsed. */
+export const APPROVAL_OUTCOMES = ['rejected', 'expired'] as const;
+
+/**
+ * An appointment as the detail and list routes return it to a participant:
+ * the response, plus `viewer` and, for the employee of a declined follow-up,
+ * the approver's safe reason and how the approval ended (CALL-39).
+ */
+export const AppointmentViewSchema = AppointmentResponseSchema.extend({
+  viewer: AppointmentViewerSchema.optional(),
+  declineReason: z.string().min(1).max(APPROVAL_SAFE_REASON_MAX_LENGTH).optional(),
+  approvalOutcome: z.enum(APPROVAL_OUTCOMES).optional(),
+});
+export type AppointmentView = z.infer<typeof AppointmentViewSchema>;
+
+export const AppointmentViewListResponseSchema = AppointmentListResponseSchema.extend({
+  items: z.array(AppointmentViewSchema),
+});
+
+/** One technical problem report as operations list them: ids, role, category and the connection summary only. */
+export const ProblemReportItemSchema = z.object({
+  sessionId: z.string().min(1),
+  appointmentId: z.string().min(1).nullable(),
+  reportedAt: z.string().datetime(),
+  role: CallParticipantRoleSchema,
+  category: CallProblemCategorySchema,
+  summary: CallProblemSummarySchema,
+});
+export type ProblemReportItem = z.infer<typeof ProblemReportItemSchema>;
+
+export const ProblemReportListResponseSchema = z.object({
+  items: z.array(ProblemReportItemSchema),
+  nextCursor: z.string().nullable(),
+});
+export type ProblemReportListResponse = z.infer<typeof ProblemReportListResponseSchema>;
 
 const NoContentSchema = z.undefined();
 
@@ -98,14 +169,40 @@ export function createCallsApi(client: ApiClient) {
     listAppointments: (params: AppointmentListParams = {}) =>
       client.request(`/api/appointments${queryString(params)}`, {
         method: 'GET',
-        schema: AppointmentListResponseSchema,
+        schema: AppointmentViewListResponseSchema,
       }),
 
-    /** GET /appointments/:id */
+    /** GET /appointments/:id, with what the reader needs (`viewer`, a declined follow-up's reason). */
     getAppointment: (appointmentId: string) =>
       client.request(appointmentPath(appointmentId), {
         method: 'GET',
+        schema: AppointmentViewSchema,
+      }),
+
+    /**
+     * POST /orgs/:orgId/appointments (CALL-26): operations book a consultation
+     * for an employee of an assigned organisation with an expert approved for
+     * the category. Answers the new `confirmed` appointment (201).
+     */
+    createAppointment: (orgId: string, body: AppointmentCreateRequest) =>
+      client.request(`/api/orgs/${encodeURIComponent(orgId)}/appointments`, {
+        ...jsonPost(body),
         schema: AppointmentResponseSchema,
+      }),
+
+    /** GET /ops/calls/:sessionId/diagnostics (PLT-05): exactly the support fields of D-CW-28; the view is audited. */
+    getDiagnostics: (sessionId: string) =>
+      client.request(`/api/ops/calls/${encodeURIComponent(sessionId)}/diagnostics`, {
+        method: 'GET',
+        cache: 'no-store',
+        schema: DiagnosticsResponseSchema,
+      }),
+
+    /** GET /ops/calls/problem-reports (CALL-16): the technical problem reports of the organisations the caller supports. */
+    listProblemReports: (params: ProblemReportListParams = {}) =>
+      client.request(`/api/ops/calls/problem-reports${queryString(params)}`, {
+        method: 'GET',
+        schema: ProblemReportListResponseSchema,
       }),
 
     /** POST /appointments/:id/cancel */

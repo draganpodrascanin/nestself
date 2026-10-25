@@ -12,17 +12,20 @@
 import { z } from 'zod';
 import {
   AppointmentRemindPayloadSchema,
+  FollowUpDeclinedPayloadSchema,
   FollowUpProposedPayloadSchema,
   TimesSuggestedPayloadSchema,
   userRoomName,
 } from '@nestself/contracts';
-import type { AppointmentRemindPayload, TimesSuggestedPayload } from '@nestself/contracts';
+import type { AppointmentRemindPayload, FollowUpDeclinedPayload, TimesSuggestedPayload } from '@nestself/contracts';
 import type { FollowUpProposedEvent, RoomSocket } from './call-room';
 
 export interface UserRoomHandlers {
   onFollowUpProposed?: (event: FollowUpProposedEvent) => void;
   /** The employee suggested other windows for the expert's proposal (to the expert). */
   onTimesSuggested?: (event: TimesSuggestedPayload) => void;
+  /** The employee declined the expert's proposal (to the expert, CALL-38). */
+  onFollowUpDeclined?: (event: FollowUpDeclinedPayload) => void;
   /** A reminder fired while the user is online (D-CW-26): the apps show a toast. */
   onReminder?: (event: AppointmentRemindPayload) => void;
   /** The subscription was refused or the socket could not connect. */
@@ -42,6 +45,7 @@ export const noopUserRoomClient: UserRoomClient = {
 export const USER_ROOM_EVENTS = {
   followUpProposed: 'appointment.follow_up.proposed',
   timesSuggested: 'appointment.times_suggested',
+  followUpDeclined: 'appointment.follow_up.declined',
   remind: 'appointment.remind',
 } as const;
 
@@ -78,6 +82,7 @@ export function createUserRoomClient(connect: () => RoomSocket): UserRoomClient 
       });
       on(USER_ROOM_EVENTS.followUpProposed, FollowUpProposedPayloadSchema, handlers.onFollowUpProposed);
       on(USER_ROOM_EVENTS.timesSuggested, TimesSuggestedPayloadSchema, handlers.onTimesSuggested);
+      on(USER_ROOM_EVENTS.followUpDeclined, FollowUpDeclinedPayloadSchema, handlers.onFollowUpDeclined);
       on(USER_ROOM_EVENTS.remind, AppointmentRemindPayloadSchema, handlers.onReminder);
 
       return () => {

@@ -16,7 +16,7 @@ import type {
   FollowUpSuggestTimesRequest,
 } from '@nestself/contracts';
 import { ApiError } from '../errors';
-import type { AppointmentListParams, CallsApi } from '../calls';
+import type { AppointmentListParams, CallsApi, ProblemReportListParams } from '../calls';
 
 export const appointmentKeys = {
   all: ['appointments'] as const,
@@ -175,4 +175,39 @@ export const setFollowUpPolicyMutation = (api: CallsApi, orgId: string) =>
   mutationOptions({
     mutationKey: [...followUpPolicyKeys.detail(orgId), 'set'],
     mutationFn: (policy: FollowUpApprovalPolicy) => api.setFollowUpPolicy(orgId, policy),
+  });
+
+// ── Operations: booking and support (CALL-26, PLT-05) ───────────────────────
+
+export const supportKeys = {
+  all: ['ops-calls'] as const,
+  diagnostics: (sessionId: string) => [...supportKeys.all, 'diagnostics', sessionId] as const,
+  problemReports: (params: Omit<ProblemReportListParams, 'cursor'>) => [...supportKeys.all, 'problem-reports', params] as const,
+};
+
+/** `POST /orgs/:orgId/appointments` */
+export const createAppointmentMutation = (api: CallsApi) =>
+  mutationOptions({
+    mutationKey: [...appointmentKeys.all, 'create'],
+    mutationFn: ({ orgId, body }: { orgId: string; body: Parameters<CallsApi['createAppointment']>[1] }) => api.createAppointment(orgId, body),
+  });
+
+/** `GET /ops/calls/:sessionId/diagnostics`: read on demand, never kept after the screen is gone. */
+export const diagnosticsQuery = (api: CallsApi, sessionId: string) =>
+  queryOptions({
+    queryKey: supportKeys.diagnostics(sessionId),
+    queryFn: () => api.getDiagnostics(sessionId),
+    staleTime: 0,
+    gcTime: 0,
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /ops/calls/problem-reports`, cursor-paged. */
+export const problemReportListQuery = (api: CallsApi, params: Omit<ProblemReportListParams, 'cursor'> = {}) =>
+  infiniteQueryOptions({
+    queryKey: supportKeys.problemReports(params),
+    queryFn: ({ pageParam }) => api.listProblemReports({ ...params, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    retry: retryUnlessClientError,
   });
