@@ -414,6 +414,7 @@
       "notFound": "Ez a személy, szervezeti egység vagy közvetlen vezető már nem létezik. Frissítsd a listát, és próbáld újra.",
       "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
       "alreadyMember": "Ez a személy már aktív tagja a szervezetnek.",
+      "cannotEndSelf": "A saját tagságodat nem szüntetheted meg. Kérj meg egy másik adminisztrátort.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
       "unknown": "Valami hiba történt. Próbáld újra.",
       "noChange": "Válassz másik szervezeti egységet vagy közvetlen vezetőt.",

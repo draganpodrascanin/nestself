@@ -112,6 +112,25 @@ describe('MembersService', () => {
     ).rejects.toThrow(expect.objectContaining({ code: 'not_found' }));
   });
 
+  // ── Refuse ending your own membership ─────────────────────────────────
+
+  it('refuses to end the caller\'s own membership: 409 cannot_end_self, nothing written', async () => {
+    memberships.findByIdAndOrg.mockResolvedValue({ ...ACTIVE_MEMBERSHIP, userId: 'actor-1' });
+
+    const err = await service
+      .endMembership('org-1', 'mem-1', { reason: 'LEFT' }, 'actor-1')
+      .catch((e: unknown) => e);
+
+    expect(err).toEqual(expect.objectContaining({ code: 'cannot_end_self' }));
+    expect((err as { getStatus(): number }).getStatus()).toBe(409);
+    expect(memberships.endMembership).not.toHaveBeenCalled();
+    expect(authz.findActiveGrantsScopedToOrg).not.toHaveBeenCalled();
+    expect(authz.revokeGrantTree).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+    expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    expect(principalLoader.invalidateDelegatees).not.toHaveBeenCalled();
+  });
+
   // ── Idempotent re-end ─────────────────────────────────────────────────
 
   it('returns existing result for already-ended membership (idempotent)', async () => {

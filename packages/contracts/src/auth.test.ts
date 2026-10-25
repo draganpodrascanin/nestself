@@ -170,6 +170,7 @@ describe('AUTH_ERROR_CODES', () => {
     'session_expired',
     'unavailable',
     'cannot_suspend_self',
+    'cannot_end_self',
   ];
 
   it('contains all required error codes', () => {

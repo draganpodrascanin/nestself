@@ -317,6 +317,8 @@ export const AUTH_ERROR_CODES = [
   'owner_exists',
   /** `POST /ops/users/:userId/suspend` on the caller's own account (409). */
   'cannot_suspend_self',
+  /** `POST .../members/:id/end` on the caller's own membership (409). */
+  'cannot_end_self',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

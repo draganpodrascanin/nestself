@@ -417,6 +417,7 @@
       "notFound": "This person or invitation no longer exists. Refresh the list and try again.",
       "duplicateInvitation": "A pending invitation already exists for this email address.",
       "alreadyMember": "This person is already an active member of the organization.",
+      "cannotEndSelf": "You cannot end your own membership. Ask another staff member.",
       "rateLimited": "Too many attempts. Wait a moment and try again.",
       "unknown": "Something went wrong. Try again.",
       "emailInvalid": "Enter a valid email address.",

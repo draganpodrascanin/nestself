@@ -418,6 +418,7 @@
       "notFound": "Ova osoba, organizaciona jedinica ili neposredni rukovodilac više ne postoji. Osveži listu i pokušaj ponovo.",
       "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
       "alreadyMember": "Ova osoba je već aktivan član organizacije.",
+      "cannotEndSelf": "Ne možeš da okončaš sopstveno članstvo. Zamoli drugog administratora.",
       "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
       "unknown": "Nešto nije u redu. Pokušaj ponovo.",
       "noChange": "Izaberi drugu organizacionu jedinicu ili neposrednog rukovodioca.",

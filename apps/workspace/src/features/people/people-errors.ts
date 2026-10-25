@@ -18,6 +18,7 @@ export type PeopleErrorKey =
   | 'notFound'
   | 'duplicateInvitation'
   | 'alreadyMember'
+  | 'cannotEndSelf'
   | 'rateLimited'
   | 'unknown';
 
@@ -29,6 +30,7 @@ const BY_CODE: Record<string, PeopleErrorKey> = {
   not_found: 'notFound',
   duplicate_invitation: 'duplicateInvitation',
   already_member: 'alreadyMember',
+  cannot_end_self: 'cannotEndSelf',
   rate_limited: 'rateLimited',
 };
 

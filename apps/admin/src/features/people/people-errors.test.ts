@@ -15,6 +15,7 @@ describe('peopleErrorKey (operations)', () => {
     [err(409, 'duplicate_invitation'), 'duplicateInvitation'],
     [err(409, 'already_member'), 'alreadyMember'],
     [err(403, 'forbidden'), 'forbidden'],
+    [err(409, 'cannot_end_self'), 'cannotEndSelf'],
     [err(429, 'anything'), 'rateLimited'],
     [err(409, 'something_new'), 'conflict'],
     [err(500, 'internal_error'), 'unknown'],

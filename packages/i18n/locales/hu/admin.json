@@ -413,6 +413,7 @@
       "notFound": "Ez a személy vagy meghívó már nem létezik. Frissítsd a listát, és próbáld újra.",
       "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
       "alreadyMember": "Ez a személy már aktív tagja a szervezetnek.",
+      "cannotEndSelf": "A saját tagságodat nem szüntetheted meg. Kérj meg egy másik munkatársat.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
       "unknown": "Valami hiba történt. Próbáld újra.",
       "emailInvalid": "Adj meg érvényes e-mail-címet.",

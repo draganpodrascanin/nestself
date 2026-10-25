@@ -176,6 +176,7 @@ describe('OpsPeopleScreen: end membership', () => {
     ['not_found', 404, 'notFound'],
     ['conflict', 409, 'conflict'],
     ['forbidden', 403, 'forbidden'],
+    ['cannot_end_self', 409, 'cannotEndSelf'],
     ['rate_limited', 429, 'rateLimited'],
     ['internal_error', 500, 'unknown'],
   ] as const)('keeps the dialog open with the %s failure as people.errors.%s', async (code, status, key) => {

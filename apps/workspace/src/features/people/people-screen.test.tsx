@@ -302,6 +302,7 @@ describe('PeopleScreen: end membership (Review Focus 1)', () => {
   it.each([
     ['not_found', apiError(404, 'not_found'), 'notFound'],
     ['conflict', apiError(409, 'conflict'), 'conflict'],
+    ['cannot_end_self', apiError(409, 'cannot_end_self'), 'cannotEndSelf'],
     ['validation', apiError(400, 'validation'), 'validation'],
     ['429', apiError(429, 'rate_limited'), 'rateLimited'],
     ['unknown', apiError(500, 'internal'), 'unknown'],

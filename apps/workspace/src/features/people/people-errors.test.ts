@@ -16,6 +16,7 @@ describe('peopleErrorKey', () => {
     [apiError(404, 'not_found'), 'notFound'],
     [apiError(409, 'duplicate_invitation'), 'duplicateInvitation'],
     [apiError(409, 'already_member'), 'alreadyMember'],
+    [apiError(409, 'cannot_end_self'), 'cannotEndSelf'],
     [apiError(429, 'anything'), 'rateLimited'],
     [apiError(409, 'something_new'), 'conflict'],
     [apiError(500, 'internal'), 'unknown'],
