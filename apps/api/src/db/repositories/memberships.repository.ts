@@ -166,6 +166,18 @@ export class MembershipsRepository {
     return rows as MemberListItem[];
   }
 
+  /** Display name and email of a member, for the member item an update returns. */
+  async findMemberContact(
+    userId: string,
+    tx?: DbExecutor,
+  ): Promise<{ displayName: string; email: string } | null> {
+    const [row] = await this.exec(tx)
+      .select({ displayName: users.displayName, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+    return row ?? null;
+  }
+
   /** Update mutable fields on a membership. */
   async updateMembership(
     membershipId: string,
