@@ -30,6 +30,8 @@ import { AuthModule } from '../auth/auth.module.js';
 import { AppointmentsModule } from '../appointments/appointments.module.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AppointmentsRepository } from '../appointments/appointments.repository.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AppointmentCancelHooks } from '../appointments/appointment-cancel-hooks.js';
 import { CallsSchedulerModule } from '../jobs/calls-scheduler.module.js';
 import { VideoModule } from '../video/video.module.js';
 import { WsModule } from '../ws/ws.module.js';
@@ -60,11 +62,15 @@ export function shouldApplyFakeEventsInApi(config: Pick<ConfigService, 'get'>): 
 export class CallsModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap {
   private readonly logger = new Logger(CallsModule.name);
 
+  private unregisterCancelHook: (() => void) | null = null;
+
   constructor(
     private readonly repo: CallsRepository,
     private readonly appointments: AppointmentsRepository,
     private readonly config: ConfigService,
     private readonly moduleRef: ModuleRef,
+    private readonly cancelHooks: AppointmentCancelHooks,
+    private readonly calls: CallsService,
   ) {}
 
   onModuleInit(): void {
@@ -72,6 +78,10 @@ export class CallsModule implements OnModuleInit, OnModuleDestroy, OnApplication
       findSessionById: (id) => this.repo.findSessionById(id),
       findAppointmentById: (id) => this.appointments.findById(id),
     });
+    // CALL-27 criterion 3: a cancel ends the appointment's live call session for both participants.
+    this.unregisterCancelHook = this.cancelHooks.register('calls', (appointment, canceledByUserId) =>
+      this.calls.endForCancel(appointment, canceledByUserId),
+    );
   }
 
   onApplicationBootstrap(): void {
@@ -90,5 +100,7 @@ export class CallsModule implements OnModuleInit, OnModuleDestroy, OnApplication
 
   onModuleDestroy(): void {
     bindCallSessionLookup(null);
+    this.unregisterCancelHook?.();
+    this.unregisterCancelHook = null;
   }
 }

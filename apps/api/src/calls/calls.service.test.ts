@@ -757,6 +757,32 @@ describe('CallsService', () => {
       expect(audited('call.ended')).toHaveLength(1);
     });
 
+    it('ends a live session when the appointment is canceled, recorded as the canceller\'s end (CALL-27)', async () => {
+      const expert = await service.join('appt_1', principal(EXPERT), {});
+      await service.join('appt_1', principal(EMPLOYEE), {});
+      const endSession = vi.spyOn(video, 'endSession');
+
+      const ended = await service.endForCancel({ id: 'appt_1', orgId: ORG }, EMPLOYEE);
+
+      expect(ended).toBe(true);
+      expect(endSession).toHaveBeenCalledWith({ providerMeetingId: expert.meeting.MeetingId });
+      expect(repo.sessions.get(expert.sessionId)).toMatchObject({ status: 'ended', endReason: 'expert', locationText: null });
+      expect(await kv.get(callParticipantCredentialsKey(expert.sessionId, expert.participantId))).toBeNull();
+      expect(rooms.emit).toHaveBeenCalledWith(`call:${expert.sessionId}`, 'call.session.ended', expect.objectContaining({ sessionId: expert.sessionId }));
+      expect(audited('call.ended').map((e) => [e.actorUserId, e.details])).toEqual([
+        [EMPLOYEE, { sessionId: expert.sessionId, endedByUserId: EMPLOYEE, cause: 'canceled' }],
+      ]);
+    });
+
+    it('a cancel without a live meeting ends nothing', async () => {
+      const endSession = vi.spyOn(video, 'endSession');
+      expect(await service.endForCancel({ id: 'appt_1', orgId: ORG }, EMPLOYEE)).toBe(false);
+      await service.signal('appt_1', principal(EXPERT), { type: 'running_late' });
+      expect(await service.endForCancel({ id: 'appt_1', orgId: ORG }, EMPLOYEE)).toBe(false);
+      expect(endSession).not.toHaveBeenCalled();
+      expect(audited('call.ended')).toEqual([]);
+    });
+
     it('answers 409 when there is no running meeting to end', async () => {
       await expectApiError(service.end('appt_1', principal(EXPERT)), 409, 'appointment_not_joinable');
     });

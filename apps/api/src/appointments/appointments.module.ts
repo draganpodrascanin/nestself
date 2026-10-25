@@ -23,6 +23,7 @@ import { MailerModule } from '../mailer/mailer.module.js';
 import { WsModule } from '../ws/ws.module.js';
 import { bindAppointmentLookup } from './appointment.resolver.js';
 import { AppointmentViewerReader } from './appointment-viewer.js';
+import { AppointmentCancelHooks } from './appointment-cancel-hooks.js';
 import { AppointmentsController } from './appointments.controller.js';
 import { AppointmentsRepository } from './appointments.repository.js';
 import { AppointmentsService } from './appointments.service.js';
@@ -44,6 +45,7 @@ import { FollowUpService } from './follow-up.service.js';
     AppointmentsRepository,
     AppointmentsService,
     AppointmentViewerReader,
+    AppointmentCancelHooks,
     FollowUpService,
     FollowUpPolicyReader,
     FollowUpCallRoom,
@@ -53,7 +55,7 @@ import { FollowUpService } from './follow-up.service.js';
     ApprovalService,
     { provide: FOLLOW_UP_APPROVAL, useExisting: ApprovalService },
   ],
-  exports: [AppointmentsRepository, AppointmentsService, FollowUpPolicyReader, FOLLOW_UP_APPROVAL, ApprovalService],
+  exports: [AppointmentsRepository, AppointmentsService, AppointmentCancelHooks, FollowUpPolicyReader, FOLLOW_UP_APPROVAL, ApprovalService],
 })
 export class AppointmentsModule implements OnModuleInit, OnModuleDestroy {
   constructor(

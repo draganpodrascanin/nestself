@@ -9,6 +9,7 @@
  * | awaiting approval| `appointment.follow_up.confirmed` (`awaiting_approval`) |                                | none here: the approver's email is T-CW-1.10's |
  * | times suggested  | `appointment.times_suggested`                   | `user:{expert}`                        | none (guidelines 10.5 names none)            |
  * | declined         | `appointment.follow_up.declined`                | `user:{expert}` (T-CW-1.5)             | `appointment.follow_up.declined`, expert     |
+ * | canceled (any appointment, CALL-27) |                              |                                        | `appointment.canceled`, both parties         |
  *
  * Everything here is best effort: the step has already succeeded, so a
  * failed emit or email is logged with ids only and never thrown. Payloads
@@ -116,6 +117,22 @@ export class FollowUpNotifier {
       template: 'appointment.follow_up.declined',
       data: { appointment: this.windowOf(followUp), appointmentUrl: this.appointmentUrl('expert', followUp.id) },
     }));
+  }
+
+  /**
+   * CALL-27 criterion 6: the appointment was canceled. Both participants get
+   * `appointment.canceled` (with the calendar's CANCEL part) in their own
+   * locale, each with their own appointment page.
+   */
+  async canceled(appointment: AppointmentRecord): Promise<void> {
+    for (const role of ['employee', 'expert'] as const) {
+      await this.mail(appointment, role, (to, locale) => ({
+        to,
+        locale,
+        template: 'appointment.canceled',
+        data: { appointment: this.windowOf(appointment), appointmentUrl: this.appointmentUrl(role, appointment.id) },
+      }));
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

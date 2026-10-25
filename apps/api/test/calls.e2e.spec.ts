@@ -50,6 +50,7 @@ import { callParticipantCredentialsKey } from '../src/redis/redis-keys.js';
 import { VIDEO_PROVIDER } from '../src/video/video-provider.js';
 import type { FakeVideoProvider } from '../src/video/fake-video-provider.js';
 import { RoomEmitter } from '../src/ws/room-emitter.js';
+import { Mailer, type MailInput } from '../src/mailer/mailer.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
   appointments,
@@ -84,6 +85,8 @@ const APPT_CANCELED = 'appt_call_canceled';
 const APPT_PROVIDER = 'appt_call_provider_end';
 /** Inside the window; the expert signals running late before the employee joins (T-CW-1.5). */
 const APPT_SIGNAL = 'appt_call_pending_signal';
+/** Inside the window; canceled while its meeting runs (CALL-27). */
+const APPT_CANCEL_LIVE = 'appt_call_cancel_live';
 
 /**
  * Every key set a call audit event may carry (guidelines 7.5). `call.ended`
@@ -94,6 +97,9 @@ const CALL_AUDIT_DETAIL_KEYS: Record<string, string[][]> = {
   'call.session.created': [['appointmentId', 'format', 'sessionId']],
   'call.joined': [['participantId', 'role', 'sessionId']],
   'call.ended': [
+    // A cancel ends the live meeting (CALL-27), with or without a concurrent close.
+    ['cause', 'endedByUserId', 'sessionId'],
+    ['cause', 'closedBy', 'endedByUserId', 'sessionId'],
     ['endedByUserId', 'sessionId'],
     ['closedBy', 'endedByUserId', 'sessionId'],
     ['endReason', 'sessionId'],
@@ -256,6 +262,7 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     await insertAppointment(APPT_CANCELED, new Date(now + 5 * MINUTE), 'CANCELED');
     await insertAppointment(APPT_PROVIDER, new Date(now + 5 * MINUTE));
     await insertAppointment(APPT_SIGNAL, new Date(now + 5 * MINUTE));
+    await insertAppointment(APPT_CANCEL_LIVE, new Date(now + 5 * MINUTE));
 
     // Stefan keeps team_manager only: an employer-scoped principal.
     await testDb.db
@@ -754,6 +761,56 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     const rejoin = await join(jovan);
     expect(rejoin.status).toBe(409);
     expect(rejoin.body.code).toBe('appointment_not_joinable');
+  });
+
+  // ── Cancel while live (CALL-27 criteria 3 and 6) ────────────────────────────
+
+  it('canceling during a live call ends the meeting for both and emails both participants', async () => {
+    const expert = CallJoinResponseSchema.parse((await join(milica, APPT_CANCEL_LIVE)).body);
+    expect((await join(jovan, APPT_CANCEL_LIVE)).status).toBe(200);
+    const send = vi.spyOn(app.get(Mailer), 'send');
+    send.mockClear();
+    const endSession = vi.spyOn(video, 'endSession');
+    endSession.mockClear();
+
+    const res = await post(jovan, `/appointments/${APPT_CANCEL_LIVE}/cancel`);
+    expect(res.status).toBe(200);
+    expect(AppointmentResponseSchema.parse(res.body).status).toBe('canceled');
+
+    // The meeting is gone at the provider and the room is told, whichever closer won.
+    expect(endSession).toHaveBeenCalledWith({ providerMeetingId: expert.meeting.MeetingId });
+    expect(await video.describeSession({ providerMeetingId: expert.meeting.MeetingId })).toBeNull();
+    const [session] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, expert.sessionId));
+    expect(session).toMatchObject({ status: 'ENDED', endReason: 'EXPERT' });
+    await vi.waitFor(() =>
+      expect(emitted('call.session.ended').filter((call) => call[0] === `call:${expert.sessionId}`)).toHaveLength(1),
+    );
+    expect(await kv.get(callParticipantCredentialsKey(expert.sessionId, expert.participantId))).toBeNull();
+
+    // Both participants are emailed, each with the calendar's cancellation.
+    const mails = send.mock.calls.map((call) => call[0] as MailInput);
+    expect(mails.map((m) => [m.template, m.to]).sort()).toEqual([
+      ['appointment.canceled', 'user_jovan@example.com'],
+      ['appointment.canceled', 'user_milica@example.com'],
+    ]);
+
+    const canceled = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'appointment.canceled'), eq(auditEvents.recordId, APPT_CANCEL_LIVE)));
+    expect(canceled.map((e) => e.details)).toEqual([{ appointmentId: APPT_CANCEL_LIVE, canceledByUserId: 'user_jovan' }]);
+    const ended = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.action, 'call.ended'),
+          eq(auditEvents.recordId, expert.sessionId),
+          eq(auditEvents.actorUserId, 'user_jovan'),
+        ),
+      );
+    expect(ended).toHaveLength(1);
+    expect(ended[0]!.details).toMatchObject({ sessionId: expert.sessionId, endedByUserId: 'user_jovan', cause: 'canceled' });
   });
 
   // ── Provider-side end (T-CW-1.2, D-CW-09, D-CW-12) ──────────────────────────

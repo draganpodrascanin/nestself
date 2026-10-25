@@ -69,3 +69,38 @@ describe('FollowUpNotifier.declined', () => {
     });
   });
 });
+
+describe('FollowUpNotifier.canceled (CALL-27)', () => {
+  it('emails the employee and the expert, each in their locale, with their own appointment page', async () => {
+    const mailer = { send: vi.fn(async (_input: unknown) => undefined) };
+    const users: Record<string, { email: string; locale: string; suspendedAt: null; deactivatedAt: null }> = {
+      user_jovan: { email: 'user_jovan@example.com', locale: 'hu', suspendedAt: null, deactivatedAt: null },
+      user_milica: { email: 'user_milica@example.com', locale: 'sr-Latn', suspendedAt: null, deactivatedAt: null },
+    };
+    const notifier = new FollowUpNotifier(
+      { latestSessionId: vi.fn(), emitDeclined: vi.fn() } as unknown as FollowUpCallRoom,
+      { emitToUser: vi.fn() } as unknown as RoomEmitter,
+      mailer as unknown as Mailer,
+      { findUserById: vi.fn(async (id: string) => users[id] ?? null) } as unknown as IdentityRepository,
+      { get: (key: string) => (key === 'WORKSPACE_URL' ? 'https://app.test' : key === 'ADMIN_URL' ? 'https://admin.test' : undefined) } as unknown as ConfigService,
+    );
+
+    await notifier.canceled({ ...followUp, status: 'canceled' });
+
+    const window = { id: followUp.id, startsAt: followUp.startsAt.toISOString(), endsAt: followUp.endsAt.toISOString(), timeZone: 'Europe/Belgrade' };
+    expect(mailer.send.mock.calls.map((call) => call[0])).toEqual([
+      {
+        to: 'user_jovan@example.com',
+        locale: 'hu',
+        template: 'appointment.canceled',
+        data: { appointment: window, appointmentUrl: 'https://app.test/appointments/appt_follow_up' },
+      },
+      {
+        to: 'user_milica@example.com',
+        locale: 'sr-Latn',
+        template: 'appointment.canceled',
+        data: { appointment: window, appointmentUrl: 'https://admin.test/consultations/appt_follow_up' },
+      },
+    ]);
+  });
+});

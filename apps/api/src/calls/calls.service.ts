@@ -502,24 +502,63 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
     );
     if (session?.status === 'ended') return;
     if (session?.status !== 'active' || !session.providerMeetingId) throw notJoinable();
+    // Narrowed for the shared end path.
+    const active = { ...session, providerMeetingId: session.providerMeetingId };
 
+    await this.endActiveSession(active, appointment.orgId, principal.userId, {});
+  }
+
+  /**
+   * CALL-27 criterion 3: the appointment was canceled, so a live meeting ends
+   * for both participants. Recorded with the EXPERT end reason (the room is
+   * over for good, as after the expert's end; a CANCELED end reason would
+   * need a migration) and `cause: 'canceled'` in the `call.ended` details,
+   * with the canceller as `endedByUserId`. True when a meeting was ended; a
+   * session that never reached the provider (PENDING, CREATING) or is
+   * already over is left as it is: the join path refuses a canceled
+   * appointment.
+   */
+  async endForCancel(appointment: { id: string; orgId: string }, canceledByUserId: string): Promise<boolean> {
+    const session = await this.scoped(appointment.orgId, (tx) =>
+      this.repo.findLiveSessionByAppointment(appointment.id, tx),
+    );
+    if (session?.status !== 'active' || !session.providerMeetingId) return false;
+    const active = { ...session, providerMeetingId: session.providerMeetingId };
+    await this.endActiveSession(active, appointment.orgId, canceledByUserId, { cause: 'canceled' });
+    return true;
+  }
+
+  /**
+   * Ends an ACTIVE session at the provider and closes it: credentials
+   * dropped, `call.session.ended` on the room and `call.ended` audited with
+   * `extra` in the details. When the provider event (or a job) closed it
+   * first, that closer announced the end and only the audit is written here,
+   * with `closedBy`.
+   */
+  private async endActiveSession(
+    session: CallSessionRecord & { providerMeetingId: string },
+    orgId: string,
+    actorUserId: string,
+    extra: Record<string, string>,
+  ): Promise<void> {
     const started = Date.now();
     // Stamped before the provider call, so the MeetingEnded event that DeleteMeeting raises, if it
     // commits first, records the end as the expert's and never as a provider-side end (T-CW-1.2).
-    const stamped = await this.scoped(appointment.orgId, (tx) => this.repo.stampEndReason(session.id, 'expert', tx));
+    const stamped = await this.scoped(orgId, (tx) => this.repo.stampEndReason(session.id, 'expert', tx));
     await this.video.endSession({ providerMeetingId: session.providerMeetingId });
-    const ended = await this.scoped(appointment.orgId, (tx) =>
+    const ended = await this.scoped(orgId, (tx) =>
       this.repo.closeSession(session.id, { endedAt: new Date(), reason: 'expert' }, tx),
     );
 
     if (!ended) {
-      // The provider event (or a job) closed it first and announced the end; the expert's action is still audited.
-      const current = await this.scoped(appointment.orgId, (tx) => this.repo.findSessionById(session.id, tx));
+      // The provider event (or a job) closed it first and announced the end; the action is still audited.
+      const current = await this.scoped(orgId, (tx) => this.repo.findSessionById(session.id, tx));
       const closedBy: CallSessionEndReason = stamped ? 'provider' : (current?.endReason ?? 'provider');
-      await this.record(principal.userId, appointment.orgId, session.id, 'call.ended', {
+      await this.record(actorUserId, orgId, session.id, 'call.ended', {
         sessionId: session.id,
-        endedByUserId: principal.userId,
+        endedByUserId: actorUserId,
         closedBy,
+        ...extra,
       });
       this.logger.log({ sessionId: session.id, operation: 'end', closedBy, latencyMs: Date.now() - started }, 'Call ended');
       return;
@@ -530,11 +569,12 @@ export class CallsService implements OnModuleInit, OnModuleDestroy {
       sessionId: session.id,
       endedAt: (ended.endedAt ?? new Date()).toISOString(),
     });
-    await this.record(principal.userId, appointment.orgId, session.id, 'call.ended', {
+    await this.record(actorUserId, orgId, session.id, 'call.ended', {
       sessionId: session.id,
-      endedByUserId: principal.userId,
+      endedByUserId: actorUserId,
+      ...extra,
     });
-    this.logger.log({ sessionId: session.id, operation: 'end', latencyMs: Date.now() - started }, 'Call ended');
+    this.logger.log({ sessionId: session.id, operation: 'end', latencyMs: Date.now() - started, ...extra }, 'Call ended');
   }
 
   /** Deletes every participant's cached credentials of the session (D-CW-08). */

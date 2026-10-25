@@ -76,6 +76,10 @@ import { AuditWriter } from '../audit/audit-writer.js';
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AppointmentViewerReader } from './appointment-viewer.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AppointmentCancelHooks } from './appointment-cancel-hooks.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { FollowUpNotifier } from './follow-up-notifier.js';
 import { authorize } from '../authz/authorize.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 import { assemblePrincipal } from '../principal/assemble-principal.js';
@@ -158,6 +162,8 @@ export class AppointmentsService {
     private readonly audit: AuditWriter,
     private readonly callsJobs: CallsJobSchedulerService,
     private readonly viewers: AppointmentViewerReader,
+    private readonly cancelHooks: AppointmentCancelHooks,
+    private readonly notifier: FollowUpNotifier,
   ) {}
 
   // ── Create ──────────────────────────────────────────────────────────────
@@ -244,8 +250,14 @@ export class AppointmentsService {
     }
   }
 
-  /** Post-commit hook for a cancellation: removes the pending reminder and follow-up jobs (CW-R-37a). */
-  protected async onAppointmentCanceled(appointment: AppointmentResponse): Promise<void> {
+  /**
+   * Post-commit work of a cancellation (CALL-27): removes the pending
+   * reminder and follow-up jobs (CW-R-37a), ends a live call session for both
+   * participants through the registered cancel hooks (`CallsModule`,
+   * criterion 3), and emails `appointment.canceled` to the employee and the
+   * expert (criterion 6). All best effort: the cancel stands.
+   */
+  protected async onAppointmentCanceled(appointment: AppointmentRecord, canceledByUserId: string): Promise<void> {
     try {
       await this.callsJobs.cancelAppointmentJobs(appointment.id);
     } catch (error) {
@@ -255,6 +267,8 @@ export class AppointmentsService {
         'Appointment jobs not removed',
       );
     }
+    await this.cancelHooks.run(appointment, canceledByUserId);
+    await this.notifier.canceled(appointment);
   }
 
   /**
@@ -539,7 +553,7 @@ export class AppointmentsService {
       details: { appointmentId: canceled.id, canceledByUserId: actor.userId },
     });
     const response = await this.repo.toResponse(canceled);
-    await this.onAppointmentCanceled(response);
+    await this.onAppointmentCanceled(canceled, actor.userId);
     return response;
   }
 
