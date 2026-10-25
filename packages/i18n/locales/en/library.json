@@ -3,7 +3,8 @@
     "home": "Home",
     "explore": "Explore",
     "saved": "Saved",
-    "myRequests": "My requests"
+    "myRequests": "My requests",
+    "more": "More"
   },
   "home": {
     "greeting": "Hello, {{name}}",
@@ -25,9 +26,11 @@
     "video": "Video",
     "audio": "Audio",
     "guide": "Guide",
-    "course": "Course"
+    "course": "Course",
+    "qa": "Q&A"
   },
   "detail": {
+    "editorialTeam": "Editorial team",
     "outcome": "What you get",
     "duration": "Duration",
     "reviewedBy": "Reviewed by {{name}}",
@@ -57,6 +60,7 @@
     "unavailable": "This content is no longer available",
     "remove": "Remove",
     "removeItem": "Remove {{title}}",
+    "removeUnavailable": "Remove unavailable item saved on {{date}}",
     "removeDemo": "This is a demonstration. Nothing was removed."
   },
   "content": {

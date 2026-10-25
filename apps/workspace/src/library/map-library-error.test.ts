@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ApiError } from '@nestself/api-client';
-import { mapLibraryError } from './map-library-error';
+import { mapLibraryError, mapSaveError } from './map-library-error';
 
 function mockT(key: string) {
   return key;
@@ -36,5 +36,42 @@ describe('mapLibraryError', () => {
 
   it('maps non-ApiError to error.unknown', () => {
     expect(mapLibraryError(new Error('random'), t)).toBe('error.unknown');
+  });
+});
+
+describe('mapSaveError', () => {
+  const t = vi.fn(mockT) as unknown as Parameters<typeof mapSaveError>[1];
+
+  it('maps content_not_available on save', () => {
+    const err = new ApiError({ status: 404, code: 'content_not_available', message: '', requestId: null });
+    expect(mapSaveError(err, t, 'save')).toBe('error.contentNotAvailable');
+  });
+
+  it('maps org_context_expired on unsave', () => {
+    const err = new ApiError({ status: 403, code: 'org_context_expired', message: '', requestId: null });
+    expect(mapSaveError(err, t, 'unsave')).toBe('error.orgContextExpired');
+  });
+
+  it('maps network error on save', () => {
+    const err = new ApiError({ status: 0, code: 'network', message: '', requestId: null });
+    expect(mapSaveError(err, t, 'save')).toBe('error.network');
+  });
+
+  it('falls back to error.saveFailed for unknown API code on save', () => {
+    const err = new ApiError({ status: 500, code: 'server_error', message: '', requestId: null });
+    expect(mapSaveError(err, t, 'save')).toBe('error.saveFailed');
+  });
+
+  it('falls back to error.unsaveFailed for unknown API code on unsave', () => {
+    const err = new ApiError({ status: 500, code: 'server_error', message: '', requestId: null });
+    expect(mapSaveError(err, t, 'unsave')).toBe('error.unsaveFailed');
+  });
+
+  it('falls back to error.saveFailed for non-ApiError on save', () => {
+    expect(mapSaveError(new TypeError('fetch failed'), t, 'save')).toBe('error.saveFailed');
+  });
+
+  it('falls back to error.unsaveFailed for non-ApiError on unsave', () => {
+    expect(mapSaveError(new TypeError('fetch failed'), t, 'unsave')).toBe('error.unsaveFailed');
   });
 });

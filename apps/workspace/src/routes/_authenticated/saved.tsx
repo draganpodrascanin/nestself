@@ -27,12 +27,13 @@ import {
 } from '@nestself/ui';
 import type { SavedItem } from '@nestself/contracts';
 import { SavedItemsListSchema, can } from '@nestself/contracts';
-import { savedKeys } from '@nestself/api-client';
+import { libraryKeys, savedKeys } from '@nestself/api-client';
 import type { Locale } from '@nestself/i18n';
+import { formatDate } from '@nestself/i18n';
 import { useAuth } from '../../auth';
 import { isSampleDataMode } from '../../data-source';
 import { api } from '../../api';
-import { mapLibraryError } from '../../library/map-library-error';
+import { mapLibraryError, mapSaveError } from '../../library/map-library-error';
 import { unsaveItem } from '../../library/use-library';
 
 export const Route = createFileRoute('/_authenticated/saved')({
@@ -74,6 +75,7 @@ function SampleSavedPage() {
       </Heading>
       <StatusBlock
         state="empty"
+        headingLevel={2}
         title={t('library:saved.empty.title')}
         body={t('library:saved.empty.body')}
       />
@@ -151,6 +153,7 @@ function ApiSavedPage({ locale }: { locale: string }) {
       {allItems.length === 0 ? (
         <StatusBlock
           state="empty"
+          headingLevel={2}
           title={t('library:saved.empty.title')}
           body={t('library:saved.empty.body')}
         />
@@ -166,7 +169,7 @@ function ApiSavedPage({ locale }: { locale: string }) {
                   ref={isFirstOfLastPage ? firstNewItemRef : undefined}
                   tabIndex={isFirstOfLastPage ? -1 : undefined}
                 >
-                  <SavedItemRow item={item} ctx={ctx} />
+                  <SavedItemRow item={item} ctx={ctx} locale={locale} />
                 </li>
               );
             })}
@@ -197,9 +200,11 @@ function ApiSavedPage({ locale }: { locale: string }) {
 function SavedItemRow({
   item,
   ctx,
+  locale,
 }: {
   item: SavedItem;
   ctx: { kind: string; orgId?: string };
+  locale: string;
 }) {
   const { t } = useTranslation(['library']);
   const queryClient = useQueryClient();
@@ -211,16 +216,21 @@ function SavedItemRow({
       void queryClient.invalidateQueries({
         queryKey: savedKeys.all(ctx as Parameters<typeof savedKeys.all>[0]),
       });
+      void queryClient.invalidateQueries({
+        queryKey: libraryKeys.all(ctx as Parameters<typeof libraryKeys.all>[0]),
+      });
     },
     onError: (err) => {
       toast.add({
-        title: mapLibraryError(err, t as Parameters<typeof mapLibraryError>[1]),
+        title: mapSaveError(err, t as Parameters<typeof mapSaveError>[1], 'unsave'),
         tone: 'danger',
       });
     },
   });
 
   if (item.status === 'unavailable') {
+    // Include the saved date in the aria-label for a unique accessible name
+    const savedDate = formatDate(new Date(item.savedAt), locale as Locale);
     return (
       <Card padding="md">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -231,7 +241,7 @@ function SavedItemRow({
             onClick={() => removeMutation.mutate()}
             loading={removeMutation.isPending}
             disabled={removeMutation.isPending}
-            aria-label={t('library:saved.removeItem', { title: t('library:saved.unavailable') })}
+            aria-label={t('library:saved.removeUnavailable', { date: savedDate })}
           >
             {t('library:saved.remove')}
           </Button>

@@ -38,7 +38,7 @@ import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
 import { api } from '../../../api';
 import { sampleContentDetail } from '../../../library/sample-library-data';
-import { mapLibraryError } from '../../../library/map-library-error';
+import { mapLibraryError, mapSaveError } from '../../../library/map-library-error';
 import { libraryContentDetailOptions, saveItem, unsaveItem } from '../../../library/use-library';
 import { useState } from 'react';
 
@@ -74,7 +74,9 @@ function ContentDetailPage() {
 
 function SampleDetailPage({ contentId, locale }: { contentId: string; locale: string }) {
   const { t } = useTranslation(['library', 'common']);
-  const detail = sampleContentDetail(contentId, locale);
+  const detail = sampleContentDetail(contentId, locale, {
+    authorLabel: t('library:detail.editorialTeam'),
+  });
   const [showSaveDemo, setShowSaveDemo] = useState(false);
 
   if (!detail) {
@@ -126,7 +128,7 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     },
     onError: (err) => {
       toast.add({
-        title: mapLibraryError(err, t as Parameters<typeof mapLibraryError>[1]),
+        title: mapSaveError(err, t as Parameters<typeof mapSaveError>[1], 'save'),
         tone: 'danger',
       });
     },
@@ -141,7 +143,7 @@ function ApiDetailPage({ contentId, locale }: { contentId: string; locale: strin
     },
     onError: (err) => {
       toast.add({
-        title: mapLibraryError(err, t as Parameters<typeof mapLibraryError>[1]),
+        title: mapSaveError(err, t as Parameters<typeof mapSaveError>[1], 'unsave'),
         tone: 'danger',
       });
     },
@@ -242,7 +244,8 @@ const RendererLinkComponent: LinkComponentType = ({ href, children, className })
 };
 
 function mediaUrl(assetId: string, rendition: string): string {
-  return `/api/library/media/${encodeURIComponent(assetId)}/${rendition}`;
+  // Honour VITE_API_URL (reuse the api-client's base URL)
+  return `${api.baseUrl}/api/library/media/${encodeURIComponent(assetId)}/${rendition}`;
 }
 
 interface DetailViewProps {
@@ -289,26 +292,46 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
     return translated || t('library:detail.cta.default');
   };
 
+  /**
+   * Build a workspace href from a CTA kind and target id.
+   *
+   * Only `open_content` has a destination screen at M1. The others
+   * (`open_collection`, `suggest_topic`, `ask_general_question`,
+   * `express_event_interest`, `open_service`) don't: they are omitted
+   * and will be wired when the destination screens are added (M2+).
+   */
+  const ctaHref = (kind: string, targetId: string): string | null => {
+    switch (kind) {
+      case 'open_content':
+        return `/content/${encodeURIComponent(targetId)}`;
+      // M2: open_collection → /explore/collections/<targetId> (T-C2.xx)
+      // M2+: suggest_topic, ask_general_question → TBD request/support screens
+      // M2+: express_event_interest → TBD events screen
+      // M2+: open_service → TBD service screen
+      default:
+        return null;
+    }
+  };
+
   // Resolve CTA from the read model (LIB-R-23).
-  // The API drops unavailable targets, so if `detail.cta.targetId` is present,
-  // the CTA is actionable. When `label` is null (contract change),
-  // we fall back to a translated label per kind.
+  // The API drops unavailable targets, so if `detail.cta.targetId` is present
+  // and has a workspace route, the CTA is actionable.
   const resolveCta = (cta: { ctaKind: string; targetId?: string | null; label?: string | null }): ResolvedCta | null => {
     if (!detail.cta) return null;
-    if (detail.cta.targetId) {
-      return {
-        kind: 'link' as const,
-        href: detail.cta.targetId,
-        label: ctaLabel(detail.cta.kind, cta.label ?? detail.cta.label),
-      };
-    }
-    // CTA without a targetId: nothing to link to
-    return null;
+    if (!detail.cta.targetId) return null;
+    const href = ctaHref(detail.cta.kind, detail.cta.targetId);
+    if (!href) return null; // No destination screen for this CTA kind at M1
+    return {
+      kind: 'link' as const,
+      href,
+      label: ctaLabel(detail.cta.kind, cta.label ?? detail.cta.label),
+    };
   };
 
   // LIB-R-27: replacement link for unavailable content.
-  // TODO(T-C1.13): Wire `detail.replacementLink` into a visible CTA when
-  // the library API populates it (field exists in the contract, always null for now).
+  // TODO(T-C2.xx content-withdrawal): Wire `detail.replacementLink` into a visible
+  // CTA when the withdrawal task adds the replacement data model. The field exists
+  // in the contract but is always null at M1.
 
   return (
     <div className="space-y-6 max-w-reading">
@@ -335,7 +358,14 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
             }}
           />
         ) : detail.durationBand ? (
-          <DurationBadge bandLabel={t(`library:duration.${detail.durationBand}`)} />
+          <DurationBadge
+            bandLabel={t(`library:duration.${detail.durationBand}`)}
+            formatLabel={(seconds) => {
+              const minutes = Math.round(seconds / 60);
+              if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+              return t('library:durationFormat.minutes', { count: minutes });
+            }}
+          />
         ) : null}
       </div>
 
@@ -392,6 +422,22 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
           documentKey={detail.id}
         />
       ) : null}
+
+      {/* Standalone CTA (detail.cta rendered outside the body) */}
+      {detail.cta && detail.cta.targetId && (() => {
+        const href = ctaHref(detail.cta!.kind, detail.cta!.targetId!);
+        if (!href) return null;
+        return (
+          <div className="pt-4">
+            <Link
+              to={href}
+              className="inline-flex items-center justify-center gap-2 rounded-control bg-primary text-text-on-primary px-5 py-2.5 type-label hover:bg-primary-hover transition-colors no-underline"
+            >
+              {ctaLabel(detail.cta!.kind, detail.cta!.label)}
+            </Link>
+          </div>
+        );
+      })()}
 
       {/* Save button */}
       {onToggleSave ? (

@@ -174,6 +174,22 @@ describe('Library routes', () => {
     expect(screen.getByText('What you get')).toBeInTheDocument();
   });
 
+  it('detail page renders reviewer name and date for a sample resource', async () => {
+    renderWithRouter({
+      initialUrl: '/content/res_sample_evening_wind_down',
+      role: 'employee',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    });
+
+    // Reviewer from SAMPLE_EDITORIAL_STAFF (Darko, the content_reviewer)
+    expect(screen.getByText(/Darko/)).toBeInTheDocument();
+    // Date derived from SAMPLE_PUBLICATION_DATES.liveFrom (2026-10-01)
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+
   it('detail page for unknown resource renders neutral "not available" copy without a title', async () => {
     renderWithRouter({
       initialUrl: '/content/res_nonexistent',

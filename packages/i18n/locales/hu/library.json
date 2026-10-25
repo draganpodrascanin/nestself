@@ -3,7 +3,8 @@
     "home": "Kezdőlap",
     "explore": "Felfedezés",
     "saved": "Mentett",
-    "myRequests": "Kéréseim"
+    "myRequests": "Kéréseim",
+    "more": "Több"
   },
   "home": {
     "greeting": "Szia, {{name}}!",
@@ -25,9 +26,11 @@
     "video": "Videó",
     "audio": "Hang",
     "guide": "Útmutató",
-    "course": "Tanfolyam"
+    "course": "Tanfolyam",
+    "qa": "Kérdések és válaszok"
   },
   "detail": {
+    "editorialTeam": "Szerkesztőség",
     "outcome": "Mit kapsz",
     "duration": "Időtartam",
     "reviewedBy": "Ellenőrizte: {{name}}",
@@ -57,6 +60,7 @@
     "unavailable": "Ez a tartalom már nem elérhető",
     "remove": "Eltávolítás",
     "removeItem": "{{title}} eltávolítása",
+    "removeUnavailable": "Nem elérhető elem eltávolítása, mentve: {{date}}",
     "removeDemo": "Ez egy bemutató. Semmi sem lett eltávolítva."
   },
   "content": {

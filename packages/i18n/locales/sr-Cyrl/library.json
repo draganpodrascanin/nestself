@@ -3,7 +3,8 @@
     "home": "Почетна",
     "explore": "Истражи",
     "saved": "Сачувано",
-    "myRequests": "Моји захтеви"
+    "myRequests": "Моји захтеви",
+    "more": "Још"
   },
   "home": {
     "greeting": "Здраво, {{name}}",
@@ -25,9 +26,11 @@
     "video": "Видео",
     "audio": "Аудио",
     "guide": "Водич",
-    "course": "Курс"
+    "course": "Курс",
+    "qa": "Питања и одговори"
   },
   "detail": {
+    "editorialTeam": "Редакција",
     "outcome": "Шта добијате",
     "duration": "Трајање",
     "reviewedBy": "Прегледао: {{name}}",
@@ -57,6 +60,7 @@
     "unavailable": "Овај садржај више није доступан",
     "remove": "Уклони",
     "removeItem": "Уклони {{title}}",
+    "removeUnavailable": "Уклони недоступну ставку сачувану {{date}}",
     "removeDemo": "Ово је демонстрација. Ништа није уклоњено."
   },
   "content": {

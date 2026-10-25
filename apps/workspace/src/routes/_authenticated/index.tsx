@@ -13,7 +13,7 @@ import {
   ShowMore,
 } from '@nestself/ui';
 import type { LibraryCard } from '@nestself/contracts';
-import { LibraryContentListSchema } from '@nestself/contracts';
+import { LibraryContentListSchema, can } from '@nestself/contracts';
 import { libraryKeys } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { isSampleDataMode } from '../../data-source';
@@ -33,6 +33,7 @@ function cardFormatKey(type: string): string {
     case 'audio': return 'library:card.audio';
     case 'practical': return 'library:card.guide';
     case 'collection': return 'library:card.course';
+    case 'qa': return 'library:card.qa';
     default: return 'library:card.article';
   }
 }
@@ -43,9 +44,30 @@ export const Route = createFileRoute('/_authenticated/')({
 });
 
 function HomePage() {
-  const { i18n } = useTranslation(['library', 'common']);
+  const { i18n, t } = useTranslation(['library', 'common']);
   const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
   const { denied } = Route.useSearch();
+  const { principal, effectiveActions } = useAuth();
+
+  const canRead =
+    isSampleDataMode ||
+    (principal ? can(principal, 'content.read', undefined, effectiveActions) : false);
+
+  if (!canRead) {
+    // No content.read: show greeting and permission block, don't call the library API
+    return (
+      <div className="space-y-8">
+        <Heading level={1} typeRole="screenTitle">
+          {t('library:home.greeting', { name: principal?.displayName ?? '' })}
+        </Heading>
+        <StatusBlock
+          state="permission"
+          title={t('common:state.permission.title')}
+          body={t('common:state.permission.body')}
+        />
+      </div>
+    );
+  }
 
   if (isSampleDataMode) {
     return <SampleHomePage locale={locale} denied={denied} />;
@@ -96,7 +118,13 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
                 formatLabel={t(cardFormatKey(card.type))}
                 durationBadge={
                   card.durationBand ? (
-                    <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
+                    <DurationBadge
+                      bandLabel={t(`library:duration.${card.durationBand}`)}
+                      formatLabel={(s) => {
+                        const m = Math.round(s / 60);
+                        return m < 1 ? t('library:durationFormat.lessThanMinute') : t('library:durationFormat.minutes', { count: m });
+                      }}
+                    />
                   ) : null
                 }
                 href={`/content/${card.resourceId}`}
@@ -210,7 +238,13 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
                       imageUrl={card.coverImageUrl}
                       durationBadge={
                         card.durationBand ? (
-                          <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
+                          <DurationBadge
+                            bandLabel={t(`library:duration.${card.durationBand}`)}
+                            formatLabel={(s) => {
+                              const m = Math.round(s / 60);
+                              return m < 1 ? t('library:durationFormat.lessThanMinute') : t('library:durationFormat.minutes', { count: m });
+                            }}
+                          />
                         ) : null
                       }
                       saved={card.saved}

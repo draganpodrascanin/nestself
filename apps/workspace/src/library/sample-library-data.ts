@@ -7,12 +7,14 @@
 import {
   SAMPLE_CONTENT_RESOURCES,
   SAMPLE_CATEGORY_LABELS,
+  SAMPLE_EDITORIAL_STAFF,
+  SAMPLE_PUBLICATION_DATES,
 } from '@nestself/sample-data';
 import type {
   SampleContentResource,
   SampleContentVariant,
 } from '@nestself/sample-data';
-import type { LibraryCard, LibraryContentDetail, SavedItem } from '@nestself/contracts';
+import type { LibraryCard, LibraryContentDetail } from '@nestself/contracts';
 
 function findVariant(
   resource: SampleContentResource,
@@ -67,6 +69,7 @@ export function sampleContentCards(locale: string): LibraryCard[] {
 export function sampleContentDetail(
   contentId: string,
   locale: string,
+  options?: { authorLabel?: string },
 ): LibraryContentDetail | null {
   const resource = SAMPLE_CONTENT_RESOURCES.find((r) => r.id === contentId);
   if (!resource) return null;
@@ -74,6 +77,14 @@ export function sampleContentDetail(
   if (resource.scenario !== 'all_eligible' && resource.scenario !== 'org_a') return null;
 
   const variant = findVariant(resource, locale);
+
+  // Derive reviewer from the editorial staff fixture, matching by discipline
+  const reviewer = SAMPLE_EDITORIAL_STAFF.find(
+    (s) =>
+      s.templateKey === 'content_reviewer' &&
+      s.disciplines.includes(resource.reviewDiscipline),
+  );
+
   return {
     id: resource.id,
     type: resource.type,
@@ -93,9 +104,9 @@ export function sampleContentDetail(
     },
     secondaryCategories: [],
     topics: [],
-    authorName: 'Editorial team',
-    reviewerName: null,
-    reviewedAt: null,
+    authorName: options?.authorLabel ?? '',
+    reviewerName: reviewer?.displayName ?? null,
+    reviewedAt: reviewer ? new Date(SAMPLE_PUBLICATION_DATES.liveFrom) : null,
     sources: [],
     media: [],
     relatedResources: [],
@@ -105,11 +116,4 @@ export function sampleContentDetail(
     playbackPosition: null,
     replacementLink: null,
   };
-}
-
-/**
- * Returns sample saved items (empty by default; sample mode has no persistence).
- */
-export function sampleSavedItems(): SavedItem[] {
-  return [];
 }

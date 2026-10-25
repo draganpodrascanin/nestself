@@ -1,3 +1,4 @@
+import { Fragment, useState } from 'react';
 import { createFileRoute, Outlet, Link, useMatches, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,8 +15,9 @@ import {
   BookmarkSimple,
   Compass,
   PaperPlaneTilt,
+  DotsThree,
 } from '@phosphor-icons/react';
-import { AppShell, NavItem } from '@nestself/ui';
+import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
@@ -43,11 +45,15 @@ function AuthenticatedLayout() {
   const { t } = useTranslation(['common', 'workspace', 'library']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
   // Permission checks
+  const canRead = principal
+    ? can(principal, 'content.read', undefined, effectiveActions)
+    : false;
   const canBookmark = principal
     ? can(principal, 'content.bookmark', undefined, effectiveActions)
     : false;
@@ -60,10 +66,12 @@ function AuthenticatedLayout() {
   const showAccess =
     showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
-  // Build nav items — Saved shown only when content.bookmark is available
+  // Build nav items — Explore hidden without content.read, Saved without content.bookmark
   const coreNavItems: NavEntry[] = [
     { to: '/', icon: House, label: t('library:nav.home') },
-    { to: '/explore', icon: Compass, label: t('library:nav.explore') },
+    ...(isSampleDataMode || canRead
+      ? [{ to: '/explore', icon: Compass, label: t('library:nav.explore') }]
+      : []),
     ...(canBookmark
       ? [{ to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') }]
       : []),
@@ -97,57 +105,111 @@ function AuthenticatedLayout() {
   const allNavItems = [...coreNavItems, ...prototypeItems, ...managerNav, ...hrNav, ...accessNav];
 
   /**
-   * Bottom bar: 5 slots. Home, Explore, (Saved if permitted), My requests, Settings.
-   * Settings was unreachable below 1024 px when slice(0,4) excluded it.
+   * Bottom bar: up to 5 slots.
+   * When overflow items exist (Manage, HR, Access, prototype screens), the
+   * last slot becomes "More" which opens a bottom sheet listing everything
+   * not already in the bar. Settings moves into the sheet in that case.
    */
-  const bottomBarItems = coreNavItems.slice(0, 5);
+  const overflowItems = allNavItems.filter(
+    (item) => !coreNavItems.slice(0, 4).some((c) => c.to === item.to),
+  );
+  const hasOverflow = overflowItems.length > 1; // >1 because Settings alone is fine
+  const bottomBarItems = hasOverflow ? coreNavItems.slice(0, 4) : coreNavItems.slice(0, 5);
+  // When overflow, include Settings + everything else not in the first 4 core items
+  const moreSheetItems = hasOverflow ? overflowItems : [];
 
-  const renderNavItemList = (
-    items: typeof allNavItems,
-    variant: 'sidebar' | 'bottom' = 'sidebar',
-  ) =>
-    items.map((item, index) => {
-      const prevGroup = items.slice(0, index).reverse().find((i) => i.group)?.group;
-      const groupLabel =
-        variant === 'sidebar' && item.group && item.group !== prevGroup
-          ? item.group
-          : null;
+  // ---------------------------------------------------------------------------
+  // Sidebar rendering — groups are semantic (`role="group"` + `aria-labelledby`)
+  // ---------------------------------------------------------------------------
 
-      return (
-        <div key={item.to}>
-          {groupLabel ? (
-            <p className="px-2 pt-4 pb-1 type-metadata text-text-secondary" role="presentation">
-              {groupLabel}
+  const renderSidebarNav = (items: NavEntry[]) => {
+    const groups: { label: string | null; items: NavEntry[] }[] = [];
+    for (const item of items) {
+      const last = groups[groups.length - 1];
+      const itemGroup = item.group ?? null;
+      if (!last || last.label !== itemGroup) {
+        groups.push({ label: itemGroup, items: [item] });
+      } else {
+        last.items.push(item);
+      }
+    }
+
+    return groups.map((group, gi) => {
+      const navItems = group.items.map((item) => (
+        <NavItem
+          key={item.to}
+          variant="sidebar"
+          href={item.to}
+          icon={item.icon}
+          label={item.label}
+          active={
+            item.to === '/'
+              ? matches[matches.length - 1]?.pathname === '/'
+              : isActive(item.to)
+          }
+          render={(props) => (
+            <Link
+              to={item.to}
+              className={props.className}
+              aria-current={props['aria-current']}
+            >
+              {props.children}
+            </Link>
+          )}
+        />
+      ));
+
+      if (group.label) {
+        const labelId = `nav-group-${gi}`;
+        return (
+          <div key={`group-${gi}`} role="group" aria-labelledby={labelId}>
+            <p id={labelId} className="px-2 pt-4 pb-1 type-metadata text-text-secondary">
+              {group.label}
             </p>
-          ) : null}
-          <NavItem
-            variant={variant}
-            href={item.to}
-            icon={item.icon}
-            label={item.label}
-            active={
-              item.to === '/'
-                ? matches[matches.length - 1]?.pathname === '/'
-                : isActive(item.to)
-            }
-            render={(props) => (
-              <Link
-                to={item.to}
-                className={props.className}
-                aria-current={props['aria-current']}
-              >
-                {props.children}
-              </Link>
-            )}
-          />
-        </div>
-      );
+            {navItems}
+          </div>
+        );
+      }
+      return <Fragment key={`group-${gi}`}>{navItems}</Fragment>;
     });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bottom bar rendering — wrapper carries flex-child classes so NavItem can
+  // shrink and truncate at narrow widths (the wrapper was previously a plain
+  // <div> that defeated `flex-1 basis-0 min-w-0`).
+  // ---------------------------------------------------------------------------
+
+  const renderBottomBarItems = (items: NavEntry[]) =>
+    items.map((item) => (
+      <div key={item.to} className="flex-1 basis-0 min-w-0">
+        <NavItem
+          variant="bottom"
+          href={item.to}
+          icon={item.icon}
+          label={item.label}
+          active={
+            item.to === '/'
+              ? matches[matches.length - 1]?.pathname === '/'
+              : isActive(item.to)
+          }
+          render={(props) => (
+            <Link
+              to={item.to}
+              className={props.className}
+              aria-current={props['aria-current']}
+            >
+              {props.children}
+            </Link>
+          )}
+        />
+      </div>
+    ));
 
   const sidebar = (
     <nav aria-label={t('common:nav.menu')} className="gap-1 p-4 flex flex-col">
       <p className="px-2 py-3 type-label text-primary">NestSelf</p>
-      {renderNavItemList(allNavItems)}
+      {renderSidebarNav(allNavItems)}
     </nav>
   );
 
@@ -163,7 +225,45 @@ function AuthenticatedLayout() {
 
   const bottomBar = (
     <nav aria-label={t('common:nav.menu')} className="py-1 flex items-center justify-around">
-      {renderNavItemList(bottomBarItems, 'bottom')}
+      {renderBottomBarItems(bottomBarItems)}
+      {hasOverflow ? (
+        <div className="flex-1 basis-0 min-w-0">
+          <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+            <SheetTrigger>
+              <NavItem
+                variant="bottom"
+                href="#more"
+                icon={DotsThree}
+                label={t('library:nav.more')}
+                render={(props) => (
+                  <button type="button" className={props.className}>
+                    {props.children}
+                  </button>
+                )}
+              />
+            </SheetTrigger>
+            <SheetContent
+              title={t('library:nav.more')}
+              side="bottom"
+              closeLabel={t('common:action.close', { defaultValue: 'Close' })}
+            >
+              <nav aria-label={t('library:nav.more')} className="flex flex-col gap-1">
+                {moreSheetItems.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMoreOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-control text-text no-underline hover:bg-tint transition"
+                  >
+                    <item.icon size={20} aria-hidden />
+                    <span className="type-body">{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
+      ) : null}
     </nav>
   );
 

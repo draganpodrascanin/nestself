@@ -15,7 +15,7 @@ import {
 } from '@nestself/contracts';
 import type { ActiveContext } from '@nestself/contracts';
 import type { ApiClient } from '@nestself/api-client';
-import { ApiError, libraryKeys, savedKeys } from '@nestself/api-client';
+import { ApiError, libraryKeys } from '@nestself/api-client';
 
 // ---------------------------------------------------------------------------
 // Content detail
@@ -40,26 +40,6 @@ export function libraryContentDetailOptions(
       if (error instanceof ApiError && error.status === 404) return false;
       return failureCount < 1;
     },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Saved items
-// ---------------------------------------------------------------------------
-
-export function savedItemsListOptions(
-  client: ApiClient,
-  ctx: ActiveContext,
-  locale: string,
-) {
-  return queryOptions({
-    queryKey: savedKeys.list(ctx, locale),
-    queryFn: () =>
-      client.request('/api/me/saved', {
-        schema: SavedItemsListSchema,
-        headers: { 'Accept-Language': locale },
-      }),
-    staleTime: 60_000,
   });
 }
 

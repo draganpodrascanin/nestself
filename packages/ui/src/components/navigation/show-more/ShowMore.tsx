@@ -40,34 +40,43 @@ export function ShowMore({
   const [announced, setAnnounced] = useState('');
   const prevLoadingRef = useRef(loading);
 
-  useEffect(() => {
-    if (!addedAnnouncement) {
-      // No announcement: schedule a clear (not synchronous to satisfy the lint rule)
-      const clearId = setTimeout(() => setAnnounced(''), 0);
-      return () => clearTimeout(clearId);
-    }
-    // Clear then re-set so repeated identical announcements are still picked up
-    const clearId = setTimeout(() => setAnnounced(''), 0);
-    const setId = setTimeout(() => setAnnounced(addedAnnouncement), 50);
-    return () => {
-      clearTimeout(clearId);
-      clearTimeout(setId);
-    };
-  }, [addedAnnouncement]);
+  // Only announce/focus after a user-triggered click on "Show more".
+  // Prevents spurious announcements on first paint, refetch, or item removal.
+  const userTriggeredRef = useRef(false);
 
-  // Move focus to the first new card when a load completes
+  const handleClick = () => {
+    userTriggeredRef.current = true;
+    onLoadMore();
+  };
+
+  // Single effect: announce and focus only when a user-triggered load finishes
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
     prevLoadingRef.current = loading;
 
-    if (wasLoading && !loading && addedAnnouncement && focusTargetRef?.current) {
-      focusTargetRef.current.focus({ preventScroll: false });
+    if (userTriggeredRef.current && wasLoading && !loading && addedAnnouncement) {
+      userTriggeredRef.current = false;
+
+      // Focus the first new item
+      if (focusTargetRef?.current) {
+        focusTargetRef.current.focus({ preventScroll: false });
+      }
+
+      // Clear then re-set so repeated identical announcements are still picked up
+      const clearId = setTimeout(() => setAnnounced(''), 0);
+      const setId = setTimeout(() => setAnnounced(addedAnnouncement), 50);
+      return () => {
+        clearTimeout(clearId);
+        clearTimeout(setId);
+      };
+    }
+
+    // Not user-triggered: keep region empty (avoids stale text from prior loads)
+    if (!userTriggeredRef.current) {
+      const clearId = setTimeout(() => setAnnounced(''), 0);
+      return () => clearTimeout(clearId);
     }
   }, [loading, addedAnnouncement, focusTargetRef]);
-
-  const handleClick = () => {
-    onLoadMore();
-  };
 
   // Always render the container so the live region stays mounted and focus
   // doesn't drop to <body> when the last page loads.

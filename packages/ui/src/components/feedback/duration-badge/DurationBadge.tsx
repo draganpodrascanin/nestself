@@ -8,19 +8,11 @@ export interface DurationBadgeProps {
   /** Duration band label text (e.g. "Under 5 min"). */
   bandLabel?: string;
   /**
-   * Formatter for the seconds value. When provided, replaces the built-in
-   * English fallback (`"<1 min"` / `"5 min"`). Use this to supply translated
-   * labels from the host app.
+   * Formatter for the seconds value. Required when `durationSeconds` is used,
+   * so the host app supplies a translated label rather than falling back to English.
    */
-  formatLabel?: (seconds: number) => string;
+  formatLabel: (seconds: number) => string;
   className?: string;
-}
-
-/** English-only fallback when no `formatLabel` is provided. */
-function formatDurationFallback(seconds: number): string {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 1) return '<1 min';
-  return `${minutes} min`;
 }
 
 export function DurationBadge({
@@ -30,7 +22,7 @@ export function DurationBadge({
   className,
 }: DurationBadgeProps) {
   const displayText = durationSeconds != null
-    ? (formatLabel ?? formatDurationFallback)(durationSeconds)
+    ? formatLabel(durationSeconds)
     : bandLabel ?? null;
 
   if (!displayText) return null;
