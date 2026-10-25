@@ -328,10 +328,10 @@ describe('SSO connection schemas (D-12, 5.4)', () => {
 
   it('SsoConnectionCreateRequestSchema enforces the slug pattern', () => {
     const base = { orgId: 'org_sample', protocol: 'SAML' };
-    for (const slug of ['a', 'abcdefghijklm', 'Acme', 'acme_co', 'acme.co', '']) {
+    for (const slug of ['a', 'abcdefghijkl', 'abcdefghijklm', 'Acme', 'acme_co', 'acme.co', '']) {
       expect(SsoConnectionCreateRequestSchema.safeParse({ ...base, slug }).success, slug).toBe(false);
     }
-    for (const slug of ['ac', 'abcdefghijkl', 'acme-2']) {
+    for (const slug of ['ac', 'abcdefghijk', 'acme-2']) {
       expect(SsoConnectionCreateRequestSchema.safeParse({ ...base, slug }).success, slug).toBe(true);
     }
     expect(SsoConnectionCreateRequestSchema.safeParse(base).success).toBe(false);

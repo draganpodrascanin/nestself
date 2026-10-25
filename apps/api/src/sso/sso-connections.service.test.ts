@@ -22,6 +22,7 @@ import { SsoConnectionsService } from './sso-connections.service.js';
 
 const ACTOR = { userId: 'user_nikola', sessionId: 'sess_1' } as Principal;
 const ORG = 'org_sample';
+const TX = { tx: 'scoped' };
 const SP = { entityId: 'urn:amazon:cognito:sp:pool', acsUrl: 'https://auth.example/saml2/idpresponse' };
 
 class MemoryRepo {
@@ -63,13 +64,15 @@ class MemoryRepo {
     this.connections.set(row.id, row);
     return row;
   });
-  updateConnection = vi.fn(async (id: string, patch: SsoConnectionPatch) => {
+  updateConnection = vi.fn(
+    async (id: string, patch: SsoConnectionPatch, _tx?: unknown, opts: { fromStatus?: string } = {}) => {
     const row = this.connections.get(id);
-    if (!row) return null;
+    if (!row || (opts.fromStatus && row.status !== opts.fromStatus)) return null;
     const next = { ...row, ...patch };
     this.connections.set(id, next);
     return next;
-  });
+  },
+  );
   findDomainByName = vi.fn(async (domain: string) => [...this.domains.values()].find((d) => d.domain === domain) ?? null);
   addDomain = vi.fn(async (input: { connectionId: string; domain: string; verificationToken: string }) => {
     const row = { id: `ssod_${++this.seq}`, verifiedAt: null, ...input };
@@ -102,7 +105,9 @@ function setup() {
   const events: AuditEventInput[] = [];
   const audit = { record: vi.fn(async (e: AuditEventInput) => void events.push(e)) };
   const dns = new FakeDnsTxtResolver();
+  const db = { withOrgScope: vi.fn(async (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
   const service = new SsoConnectionsService(
+    db as never,
     repo as never,
     organizations as never,
     orgUnits as never,
@@ -112,7 +117,7 @@ function setup() {
     dns,
     { apiPublicUrl: 'http://api.test', spMetadata: SP },
   );
-  return { repo, idp, events, dns, service };
+  return { repo, idp, events, dns, db, service };
 }
 
 const SAML: SsoConnectionCreateRequest = {
@@ -415,6 +420,56 @@ describe('SsoConnectionsService', () => {
 
     it('404 for an unknown connection', async () => {
       await expectApiError(ctx.service.update('sso_missing', { jitProvisioning: true }, ACTOR), 404, 'not_found');
+    });
+  });
+
+  describe('tenant scope, conditional transitions and lastTestedAt (SSO-R-01)', () => {
+    it('every write runs in the connection organization scope with its transaction', async () => {
+      const conn = await connectionIn(ctx, 'TESTING', new Date());
+      await ctx.service.activate(conn.id, ACTOR);
+      expect(ctx.db.withOrgScope).toHaveBeenCalled();
+      for (const call of ctx.db.withOrgScope.mock.calls) expect(call[0]).toBe(ORG);
+      expect(ctx.repo.createConnection).toHaveBeenCalledWith(expect.anything(), TX);
+      expect(ctx.repo.addDomain).toHaveBeenCalledWith(expect.anything(), TX);
+      expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(conn.id, { status: 'ACTIVE' }, TX, { fromStatus: 'TESTING' });
+    });
+
+    it('a status that changed meanwhile answers 409 and records nothing', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      ctx.repo.updateConnection.mockResolvedValueOnce(null);
+      await expectApiError(ctx.service.update(conn.id, { status: 'SUSPENDED' }, ACTOR), 409, 'sso_connection_state');
+      expect(ctx.events).toEqual([]);
+    });
+
+    it('a reset to DRAFT clears lastTestedAt', async () => {
+      const conn = await connectionIn(ctx, 'TESTING', new Date());
+      const res = await ctx.service.update(conn.id, { status: 'DRAFT' }, ACTOR);
+      expect(res.lastTestedAt).toBeNull();
+    });
+
+    it('a provider change while TESTING clears lastTestedAt; other fields keep it', async () => {
+      const conn = await connectionIn(ctx, 'TESTING', new Date());
+      expect((await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR)).lastTestedAt).not.toBeNull();
+      expect((await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v9' }, ACTOR)).lastTestedAt).toBeNull();
+      await expectApiError(ctx.service.activate(conn.id, ACTOR), 409, 'sso_connection_state');
+    });
+
+    it('every test clears lastTestedAt', async () => {
+      const conn = await connectionIn(ctx, 'TESTING', new Date());
+      await ctx.service.test(conn.id, ACTOR);
+      expect(ctx.repo.connections.get(conn.id)?.lastTestedAt).toBeNull();
+      await expectApiError(ctx.service.activate(conn.id, ACTOR), 409, 'sso_connection_state');
+    });
+
+    it('a reset to DRAFT carrying a client secret is refused with 422', async () => {
+      const conn = await ctx.service.create(
+        { ...SAML, protocol: 'OIDC', metadataUrl: undefined, oidcIssuer: 'https://login.acme.example', oidcClientId: 'c', oidcClientSecret: 's' },
+        ACTOR,
+      );
+      await ctx.repo.updateConnection(conn.id, { status: 'TESTING' });
+      await expectApiError(ctx.service.update(conn.id, { status: 'DRAFT', oidcClientSecret: 'new' }, ACTOR), 422, 'validation');
+      expect(ctx.repo.connections.get(conn.id)?.status).toBe('TESTING');
+      expect(ctx.idp.deleteProvider).not.toHaveBeenCalled();
     });
   });
 

@@ -14,6 +14,13 @@
  * identity provider keeps it ("staged" registration). Discovery ignores
  * DRAFT connections either way.
  *
+ * Writes run in the connection's tenant scope (`withOrgScope`, so row-level
+ * security checks them) and share that transaction with their audit
+ * events; status changes are conditional on the status read (a concurrent
+ * change answers 409). Any reset, re-test or provider change while TESTING
+ * clears `lastTestedAt`, so activation always follows a test sign-in
+ * against the current configuration (SSO-R-01).
+ *
  * Every status change audits `sso_connection.changed { from, to }`
  * (SSO-R-02). Audit details never carry the client secret or the domain
  * verification token.
@@ -37,6 +44,8 @@ import { ApiHttpException } from '../common/api-error.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import type { AuditAction } from '../audit/audit-events.js';
 import { isPublicEmailDomain } from '../auth/constants.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { DbService } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { IdentityResolutionService } from '../auth/identity-resolution.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -110,6 +119,13 @@ function secretNotApplicable(): ApiHttpException {
   return validation('oidcClientSecret applies to OIDC connections only', { field: 'oidcClientSecret' });
 }
 
+/** 422 for a well-formed slug whose provider name would exceed 20 characters. */
+export function slugTooLong(): ApiHttpException {
+  return validation('The provider name built from the slug exceeds 20 characters; choose a shorter slug', {
+    field: 'slug',
+  });
+}
+
 /** 422 for `idpInitiatedAllowed: true` (SSO-R-12, D-12). */
 export function idpInitiatedRefused(): ApiHttpException {
   return validation('IdP-initiated sign-in is not available', { field: 'idpInitiatedAllowed' });
@@ -125,6 +141,7 @@ function sameValue(a: string, b: string): boolean {
 @Injectable()
 export class SsoConnectionsService {
   constructor(
+    private readonly db: DbService,
     private readonly repo: SsoRepository,
     private readonly organizations: OrganizationsRepository,
     private readonly orgUnits: OrgUnitsRepository,
@@ -181,21 +198,23 @@ export class SsoConnectionsService {
 
     let row: SsoConnectionRow;
     try {
-      row = await this.repo.createConnection(values);
+      row = await this.db.withOrgScope(body.orgId, async (tx) => {
+        const created = await this.repo.createConnection(values, tx);
+        await this.audit.record(
+          this.event('sso_connection.created', created, actor, {
+            protocol: created.protocol,
+            cognitoProviderName: created.cognitoProviderName,
+            jitProvisioning: created.jitProvisioning,
+            providerStaged: stage,
+          }),
+        );
+        return created;
+      });
     } catch (err) {
       if (stage) await this.idp.deleteProvider(name).catch(() => undefined);
       if (isUniqueViolation(err)) throw conflict('A connection with this provider name already exists');
       throw err;
     }
-
-    await this.audit.record(
-      this.event('sso_connection.created', row, actor, {
-        protocol: row.protocol,
-        cognitoProviderName: row.cognitoProviderName,
-        jitProvisioning: row.jitProvisioning,
-        providerStaged: stage,
-      }),
-    );
     return this.toResponse({ ...row, domains: [] });
   }
 
@@ -218,6 +237,11 @@ export class SsoConnectionsService {
     if (body.defaultOrgUnitId) await this.assertOrgUnit(conn.orgId, body.defaultOrgUnitId);
     if (body.oidcClientSecret !== undefined && (body.protocol ?? conn.protocol) !== 'OIDC') {
       throw secretNotApplicable();
+    }
+    if (body.oidcClientSecret !== undefined && to === 'DRAFT') {
+      throw validation('A reset to DRAFT removes the provider; send the client secret in a separate request', {
+        field: 'oidcClientSecret',
+      });
     }
 
     const patch: SsoConnectionPatch = {};
@@ -262,19 +286,24 @@ export class SsoConnectionsService {
 
     if (to !== from) patch.status = to;
     if (protocolChange) patch.cognitoProviderName = name;
-    let updated: SsoConnectionRow | null;
+    // A reset or a provider change while TESTING invalidates the last test sign-in.
+    if (to === 'DRAFT' || (from === 'TESTING' && providerChanged)) patch.lastTestedAt = null;
+
+    let updated: SsoConnectionRow;
     try {
-      updated = await this.repo.updateConnection(id, patch);
+      updated = await this.db.withOrgScope(conn.orgId, async (tx) => {
+        const row = await this.repo.updateConnection(id, patch, tx, { fromStatus: from });
+        if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
+        if (changedFields.length > 0) {
+          await this.audit.record(this.event('sso_connection.updated', row, actor, { fields: changedFields }));
+        }
+        if (to !== from) await this.recordStatusChange(row, actor, from, to);
+        return row;
+      });
     } catch (err) {
       if (isUniqueViolation(err)) throw conflict('A connection with this provider name already exists');
       throw err;
     }
-    if (!updated) throw notFound('SSO connection not found');
-
-    if (changedFields.length > 0) {
-      await this.audit.record(this.event('sso_connection.updated', updated, actor, { fields: changedFields }));
-    }
-    if (to !== from) await this.recordStatusChange(updated, actor, from, to);
     return this.toResponse({ ...updated, domains: conn.domains });
   }
 
@@ -321,22 +350,23 @@ export class SsoConnectionsService {
 
     let row: SsoDomainRow;
     try {
-      row = await this.repo.addDomain({
-        connectionId: conn.id,
-        domain,
-        verificationToken: randomBytes(16).toString('hex'),
+      row = await this.db.withOrgScope(conn.orgId, async (tx) => {
+        const added = await this.repo.addDomain(
+          { connectionId: conn.id, domain, verificationToken: randomBytes(16).toString('hex') },
+          tx,
+        );
+        await this.audit.record(
+          this.event('sso_domain.added', conn, actor, { connectionId: conn.id, domain: added.domain }, {
+            recordType: 'sso_domain',
+            recordId: added.id,
+          }),
+        );
+        return added;
       });
     } catch (err) {
       if (isUniqueViolation(err)) throw conflict('This domain is already attached to a connection');
       throw err;
     }
-
-    await this.audit.record(
-      this.event('sso_domain.added', conn, actor, { connectionId: conn.id, domain: row.domain }, {
-        recordType: 'sso_domain',
-        recordId: row.id,
-      }),
-    );
     return toDomainResponse(row);
   }
 
@@ -368,13 +398,16 @@ export class SsoConnectionsService {
       });
     }
 
-    const verified = (await this.repo.markDomainVerified(row.id, new Date())) ?? row;
-    await this.audit.record(
-      this.event('sso_domain.verified', conn, actor, { connectionId: conn.id, domain: row.domain }, {
-        recordType: 'sso_domain',
-        recordId: row.id,
-      }),
-    );
+    const verified = await this.db.withOrgScope(conn.orgId, async (tx) => {
+      const marked = (await this.repo.markDomainVerified(row.id, new Date(), tx)) ?? row;
+      await this.audit.record(
+        this.event('sso_domain.verified', conn, actor, { connectionId: conn.id, domain: row.domain }, {
+          recordType: 'sso_domain',
+          recordId: row.id,
+        }),
+      );
+      return marked;
+    });
     return toDomainResponse(verified);
   }
 
@@ -401,15 +434,24 @@ export class SsoConnectionsService {
     }
     const info = await this.idp.describeProvider(conn.cognitoProviderName).catch(() => null);
 
-    const updated =
-      (await this.repo.updateConnection(conn.id, {
-        status: 'TESTING',
-        ...(info ? { certificateExpiresAt: info.certificateExpiresAt } : {}),
-      })) ?? conn;
-    if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING');
-    await this.audit.record(
-      this.event('sso_connection.tested', updated, actor, { cognitoProviderName: conn.cognitoProviderName }),
-    );
+    // Every test needs a new test sign-in before activation (SSO-R-01).
+    await this.db.withOrgScope(conn.orgId, async (tx) => {
+      const updated = await this.repo.updateConnection(
+        conn.id,
+        {
+          status: 'TESTING',
+          lastTestedAt: null,
+          ...(info ? { certificateExpiresAt: info.certificateExpiresAt } : {}),
+        },
+        tx,
+        { fromStatus: conn.status },
+      );
+      if (!updated) throw connectionState('The connection changed meanwhile; reload and try again');
+      if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING');
+      await this.audit.record(
+        this.event('sso_connection.tested', updated, actor, { cognitoProviderName: conn.cognitoProviderName }),
+      );
+    });
 
     const query = new URLSearchParams({
       connection: conn.cognitoProviderName,
@@ -423,8 +465,12 @@ export class SsoConnectionsService {
     const conn = await this.load(id);
     if (conn.status !== 'TESTING') throw connectionState('Only a TESTING connection can be activated');
     this.assertActivatable(conn);
-    const updated = (await this.repo.updateConnection(conn.id, { status: 'ACTIVE' })) ?? conn;
-    await this.recordStatusChange(updated, actor, 'TESTING', 'ACTIVE');
+    const updated = await this.db.withOrgScope(conn.orgId, async (tx) => {
+      const row = await this.repo.updateConnection(conn.id, { status: 'ACTIVE' }, tx, { fromStatus: 'TESTING' });
+      if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
+      await this.recordStatusChange(row, actor, 'TESTING', 'ACTIVE');
+      return row;
+    });
     return this.toResponse({ ...updated, domains: conn.domains });
   }
 

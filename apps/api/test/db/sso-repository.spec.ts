@@ -115,6 +115,33 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
     expect((await repo.listActiveConnectionsWithCertificates()).map((c) => c.id)).toEqual([acmeId]);
   });
 
+  it('updateConnection with fromStatus only applies while the status still matches', async () => {
+    expect(await repo.updateConnection(otherId, { status: 'TESTING' }, undefined, { fromStatus: 'ACTIVE' })).toBeNull();
+    expect((await repo.findConnection(otherId))?.status).toBe('DRAFT');
+    expect((await repo.updateConnection(otherId, { status: 'TESTING' }, undefined, { fromStatus: 'DRAFT' }))?.status).toBe('TESTING');
+    await repo.updateConnection(otherId, { status: 'DRAFT' });
+  });
+
+  it('a write scoped to one organization cannot create a domain for another organization connection', async () => {
+    const err = await dbs
+      .withOrgScope(ORG, (tx) =>
+        repo.addDomain({ connectionId: otherId, domain: 'other-tenant.example', verificationToken: 'c'.repeat(32) }, tx),
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(String((err as { cause?: { message?: string } }).cause?.message ?? (err as Error).message)).toMatch(/row-level security/);
+    expect(await repo.findDomainByName('other-tenant.example')).toBeNull();
+    // A scoped update of another tenant's connection touches no row.
+    await dbs.withOrgScope(ORG, async (tx) => {
+      expect(await repo.updateConnection(otherId, { jitProvisioning: true }, tx)).toBeNull();
+    });
+    // The connection's own scope may write.
+    const own = await dbs.withOrgScope(OTHER, (tx) =>
+      repo.addDomain({ connectionId: otherId, domain: 'other-tenant.example', verificationToken: 'c'.repeat(32) }, tx),
+    );
+    expect(own.domain).toBe('other-tenant.example');
+  });
+
   it('row-level security hides another tenant connections and domains', async () => {
     await dbs.withOrgScope(OTHER, async (tx) => {
       expect(await repo.findConnection(acmeId, tx)).toBeNull();

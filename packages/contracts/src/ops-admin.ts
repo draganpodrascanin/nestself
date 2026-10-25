@@ -145,8 +145,11 @@ export type SsoConnectionStatus = z.infer<typeof SsoConnectionStatusSchema>;
  */
 export const SSO_CONNECTION_PATCH_STATUSES = ['DRAFT', 'ACTIVE', 'SUSPENDED'] as const;
 
-/** Builds the Cognito provider name `org-<slug>-saml|oidc` (at most 20 characters). */
-export const SSO_SLUG_PATTERN = /^[a-z0-9-]{2,12}$/;
+/**
+ * Builds the Cognito provider name `org-<slug>-saml|oidc`: 11 characters is
+ * the longest slug that keeps the name within 20 characters.
+ */
+export const SSO_SLUG_PATTERN = /^[a-z0-9-]{2,11}$/;
 
 /** One lowercase DNS label per segment, at least two segments, no scheme, path or `@`. */
 const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;

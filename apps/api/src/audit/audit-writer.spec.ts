@@ -241,6 +241,15 @@ describe('sanitizeDetails', () => {
     expect(result).toEqual({ nested: { safe: 1 } });
   });
 
+  it('removes the SSO client secret and domain verification token', () => {
+    const result = sanitizeDetails({
+      oidcClientSecret: 's',
+      verificationToken: 't',
+      nested: { oidcClientSecret: 's', verificationToken: 't', domain: 'acme.example' },
+    });
+    expect(result).toEqual({ nested: { domain: 'acme.example' } });
+  });
+
   it('truncates strings over 500 characters', () => {
     const longStr = 'a'.repeat(600);
     const result = sanitizeDetails({ info: longStr });

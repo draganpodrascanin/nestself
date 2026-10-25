@@ -1,9 +1,17 @@
 /**
  * SsoRepository: enterprise SSO connections and their email domains (D-12,
- * 3.4). Staff management (`/ops/sso-connections`) and home-realm discovery
- * read these in the system context (no tenant setting); both tables carry
- * row-level security, so a tenant-scoped transaction only sees its own
- * organization's rows.
+ * 3.4). Both tables carry row-level security: a tenant-scoped transaction
+ * (`withOrgScope`) sees and writes only its own organization's rows, and
+ * every write the SSO service makes runs in the connection's scope.
+ *
+ * Deliberately unscoped (system context, no tenant setting) reads:
+ * - `findConnectionByProviderName` and `findDomainByName`: uniqueness of the
+ *   provider name and of the domain is global, across organizations
+ *   (SSO-R-07, Review Focus 3 and 5), so they must see every tenant;
+ * - `listConnections` without a tenant transaction: the staff list spans
+ *   organizations (`sso.manage` is a platform action);
+ * - `findActiveConnectionForDomain`: home-realm discovery runs before any
+ *   organization is known.
  */
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
@@ -90,21 +98,24 @@ export class SsoRepository {
     return row!;
   }
 
-  /** Apply a patch; null when the connection does not exist. */
+  /**
+   * Apply a patch; null when the connection does not exist or, with
+   * `fromStatus`, is no longer in that status (a conditional transition).
+   */
   async updateConnection(
     id: string,
     patch: SsoConnectionPatch,
     tx?: DbExecutor,
+    opts: { fromStatus?: SsoConnectionRow['status'] } = {},
   ): Promise<SsoConnectionRow | null> {
+    const where = opts.fromStatus
+      ? and(eq(ssoConnections.id, id), eq(ssoConnections.status, opts.fromStatus))
+      : eq(ssoConnections.id, id);
     if (Object.keys(patch).length === 0) {
-      const [row] = await this.exec(tx).select().from(ssoConnections).where(eq(ssoConnections.id, id));
+      const [row] = await this.exec(tx).select().from(ssoConnections).where(where);
       return row ?? null;
     }
-    const [row] = await this.exec(tx)
-      .update(ssoConnections)
-      .set(patch)
-      .where(eq(ssoConnections.id, id))
-      .returning();
+    const [row] = await this.exec(tx).update(ssoConnections).set(patch).where(where).returning();
     return row ?? null;
   }
 

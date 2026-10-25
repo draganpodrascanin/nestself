@@ -284,6 +284,28 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(protocol.body.code).toBe('validation');
   });
 
+  it('a reset to DRAFT invalidates the test sign-in: reset -> re-test -> activate is 409 (SSO-R-01)', async () => {
+    const created = await post('', { orgId: ORG, slug: 'reset', protocol: 'SAML', metadataUrl: METADATA_URL });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+    const domain = await post(`/${id}/domains`, { domain: 'reset.example' });
+    expect(domain.status).toBe(201);
+    dns.setTxt(domain.body.txtRecordName as string, [domain.body.txtRecordValue as string]);
+    expect((await post(`/${id}/domains/${domain.body.id as string}/verify`)).status).toBe(200);
+    expect((await post(`/${id}/test`)).status).toBe(200);
+    await app.get(SsoRepository).updateConnection(id, { lastTestedAt: new Date() });
+
+    const reset = await patch(`/${id}`, { status: 'DRAFT' });
+    expect(reset.status).toBe(200);
+    expect(reset.body).toMatchObject({ status: 'DRAFT', lastTestedAt: null });
+    expect(await idp.listProviders()).not.toContain('org-reset-saml');
+
+    expect((await post(`/${id}/test`)).status).toBe(200);
+    const activate = await post(`/${id}/activate`);
+    expect(activate.status).toBe(409);
+    expect(activate.body.code).toBe('sso_connection_state');
+  });
+
   it('refuses a public email domain: 422 domain_blocklisted', async () => {
     const res = await post(`/${connectionId}/domains`, { domain: 'gmail.com' });
     expect(res.status).toBe(422);

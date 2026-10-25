@@ -48,6 +48,8 @@ const FORBIDDEN_KEYS = new Set([
   'idToken',
   'refreshToken',
   'secret',
+  'oidcClientSecret',
+  'verificationToken',
   'cookie',
   'authorization',
   'body',

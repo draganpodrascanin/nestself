@@ -37,20 +37,26 @@ import { WRITE_THROTTLE } from '../authz/throttles.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { SsoConnectionsService, idpInitiatedRefused } from './sso-connections.service.js';
+import { SsoConnectionsService, idpInitiatedRefused, slugTooLong } from './sso-connections.service.js';
 
 export const SsoConnectionListQuerySchema = z.object({ orgId: z.string().min(1).optional() });
 export type SsoConnectionListQuery = z.infer<typeof SsoConnectionListQuerySchema>;
 
+/** A slug of the allowed characters that is merely too long for the 20-character provider name. */
+const LONG_SLUG = /^[a-z0-9-]{12,}$/;
+
 /**
- * Body validation that answers `idpInitiatedAllowed: true` with 422
- * `validation` (a refused policy, not a malformed request); everything else
- * goes through the usual 400 `validation`.
+ * Body validation that answers refused policies with 422 `validation`
+ * rather than a malformed-request 400: `idpInitiatedAllowed: true`, and a
+ * well-formed slug too long for the provider name (the same 422 the service
+ * gives). Everything else goes through the usual 400 `validation`.
  */
 class SsoBodyPipe extends ZodValidationPipe {
   override transform(value: unknown) {
-    if (typeof value === 'object' && value !== null && (value as Record<string, unknown>)['idpInitiatedAllowed'] === true) {
-      throw idpInitiatedRefused();
+    if (typeof value === 'object' && value !== null) {
+      const body = value as Record<string, unknown>;
+      if (body['idpInitiatedAllowed'] === true) throw idpInitiatedRefused();
+      if (typeof body['slug'] === 'string' && LONG_SLUG.test(body['slug'])) throw slugTooLong();
     }
     return super.transform(value);
   }
