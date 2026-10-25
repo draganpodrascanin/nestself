@@ -134,8 +134,14 @@ describe('admin webinars (sample mode)', () => {
 
     const queue = await screen.findByTestId('webinar-moderator-queue');
     await waitFor(() => expect(within(queue).getByTestId('webinar-queue-attendance')).toHaveTextContent('Attending: 86'));
-    // The moderator sees the registration name on a raised hand (WBN-10).
-    expect(within(queue).getByRole('button', { name: 'Give the floor to Ana Kovač (sample)' })).toBeInTheDocument();
+    // The sample people come from the fixtures; the moderator sees the registration name on a raised hand (WBN-10).
+    await user.click(within(queue).getByRole('button', { name: 'Give the floor to Ana Nikolić' }));
+    // WBN-26: the speaker row offers Mute, then "Ask to unmute" once muted; a host never unmutes.
+    await user.click(await within(queue).findByRole('button', { name: 'Mute Ana Nikolić' }));
+    expect(await within(queue).findByRole('button', { name: 'Ask Ana Nikolić to unmute' })).toBeInTheDocument();
+    expect(within(queue).getByText(calls.webinar.moderation.muted)).toBeInTheDocument();
+    // The fixture's pending question waits for review.
+    expect(within(queue).getByText('Could you show the stretching example once more?')).toBeInTheDocument();
     expect(within(queue).getByRole('button', { name: calls.webinar.moderation.stopRecording })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: calls.webinar.console.pollTitle })).toBeInTheDocument();
     expect(screen.getByTestId('webinar-share-screen')).toBeInTheDocument();

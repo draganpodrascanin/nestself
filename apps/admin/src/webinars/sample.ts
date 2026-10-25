@@ -5,7 +5,17 @@
  * organisation picker from `SAMPLE_ORG`. Nothing is created, published or
  * canceled.
  */
-import { SAMPLE_ORG, SAMPLE_PRINCIPALS, SAMPLE_WEBINAR_ATTENDANCE, SAMPLE_WEBINARS } from '@nestself/sample-data';
+import {
+  SAMPLE_CALL_SESSIONS,
+  SAMPLE_ORG,
+  SAMPLE_PEOPLE,
+  SAMPLE_PRINCIPALS,
+  SAMPLE_WEBINAR_ATTENDANCE,
+  SAMPLE_WEBINAR_MESSAGES,
+  SAMPLE_WEBINAR_POLLS,
+  SAMPLE_WEBINARS,
+} from '@nestself/sample-data';
+import type { SampleWebinarContent } from '@nestself/video';
 import type { RecordingStatus, Webinar, WebinarAttendanceResponse, WebinarResponse } from '@nestself/contracts';
 
 type SampleWebinar = (typeof SAMPLE_WEBINARS)[number];
@@ -84,3 +94,34 @@ function holders(action: string): PickerOption[] {
 export const SAMPLE_PRESENTER_OPTIONS: readonly PickerOption[] = holders('event.present');
 export const SAMPLE_MODERATOR_OPTIONS: readonly PickerOption[] = holders('event.moderate');
 export const SAMPLE_ORGANIZATION_OPTIONS: readonly PickerOption[] = [{ value: SAMPLE_ORG.id, label: SAMPLE_ORG.name }];
+
+/** The sample webinar session whose participants wrote `SAMPLE_WEBINAR_MESSAGES`. */
+const SAMPLE_WEBINAR_SESSION_ID = 'call_session_sample_webinar';
+
+/**
+ * The live sample's content (sample-data rule): the people of the sample
+ * webinar session, named from `SAMPLE_PEOPLE` (attendees) and the webinar's
+ * hosts (first names), with `SAMPLE_WEBINAR_MESSAGES` and
+ * `SAMPLE_WEBINAR_POLLS`. Nothing is sent anywhere.
+ */
+export function sampleWebinarContent(): SampleWebinarContent {
+  const participants = SAMPLE_CALL_SESSIONS.find((session) => session.id === SAMPLE_WEBINAR_SESSION_ID)?.participants ?? [];
+  const hostNames = new Map(SAMPLE_WEBINARS.flatMap((webinar) => webinar.hosts).map((host) => [host.userId, host.displayName]));
+  const personName = (userId: string) => SAMPLE_PEOPLE.find((person) => person.id === userId)?.displayName ?? hostNames.get(userId) ?? userId;
+  const hosts = participants
+    .filter((participant) => participant.role === 'presenter' || participant.role === 'moderator')
+    .map((participant) => ({ participantId: participant.id, name: hostNames.get(participant.userId) ?? personName(participant.userId), role: participant.role }));
+  const attendees = participants
+    .filter((participant) => participant.role === 'attendee')
+    .map((participant) => ({ participantId: participant.id, name: personName(participant.userId), userId: participant.userId }));
+  return {
+    people: {
+      moderator: hosts.find((host) => host.role === 'moderator')?.name ?? '',
+      presenter: hosts.find((host) => host.role === 'presenter')?.name ?? '',
+      attendees: attendees.map(({ participantId, name }) => ({ participantId, name })),
+      hosts: hosts.map(({ participantId, name }) => ({ participantId, name })),
+    },
+    messages: SAMPLE_WEBINAR_MESSAGES,
+    polls: SAMPLE_WEBINAR_POLLS,
+  };
+}

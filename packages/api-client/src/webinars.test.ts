@@ -233,6 +233,25 @@ describe('webinar live routes', () => {
     expect(taken.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/participants/part_1/take-floor', method: 'POST' });
   });
 
+  it('mutes the floor holder, asks them to unmute and takes their consent, each answer checked', async () => {
+    const receive = { audio: 'receive', video: 'receive', content: 'receive' };
+    const muted = setup({ participantId: 'part_1', hasFloor: true, muted: true, capabilities: receive });
+    await expect(muted.api.muteParticipant('web_1', 'part_1')).resolves.toMatchObject({ muted: true });
+    expect(muted.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/participants/part_1/mute', method: 'POST', body: {} });
+
+    const asked = setup({ participantId: 'part_1', requested: true });
+    await expect(asked.api.requestUnmute('web_1', 'part_1')).resolves.toEqual({ participantId: 'part_1', requested: true });
+    expect(asked.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/participants/part_1/unmute-request', method: 'POST' });
+
+    const unmuted = setup({ participantId: 'part_1', hasFloor: true, muted: false, capabilities: { ...receive, audio: 'send_receive' } });
+    await expect(unmuted.api.unmuteParticipant('web_1', 'part_1')).resolves.toMatchObject({ muted: false });
+    expect(unmuted.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/participants/part_1/unmute', method: 'POST' });
+
+    // An answer that does not match the contract is refused.
+    const wrong = setup({ participantId: 'part_1', hasFloor: true, muted: false, capabilities: receive });
+    await expect(wrong.api.muteParticipant('web_1', 'part_1')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
   it('creates, opens, closes and votes in polls; the vote carries the option only', async () => {
     const created = setup(POLL);
     await created.api.createPoll('web_1', { question: 'Which break?', options: ['A walk', 'Tea'] });

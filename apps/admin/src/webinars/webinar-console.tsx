@@ -68,6 +68,7 @@ import { hostJoinWindow, useLocalized, useNow, useWebinarWhen } from './webinar-
 import { useZonedFormat } from '../calls/format';
 import { canListWebinars } from './route-gate';
 import { webinarRoomClient } from './webinar-room-client';
+import { sampleWebinarContent } from './sample';
 import { webinarsApi } from './webinars-api';
 
 const MINUTE_MS = 60_000;
@@ -95,7 +96,8 @@ function useHostClient(webinar: WebinarResponse, role: WebinarHostRole | null, c
   const { principal, effectiveActions } = useAuth();
   const [sample] = useState(() => {
     if (!isSampleDataMode) return null;
-    const server = createSampleWebinarServer({ webinarId: webinar.id, status: 'published', pending: true, hands: true, poll: 'prepared', chat: true });
+    // The sample webinar's people, messages and polls (sample-data rule), with two raised hands to give the floor to.
+    const server = createSampleWebinarServer({ webinarId: webinar.id, status: 'published', hands: true, content: sampleWebinarContent() });
     const sampleHost = sampleRole(effectiveActions);
     return new FakeWebinarClient({ server, role: sampleHost, name: principal?.displayName ?? null, audio: controller });
   });

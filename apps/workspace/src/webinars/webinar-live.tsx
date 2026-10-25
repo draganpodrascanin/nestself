@@ -26,7 +26,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { RecordingStatus, WebinarJoinResponse, WebinarResponse } from '@nestself/contracts';
 import {
   ChatPanel,
-  FAKE_WEBINAR_SAMPLE_PEOPLE,
   FakeCallSessionController,
   FakeWebinarClient,
   PollPanel,
@@ -44,6 +43,7 @@ import { isWebinarNotOpen, mapWebinarError } from './map-webinar-error';
 import { webinarRoomClient } from './webinar-room-client';
 import { webinarsApi } from './webinars-api';
 import { useLocalized } from './webinar-format';
+import { sampleAttendee, sampleWebinarContent } from './sample';
 import { Reveal } from '../calls/reveal';
 
 type Phase = 'prejoin' | 'stage';
@@ -107,11 +107,11 @@ function createAttendeeClient({ webinar, controller, userId, onUnavailable }: At
   });
 }
 
-/** Sample mode: one fake client on a scripted sample webinar that is already live. */
-function createSampleClient(webinar: WebinarResponse, controller: CallSessionControllerApi): WebinarClientApi {
-  const server = createSampleWebinarServer({ webinarId: webinar.id, status: 'live', recording: true, poll: 'open', chat: true });
-  const [ana] = FAKE_WEBINAR_SAMPLE_PEOPLE.attendees;
-  return new FakeWebinarClient({ server, role: 'attendee', participantId: ana.participantId, name: ana.name, audio: controller });
+/** Sample mode: one fake client on the sample webinar's people, messages and polls, already live. */
+function createSampleClient(webinar: WebinarResponse, controller: CallSessionControllerApi, userId: string | null): WebinarClientApi {
+  const server = createSampleWebinarServer({ webinarId: webinar.id, status: 'live', recording: true, content: sampleWebinarContent() });
+  const me = sampleAttendee(userId ?? undefined);
+  return new FakeWebinarClient({ server, role: 'attendee', participantId: me.participantId, name: me.name, audio: controller });
 }
 
 /** Sample mode: the fake controller "connects" for an hour and a fake presenter appears. */
@@ -147,7 +147,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
   const clientOptions: AttendeeClientOptions = { webinar, controller, userId: principal?.userId ?? null, onUnavailable: () => setRoomUnavailable(true) };
   const [{ client, participantId }, setAttendee] = useState(() => ({
     participantId: null as string | null,
-    client: isSampleDataMode ? createSampleClient(webinar, controller) : createAttendeeClient(clientOptions, null),
+    client: isSampleDataMode ? createSampleClient(webinar, controller, clientOptions.userId) : createAttendeeClient(clientOptions, null),
   }));
 
   const status = useSnapshotStatus(client);

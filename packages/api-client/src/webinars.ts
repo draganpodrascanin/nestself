@@ -25,7 +25,9 @@ import {
   WebinarAttendanceResponseSchema,
   OpsOrganizationsResponseSchema,
   OpsOrgUnitsResponseSchema,
+  WebinarFloorMuteResponseSchema,
   WebinarFloorResponseSchema,
+  WebinarFloorUnmuteResponseSchema,
   WebinarHandRaiseResponseSchema,
   WebinarHostCandidatesResponseSchema,
   WebinarJoinResponseSchema,
@@ -44,6 +46,7 @@ import {
   WebinarRegistrationResponseSchema,
   WebinarResponseSchema,
   WebinarStatusResponseSchema,
+  WebinarUnmuteRequestResponseSchema,
   userRoomName,
   webinarRoomName,
 } from '@nestself/contracts';
@@ -202,19 +205,20 @@ export function createWebinarsApi(client: ApiClient) {
         schema: WebinarFloorResponseSchema,
       }),
 
-    /**
-     * Hosts mute the attendee who has the floor, and ask them to unmute; the
-     * attendee consents with `unmuteParticipant` (WBN-26). The answers are
-     * parsed by the webinar client; the contract names them with the API.
-     */
+    /** POST .../participants/:participantId/mute: a host mutes the floor holder, who keeps the floor (WBN-26). */
     muteParticipant: (webinarId: string, participantId: string) =>
-      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/mute`), { ...json('POST'), schema: z.unknown() }),
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/mute`), { ...json('POST'), schema: WebinarFloorMuteResponseSchema }),
 
+    /** POST .../unmute-request: a host asks the muted floor holder to unmute; nothing changes until they consent. */
     requestUnmute: (webinarId: string, participantId: string) =>
-      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute-request`), { ...json('POST'), schema: z.unknown() }),
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute-request`), {
+        ...json('POST'),
+        schema: WebinarUnmuteRequestResponseSchema,
+      }),
 
+    /** POST .../unmute: the attendee consents on their own participant, only while they hold the floor; a host never unmutes them. */
     unmuteParticipant: (webinarId: string, participantId: string) =>
-      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute`), { ...json('POST'), schema: z.unknown() }),
+      client.request(webinarPath(webinarId, `/participants/${id(participantId)}/unmute`), { ...json('POST'), schema: WebinarFloorUnmuteResponseSchema }),
 
     // ── Polls (D-CW-16) ────────────────────────────────────────────────────
 
