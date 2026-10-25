@@ -61,7 +61,7 @@ import { AvailabilityVersionService } from '../library/availability/availability
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 
-import { extractMediaRefs, extractCtaFromBody, addBusinessDays } from './cms-helpers.js';
+import { extractMediaRefs, extractCtaFromBody, addBusinessDays, checkAudienceContainmentPure } from './cms-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Service
@@ -105,35 +105,37 @@ export class CmsService {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
     };
 
-    await this.dbService.db.transaction(async (tx) => {
-      await tx.insert(contentResources).values({
-        id: resourceId,
-        type: input.type,
-        state: 'active',
-        primaryCategoryId: input.primaryCategoryId,
-        ownerUserId: principal.userId,
-        reviewPolicy: input.reviewPolicy,
-        reviewDiscipline: input.reviewDiscipline,
-      });
+    await this.withPgErrorMapping(async () => {
+      await this.dbService.db.transaction(async (tx) => {
+        await tx.insert(contentResources).values({
+          id: resourceId,
+          type: input.type,
+          state: 'active',
+          primaryCategoryId: input.primaryCategoryId,
+          ownerUserId: principal.userId,
+          reviewPolicy: input.reviewPolicy,
+          reviewDiscipline: input.reviewDiscipline,
+        });
 
-      await tx.insert(contentVariants).values({
-        id: variantId,
-        contentResourceId: resourceId,
-        locale: input.locale,
-        slug: `${input.type}-${resourceId.slice(0, 8)}-${input.locale}`,
-      });
+        await tx.insert(contentVariants).values({
+          id: variantId,
+          contentResourceId: resourceId,
+          locale: input.locale,
+          slug: `${input.type}-${resourceId.slice(0, 8)}-${input.locale}`,
+        });
 
-      await tx.insert(contentRevisions).values({
-        id: revisionId,
-        contentVariantId: variantId,
-        revisionNumber: 1,
-        state: 'draft',
-        body: emptyDoc,
-        title: input.title,
-        summary: '',
-        authorUserId: principal.userId,
-        lastEditorUserId: principal.userId,
-        lockVersion: 1,
+        await tx.insert(contentRevisions).values({
+          id: revisionId,
+          contentVariantId: variantId,
+          revisionNumber: 1,
+          state: 'draft',
+          body: emptyDoc,
+          title: input.title,
+          summary: '',
+          authorUserId: principal.userId,
+          lastEditorUserId: principal.userId,
+          lockVersion: 1,
+        });
       });
     });
 
@@ -343,7 +345,7 @@ export class CmsService {
       }
     }
 
-    await this.withUniqueViolationAs409(async () => {
+    await this.withPgErrorMapping(async () => {
       await this.dbService.db.transaction(async (tx) => {
         await tx.insert(contentVariants).values({
           id: variantId,
@@ -416,22 +418,15 @@ export class CmsService {
       body = { ...body, body: result.document as unknown as Record<string, unknown> };
     }
 
-    // FMT-R-27: derive CTA from the body document (single source of truth).
-    // Reject a top-level `cta` that differs from the body node.
-    let derivedCta: { kind: string; targetId?: string } | null | undefined;
-    if (body.body) {
-      const bodyCta = extractCtaFromBody(body.body as Record<string, unknown>);
-      if (body.cta !== undefined && body.cta !== null && bodyCta !== null) {
-        if (body.cta.kind !== bodyCta.kind || (body.cta.targetId ?? undefined) !== bodyCta.targetId) {
-          throw new ApiHttpException({
-            status: 400,
-            code: 'validation',
-            message: 'Top-level cta must match the cta node in the body document',
-            details: { expected: bodyCta, received: body.cta },
-          });
-        }
-      }
-      derivedCta = bodyCta; // may be null (no cta node in body)
+    // FMT-R-27: CTA is derived from the body only — the top-level `cta`
+    // field is not accepted in the write DTO. If the request includes
+    // `cta`, reject it.
+    if (body.cta !== undefined) {
+      throw new ApiHttpException({
+        status: 400,
+        code: 'validation',
+        message: 'Top-level cta is read-only; CTA is derived from the body document',
+      });
     }
 
     // Build update set
@@ -449,17 +444,11 @@ export class CmsService {
     if (body.difficulty !== undefined) updateSet.difficulty = body.difficulty;
     if (body.sources !== undefined) updateSet.sources = body.sources;
     if (body.proposedAudience !== undefined) updateSet.proposedAudience = body.proposedAudience;
-    // FMT-R-27: body-derived CTA overrides top-level cta
-    if (derivedCta !== undefined) {
-      updateSet.cta = derivedCta;
-    } else if (body.cta !== undefined) {
-      updateSet.cta = body.cta;
-    }
     if (body.relatedResourceIds !== undefined) updateSet.relatedResourceIds = body.relatedResourceIds;
     if (body.quicklyOutdated !== undefined) updateSet.quicklyOutdated = body.quicklyOutdated;
 
     // Atomic CAS inside a transaction so media sync is all-or-nothing
-    const result = await this.dbService.db.transaction(async (tx) => {
+    const result = await this.withPgErrorMapping(() => this.dbService.db.transaction(async (tx) => {
       // Extract and validate media refs before the update
       if (body.body) {
         const refs = extractMediaRefs(body.body as Record<string, unknown>);
@@ -536,8 +525,18 @@ export class CmsService {
         await this.syncRevisionMedia(tx, revisionId, body.body as Record<string, unknown>);
       }
 
+      // FMT-R-27: derive CTA from the effective body (the one now stored)
+      // and persist it in the same transaction.
+      const effectiveBody = (body.body ?? updated[0]!.body) as Record<string, unknown>;
+      const derivedCta = extractCtaFromBody(effectiveBody);
+      await tx
+        .update(contentRevisions)
+        .set({ cta: derivedCta })
+        .where(eq(contentRevisions.id, revisionId));
+      updated[0] = { ...updated[0]!, cta: derivedCta };
+
       return updated[0]!;
-    });
+    }));
 
     // Audit after commit
     await this.auditWriter.record({
@@ -563,7 +562,7 @@ export class CmsService {
   ) {
     const newRevisionId = randomUUID();
 
-    await this.withUniqueViolationAs409(async () => {
+    await this.withPgErrorMapping(async () => {
       await this.dbService.db.transaction(async (tx) => {
         // Serialize concurrent callers by locking the parent variant row.
         // Without this, two requests can both pass the "no draft exists" check
@@ -674,7 +673,7 @@ export class CmsService {
     principal: Principal,
   ) {
     // Atomic: lock revision row, validate, transition, outbox -- all in one tx (ARC-R-08)
-    const updated = await this.dbService.db.transaction(async (tx) => {
+    const updated = await this.withPgErrorMapping(() => this.dbService.db.transaction(async (tx) => {
       // Lock the revision row to serialize concurrent submits
       const lockedRows = await tx.execute(
         sql`SELECT * FROM content_revisions WHERE id = ${revisionId} FOR UPDATE`,
@@ -698,8 +697,9 @@ export class CmsService {
       if (!rev.proposed_audience || !Array.isArray(rev.proposed_audience) || (rev.proposed_audience as unknown[]).length === 0) {
         throw new ApiHttpException({
           status: 400,
-          code: 'content_not_submittable',
+          code: 'content_missing_required',
           message: 'proposedAudience is required before submitting for review',
+          details: { field: 'proposedAudience' },
         });
       }
 
@@ -754,7 +754,7 @@ export class CmsService {
       });
 
       return result[0]!;
-    });
+    }));
 
     // Audit AFTER the transaction commits
     await this.auditWriter.record({
@@ -778,7 +778,7 @@ export class CmsService {
     revisionId: string,
     principal: Principal,
   ) {
-    const updated = await this.dbService.db.transaction(async (tx) => {
+    const updated = await this.withPgErrorMapping(() => this.dbService.db.transaction(async (tx) => {
       // Lock order: resource first, then variant (sorted by id in multi-variant cases)
       // Step 1: load revision + resource context via join
       const contextRows = await tx
@@ -853,24 +853,24 @@ export class CmsService {
 
       const now = new Date();
 
-      // Check: if a newer revision of the same variant is already approved → 409
-      const newerApproved = await tx
+      // Check: if a newer revision of the same variant is approved or in_review → 409
+      const newerLocked = await tx
         .select({ id: contentRevisions.id })
         .from(contentRevisions)
         .where(
           and(
             eq(contentRevisions.contentVariantId, ctx.variantId),
-            eq(contentRevisions.state, 'approved'),
+            inArray(contentRevisions.state, ['approved', 'in_review']),
             gt(contentRevisions.revisionNumber, ctx.revRevisionNumber),
           ),
         )
         .limit(1);
 
-      if (newerApproved.length > 0) {
+      if (newerLocked.length > 0) {
         throw new ApiHttpException({
           status: 409,
           code: 'content_revision_locked',
-          message: 'A newer revision is already approved for this variant',
+          message: 'A newer revision is already approved or in review for this variant',
         });
       }
 
@@ -934,7 +934,7 @@ export class CmsService {
       });
 
       return result[0]!;
-    });
+    }));
 
     // Audit AFTER the transaction commits
     await this.auditWriter.record({
@@ -962,7 +962,28 @@ export class CmsService {
     // Track superseded publications' audience org ids for availability bump
     const supersededOrgIds = new Set<string>();
 
-    await this.withUniqueViolationAs409(async () => {
+    // WRK-R-32: content.restrict authorization check runs BEFORE the
+    // transaction opens so it does not acquire a second pooled connection
+    // while the transaction holds one (defect 6c).
+    const preResource = await this.dbService.db
+      .select({
+        id: contentResources.id,
+        primaryCategoryId: contentResources.primaryCategoryId,
+        reviewDiscipline: contentResources.reviewDiscipline,
+      })
+      .from(contentResources)
+      .where(eq(contentResources.id, input.resourceId))
+      .limit(1);
+    if (!preResource[0]) {
+      throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
+    }
+    await this.authorizationService.require(principal, ACTIONS['content.restrict'], {
+      type: 'content_resource',
+      id: preResource[0].id,
+      collectionId: preResource[0].primaryCategoryId ?? undefined,
+    });
+
+    await this.withPgErrorMapping(async () => {
     await this.dbService.db.transaction(async (tx) => {
       // Lock the resource row FIRST inside the transaction (prevent concurrent publishes)
       const resourceLockRows = await tx.execute(
@@ -979,13 +1000,6 @@ export class CmsService {
 
       // Compute now AFTER the resource lock so all timestamps are post-lock
       const now = new Date();
-
-      // WRK-R-32: content.restrict authorization check
-      await this.authorizationService.require(principal, ACTIONS['content.restrict'], {
-        type: 'content_resource',
-        id: resource.id,
-        collectionId: resource.primary_category_id ?? undefined,
-      });
 
       // Get all variants (inside the transaction to see a consistent snapshot)
       const variants = await tx
@@ -1096,13 +1110,14 @@ export class CmsService {
         }
       }
 
-      // Sort locales deterministically to prevent deadlock when concurrent
-      // publishes use opposite locale orders (P14).
-      const sortedLocales = [...requestedLocales].sort();
+      // Lock variants by id ascending to match the lock order used by
+      // approve and new-working-revision, preventing deadlocks (P14).
+      const requestedVariants = requestedLocales
+        .map((locale) => variants.find((v) => v.locale === locale))
+        .filter((v): v is NonNullable<typeof v> => v != null)
+        .sort((a, b) => a.id.localeCompare(b.id));
 
-      for (const locale of sortedLocales) {
-        const variant = variants.find((v) => v.locale === locale);
-        if (!variant) continue;
+      for (const variant of requestedVariants) {
 
         // WRK-R-34: serialize with FOR UPDATE on the variant
         const lockedVariant = await tx.execute(
@@ -1201,15 +1216,23 @@ export class CmsService {
             ),
           );
 
-        // Supersession: set ends_at on previous live publications that haven't already ended
+        // Supersession: end only live publications of the same variant whose
+        // revision has a lower revision_number than the one being published,
+        // including those with a future ends_at.
         const previousPubs = await tx
-          .select({ id: contentPublications.id, endsAt: contentPublications.endsAt })
+          .select({
+            id: contentPublications.id,
+            endsAt: contentPublications.endsAt,
+            revisionNumber: contentRevisions.revisionNumber,
+          })
           .from(contentPublications)
+          .innerJoin(contentRevisions, eq(contentPublications.contentRevisionId, contentRevisions.id))
           .where(
             and(
               eq(contentPublications.contentVariantId, variant.id),
               eq(contentPublications.state, 'live'),
               isNull(contentPublications.withdrawnAt),
+              lt(contentRevisions.revisionNumber, approvedRev.revisionNumber),
             ),
           );
 
@@ -1229,14 +1252,12 @@ export class CmsService {
             }
           }
 
-          // Don't overwrite ends_at on publications that already have one
-          const pubsToEnd = previousPubs.filter((p) => !p.endsAt).map((p) => p.id);
-          if (pubsToEnd.length > 0) {
-            await tx
-              .update(contentPublications)
-              .set({ endsAt: now })
-              .where(inArray(contentPublications.id, pubsToEnd));
-          }
+          // Set ends_at (overwrite future ends_at too, since this is supersession)
+          const pubIdsToEnd = previousPubs.map((p) => p.id);
+          await tx
+            .update(contentPublications)
+            .set({ endsAt: now })
+            .where(inArray(contentPublications.id, pubIdsToEnd));
         }
 
         // Create the publication
@@ -1274,7 +1295,7 @@ export class CmsService {
         });
       }
     });
-    }); // withUniqueViolationAs409
+    }); // withPgErrorMapping
 
     // Audit AFTER the transaction commits
     for (const pubId of publicationIds) {
@@ -1445,106 +1466,33 @@ export class CmsService {
   /**
    * Entry-by-entry audience containment check (C-12).
    *
-   * Each publish audience entry must be covered by at least one proposed
-   * audience entry. The rules:
-   * - `all_eligible` in publish → proposed must also have `all_eligible`
-   * - `organization(orgId)` → proposed must have `all_eligible` or `organization(orgId)`
-   * - `org_unit(orgId, unitId)` → proposed must have `all_eligible`,
-   *   `organization(orgId)` (and unit must belong to that org),
-   *   or `org_unit(orgId, unitId)` with matching or wider descendants flag
-   *
-   * When `proposedAudience` is null/undefined/empty, every publish entry
-   * is rejected (fail-closed: C-12).
+   * Delegates the pure containment logic to `checkAudienceContainmentPure`
+   * in cms-helpers.ts (shared with unit tests), then performs the DB-only
+   * org_unit → org membership verification.
    */
   private async checkAudienceContainment(
     tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
     publishAudience: AudienceEntry[],
     proposedAudience: unknown,
   ): Promise<void> {
-    // Fail-closed: null/undefined/non-array proposed → reject all
-    if (!proposedAudience || !Array.isArray(proposedAudience) || proposedAudience.length === 0) {
-      if (publishAudience.length > 0) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'content_audience_exceeds_approval',
-          message: 'No proposed audience was approved; cannot publish to any audience',
-        });
-      }
-      return;
-    }
-    const proposed = proposedAudience as AudienceEntry[];
+    // Pure containment check (throws on violation)
+    checkAudienceContainmentPure(publishAudience, proposedAudience);
 
-    const proposedHasAllEligible = proposed.some((a) => a.kind === 'all_eligible');
-
+    // DB-only: verify org_unit entries actually belong to their stated org
     for (const pub of publishAudience) {
-      if (pub.kind === 'all_eligible') {
-        if (!proposedHasAllEligible) {
+      if (pub.kind === 'org_unit' && pub.orgUnitId) {
+        const unitRows = await tx
+          .select({ orgId: orgUnits.orgId })
+          .from(orgUnits)
+          .where(eq(orgUnits.id, pub.orgUnitId))
+          .limit(1);
+        if (unitRows.length > 0 && unitRows[0]!.orgId !== pub.orgId) {
           throw new ApiHttpException({
             status: 403,
             code: 'content_audience_exceeds_approval',
-            message: 'Publication audience exceeds the approved proposed audience',
+            message: `Org unit ${pub.orgUnitId} does not belong to organization ${pub.orgId}`,
           });
         }
-        continue;
-      }
-
-      if (pub.kind === 'organization') {
-        if (proposedHasAllEligible) continue;
-        const orgMatch = proposed.some(
-          (p) => p.kind === 'organization' && p.orgId === pub.orgId,
-        );
-        if (!orgMatch) {
-          throw new ApiHttpException({
-            status: 403,
-            code: 'content_audience_exceeds_approval',
-            message: `Organization ${pub.orgId} is not in the approved proposed audience`,
-          });
-        }
-        continue;
-      }
-
-      if (pub.kind === 'org_unit') {
-        if (proposedHasAllEligible) continue;
-
-        // Verify the org unit actually belongs to the stated org
-        if (pub.orgUnitId) {
-          const unitRows = await tx
-            .select({ orgId: orgUnits.orgId })
-            .from(orgUnits)
-            .where(eq(orgUnits.id, pub.orgUnitId))
-            .limit(1);
-          if (unitRows.length > 0 && unitRows[0]!.orgId !== pub.orgId) {
-            throw new ApiHttpException({
-              status: 403,
-              code: 'content_audience_exceeds_approval',
-              message: `Org unit ${pub.orgUnitId} does not belong to organization ${pub.orgId}`,
-            });
-          }
-        }
-
-        // Check if covered by a proposed organization entry
-        const orgCover = proposed.some(
-          (p) => p.kind === 'organization' && p.orgId === pub.orgId,
-        );
-        if (orgCover) continue;
-
-        // Check if covered by a proposed org_unit entry
-        const unitCover = proposed.some(
-          (p) =>
-            p.kind === 'org_unit' &&
-            p.orgId === pub.orgId &&
-            p.orgUnitId === pub.orgUnitId &&
-            // proposed includeDescendants must be >= publish includeDescendants
-            ((p.includeDescendants ?? true) || !(pub.includeDescendants ?? true)),
-        );
-        if (!unitCover) {
-          throw new ApiHttpException({
-            status: 403,
-            code: 'content_audience_exceeds_approval',
-            message: `Org unit ${pub.orgUnitId} in org ${pub.orgId} exceeds the approved proposed audience`,
-          });
-        }
-        continue;
       }
     }
   }
@@ -1637,11 +1585,18 @@ export class CmsService {
   // =========================================================================
 
   /**
-   * Wrap a CMS write so that a PostgreSQL 23505 (unique_violation) that
-   * somehow slips past the application-level checks still surfaces as a
-   * 409 Conflict rather than an opaque 500.
+   * Wrap a CMS write so that PostgreSQL constraint/serialization errors
+   * surface as the correct HTTP status rather than an opaque 500.
+   *
+   * Drizzle 0.45+ wraps driver errors in `DrizzleQueryError` and puts
+   * the PG error on `.cause`, so we read `(err.cause ?? err).code`.
+   *
+   * Mappings:
+   * - 23505 (unique_violation) → 409 `conflict`
+   * - 23514 (check_violation), 23503 (fk_violation) → 400 `validation`
+   * - 40P01 (deadlock_detected), 40001 (serialization_failure) → 409 `conflict`
    */
-  private async withUniqueViolationAs409<T>(fn: () => Promise<T>): Promise<T> {
+  private async withPgErrorMapping<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (err: unknown) {
@@ -1651,10 +1606,13 @@ export class CmsService {
       ) {
         throw err;
       }
-      const pgCode = (err as { code?: string }).code;
+      // Drizzle 0.45+ wraps the PG error in .cause
+      const inner = (err as { cause?: unknown }).cause;
+      const pgSource = (inner instanceof Error ? inner : err) as { code?: string; constraint?: string };
+      const pgCode = pgSource.code;
       if (pgCode === '23505') {
         this.logger.warn(
-          { constraint: (err as { constraint?: string }).constraint },
+          { constraint: pgSource.constraint },
           'CMS unique violation mapped to 409',
         );
         throw new ApiHttpException({
@@ -1666,13 +1624,25 @@ export class CmsService {
       // Map check_violation (23514) and foreign_key_violation (23503) to 400
       if (pgCode === '23514' || pgCode === '23503') {
         this.logger.warn(
-          { constraint: (err as { constraint?: string }).constraint, pgCode },
+          { constraint: pgSource.constraint, pgCode },
           'CMS constraint violation mapped to 400',
         );
         throw new ApiHttpException({
           status: 400,
           code: 'validation',
           message: 'A database constraint was violated',
+        });
+      }
+      // Map deadlock_detected (40P01) and serialization_failure (40001) to 409
+      if (pgCode === '40P01' || pgCode === '40001') {
+        this.logger.warn(
+          { pgCode },
+          'CMS serialization/deadlock mapped to 409',
+        );
+        throw new ApiHttpException({
+          status: 409,
+          code: 'conflict',
+          message: 'A concurrent operation conflicted; please retry',
         });
       }
       throw err;

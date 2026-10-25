@@ -568,7 +568,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       .post(`${OPS_CMS}/resources/${createRes.body.id}/variants`)
       .set('x-csrf-token', katarina.csrf)
       .send({ locale: 'sr-Cyrl' });
-    // Should be rejected (either 400 from Zod or service logic)
-    expect(varRes.status).toBeGreaterThanOrEqual(400);
+    expect(varRes.status).toBe(400);
+    expect(varRes.body.code).toBe('validation');
   });
 });

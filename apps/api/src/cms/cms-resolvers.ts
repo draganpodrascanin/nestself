@@ -22,6 +22,10 @@ import { ApiHttpException } from '../common/api-error.js';
 /**
  * Check whether the principal holds `content.preview` on the resource's
  * primary category. Used by the discipline ruling to decide 403 vs 404.
+ *
+ * Uses the non-auditing evaluateQuiet to avoid writing access.denied
+ * audit rows for what is only a visibility probe. Rethrows non-
+ * authorization errors (DB failures, etc.) so they don't get swallowed.
  */
 async function hasPreviewAccess(
   deps: ResolverDeps,
@@ -29,16 +33,11 @@ async function hasPreviewAccess(
   primaryCategoryId: string | null,
 ): Promise<boolean> {
   if (!primaryCategoryId) return false;
-  try {
-    const authzService = deps.get(AuthorizationService);
-    await authzService.require(principal, ACTIONS['content.preview'], {
-      type: 'content_resource',
-      collectionId: primaryCategoryId,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  const authzService = deps.get(AuthorizationService);
+  return authzService.evaluateQuiet(principal, ACTIONS['content.preview'], {
+    type: 'content_resource',
+    collectionId: primaryCategoryId,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -94,19 +93,18 @@ export function cmsResource(
         const authzService = deps!.get(AuthorizationService);
 
         // Step 1: scope check — does the principal hold content.review
-        // on the primary category?  (category omitted → condition passes)
-        let isReviewerForCategory = false;
-        try {
-          await authzService.require(principal, ACTIONS['content.review'], {
+        // on the primary category?  Uses evaluateQuiet (no audit row)
+        // because this is a probe, not a final denial decision.
+        const isReviewerForCategory = await authzService.evaluateQuiet(
+          principal,
+          ACTIONS['content.review'],
+          {
             type: loaded.type,
             id: loaded.id,
             collectionId: loaded.collectionId ?? undefined,
             // Omit category so the 'categories' condition passes vacuously.
-          });
-          isReviewerForCategory = true;
-        } catch (err) {
-          if (!(err instanceof ApiHttpException) || err.getStatus() >= 500) throw err;
-        }
+          },
+        );
 
         if (!isReviewerForCategory) {
           // Not a reviewer for this category (author, publisher, etc.).
@@ -129,20 +127,19 @@ export function cmsResource(
         }
 
         // Step 3: full authorization including the discipline condition
-        // (category = reviewDiscipline).
+        // (category = reviewDiscipline). Uses evaluateQuiet to avoid
+        // probe audit rows; the guard's own decision handles the audit.
         loaded.category = loaded.reviewDiscipline;
-        let hasDisciplineGrant = false;
-        try {
-          await authzService.require(principal, ACTIONS['content.review'], {
+        const hasDisciplineGrant = await authzService.evaluateQuiet(
+          principal,
+          ACTIONS['content.review'],
+          {
             type: loaded.type,
             id: loaded.id,
             collectionId: loaded.collectionId ?? undefined,
             category: loaded.reviewDiscipline,
-          });
-          hasDisciplineGrant = true;
-        } catch (err) {
-          if (!(err instanceof ApiHttpException) || err.getStatus() >= 500) throw err;
-        }
+          },
+        );
 
         if (!hasDisciplineGrant) {
           // Reviewer for this category but NOT for this discipline.

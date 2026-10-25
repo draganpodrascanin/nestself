@@ -348,4 +348,111 @@ describe.skipIf(!shouldRun)('CMS concurrency (e2e)', () => {
     expect(conflicts.length).toBe(2);
     expect(serverErrors.length).toBe(0);
   });
+
+  // ─── Forced concurrency: external lock holder ─────────────────────
+
+  it('forced concurrency: publish with external FOR UPDATE holder → one 201, one 409, zero 500', async () => {
+    const f = await fullApproved();
+    const pg = await import('pg');
+    const client = new pg.default.Client({ connectionString: testDb.url });
+    await client.connect();
+
+    try {
+      // Hold a FOR UPDATE lock on the resource row
+      await client.query('BEGIN');
+      await client.query(
+        'SELECT id FROM content_resources WHERE id = $1 FOR UPDATE',
+        [f.resourceId],
+      );
+
+      // Fire both publish requests (they'll block on the resource lock)
+      const pubPromises = [
+        publish({ resourceId: f.resourceId, audience: [{ kind: 'all_eligible' }] }),
+        publish({ resourceId: f.resourceId, audience: [{ kind: 'all_eligible' }] }),
+      ];
+
+      // Poll pg_stat_activity until both are waiting on the lock
+      const waitForBlocked = async () => {
+        for (let i = 0; i < 50; i++) {
+          const result = await client.query(
+            `SELECT count(*) FROM pg_stat_activity
+             WHERE wait_event_type = 'Lock'
+             AND query LIKE '%content_resources%FOR UPDATE%'`,
+          );
+          if (Number(result.rows[0].count) >= 2) return;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      };
+      await waitForBlocked();
+
+      // Release the lock
+      await client.query('COMMIT');
+
+      const results = await Promise.all(pubPromises);
+      const statuses = results.map((r) => r.status).sort();
+      expect(statuses).toEqual([201, 409]);
+      expect(statuses.filter((s) => s >= 500)).toHaveLength(0);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('forced concurrency: new-working-revision with external FOR UPDATE holder → one 201, one 409, zero 500', async () => {
+    const c = await create();
+    await save(c.variantId, c.revisionId, 1, {
+      title: 'Lock test',
+      summary: 'S',
+      body: doc('lock test'),
+      proposedAudience: [{ kind: 'all_eligible' }],
+    });
+    await submit(c.revisionId);
+    await approve(c.revisionId);
+
+    const pg = await import('pg');
+    const client = new pg.default.Client({ connectionString: testDb.url });
+    await client.connect();
+
+    try {
+      // Hold a FOR UPDATE lock on the variant row
+      await client.query('BEGIN');
+      await client.query(
+        'SELECT id FROM content_variants WHERE id = $1 FOR UPDATE',
+        [c.variantId],
+      );
+
+      const k = S[K]!;
+      const revPromises = [
+        k.agent
+          .post(`${OPS}/variants/${c.variantId}/revisions`)
+          .set('x-csrf-token', k.csrf),
+        k.agent
+          .post(`${OPS}/variants/${c.variantId}/revisions`)
+          .set('x-csrf-token', k.csrf),
+      ];
+
+      // Poll pg_stat_activity until both are waiting
+      const waitForBlocked = async () => {
+        for (let i = 0; i < 50; i++) {
+          const result = await client.query(
+            `SELECT count(*) FROM pg_stat_activity
+             WHERE wait_event_type = 'Lock'
+             AND query LIKE '%content_variants%FOR UPDATE%'`,
+          );
+          if (Number(result.rows[0].count) >= 2) return;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      };
+      await waitForBlocked();
+
+      // Release the lock
+      await client.query('COMMIT');
+
+      const revResults = await Promise.all(revPromises);
+      const statuses = revResults.map((r) => r.status).sort();
+      expect(statuses).toEqual([201, 409]);
+      expect(statuses.filter((s) => s >= 500)).toHaveLength(0);
+    } finally {
+      await client.end();
+    }
+  });
 }, 180_000);

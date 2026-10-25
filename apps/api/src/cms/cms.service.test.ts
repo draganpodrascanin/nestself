@@ -217,11 +217,11 @@ describe('extractCtaFromBody (FMT-R-27)', () => {
     ],
   });
 
-  it('extracts a cta node from the body', () => {
+  it('extracts a cta node from the body (ctaKind attr)', () => {
     const cta = extractCtaFromBody(doc([
-      { type: 'cta', attrs: { kind: 'link', targetId: 'res_1' } },
+      { type: 'cta', attrs: { ctaKind: 'open_content', targetId: 'res_1' } },
     ]));
-    expect(cta).toEqual({ kind: 'link', targetId: 'res_1' });
+    expect(cta).toEqual({ kind: 'open_content', targetId: 'res_1' });
   });
 
   it('returns null when no cta node is present', () => {
@@ -235,23 +235,23 @@ describe('extractCtaFromBody (FMT-R-27)', () => {
         {
           type: 'section',
           content: [
-            { type: 'cta', attrs: { kind: 'download' } },
+            { type: 'cta', attrs: { ctaKind: 'suggest_topic' } },
           ],
         },
       ],
     });
-    expect(cta).toEqual({ kind: 'download', targetId: undefined });
+    expect(cta).toEqual({ kind: 'suggest_topic', targetId: undefined });
   });
 
   it('returns the first cta node when multiple exist', () => {
     const cta = extractCtaFromBody(doc([
-      { type: 'cta', attrs: { kind: 'first', targetId: 'a' } },
-      { type: 'cta', attrs: { kind: 'second', targetId: 'b' } },
+      { type: 'cta', attrs: { ctaKind: 'open_content', targetId: 'a' } },
+      { type: 'cta', attrs: { ctaKind: 'open_collection', targetId: 'b' } },
     ]));
-    expect(cta!.kind).toBe('first');
+    expect(cta!.kind).toBe('open_content');
   });
 
-  it('ignores cta nodes with missing kind', () => {
+  it('ignores cta nodes with missing ctaKind', () => {
     expect(extractCtaFromBody(doc([
       { type: 'cta', attrs: { targetId: 'res_1' } },
     ]))).toBeNull();
@@ -260,6 +260,12 @@ describe('extractCtaFromBody (FMT-R-27)', () => {
   it('ignores cta nodes without attrs', () => {
     expect(extractCtaFromBody(doc([
       { type: 'cta' },
+    ]))).toBeNull();
+  });
+
+  it('ignores cta nodes with old "kind" attr (schema uses ctaKind)', () => {
+    expect(extractCtaFromBody(doc([
+      { type: 'cta', attrs: { kind: 'link', targetId: 'res_1' } },
     ]))).toBeNull();
   });
 });
@@ -297,103 +303,10 @@ describe('addBusinessDays', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Revision state transition preconditions
-// ---------------------------------------------------------------------------
-
-describe('Revision state transitions', () => {
-  const SUBMITTABLE_STATES = ['draft', 'changes_requested'];
-
-  it('allows submit from draft', () => {
-    expect(SUBMITTABLE_STATES).toContain('draft');
-  });
-
-  it('allows submit from changes_requested', () => {
-    expect(SUBMITTABLE_STATES).toContain('changes_requested');
-  });
-
-  it.each(['approved', 'superseded', 'in_review'])('rejects submit from %s', (state) => {
-    expect(SUBMITTABLE_STATES).not.toContain(state);
-  });
-
-  it('allows approve only from in_review', () => {
-    const approvable = 'in_review';
-    expect(approvable).toBe('in_review');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Self-review (ACC-R-08, 5.5)
-// ---------------------------------------------------------------------------
-
-describe('Self-review rule (ACC-R-08)', () => {
-  const isSelfReview = (author: string, lastEditor: string, reviewer: string) =>
-    author === reviewer || lastEditor === reviewer;
-
-  it('refuses when reviewer is the author', () => {
-    expect(isSelfReview('user_A', 'user_B', 'user_A')).toBe(true);
-  });
-
-  it('refuses when reviewer is the last editor', () => {
-    expect(isSelfReview('user_A', 'user_B', 'user_B')).toBe(true);
-  });
-
-  it('allows when reviewer is neither', () => {
-    expect(isSelfReview('user_A', 'user_B', 'user_C')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ETag / If-Match format
-// ---------------------------------------------------------------------------
-
-describe('ETag / If-Match format', () => {
-  const ETAG_RE = /^"(\d+)"$/;
-
-  it('parses valid quoted integer', () => {
-    const m = ETAG_RE.exec('"42"');
-    expect(m).toBeTruthy();
-    expect(m![1]).toBe('42');
-  });
-
-  it('rejects unquoted integer', () => {
-    expect(ETAG_RE.exec('42')).toBeNull();
-  });
-
-  it('rejects quoted non-integer', () => {
-    expect(ETAG_RE.exec('"1abc"')).toBeNull();
-  });
-
-  it('rejects empty quotes', () => {
-    expect(ETAG_RE.exec('""')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Locale completeness (WRK-R-36)
-// ---------------------------------------------------------------------------
-
-describe('Locale completeness (WRK-R-36)', () => {
-  const AUTHORED_LOCALES = ['sr-Latn', 'hu', 'en'];
-
-  it('detects missing locales for full publish', () => {
-    const presentLocales = ['sr-Latn', 'en'];
-    const missing = AUTHORED_LOCALES.filter((l) => !presentLocales.includes(l));
-    expect(missing).toEqual(['hu']);
-  });
-
-  it('passes when all three are present', () => {
-    const missing = AUTHORED_LOCALES.filter((l) => !['sr-Latn', 'hu', 'en'].includes(l));
-    expect(missing).toHaveLength(0);
-  });
-
-  it('correction path: only requested locales need approved revisions', () => {
-    const requestedLocales = ['hu'];
-    const otherLocales = AUTHORED_LOCALES.filter((l) => !requestedLocales.includes(l));
-    expect(otherLocales).toEqual(['sr-Latn', 'en']);
-    // Other locales need live publications (tested in e2e)
-  });
-});
+// Tautological state-transition, self-review, ETag, and locale tests
+// removed — they tested local constants, not the service.  State
+// transitions, self-review, ETag parsing and locale completeness are
+// covered by the e2e specs (cms.e2e, cms-workflow.e2e).
 
 // ---------------------------------------------------------------------------
 // AudienceEntrySchema per-kind validation (WRK-R-38)

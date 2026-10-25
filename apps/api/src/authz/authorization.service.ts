@@ -107,6 +107,21 @@ export class AuthorizationService {
   }
 
   /**
+   * Non-auditing authorization check: returns a boolean without writing
+   * an audit row. Used for probing authorization in resolvers (e.g.
+   * discipline ruling) where a probe failure is not a final denial.
+   */
+  async evaluateQuiet(
+    principal: Principal,
+    action: Action,
+    resource: Resource,
+  ): Promise<boolean> {
+    const ctx = await this.contextLoader.build(principal, resource, { action });
+    const decision = authorize(principal, action, resource, ctx);
+    return decision.allowed;
+  }
+
+  /**
    * Compute the effective actions for a principal's current context.
    * Used by GET /auth/me.
    */
