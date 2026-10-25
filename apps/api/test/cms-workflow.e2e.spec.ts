@@ -843,19 +843,101 @@ describe.skipIf(!shouldRun)('CMS workflow (e2e)', () => {
 
   // ─── content.restrict denial from publish (WRK-R-32) ──────────────
 
-  it('publisher without content.restrict gets denied from publish', async () => {
-    // Teodora has content.publish but we test that content.restrict
-    // is also checked. The service checks it before the transaction.
-    // If the seed gives Teodora content.restrict, this test verifies
-    // the code path runs. If not, it would get a 403.
+  /**
+   * Milica: a staff user with content.publish + content.preview but
+   * NOT content.restrict. Created in beforeAll below via direct DB inserts.
+   */
+  const M = 'user_milica';
+
+  it('publisher without content.restrict gets 403 forbidden', async () => {
+    // --- Fixture: create Milica with a grant that omits content.restrict ---
+    const milicaEmail = `${M}@example.com`;
+    // Insert user row
+    await testDb.pool.query(
+      `INSERT INTO users (id, email, display_name, locale, email_verified_at)
+       VALUES ($1, $2, 'Milica', 'sr-Latn', now())
+       ON CONFLICT (id) DO NOTHING`,
+      [M, milicaEmail],
+    );
+    // Insert grant with content.publish + content.preview but NO content.restrict
+    await testDb.pool.query(
+      `INSERT INTO grants (id, subject_user_id, template_key, actions, scope_type,
+         granted_by_user_id, granted_at, valid_from)
+       VALUES ($1, $2, 'content_publisher', $3, 'assigned_collections',
+         $2, now(), now())
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        `grant_${M}_no_restrict`,
+        M,
+        [
+          'content.publish', 'content.schedule', 'content.archive',
+          'content.preview', 'preferences.manage', 'feedback.submit',
+          'data.export.own', 'data.erasure.request',
+        ],
+      ],
+    );
+    // COLLECTION assignment on cat_stress (the category used in test resources)
+    await testDb.pool.query(
+      `INSERT INTO assignments (id, user_id, kind, target_id, assigned_by_user_id, start_at)
+       VALUES ($1, $2, 'COLLECTION', 'cat_stress', $2, now())
+       ON CONFLICT (id) DO NOTHING`,
+      [`assign_${M}_cat_stress`, M],
+    );
+    // Sign in Milica through the stub provider
+    idp.seedUsers([{ email: milicaEmail }]);
+    const idpUser = await idp.findUserByEmail(milicaEmail);
+    await testDb.db
+      .insert(externalIdentities)
+      .values({
+        userId: M,
+        provider: 'cognito',
+        subject: idpUser!.sub,
+        cognitoUsername: idpUser!.username,
+        email: milicaEmail,
+        emailVerified: true,
+      })
+      .onConflictDoNothing();
+    S[M] = await signInOps(M);
+
+    // --- Act: create a fully approved resource, Milica tries to publish ---
+    const f = await fullApproved();
+
+    // Count publications before the attempt
+    const before = await testDb.pool.query(
+      `SELECT count(*)::int AS cnt FROM content_publications
+       WHERE content_revision_id IN (
+         SELECT id FROM content_revisions WHERE content_variant_id IN (
+           SELECT id FROM content_variants WHERE content_resource_id = $1))`,
+      [f.resourceId],
+    );
+
+    const r = await publish(
+      { resourceId: f.resourceId, audience: [{ kind: 'all_eligible' }] },
+      M,
+    );
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('forbidden');
+
+    // Assert no publication row was created
+    const after = await testDb.pool.query(
+      `SELECT count(*)::int AS cnt FROM content_publications
+       WHERE content_revision_id IN (
+         SELECT id FROM content_revisions WHERE content_variant_id IN (
+           SELECT id FROM content_variants WHERE content_resource_id = $1))`,
+      [f.resourceId],
+    );
+    expect(after.rows[0].cnt).toBe(before.rows[0].cnt);
+  });
+
+  it('publisher with content.restrict (Teodora) publishes successfully', async () => {
     const f = await fullApproved();
     const r = await publish({
       resourceId: f.resourceId,
       audience: [{ kind: 'all_eligible' }],
     });
-    // Teodora should succeed (she has content.restrict in the seed)
-    // or fail with 403 if she doesn't have it
-    expect([201, 403]).toContain(r.status);
+    expect(r.status).toBe(201);
+    expect(r.body.publications).toBeDefined();
+    expect(r.body.publications.length).toBeGreaterThan(0);
   });
 
   // ─── concurrent add-variant for same locale → one 201, one 409 ───
