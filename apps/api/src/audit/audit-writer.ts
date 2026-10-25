@@ -50,6 +50,10 @@ const FORBIDDEN_KEYS = new Set([
   'secret',
   'oidcClientSecret',
   'verificationToken',
+  // SSO code flow (API-R-06/07): the PKCE verifier and the OAuth state.
+  'codeVerifier',
+  'verifier',
+  'state',
   'cookie',
   'authorization',
   'body',

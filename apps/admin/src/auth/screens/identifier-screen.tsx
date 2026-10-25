@@ -18,11 +18,13 @@ import type { FormErrorSummaryHandle } from '@nestself/ui';
 interface Props {
   onSubmit: (email: string) => Promise<void>;
   error: string | null;
+  /** Prefills the address (e.g. after an SSO sign-in that did not confirm it). */
+  initialEmail?: string;
 }
 
-export function IdentifierScreen({ onSubmit, error }: Props) {
+export function IdentifierScreen({ onSubmit, error, initialEmail }: Props) {
   const { t } = useTranslation(['auth', 'common']);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const errorSummaryRef = useRef<FormErrorSummaryHandle>(null);

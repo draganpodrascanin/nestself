@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { IdentityResolutionService } from './identity-resolution.service.js';
+import { describe, it, expect, vi } from 'vitest';
+import { IdentityResolutionService, authMethodFromOutcome, federatedProvider } from './identity-resolution.service.js';
 import { IdentityProviderError } from '../identity/identity-provider.service.js';
 import type { IdentityProviderErrorCode } from '../identity/identity-provider.service.js';
 
@@ -34,5 +34,55 @@ describe('IdentityResolutionService.mapIdpError', () => {
     ['unavailable', 503, 'unavailable'],
   ])('keeps %s -> %i %s', (code, status, apiCode) => {
     expect(mapped(code)).toEqual({ status, code: apiCode });
+  });
+});
+
+describe('federated identities (D-04, 3.4.9)', () => {
+  it('names the provider cognito:<providerName> and the method sso', () => {
+    expect(federatedProvider('org-acme-saml')).toBe('cognito:org-acme-saml');
+    const outcome = { kind: 'tokens' } as never;
+    expect(authMethodFromOutcome(outcome, false, true)).toBe('sso');
+    expect(authMethodFromOutcome(outcome, true, true)).toBe('sso');
+    expect(authMethodFromOutcome(outcome, true)).toBe('password_totp');
+    expect(authMethodFromOutcome(outcome, false)).toBe('email_otp');
+  });
+
+  function idToken(claims: Record<string, unknown>): string {
+    return `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
+  }
+
+  function build(identity: { userId: string } | null) {
+    const sessions = { create: vi.fn().mockResolvedValue({ sessionId: 's', csrfToken: 'c', absoluteExpiresAt: new Date() }) };
+    const loader = {
+      load: vi.fn().mockResolvedValue({
+        userId: 'u1', displayName: 'U', initials: 'U', locale: 'en', memberships: [], staffTemplates: [],
+        expert: null, isSuspended: false, isDeactivated: false,
+      }),
+    };
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    const identities = { findExternalIdentity: vi.fn().mockResolvedValue(identity) };
+    const throttle = { reset: vi.fn().mockResolvedValue(undefined) };
+    const me = { build: vi.fn().mockResolvedValue({ principal: {}, effectiveActions: [] }) };
+    const svc = new IdentityResolutionService(
+      sessions as never, loader as never, audit as never, identities as never, throttle as never, me as never,
+    );
+    return { svc, sessions, identities };
+  }
+
+  const tokens = { accessToken: 'a', idToken: idToken({ sub: 'sub-1', username: 'org-acme-saml_x' }), refreshToken: 'r', expiresIn: 3600 };
+
+  it('looks the identity up under cognito:<providerName> and records sso with the second factor', async () => {
+    const { svc, sessions, identities } = build({ userId: 'u1' });
+    await svc.resolveIdentityAndCreateSession(tokens, 'a@acme.example', 'workspace', { ip: null, userAgent: null }, false, true, 'org-acme-saml');
+    expect(identities.findExternalIdentity).toHaveBeenCalledWith('cognito:org-acme-saml', 'sub-1');
+    expect(sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ auth: expect.objectContaining({ method: 'sso', secondFactor: true }) }),
+    );
+  });
+
+  it('keeps the native provider for non-federated tokens', async () => {
+    const { svc, identities } = build({ userId: 'u1' });
+    await svc.resolveIdentityAndCreateSession(tokens, 'a@example.com', 'workspace', { ip: null, userAgent: null }, false);
+    expect(identities.findExternalIdentity).toHaveBeenCalledWith('cognito', 'sub-1');
   });
 });

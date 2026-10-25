@@ -250,6 +250,11 @@ describe('sanitizeDetails', () => {
     expect(result).toEqual({ nested: { domain: 'acme.example' } });
   });
 
+  it('removes the SSO PKCE verifier and OAuth state (API-R-06/07)', () => {
+    const result = sanitizeDetails({ codeVerifier: 'v', verifier: 'v', state: 's', reason: 'sso_state' });
+    expect(result).toEqual({ reason: 'sso_state' });
+  });
+
   it('truncates strings over 500 characters', () => {
     const longStr = 'a'.repeat(600);
     const result = sanitizeDetails({ info: longStr });

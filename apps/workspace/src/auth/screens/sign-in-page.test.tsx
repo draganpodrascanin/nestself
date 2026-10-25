@@ -713,3 +713,44 @@ describe('error summary links focus the field they name', () => {
     await clickSummaryLinkAndExpectFocus('#new-password-input');
   });
 });
+
+// API-R-07: the SSO callback sends the user back with ?reason=; the screen says why.
+describe('SignInPage SSO return reasons', () => {
+  const user = userEvent.setup();
+
+  afterEach(async () => {
+    cleanup();
+    vi.restoreAllMocks();
+    await testI18n.changeLanguage('en');
+  });
+
+  it('sso_denied: shows the translated "ask your HR administrator" copy in the error summary', async () => {
+    pageApi.current = makeAuthApi();
+    renderInRouter(<SignInPage reason="sso_denied" />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByText(testI18n.t('auth:error.ssoDenied')).length).toBeGreaterThan(0);
+  });
+
+  it('sso_denied: the copy follows the screen language', async () => {
+    await testI18n.changeLanguage('hu');
+    pageApi.current = makeAuthApi();
+    renderInRouter(<SignInPage reason="sso_denied" />);
+    expect((await screen.findAllByText(testI18n.t('auth:error.ssoDenied'))).length).toBeGreaterThan(0);
+    expect(testI18n.t('auth:error.ssoDenied')).not.toBe(testI18n.t('auth:error.ssoDenied', { lng: 'en' }));
+  });
+
+  it('sso_email_unverified: explains, prefills the address and goes straight to the email code (no discover)', async () => {
+    const discover = vi.fn();
+    const emailOtpStart = vi.fn().mockResolvedValue({ challengeToken: 'tok', codeDeliveryMedium: 'EMAIL' });
+    pageApi.current = makeAuthApi({ discover, emailOtpStart });
+    renderInRouter(<SignInPage reason="sso_email_unverified" email="new@acme.example" />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByText(testI18n.t('auth:error.ssoEmailUnverified')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('textbox')).toHaveValue('new@acme.example');
+
+    await user.click(screen.getByRole('button', { name: testI18n.t('auth:signIn.submit') }));
+    await waitFor(() => expect(emailOtpStart).toHaveBeenCalledWith('new@acme.example', 'en'));
+    expect(discover).not.toHaveBeenCalled();
+  });
+});

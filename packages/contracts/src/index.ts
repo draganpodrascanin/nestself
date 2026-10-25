@@ -106,6 +106,11 @@ export type {
 export {
   DiscoverRequestSchema,
   DiscoverResponseSchema,
+  isRelativeReturnPath,
+  SsoReturnPathSchema,
+  SsoStartQuerySchema,
+  SsoCallbackQuerySchema,
+  SSO_SIGN_IN_REASONS,
   EmailOtpStartRequestSchema,
   EmailOtpStartResponseSchema,
   EmailOtpVerifyRequestSchema,
@@ -150,6 +155,9 @@ export {
 export type {
   DiscoverRequest,
   DiscoverResponse,
+  SsoStartQuery,
+  SsoCallbackQuery,
+  SsoSignInReason,
   EmailOtpStartRequest,
   EmailOtpStartResponse,
   EmailOtpVerifyRequest,

@@ -11,29 +11,25 @@
  * @see 3.7 rows 1-2 and 4, API-R-08, API-R-09
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import type { InvitationAcceptResponse, PermissionTemplateDefinition } from '@nestself/contracts';
 import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
-import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
-import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
+import { SsoRepository } from '../db/repositories/sso.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { IdentityProviderService } from '../identity/identity-provider.service.js';
 import { SignInService } from '../auth/sign-in.service.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { hashToken, constantTimeHashCompare } from './invitation-token.js';
-import { memberships, organizations } from '../db/schema/index.js';
+import { organizations } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { OWNER_TEMPLATE_KEY, isInvitableTemplate, ownerExists } from '../grants/grant-rules.js';
 import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
-
-const TEMPLATE_MAP = new Map<string, PermissionTemplateDefinition>(
-  PERMISSION_TEMPLATES.map((t) => [t.key, t]),
-);
+import { InvitationMembershipActivator, invitableTemplateFor } from './invitation-membership-activator.js';
+import { apiPublicUrlFrom, buildSsoStartUrl } from '../auth/sso-start-url.js';
 
 @Injectable()
 export class InvitationActivationService {
@@ -43,12 +39,13 @@ export class InvitationActivationService {
     @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
     @Inject(forwardRef(() => InvitationsRepository)) private readonly invitations: InvitationsRepository,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
-    @Inject(forwardRef(() => MembershipsRepository)) private readonly membershipRepo: MembershipsRepository,
-    @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
     @Inject(forwardRef(() => SignInService)) private readonly signIn: SignInService,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
+    @Inject(forwardRef(() => InvitationMembershipActivator)) private readonly activator: InvitationMembershipActivator,
+    @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -138,14 +135,18 @@ export class InvitationActivationService {
     // Only organization and employee templates are honoured (C1): an
     // invitation stored before the create-time check cannot mint a staff,
     // expert or platform grant.
-    const template = TEMPLATE_MAP.get(invitation.templateKey ?? '');
-    if (!template || !isInvitableTemplate(template)) {
+    const template = invitableTemplateFor(invitation);
+    if (!template) {
       throw new ApiHttpException({
         status: 401,
         code: 'invalid_invitation',
         message: 'Invalid invitation template',
       });
     }
+
+    // Federated employees: nothing is written here (see ssoResponseFor).
+    const sso = await this.ssoResponseFor(invitation, surface);
+    if (sso) return sso;
 
     // Idempotent: if already accepted, return the same response shape with a
     // fresh challenge (do not create a second membership).
@@ -164,10 +165,7 @@ export class InvitationActivationService {
       async (tx) => {
         // 0. Owner model (2026-10-24): one active employer_owner per
         //    organization. Checked before any write or IdP side effect.
-        if (template.key === OWNER_TEMPLATE_KEY) {
-          const [current] = await this.authzRepo.findActiveOwnerGrants(invitation.orgId, now, tx);
-          if (current) throw ownerExists(current.subjectUserId);
-        }
+        await this.activator.assertOwnerSlotFree(template, invitation.orgId, now, tx);
 
         // 1. Resolve or create the user.
         const { userId, created: userCreated } = await this.resolveOrCreateUser(
@@ -205,49 +203,9 @@ export class InvitationActivationService {
           details: { emailNormalised: invitation.email, provider: 'cognito' },
         });
 
-        // 5. Create the membership unless one already exists.
-        const existingMemberships = await this.membershipRepo.findByUserId(userId, tx);
-        const existingActive = existingMemberships.find(
-          (m) => m.orgId === invitation.orgId && m.status === 'ACTIVE',
-        );
-
-        if (!existingActive) {
-          const [newMembership] = await tx
-            .insert(memberships)
-            .values({
-              userId,
-              orgId: invitation.orgId,
-              orgUnitId: invitation.orgUnitId,
-              status: 'ACTIVE',
-              startDate: now,
-            })
-            .returning();
-
-          await this.audit.record({
-            action: 'membership.activated',
-            actorUserId: null,
-            actorKind: 'SYSTEM',
-            orgId: invitation.orgId,
-            recordType: 'membership',
-            recordId: newMembership!.id,
-            result: 'ALLOWED',
-            details: { emailNormalised: invitation.email, templateKey: invitation.templateKey },
-          });
-
-          // 6. Create default grants from the template.
-          await this.createDefaultGrants(
-            template,
-            userId,
-            invitation.orgId,
-            invitation.orgUnitId,
-            invitation.invitedByUserId,
-            now,
-            tx,
-          );
-        }
-
-        // 7. Mark invitation as accepted.
-        await this.invitations.accept(invitation.id, now, userId, tx);
+        // 5-7. Membership, default grants, invitation accepted (shared with
+        //      the SSO callback).
+        await this.activator.activateInvitationForUser(invitation, template, userId, now, tx);
 
         return { userId };
       },
@@ -345,37 +303,32 @@ export class InvitationActivationService {
     );
   }
 
-  private async createDefaultGrants(
-    template: PermissionTemplateDefinition,
-    userId: string,
-    orgId: string,
-    orgUnitId: string | null,
-    grantedByUserId: string,
-    now: Date,
-    tx: DbExecutor,
-  ): Promise<void> {
-    // Belt and braces (C1): an invitation never creates a grant outside the
-    // inviting organization.
-    if (!isInvitableTemplate(template) || template.scopeType === 'platform') {
-      throw new Error(`Invitation template ${template.key} is not an organization template`);
-    }
-    const scopeOrgId = orgId;
-    const scopeOrgUnitId = template.scopeType === 'org_unit' ? orgUnitId : null;
-
-    await this.authzRepo.createGrant(
-      {
-        subjectUserId: userId,
-        templateKey: template.key,
-        actions: [...template.actions],
-        scopeType: template.scopeType,
-        scopeOrgId,
-        scopeOrgUnitId,
-        includeDescendants: template.scopeType === 'org_unit',
-        validFrom: now,
-        grantedByUserId,
-      },
-      tx,
-    );
+  /**
+   * SSO employees are not pre-staged (3.4.5 step 1): when the invitation's
+   * email domain is a verified domain of an ACTIVE connection of the
+   * inviting organization, acceptance creates nothing and hands back the
+   * start URL. The invitation stays pending; the SSO callback binds it to the
+   * federated identity (verified email + pending invitation of the
+   * connection's organization).
+   */
+  private async ssoResponseFor(
+    invitation: InvitationRow,
+    surface: 'workspace' | 'admin',
+  ): Promise<InvitationAcceptResponse | null> {
+    const emailDomain = invitation.email.split('@')[1] ?? '';
+    const hasSso = await this.invitations.hasSsoForEmailDomain(invitation.orgId, emailDomain);
+    if (!hasSso) return null;
+    const connection = await this.sso.findActiveConnectionForDomain(emailDomain);
+    if (!connection || connection.orgId !== invitation.orgId) return null;
+    return {
+      method: 'sso',
+      ssoStartUrl: buildSsoStartUrl(apiPublicUrlFrom(this.config.get<string>('API_PUBLIC_URL')), {
+        connection: connection.cognitoProviderName,
+        surface,
+      }),
+      challengeToken: null,
+      step: null,
+    };
   }
 
   /**
@@ -387,7 +340,7 @@ export class InvitationActivationService {
    * - employee -> email OTP via SignInService.emailOtpStart()
    * - staff/expert/employer_admin -> password with temp password via
    *   SignInService.passwordSignIn(), returning NEW_PASSWORD_REQUIRED challenge
-   * - SSO: if an active SSO connection with a matching verified domain exists
+   * (SSO invitations never get here: `accept` answers them first.)
    */
   private async buildSignInResponse(
     invitation: InvitationRow,
@@ -396,22 +349,6 @@ export class InvitationActivationService {
     meta: { ip: string | null; userAgent: string | null },
     tempPassword?: string,
   ): Promise<InvitationAcceptResponse> {
-    // Check SSO first.
-    const emailDomain = invitation.email.split('@')[1] ?? '';
-    const hasSso = await this.invitations.hasSsoForEmailDomain(
-      invitation.orgId,
-      emailDomain,
-    );
-    if (hasSso) {
-      // TODO(phase 3): return the actual SSO start URL.
-      return {
-        method: 'sso',
-        ssoStartUrl: null,
-        challengeToken: null,
-        step: null,
-      };
-    }
-
     const population = template.population;
 
     // Staff/expert/employer_admin: password flow with temporary password.

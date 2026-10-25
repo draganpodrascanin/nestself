@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InvitationActivationService } from './invitation-activation.service.js';
+import { InvitationMembershipActivator } from './invitation-membership-activator.js';
 import { hashToken } from './invitation-token.js';
 
 // ---------------------------------------------------------------------------
@@ -145,19 +146,28 @@ function buildService(overrides: Record<string, unknown> = {}) {
     idp,
     signIn,
     principalLoader,
+    sso: { findActiveConnectionForDomain: vi.fn().mockResolvedValue(null) },
+    config: { get: vi.fn((key: string) => (key === 'API_PUBLIC_URL' ? 'http://api.test' : undefined)) },
     ...overrides,
   };
 
+  const activator = new InvitationMembershipActivator(
+    deps.invitations as never,
+    deps.membershipRepo as never,
+    deps.authzRepo as never,
+    deps.audit as never,
+  );
   const service = new InvitationActivationService(
     deps.dbs as never,
     deps.invitations as never,
     deps.identities as never,
-    deps.membershipRepo as never,
-    deps.authzRepo as never,
     deps.audit as never,
     deps.idp as never,
     deps.signIn as never,
     deps.principalLoader as never,
+    activator,
+    deps.sso as never,
+    deps.config as never,
   );
 
   return { service, ...deps };
@@ -216,6 +226,41 @@ describe('InvitationActivationService', () => {
     const token = 'a'.repeat(64);
     const surface = 'workspace' as const;
     const meta = { ip: '127.0.0.1', userAgent: 'vitest' };
+
+    it('answers sso with the start URL and writes nothing when the domain belongs to an ACTIVE connection of the org', async () => {
+      const inv = validInvitation({ email: 'invitee@acme.example' });
+      const { service, invitations, identities, dbs, idp, sso, signIn } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      invitations.hasSsoForEmailDomain.mockResolvedValue(true);
+      sso.findActiveConnectionForDomain.mockResolvedValue({ orgId: 'org_sample', cognitoProviderName: 'org-acme-saml' });
+
+      const result = await service.accept(token, surface, meta);
+
+      expect(result).toEqual({
+        method: 'sso',
+        ssoStartUrl: 'http://api.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace',
+        challengeToken: null,
+        step: null,
+      });
+      expect(dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(identities.createUser).not.toHaveBeenCalled();
+      expect(idp.createUser).not.toHaveBeenCalled();
+      expect(invitations.accept).not.toHaveBeenCalled();
+      expect(signIn.emailOtpStart).not.toHaveBeenCalled();
+    });
+
+    it('ignores an ACTIVE connection of another organization for the domain', async () => {
+      const inv = validInvitation({ email: 'invitee@acme.example' });
+      const { service, invitations, sso } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      invitations.hasSsoForEmailDomain.mockResolvedValue(true);
+      sso.findActiveConnectionForDomain.mockResolvedValue({ orgId: 'org_other', cognitoProviderName: 'org-x-saml' });
+
+      const result = await service.accept(token, surface, meta);
+
+      expect(result).toHaveProperty('method', 'email_otp');
+      expect(invitations.accept).toHaveBeenCalled();
+    });
 
     it('creates user, membership, grants and returns email_otp for employee', async () => {
       const inv = validInvitation();

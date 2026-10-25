@@ -39,6 +39,49 @@ export const DiscoverResponseSchema = z.object({
 });
 export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
+// ---------------------------------------------------------------------------
+// Enterprise SSO redirect (API-R-06, API-R-07)
+// ---------------------------------------------------------------------------
+
+/**
+ * API-R-06: a return path is relative. It starts with a single `/`, contains
+ * no `//` (protocol-relative or authority), no backslash (browsers read `/\`
+ * as `//`) and no control characters.
+ */
+export function isRelativeReturnPath(value: string): boolean {
+  if (!value.startsWith('/')) return false;
+  if (value.includes('//') || value.includes('\\')) return false;
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
+  return !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+export const SsoReturnPathSchema = z
+  .string()
+  .max(2048)
+  .refine(isRelativeReturnPath, 'returnPath must be a relative path');
+
+/** `GET /auth/sso/start` query. `connection` is the connection's `cognitoProviderName`. */
+export const SsoStartQuerySchema = z.object({
+  connection: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/),
+  surface: z.enum(['workspace', 'admin']),
+  returnPath: SsoReturnPathSchema.optional(),
+  /** Staff test sign-in of a TESTING connection (`POST /ops/sso-connections/:id/test`). */
+  test: z.literal('1').optional(),
+});
+export type SsoStartQuery = z.infer<typeof SsoStartQuerySchema>;
+
+/** `GET /auth/sso/callback` query as Cognito sends it (`error` instead of `code` on failure). */
+export const SsoCallbackQuerySchema = z.object({
+  code: z.string().min(1).max(2048).optional(),
+  state: z.string().min(1).max(256).optional(),
+  error: z.string().max(256).optional(),
+});
+export type SsoCallbackQuery = z.infer<typeof SsoCallbackQuerySchema>;
+
+/** `?reason=` values the SSO callback puts on the surface's `/sign-in` URL. */
+export const SSO_SIGN_IN_REASONS = ['sso_denied', 'sso_email_unverified'] as const;
+export type SsoSignInReason = (typeof SSO_SIGN_IN_REASONS)[number];
+
 export const EmailOtpStartRequestSchema = z.object({
   email: emailField,
   /** Language of the code email (Cognito CustomMessage trigger). Pool default when absent. */
