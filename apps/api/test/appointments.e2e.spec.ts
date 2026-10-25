@@ -183,8 +183,11 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'appointments');
     await seed(testDb.db);
     // The seeded sample appointments (T-CW-1.1) belong to the same people;
-    // this suite counts every appointment row, so it starts from none.
-    const sampleSessionIds = SAMPLE_CALL_SESSIONS.map((session) => session.id);
+    // this suite counts every appointment row, so it starts from none. The
+    // sample webinar's session (T-CW-2.1) stays: it holds the sample chat.
+    const sampleSessionIds = SAMPLE_CALL_SESSIONS.filter((session) => session.format === 'consultation').map(
+      (session) => session.id,
+    );
     const sampleAppointmentIds = SAMPLE_APPOINTMENTS.map((appointment) => appointment.id);
     await testDb.db.delete(callFeedback).where(inArray(callFeedback.sessionId, sampleSessionIds));
     await testDb.db.delete(callOutcomes).where(inArray(callOutcomes.sessionId, sampleSessionIds));
@@ -355,7 +358,10 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
 
     const rows = await testDb.db.select({ id: appointments.id }).from(appointments);
     expect(rows.map((r) => r.id)).toEqual([confirmedId]);
-    const caseAssignments = await testDb.db.select().from(assignments).where(eq(assignments.kind, 'CASE'));
+    // The seed's webinar presenters hold CASE assignments on their occurrences (T-CW-2.1).
+    const caseAssignments = (await testDb.db.select().from(assignments).where(eq(assignments.kind, 'CASE'))).filter(
+      (a) => a.reason !== 'webinar_presenter',
+    );
     expect(caseAssignments.map((a) => a.targetId).filter((t) => t !== 'case_sample')).toEqual([confirmedId]);
   });
 

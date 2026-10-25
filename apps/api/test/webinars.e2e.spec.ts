@@ -1,0 +1,780 @@
+/**
+ * Webinar e2e tests (T-CW-2.1, NS-CALLS-01): the occurrence form,
+ * registration, the live session, the chat, hand-raise, the floor, polls
+ * and attendance over HTTP against the `FakeVideoProvider`, with the golden
+ * cases of the task (05-tasks T-CW-2.1 step 11), guidelines 7.3 and 15, and
+ * D-CW-30 (employer-scoped principals get 404 on attendance and every ops
+ * route).
+ *
+ * Principals: `user_nikola` operations (`client_operations` through his
+ * CLIENT assignment to `org_sample`: event.manage and event.moderate), the
+ * occurrence's moderator; `user_milica` the expert, its presenter (the
+ * occurrence form gives her the CASE assignment the `expert` template's
+ * `event.present` needs); `user_jovan` and `user_ana` employees;
+ * `user_ivana` HR (employer owner, hr_admin and employee templates);
+ * `user_stefan` a team manager whose employee grant is revoked, so that he is
+ * employer-scoped only.
+ *
+ * The webinar queue gets Redis under a run-specific prefix when Redis
+ * answers (reminders and the recording start job); the rest of the
+ * application runs on the in-memory store. Every test starts with an empty
+ * throttle store: the suite registers more than ten times a minute from one
+ * address.
+ *
+ * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
+ */
+import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
+import request from 'supertest';
+import { and, eq } from 'drizzle-orm';
+import { Redis } from 'ioredis';
+import {
+  WEBINAR_SINGLE_MEETING_CAPACITY,
+  WebinarAttendanceResponseSchema,
+  WebinarJoinResponseSchema,
+  WebinarListResponseSchema,
+  WebinarMessageListResponseSchema,
+  WebinarModerationMessageListResponseSchema,
+  WebinarOpsListResponseSchema,
+  WebinarOpsResponseSchema,
+  WebinarPollResultsSchema,
+  WebinarResponseSchema,
+  type WebinarJoinResponse,
+} from '@nestself/contracts';
+import { SAMPLE_DEV_PASSWORD, SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
+import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { computeTotp } from '../src/identity/totp.js';
+import { AuditWriter, type AuditEventInput } from '../src/audit/audit-writer.js';
+import { VIDEO_PROVIDER } from '../src/video/video-provider.js';
+import type { FakeVideoProvider } from '../src/video/fake-video-provider.js';
+import { RoomEmitter } from '../src/ws/room-emitter.js';
+import { WebinarJobSchedulerService, webinarReminderJobIds } from '../src/jobs/webinar-job-scheduler.service.js';
+import { WebinarsRepository } from '../src/webinars/webinars.repository.js';
+import { seed } from '../src/db/seed/seed-lib.js';
+import {
+  assignments,
+  callSessions,
+  grants,
+  orgUnits,
+  webinarPollResults,
+  webinarRegistrations,
+} from '../src/db/schema/index.js';
+import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+
+const TEST_DB_URL = process.env.TEST_DATABASE_URL;
+const shouldRun = !!TEST_DB_URL;
+const REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://localhost:6379';
+
+const ORG = 'org_sample';
+const MINUTE = 60_000;
+/** Fixed TOTP secret for the staff and expert users of this suite (base32). */
+const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
+const STAFF = ['user_milica', 'user_nikola'];
+const PEOPLE = ['user_milica', 'user_nikola', 'user_jovan', 'user_ana', 'user_ivana', 'user_stefan'];
+/** A unit of the sample organisation nobody belongs to: its audience is empty of our employees. */
+const ELSEWHERE_UNIT = 'ou_wbn_elsewhere';
+
+/** The keys each webinar audit event may carry (guidelines 7.5, CW-R-33a). */
+const WEBINAR_AUDIT_DETAIL_KEYS: Record<string, string[]> = {
+  'webinar.created': ['createdByUserId', 'webinarId'],
+  'webinar.published': ['webinarId'],
+  'webinar.canceled': ['webinarId'],
+  'webinar.started': ['sessionId', 'webinarId'],
+  'webinar.ended': ['sessionId', 'webinarId'],
+  'webinar.registered': ['userId', 'webinarId'],
+  'webinar.unregistered': ['userId', 'webinarId'],
+  'webinar.joined': ['participantId', 'webinarId'],
+  'webinar.message.submitted': ['messageId', 'webinarId'],
+  'webinar.message.published': ['messageId', 'webinarId'],
+  'webinar.message.answered': ['messageId', 'webinarId'],
+  'webinar.message.dismissed': ['messageId', 'webinarId'],
+  'webinar.floor.given': ['participantId', 'recordingNoticeShown', 'webinarId'],
+  'webinar.floor.taken': ['participantId', 'webinarId'],
+  'webinar.poll.opened': ['pollId', 'webinarId'],
+  'webinar.poll.closed': ['pollId', 'webinarId'],
+};
+
+interface SignedIn {
+  agent: request.Agent;
+  csrf: string;
+}
+
+async function redisAnswers(url: string): Promise<boolean> {
+  const client = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 0, connectTimeout: 1_000 });
+  client.on('error', () => undefined);
+  try {
+    await client.connect();
+    return (await client.ping()) === 'PONG';
+  } catch {
+    return false;
+  } finally {
+    client.disconnect();
+  }
+}
+
+describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
+  let app: INestApplication;
+  let idp: FakeIdentityProvider;
+  let testDb: TestDatabase;
+  let video: FakeVideoProvider;
+  let scheduler: WebinarJobSchedulerService;
+  let redisUp = false;
+  let emit: ReturnType<typeof vi.spyOn>;
+  let auditRecord: ReturnType<typeof vi.spyOn>;
+  const auditLog: AuditEventInput[] = [];
+  const jwtSecret = randomBytes(32).toString('hex');
+  const queuePrefix = `nestself-test-cw21-${randomBytes(4).toString('hex')}`;
+
+  let nikola: SignedIn;
+  let milica: SignedIn;
+  let jovan: SignedIn;
+  let ana: SignedIn;
+  let ivana: SignedIn;
+  let stefan: SignedIn;
+
+  /** The live webinar of the golden flow: org_sample, capacity 2, starts in 5 minutes. */
+  let liveId: string;
+  let presenterJoin: WebinarJoinResponse;
+  let attendeeJoin: WebinarJoinResponse;
+
+  function extractCsrf(res: request.Response): string {
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const csrf = cookies?.find((c) => c.startsWith('nestself_csrf='))?.match(/nestself_csrf=([^;]+)/);
+    if (!csrf) throw new Error('CSRF cookie not found');
+    return csrf[1]!;
+  }
+
+  async function switchContext(who: SignedIn, context: Record<string, string>) {
+    const res = await who.agent.post('/api/auth/context').set('X-CSRF-Token', who.csrf).send({ context });
+    expect(res.status).toBe(200);
+  }
+
+  async function signInStaff(userId: string, context: Record<string, string>): Promise<SignedIn> {
+    const agent = request.agent(app.getHttpServer());
+    const pw = await agent.post('/api/auth/password').send({ email: `${userId}@example.com`, password: SAMPLE_DEV_PASSWORD });
+    expect(pw.status).toBe(200);
+    const totp = await agent
+      .post('/api/auth/challenge')
+      .send({ challengeToken: pw.body.challengeToken, response: computeTotp(TOTP_SECRET) });
+    expect(totp.status).toBe(200);
+    const who = { agent, csrf: extractCsrf(totp) };
+    await switchContext(who, context);
+    return who;
+  }
+
+  async function signInMember(userId: string): Promise<SignedIn> {
+    const email = `${userId}@example.com`;
+    const agent = request.agent(app.getHttpServer());
+    const start = await agent.post('/api/auth/email-otp/start').send({ email });
+    expect(start.status).toBe(200);
+    const code = idp.sentCodes.filter((c) => c.email === email).pop()!.code;
+    const verify = await agent.post('/api/auth/email-otp/verify').send({ challengeToken: start.body.challengeToken, code });
+    expect(verify.status).toBe(200);
+    const who = { agent, csrf: extractCsrf(verify) };
+    await switchContext(who, { kind: 'organization', orgId: ORG });
+    return who;
+  }
+
+  const post = (who: SignedIn, path: string, body: unknown = {}) =>
+    who.agent.post(`/api${path}`).set('X-CSRF-Token', who.csrf).send(body as object);
+  const patch = (who: SignedIn, path: string, body: unknown) =>
+    who.agent.patch(`/api${path}`).set('X-CSRF-Token', who.csrf).send(body as object);
+  const del = (who: SignedIn, path: string) => who.agent.delete(`/api${path}`).set('X-CSRF-Token', who.csrf);
+  const get = (who: SignedIn, path: string) => who.agent.get(`/api${path}`);
+
+  function expectNotFound(res: request.Response) {
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body).toMatchObject({ status: 404, code: 'not_found', message: 'Resource not found' });
+  }
+
+  function expectCode(res: request.Response, status: number, code: string) {
+    expect(res.status, JSON.stringify(res.body)).toBe(status);
+    expect(res.body.code).toBe(code);
+  }
+
+  function emitted(event: string): [string, string, Record<string, unknown>][] {
+    return (emit.mock.calls as [string, string, Record<string, unknown>][]).filter((call) => call[1] === event);
+  }
+
+  function occurrence(overrides: Record<string, unknown> = {}) {
+    const startsAt = new Date(Date.now() + 5 * MINUTE);
+    return {
+      title: { en: 'Taking breaks during the working day', 'sr-Latn': 'Pauze tokom radnog dana' },
+      description: { en: 'Short, simple breaks.' },
+      presenterUserIds: ['user_milica'],
+      moderatorUserId: 'user_nikola',
+      startsAt: startsAt.toISOString(),
+      endsAt: new Date(startsAt.getTime() + 60 * MINUTE).toISOString(),
+      timeZone: 'Europe/Belgrade',
+      audiencePolicy: { type: 'organization', orgIds: [ORG] },
+      capacity: 2,
+      ...overrides,
+    };
+  }
+
+  async function createPublished(overrides: Record<string, unknown> = {}): Promise<string> {
+    const created = await post(nikola, '/ops/webinars', occurrence(overrides));
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const published = await post(nikola, `/ops/webinars/${created.body.id}/publish`);
+    expect(published.status, JSON.stringify(published.body)).toBe(200);
+    return created.body.id as string;
+  }
+
+  beforeAll(async () => {
+    testDb = await resetTestDatabase(TEST_DB_URL!, 'webinars');
+    await seed(testDb.db);
+
+    process.env.DATABASE_URL = testDb.url;
+    process.env.AUTH_MODE = 'stub';
+    process.env.VIDEO_PROVIDER = 'none';
+    process.env.JWT_SECRET = jwtSecret;
+    process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
+    process.env.NODE_ENV = 'test';
+    delete process.env.REDIS_URL;
+
+    redisUp = await redisAnswers(REDIS_URL);
+    const schedulerConfig = { get: (key: string) => (key === 'REDIS_URL' && redisUp ? REDIS_URL : undefined) };
+
+    const { AppModule } = await import('../src/app.module.js');
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(WebinarJobSchedulerService)
+      .useFactory({
+        factory: () => {
+          scheduler = new WebinarJobSchedulerService(schedulerConfig as unknown as ConfigService);
+          scheduler.prefix = queuePrefix;
+          return scheduler;
+        },
+      })
+      .compile();
+    const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+
+    video = app.get<FakeVideoProvider>(VIDEO_PROVIDER);
+    emit = vi.spyOn(app.get(RoomEmitter), 'emit');
+    // Every audit event of the run, for the hygiene test at the end (spies are cleared between tests).
+    const writer = app.get(AuditWriter);
+    const record = writer.record.bind(writer);
+    writer.record = async (input) => {
+      auditLog.push(input);
+      return record(input);
+    };
+    auditRecord = vi.spyOn(writer, 'record');
+
+    idp = app.get(IdentityProviderService) as FakeIdentityProvider;
+    const staffLogin = { password: SAMPLE_DEV_PASSWORD, totpSecret: TOTP_SECRET, totpEnrolled: true };
+    idp.seedUsers(
+      SAMPLE_EXTERNAL_IDENTITIES.filter((i) => PEOPLE.includes(i.userId)).map((i) => ({
+        email: i.email,
+        sub: i.subject,
+        username: i.cognitoUsername,
+        ...(STAFF.includes(i.userId) ? staffLogin : {}),
+      })),
+    );
+
+    // Stefan keeps team_manager only: an employer-scoped principal.
+    await testDb.db
+      .update(grants)
+      .set({ revokedAt: new Date('2026-01-02'), revokedReason: 'test_fixture' })
+      .where(eq(grants.id, 'grant_user_stefan_employee'));
+    await testDb.db.insert(orgUnits).values({ id: ELSEWHERE_UNIT, orgId: ORG, kind: 'TEAM', name: 'Elsewhere' });
+
+    nikola = await signInStaff('user_nikola', { kind: 'operations' });
+    milica = await signInStaff('user_milica', { kind: 'expert' });
+    jovan = await signInMember('user_jovan');
+    ana = await signInMember('user_ana');
+    ivana = await signInMember('user_ivana');
+    stefan = await signInMember('user_stefan');
+  }, 180_000);
+
+  beforeEach(() => {
+    // The in-memory store keeps the hit times apart from the counters; both go.
+    const throttles = app.get<ThrottlerStorageService>(ThrottlerStorage, { strict: false });
+    throttles.storage.clear();
+    (throttles as unknown as { hitExpirations: Map<string, unknown> }).hitExpirations.clear();
+  });
+
+  afterAll(async () => {
+    if (redisUp) await scheduler?.getQueue()?.obliterate({ force: true }).catch(() => undefined);
+    await app?.close();
+    await testDb?.close();
+  });
+
+  // ── Occurrence form (WBN-30, D-CW-34, D-CW-36) ─────────────────────────────
+
+  it('creation with capacity 300 returns 400 capacity_above_limit naming the limit (D-CW-36)', async () => {
+    const res = await post(nikola, '/ops/webinars', occurrence({ capacity: 300 }));
+    expectCode(res, 400, 'capacity_above_limit');
+    expect(res.body.details).toEqual({ field: 'capacity', limit: WEBINAR_SINGLE_MEETING_CAPACITY });
+    const patched = await patch(nikola, '/ops/webinars/webinar_sample_ended', { capacity: 251 });
+    expectCode(patched, 400, 'capacity_above_limit');
+  });
+
+  it('operations create a draft occurrence without a recording switch; the presenter gets her CASE assignment', async () => {
+    expectCode(await post(nikola, '/ops/webinars', occurrence({ recordingPolicy: 'off' })), 400, 'validation');
+
+    const res = await post(nikola, '/ops/webinars', occurrence());
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const created = WebinarOpsResponseSchema.parse(res.body);
+    expect(created).toMatchObject({ orgId: ORG, status: 'draft', capacity: 2, chatPolicy: 'moderated' });
+    expect(created.hosts).toEqual([
+      { userId: 'user_milica', role: 'presenter', displayName: 'Milica' },
+      { userId: 'user_nikola', role: 'moderator', displayName: 'Nikola' },
+    ]);
+    liveId = created.id;
+
+    const caseRows = await testDb.db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.userId, 'user_milica'), eq(assignments.targetId, liveId)));
+    expect(caseRows).toEqual([expect.objectContaining({ kind: 'CASE', reason: 'webinar_presenter', endAt: null })]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.created', details: { webinarId: liveId, createdByUserId: 'user_nikola' } }),
+    );
+  });
+
+  it('a draft is invisible to employees; publishing makes it visible (WBN-31, WBN-01)', async () => {
+    expectNotFound(await get(jovan, `/webinars/${liveId}`));
+    expectCode(await post(jovan, `/webinars/${liveId}/register`), 409, 'webinar_not_open');
+
+    const published = await post(nikola, `/ops/webinars/${liveId}/publish`);
+    expect(published.body).toEqual({ webinarId: liveId, status: 'published' });
+
+    const list = WebinarListResponseSchema.parse((await get(jovan, '/webinars')).body);
+    const item = list.items.find((w) => w.id === liveId)!;
+    expect(item).toMatchObject({ status: 'published', capacity: 2, capacityRemaining: 2, registered: false });
+    expect(item.presenters).toEqual([{ displayName: 'Milica' }]);
+    // The occurrence open to all eligible organisations is listed too; the ended one is not by default.
+    expect(list.items.map((w) => w.id)).toContain('webinar_sample_upcoming');
+    expect(list.items.map((w) => w.id)).not.toContain('webinar_sample_ended');
+  });
+
+  it('employer-scoped principals get 404 on attendance and on every ops route (D-CW-30, CW-R-72)', async () => {
+    for (const who of [ivana, stefan]) {
+      expectNotFound(await get(who, '/ops/webinars'));
+      expectNotFound(await post(who, '/ops/webinars', occurrence()));
+      expectNotFound(await patch(who, `/ops/webinars/${liveId}`, { capacity: 3 }));
+      expectNotFound(await post(who, `/ops/webinars/${liveId}/publish`));
+      expectNotFound(await post(who, `/ops/webinars/${liveId}/cancel`));
+      expectNotFound(await get(who, `/ops/webinars/${liveId}/attendance`));
+      expectNotFound(await get(who, '/ops/webinars/webinar_sample_ended/attendance'));
+    }
+    // Stefan holds no event.register: the employee routes are 404 for him as well.
+    expectNotFound(await get(stefan, '/webinars'));
+    expectNotFound(await get(stefan, `/webinars/${liveId}`));
+    expectNotFound(await post(stefan, `/webinars/${liveId}/register`));
+  });
+
+  // ── Registration (WBN-02, WBN-03, CW-R-31) ────────────────────────────────
+
+  it('registers within capacity, refuses a duplicate with already_registered and a full webinar with webinar_full', async () => {
+    const first = await post(jovan, `/webinars/${liveId}/register`);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body).toMatchObject({ webinarId: liveId, registered: true });
+    expectCode(await post(jovan, `/webinars/${liveId}/register`), 409, 'already_registered');
+    expect((await post(ana, `/webinars/${liveId}/register`)).status).toBe(200);
+    // Capacity 2 is reached: Ivana (an eligible employee too) is refused.
+    expectCode(await post(ivana, `/webinars/${liveId}/register`), 409, 'webinar_full');
+
+    const detail = WebinarResponseSchema.parse((await get(jovan, `/webinars/${liveId}`)).body);
+    expect(detail).toMatchObject({ registered: true, capacityRemaining: 0 });
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.registered', details: { webinarId: liveId, userId: 'user_jovan' } }),
+    );
+  });
+
+  it('concurrent registrations never exceed the capacity (SELECT ... FOR UPDATE, CW-R-31)', async () => {
+    const id = await createPublished({ capacity: 1 });
+    const results = await Promise.all([jovan, ana, ivana].map((who) => post(who, `/webinars/${id}/register`)));
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409]);
+    expect(results.filter((r) => r.status === 409).every((r) => r.body.code === 'webinar_full')).toBe(true);
+    const rows = await testDb.db.select().from(webinarRegistrations).where(eq(webinarRegistrations.webinarId, id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('an employee outside the audience gets 403 not_eligible and never sees the occurrence (D-CW-17, CW-R-32)', async () => {
+    const id = await createPublished({ audiencePolicy: { type: 'org_unit', orgId: ORG, orgUnitIds: [ELSEWHERE_UNIT] } });
+    expectCode(await post(jovan, `/webinars/${id}/register`), 403, 'not_eligible');
+    expectNotFound(await get(jovan, `/webinars/${id}`));
+    const list = WebinarListResponseSchema.parse((await get(jovan, '/webinars')).body);
+    expect(list.items.map((w) => w.id)).not.toContain(id);
+  });
+
+  it('schedules the reminders at registration and removes them on unregistration (WBN-05, CW-R-37a)', async () => {
+    const startsAt = new Date(Date.now() + 3 * 24 * 60 * MINUTE);
+    const id = await createPublished({
+      startsAt: startsAt.toISOString(),
+      endsAt: new Date(startsAt.getTime() + 60 * MINUTE).toISOString(),
+    });
+    expect((await post(jovan, `/webinars/${id}/register`)).status).toBe(200);
+    const [registration] = await testDb.db
+      .select()
+      .from(webinarRegistrations)
+      .where(and(eq(webinarRegistrations.webinarId, id), eq(webinarRegistrations.userId, 'user_jovan')));
+    if (redisUp) {
+      const delayed = await scheduler.getQueue()!.getDelayed();
+      expect(delayed.map((job) => job.id).filter((jobId) => jobId?.includes(registration!.id)).sort()).toEqual(
+        webinarReminderJobIds(registration!.id).sort(),
+      );
+    }
+
+    const unregistered = await del(jovan, `/webinars/${id}/register`);
+    expect(unregistered.body).toEqual({ webinarId: id, registered: false, registeredAt: null });
+    expectNotFound(await del(jovan, `/webinars/${id}/register`));
+    if (redisUp) {
+      const delayed = await scheduler.getQueue()!.getDelayed();
+      expect(delayed.filter((job) => job.id?.includes(registration!.id))).toEqual([]);
+    }
+    // Registering again reuses the one row (CW-R-24a).
+    expect((await post(jovan, `/webinars/${id}/register`)).status).toBe(200);
+
+    // A canceled occurrence refuses registration with webinar_not_open (WBN-32).
+    expect((await post(nikola, `/ops/webinars/${id}/cancel`)).body).toEqual({ webinarId: id, status: 'canceled' });
+    expectCode(await post(ana, `/webinars/${id}/register`), 409, 'webinar_not_open');
+  });
+
+  // ── Start (WBN-17, CW-R-31a) ──────────────────────────────────────────────
+
+  it('an attendee waits in the lobby before the start (webinar_not_open)', async () => {
+    expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
+  });
+
+  it('an attendee cannot start the webinar: 404, as for anyone who is not a host (CW-R-31a)', async () => {
+    expectNotFound(await post(jovan, `/webinars/${liveId}/start`));
+    expectNotFound(await post(ivana, `/webinars/${liveId}/start`));
+    expectNotFound(await post(stefan, `/webinars/${liveId}/end`));
+  });
+
+  it('the presenter can start: published to live, webinar.state, the recording start job (WBN-17, CW-R-107)', async () => {
+    const res = await post(milica, `/webinars/${liveId}/start`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ webinarId: liveId, status: 'live' });
+    expect(emitted('webinar.state')).toContainEqual([`webinar:${liveId}`, 'webinar.state', { webinarId: liveId, status: 'live' }]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'webinar.started', details: { webinarId: liveId, sessionId: null } }),
+    );
+    if (redisUp) {
+      const job = await scheduler.getQueue()!.getJob(`webinar.recording.start/${liveId}`);
+      expect(job?.data).toEqual({ webinarId: liveId, sessionId: null });
+    }
+    // Every webinar is recorded: the status stays SCHEDULED until the pipeline (T-CW-2.5) moves it.
+    const webinar = await app.get(WebinarsRepository).findById(liveId);
+    expect(webinar).toMatchObject({ status: 'live', recordingStatus: 'scheduled' });
+  });
+
+  it('registration after the start returns 409 registration_closed (WBN-03)', async () => {
+    expectCode(await post(ivana, `/webinars/${liveId}/register`), 409, 'registration_closed');
+    expectCode(await del(ana, `/webinars/${liveId}/register`), 409, 'registration_closed');
+  });
+
+  // ── Join (WBN-07, WBN-16, D-CW-35) ────────────────────────────────────────
+
+  it('attendees wait until a host opened the meeting; hosts join with send capabilities', async () => {
+    expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
+
+    const res = await post(milica, `/webinars/${liveId}/join`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    presenterJoin = WebinarJoinResponseSchema.parse(res.body);
+    expect(presenterJoin).toMatchObject({
+      role: 'presenter',
+      format: 'webinar',
+      capabilities: { audio: 'send_receive', video: 'send_receive', content: 'send_receive' },
+    });
+    const [session] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, presenterJoin.sessionId));
+    expect(session).toMatchObject({ format: 'WEBINAR', webinarId: liveId, orgId: ORG, status: 'ACTIVE' });
+
+    const moderatorJoin = WebinarJoinResponseSchema.parse((await post(nikola, `/webinars/${liveId}/join`)).body);
+    expect(moderatorJoin).toMatchObject({ role: 'moderator', sessionId: presenterJoin.sessionId });
+  });
+
+  it('an attendee joins receive-only on audio, video and content (WBN-07, CW-R-75, CW-R-71)', async () => {
+    const res = await post(jovan, `/webinars/${liveId}/join`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    attendeeJoin = WebinarJoinResponseSchema.parse(res.body);
+    expect(attendeeJoin).toMatchObject({
+      role: 'attendee',
+      sessionId: presenterJoin.sessionId,
+      capabilities: { audio: 'receive', video: 'receive', content: 'receive' },
+    });
+    expect(attendeeJoin.attendee.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+    expect(attendeeJoin.attendee.ExternalUserId).toBe(attendeeJoin.participantId);
+    expect(attendeeJoin.attendee.ExternalUserId).not.toBe('user_jovan');
+    expect(emitted('webinar.attendance.count')).toContainEqual([
+      `webinar:${liveId}:moderation`,
+      'webinar.attendance.count',
+      { webinarId: liveId, count: 1 },
+    ]);
+    // A rejoin returns the cached credentials.
+    const again = WebinarJoinResponseSchema.parse((await post(jovan, `/webinars/${liveId}/join`)).body);
+    expect(again.attendee.AttendeeId).toBe(attendeeJoin.attendee.AttendeeId);
+  });
+
+  it('an attendee cannot list the roster: no roster route, no names in the detail, 404 on attendance (WBN-08)', async () => {
+    // No such routes exist.
+    for (const path of ['participants', 'registrations', 'attendees', 'attendance']) {
+      expect((await get(jovan, `/webinars/${liveId}/${path}`)).status).toBe(404);
+    }
+    expectNotFound(await get(jovan, `/ops/webinars/${liveId}/attendance`));
+    const detail = (await get(jovan, `/webinars/${liveId}`)).body as Record<string, unknown>;
+    expect(WebinarResponseSchema.safeParse(detail).success).toBe(true);
+    expect(JSON.stringify(detail)).not.toMatch(/user_|Petrović|Jovan|Ana|participant/);
+  });
+
+  // ── Chat (WBN-09, WBN-20, WBN-23, WBN-24, WBN-37, D-CW-35) ────────────────
+
+  let questionId: string;
+  let messageId: string;
+
+  it('attendees write to the hosts, pending and anonymous unless they attach their first name (WBN-09)', async () => {
+    const question = await post(jovan, `/webinars/${liveId}/messages`, { kind: 'question', text: 'How long should a break be?' });
+    expect(question.status, JSON.stringify(question.body)).toBe(201);
+    expect(question.body).toMatchObject({ kind: 'question', status: 'pending', authorFirstName: null });
+    questionId = question.body.id;
+
+    const message = await post(ana, `/webinars/${liveId}/messages`, { kind: 'attendee', text: 'Thank you', showFirstName: true });
+    expect(message.body).toMatchObject({ status: 'pending', authorFirstName: 'Ana' });
+    messageId = message.body.id;
+
+    const submitted = emitted('webinar.message.submitted');
+    expect(submitted.map((call) => call[0])).toEqual([`webinar:${liveId}:moderation`, `webinar:${liveId}:moderation`]);
+    expect(submitted[0]![2]).toMatchObject({ id: questionId, authorName: 'Jovan Petrović', showFirstName: false });
+
+    // An attendee cannot post to everyone; a host cannot pose as an attendee (CW-R-110).
+    expect((await post(jovan, `/webinars/${liveId}/messages`, { kind: 'host', text: 'Hello all' })).status).toBe(403);
+    expect((await post(nikola, `/webinars/${liveId}/messages`, { kind: 'attendee', text: 'Hello' })).status).toBe(403);
+  });
+
+  it('hosts post to everyone, published at once (WBN-37)', async () => {
+    const res = await post(milica, `/webinars/${liveId}/messages`, { kind: 'host', text: 'Welcome, everyone.' });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body).toMatchObject({ kind: 'host', status: 'published', authorFirstName: 'Milica' });
+    expect(emitted('webinar.message.published').at(-1)![0]).toBe(`webinar:${liveId}`);
+  });
+
+  it('an attendee reads only published messages (CW-R-104, WBN-09 criterion 7)', async () => {
+    const res = await get(jovan, `/webinars/${liveId}/messages`);
+    expect(res.status).toBe(200);
+    const list = WebinarMessageListResponseSchema.parse(res.body);
+    expect(list.items.map((m) => [m.kind, m.status])).toEqual([['host', 'published']]);
+    expect(JSON.stringify(res.body)).not.toMatch(/authorName|authorParticipantId|user_/);
+  });
+
+  it('the moderator reads all messages with the registration names (WBN-23); the presenter reads the published ones (WBN-20)', async () => {
+    const res = await get(nikola, `/webinars/${liveId}/messages`);
+    expect(res.status).toBe(200);
+    const list = WebinarModerationMessageListResponseSchema.parse(res.body);
+    expect(list.items.map((m) => [m.kind, m.status, m.authorName])).toEqual([
+      ['question', 'pending', 'Jovan Petrović'],
+      ['attendee', 'pending', 'Ana Nikolić'],
+      ['host', 'published', null],
+    ]);
+    const presenter = WebinarMessageListResponseSchema.parse((await get(milica, `/webinars/${liveId}/messages`)).body);
+    expect(presenter.items.map((m) => m.status)).toEqual(['published']);
+    expectNotFound(await get(stefan, `/webinars/${liveId}/messages`));
+  });
+
+  it('the moderator publishes (editing the text), answers and dismisses (WBN-24)', async () => {
+    expectNotFound(await post(jovan, `/webinars/${liveId}/messages/${messageId}/publish`, {}));
+    expectNotFound(await post(milica, `/webinars/${liveId}/messages/${messageId}/publish`, {}));
+
+    const published = await post(nikola, `/webinars/${liveId}/messages/${messageId}/publish`, { text: 'Thank you!' });
+    expect(published.status, JSON.stringify(published.body)).toBe(200);
+    expect(published.body).toMatchObject({ status: 'published', text: 'Thank you!', authorName: 'Ana Nikolić' });
+    expect(emitted('webinar.message.published').at(-1)![2]).toMatchObject({ id: messageId, authorFirstName: 'Ana' });
+    expectCode(await post(nikola, `/webinars/${liveId}/messages/${messageId}/publish`, {}), 409, 'conflict');
+
+    const answered = await post(nikola, `/webinars/${liveId}/messages/${questionId}/answer`, {
+      answerText: 'A few minutes away from the screen.',
+    });
+    expect(answered.body).toMatchObject({ status: 'answered', answerText: 'A few minutes away from the screen.' });
+    expect(emitted('webinar.message.answered')).toHaveLength(1);
+
+    const pending = await post(jovan, `/webinars/${liveId}/messages`, { kind: 'attendee', text: 'Off topic' });
+    const dismissed = await post(nikola, `/webinars/${liveId}/messages/${pending.body.id}/dismiss`, {});
+    expect(dismissed.body).toMatchObject({ status: 'dismissed' });
+
+    const seen = WebinarMessageListResponseSchema.parse((await get(jovan, `/webinars/${liveId}/messages`)).body);
+    expect(seen.items.map((m) => m.status).sort()).toEqual(['answered', 'published', 'published']);
+  });
+
+  // ── Hand-raise and floor (WBN-10, WBN-25, D-CW-35) ────────────────────────
+
+  it('an attendee raises a hand; only the moderation room learns the name (WBN-10)', async () => {
+    const res = await post(jovan, `/webinars/${liveId}/hand`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.raised).toBe(true);
+    const [room, , payload] = emitted('webinar.hand.raised').at(-1)!;
+    expect(room).toBe(`webinar:${liveId}:moderation`);
+    expect(payload).toMatchObject({ participantId: attendeeJoin.participantId, participantName: 'Jovan Petrović' });
+    // Ana registered but never joined.
+    expectCode(await post(ana, `/webinars/${liveId}/hand`), 409, 'conflict');
+  });
+
+  it('give-floor sets audio to SendReceive and video stays Receive, for that attendee only (WBN-25, CW-R-108)', async () => {
+    const path = `/webinars/${liveId}/participants/${attendeeJoin.participantId}/give-floor`;
+    expectNotFound(await post(ana, path));
+    expectNotFound(await post(ivana, path));
+
+    const res = await post(nikola, path);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({
+      participantId: attendeeJoin.participantId,
+      hasFloor: true,
+      capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' },
+    });
+    const meeting = await video.describeSession({ providerMeetingId: presenterJoin.meeting.MeetingId });
+    expect(meeting).not.toBeNull();
+    const state = (video as unknown as { findAttendee(m: string, a: string): { Capabilities: unknown } }).findAttendee(
+      presenterJoin.meeting.MeetingId,
+      attendeeJoin.attendee.AttendeeId,
+    );
+    expect(state.Capabilities).toEqual({ Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' });
+
+    expect(emitted('webinar.floor.given')).toEqual([
+      [
+        'user:user_jovan',
+        'webinar.floor.given',
+        { participantId: attendeeJoin.participantId, capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' } },
+      ],
+    ]);
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'webinar.floor.given',
+        details: { webinarId: liveId, participantId: attendeeJoin.participantId, recordingNoticeShown: true },
+      }),
+    );
+    // Giving the floor lowered the hand.
+    expect(emitted('webinar.hand.lowered').at(-1)![2]).toEqual({ participantId: attendeeJoin.participantId });
+    // A host is not an attendee: there is no floor to give.
+    expectCode(
+      await post(nikola, `/webinars/${liveId}/participants/${presenterJoin.participantId}/give-floor`),
+      409,
+      'floor_not_available',
+    );
+  });
+
+  it('take-floor reverts audio to Receive (WBN-25 criterion 6)', async () => {
+    const res = await post(milica, `/webinars/${liveId}/participants/${attendeeJoin.participantId}/take-floor`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({
+      participantId: attendeeJoin.participantId,
+      hasFloor: false,
+      capabilities: { audio: 'receive', video: 'receive', content: 'receive' },
+    });
+    const state = (video as unknown as { findAttendee(m: string, a: string): { Capabilities: unknown } }).findAttendee(
+      presenterJoin.meeting.MeetingId,
+      attendeeJoin.attendee.AttendeeId,
+    );
+    expect(state.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+    expect(emitted('webinar.floor.taken').at(-1)![0]).toBe('user:user_jovan');
+
+    // The floor does not survive a reconnect: a rejoin with cached credentials is receive-only again (D-CW-35).
+    expect((await post(nikola, `/webinars/${liveId}/participants/${attendeeJoin.participantId}/give-floor`)).status).toBe(200);
+    const rejoin = WebinarJoinResponseSchema.parse((await post(jovan, `/webinars/${liveId}/join`)).body);
+    expect(rejoin.attendee.AttendeeId).toBe(attendeeJoin.attendee.AttendeeId);
+    const after = (video as unknown as { findAttendee(m: string, a: string): { Capabilities: unknown } }).findAttendee(
+      presenterJoin.meeting.MeetingId,
+      attendeeJoin.attendee.AttendeeId,
+    );
+    expect(after.Capabilities).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+  });
+
+  // ── Polls (WBN-11, WBN-27, CW-R-24) ───────────────────────────────────────
+
+  it('polls: created and opened by the moderator, one vote per attendee without a voter, aggregate results', async () => {
+    expectNotFound(await post(jovan, `/webinars/${liveId}/polls`, { question: 'Which break?', options: ['Walk', 'Tea'] }));
+    const created = await post(nikola, `/webinars/${liveId}/polls`, { question: 'Which break?', options: ['Walk', 'Tea'] });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const pollId = created.body.id as string;
+    const [walk, tea] = created.body.options as { id: string }[];
+    expectCode(await post(jovan, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: walk!.id }), 409, 'conflict');
+
+    const opened = await post(nikola, `/webinars/${liveId}/polls/${pollId}/open`);
+    expect(opened.body.openedAt).not.toBeNull();
+    expect(emitted('webinar.poll.opened').at(-1)![0]).toBe(`webinar:${liveId}`);
+
+    expect((await post(jovan, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: walk!.id })).body).toEqual({
+      pollId,
+      voted: true,
+    });
+    expectCode(await post(jovan, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: tea!.id }), 409, 'conflict');
+    expect((await post(ana, `/webinars/${liveId}/polls/${pollId}/vote`, { optionId: tea!.id, userId: 'x' })).status).toBe(400);
+
+    const closed = await post(nikola, `/webinars/${liveId}/polls/${pollId}/close`);
+    const results = WebinarPollResultsSchema.parse(closed.body);
+    expect(results).toEqual({
+      pollId,
+      totalVotes: 1,
+      results: [
+        { optionId: walk!.id, count: 1 },
+        { optionId: tea!.id, count: 0 },
+      ],
+    });
+    expect(emitted('webinar.poll.results').at(-1)![2]).toEqual(results);
+
+    const votes = await testDb.db.select().from(webinarPollResults).where(eq(webinarPollResults.pollId, pollId));
+    expect(votes.map((v) => Object.keys(v).sort())).toEqual([['id', 'optionId', 'orgId', 'pollId']]);
+    const [registration] = await testDb.db
+      .select()
+      .from(webinarRegistrations)
+      .where(and(eq(webinarRegistrations.webinarId, liveId), eq(webinarRegistrations.userId, 'user_jovan')));
+    expect(registration!.votedPollIds).toEqual([pollId]);
+  });
+
+  // ── Attendance and the ops index (WBN-33) ─────────────────────────────────
+
+  it('operations see attendance as counts and registration rows without names or user ids (WBN-33)', async () => {
+    const res = await get(nikola, `/ops/webinars/${liveId}/attendance`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const attendance = WebinarAttendanceResponseSchema.parse(res.body);
+    expect(attendance).toMatchObject({ webinarId: liveId, registeredCount: 2 });
+    expect(attendance.registrants).toHaveLength(2);
+    expect(JSON.stringify(res.body)).not.toMatch(/user_|Jovan|Ana|email/);
+
+    const sample = WebinarAttendanceResponseSchema.parse((await get(nikola, '/ops/webinars/webinar_sample_ended/attendance')).body);
+    expect(sample).toMatchObject({ registeredCount: 2, joinedCount: 2, peakConcurrent: 2 });
+
+    const index = WebinarOpsListResponseSchema.parse((await get(nikola, `/ops/webinars?orgId=${ORG}`)).body);
+    expect(index.items.map((w) => w.id)).toEqual(expect.arrayContaining([liveId, 'webinar_sample_ended']));
+  });
+
+  // ── End (WBN-21, WBN-29) ──────────────────────────────────────────────────
+
+  it('an attendee cannot end; a host ends for everyone and the room closes (WBN-21, CW-R-36b)', async () => {
+    expectNotFound(await post(jovan, `/webinars/${liveId}/end`));
+    const res = await post(nikola, `/webinars/${liveId}/end`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ webinarId: liveId, status: 'ended' });
+    const ended = emitted('webinar.ended').map((call) => call[0]);
+    expect(ended).toEqual([`webinar:${liveId}`, `webinar:${liveId}:moderation`]);
+    const [session] = await testDb.db.select().from(callSessions).where(eq(callSessions.id, presenterJoin.sessionId));
+    expect(session).toMatchObject({ status: 'ENDED' });
+    expect(await video.describeSession({ providerMeetingId: presenterJoin.meeting.MeetingId })).toBeNull();
+
+    expectCode(await post(jovan, `/webinars/${liveId}/join`), 409, 'webinar_not_open');
+    expect((await post(milica, `/webinars/${liveId}/end`)).body).toEqual({ webinarId: liveId, status: 'ended' });
+  });
+
+  // ── Audit hygiene (CW-R-33a, CW-R-69) ─────────────────────────────────────
+
+  it('every webinar audit event carries identifiers only, never a token or a name', () => {
+    const webinarEvents = auditLog.filter((event) => event.action.startsWith('webinar.'));
+    expect(new Set(webinarEvents.map((e) => e.action)).size).toBeGreaterThanOrEqual(14);
+    for (const event of webinarEvents) {
+      const expected = WEBINAR_AUDIT_DETAIL_KEYS[event.action];
+      expect(expected, event.action).toBeDefined();
+      expect(Object.keys(event.details ?? {}).sort(), event.action).toEqual(expected);
+      expect(JSON.stringify(event.details), event.action).not.toMatch(/JoinToken|fake-token|Petrović/);
+    }
+  });
+});

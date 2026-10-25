@@ -37,6 +37,9 @@ type DbHostRole = 'PRESENTER' | 'MODERATOR';
 
 const MINUTE_MS = 60_000;
 
+/** The CASE assignment reason of a presenter: the `expert` template's `assigned_cases` scope reaches the occurrence. */
+export const PRESENTER_ASSIGNMENT_REASON = 'webinar_presenter';
+
 // ---------------------------------------------------------------------------
 // Enum spellings (CW-R-19a)
 // ---------------------------------------------------------------------------

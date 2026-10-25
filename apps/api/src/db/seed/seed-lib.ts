@@ -22,16 +22,32 @@ import {
   SAMPLE_CASE,
   SAMPLE_APPOINTMENTS,
   SAMPLE_CALL_SESSIONS,
+  SAMPLE_WEBINARS,
+  SAMPLE_WEBINAR_MESSAGES,
+  SAMPLE_WEBINAR_POLLS,
   type SampleAppointment,
   type SampleCallSession,
+  type SampleWebinar,
+  type SampleWebinarMessage,
+  type SampleWebinarPoll,
 } from '@nestself/sample-data';
-// Calls and webinars: SAMPLE_APPOINTMENTS and the consultation entry of
+// Calls and webinars: SAMPLE_APPOINTMENTS and both entries of
 // SAMPLE_CALL_SESSIONS (call_sessions, call_participants, call_outcomes,
-// call_feedback) are seeded below (T-CW-1.1). SAMPLE_WEBINARS,
-// SAMPLE_WEBINAR_MESSAGES and SAMPLE_WEBINAR_POLLS, and the webinar session of
-// SAMPLE_CALL_SESSIONS (which points at a sample webinar), wait for the
-// webinars tables of T-CW-2.1.
-import { PERMISSION_TEMPLATES, type PermissionTemplateDefinition } from '@nestself/contracts';
+// call_feedback, T-CW-1.1), and SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES and
+// SAMPLE_WEBINAR_POLLS (T-CW-2.1) are seeded below.
+import {
+  PERMISSION_TEMPLATES,
+  type PermissionTemplateDefinition,
+  type WebinarAudiencePolicy,
+} from '@nestself/contracts';
+import { firstNameOf } from '../../appointments/appointment-mapper.js';
+import {
+  PRESENTER_ASSIGNMENT_REASON,
+  toDbHostRole,
+  toDbMessageKind,
+  toDbMessageStatus,
+  toDbWebinarStatus,
+} from '../../webinars/webinar-mapper.js';
 import { toDbAppointmentStatus } from '../../appointments/appointments.repository.js';
 import {
   toDbFormat,
@@ -462,7 +478,28 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       .onConflictDoNothing({ target: t.assignments.id });
   }
 
-  // ── Call sessions (T-CW-1.1): the ended consultation with its outcome and feedback ──
+  // ── Webinars (T-CW-2.1): occurrences, hosts with the presenters' CASE assignments, registrations ──
+  for (const sample of SAMPLE_WEBINARS) {
+    const rows = sampleWebinarRows(sample);
+    const { id: _webinarId, ...webinarUpdate } = rows.webinar;
+    await upsertById(db, t.webinars, rows.webinar, webinarUpdate);
+    for (const host of rows.hosts) {
+      const { id: _hostId, ...hostUpdate } = host;
+      await upsertById(db, t.webinarHosts, host, hostUpdate);
+    }
+    for (const assignment of rows.presenterAssignments) {
+      await db
+        .insert(t.assignments)
+        .values({ ...assignment, startAt: SAMPLE_START_DATE })
+        .onConflictDoNothing({ target: t.assignments.id });
+    }
+    for (const registration of rows.registrations) {
+      const { id: _registrationId, ...registrationUpdate } = registration;
+      await upsertById(db, t.webinarRegistrations, registration, registrationUpdate);
+    }
+  }
+
+  // ── Call sessions (T-CW-1.1): the ended consultation with its outcome and feedback, the ended webinar ──
   for (const sample of seededSampleCallSessions()) {
     const rows = sampleCallSessionRows(sample);
     const { id: _sessionId, ...sessionUpdate } = rows.session;
@@ -481,7 +518,180 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     }
   }
 
+  // ── Webinar chat and polls (T-CW-2.1): written in the webinar session, so after it ──
+  for (const message of SAMPLE_WEBINAR_MESSAGES) {
+    const row = sampleWebinarMessageRow(message);
+    const { id: _messageId, ...messageUpdate } = row;
+    await upsertById(db, t.webinarMessages, row, messageUpdate);
+  }
+  for (const sample of SAMPLE_WEBINAR_POLLS) {
+    const rows = sampleWebinarPollRows(sample);
+    const { id: _pollId, ...pollUpdate } = rows.poll;
+    await upsertById(db, t.webinarPolls, rows.poll, pollUpdate);
+    for (const option of rows.options) {
+      const { id: _optionId, ...optionUpdate } = option;
+      await upsertById(db, t.webinarPollOptions, option, optionUpdate);
+    }
+    for (const vote of rows.votes) {
+      await db.insert(t.webinarPollResults).values(vote).onConflictDoNothing({ target: t.webinarPollResults.id });
+    }
+  }
+
   return countAll(db);
+}
+
+// ── Webinar fixtures (T-CW-2.1) ──────────────────────────────────────────────
+// Note for the sample-data owners: `SampleWebinarStatus` in
+// `packages/sample-data/src/fixtures/webinars.ts` duplicates the contract's
+// `WebinarStatus` (it predates the webinar contracts); swap it for the
+// contract type when that file is next changed.
+
+/** The fixture's audience: `all_eligible`, or the id of the one organisation (D-CW-17). */
+export function sampleAudiencePolicy(audience: string): WebinarAudiencePolicy {
+  return audience === 'all_eligible' ? { type: 'all_eligible' } : { type: 'organization', orgIds: [audience] };
+}
+
+/** The sample person's first name, as an attendee would attach it (D-CW-35). */
+function sampleFirstName(userId: string): string | null {
+  return firstNameOf(SAMPLE_PEOPLE.find((person) => person.id === userId)?.displayName);
+}
+
+const sampleWebinar = (webinarId: string): SampleWebinar => {
+  const webinar = SAMPLE_WEBINARS.find((w) => w.id === webinarId);
+  if (!webinar) throw new Error(`sample webinar ${webinarId} is missing`);
+  return webinar;
+};
+
+/** The sample webinar session's participants by id. */
+function sampleParticipant(participantId: string): { userId: string; role: string } {
+  for (const session of SAMPLE_CALL_SESSIONS) {
+    const participant = session.participants.find((p) => p.id === participantId);
+    if (participant) return participant;
+  }
+  throw new Error(`sample call participant ${participantId} is missing`);
+}
+
+const sampleModerator = (webinar: SampleWebinar) => webinar.hosts.find((host) => host.role === 'moderator')?.userId ?? null;
+const samplePresenter = (webinar: SampleWebinar) => webinar.hosts.find((host) => host.role === 'presenter')?.userId ?? null;
+
+/**
+ * The rows of a sample occurrence. Title and description go in per locale
+ * (`jsonb`, the contract's `WebinarLocalizedTextSchema`); the attendees of the
+ * sample webinar session are its registrants, and each registration records
+ * that it voted in the sample polls, never the option (CW-R-24).
+ */
+export function sampleWebinarRows(sample: SampleWebinar) {
+  const webinar = {
+    id: sample.id,
+    orgId: sample.orgId,
+    title: sample.title,
+    description: sample.description,
+    audiencePolicy: sampleAudiencePolicy(sample.audiencePolicy),
+    capacity: sample.capacity,
+    startsAt: new Date(sample.startsAt),
+    endsAt: new Date(sample.endsAt),
+    timeZone: sample.timeZone,
+    status: toDbWebinarStatus(sample.status),
+    chatPolicy: sample.chatPolicy,
+    createdByUserId: sample.createdByUserId,
+  } satisfies typeof t.webinars.$inferInsert;
+  const hosts = sample.hosts.map(
+    (host) =>
+      ({
+        id: `webinar_host_${sample.id}_${host.userId}`,
+        webinarId: sample.id,
+        orgId: sample.orgId,
+        userId: host.userId,
+        role: toDbHostRole(host.role),
+        displayName: host.displayName,
+      }) satisfies typeof t.webinarHosts.$inferInsert,
+  );
+  const presenterAssignments = sample.hosts
+    .filter((host) => host.role === 'presenter')
+    .map((host) => ({
+      id: `assignment_${host.userId}_case_${sample.id}`,
+      userId: host.userId,
+      kind: 'CASE' as const,
+      targetId: sample.id,
+      assignedByUserId: sample.createdByUserId,
+      reason: PRESENTER_ASSIGNMENT_REASON,
+    }));
+  const pollIds = SAMPLE_WEBINAR_POLLS.filter((poll) => poll.webinarId === sample.id).map((poll) => poll.id);
+  const attendees = SAMPLE_CALL_SESSIONS.filter((session) => session.webinarId === sample.id).flatMap((session) =>
+    session.participants.filter((participant) => participant.role === 'attendee'),
+  );
+  const registrations = [...new Set(attendees.map((attendee) => attendee.userId))].map(
+    (userId) =>
+      ({
+        id: `webinar_registration_${sample.id}_${userId}`,
+        webinarId: sample.id,
+        orgId: SAMPLE_PEOPLE.find((person) => person.id === userId)?.orgId ?? sample.orgId,
+        userId,
+        registeredAt: new Date(new Date(sample.startsAt).getTime() - 7 * 24 * 60 * 60_000),
+        votedPollIds: pollIds,
+      }) satisfies typeof t.webinarRegistrations.$inferInsert,
+  );
+  return { webinar, hosts, presenterAssignments, registrations };
+}
+
+/**
+ * A sample chat message: the author from the session's participant, the
+ * first name only where the attendee attached it, the host's display name
+ * on host posts, the moderator as publisher and the presenter as answerer.
+ */
+export function sampleWebinarMessageRow(message: SampleWebinarMessage) {
+  const webinar = sampleWebinar(message.webinarId);
+  const author = message.authorParticipantId ? sampleParticipant(message.authorParticipantId) : null;
+  const authorUserId = author?.userId ?? sampleModerator(webinar) ?? webinar.createdByUserId;
+  const host = webinar.hosts.find((h) => h.userId === authorUserId);
+  const authorFirstName =
+    message.kind === 'host' ? (host?.displayName ?? sampleFirstName(authorUserId)) : message.showFirstName ? sampleFirstName(authorUserId) : null;
+  const published = message.status === 'published' || message.status === 'answered';
+  return {
+    id: message.id,
+    webinarId: message.webinarId,
+    orgId: webinar.orgId,
+    sessionId: message.sessionId,
+    authorParticipantId: message.authorParticipantId,
+    authorUserId,
+    kind: toDbMessageKind(message.kind),
+    status: toDbMessageStatus(message.status),
+    text: message.text,
+    showFirstName: message.kind !== 'host' && authorFirstName !== null,
+    authorFirstName,
+    publishedAt: message.publishedAt ? new Date(message.publishedAt) : null,
+    publishedByUserId: published ? (message.kind === 'host' ? authorUserId : sampleModerator(webinar)) : null,
+    answerText: message.answerText,
+    answeredByUserId: message.status === 'answered' ? samplePresenter(webinar) : null,
+    createdAt: new Date(message.createdAt),
+  } satisfies typeof t.webinarMessages.$inferInsert;
+}
+
+/** A sample poll with its options and one vote row per counted vote, none naming a voter (CW-R-24). */
+export function sampleWebinarPollRows(sample: SampleWebinarPoll) {
+  const webinar = sampleWebinar(sample.webinarId);
+  const poll = {
+    id: sample.id,
+    webinarId: sample.webinarId,
+    orgId: webinar.orgId,
+    sessionId: sample.sessionId,
+    question: sample.question,
+    createdByUserId: sampleModerator(webinar) ?? webinar.createdByUserId,
+    openedAt: new Date(sample.openedAt),
+    closedAt: new Date(sample.closedAt),
+  } satisfies typeof t.webinarPolls.$inferInsert;
+  const options = sample.options.map(
+    (option) =>
+      ({ id: option.id, pollId: sample.id, orgId: webinar.orgId, label: option.label, position: option.position }) satisfies typeof t.webinarPollOptions.$inferInsert,
+  );
+  const votes = sample.results.flatMap((result) =>
+    Array.from(
+      { length: result.count },
+      (_, n) =>
+        ({ id: `${result.optionId}_vote_${n + 1}`, pollId: sample.id, optionId: result.optionId, orgId: webinar.orgId }) satisfies typeof t.webinarPollResults.$inferInsert,
+    ),
+  );
+  return { poll, options, votes };
 }
 
 /** The `appointments` row of a sample appointment, with the UPPER_CASE status (CW-R-19a). */
@@ -502,11 +712,11 @@ export function sampleAppointmentRow(appointment: SampleAppointment): typeof t.a
 }
 
 /**
- * The sample call sessions this seed writes: consultations only. The webinar
- * session points at a sample webinar, whose table arrives with T-CW-2.1.
+ * The sample call sessions this seed writes: the consultation and, since the
+ * webinars tables of T-CW-2.1, the session of the ended sample webinar.
  */
 export function seededSampleCallSessions(): SampleCallSession[] {
-  return SAMPLE_CALL_SESSIONS.filter((session) => session.format === 'consultation');
+  return [...SAMPLE_CALL_SESSIONS];
 }
 
 /** The rows of one sample call session, with the UPPER_CASE enums (CW-R-19a). */
@@ -642,6 +852,13 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     callParticipants: t.callParticipants,
     callOutcomes: t.callOutcomes,
     callFeedback: t.callFeedback,
+    webinars: t.webinars,
+    webinarHosts: t.webinarHosts,
+    webinarRegistrations: t.webinarRegistrations,
+    webinarMessages: t.webinarMessages,
+    webinarPolls: t.webinarPolls,
+    webinarPollOptions: t.webinarPollOptions,
+    webinarPollResults: t.webinarPollResults,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

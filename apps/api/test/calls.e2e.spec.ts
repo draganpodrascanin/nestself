@@ -419,8 +419,11 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
     const anonymous = await request(app.getHttpServer()).post(`/api/appointments/${APPT_NOW}/join`).send({});
     expect(anonymous.status).toBe(401);
 
-    // Neither refusal created a session.
-    const rows = await testDb.db.select({ appointmentId: callSessions.appointmentId }).from(callSessions);
+    // Neither refusal created a session (the seed's webinar session has no appointment, T-CW-2.1).
+    const rows = await testDb.db
+      .select({ appointmentId: callSessions.appointmentId })
+      .from(callSessions)
+      .where(eq(callSessions.format, 'CONSULTATION'));
     expect(rows.map((r) => r.appointmentId).filter((id) => id !== 'appt_sample_completed')).toEqual([APPT_NOW]);
   });
 

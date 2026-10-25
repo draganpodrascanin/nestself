@@ -339,6 +339,15 @@ export class WebinarsService {
 
     if (joiner.kind === 'attendee' && joiner.registration.floorGivenAt) {
       // A rejoining attendee starts receive-only again (D-CW-35): the floor does not survive a reconnect.
+      // A new attendee is receive-only already; the cached one still holds the floor's audio.
+      if (path === 'cached' && session.providerMeetingId && participant.providerAttendeeId) {
+        await this.video.updateParticipantCapabilities({
+          providerMeetingId: session.providerMeetingId,
+          providerAttendeeId: participant.providerAttendeeId,
+          role: 'attendee',
+          capabilities: attendeeCapabilities(false),
+        });
+      }
       await this.access.scoped(webinar.orgId, (tx) => this.repo.setFloor(joiner.registration.id, null, tx));
     }
 

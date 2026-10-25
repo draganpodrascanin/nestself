@@ -14,7 +14,7 @@
  * {@link findRegistration} (active registrations only) and {@link findHost}.
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type {
   RecordingStatus,
   WebinarAudiencePolicy,
@@ -55,6 +55,7 @@ import {
   toDbMessageKind,
   toDbMessageStatus,
   toDbWebinarStatus,
+  PRESENTER_ASSIGNMENT_REASON,
   type MembershipFact,
   type PageKey,
 } from './webinar-mapper.js';
@@ -65,8 +66,7 @@ type RegistrationRow = typeof webinarRegistrations.$inferSelect;
 type MessageRow = typeof webinarMessages.$inferSelect;
 type SessionRow = typeof callSessions.$inferSelect;
 
-/** The CASE assignment reason of a presenter (the `expert` template's `assigned_cases` scope). */
-export const PRESENTER_ASSIGNMENT_REASON = 'webinar_presenter';
+export { PRESENTER_ASSIGNMENT_REASON } from './webinar-mapper.js';
 
 /** A `webinars` row in contract spelling. */
 export interface WebinarRecord {
@@ -392,7 +392,7 @@ export class WebinarsRepository {
       .select()
       .from(webinarHosts)
       .where(eq(webinarHosts.webinarId, webinarId))
-      .orderBy(desc(webinarHosts.role), asc(webinarHosts.createdAt), asc(webinarHosts.id));
+      .orderBy(asc(webinarHosts.role), asc(webinarHosts.createdAt), asc(webinarHosts.id));
     return rows.map(toHostRecord);
   }
 
@@ -951,22 +951,5 @@ export class WebinarsRepository {
       .where(eq(webinarPollResults.pollId, pollId))
       .groupBy(webinarPollResults.optionId);
     return new Map(rows.map((row) => [row.optionId, row.n]));
-  }
-
-  /** Whether the session has a poll still open, for the poll rule that one runs at a time. */
-  async hasOpenPoll(webinarId: string, exceptPollId: string, tx?: DbExecutor): Promise<boolean> {
-    const [row] = await this.exec(tx)
-      .select({ id: webinarPolls.id })
-      .from(webinarPolls)
-      .where(
-        and(
-          eq(webinarPolls.webinarId, webinarId),
-          ne(webinarPolls.id, exceptPollId),
-          isNotNull(webinarPolls.openedAt),
-          isNull(webinarPolls.closedAt),
-        ),
-      )
-      .limit(1);
-    return row !== undefined;
   }
 }

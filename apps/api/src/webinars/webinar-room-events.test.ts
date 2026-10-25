@@ -8,7 +8,7 @@ import type { RoomEmitter } from '../ws/room-emitter.js';
 import { WebinarRoomEvents } from './webinar-room-events.js';
 
 function setup() {
-  const emit = vi.fn(() => true);
+  const emit = vi.fn((_room: string, _event: string, _payload: unknown) => true);
   const events = new WebinarRoomEvents({ emit } as unknown as RoomEmitter);
   return { emit, events };
 }

@@ -11,6 +11,7 @@ import {
   WEBINAR_HOST_JOIN_BEFORE_MINUTES,
   WEBINAR_STATUSES,
   WebinarAttendeeCapabilitiesSchema,
+  type WebinarAudiencePolicy,
 } from '@nestself/contracts';
 import { capabilitiesForRole } from '../video/video-provider.js';
 import {
@@ -97,7 +98,7 @@ describe('audience (D-CW-17, CW-R-32)', () => {
   });
 
   it('takes the members of a listed organisation, preferring the active one', () => {
-    const policy = { type: 'organization', orgIds: ['org_a', 'org_b'] } as const;
+    const policy: WebinarAudiencePolicy = { type: 'organization', orgIds: ['org_a', 'org_b'] };
     expect(eligibleOrgId(policy, [memberOfA, memberOfB], 'org_b')).toBe('org_b');
     expect(eligibleOrgId({ type: 'organization', orgIds: ['org_c'] }, [memberOfA, memberOfB])).toBeNull();
   });

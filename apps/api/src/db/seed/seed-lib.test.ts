@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-import { SAMPLE_APPOINTMENTS, SAMPLE_CALL_SESSIONS, SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
+import {
+  SAMPLE_APPOINTMENTS,
+  SAMPLE_CALL_SESSIONS,
+  SAMPLE_GRANTS,
+  SAMPLE_PEOPLE,
+  SAMPLE_WEBINARS,
+  SAMPLE_WEBINAR_MESSAGES,
+  SAMPLE_WEBINAR_POLLS,
+} from '@nestself/sample-data';
+import { WebinarAudiencePolicySchema, WebinarLocalizedTextSchema } from '@nestself/contracts';
 import {
   EXTRA_SAMPLE_TEMPLATES,
   extraSampleGrantIds,
   sampleAppointmentRow,
   sampleCallSessionRows,
+  sampleWebinarMessageRow,
+  sampleWebinarPollRows,
+  sampleWebinarRows,
   seededSampleCallSessions,
   templatesForLegacyRoles,
 } from './seed-lib.js';
@@ -92,9 +104,15 @@ describe('sample appointments and call sessions (T-CW-1.1)', () => {
     expect(rows.every((r) => !('sample' in r))).toBe(true);
   });
 
-  it('seeds the consultation session only; the webinar session waits for the webinars table (T-CW-2.1)', () => {
+  it('seeds the consultation session and, since the webinars tables (T-CW-2.1), the webinar session', () => {
     expect(SAMPLE_CALL_SESSIONS.map((s) => s.format)).toEqual(['consultation', 'webinar']);
-    expect(seededSampleCallSessions().map((s) => s.id)).toEqual(['call_session_sample_consultation']);
+    expect(seededSampleCallSessions().map((s) => s.id)).toEqual([
+      'call_session_sample_consultation',
+      'call_session_sample_webinar',
+    ]);
+    const webinar = sampleCallSessionRows(seededSampleCallSessions()[1]!);
+    expect(webinar.session).toMatchObject({ format: 'WEBINAR', webinarId: 'webinar_sample_ended', appointmentId: null });
+    expect(webinar.participants.map((p) => p.role)).toEqual(['PRESENTER', 'MODERATOR', 'ATTENDEE', 'ATTENDEE']);
   });
 
   it('maps the consultation session, participants, outcome and feedback to the UPPER_CASE enums', () => {
@@ -124,5 +142,58 @@ describe('sample appointments and call sessions (T-CW-1.1)', () => {
         comment: 'Sample feedback comment (fixture)',
       },
     ]);
+  });
+});
+
+describe('sample webinars (T-CW-2.1)', () => {
+  it('stores title and description per locale and maps the audience to the contract policy', () => {
+    const [upcoming, ended] = SAMPLE_WEBINARS.map(sampleWebinarRows);
+    expect(upcoming!.webinar).toMatchObject({ orgId: null, status: 'PUBLISHED', audiencePolicy: { type: 'all_eligible' } });
+    expect(ended!.webinar).toMatchObject({
+      orgId: 'org_sample',
+      status: 'ENDED',
+      audiencePolicy: { type: 'organization', orgIds: ['org_sample'] },
+    });
+    for (const rows of [upcoming!, ended!]) {
+      expect(WebinarLocalizedTextSchema.safeParse(rows.webinar.title).success).toBe(true);
+      expect(WebinarAudiencePolicySchema.safeParse(rows.webinar.audiencePolicy).success).toBe(true);
+      // Every webinar is recorded (D-CW-34): there is no recording switch to seed.
+      expect(Object.keys(rows.webinar)).not.toContain('recordingPolicy');
+      expect(rows.hosts.map((h) => [h.userId, h.role])).toEqual([
+        ['user_milica', 'PRESENTER'],
+        ['user_nikola', 'MODERATOR'],
+      ]);
+      expect(rows.presenterAssignments).toEqual([
+        expect.objectContaining({ userId: 'user_milica', kind: 'CASE', targetId: rows.webinar.id, reason: 'webinar_presenter' }),
+      ]);
+    }
+    // The attendees of the ended session are its registrants; a registration records the poll, not the option.
+    expect(ended!.registrations.map((r) => [r.userId, r.votedPollIds])).toEqual([
+      ['user_jovan', ['webinar_poll_sample']],
+      ['user_ana', ['webinar_poll_sample']],
+    ]);
+    expect(upcoming!.registrations).toEqual([]);
+  });
+
+  it('keeps chat authors anonymous unless they attached the first name (D-CW-35)', () => {
+    const rows = SAMPLE_WEBINAR_MESSAGES.map(sampleWebinarMessageRow);
+    expect(rows.map((r) => [r.kind, r.status, r.authorFirstName, r.showFirstName])).toEqual([
+      ['HOST', 'PUBLISHED', 'Nikola', false],
+      ['ATTENDEE', 'PUBLISHED', 'Jovan', true],
+      ['HOST', 'PUBLISHED', 'Milica', false],
+      ['QUESTION', 'ANSWERED', null, false],
+      ['ATTENDEE', 'PENDING', null, false],
+    ]);
+    expect(rows.map((r) => r.authorUserId)).toEqual(['user_nikola', 'user_jovan', 'user_milica', 'user_ana', 'user_ana']);
+    expect(rows[3]).toMatchObject({ answeredByUserId: 'user_milica', publishedByUserId: 'user_nikola' });
+    expect(rows[4]).toMatchObject({ publishedAt: null, publishedByUserId: null });
+  });
+
+  it('seeds one vote row per counted vote, none naming a voter (CW-R-24)', () => {
+    const { poll, options, votes } = sampleWebinarPollRows(SAMPLE_WEBINAR_POLLS[0]!);
+    expect(poll).toMatchObject({ id: 'webinar_poll_sample', createdByUserId: 'user_nikola', orgId: 'org_sample' });
+    expect(options).toHaveLength(3);
+    expect(votes.map((v) => v.optionId)).toEqual(['webinar_poll_option_sample_1', 'webinar_poll_option_sample_2']);
+    for (const vote of votes) expect(Object.keys(vote).sort()).toEqual(['id', 'optionId', 'orgId', 'pollId']);
   });
 });

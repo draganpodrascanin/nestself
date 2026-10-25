@@ -551,9 +551,9 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(callSessions)
         .where(eq(callSessions.id, 'call_session_sample_consultation'));
       expect(session).toMatchObject({ format: 'CONSULTATION', status: 'ENDED', appointmentId: 'appt_sample_completed' });
-      // The webinar session waits for the webinars table (T-CW-2.1).
+      // The webinar session of the ended sample webinar (T-CW-2.1).
       const webinarSessions = await owner.db.select().from(callSessions).where(eq(callSessions.format, 'WEBINAR'));
-      expect(webinarSessions).toEqual([]);
+      expect(webinarSessions.map((s) => [s.id, s.webinarId])).toEqual([['call_session_sample_webinar', 'webinar_sample_ended']]);
 
       const [outcome] = await owner.db
         .select()
@@ -565,6 +565,32 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(callParticipants)
         .where(eq(callParticipants.sessionId, 'call_session_sample_consultation'));
       expect(roles.map((r) => r.role).sort()).toEqual(['EMPLOYEE', 'EXPERT']);
+    });
+
+    it('seeds the sample webinars, their chat and the poll with anonymous votes (T-CW-2.1)', async () => {
+      const counts = await seed(owner.db);
+      expect(counts.webinars).toBeGreaterThanOrEqual(2);
+      expect(counts.webinarMessages).toBeGreaterThanOrEqual(5);
+      expect(counts.webinarPollResults).toBeGreaterThanOrEqual(2);
+
+      const rows = await owner.db
+        .select({ id: webinars.id, orgId: webinars.orgId, status: webinars.status, recordingStatus: webinars.recordingStatus })
+        .from(webinars)
+        .where(inArray(webinars.id, ['webinar_sample_upcoming', 'webinar_sample_ended']));
+      expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        { id: 'webinar_sample_ended', orgId: 'org_sample', status: 'ENDED', recordingStatus: 'SCHEDULED' },
+        { id: 'webinar_sample_upcoming', orgId: null, status: 'PUBLISHED', recordingStatus: 'SCHEDULED' },
+      ]);
+      const pending = await owner.db
+        .select({ id: webinarMessages.id })
+        .from(webinarMessages)
+        .where(eq(webinarMessages.status, 'PENDING'));
+      expect(pending.map((m) => m.id)).toContain('webinar_message_sample_5');
+      const registrations = await owner.db
+        .select({ userId: webinarRegistrations.userId })
+        .from(webinarRegistrations)
+        .where(eq(webinarRegistrations.webinarId, 'webinar_sample_ended'));
+      expect(registrations.map((r) => r.userId).sort()).toEqual(['user_ana', 'user_jovan']);
     });
 
     it('is idempotent (run twice, row counts equal)', async () => {
