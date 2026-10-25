@@ -30,6 +30,8 @@ import { Route as AuthenticatedHrHrIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedHrHrAccessRouteImport } from './routes/_authenticated/_hr/hr/access'
 import { Route as AuthenticatedHrHrEligibilityRouteImport } from './routes/_authenticated/_hr/hr/eligibility'
 import { Route as AuthenticatedHrHrEventsRouteImport } from './routes/_authenticated/_hr/hr/events'
+import { Route as AuthenticatedHrHrOrgUnitsRouteImport } from './routes/_authenticated/_hr/hr/org-units'
+import { Route as AuthenticatedHrHrPeopleRouteImport } from './routes/_authenticated/_hr/hr/people'
 import { Route as AuthenticatedHrHrReportsRouteImport } from './routes/_authenticated/_hr/hr/reports'
 import { Route as AuthenticatedManagerManageIndexRouteImport } from './routes/_authenticated/_manager/manage/index'
 import { Route as AuthenticatedManagerManageEventsNewRouteImport } from './routes/_authenticated/_manager/manage/events.new'
@@ -144,6 +146,17 @@ const AuthenticatedHrHrEventsRoute = AuthenticatedHrHrEventsRouteImport.update({
   path: '/hr/events',
   getParentRoute: () => AuthenticatedHrRoute,
 } as any)
+const AuthenticatedHrHrOrgUnitsRoute =
+  AuthenticatedHrHrOrgUnitsRouteImport.update({
+    id: '/hr/org-units',
+    path: '/hr/org-units',
+    getParentRoute: () => AuthenticatedHrRoute,
+  } as any)
+const AuthenticatedHrHrPeopleRoute = AuthenticatedHrHrPeopleRouteImport.update({
+  id: '/hr/people',
+  path: '/hr/people',
+  getParentRoute: () => AuthenticatedHrRoute,
+} as any)
 const AuthenticatedHrHrReportsRoute =
   AuthenticatedHrHrReportsRouteImport.update({
     id: '/hr/reports',
@@ -186,6 +199,8 @@ export interface FileRoutesByFullPath {
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
+  '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
+  '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
   '/hr/': typeof AuthenticatedHrHrIndexRoute
   '/manage/': typeof AuthenticatedManagerManageIndexRoute
@@ -209,6 +224,8 @@ export interface FileRoutesByTo {
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
+  '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
+  '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
   '/hr': typeof AuthenticatedHrHrIndexRoute
   '/manage': typeof AuthenticatedManagerManageIndexRoute
@@ -237,6 +254,8 @@ export interface FileRoutesById {
   '/_authenticated/_hr/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/_authenticated/_hr/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/_authenticated/_hr/hr/events': typeof AuthenticatedHrHrEventsRoute
+  '/_authenticated/_hr/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
+  '/_authenticated/_hr/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/_authenticated/_hr/hr/reports': typeof AuthenticatedHrHrReportsRoute
   '/_authenticated/_hr/hr/': typeof AuthenticatedHrHrIndexRoute
   '/_authenticated/_manager/manage/': typeof AuthenticatedManagerManageIndexRoute
@@ -262,6 +281,8 @@ export interface FileRouteTypes {
     | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
+    | '/hr/org-units'
+    | '/hr/people'
     | '/hr/reports'
     | '/hr/'
     | '/manage/'
@@ -285,6 +306,8 @@ export interface FileRouteTypes {
     | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
+    | '/hr/org-units'
+    | '/hr/people'
     | '/hr/reports'
     | '/hr'
     | '/manage'
@@ -312,6 +335,8 @@ export interface FileRouteTypes {
     | '/_authenticated/_hr/hr/access'
     | '/_authenticated/_hr/hr/eligibility'
     | '/_authenticated/_hr/hr/events'
+    | '/_authenticated/_hr/hr/org-units'
+    | '/_authenticated/_hr/hr/people'
     | '/_authenticated/_hr/hr/reports'
     | '/_authenticated/_hr/hr/'
     | '/_authenticated/_manager/manage/'
@@ -473,6 +498,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHrHrEventsRouteImport
       parentRoute: typeof AuthenticatedHrRoute
     }
+    '/_authenticated/_hr/hr/org-units': {
+      id: '/_authenticated/_hr/hr/org-units'
+      path: '/hr/org-units'
+      fullPath: '/hr/org-units'
+      preLoaderRoute: typeof AuthenticatedHrHrOrgUnitsRouteImport
+      parentRoute: typeof AuthenticatedHrRoute
+    }
+    '/_authenticated/_hr/hr/people': {
+      id: '/_authenticated/_hr/hr/people'
+      path: '/hr/people'
+      fullPath: '/hr/people'
+      preLoaderRoute: typeof AuthenticatedHrHrPeopleRouteImport
+      parentRoute: typeof AuthenticatedHrRoute
+    }
     '/_authenticated/_hr/hr/reports': {
       id: '/_authenticated/_hr/hr/reports'
       path: '/hr/reports'
@@ -508,6 +547,8 @@ interface AuthenticatedHrRouteChildren {
   AuthenticatedHrHrAccessRoute: typeof AuthenticatedHrHrAccessRoute
   AuthenticatedHrHrEligibilityRoute: typeof AuthenticatedHrHrEligibilityRoute
   AuthenticatedHrHrEventsRoute: typeof AuthenticatedHrHrEventsRoute
+  AuthenticatedHrHrOrgUnitsRoute: typeof AuthenticatedHrHrOrgUnitsRoute
+  AuthenticatedHrHrPeopleRoute: typeof AuthenticatedHrHrPeopleRoute
   AuthenticatedHrHrReportsRoute: typeof AuthenticatedHrHrReportsRoute
   AuthenticatedHrHrIndexRoute: typeof AuthenticatedHrHrIndexRoute
 }
@@ -516,6 +557,8 @@ const AuthenticatedHrRouteChildren: AuthenticatedHrRouteChildren = {
   AuthenticatedHrHrAccessRoute: AuthenticatedHrHrAccessRoute,
   AuthenticatedHrHrEligibilityRoute: AuthenticatedHrHrEligibilityRoute,
   AuthenticatedHrHrEventsRoute: AuthenticatedHrHrEventsRoute,
+  AuthenticatedHrHrOrgUnitsRoute: AuthenticatedHrHrOrgUnitsRoute,
+  AuthenticatedHrHrPeopleRoute: AuthenticatedHrHrPeopleRoute,
   AuthenticatedHrHrReportsRoute: AuthenticatedHrHrReportsRoute,
   AuthenticatedHrHrIndexRoute: AuthenticatedHrHrIndexRoute,
 }

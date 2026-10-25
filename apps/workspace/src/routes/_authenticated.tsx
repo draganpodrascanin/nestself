@@ -11,6 +11,8 @@ import {
   Users,
   Buildings,
   ShieldCheck,
+  UsersThree,
+  TreeStructure,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -69,11 +71,22 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
     : [];
 
+  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate as well.
+  const peopleNav = showHr
+    ? [{ to: '/hr/people' as const, icon: UsersThree, label: t('workspace:people.nav') }]
+    : [];
+
+  const showOrgUnits =
+    showHr && principal ? can(principal, 'org_units.manage', undefined, effectiveActions) : false;
+  const orgUnitsNav = showOrgUnits
+    ? [{ to: '/hr/org-units' as const, icon: TreeStructure, label: t('workspace:orgUnits.nav') }]
+    : [];
+
   const accessNav = showAccess
     ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...accessNav];
+  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...peopleNav, ...orgUnitsNav, ...accessNav];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [
