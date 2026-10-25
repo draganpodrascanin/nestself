@@ -20,7 +20,8 @@
  * - `AttendeeLeft` and `AttendeeDropped`: `last_left_at` keeps the latest
  *   leave; the call room hears `call.participant.left` unless a later
  *   `AttendeeJoined` of the same attendee (a reconnect, OPS-12) is already
- *   stored.
+ *   stored. For a webinar attendee the webinar module then re-announces the
+ *   live attendance count (`WEBINAR_ATTENDANCE_HANDLER`, T-CW-2.1).
  * - `MeetingEnded`: the session closes exactly once (`CallSessionLifecycle`):
  *   ENDED, `ended_at`, location text cleared, credentials dropped,
  *   `call.session.ended` emitted. Its end reason is `provider` unless the
@@ -46,7 +47,9 @@
  * Logs carry ids only, at debug level (an event has meeting and attendee ids,
  * never a token).
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ModuleRef } from '@nestjs/core';
 import type { DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
@@ -122,6 +125,19 @@ function ownAttendee(participant: CallParticipantRecord, event: CallProviderEven
   return participant.providerAttendeeId === event.providerAttendeeId;
 }
 
+/**
+ * The webinar module's side of an attendee's leave (T-CW-2.1, WBN-19.1,
+ * WBN-36.1): re-announces the live attendance count. Looked up by
+ * {@link WEBINAR_ATTENDANCE_HANDLER} at use, so this module does not depend
+ * on the webinars module.
+ */
+export interface WebinarAttendanceHandler {
+  attendeeLeft(session: CallSessionRecord): Promise<void>;
+}
+
+/** Injection token of the {@link WebinarAttendanceHandler} (`WebinarsService`). */
+export const WEBINAR_ATTENDANCE_HANDLER = Symbol('WEBINAR_ATTENDANCE_HANDLER');
+
 /** The event names the applier acts on, as the fake provider emits them; null for any other. */
 function knownEventType(name: string): VideoProviderEventType | null {
   return (VIDEO_PROVIDER_EVENT_TYPES as readonly string[]).includes(name) ? (name as VideoProviderEventType) : null;
@@ -136,6 +152,7 @@ export class EventApplier {
     private readonly lifecycle: CallSessionLifecycle,
     private readonly calls: CallsService,
     private readonly scheduler: CallsJobSchedulerService,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
   async apply(event: CallProviderEvent): Promise<ApplyResult> {
@@ -257,9 +274,21 @@ export class EventApplier {
       } catch (error) {
         this.logger.warn({ sessionId: session.id, operation: 'notifyLeft', error: errorName(error) }, 'Leave not announced');
       }
+      // A webinar attendee's leave or drop changes the live attendance count (WBN-19.1, WBN-36.1).
+      if (session.format === 'webinar' && effects.left.role === 'attendee') await this.announceAttendance(session);
     }
     // Never throws: the event is committed, and its redelivery would be a duplicate.
     if (effects.closed) await this.lifecycle.announceClosed(effects.closed);
+  }
+
+  /** The webinar module re-announces the attendance count; absent outside the application, never throws. */
+  private async announceAttendance(session: CallSessionRecord): Promise<void> {
+    try {
+      const handler = this.moduleRef?.get<WebinarAttendanceHandler>(WEBINAR_ATTENDANCE_HANDLER, { strict: false });
+      await handler?.attendeeLeft(session);
+    } catch (error) {
+      this.logger.warn({ sessionId: session.id, operation: 'announceAttendance', error: errorName(error) }, 'Attendance not announced');
+    }
   }
 
   /**

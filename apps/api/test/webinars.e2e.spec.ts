@@ -970,6 +970,8 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
       .where(and(eq(webinarRegistrations.webinarId, liveId), eq(webinarRegistrations.userId, 'user_jovan')));
     expect(registration!.floorGivenAt).not.toBeNull();
 
+    // Muted by a host, the attendee cannot unmute until a host asks (WBN-26 criterion 3, server-side).
+    expectCode(await post(jovan, path('unmute')), 409, 'floor_not_available');
     expect((await post(nikola, path('unmute-request'))).body).toEqual({ participantId, requested: true });
     expect(emitted('webinar.floor.unmute_requested')).toEqual([['user:user_jovan', 'webinar.floor.unmute_requested', {}]]);
     // Nothing changes until the attendee consents.
@@ -1004,6 +1006,31 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect((auditRecord.mock.calls as [AuditEventInput][]).map(([event]) => event.action)).toEqual(
       expect.arrayContaining(['webinar.floor.muted', 'webinar.floor.unmute_requested', 'webinar.floor.unmuted']),
     );
+  });
+
+  it('the live attendance count follows joins and leaves; hosts start from it (WBN-19.1, WBN-36.1)', async () => {
+    // Jovan is in the meeting; Ana joins: two attendees present.
+    const anaJoin = WebinarJoinResponseSchema.parse((await post(ana, `/webinars/${liveId}/join`)).body);
+    expect(emitted('webinar.attendance.count')).toEqual([
+      [`webinar:${liveId}:moderation`, 'webinar.attendance.count', { webinarId: liveId, count: 2 }],
+      [`webinar:${liveId}:hosts`, 'webinar.attendance.count', { webinarId: liveId, count: 2 }],
+    ]);
+    expect(anaJoin).not.toHaveProperty('attendanceCount');
+    const host = WebinarJoinResponseSchema.parse((await post(nikola, `/webinars/${liveId}/join`)).body);
+    expect(host).toMatchObject({ role: 'moderator', attendanceCount: 2 });
+
+    // Ana leaves: the provider's AttendeeLeft reaches the applier, which re-announces the count.
+    video.simulateEvent('AttendeeLeft', presenterJoin.meeting.MeetingId, anaJoin.attendee.AttendeeId);
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && emitted('webinar.attendance.count').length < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(emitted('webinar.attendance.count').slice(2)).toEqual([
+      [`webinar:${liveId}:moderation`, 'webinar.attendance.count', { webinarId: liveId, count: 1 }],
+      [`webinar:${liveId}:hosts`, 'webinar.attendance.count', { webinarId: liveId, count: 1 }],
+    ]);
+    const after = WebinarJoinResponseSchema.parse((await post(milica, `/webinars/${liveId}/join`)).body);
+    expect(after).toMatchObject({ role: 'presenter', attendanceCount: 1 });
   });
 
   // ── Polls (WBN-11, WBN-27, CW-R-24) ───────────────────────────────────────
@@ -1210,6 +1237,31 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     // A host's end afterwards is a no-op; the presenter's CASE assignment ended with the occurrence.
     expect((await post(nikola, `/webinars/${id}/end`)).body).toEqual({ webinarId: id, status: 'ended' });
     expectNotFound(await post(milica, `/webinars/${id}/end`));
+  });
+
+  it('the end stops the capture pipeline before the meeting is deleted (WBN-29.3)', async () => {
+    const id = await createPublished();
+    expect((await post(milica, `/webinars/${id}/start`)).status).toBe(200);
+    const host = WebinarJoinResponseSchema.parse((await post(milica, `/webinars/${id}/join`)).body);
+    await app.get(WebinarJobsService).handle('webinar.recording.start', { webinarId: id, sessionId: null }, RECORDING_JOB_CONTEXT());
+    const pipelineId = `fake-pipeline-${host.sessionId}`;
+    expect(video.isRecording(pipelineId)).toBe(true);
+
+    const stopRecording = vi.spyOn(video, 'stopRecording');
+    const endSession = vi.spyOn(video, 'endSession');
+    expect((await post(nikola, `/webinars/${id}/end`)).body).toEqual({ webinarId: id, status: 'ended' });
+    expect(stopRecording).toHaveBeenCalledWith({ pipelineId });
+    expect(endSession).toHaveBeenCalledTimes(1);
+    expect(stopRecording.mock.invocationCallOrder[0]!).toBeLessThan(endSession.mock.invocationCallOrder[0]!);
+    expect(video.isRecording(pipelineId)).toBe(false);
+    const [row] = await testDb.db.select().from(webinarRecordings).where(eq(webinarRecordings.webinarId, id));
+    expect(row).toMatchObject({ status: 'PROCESSING', stoppedAt: expect.any(Date) });
+
+    // The finalize job's own stop of the capture is idempotent: the pipeline is already gone.
+    const result = await app
+      .get(WebinarJobsService)
+      .handle('webinar.recording.finalize', { webinarId: id, sessionId: host.sessionId }, RECORDING_JOB_CONTEXT());
+    expect(result).toMatchObject({ webinarId: id, finalized: true });
   });
 
   it('an end before the recording started records it as failed, with no recording to stop', async () => {

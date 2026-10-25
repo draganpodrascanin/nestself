@@ -81,6 +81,7 @@ import { CallsRepository, type CallParticipantRecord, type CallSessionRecord } f
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { VideoMetrics } from '../calls/video-metrics.js';
 import type { WebinarSessionClosedHandler } from '../calls/session-lifecycle.js';
+import type { WebinarAttendanceHandler } from '../calls/event-applier.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -112,6 +113,8 @@ import { WebinarRecordingService, type RecordingActor } from './recording.servic
 import { WebinarRecordingsRepository } from './recording.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarMailer } from './webinar-mailer.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarFloorState } from './webinar-floor-state.js';
 import {
   attendeeCapabilities,
   decodePageCursor,
@@ -145,7 +148,7 @@ function errorName(error: unknown): string {
 type Joiner = { kind: 'host'; role: WebinarHostRole } | { kind: 'attendee'; registration: WebinarRegistrationRecord };
 
 @Injectable()
-export class WebinarsService implements WebinarSessionClosedHandler {
+export class WebinarsService implements WebinarSessionClosedHandler, WebinarAttendanceHandler {
   private readonly logger = new Logger(WebinarsService.name);
 
   /** Interval and limit of an attendee's wait for a meeting a host is creating. Tests shorten them. */
@@ -166,6 +169,7 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     private readonly recording: WebinarRecordingService,
     private readonly recordings: WebinarRecordingsRepository,
     private readonly principals: PrincipalLoader,
+    private readonly floorState: WebinarFloorState,
   ) {}
 
   // ── Discovery (WBN-01) ────────────────────────────────────────────────────
@@ -389,6 +393,8 @@ export class WebinarsService implements WebinarSessionClosedHandler {
           capabilities: attendeeCapabilities(false),
         });
       }
+      // A rejoin starts without a host's mute or a pending unmute request (WBN-26).
+      await this.floorState.clear(webinar.id, participant.id);
       const active = await this.access.scoped(webinar.orgId, async (tx) => {
         await this.repo.setFloor(joiner.registration.id, null, tx);
         return (await this.repo.listActiveRegistrations(webinar.id, tx)).some((r) => r.floorGivenAt !== null);
@@ -399,12 +405,11 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     }
 
     await this.record(principal.userId, webinar, 'webinar.joined', { webinarId: webinar.id, participantId: participant.id });
-    if (joiner.kind === 'attendee') {
-      const count = await this.access.scoped(webinar.orgId, (tx) => this.repo.countAttendees(session.id, tx));
-      this.events.toModeration(webinar.id, 'webinar.attendance.count', { webinarId: webinar.id, count });
-      // Presenters follow the count without the moderation room's names (WBN-19, T-CW-2.3 hosts room).
-      this.events.toHosts(webinar.id, 'webinar.attendance.count', { webinarId: webinar.id, count });
-    }
+    // Attendees present now (WBN-19.1): the joiner counts before the provider reports the join.
+    const attendanceCount = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.countPresentAttendees(session.id, tx, joiner.kind === 'attendee' ? participant.id : undefined),
+    );
+    if (joiner.kind === 'attendee') this.announceAttendance(webinar.id, attendanceCount);
     this.logger.log(
       { webinarId: webinar.id, sessionId: session.id, participantId: participant.id, operation: 'join', path, latencyMs: Date.now() - started },
       'Webinar joined',
@@ -419,6 +424,8 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     return WebinarJoinResponseSchema.parse({
       webinarId: webinar.id,
       recordingStatus: recording?.status ?? webinar.recordingStatus,
+      // The hosts' console starts from the live count (WBN-19.1); attendees never get one (D-CW-15).
+      ...(joiner.kind === 'host' ? { attendanceCount } : {}),
       sessionId: session.id,
       participantId: participant.id,
       format: 'webinar',
@@ -700,11 +707,14 @@ export class WebinarsService implements WebinarSessionClosedHandler {
     );
     if (!ended) return { webinarId, status: (await this.access.load(webinarId)).status };
 
+    // WBN-29.3: the capture pipeline stops before the meeting is deleted, so the recording ends on the
+    // host's end rather than on the meeting's disappearance. The finalize job's own pipeline deletion is
+    // idempotent (a pipeline already gone counts as stopped). Never throws.
+    await this.stopCaptureBeforeDelete(webinar);
+    await this.recording.stopForEnd(webinar, { userId: principal.userId, kind: 'USER' });
     const session = await this.closeSession(webinar, endedAt);
     await this.access.scoped(webinar.orgId, (tx) => this.repo.clearHandsAndFloors(webinarId, tx));
     await this.endPresenterAssignments(webinar);
-    // WBN-28 criterion 4: the recording stops with the webinar (never throws).
-    await this.recording.stopForEnd(webinar, { userId: principal.userId, kind: 'USER' });
     await this.record(principal.userId, webinar, 'webinar.ended', { webinarId, sessionId: session?.id ?? null });
     this.announceEnded(webinarId, endedAt);
     return { webinarId, status: 'ended' };
@@ -757,6 +767,39 @@ export class WebinarsService implements WebinarSessionClosedHandler {
   private async endPresenterAssignments(webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<void> {
     const userIds = await this.access.scoped(webinar.orgId, (tx) => this.repo.endPresenterAssignments(webinar.id, tx));
     for (const userId of new Set(userIds)) await this.principals.invalidateUser(userId);
+  }
+
+  /** `VideoProvider.stopRecording` for a recording still capturing (WBN-29.3); a failure is logged, the end goes on. */
+  private async stopCaptureBeforeDelete(webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<void> {
+    try {
+      const row = await this.access.scoped(webinar.orgId, (tx) => this.recordings.findLatest(webinar.id, tx));
+      if (row?.status !== 'recording' || !row.providerPipelineId) return;
+      await this.video.stopRecording({ pipelineId: row.providerPipelineId });
+    } catch (error) {
+      this.logger.error({ webinarId: webinar.id, operation: 'stopCaptureBeforeDelete', error: errorName(error) }, 'Capture not stopped');
+    }
+  }
+
+  /** `webinar.attendance.count` to the moderators and the hosts: a number, never names (WBN-19, D-CW-15). */
+  private announceAttendance(webinarId: string, count: number): void {
+    this.events.toModeration(webinarId, 'webinar.attendance.count', { webinarId, count });
+    // Presenters follow the count without the moderation room's names (T-CW-2.3 hosts room).
+    this.events.toHosts(webinarId, 'webinar.attendance.count', { webinarId, count });
+  }
+
+  /**
+   * The event applier recorded an attendee's leave or drop (WBN-19.1,
+   * WBN-36.1): the live count goes out again. Never throws.
+   */
+  async attendeeLeft(session: CallSessionRecord): Promise<void> {
+    if (session.format !== 'webinar' || !session.webinarId) return;
+    const webinarId = session.webinarId;
+    try {
+      const count = await this.access.scoped(session.orgId, (tx) => this.repo.countPresentAttendees(session.id, tx));
+      this.announceAttendance(webinarId, count);
+    } catch (error) {
+      this.logger.warn({ webinarId, sessionId: session.id, operation: 'attendeeLeft', error: errorName(error) }, 'Attendance not announced');
+    }
   }
 
   /** `webinar.state` ended and `webinar.ended` on both rooms (CW-R-36b). */

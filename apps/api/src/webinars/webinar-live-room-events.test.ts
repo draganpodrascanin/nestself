@@ -19,6 +19,8 @@ import type { AuditWriter } from '../audit/audit-writer.js';
 import type { CallsRepository } from '../calls/calls.repository.js';
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import type { WebinarAccess } from './webinar-access.js';
+import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
+import { WebinarFloorState } from './webinar-floor-state.js';
 import { WebinarLiveService } from './webinar-live.service.js';
 import type { WebinarRoomEvents } from './webinar-room-events.js';
 import type { WebinarMessageRecord, WebinarRegistrationRecord, WebinarsRepository } from './webinars.repository.js';
@@ -120,7 +122,8 @@ async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?
   const toHosts = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
   const events = { toParticipant: vi.fn(), toModeration: vi.fn(), toAudience: vi.fn(), toAudienceAdded, toHosts };
   const audit = { record: vi.fn(async () => undefined) } as unknown as AuditWriter;
-  const service = new WebinarLiveService(repo, access, calls, video, events as unknown as WebinarRoomEvents, audit);
+  const floorState = new WebinarFloorState(new MemoryKeyValueStore());
+  const service = new WebinarLiveService(repo, access, calls, video, events as unknown as WebinarRoomEvents, audit, floorState);
   return { service, toAudienceAdded, toHosts, hands };
 }
 

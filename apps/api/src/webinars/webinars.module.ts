@@ -20,6 +20,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module.js';
 import { CallsModule } from '../calls/calls.module.js';
 import { WEBINAR_SESSION_CLOSED_HANDLER } from '../calls/session-lifecycle.js';
+import { WEBINAR_ATTENDANCE_HANDLER } from '../calls/event-applier.js';
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 import { MailerModule } from '../mailer/mailer.module.js';
 import { VideoModule } from '../video/video.module.js';
@@ -27,6 +28,7 @@ import { WsModule } from '../ws/ws.module.js';
 import { WebinarRecordingsRepository } from './recording.repository.js';
 import { WebinarRecordingService } from './recording.service.js';
 import { WebinarAccess } from './webinar-access.js';
+import { WebinarFloorState } from './webinar-floor-state.js';
 import { WebinarJobsService } from './webinar-jobs.service.js';
 import { WebinarLiveService } from './webinar-live.service.js';
 import { WebinarMailer } from './webinar-mailer.js';
@@ -55,6 +57,9 @@ import { WebinarsService } from './webinars.service.js';
     WebinarRecordingService,
     // The session lifecycle (CallsJobsModule) ends a live webinar whose session closed (T-CW-2.5).
     { provide: WEBINAR_SESSION_CLOSED_HANDLER, useExisting: WebinarsService },
+    // The event applier re-announces the live attendance count after a leave or drop (WBN-19.1).
+    { provide: WEBINAR_ATTENDANCE_HANDLER, useExisting: WebinarsService },
+    WebinarFloorState,
   ],
   exports: [WebinarsRepository, WebinarAccess, WebinarJobSchedulerService, WebinarJobsService],
 })

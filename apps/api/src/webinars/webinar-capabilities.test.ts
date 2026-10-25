@@ -21,6 +21,8 @@ import type { CallsRepository } from '../calls/calls.repository.js';
 import { FakeVideoProvider } from '../video/fake-video-provider.js';
 import { VideoCapabilityError, type UpdateCapabilitiesInput } from '../video/video-provider.js';
 import type { WebinarAccess } from './webinar-access.js';
+import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
+import { WebinarFloorState } from './webinar-floor-state.js';
 import { WebinarLiveService } from './webinar-live.service.js';
 import type { WebinarRoomEvents } from './webinar-room-events.js';
 import type { WebinarsRepository } from './webinars.repository.js';
@@ -86,7 +88,7 @@ async function setup() {
     toHosts: vi.fn(),
   } as unknown as WebinarRoomEvents;
   const audit = { record: vi.fn(async () => undefined) } as unknown as AuditWriter;
-  const service = new WebinarLiveService(repo, access, calls, video, events, audit);
+  const service = new WebinarLiveService(repo, access, calls, video, events, audit, new WebinarFloorState(new MemoryKeyValueStore()));
   return { service, video, updates, attendee, session };
 }
 

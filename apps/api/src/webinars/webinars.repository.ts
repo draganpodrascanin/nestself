@@ -29,6 +29,7 @@ import type {
 import { DbService, type DbExecutor } from '../db/db.service.js';
 import {
   assignments,
+  callEvents,
   callParticipants,
   callSessions,
   grants,
@@ -951,12 +952,33 @@ export class WebinarsRepository {
     await this.exec(tx).update(callParticipants).set({ floorAttendeeId }).where(eq(callParticipants.id, participantId));
   }
 
-  /** Attendee participants of the session. */
-  async countAttendees(sessionId: string, tx?: DbExecutor): Promise<number> {
+  /**
+   * Attendees present in the session now (WBN-19.1, WBN-36.1): attendee
+   * participants who have not left, or whose attendee joined again after its
+   * last leave (a reconnect, from the provider's events in `call_events`).
+   * `including` counts one participant as present whatever the events say:
+   * the attendee the join path just admitted, before the provider's
+   * `AttendeeJoined` arrives. Replicas count alike (their attendees are the
+   * session's participants).
+   */
+  async countPresentAttendees(sessionId: string, tx?: DbExecutor, including?: string): Promise<number> {
+    const rejoined = sql`EXISTS (
+      SELECT 1 FROM ${callEvents}
+      WHERE ${callEvents.sessionId} = ${callParticipants.sessionId}
+        AND ${callEvents.providerAttendeeId} = ${callParticipants.providerAttendeeId}
+        AND ${callEvents.eventType} = 'AttendeeJoined'
+        AND ${callEvents.occurredAt} > ${callParticipants.lastLeftAt})`;
+    const present = or(isNull(callParticipants.lastLeftAt), rejoined)!;
     const [row] = await this.exec(tx)
       .select({ n: count() })
       .from(callParticipants)
-      .where(and(eq(callParticipants.sessionId, sessionId), eq(callParticipants.role, 'ATTENDEE')));
+      .where(
+        and(
+          eq(callParticipants.sessionId, sessionId),
+          eq(callParticipants.role, 'ATTENDEE'),
+          including ? or(present, eq(callParticipants.id, including))! : present,
+        ),
+      );
     return row?.n ?? 0;
   }
 

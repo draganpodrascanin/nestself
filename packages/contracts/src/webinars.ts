@@ -525,6 +525,12 @@ export const WebinarJoinResponseSchema = z.discriminatedUnion('role', [
     ...joinFields,
     role: WebinarHostRoleSchema,
     capabilities: WebinarCapabilitiesSchema,
+    /**
+     * Attendees present at the host's join, so the console starts from the
+     * live count before the next `webinar.attendance.count` (WBN-19.1,
+     * T-CW-2.1). Hosts only: an attendee's response has no count (D-CW-15).
+     */
+    attendanceCount: count.optional(),
   }),
 ]);
 export type WebinarJoinResponse = z.infer<typeof WebinarJoinResponseSchema>;

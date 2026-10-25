@@ -33,7 +33,8 @@
  *   recording notice before it lets the attendee unmute.
  * - Mute (WBN-26): a host mutes the floor holder (audio back to `Receive`,
  *   the floor kept) or asks them to unmute; only the attendee unmutes, on
- *   their own participant, while they hold the floor. `webinar.floor.muted`
+ *   their own participant, while they hold the floor, and after a host's
+ *   mute only once a host asked (`WebinarFloorState`, Redis). `webinar.floor.muted`
  *   and `webinar.floor.unmuted` reach the hosts room with the participant
  *   id; the attendee's own room gets `webinar.floor.muted {}` and
  *   `webinar.floor.unmute_requested {}`.
@@ -89,6 +90,8 @@ import { WebinarAccess, apiError, conflict, invalidField, notFound, webinarNotOp
 import { attendeeCapabilities, decodePageCursor, paginate } from './webinar-mapper.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarRoomEvents } from './webinar-room-events.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { WebinarFloorState } from './webinar-floor-state.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import {
   WebinarsRepository,
@@ -150,6 +153,7 @@ export class WebinarLiveService {
     @Inject(VIDEO_PROVIDER) private readonly video: VideoProvider,
     private readonly events: WebinarRoomEvents,
     private readonly audit: AuditWriter,
+    private readonly floorState: WebinarFloorState,
   ) {}
 
   // ── Chat ──────────────────────────────────────────────────────────────────
@@ -414,6 +418,8 @@ export class WebinarLiveService {
       };
     }
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, new Date(), tx));
+    // A new floor starts unmuted, with no request pending (WBN-26).
+    await this.floorState.clear(webinarId, participantId);
     if (target.registration.handRaisedAt) this.events.toModeration(webinarId, 'webinar.hand.lowered', { participantId });
     this.events.toParticipant(target.registration.userId, 'webinar.floor.given', {
       participantId,
@@ -447,6 +453,7 @@ export class WebinarLiveService {
       });
     }
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, null, tx));
+    await this.floorState.clear(webinarId, participantId);
     this.events.toParticipant(target.registration.userId, 'webinar.floor.taken', {
       participantId,
       capabilities: RECEIVE_ONLY,
@@ -483,6 +490,8 @@ export class WebinarLiveService {
         capabilities: attendeeCapabilities(false),
       });
     }
+    // Muted by a host: the attendee may unmute again only once a host asks (WBN-26 criterion 3).
+    await this.floorState.set(target.webinar, participantId, { muted: true, unmuteRequested: false });
     this.events.toHostsFloorMute(webinarId, 'webinar.floor.muted', { participantId });
     this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.muted', {});
     await this.record(principal.userId, target.webinar, 'webinar.floor.muted', { webinarId, participantId });
@@ -497,6 +506,8 @@ export class WebinarLiveService {
   async requestUnmute(webinarId: string, participantId: string, principal: Principal): Promise<WebinarUnmuteRequestResponse> {
     const target = await this.floorTarget(webinarId, participantId, principal);
     if (!target.registration.floorGivenAt) floorNotAvailable('The participant does not hold the floor');
+    const state = await this.floorState.get(webinarId, participantId);
+    await this.floorState.set(target.webinar, participantId, { ...state, unmuteRequested: true });
     this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.unmute_requested', {});
     await this.record(principal.userId, target.webinar, 'webinar.floor.unmute_requested', { webinarId, participantId });
     return { participantId, requested: true };
@@ -520,6 +531,9 @@ export class WebinarLiveService {
     if (participant.role !== 'ATTENDEE' || !registration.floorGivenAt) {
       floorNotAvailable('You do not hold the floor');
     }
+    // A host muted this floor and has not asked to unmute since: the attendee waits for the request (WBN-26).
+    const state = await this.floorState.get(webinarId, participantId);
+    if (state.muted && !state.unmuteRequested) floorNotAvailable('A host muted you; wait until a host asks you to unmute');
     const session = await this.access.scoped(webinar.orgId, (tx) => this.calls.findSessionById(participant.sessionId, tx));
     if (session?.status !== 'active' || !session.providerMeetingId || !participant.providerAttendeeId) {
       floorNotAvailable('You are not in the live meeting');
@@ -546,6 +560,7 @@ export class WebinarLiveService {
         JoinToken: promoted.attendee.JoinToken,
       };
     }
+    await this.floorState.clear(webinarId, participantId);
     this.events.toHostsFloorMute(webinarId, 'webinar.floor.unmuted', { participantId });
     await this.record(principal.userId, webinar, 'webinar.floor.unmuted', { webinarId, participantId });
     return { participantId, hasFloor: true, muted: false, capabilities: FLOOR, ...(primaryAttendee ? { primaryAttendee } : {}) };
