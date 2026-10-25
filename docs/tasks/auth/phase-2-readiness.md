@@ -15,13 +15,43 @@ Phase 2 was carried out on `feat/auth-foundation` following `docs/superpowers/pl
 | T-2.7 Role backfill and legacy removal | Done for the role columns | `db:backfill-grants`; migration `0005` drops `users.platform_role` and `memberships.role` behind a guard; seed defect fixed; a `MANAGER` without an org unit is backfilled at organization scope and reported as `widened`; the backfill runs before `db:migrate` reaches `0005`. `memberships.team_id`, `legacy_teams`, the community tables and the contracts' legacy role types stay for the community retirement and sample mode | `57bfd4f`, `853874a`, `0c04832`, `f3f4bc1`, `176c363`, `ed0bbbe` |
 | T-2.10 Nightly jobs | Partly done | `sessions.reconcile-ttl` and `emergency.sweep-expired` added; Redis in the health check; `worker:dev` and `job:run` run through the Nest compiler. Weekly Cognito export (T-2.12), retention sweeper, audit export and SSO certificate check deferred | `68545ae`, `f12e5ea`, `06742bf` |
 | Review gaps from `implementation.md` section 21 | Done | Email code retypable three times per challenge, lock checked on verify, code emails in the screen's language | `bfce0f6`, `df83b8c` |
-| Browser journey | Done | `pnpm e2e:auth` runs six tests, including `hr-access.spec.ts` | `be65cf3` |
+| Browser journey | Done | `pnpm e2e:auth` runs ten tests since the UI-completeness plan (six in phase 2, including `hr-access.spec.ts`) | `be65cf3` |
 | Organization owner model (2026-10-24) | Done | One `employer_owner` per organization with `access.grant` and `access.revoke`; `POST /orgs/:orgId/grants/transfer-ownership` (owner) and `/ops/orgs/:orgId/grants/transfer-ownership` (staff), delegations re-parented in the same transaction; owner invitations refused while an owner exists; transfer dialogs in both web apps; `hr-access.spec.ts` assigns and revokes; dedicated e2e database and per-worktree test database names; screenshots in the guides | `002c7d6`, `1172c72`, `f08d958`, `0c22c68`, `6e9b297`, `aeea027`, `f08c865`, `4ec3bb0`, `1876e87` |
 | T-2.8 Security baseline, SCPs, production account | Deferred | Waits for staging | |
 | T-2.9, T-2.11 File delivery and export authorization | Deferred | No files or exports exist to authorize | |
 | T-2.12 Weekly Cognito user export | Deferred | Needs the S3 archive bucket (staging) | |
 | Compliance track (T-C.x) | Owner decision | Unchanged; must land before the first real employee signs in | |
 | Phase 3 SSO | Not started | Separate plan | |
+
+### UI coverage (2026-10-25)
+
+The UI-completeness plan (`docs/superpowers/plans/2026-10-25-auth-ui-completeness.md`, branch `feat/auth-ui`) gave the API's auth capabilities screens in the web apps. Every row of the gap map is listed; mobile is out of scope by decision (administration is web only; the app keeps sign-in, settings and sign-out). Routes, gates and screenshots per screen: `docs/auth/implementation.md` section 3.1.
+
+| Capability (API) | Screen | Status |
+| --- | --- | --- |
+| Display name and language (`PATCH /auth/me/display-name`, `/auth/me/locale`) | Workspace and admin `/settings`, Account | Covered |
+| Sessions list, end one, sign out everywhere (`/auth/sessions`, `/auth/sign-out-all`) | `/settings`, Security | Covered; journey `account.spec.ts` |
+| Authenticator for a signed-in user (`POST /auth/me/totp/enrol`, `/auth/totp/confirm`) | `/settings`, Security (password users) | Covered |
+| Sign out (`POST /auth/sign-out`) | Header account menu, both apps | Covered; journey `workspace-sign-in.spec.ts` |
+| Context switch (`POST /auth/context`) | Header context picker, both apps | Covered |
+| Members list, move, end (`/orgs/:orgId/members`) | Workspace `/hr/people`, Members | Covered; journey `hr-people.spec.ts` (end is opened and cancelled) |
+| Invitations list, create, import, revoke (`/orgs/:orgId/invitations`) | Workspace `/hr/people`, Invitations | Covered; journey `hr-people.spec.ts` (invite, revoke) |
+| Org units create, rename, move (`/orgs/:orgId/org-units`) | Workspace `/hr/org-units` | Covered; journey `hr-people.spec.ts` (add, rename) |
+| Grants, delegation, preview, ownership transfer (`/orgs/:orgId/grants`) | Workspace `/hr/access` | Covered (phase 2); journey `hr-access.spec.ts` |
+| Grant update of conditions or validity (`PATCH /orgs/:orgId/grants/:id`) | None | Deferred |
+| Approval authorities (`/orgs/:orgId/approval-authorities`) | None | Deferred |
+| Organizations list and detail (`GET /ops/organizations`, `/:orgId`) | Admin `/organizations`, `/organizations/:orgId` | Covered; journey `admin-ops.spec.ts` |
+| Ownership by staff (`/ops/orgs/:orgId/grants/transfer-ownership`) | Admin organization Overview and Access tab | Covered |
+| Members and invitations of assigned clients (`/ops/orgs/:orgId/members`, `/invitations`) | Admin `/organizations/:orgId/people` | Covered; journey `admin-ops.spec.ts` (members) |
+| Platform and organization grants, user access (`/ops/grants`, `/ops/orgs/:orgId/grants`, `/ops/users/:userId/access`) | Admin `/access`, organization Access tab | Covered (phase 2) |
+| Suspend and reinstate (`/ops/users/:userId/suspend`, `/reinstate`) | Admin user lookup result | Covered; journey `admin-ops.spec.ts` (Suspend offered, cancelled); own account refused (409 `cannot_suspend_self`) |
+| Emergency access request, approve, deny, revoke (`/ops/emergency-access`) | Admin `/emergency` | Covered; journey `admin-ops.spec.ts` (request, own-request rule, approval by a second platform owner) |
+| Emergency record read (`/ops/emergency-access/:id/records/*`) | Admin `/emergency`, Open record (audited notice) | Covered; journey `admin-ops.spec.ts` |
+| Assigned conversations and intake (`/professional/conversations`, `/professional/intake/:id`) | Workspace `/cases`, `/cases/:id` | Covered; journey `expert-cases.spec.ts`. Intake id typed by hand until conversations carry it |
+| Participant conversations (`/professional/me/conversations`) | Workspace `/conversations`, `/conversations/:id` | Covered |
+| Step-up (`/auth/step-up/*`) | Step-up dialog, both web apps | Covered (phase 2); mobile deferred |
+| Any of the above on mobile | None | Out of scope |
+| Enterprise SSO (`/auth/sso/*`) | None | Phase 3 |
 
 New owner decisions raised by phase 2 are in section 4 below. The rest of this document is the work list as it stood on 2026-10-23 and is kept for its reasoning.
 

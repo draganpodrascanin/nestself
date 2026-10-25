@@ -71,6 +71,56 @@ NestSelf serves five populations from one platform: employees of client companie
 
 The screenshots are of the real screens against the stub API with the fictional sample people; `pnpm docs:auth:screenshots` regenerates them (`implementation.md`, section 19).
 
+## What each role can do and where
+
+Every auth capability of the API has a screen in the web apps since 2026-10-25 (`implementation.md`, section 3.1, maps each one to its route, gate and API). The screens hide what a role cannot do, but the API decides: hiding a button is a convenience, never the check. Everyone signed in has `/settings` (display name, language, signed-in sessions, sign out everywhere, and the authenticator for password users), the account menu with Sign out, and the context picker in the header when they have more than one context.
+
+| Role | What they can do | Where |
+|---|---|---|
+| Owner (`employer_owner`, one per organization) | Grant, revoke and delegate access, preview anyone's effective access, transfer ownership | Workspace `/hr/access` (the sample owner is also HR admin; the route sits under the HR area) |
+| HR admin (`hr_admin`) | See members, move them between org units and line managers, end memberships; invite, import and revoke invitations; add, rename and move org units | Workspace `/hr/people` (Members, Invitations) and `/hr/org-units` |
+| Manager (`team_manager`) | Their team's budget, events and approvals; their own account and sessions | Workspace manager area and `/settings`; no access administration |
+| Employee (`employee`) | Their own conversations with an expert, read-only; their account and sessions; switch between personal and organization contexts | Workspace `/conversations` and `/settings` |
+| Expert (`expert`) | Read the conversations of the cases assigned to them (a fresh sign-in or step-up within 15 minutes) and the intake record | Workspace `/cases` (switches them to the expert context) |
+| Staff: platform owner (`platform_owner`) | List organizations, see an organization's members and end memberships, set or transfer its owner, manage platform and organization grants, look up any user's access, suspend and reinstate users, request, approve, deny and revoke emergency access and read a record under it | Admin `/organizations`, `/organizations/:orgId` (Overview, People, Access), `/access`, `/emergency` |
+| Staff: client operations (`client_operations`) | For assigned clients only: members, invitations and imports, end memberships | Admin `/organizations/:orgId/people`, opened by link (the list is platform-wide only) |
+
+![Settings and sessions](screenshots/workspace-settings-sessions.png)
+*Everyone: the signed-in sessions in `/settings`, with Sign out everywhere.*
+
+![Context picker](screenshots/workspace-context-picker.png)
+*Everyone with more than one context: the picker in the header switches between personal and organization (and expert or operations where held).*
+
+![HR people](screenshots/workspace-people-members.png)
+*HR admin: `/hr/people`, members with Move and End membership.*
+
+![HR invitation import](screenshots/workspace-people-import-result.png)
+*HR admin: importing invitations from pasted lines, with the rows the server refused and why.*
+
+![Org units](screenshots/workspace-org-units.png)
+*HR admin: the org-unit tree with Rename, Add child and Move.*
+
+![Expert cases](screenshots/workspace-expert-cases.png)
+*Expert: the conversations of assigned cases.*
+
+![Employee conversation](screenshots/workspace-my-conversation.png)
+*Employee: their own conversation, read-only.*
+
+![Admin organizations](screenshots/admin-organizations.png)
+*Staff: the organizations list.*
+
+![Admin organization people](screenshots/admin-org-people.png)
+*Staff: an organization's members.*
+
+![Suspend dialog](screenshots/admin-user-suspend.png)
+*Staff: suspending a user from the access lookup asks for a reason; one's own account cannot be suspended.*
+
+![Emergency access](screenshots/admin-emergency-list.png)
+*Staff: emergency access. Approve and Deny appear only on someone else's request; the rows were staged for the screenshot.*
+
+![Emergency record view](screenshots/admin-emergency-record.png)
+*Staff: reading a record under approved emergency access, with the audited notice.*
+
 ## Where to look
 
 | Question | Place |
@@ -87,6 +137,8 @@ The screenshots are of the real screens against the stub API with the fictional 
 | Grant administration, confidential reads, emergency access | `apps/api/src/grants/`, `apps/api/src/professional/`, `apps/api/src/emergency/` |
 | Step-up | `apps/api/src/auth/step-up.service.ts`, `apps/api/src/authz/step-up-freshness.ts`, the web apps' `src/auth/step-up-dialog.tsx` |
 | Access screens | `apps/workspace/src/features/access/`, `apps/admin/src/features/access/` |
+| Settings, people, org units, organizations, emergency, expert screens | `apps/{workspace,admin}/src/features/` (`account`, `context`, `people`, `org-units`, `organizations`, `users`, `emergency`, `cases`); the full map is `implementation.md` section 3.1 |
+| Browser journeys and screenshots | `e2e/auth/`, `e2e/screenshots/`, `e2e/README.md` |
 | Phase 2 status and what is left | `docs/tasks/auth/phase-2-readiness.md`, `implementation.md` section 21 |
 | Environment variables | `docs/environment.md`, `apps/api/src/config/env.ts` |
 
@@ -117,4 +169,4 @@ A real Cognito dev pool exists since 2026-10-24 (`eu-central-1_g6OGYONQ0` in acc
 
 ## What is not done yet
 
-Enterprise SSO (phase 3), mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Screens for members and invitations, org units, approval authorities, emergency access, sessions and suspension come next. Open owner decisions: the authenticator for emergency step-up and a `cases` table before anything writes conversations. Who administers grants inside an organization was decided on 2026-10-24: the single employer owner, and NestSelf staff. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.
+Enterprise SSO (phase 3), mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Screens for approval authorities and for changing a grant's conditions are still missing; the rest of the auth capabilities have screens (mobile keeps sign-in, settings and sign-out). Open owner decisions: the authenticator for emergency step-up and a `cases` table before anything writes conversations. Who administers grants inside an organization was decided on 2026-10-24: the single employer owner, and NestSelf staff. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.

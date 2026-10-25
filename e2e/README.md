@@ -38,6 +38,8 @@ pnpm e2e:update
 
 Regenerates the expected screenshot PNGs under `e2e/__screenshots__/`. Run this after intentional visual changes.
 
+The suite expects the apps in sample mode. If `apps/workspace/.env.local` sets `VITE_DATA_SOURCE=api` (as it does for the auth journeys), run the suite with `VITE_DATA_SOURCE=sample pnpm e2e` (Vite lets the shell override `.env.local`), and stop a workspace dev server that already runs in api mode on port 5173 first, because Playwright reuses it. The account menu and the context picker in the app headers (2026-10-25) touch every authenticated workspace and admin page; after a header fix for 320px only the settings baselines changed and the sign-in baselines were added. Update only the entries whose diffs you inspected, for example `VITE_DATA_SOURCE=sample pnpm exec playwright test e2e/screenshots.spec.ts --update-snapshots -g "screenshot: (workspace|admin)-settings"`. Known failures outside the workspace and admin entries (marketing `document-title`, marketing screenshots and reflow, and `e2e/auth/*.spec.ts` being collected by this config) are listed in `docs/auth/implementation.md` section 21.
+
 ### Ad-hoc screenshots with snap.mjs
 
 ```bash
@@ -116,7 +118,7 @@ This starts the API (stub mode, fixed OTP `123456`, insecure-dev cookies), the w
 
 ### TOTP enrolment state caveat
 
-The fake identity provider keeps TOTP enrolment in memory. On the **first** run (or after an API restart) the staff-user test hits the enrolment screen, reads the manual key, computes a code, confirms setup, and persists the secret to `e2e/.auth-state/nikola-totp-secret.txt`. On **subsequent** runs the test reads that persisted secret and enters a computed TOTP code on the plain challenge screen.
+The fake identity provider keeps TOTP enrolment in memory. On the **first** password sign-in of a user against an API process, the journey hits the enrolment screen, reads the manual key, computes a code, confirms setup, and persists the secret to `e2e/.auth-state/<user>-totp-secret.txt` (`nikola-totp-secret.txt`, `milica-totp-secret.txt`). Later sign-ins in the same process read that secret and enter a computed code on the plain challenge screen. `signInWithPassword` in `e2e/auth/support.ts` handles both shapes; `admin-sign-in.spec.ts` does the same for Nikola.
 
 If the API process is restarted but the secret file still exists the test will fail because the API no longer knows that secret. Delete `e2e/.auth-state/` and re-run to trigger a fresh enrolment.
 
@@ -128,7 +130,16 @@ Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5
 
 `hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. Since the owner model of 2026-10-24 gave `employer_owner` `access.grant` and `access.revoke`, it then assigns `team_manager` to Ana on the Product unit and revokes that same grant (found by the id in the create response) with a reason. Repeated delegations are accepted, so a run against a database that was not reset adds one more delegated row; the test only requires at least one. Ownership transfer is not run (it would move Ivana's owner grant away); component tests and the API e2e suite cover it. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
 
-`pnpm e2e:auth` runs six tests in total: four in `workspace-sign-in.spec.ts`, one in `admin-sign-in.spec.ts` and one in `hr-access.spec.ts`.
+### Journeys for the account, people, operations and expert screens
+
+- `account.spec.ts`: Ivana opens `/settings` by deep link and sees her saved display name, changes it and sees the new name in the header's account menu, restores it, checks that the sessions list marks this browser and lists a second browser signed in at the start, then signs out everywhere: this browser lands on `/sign-in` and both browsers' sessions are gone.
+- `hr-people.spec.ts`: Ivana invites `new.colleague.<run>@example.com` with the employee template and sees it pending, revokes it, moves Ana Nikolić to Sales and back to her own unit, and adds a department under Example d.o.o. and renames it. End membership is opened and cancelled (ending it would remove a seeded member), and no step-up dialog appears on the fresh session.
+- `admin-ops.spec.ts`: stages `platform_owner` grants for Nikola and Milica (`grant_user_nikola_platform_owner_e2e`, `grant_user_milica_platform_owner_e2e`; the seed has none and emergency approval needs a second platform owner; the fake identity provider lives in the API process, so a new staff account cannot be created from here). Nikola opens the organizations list, the sample organization and its People tab; requests emergency access to `case_sample` and finds Approve and Deny hidden on his own request; Milica approves it in a second browser; Nikola opens the record view, sees "This access is audited" and reads `conv_sample`; the user lookup for `user_jovan` offers Suspend, whose dialog is opened and cancelled.
+- `expert-cases.spec.ts`: Milica opens `/cases`, finds `case_sample`, opens `conv_sample` and reads both fixture messages; no step-up dialog and no `step_up_required` answer on the fresh session.
+
+All four are safe to re-run: global setup reseeds the database, and the names they create carry the run's timestamp. The staging helper (`stagePlatformGrant` in `support.ts`) also deletes the user's cached principal from the Redis in `REDIS_URL`, because Redis outlives the API process and a principal cached by a previous run would hide the new grant.
+
+`pnpm e2e:auth` runs ten tests in total: four in `workspace-sign-in.spec.ts` and one each in `account.spec.ts`, `admin-ops.spec.ts`, `admin-sign-in.spec.ts`, `expert-cases.spec.ts`, `hr-access.spec.ts` and `hr-people.spec.ts`.
 
 ### File structure
 
@@ -138,13 +149,20 @@ e2e/
   e2e-database.ts               -- which database that is (E2E_DATABASE_URL / TEST_DATABASE_URL)
 e2e/auth/
   totp.ts                       -- RFC 6238 TOTP helper (node:crypto only)
+  support.ts                    -- sign-in helpers, persisted authenticator secrets, e2e database staging
   workspace-sign-in.spec.ts     -- employee email-code, sign-out, guards, error
   admin-sign-in.spec.ts         -- staff password + TOTP enrol / challenge
   hr-access.spec.ts             -- HR admin: grant table, access preview, delegation, assign and revoke
+  account.spec.ts               -- display name, sessions, sign out everywhere
+  hr-people.spec.ts             -- invite and revoke, move a member, add and rename an org unit
+  admin-ops.spec.ts             -- organizations, people tab, emergency access with two staff, user lookup
+  expert-cases.spec.ts          -- expert opens an assigned case conversation
 e2e/screenshots/
   shots.ts                      -- shot() and pick() helpers, output directory
-  workspace.shot.ts             -- workspace sign-in, access screen, dialogs, step-up
   admin.shot.ts                 -- admin sign-in, enrolment, platform and organization access
+  operations.shot.ts            -- admin organizations, people, emergency list and record, suspend dialog
+  workspace-screens.shot.ts     -- settings, sessions, context picker, people, import, org units, expert and participant views
+  workspace.shot.ts             -- workspace sign-in, access screen, dialogs, step-up
   README section                -- this section
 ```
 
@@ -163,6 +181,8 @@ pnpm docs:auth:pdf           # docs/auth/implementation.pdf and quick-guide.pdf
 `docs:auth:screenshots` runs the `screenshots` project of `playwright.auth.config.ts`: `e2e/screenshots/*.shot.ts` (not `*.spec.ts`, so `pnpm e2e` never picks them up), 1280×800, light colour scheme, device scale factor 1, reduced motion, viewport-only PNGs well under 300 KB. Global setup resets the e2e database first, so the screens show only the fictional sample people.
 
 - `workspace.shot.ts` signs in as Ivana and captures the sign-in steps, `/hr/access`, the effective-access panel, the assign and transfer dialogs (both cancelled, nothing is created) and the step-up dialog. To open the step-up dialog without waiting 30 minutes it answers the first `POST /orgs/:orgId/grants` in the browser with the API's own 403 `step_up_required` body; the dialog then starts a real challenge against the stub API.
+- `operations.shot.ts` (runs after `admin.shot.ts`, so Nikola is enrolled) captures `admin-organizations`, `admin-org-people`, `admin-emergency-list`, `admin-emergency-record` and `admin-user-suspend` (dialog open, not confirmed). It stages the same platform owner grant and two emergency access rows whose purposes start with "Staged for the guide screenshots": a pending request by Milica and an approved access of Nikola's for `case_sample`.
+- `workspace-screens.shot.ts` captures, as Ivana, `workspace-settings-account`, `workspace-settings-sessions`, `workspace-context-picker` (menu open), `workspace-people-members`, `workspace-people-import-result`, `workspace-people-invitations` and `workspace-org-units`; as Milica `workspace-expert-cases` and `workspace-expert-conversation`; as Jovan `workspace-my-conversation`. The import creates two invitations for fictional `new.colleague.*@example.com` addresses in the disposable database (and is refused for Ana, an active member), so the result and the pending list have rows.
 - `admin.shot.ts` inserts `grant_user_nikola_platform_owner_screenshots` into the e2e database (the sample data has no platform owner, and the admin access pages need `access.preview`), then signs in as Nikola and captures the password step, authenticator enrolment, `/access`, the user-access lookup and the organization Access tab. Enrolment appears only on the first sign-in against a fresh API process; if an API on port 4000 is reused the test stops with a message, so stop it first. The secret is persisted to `e2e/.auth-state/` like `admin-sign-in.spec.ts` does.
 
 Add a screenshot by adding a `shot(page, '<name>')` call (`e2e/screenshots/shots.ts`) and embedding `![alt](screenshots/<name>.png)` followed by an `*italic caption*` line in the guide; `docs/auth/pdf/build.mjs` turns that pair into a captioned figure and fails when an image is missing.
