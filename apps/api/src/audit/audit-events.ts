@@ -99,6 +99,10 @@ export const AUDIT_ACTIONS = [
   'webinar.message.dismissed',
   'webinar.floor.given',
   'webinar.floor.taken',
+  // WBN-26 (T-CW-2.1): a host mutes the floor holder, asks them to unmute, and the attendee consents.
+  'webinar.floor.muted',
+  'webinar.floor.unmute_requested',
+  'webinar.floor.unmuted',
   'webinar.poll.opened',
   'webinar.poll.closed',
   'webinar.recording.started',

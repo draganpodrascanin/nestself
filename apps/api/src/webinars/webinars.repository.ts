@@ -617,6 +617,15 @@ export class WebinarsRepository {
     return new Set(rows.map((row) => row.id));
   }
 
+  /** The organisation's active units, by name: the audience picker of an `org_unit` policy. */
+  async listUnits(orgId: string, tx?: DbExecutor): Promise<{ id: string; name: string; parentId: string | null }[]> {
+    return this.exec(tx)
+      .select({ id: orgUnits.id, name: orgUnits.name, parentId: orgUnits.parentId })
+      .from(orgUnits)
+      .where(and(eq(orgUnits.orgId, orgId), isNull(orgUnits.archivedAt)))
+      .orderBy(asc(orgUnits.name), asc(orgUnits.id));
+  }
+
   /** The ids among `unitIds` that are units of `orgId`. */
   async unitsOfOrganization(orgId: string, unitIds: readonly string[], tx?: DbExecutor): Promise<Set<string>> {
     if (unitIds.length === 0) return new Set();

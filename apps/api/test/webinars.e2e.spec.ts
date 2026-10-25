@@ -34,6 +34,7 @@ import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import {
+  OpsOrgUnitsResponseSchema,
   OpsOrganizationsResponseSchema,
   WEBINAR_REPLICATED_CAPACITY,
   WebinarHostCandidatesResponseSchema,
@@ -103,6 +104,9 @@ const WEBINAR_AUDIT_DETAIL_KEYS: Record<string, string[]> = {
   'webinar.message.dismissed': ['messageId', 'webinarId'],
   'webinar.floor.given': ['participantId', 'recordingNoticeShown', 'webinarId'],
   'webinar.floor.taken': ['participantId', 'webinarId'],
+  'webinar.floor.muted': ['participantId', 'webinarId'],
+  'webinar.floor.unmute_requested': ['participantId', 'webinarId'],
+  'webinar.floor.unmuted': ['participantId', 'webinarId'],
   'webinar.poll.opened': ['pollId', 'webinarId'],
   'webinar.poll.closed': ['pollId', 'webinarId'],
   // T-CW-2.5
@@ -443,6 +447,13 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     const all = OpsOrganizationsResponseSchema.parse((await get(admin, '/ops/orgs?q=a')).body);
     expect(all.items.map((o) => o.id)).toContain(ORG);
     expectNotFound(await get(ivana, '/ops/orgs'));
+
+    // The units of an `org_unit` audience (event.manage on the organisation, operations context).
+    const units = OpsOrgUnitsResponseSchema.parse((await get(nikola, `/ops/orgs/${ORG}/units`)).body);
+    expect(units.items.map((u) => u.id)).toContain(ELSEWHERE_UNIT);
+    expect(units.items.find((u) => u.id === ELSEWHERE_UNIT)).toEqual({ id: ELSEWHERE_UNIT, name: 'Elsewhere', parentId: null });
+    expectNotFound(await get(nikola, '/ops/orgs/org_unknown/units'));
+    for (const who of [ivana, stefan, milica]) expectNotFound(await get(who, `/ops/orgs/${ORG}/units`));
 
     // The hosts' own list, from the expert context too (`mine=true`).
     const mine = WebinarOpsListResponseSchema.parse((await get(milica, '/ops/webinars?mine=true')).body);
@@ -925,6 +936,74 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     const counts = emitted('webinar.attendance.count').map((call) => call[0]);
     expect(counts).toEqual([`webinar:${liveId}:moderation`, `webinar:${liveId}:hosts`]);
     expect(JSON.stringify(emitted('webinar.hand.count'))).not.toMatch(/Jovan|user_/);
+  });
+
+  it('a host mutes the floor holder and asks to unmute; only the attendee unmutes, while holding the floor (WBN-26)', async () => {
+    const path = (action: string) => `/webinars/${liveId}/participants/${attendeeJoin.participantId}/${action}`;
+    const capabilities = () =>
+      (video as unknown as { findAttendee(m: string, a: string): { Capabilities: unknown } }).findAttendee(
+        presenterJoin.meeting.MeetingId,
+        attendeeJoin.attendee.AttendeeId,
+      ).Capabilities;
+    const participantId = attendeeJoin.participantId;
+    // Muting needs a floor to mute.
+    expectCode(await post(nikola, path('mute')), 409, 'floor_not_available');
+    expect((await post(nikola, path('give-floor'))).status).toBe(200);
+
+    const muted = await post(milica, path('mute'));
+    expect(muted.status, JSON.stringify(muted.body)).toBe(200);
+    expect(muted.body).toEqual({
+      participantId,
+      hasFloor: true,
+      muted: true,
+      capabilities: { audio: 'receive', video: 'receive', content: 'receive' },
+    });
+    expect(capabilities()).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+    expect(emitted('webinar.floor.muted')).toEqual([
+      [`webinar:${liveId}:hosts`, 'webinar.floor.muted', { participantId }],
+      ['user:user_jovan', 'webinar.floor.muted', {}],
+    ]);
+    // The floor itself stays with the attendee.
+    const [registration] = await testDb.db
+      .select()
+      .from(webinarRegistrations)
+      .where(and(eq(webinarRegistrations.webinarId, liveId), eq(webinarRegistrations.userId, 'user_jovan')));
+    expect(registration!.floorGivenAt).not.toBeNull();
+
+    expect((await post(nikola, path('unmute-request'))).body).toEqual({ participantId, requested: true });
+    expect(emitted('webinar.floor.unmuteRequested')).toEqual([['user:user_jovan', 'webinar.floor.unmuteRequested', {}]]);
+    // Nothing changes until the attendee consents.
+    expect(capabilities()).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+
+    // A host cannot unmute an attendee; another registrant cannot touch this participant.
+    expectNotFound(await post(nikola, path('unmute')));
+    expectNotFound(await post(ana, path('unmute')));
+    const unmuted = await post(jovan, path('unmute'));
+    expect(unmuted.status, JSON.stringify(unmuted.body)).toBe(200);
+    expect(unmuted.body).toEqual({
+      participantId,
+      hasFloor: true,
+      muted: false,
+      capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' },
+    });
+    expect(capabilities()).toEqual({ Audio: 'SendReceive', Video: 'Receive', Content: 'Receive' });
+    expect(emitted('webinar.floor.unmuted')).toEqual([[`webinar:${liveId}:hosts`, 'webinar.floor.unmuted', { participantId }]]);
+
+    // Employer-scoped principals and attendees learn nothing.
+    for (const who of [ivana, stefan, jovan]) {
+      expectNotFound(await post(who, path('mute')));
+      expectNotFound(await post(who, path('unmute-request')));
+    }
+    expectNotFound(await post(stefan, path('unmute')));
+
+    // Without the floor the attendee cannot unmute.
+    expect((await post(nikola, path('take-floor'))).status).toBe(200);
+    expectCode(await post(jovan, path('unmute')), 409, 'floor_not_available');
+    expectCode(await post(nikola, path('unmute-request')), 409, 'floor_not_available');
+    expect(capabilities()).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
+    expect((auditRecord.mock.calls as [AuditEventInput][]).map(([event]) => event.action)).toEqual(
+      expect.arrayContaining(['webinar.floor.muted', 'webinar.floor.unmute_requested', 'webinar.floor.unmuted']),
+    );
   });
 
   // ── Polls (WBN-11, WBN-27, CW-R-24) ───────────────────────────────────────

@@ -18,6 +18,9 @@
  * DELETE /webinars/:id/hand                             10/60 s   event.register  webinarRegistrantResource
  * POST   /webinars/:id/participants/:participantId/give-floor  10/60 s  authenticated  a host or moderating (service, WBN-25)
  * POST   /webinars/:id/participants/:participantId/take-floor  10/60 s  authenticated  a host or moderating (service, WBN-25)
+ * POST   /webinars/:id/participants/:participantId/mute        10/60 s  authenticated  a host or moderating (service, WBN-26)
+ * POST   /webinars/:id/participants/:participantId/unmute-request  10/60 s  authenticated  a host or moderating (service, WBN-26)
+ * POST   /webinars/:id/participants/:participantId/unmute      10/60 s  event.register  the attendee, own participant, holding the floor (service, WBN-26)
  * POST   /webinars/:id/polls                            10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/open               10/60 s   event.moderate  webinarStaffResource
  * POST   /webinars/:id/polls/:pollId/close              10/60 s   event.moderate  webinarStaffResource
@@ -55,7 +58,9 @@ import {
   WebinarPollCreateRequestSchema,
   WebinarPollVoteRequestSchema,
   type Principal,
+  type WebinarFloorMuteResponse,
   type WebinarFloorResponse,
+  type WebinarFloorUnmuteResponse,
   type WebinarHandRaiseResponse,
   type WebinarJoinResponse,
   type WebinarListQuery,
@@ -78,6 +83,7 @@ import {
   type WebinarRegistrationResponse,
   type WebinarResponse,
   type WebinarStatusResponse,
+  type WebinarUnmuteRequestResponse,
 } from '@nestself/contracts';
 import { AppointmentNonDisclosureFilter } from '../appointments/appointment-non-disclosure.filter.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
@@ -278,6 +284,45 @@ export class WebinarsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<WebinarFloorResponse> {
     return this.live.takeFloor(id, participantId, principal);
+  }
+
+  /** WBN-26: a host mutes the floor holder; the floor stays theirs (canonical addition, T-CW-2.1). */
+  @Post(':id/participants/:participantId/mute')
+  @HttpCode(200)
+  @Throttle(perMinute(10))
+  @Authenticated()
+  muteFloor(
+    @Param('id') id: string,
+    @Param('participantId') participantId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<WebinarFloorMuteResponse> {
+    return this.live.muteFloor(id, participantId, principal);
+  }
+
+  /** WBN-26: a host asks the floor holder to unmute; only the attendee can (canonical addition, T-CW-2.1). */
+  @Post(':id/participants/:participantId/unmute-request')
+  @HttpCode(200)
+  @Throttle(perMinute(10))
+  @Authenticated()
+  requestUnmute(
+    @Param('id') id: string,
+    @Param('participantId') participantId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<WebinarUnmuteRequestResponse> {
+    return this.live.requestUnmute(id, participantId, principal);
+  }
+
+  /** WBN-26: the attendee unmutes themselves while they hold the floor (canonical addition, T-CW-2.1). */
+  @Post(':id/participants/:participantId/unmute')
+  @HttpCode(200)
+  @Throttle(perMinute(10))
+  @Authorize(ACTIONS['event.register'], webinarRegistrantResource)
+  unmuteFloor(
+    @Param('id') id: string,
+    @Param('participantId') participantId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<WebinarFloorUnmuteResponse> {
+    return this.live.unmuteFloor(id, participantId, principal);
   }
 
   // ── Polls (D-CW-16) ───────────────────────────────────────────────────────

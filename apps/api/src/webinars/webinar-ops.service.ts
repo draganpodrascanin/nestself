@@ -29,8 +29,9 @@
  *   caller hosts, from any context (the presenter's list). Detail
  *   (`GET /ops/webinars/:id`): `event.manage` or `event.moderate`.
  * - The form's lookups (`event.manage`): `GET /ops/webinars/host-candidates`
- *   (experts and staff whose grants list `event.present` or `event.moderate`)
- *   and `GET /ops/orgs` (the organisations the caller may manage).
+ *   (experts and staff whose grants list `event.present` or `event.moderate`),
+ *   `GET /ops/orgs` (the organisations the caller may manage) and
+ *   `GET /ops/orgs/:orgId/units` (an organisation's units).
  * - Attendance (`GET /ops/webinars/:id/attendance`, WBN-33, D-CW-17,
  *   D-CW-30): `event.manage` or `event.moderate` on the occurrence in the
  *   operations context; anyone else, an employer-scoped principal included,
@@ -43,6 +44,7 @@ import {
   ACTIONS,
   WEBINAR_LIST_DEFAULT_LIMIT,
   type AssignmentInput,
+  type OpsOrgUnitsResponse,
   type OpsOrganizationsQuery,
   type OpsOrganizationsResponse,
   type WebinarHostCandidatesQuery,
@@ -200,6 +202,15 @@ export class WebinarOpsService {
   async organisations(principal: Principal, query: OpsOrganizationsQuery): Promise<OpsOrganizationsResponse> {
     const scope = await this.assertManagesSomewhere(principal);
     return { items: await this.repo.organisations(scope, query.q || undefined, LOOKUP_LIMIT) };
+  }
+
+  /**
+   * `GET /ops/orgs/:orgId/units`: the organisation's active units for an
+   * `org_unit` audience. The guard checked `event.manage` on the organisation
+   * in the operations context; read in its tenant scope.
+   */
+  async units(orgId: string): Promise<OpsOrgUnitsResponse> {
+    return { items: await this.access.scoped(orgId, (tx) => this.repo.listUnits(orgId, tx)) };
   }
 
   /** The organisations the caller may manage occurrences of (null: every one); 404 when none, in the operations context. */

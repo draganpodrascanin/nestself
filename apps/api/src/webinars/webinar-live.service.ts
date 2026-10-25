@@ -31,6 +31,12 @@
  *   whose floor changed. `webinar.floor.given` is audited
  *   with `recordingNoticeShown: true` (CW-R-128): the client shows the
  *   recording notice before it lets the attendee unmute.
+ * - Mute (WBN-26): a host mutes the floor holder (audio back to `Receive`,
+ *   the floor kept) or asks them to unmute; only the attendee unmutes, on
+ *   their own participant, while they hold the floor. `webinar.floor.muted`
+ *   and `webinar.floor.unmuted` reach the hosts room with the participant
+ *   id; the attendee's own room gets `webinar.floor.muted {}` and
+ *   `webinar.floor.unmuteRequested {}`.
  * - Polls (WBN-11, WBN-27, CW-R-24): created, opened and closed by moderating
  *   principals; an attendee votes once per poll; a vote row holds the option
  *   only and the registration holds only the fact that it voted. Results
@@ -62,6 +68,9 @@ import {
   type WebinarModerationMessage,
   type WebinarModerationMessageListResponse,
   type WebinarPoll,
+  type WebinarFloorMuteResponse,
+  type WebinarFloorUnmuteResponse,
+  type WebinarUnmuteRequestResponse,
   type WebinarPollCreateRequest,
   type WebinarPollListResponse,
   type WebinarPollResults,
@@ -451,6 +460,95 @@ export class WebinarLiveService {
     this.events.toHosts(webinarId, 'webinar.floor.state', { active: false, participantId });
     await this.record(principal.userId, target.webinar, 'webinar.floor.taken', { webinarId, participantId });
     return { participantId, hasFloor: false, capabilities: RECEIVE_ONLY };
+  }
+
+  // ── Mute and unmute of the floor holder (WBN-26) ──────────────────────────
+
+  /**
+   * A host mutes the floor holder: audio back to `Receive` (a replica
+   * attendee loses its promotion attendee on the primary, as at take-floor),
+   * while the floor stays theirs, so they can unmute again with consent. The
+   * hand-raise record is untouched. Same callers as take-floor.
+   */
+  async muteFloor(webinarId: string, participantId: string, principal: Principal): Promise<WebinarFloorMuteResponse> {
+    const target = await this.floorTarget(webinarId, participantId, principal);
+    if (!target.registration.floorGivenAt) floorNotAvailable('The participant does not hold the floor');
+    if (target.floorAttendeeId) {
+      await this.demote(target, target.floorAttendeeId);
+    } else if (target.replicaIndex === null) {
+      await this.video.updateParticipantCapabilities({
+        providerMeetingId: target.providerMeetingId,
+        providerAttendeeId: target.providerAttendeeId,
+        role: 'attendee',
+        capabilities: attendeeCapabilities(false),
+      });
+    }
+    this.events.toHostsFloorMute(webinarId, 'webinar.floor.muted', { participantId });
+    this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.muted', {});
+    await this.record(principal.userId, target.webinar, 'webinar.floor.muted', { webinarId, participantId });
+    return { participantId, hasFloor: true, muted: true, capabilities: RECEIVE_ONLY };
+  }
+
+  /**
+   * A host asks the floor holder to unmute (WBN-26 criterion 3): the client
+   * asks the attendee, and nothing changes here until they consent through
+   * `unmuteFloor`. A host can never unmute an attendee.
+   */
+  async requestUnmute(webinarId: string, participantId: string, principal: Principal): Promise<WebinarUnmuteRequestResponse> {
+    const target = await this.floorTarget(webinarId, participantId, principal);
+    if (!target.registration.floorGivenAt) floorNotAvailable('The participant does not hold the floor');
+    this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.unmuteRequested', {});
+    await this.record(principal.userId, target.webinar, 'webinar.floor.unmute_requested', { webinarId, participantId });
+    return { participantId, requested: true };
+  }
+
+  /**
+   * The attendee unmutes themselves, on their own participant and only while
+   * they hold the floor: audio `SendReceive` again, video and content
+   * `Receive` (D-CW-35); a replica attendee is promoted again and gets the
+   * primary credentials in the response, to themselves only (CW-R-69).
+   */
+  async unmuteFloor(webinarId: string, participantId: string, principal: Principal): Promise<WebinarFloorUnmuteResponse> {
+    const webinar = await this.access.load(webinarId);
+    const registration = await this.registrant(webinar, principal);
+    const participant = await this.access.scoped(webinar.orgId, (tx) =>
+      this.repo.findParticipantOfWebinar(webinarId, participantId, tx),
+    );
+    // Somebody else's participant reads as unknown (D-CW-15).
+    if (participant?.userId !== principal.userId) throw notFound();
+    if (webinar.status !== 'live') floorNotAvailable('The webinar is not live');
+    if (participant.role !== 'ATTENDEE' || !registration.floorGivenAt) {
+      floorNotAvailable('You do not hold the floor');
+    }
+    const session = await this.access.scoped(webinar.orgId, (tx) => this.calls.findSessionById(participant.sessionId, tx));
+    if (session?.status !== 'active' || !session.providerMeetingId || !participant.providerAttendeeId) {
+      floorNotAvailable('You are not in the live meeting');
+    }
+
+    let primaryAttendee: WebinarPrimaryAttendee | undefined;
+    if ((participant.replicaIndex ?? null) === null) {
+      await this.video.updateParticipantCapabilities({
+        providerMeetingId: session.providerMeetingId,
+        providerAttendeeId: participant.providerAttendeeId,
+        role: 'attendee',
+        capabilities: attendeeCapabilities(true),
+      });
+    } else if (!participant.floorAttendeeId) {
+      const promoted = await this.video.promoteToPrimary({
+        sessionId: session.id,
+        providerMeetingId: session.providerMeetingId,
+        participantId,
+      });
+      await this.access.scoped(webinar.orgId, (tx) => this.repo.setFloorAttendee(participantId, promoted.providerAttendeeId, tx));
+      primaryAttendee = {
+        AttendeeId: promoted.attendee.AttendeeId,
+        ExternalUserId: promoted.attendee.ExternalUserId,
+        JoinToken: promoted.attendee.JoinToken,
+      };
+    }
+    this.events.toHostsFloorMute(webinarId, 'webinar.floor.unmuted', { participantId });
+    await this.record(principal.userId, webinar, 'webinar.floor.unmuted', { webinarId, participantId });
+    return { participantId, hasFloor: true, muted: false, capabilities: FLOOR, ...(primaryAttendee ? { primaryAttendee } : {}) };
   }
 
   /**

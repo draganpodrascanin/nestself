@@ -61,11 +61,16 @@ const CALLS_WEBINARS_AUDIT_CATEGORIES: ReadonlyArray<readonly [AuditAction, Audi
   ['webinar.updated', 'ADMIN'],
   ['webinar.attendance.viewed', 'CONTENT_ACCESS'],
   ['webinar.recording.failed', 'CONTENT_ACCESS'],
+  // T-CW-2.1 additions (WBN-26): muting the floor holder, the unmute request and the attendee's
+  // consenting unmute; the floor events are content access like the give and the take.
+  ['webinar.floor.muted', 'CONTENT_ACCESS'],
+  ['webinar.floor.unmute_requested', 'CONTENT_ACCESS'],
+  ['webinar.floor.unmuted', 'CONTENT_ACCESS'],
 ];
 
 describe('calls and webinars audit events', () => {
-  it('catalogues all 46 canonical events exactly once', () => {
-    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(46);
+  it('catalogues all 49 canonical events exactly once', () => {
+    expect(CALLS_WEBINARS_AUDIT_CATEGORIES).toHaveLength(49);
     for (const [action] of CALLS_WEBINARS_AUDIT_CATEGORIES) {
       expect(AUDIT_ACTIONS.filter((a) => a === action), action).toHaveLength(1);
     }

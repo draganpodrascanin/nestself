@@ -12,9 +12,11 @@
  * GET   /ops/webinars/:id/attendance                    authenticated  event.manage or event.moderate, operations context (service, WBN-33)
  * GET   /ops/orgs                                       authenticated  event.manage or bookings.coordinate, operations context (service):
  *                                                                      the audience picker and the booking form (T-CW-1.5)
+ * GET   /ops/orgs/:orgId/units                          event.manage   operationsOrgResource('webinar'): the units of an org_unit audience
  *
  * `GET /ops/webinars` (with `mine`), `GET /ops/webinars/:id`,
- * `GET /ops/webinars/host-candidates` and `GET /ops/orgs` are additions to
+ * `GET /ops/webinars/host-candidates`, `GET /ops/orgs` and
+ * `GET /ops/orgs/:orgId/units` are additions to
  * the decision record's route list (the admin index, the presenter's list and
  * the occurrence form). Every denial, and a call from outside the operations
  * context (`context_mismatch`), answers 404: an employer-scoped principal
@@ -33,6 +35,7 @@ import {
   WebinarHostCandidatesQuerySchema,
   WebinarOpsListQuerySchema,
   WebinarUpdateRequestSchema,
+  type OpsOrgUnitsResponse,
   type OpsOrganizationsQuery,
   type OpsOrganizationsResponse,
   type Principal,
@@ -52,6 +55,7 @@ import { ApiHttpException } from '../common/api-error.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { Authenticated } from '../authz/authenticated.decorator.js';
 import { Authorize } from '../authz/authorize.decorator.js';
+import { operationsOrgResource } from '../authz/resolvers.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { WebinarOpsService } from './webinar-ops.service.js';
@@ -166,6 +170,12 @@ export class WebinarsOpsController {
       .sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1))
       .slice(0, ORGANISATION_LOOKUP_LIMIT);
     return { items };
+  }
+
+  @Get('orgs/:orgId/units')
+  @Authorize(ACTIONS['event.manage'], operationsOrgResource('webinar'))
+  units(@Param('orgId') orgId: string): Promise<OpsOrgUnitsResponse> {
+    return this.ops.units(orgId);
   }
 
   /**

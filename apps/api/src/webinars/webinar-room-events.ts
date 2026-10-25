@@ -24,6 +24,11 @@
  *   anonymous `webinar.floor.state`, checked against
  *   `WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS`.
  *
+ * - WBN-26 (T-CW-2.1): `webinar.floor.muted { participantId }` and
+ *   `webinar.floor.unmuted { participantId }` on the hosts room;
+ *   `webinar.floor.muted {}` and `webinar.floor.unmuteRequested {}` to the
+ *   floor holder's own room (`WEBINAR_FLOOR_MUTE_*_EVENT_PAYLOAD_SCHEMAS`).
+ *
  * Each payload is checked here against the contract's
  * `WEBINAR_EVENT_PAYLOAD_SCHEMAS` first (strict objects: no name reaches the
  * public room, D-CW-15) and dropped with an error log on failure. The
@@ -34,6 +39,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
@@ -43,6 +50,10 @@ import {
   webinarRoomName,
   type WebinarEventName,
   type WebinarEventPayloads,
+  type WebinarFloorMuteHostsEventName,
+  type WebinarFloorMuteHostsEventPayloads,
+  type WebinarFloorMuteParticipantEventName,
+  type WebinarFloorMuteParticipantEventPayloads,
   type WebinarHostsRoomEventName,
   type WebinarHostsRoomEventPayloads,
   type WebinarModerationRoomAddedEventName,
@@ -119,6 +130,34 @@ export class WebinarRoomEvents {
       return false;
     }
     return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarHostsRoomName(webinarId), event, checked.data);
+  }
+
+  /** WBN-26 on the hosts room `webinar:{webinarId}:hosts`: which attendee was muted or unmuted, never a name. */
+  toHostsFloorMute<E extends WebinarFloorMuteHostsEventName>(
+    webinarId: string,
+    event: E,
+    payload: WebinarFloorMuteHostsEventPayloads[E],
+  ): boolean {
+    const checked = WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload);
+    if (!checked.success) {
+      this.logger.error({ event }, 'Webinar room event failed its contract schema; not emitted');
+      return false;
+    }
+    return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarHostsRoomName(webinarId), event, checked.data);
+  }
+
+  /** WBN-26 to the floor holder's own room only (CW-R-34): muted, or asked to unmute. */
+  toParticipantFloorMute<E extends WebinarFloorMuteParticipantEventName>(
+    userId: string,
+    event: E,
+    payload: WebinarFloorMuteParticipantEventPayloads[E],
+  ): boolean {
+    const checked = WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload);
+    if (!checked.success) {
+      this.logger.error({ event }, 'Webinar room event failed its contract schema; not emitted');
+      return false;
+    }
+    return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, userRoomName(userId), event, checked.data);
   }
 
   /** A floor event to one attendee's own room only (CW-R-34). */

@@ -1142,3 +1142,107 @@ export const WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS = {
 export type WebinarModerationRoomAddedEventPayloads = {
   [E in WebinarModerationRoomAddedEventName]: z.infer<(typeof WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS)[E]>;
 };
+
+// ---------------------------------------------------------------------------
+// Muting the floor holder and the unmute request (WBN-26, T-CW-2.1)
+// ---------------------------------------------------------------------------
+
+const receiveOnlyCapabilities = z.strictObject({
+  audio: z.literal('receive'),
+  video: z.literal('receive'),
+  content: z.literal('receive'),
+});
+
+const floorCapabilities = z.strictObject({
+  audio: z.literal('send_receive'),
+  video: z.literal('receive'),
+  content: z.literal('receive'),
+});
+
+/**
+ * `POST /webinars/:id/participants/:participantId/mute` (a host or a
+ * moderating principal): the floor holder's audio goes back to `receive` but
+ * the floor stays theirs (`hasFloor`), so they can unmute again with consent.
+ * A host can never unmute an attendee (WBN-26 criterion 4).
+ */
+export const WebinarFloorMuteResponseSchema = z.strictObject({
+  participantId: idField,
+  hasFloor: z.literal(true),
+  muted: z.literal(true),
+  capabilities: receiveOnlyCapabilities,
+});
+export type WebinarFloorMuteResponse = z.infer<typeof WebinarFloorMuteResponseSchema>;
+
+/** `POST .../unmute-request` (a host): the attendee is asked; nothing changes until they consent. */
+export const WebinarUnmuteRequestResponseSchema = z.strictObject({
+  participantId: idField,
+  requested: z.literal(true),
+});
+export type WebinarUnmuteRequestResponse = z.infer<typeof WebinarUnmuteRequestResponseSchema>;
+
+/**
+ * `POST .../unmute` (the attendee, on their own participant, only while they
+ * hold the floor): audio `send_receive` again, video and content still
+ * `receive` (D-CW-35). A replica attendee gets fresh primary credentials, to
+ * themselves only (CW-R-69).
+ */
+export const WebinarFloorUnmuteResponseSchema = z.strictObject({
+  participantId: idField,
+  hasFloor: z.literal(true),
+  muted: z.literal(false),
+  capabilities: floorCapabilities,
+  primaryAttendee: WebinarPrimaryAttendeeSchema.optional(),
+});
+export type WebinarFloorUnmuteResponse = z.infer<typeof WebinarFloorUnmuteResponseSchema>;
+
+/** `webinar.floor.muted` on the hosts room: which attendee was muted; never a name. */
+export const WebinarHostsFloorMutedPayloadSchema = z.strictObject({ participantId: idField });
+export type WebinarHostsFloorMutedPayload = z.infer<typeof WebinarHostsFloorMutedPayloadSchema>;
+
+/** `webinar.floor.unmuted` on the hosts room: the attendee consented and speaks again. */
+export const WebinarHostsFloorUnmutedPayloadSchema = z.strictObject({ participantId: idField });
+export type WebinarHostsFloorUnmutedPayload = z.infer<typeof WebinarHostsFloorUnmutedPayloadSchema>;
+
+/** `webinar.floor.muted` on the attendee's own room `user:{userId}`: empty; the client mutes. */
+export const WebinarFloorMutedPayloadSchema = z.strictObject({});
+export type WebinarFloorMutedPayload = z.infer<typeof WebinarFloorMutedPayloadSchema>;
+
+/** `webinar.floor.unmuteRequested` on the attendee's own room: the client asks for consent before unmuting. */
+export const WebinarFloorUnmuteRequestedPayloadSchema = z.strictObject({});
+export type WebinarFloorUnmuteRequestedPayload = z.infer<typeof WebinarFloorUnmuteRequestedPayloadSchema>;
+
+/** Events of the hosts room added for WBN-26. */
+export const WEBINAR_FLOOR_MUTE_HOSTS_EVENT_NAMES = ['webinar.floor.muted', 'webinar.floor.unmuted'] as const;
+export type WebinarFloorMuteHostsEventName = (typeof WEBINAR_FLOOR_MUTE_HOSTS_EVENT_NAMES)[number];
+
+export const WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS = {
+  'webinar.floor.muted': WebinarHostsFloorMutedPayloadSchema,
+  'webinar.floor.unmuted': WebinarHostsFloorUnmutedPayloadSchema,
+} as const satisfies { readonly [E in WebinarFloorMuteHostsEventName]: z.ZodType };
+
+export type WebinarFloorMuteHostsEventPayloads = {
+  [E in WebinarFloorMuteHostsEventName]: z.infer<(typeof WEBINAR_FLOOR_MUTE_HOSTS_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};
+
+/** Events sent to the floor holder's own room only, added for WBN-26. */
+export const WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES = ['webinar.floor.muted', 'webinar.floor.unmuteRequested'] as const;
+export type WebinarFloorMuteParticipantEventName = (typeof WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES)[number];
+
+export const WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS = {
+  'webinar.floor.muted': WebinarFloorMutedPayloadSchema,
+  'webinar.floor.unmuteRequested': WebinarFloorUnmuteRequestedPayloadSchema,
+} as const satisfies { readonly [E in WebinarFloorMuteParticipantEventName]: z.ZodType };
+
+export type WebinarFloorMuteParticipantEventPayloads = {
+  [E in WebinarFloorMuteParticipantEventName]: z.infer<(typeof WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};
+
+// ---------------------------------------------------------------------------
+// Organisation units for the audience picker (`GET /ops/orgs/:orgId/units`, T-CW-2.1)
+// ---------------------------------------------------------------------------
+
+/** The organisation's units for an `org_unit` audience; `parentId` builds the tree. */
+export const OpsOrgUnitsResponseSchema = z.strictObject({
+  items: z.array(z.strictObject({ id: idField, name: z.string().min(1), parentId: idField.nullable() })),
+});
+export type OpsOrgUnitsResponse = z.infer<typeof OpsOrgUnitsResponseSchema>;
