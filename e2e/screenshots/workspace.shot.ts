@@ -10,6 +10,7 @@
  * real challenge against the stub API.
  */
 import { test, expect } from '@playwright/test';
+import { removeDeveloperAccount } from '../auth/support';
 import { WORKSPACE_URL, pick, shot } from './shots';
 
 const HR_ADMIN_EMAIL = 'user_ivana@example.com';
@@ -20,6 +21,8 @@ const MANAGER_NAME = 'Stefan Marković';
 test.describe.configure({ mode: 'serial' });
 
 test('workspace sign-in, access screen, dialogs and step-up', async ({ page }) => {
+  await removeDeveloperAccount();
+
   // Sign-in, identifier step.
   await page.goto(`${WORKSPACE_URL}/sign-in`);
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();

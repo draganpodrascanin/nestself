@@ -180,3 +180,23 @@ export async function stagePlatformGrant(grantId: string, userId: string, templa
   ]);
   await forgetCachedPrincipal(userId);
 }
+
+/**
+ * `SAMPLE_PEOPLE` carries one real person, the developer account
+ * `user_dragan` (added by the owner on 2026-10-24 to link the real dev pool,
+ * flagged `sample: true`). Guide screenshots show fictional people only, so
+ * the screenshot run removes that account from the disposable e2e database
+ * before any capture (idempotent; the next global setup reseeds it). Member
+ * lists are ordered by random membership ids, so filtering one screen at a
+ * time would not reliably keep the row out of every capture.
+ */
+export const DEVELOPER_ACCOUNT_ID = 'user_dragan';
+
+export async function removeDeveloperAccount(): Promise<void> {
+  await e2eSql([
+    { text: 'delete from grants where subject_user_id = $1', values: [DEVELOPER_ACCOUNT_ID] },
+    { text: 'delete from memberships where user_id = $1', values: [DEVELOPER_ACCOUNT_ID] },
+    { text: 'delete from external_identities where user_id = $1', values: [DEVELOPER_ACCOUNT_ID] },
+    { text: 'delete from users where id = $1', values: [DEVELOPER_ACCOUNT_ID] },
+  ]);
+}

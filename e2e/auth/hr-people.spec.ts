@@ -57,8 +57,11 @@ test.describe('Workspace HR people and org units', () => {
     const members = page.getByRole('table', { name: 'Members' });
     const anaRow = members.getByRole('row').filter({ hasText: EMPLOYEE_NAME });
     await expect(anaRow).toHaveCount(1, { timeout: 15_000 });
-    const cells = anaRow.getByRole('cell');
-    const originalUnit = ((await cells.nth(2).textContent()) ?? '').trim();
+    // The org-unit cell, found by its column header rather than its position.
+    const headers = await members.getByRole('columnheader').allTextContents();
+    const unitColumn = headers.findIndex((h) => h.trim() === 'Org unit');
+    expect(unitColumn, 'the members table has an Org unit column').toBeGreaterThanOrEqual(0);
+    const originalUnit = ((await anaRow.getByRole('cell').nth(unitColumn).textContent()) ?? '').trim();
     expect(originalUnit.length).toBeGreaterThan(0);
     expect(originalUnit).not.toBe(OTHER_UNIT);
 

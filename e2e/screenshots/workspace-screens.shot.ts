@@ -14,7 +14,7 @@
  * screen is only looked at.
  */
 import { test, expect } from '@playwright/test';
-import { signInWithEmailCode, signInWithPassword } from '../auth/support';
+import { removeDeveloperAccount, signInWithEmailCode, signInWithPassword } from '../auth/support';
 import { WORKSPACE_URL, shot } from './shots';
 
 const IMPORT_ROWS = [
@@ -27,6 +27,7 @@ const IMPORT_ROWS = [
 test.describe.configure({ mode: 'serial' });
 
 test('HR admin: settings, sessions, context picker, people and org units', async ({ page }) => {
+  await removeDeveloperAccount();
   await signInWithEmailCode(page, WORKSPACE_URL, 'user_ivana@example.com');
 
   // Settings: account section, then the sessions list.

@@ -95,7 +95,7 @@ Every auth capability of the API has a screen in the web apps since 2026-10-25 (
 *HR admin: `/hr/people`, members with Move and End membership.*
 
 ![HR invitation import](screenshots/workspace-people-import-result.png)
-*HR admin: importing invitations from pasted lines, with the rows the server refused and why.*
+*HR admin: importing invitations from pasted lines, with the rows the server refused and why. The two invitations were created in the disposable e2e database for the screenshot.*
 
 ![Org units](screenshots/workspace-org-units.png)
 *HR admin: the org-unit tree with Rename, Add child and Move.*

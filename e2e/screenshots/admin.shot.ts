@@ -20,7 +20,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computeTotp } from '../auth/totp';
-import { stagePlatformGrant } from '../auth/support';
+import { removeDeveloperAccount, stagePlatformGrant } from '../auth/support';
 import { ADMIN_URL, shot } from './shots';
 
 const STAFF_EMAIL = 'user_nikola@example.com';
@@ -34,6 +34,7 @@ const TOTP_SECRET_FILE = path.resolve(import.meta.dirname, '..', '.auth-state', 
 test.describe.configure({ mode: 'serial' });
 
 test('admin sign-in, enrolment and access pages', async ({ page }) => {
+  await removeDeveloperAccount();
   await stagePlatformGrant(`grant_${STAFF_USER_ID}_platform_owner_screenshots`, STAFF_USER_ID, 'platform_owner');
 
   // Identifier, then password.

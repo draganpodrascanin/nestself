@@ -14,11 +14,20 @@ export const ADMIN_URL = 'http://localhost:5174';
 
 const SCREENSHOT_DIR = path.resolve(import.meta.dirname, '..', '..', 'docs', 'auth', 'screenshots');
 
-/** Waits for fonts and a quiet frame, then writes `<name>.png` (viewport only). */
+/** Text that must never appear in a guide screenshot: the real developer account in `SAMPLE_PEOPLE`. */
+const REAL_PERSON = /Dragan|Podra[sš][cć]anin|user_dragan/i;
+
+/**
+ * Waits for fonts and a quiet frame, then writes `<name>.png` (viewport only).
+ * Fails when the page shows the real developer account (fictional people only;
+ * the shot files call `removeDeveloperAccount()` first).
+ */
 export async function shot(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   // Let toasts, focus rings and popovers settle; animations are reduced.
   await page.waitForTimeout(300);
+  const text = await page.evaluate(() => document.body.innerText);
+  expect(text, `${name}: the real developer account is on screen`).not.toMatch(REAL_PERSON);
   await page.screenshot({
     path: path.join(SCREENSHOT_DIR, `${name}.png`),
     fullPage: false,

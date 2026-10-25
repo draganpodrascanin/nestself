@@ -19,7 +19,7 @@
  * cancelled, the record read is a read.
  */
 import { test, expect } from '@playwright/test';
-import { e2eSql, signInWithPassword, stagePlatformGrant } from '../auth/support';
+import { e2eSql, removeDeveloperAccount, signInWithPassword, stagePlatformGrant } from '../auth/support';
 import { ADMIN_URL, shot } from './shots';
 
 const SAMPLE_ORG_ID = 'org_sample';
@@ -54,6 +54,7 @@ async function stageEmergencyRows(): Promise<void> {
 test.describe.configure({ mode: 'serial' });
 
 test('admin organizations, people, emergency access and user suspension', async ({ page }) => {
+  await removeDeveloperAccount();
   await stagePlatformGrant('grant_user_nikola_platform_owner_screenshots', 'user_nikola', 'platform_owner');
   await stageEmergencyRows();
 

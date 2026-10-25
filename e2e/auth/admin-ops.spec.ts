@@ -17,10 +17,11 @@
  *   pending request Approve and Deny are hidden; Milica approves it in a
  *   second browser; Nikola opens the record view, which shows the audited
  *   notice, and reads `conv_sample`;
+ * - the approved access is revoked again at the end of the emergency part;
  * - user lookup for user_jovan offers Suspend; the dialog is opened and
  *   cancelled, nobody is suspended.
  *
- * Re-runs: the request purpose carries the run's timestamp; the approved
+ * Re-runs: the request purpose carries the run's timestamp; the revoked
  * request stays in the list until the database is reseeded.
  *
  * Labels come from packages/i18n/locales/en/admin.json.
@@ -116,6 +117,15 @@ test.describe('Admin operations', () => {
     await expect(viewer.getByText('This access is audited')).toBeVisible();
     await viewer.getByRole('button', { name: 'Close' }).first().click();
     await expect(viewer).toBeHidden();
+
+    // Tidy up: revoke the approved access, so the run leaves no active window.
+    await row.getByRole('button', { name: 'Revoke' }).click();
+    const revoke = page.getByRole('alertdialog', { name: 'Revoke this emergency access?' });
+    await expect(revoke).toBeVisible();
+    await revoke.getByRole('button', { name: 'Revoke access' }).click();
+    await expect(page.getByText('Emergency access revoked.').first()).toBeVisible({ timeout: 10_000 });
+    await expect(row).toContainText('Revoked', { timeout: 10_000 });
+    await expect(row.getByRole('button', { name: 'Open record' })).toHaveCount(0);
 
     // User lookup: Suspend is offered for another user; cancelled.
     await page.goto(`${ADMIN_URL}/access`);
