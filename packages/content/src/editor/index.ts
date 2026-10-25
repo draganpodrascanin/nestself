@@ -3,7 +3,7 @@
  * Exported from @nestself/content/editor.
  */
 export { ContentEditor } from './ContentEditor.tsx';
-export type { ContentEditorProps } from './ContentEditor.tsx';
+export type { ContentEditorProps, ContentEditorHandle } from './ContentEditor.tsx';
 export { toContentDocument, fromContentDocument } from './converters.ts';
 export { createEditorExtensions } from './editor-extensions.ts';
 export type { EditorExtensionsOptions } from './editor-extensions.ts';

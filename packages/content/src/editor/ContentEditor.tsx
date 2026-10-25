@@ -10,7 +10,7 @@
  */
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useImperativeHandle } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import type { ContentDocument } from '../schema/document.ts';
@@ -51,6 +51,16 @@ export interface ContentEditorProps {
   };
   /** Callback when the image toolbar button is clicked. */
   onInsertImage?: () => void;
+  /**
+   * Imperative handle ref — exposes `insertImageNode(assetId, alt)` so the
+   * parent can insert an image block after a successful upload.
+   */
+  editorRef?: React.Ref<ContentEditorHandle>;
+}
+
+export interface ContentEditorHandle {
+  /** Insert an image node at the current cursor position. */
+  insertImageNode: (mediaAssetId: string, alt?: string) => void;
 }
 
 const DEFAULT_TOOLBAR_LABELS = {
@@ -80,6 +90,7 @@ export function ContentEditor({
   className,
   toolbarLabels = DEFAULT_TOOLBAR_LABELS,
   onInsertImage,
+  editorRef,
 }: ContentEditorProps) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -115,6 +126,25 @@ export function ContentEditor({
       },
     },
   });
+
+  // Expose imperative handle for inserting nodes from the parent
+  useImperativeHandle(
+    editorRef,
+    () => ({
+      insertImageNode(mediaAssetId: string, alt?: string) {
+        if (!editor) return;
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: 'image',
+            attrs: { mediaAssetId, alt: alt ?? null, caption: null },
+          })
+          .run();
+      },
+    }),
+    [editor],
+  );
 
   // Sync editable prop
   useEffect(() => {

@@ -149,6 +149,11 @@ vi.mock('@nestself/api-client', () => ({
       this.details = opts.details;
     }
   },
+  createApiClient: () => ({}),
+  createCmsApi: () => ({
+    uploadMedia: vi.fn(),
+    getMediaAsset: vi.fn(),
+  }),
 }));
 
 // ---------------------------------------------------------------------------

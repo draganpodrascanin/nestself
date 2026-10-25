@@ -17,6 +17,7 @@ import { can } from '@nestself/contracts';
 import type { ContentDocument } from '@nestself/content/schema';
 import { validateContentDocument, transliterateDocument, transliterateText as transliterateFn } from '@nestself/content/schema';
 import { ContentEditor } from '@nestself/content/editor';
+import type { ContentEditorHandle } from '@nestself/content/editor';
 import { ContentRenderer } from '@nestself/content/render';
 import type { ContentRendererLabels } from '@nestself/content/render';
 import { ApiError } from '@nestself/api-client';
@@ -41,6 +42,7 @@ import {
 import type { SampleContentVariant } from '@nestself/sample-data';
 import { isSampleDataMode } from '../../../../../../data-source';
 import { useAuth } from '../../../../../../auth';
+import { useImageUpload } from '../../../../../../features/cms/use-image-upload';
 
 // ---------------------------------------------------------------------------
 // Preview width presets (FMT-R-24, WRK-R-35)
@@ -138,6 +140,7 @@ function VariantEditorPage() {
   const canReview = principal ? can(principal, 'content.review', undefined, effectiveActions) : false;
 
   const isDerivedLocale = routeLocale === 'sr-Cyrl';
+  const editorHandleRef = useRef<ContentEditorHandle>(null);
 
   // --- Sample mode data lookup ---
   const resource = isSampleDataMode
@@ -291,14 +294,21 @@ function VariantEditorPage() {
     scheduleSave();
   };
 
-  // --- Image upload handler (wired to toolbar) ---
+  // --- Image upload ---
+  const imageUpload = useImageUpload({
+    ownerCategoryId: resource?.primaryCategoryId ?? 'uncategorized',
+    onReady: (assetId) => {
+      editorHandleRef.current?.insertImageNode(assetId);
+      toast.add({ title: t('cms:editor.saved'), tone: 'success' });
+    },
+  });
+
   const handleInsertImage = () => {
     if (isSampleDataMode) {
       toast.add({ title: t('cms:sample.uploadNotice'), tone: 'info' });
       return;
     }
-    // TODO: open file picker -> upload via cmsApi.uploadMedia -> insert image node
-    toast.add({ title: t('cms:editor.image.upload'), tone: 'info' });
+    imageUpload.pickAndUpload();
   };
 
   // --- Validate before submit ---
@@ -625,8 +635,37 @@ function VariantEditorPage() {
                   placeholder={t('cms:editor.bodyPlaceholder')}
                   toolbarLabels={toolbarLabels}
                   onInsertImage={handleInsertImage}
+                  editorRef={editorHandleRef}
                 />
               )}
+
+              {/* Image upload status */}
+              {imageUpload.phase !== 'idle' && imageUpload.phase !== 'ready' ? (
+                <div className="mt-2 flex items-center gap-2 text-sm">
+                  {imageUpload.phase === 'uploading' || imageUpload.phase === 'processing' ? (
+                    <>
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-border-control border-t-primary" />
+                      <span className="text-text-secondary">{imageUpload.progressLabel}</span>
+                    </>
+                  ) : null}
+                  {imageUpload.phase === 'picking' ? (
+                    <span className="text-text-secondary">{t('cms:editor.image.upload')}</span>
+                  ) : null}
+                  {imageUpload.phase === 'error' ? (
+                    <Alert tone="danger" className="flex-1">
+                      {imageUpload.error}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="ml-2"
+                        onClick={imageUpload.reset}
+                      >
+                        {t('cms:editor.toolbar.undo')}
+                      </Button>
+                    </Alert>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
