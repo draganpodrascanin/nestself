@@ -36,7 +36,7 @@
  *   their own participant, while they hold the floor. `webinar.floor.muted`
  *   and `webinar.floor.unmuted` reach the hosts room with the participant
  *   id; the attendee's own room gets `webinar.floor.muted {}` and
- *   `webinar.floor.unmuteRequested {}`.
+ *   `webinar.floor.unmute_requested {}`.
  * - Polls (WBN-11, WBN-27, CW-R-24): created, opened and closed by moderating
  *   principals; an attendee votes once per poll; a vote row holds the option
  *   only and the registration holds only the fact that it voted. Results
@@ -497,7 +497,7 @@ export class WebinarLiveService {
   async requestUnmute(webinarId: string, participantId: string, principal: Principal): Promise<WebinarUnmuteRequestResponse> {
     const target = await this.floorTarget(webinarId, participantId, principal);
     if (!target.registration.floorGivenAt) floorNotAvailable('The participant does not hold the floor');
-    this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.unmuteRequested', {});
+    this.events.toParticipantFloorMute(target.registration.userId, 'webinar.floor.unmute_requested', {});
     await this.record(principal.userId, target.webinar, 'webinar.floor.unmute_requested', { webinarId, participantId });
     return { participantId, requested: true };
   }

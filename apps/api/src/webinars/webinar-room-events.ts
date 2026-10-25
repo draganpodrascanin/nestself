@@ -26,7 +26,7 @@
  *
  * - WBN-26 (T-CW-2.1): `webinar.floor.muted { participantId }` and
  *   `webinar.floor.unmuted { participantId }` on the hosts room;
- *   `webinar.floor.muted {}` and `webinar.floor.unmuteRequested {}` to the
+ *   `webinar.floor.muted {}` and `webinar.floor.unmute_requested {}` to the
  *   floor holder's own room (`WEBINAR_FLOOR_MUTE_*_EVENT_PAYLOAD_SCHEMAS`).
  *
  * Each payload is checked here against the contract's

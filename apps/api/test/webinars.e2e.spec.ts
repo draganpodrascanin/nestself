@@ -971,7 +971,7 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect(registration!.floorGivenAt).not.toBeNull();
 
     expect((await post(nikola, path('unmute-request'))).body).toEqual({ participantId, requested: true });
-    expect(emitted('webinar.floor.unmuteRequested')).toEqual([['user:user_jovan', 'webinar.floor.unmuteRequested', {}]]);
+    expect(emitted('webinar.floor.unmute_requested')).toEqual([['user:user_jovan', 'webinar.floor.unmute_requested', {}]]);
     // Nothing changes until the attendee consents.
     expect(capabilities()).toEqual({ Audio: 'Receive', Video: 'Receive', Content: 'Receive' });
 

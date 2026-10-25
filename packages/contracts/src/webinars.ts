@@ -1207,7 +1207,7 @@ export type WebinarHostsFloorUnmutedPayload = z.infer<typeof WebinarHostsFloorUn
 export const WebinarFloorMutedPayloadSchema = z.strictObject({});
 export type WebinarFloorMutedPayload = z.infer<typeof WebinarFloorMutedPayloadSchema>;
 
-/** `webinar.floor.unmuteRequested` on the attendee's own room: the client asks for consent before unmuting. */
+/** `webinar.floor.unmute_requested` on the attendee's own room: the client asks for consent before unmuting. */
 export const WebinarFloorUnmuteRequestedPayloadSchema = z.strictObject({});
 export type WebinarFloorUnmuteRequestedPayload = z.infer<typeof WebinarFloorUnmuteRequestedPayloadSchema>;
 
@@ -1225,12 +1225,12 @@ export type WebinarFloorMuteHostsEventPayloads = {
 };
 
 /** Events sent to the floor holder's own room only, added for WBN-26. */
-export const WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES = ['webinar.floor.muted', 'webinar.floor.unmuteRequested'] as const;
+export const WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES = ['webinar.floor.muted', 'webinar.floor.unmute_requested'] as const;
 export type WebinarFloorMuteParticipantEventName = (typeof WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES)[number];
 
 export const WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_PAYLOAD_SCHEMAS = {
   'webinar.floor.muted': WebinarFloorMutedPayloadSchema,
-  'webinar.floor.unmuteRequested': WebinarFloorUnmuteRequestedPayloadSchema,
+  'webinar.floor.unmute_requested': WebinarFloorUnmuteRequestedPayloadSchema,
 } as const satisfies { readonly [E in WebinarFloorMuteParticipantEventName]: z.ZodType };
 
 export type WebinarFloorMuteParticipantEventPayloads = {
