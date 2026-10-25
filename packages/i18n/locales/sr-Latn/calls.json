@@ -409,7 +409,7 @@
       "moderator": "Moderator",
       "moderatorHint": "Pregleda poruke, daje reč i može da zaustavi snimanje. Za objavljivanje je potreban moderator.",
       "noModerator": "Još bez moderatora",
-      "hostsUnavailable": "Lista mogućih domaćina ovde još nije dostupna. Umesto toga unesite njihove identifikatore korisnika.",
+      "hostsUnavailable": "Lista mogućih domaćina nije mogla da se učita. Umesto toga unesite njihove identifikatore korisnika.",
       "schedule": "Termin",
       "date": "Datum",
       "startTime": "Vreme početka",
@@ -427,7 +427,8 @@
       "capacityRange": "Unesite ceo broj, najmanje 1.",
       "organizationsRequired": "Unesite bar jednu organizaciju.",
       "moderatorNotPresenter": "Moderator ne može istovremeno biti predavač.",
-      "cancel": "Otkaži"
+      "cancel": "Otkaži",
+      "organizationsUnavailable": "Lista organizacija nije mogla da se učita. Umesto toga unesite njihove identifikatore."
     },
     "console": {
       "prejoinTitle": "Proverite opremu",

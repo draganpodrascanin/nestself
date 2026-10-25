@@ -406,7 +406,7 @@
       "moderator": "Moderátor",
       "moderatorHint": "Átnézi az üzeneteket, szót ad, és leállíthatja a felvételt. A közzétételhez moderátor szükséges.",
       "noModerator": "Még nincs moderátor",
-      "hostsUnavailable": "A lehetséges házigazdák listája itt még nem érhető el. Adja meg helyette a felhasználói azonosítóikat.",
+      "hostsUnavailable": "A lehetséges házigazdák listáját nem sikerült betölteni. Adja meg helyette a felhasználói azonosítóikat.",
       "schedule": "Időpont",
       "date": "Dátum",
       "startTime": "Kezdés",
@@ -424,7 +424,8 @@
       "capacityRange": "Adjon meg egy legalább 1 értékű egész számot.",
       "organizationsRequired": "Adjon meg legalább egy szervezetet.",
       "moderatorNotPresenter": "A moderátor nem lehet egyben előadó is.",
-      "cancel": "Mégse"
+      "cancel": "Mégse",
+      "organizationsUnavailable": "A szervezetek listáját nem sikerült betölteni. Adja meg helyette az azonosítóikat."
     },
     "console": {
       "prejoinTitle": "Ellenőrizze a beállításokat",

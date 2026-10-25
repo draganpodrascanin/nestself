@@ -1,16 +1,12 @@
 /**
  * Webinar reads for the admin routes: the API in API mode, the sample
  * fixtures in sample mode (CW-R-56), in the same shapes.
- *
- * There is no `GET /ops/webinars/:id` (T-CW-2.1 serves the list, the form
- * routes and the attendance): the detail finds the occurrence in the
- * operations list, page by page.
  */
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { ApiError, webinarAttendanceQuery, webinarDetailQuery, webinarKeys, webinarOpsListQuery } from '@nestself/api-client';
-import { WEBINAR_LIST_MAX_LIMIT } from '@nestself/contracts';
+import { webinarAttendanceQuery, webinarDetailQuery, webinarOpsDetailQuery, webinarOpsListQuery } from '@nestself/api-client';
 import type { Webinar, WebinarAttendanceResponse, WebinarResponse } from '@nestself/contracts';
 import { isSampleDataMode } from '../data-source';
+import { useAuth } from '../auth';
 import { sampleHostView, sampleOccurrence, sampleOccurrences } from './sample';
 import { webinarsApi } from './webinars-api';
 
@@ -24,12 +20,15 @@ export interface OccurrenceListState {
   refetch: () => void;
 }
 
-export function useOccurrenceList(): OccurrenceListState {
-  const query = useInfiniteQuery({ ...webinarOpsListQuery(webinarsApi), enabled: !isSampleDataMode });
+/** `GET /ops/webinars`; with `mine`, the occurrences the caller hosts (a presenter's list). */
+export function useOccurrenceList(mine = false): OccurrenceListState {
+  const { principal } = useAuth();
+  const query = useInfiniteQuery({ ...webinarOpsListQuery(webinarsApi, mine ? { mine } : {}), enabled: !isSampleDataMode });
   if (isSampleDataMode) {
+    const all = sampleOccurrences();
     return {
       status: 'success',
-      items: sampleOccurrences(),
+      items: mine ? all.filter((webinar) => webinar.hosts.some((host) => host.userId === principal?.userId)) : all,
       error: null,
       hasNextPage: false,
       isFetchingNextPage: false,
@@ -48,22 +47,6 @@ export function useOccurrenceList(): OccurrenceListState {
   };
 }
 
-/** At most this many list pages are read to find one occurrence (1,000 occurrences). */
-const LOOKUP_MAX_PAGES = 10;
-
-/** One occurrence from the operations list; 404 when the first ten pages do not hold it. */
-async function findOccurrence(webinarId: string): Promise<Webinar> {
-  let cursor: string | undefined;
-  for (let pageNumber = 0; pageNumber < LOOKUP_MAX_PAGES; pageNumber += 1) {
-    const page = await webinarsApi.listOps({ cursor, limit: WEBINAR_LIST_MAX_LIMIT });
-    const found = page.items.find((item) => item.id === webinarId);
-    if (found) return found;
-    if (!page.nextCursor) break;
-    cursor = page.nextCursor;
-  }
-  throw new ApiError({ status: 404, code: 'not_found', message: 'Webinar not found', requestId: null });
-}
-
 export interface OccurrenceState {
   status: 'pending' | 'error' | 'success';
   webinar: Webinar | null;
@@ -72,12 +55,7 @@ export interface OccurrenceState {
 }
 
 export function useOccurrence(webinarId: string): OccurrenceState {
-  const query = useQuery({
-    queryKey: [...webinarKeys.ops(), 'occurrence', webinarId],
-    queryFn: () => findOccurrence(webinarId),
-    enabled: !isSampleDataMode,
-    retry: false,
-  });
+  const query = useQuery({ ...webinarOpsDetailQuery(webinarsApi, webinarId), enabled: !isSampleDataMode });
   if (isSampleDataMode) return { status: 'success', webinar: sampleOccurrence(webinarId), error: null, refetch: () => undefined };
   return { status: query.status, webinar: query.data ?? null, error: query.error, refetch: () => void query.refetch() };
 }

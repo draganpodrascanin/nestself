@@ -25,6 +25,16 @@ export function canListWebinars(principal: Principal | null, effectiveActions: r
   return canManageWebinars(principal, effectiveActions) || has(principal, effectiveActions, 'event.moderate');
 }
 
+/** Presenters hold `event.present` only: they see the occurrences they host (`GET /ops/webinars?mine=true`). */
+export function canPresentWebinars(principal: Principal | null, effectiveActions: readonly string[]): boolean {
+  return has(principal, effectiveActions, 'event.present');
+}
+
+/** The nav entry and the list: the full list, or the presenter's own. */
+export function canSeeWebinars(principal: Principal | null, effectiveActions: readonly string[]): boolean {
+  return canListWebinars(principal, effectiveActions) || canPresentWebinars(principal, effectiveActions);
+}
+
 /** The presenter view and the moderator console (WBN-16 to WBN-29). */
 export function canHostWebinars(principal: Principal | null, effectiveActions: readonly string[]): boolean {
   return has(principal, effectiveActions, 'event.present') || has(principal, effectiveActions, 'event.moderate');
@@ -41,6 +51,7 @@ async function guard(auth: RouterAuth, allowed: (principal: Principal, actions: 
 }
 
 export const requireWebinarList = (auth: RouterAuth) => guard(auth, canListWebinars);
+export const requireWebinarListOrMine = (auth: RouterAuth) => guard(auth, canSeeWebinars);
 export const requireWebinarManage = (auth: RouterAuth) => guard(auth, canManageWebinars);
 export const requireWebinarHost = (auth: RouterAuth) => guard(auth, canHostWebinars);
 /** The occurrence route, whose child is the live view: list holders and hosts. */

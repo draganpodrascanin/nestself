@@ -7,7 +7,7 @@ import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
 import { UserRoomListener } from '../calls/user-room-listener';
-import { canListWebinars } from '../webinars/route-gate';
+import { canSeeWebinars } from '../webinars/route-gate';
 import { ApiStatus } from './__root';
 
 function PermissionBlock() {
@@ -52,8 +52,8 @@ function AuthenticatedLayout() {
     ? [{ to: '/support/calls' as const, icon: Lifebuoy, label: t('calls:supportCalls.nav') }]
     : [];
 
-  // Webinars (T-CW-2.4): occurrences for `event.manage` and `event.moderate`.
-  const webinarsNav = canListWebinars(principal, effectiveActions)
+  // Webinars (T-CW-2.4): occurrences for `event.manage` and `event.moderate`; a presenter's own for `event.present`.
+  const webinarsNav = canSeeWebinars(principal, effectiveActions)
     ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
     : [];
 
@@ -70,7 +70,7 @@ function AuthenticatedLayout() {
         { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
         { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
       ]
-    : [...consultationsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
+    : [...consultationsNav, ...webinarsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
 
   return (
     <AppShell

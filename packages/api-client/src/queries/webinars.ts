@@ -5,7 +5,7 @@
  */
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { WebinarUpdateRequest } from '@nestself/contracts';
-import type { WebinarCreateBody, WebinarListParams, WebinarsApi } from '../webinars';
+import type { WebinarCreateBody, WebinarHostCandidatesParams, WebinarListParams, WebinarOpsListParams, WebinarsApi } from '../webinars';
 import { retryUnlessClientError } from './calls';
 
 export const webinarKeys = {
@@ -15,7 +15,10 @@ export const webinarKeys = {
   detail: (webinarId: string) => [...webinarKeys.all, 'detail', webinarId] as const,
   messages: (webinarId: string) => [...webinarKeys.all, 'messages', webinarId] as const,
   ops: () => [...webinarKeys.all, 'ops'] as const,
-  opsList: (params: Omit<WebinarListParams, 'cursor'>) => [...webinarKeys.ops(), 'list', params] as const,
+  opsList: (params: Omit<WebinarOpsListParams, 'cursor'>) => [...webinarKeys.ops(), 'list', params] as const,
+  opsDetail: (webinarId: string) => [...webinarKeys.ops(), 'detail', webinarId] as const,
+  hostCandidates: (params: WebinarHostCandidatesParams) => [...webinarKeys.ops(), 'host-candidates', params] as const,
+  organizations: (q: string) => [...webinarKeys.ops(), 'organizations', q] as const,
   attendance: (webinarId: string) => [...webinarKeys.ops(), 'attendance', webinarId] as const,
 };
 
@@ -37,13 +40,37 @@ export const webinarDetailQuery = (api: WebinarsApi, webinarId: string) =>
     retry: retryUnlessClientError,
   });
 
-/** `GET /ops/webinars`, cursor-paged: every status. */
-export const webinarOpsListQuery = (api: WebinarsApi, params: Omit<WebinarListParams, 'cursor'> = {}) =>
+/** `GET /ops/webinars`, cursor-paged: every status; `mine` the caller's hosted occurrences. */
+export const webinarOpsListQuery = (api: WebinarsApi, params: Omit<WebinarOpsListParams, 'cursor'> = {}) =>
   infiniteQueryOptions({
     queryKey: webinarKeys.opsList(params),
     queryFn: ({ pageParam }) => api.listOps({ ...params, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /ops/webinars/:id` */
+export const webinarOpsDetailQuery = (api: WebinarsApi, webinarId: string) =>
+  queryOptions({
+    queryKey: webinarKeys.opsDetail(webinarId),
+    queryFn: () => api.getOps(webinarId),
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /ops/webinars/host-candidates`: the form's presenter and moderator pickers. */
+export const webinarHostCandidatesQuery = (api: WebinarsApi, params: WebinarHostCandidatesParams) =>
+  queryOptions({
+    queryKey: webinarKeys.hostCandidates(params),
+    queryFn: () => api.hostCandidates(params),
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /ops/orgs`: the form's organisation picker. */
+export const opsOrganizationsQuery = (api: WebinarsApi, q = '') =>
+  queryOptions({
+    queryKey: webinarKeys.organizations(q),
+    queryFn: () => api.organizations(q ? { q } : {}),
     retry: retryUnlessClientError,
   });
 

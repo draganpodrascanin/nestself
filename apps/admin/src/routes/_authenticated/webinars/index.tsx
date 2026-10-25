@@ -1,21 +1,23 @@
 /**
  * The operations webinar list (guidelines 12.2, WBN-30 to WBN-33): every
  * occurrence the caller may manage or moderate (`GET /ops/webinars`), with
- * status, schedule and capacity, and "New webinar" for `event.manage`.
+ * status, schedule and capacity, and "New webinar" for `event.manage`. A
+ * presenter (`event.present` only) sees the occurrences they host
+ * (`?mine=true`), read-only, each linked to its live view.
  */
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Heading, StatusBlock, Table, Td, Th } from '@nestself/ui';
 import { useAuth } from '../../../auth';
 import { isSampleDataMode } from '../../../data-source';
-import { canListWebinars, canManageWebinars, requireWebinarList } from '../../../webinars/route-gate';
+import { canListWebinars, canManageWebinars, canSeeWebinars, requireWebinarListOrMine } from '../../../webinars/route-gate';
 import { mapWebinarError } from '../../../webinars/map-webinar-error';
 import { useOccurrenceList } from '../../../webinars/use-webinars';
 import { useLocalized, useWebinarWhen } from '../../../webinars/webinar-format';
 import { WebinarStatusBadge } from '../../../webinars/webinar-parts';
 
 export const Route = createFileRoute('/_authenticated/webinars/')({
-  beforeLoad: ({ context }) => requireWebinarList(context.auth),
+  beforeLoad: ({ context }) => requireWebinarListOrMine(context.auth),
   component: WebinarsAdminPage,
 });
 
@@ -23,11 +25,13 @@ function WebinarsAdminPage() {
   const { t } = useTranslation(['calls', 'common']);
   const { t: tCalls } = useTranslation('calls');
   const { principal, effectiveActions } = useAuth();
-  const list = useOccurrenceList();
+  // Managers and moderators see every occurrence; a presenter the ones they host.
+  const mine = !canListWebinars(principal, effectiveActions);
+  const list = useOccurrenceList(mine);
   const localized = useLocalized();
   const when = useWebinarWhen();
 
-  if (!canListWebinars(principal, effectiveActions)) {
+  if (!canSeeWebinars(principal, effectiveActions)) {
     return <StatusBlock state="permission" title={t('common:state.permission.title')} body={t('common:state.permission.body')} />;
   }
 
@@ -76,9 +80,15 @@ function WebinarsAdminPage() {
             {list.items.map((webinar) => (
               <tr key={webinar.id}>
                 <Td>
-                  <Link to="/webinars/$webinarId" params={{ webinarId: webinar.id }} className="text-primary underline underline-offset-[0.2em]">
-                    {localized(webinar.title)}
-                  </Link>
+                  {mine ? (
+                    <Link to="/webinars/$webinarId/live" params={{ webinarId: webinar.id }} className="text-primary underline underline-offset-[0.2em]">
+                      {localized(webinar.title)}
+                    </Link>
+                  ) : (
+                    <Link to="/webinars/$webinarId" params={{ webinarId: webinar.id }} className="text-primary underline underline-offset-[0.2em]">
+                      {localized(webinar.title)}
+                    </Link>
+                  )}
                 </Td>
                 <Td>{when(webinar)}</Td>
                 <Td>

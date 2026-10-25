@@ -409,7 +409,7 @@
       "moderator": "Moderator",
       "moderatorHint": "Reviews messages, gives the floor and can stop the recording. Publishing needs a moderator.",
       "noModerator": "No moderator yet",
-      "hostsUnavailable": "The list of possible hosts is not available here yet. Enter their user ids instead.",
+      "hostsUnavailable": "The list of possible hosts could not be loaded. Enter their user ids instead.",
       "schedule": "Schedule",
       "date": "Date",
       "startTime": "Start time",
@@ -427,7 +427,8 @@
       "capacityRange": "Enter a whole number of at least 1.",
       "organizationsRequired": "Enter at least one organisation.",
       "moderatorNotPresenter": "The moderator cannot also be a presenter.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "organizationsUnavailable": "The list of organisations could not be loaded. Enter their ids instead."
     },
     "console": {
       "prejoinTitle": "Check your setup",

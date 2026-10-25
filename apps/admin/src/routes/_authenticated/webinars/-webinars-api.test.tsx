@@ -120,14 +120,14 @@ interface Sent {
   body: unknown;
 }
 
-function serve(routes: Record<string, () => Response>) {
+function serve(routes: Record<string, () => Response>, who: (typeof SAMPLE_PRINCIPALS)[keyof typeof SAMPLE_PRINCIPALS] = operations) {
   const sent: Sent[] = [];
   fetchMock.mockImplementation((input, init) => {
     if (input === undefined) return Promise.resolve(json(404, { code: 'not_found', message: 'Not found' }));
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: operations.principal, effectiveActions: operations.effectiveActions }));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: who.principal, effectiveActions: who.effectiveActions }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
@@ -158,6 +158,8 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
 
   async function fillForm(user: ReturnType<typeof userEvent.setup>, capacity: string) {
     const titles = await screen.findByRole('group', { name: en.webinar.form.titleLegend }, { timeout: 5000 });
+    // The host list failed: the ids field replaces the picker.
+    await waitFor(() => expect(screen.getByLabelText(en.webinar.form.presenters)).toHaveAttribute('name', 'presenters'));
     await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
     await user.type(within(titles).getByLabelText(en.webinar.form.languages['sr-Latn']), 'San i odmor');
     const field = screen.getByLabelText(en.webinar.form.capacity);
@@ -174,8 +176,14 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
 
   const LIMIT_MESSAGE = 'Capacity can be at most 250 attendees until larger webinars are supported in milestone M3.';
 
+  /** The pickers' lists fail, so the form takes ids (the fallback). */
+  const NO_LISTS = {
+    'GET /api/ops/webinars/host-candidates': coded(404, 'not_found'),
+    'GET /api/ops/orgs': coded(404, 'not_found'),
+  };
+
   it('refuses a capacity of 300 before sending, naming the limit and M3', async () => {
-    const sent = serve({});
+    const sent = serve(NO_LISTS);
     const user = userEvent.setup();
     renderAt('/webinars/new');
     await fillForm(user, '300');
@@ -186,7 +194,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
   });
 
   it("posts the occurrence and shows the server's capacity_above_limit at the field", async () => {
-    const sent = serve({ 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 250 }) });
+    const sent = serve({ ...NO_LISTS, 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 250 }) });
     const user = userEvent.setup();
     renderAt('/webinars/new');
     await fillForm(user, '200');
@@ -206,10 +214,59 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     });
   });
 
+  it('picks presenters, the moderator and organisations from the API lists by name', async () => {
+    const sent = serve({
+      'GET /api/ops/webinars/host-candidates': () => {
+        const role = new URL(String(fetchMock.mock.lastCall?.[0]), 'http://localhost').searchParams.get('role');
+        return json(200, { items: role === 'presenter' ? [{ userId: 'user_milica', displayName: 'Milica' }] : [{ userId: 'user_admin', displayName: 'Platform' }] });
+      },
+      'GET /api/ops/orgs': () => json(200, { items: [{ id: 'org_sample', name: 'Example d.o.o.' }] }),
+      'POST /api/ops/webinars': () => json(201, occurrence()),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
+    });
+    const user = userEvent.setup();
+    renderAt('/webinars/new');
+
+    const titles = await screen.findByRole('group', { name: en.webinar.form.titleLegend }, { timeout: 5000 });
+    await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
+    await user.click(await screen.findByRole('checkbox', { name: 'Milica' }));
+    await user.click(screen.getByRole('radio', { name: en.webinar.form.audienceOrganizations }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Example d.o.o.' }));
+    await user.type(screen.getByLabelText(en.webinar.form.date), '2030-12-02');
+    await user.type(screen.getByLabelText(en.webinar.form.startTime), '17:00');
+    await user.type(screen.getByLabelText(en.webinar.form.endTime), '18:00');
+    await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
+
+    await waitFor(() => expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(true));
+    expect(sent.find((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')?.body).toMatchObject({
+      presenterUserIds: ['user_milica'],
+      moderatorUserId: null,
+      audiencePolicy: { type: 'organization', orgIds: ['org_sample'] },
+    });
+    expect(sent.some((entry) => entry.path === '/api/ops/webinars/host-candidates')).toBe(true);
+  });
+
+  it('falls back to ids and says so when the host list cannot be loaded', async () => {
+    serve(NO_LISTS);
+    renderAt('/webinars/new');
+    expect((await screen.findAllByText(new RegExp(en.webinar.form.hostsUnavailable.replace('.', '\\.')), {}, { timeout: 5000 })).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(en.webinar.form.presenters)).toHaveAttribute('name', 'presenters');
+  });
+
+  it("lists a presenter's own occurrences, read-only, linked to the live view", async () => {
+    const sent = serve({ 'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status: 'published' })], nextCursor: null }) }, SAMPLE_PRINCIPALS.expert);
+    renderAt('/webinars');
+    expect(await screen.findByRole('link', { name: 'Sleep and rest' }, { timeout: 5000 })).toHaveAttribute('href', `/webinars/${ID}/live`);
+    expect(screen.queryByRole('link', { name: en.webinar.admin.new })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: en.webinar.nav }).length).toBeGreaterThan(0);
+    expect(sent.find((entry) => entry.path === '/api/ops/webinars')).toBeDefined();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/api/ops/webinars?mine=true'))).toBe(true);
+  });
+
   it('creates the draft and opens it', async () => {
     serve({
       'POST /api/ops/webinars': () => json(201, occurrence()),
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence()], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
     });
     const user = userEvent.setup();
     const router = renderAt('/webinars/new');
@@ -228,7 +285,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
   it('publishes a draft after the confirmation; the status sentence follows', async () => {
     let status = 'draft';
     const sent = serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status })),
       [`POST /api/ops/webinars/${ID}/publish`]: () => {
         status = 'published';
         return json(200, { webinarId: ID, status: 'published' });
@@ -256,7 +313,6 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     ['canceled', en.webinar.admin.canceled],
   ])('says one status sentence for a %s occurrence', async (status, sentence) => {
     serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status })], nextCursor: null }),
       [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status })),
       [`GET /api/ops/webinars/${ID}/attendance`]: () => json(200, { webinarId: ID, registeredCount: 0, joinedCount: 0, peakConcurrent: 0, registrants: [] }),
     });
@@ -269,7 +325,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
 
   it('explains what an incomplete draft needs before publishing', async () => {
     serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ hosts: [] })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ hosts: [] })),
       [`POST /api/ops/webinars/${ID}/publish`]: coded(400, 'validation', { field: 'presenterUserIds' }),
     });
     const user = userEvent.setup();
@@ -289,7 +345,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
   });
   it('shows a failed cancellation', async () => {
     serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status: 'published' })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status: 'published' })),
       [`POST /api/ops/webinars/${ID}/cancel`]: coded(409, 'conflict', { reason: 'not_cancelable' }),
     });
     const user = userEvent.setup();
@@ -300,14 +356,15 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
   });
 
   it('says when the occurrence is not found', async () => {
-    serve({ 'GET /api/ops/webinars': () => json(200, { items: [], nextCursor: null }) });
+    // `GET /ops/webinars/:id` answers 404 to an unknown id and to anyone outside its operations context (D-CW-30).
+    serve({});
     renderAt(`/webinars/${ID}`);
     expect(await screen.findByText(en.webinar.admin.notFoundTitle, {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('shows a failed attendance load', async () => {
     serve({
-      'GET /api/ops/webinars': () => json(200, { items: [occurrence({ status: 'ended' })], nextCursor: null }),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence({ status: 'ended' })),
       [`GET /api/ops/webinars/${ID}/attendance`]: coded(503, 'video_provider_unavailable'),
     });
     renderAt(`/webinars/${ID}`);
@@ -385,12 +442,17 @@ describe('the moderator console (API mode)', { timeout: 30_000 }, () => {
       [`GET /api/webinars/${ID}/messages`]: NO_MESSAGES,
       [`GET /api/webinars/${ID}/recording`]: RECORDING,
       [`POST /api/webinars/${ID}/end`]: coded(409, 'webinar_not_open'),
+      [`GET /api/webinars/${ID}/polls`]: () =>
+        json(200, { items: [{ poll: { id: 'poll_1', webinarId: ID, question: 'Which break suits you?', options: [{ id: 'o1', label: 'A walk', position: 0 }, { id: 'o2', label: 'Tea', position: 1 }], openedAt: null, closedAt: null }, results: null, voted: false }] }),
     });
     const user = userEvent.setup();
     renderAt(`/webinars/${ID}/live`);
     await joinConsole(user);
 
     expect(await screen.findByTestId('webinar-rec-indicator', {}, { timeout: 5000 })).toBeInTheDocument();
+    // The join response carried the recording state, so the console did not ask again; the prepared poll is back.
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/api/webinars/${ID}/recording`))).toBe(false);
+    expect(await screen.findByText('Which break suits you?')).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: en.webinar.endForEveryone }));
     const dialog = await screen.findByRole('alertdialog', { name: en.webinar.endConfirmTitle });
     await user.click(within(dialog).getByRole('button', { name: en.webinar.endForEveryone }));

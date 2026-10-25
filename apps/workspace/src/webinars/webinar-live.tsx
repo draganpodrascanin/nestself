@@ -138,6 +138,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   const queryClient = useQueryClient();
   const { principal } = useAuth();
@@ -203,7 +204,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
    * when it carries one, else `GET /webinars/:id/recording`. If neither
    * answers, the `webinar.recording` events still drive it.
    */
-  const hydrateRecording = (joined: WebinarClientApi, response: WebinarJoinResponse & { recordingStatus?: RecordingStatus }) => {
+  const hydrateRecording = (joined: WebinarClientApi, response: WebinarJoinResponse) => {
     if (response.recordingStatus) {
       joined.hydrate({ recordingStatus: response.recordingStatus });
       return;
@@ -226,6 +227,25 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
       },
       (err: unknown) => {
         if (current) setChatError(mapWebinarError(err, t));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [client, participantId, webinar.id, t]);
+
+  // The opened polls with their results, for an attendee joining late or after a reload.
+  useEffect(() => {
+    if (isSampleDataMode || !participantId) return undefined;
+    let current = true;
+    webinarsApi.listPolls(webinar.id).then(
+      (page) => {
+        if (!current) return;
+        setPollError(null);
+        client.hydrate({ polls: page.items.map((item) => item.poll), results: page.items.flatMap((item) => (item.results ? [item.results] : [])) });
+      },
+      (err: unknown) => {
+        if (current) setPollError(mapWebinarError(err, t));
       },
     );
     return () => {
@@ -327,7 +347,7 @@ export function WebinarLive({ webinar }: { webinar: WebinarResponse }) {
             />
           </div>
           <aside aria-label={t('webinar.liveView.panelsLabel')} className="gap-4 lg:w-96 flex flex-col">
-            <PollPanel client={client} />
+            <PollPanel client={client} error={pollError} />
             <ChatPanel client={client} error={chatError} />
           </aside>
         </div>

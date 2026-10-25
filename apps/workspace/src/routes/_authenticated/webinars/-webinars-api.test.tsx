@@ -239,10 +239,22 @@ describe('the live webinar (API mode)', { timeout: 30_000 }, () => {
   }
 
   it('joins receive-only: attendee controls, the hand, the chat, and no camera control', async () => {
+    const opened = new Date().toISOString();
     const sent = serve({
       [`GET /api/webinars/${ID}`]: () => json(200, webinar({ status: 'live', registered: true })),
-      [`POST /api/webinars/${ID}/join`]: () => json(200, joinResponse()),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, { ...joinResponse(), recordingStatus: 'recording' }),
       [`GET /api/webinars/${ID}/messages`]: () => json(200, { items: [], nextCursor: null }),
+      // A late joiner gets the poll that is already open.
+      [`GET /api/webinars/${ID}/polls`]: () =>
+        json(200, {
+          items: [
+            {
+              poll: { id: 'poll_1', webinarId: ID, question: 'Which break suits you?', options: [{ id: 'o1', label: 'A walk', position: 0 }, { id: 'o2', label: 'Tea', position: 1 }], openedAt: opened, closedAt: null },
+              results: null,
+              voted: false,
+            },
+          ],
+        }),
     });
     const user = userEvent.setup();
     renderAt(`/webinars/${ID}/live`);
@@ -253,6 +265,10 @@ describe('the live webinar (API mode)', { timeout: 30_000 }, () => {
     expect(screen.queryByRole('button', { name: new RegExp(`${en.controls.cameraOn}|${en.controls.cameraOff}`, 'i') })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: en.controls.shareScreen })).not.toBeInTheDocument();
     expect(sent).toContainEqual({ method: 'POST', path: `/api/webinars/${ID}/join`, body: {} });
+    expect(await screen.findByText('Which break suits you?')).toBeInTheDocument();
+    // The join response carried the recording state: no second request for it.
+    expect(sent.some((entry) => entry.path === `/api/webinars/${ID}/recording`)).toBe(false);
+    expect(screen.getByTestId('webinar-rec-indicator')).toBeInTheDocument();
     // The public room joins with the user's own room, which carries the floor events.
     expect(rooms.subscriptions.some((entry) => entry.rooms.join() === `webinar:${ID},user:${employee.principal.userId}`)).toBe(true);
     expect(rooms.subscriptions.some((entry) => entry.rooms.some((room) => room.endsWith(':moderation')))).toBe(false);

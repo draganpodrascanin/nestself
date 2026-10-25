@@ -10,9 +10,10 @@
  * the summary too, naming the limit and the milestone. Every other failure
  * renders translated copy (error-visibility rule).
  *
- * The API has no directory of eligible hosts or client organisations yet:
- * in API mode the hosts and organisations are entered as ids; in sample mode
- * they are picked from the sample principals and `SAMPLE_ORG`.
+ * Presenters, the moderator and organisations are picked from the API's
+ * candidate lists (`GET /ops/webinars/host-candidates`, `GET /ops/orgs`), or
+ * from the sample principals and `SAMPLE_ORG` in sample mode; when a list
+ * cannot be loaded, the form takes ids instead and says so.
  */
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -45,7 +46,7 @@ import { zonedDateTimeToIso } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
 import { Reveal } from '../calls/reveal';
 import { mapWebinarError } from './map-webinar-error';
-import { SAMPLE_MODERATOR_OPTIONS, SAMPLE_ORGANIZATION_OPTIONS, SAMPLE_PRESENTER_OPTIONS } from './sample';
+import { useHostOptions, useOrganizationOptions } from './picker-options';
 import type { PickerOption } from './sample';
 import { webinarsApi } from './webinars-api';
 
@@ -107,7 +108,9 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const pickers = isSampleDataMode;
+  const presenterChoices = useHostOptions('presenter');
+  const moderatorChoices = useHostOptions('moderator');
+  const organizationChoices = useOrganizationOptions();
   const labels: Record<FieldKey, string> = {
     title: t('webinar.form.titleLegend'),
     description: t('webinar.form.descriptionLegend'),
@@ -136,7 +139,7 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
       problems.description = t('webinar.form.descriptionTooLong', { max: WEBINAR_DESCRIPTION_MAX_LENGTH });
     }
 
-    const orgIds = pickers ? organizations : splitIds(String(data.get('organizations') ?? ''));
+    const orgIds = organizationChoices.options ? organizations : splitIds(String(data.get('organizations') ?? ''));
     if (audience === 'organization' && orgIds.length === 0) problems.organizations = t('webinar.form.organizationsRequired');
     const audiencePolicy: WebinarAudiencePolicy = audience === 'organization' ? { type: 'organization', orgIds } : { type: 'all_eligible' };
 
@@ -146,8 +149,8 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     // D-CW-36: one meeting holds 250 until M3; the server answers 400 `capacity_above_limit` as well.
     else if (capacity > WEBINAR_SINGLE_MEETING_CAPACITY) problems.capacity = t('webinar.capacityAboveLimit', { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
 
-    const presenterUserIds = pickers ? presenters : splitIds(String(data.get('presenters') ?? ''));
-    const moderatorUserId = (pickers ? moderator : String(data.get('moderator') ?? '').trim()) || null;
+    const presenterUserIds = presenterChoices.options ? presenters : splitIds(String(data.get('presenters') ?? ''));
+    const moderatorUserId = (moderatorChoices.options ? moderator : String(data.get('moderator') ?? '').trim()) || null;
     if (moderatorUserId && presenterUserIds.includes(moderatorUserId)) problems.moderator = t('webinar.form.moderatorNotPresenter');
 
     const date = String(data.get('date') ?? '');
@@ -250,13 +253,16 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
           <RadioItem value="organization">{t('webinar.form.audienceOrganizations')}</RadioItem>
         </RadioGroup>
         <Reveal show={audience === 'organization'}>
-          {pickers ? (
+          {organizationChoices.options ? (
             <div id={FIELD.organizations} tabIndex={-1}>
-              <CheckboxGroup legend={t('webinar.form.organizations')}>{options(SAMPLE_ORGANIZATION_OPTIONS, organizations, setOrganizations)}</CheckboxGroup>
+              <CheckboxGroup legend={t('webinar.form.organizations')}>
+                {organizationChoices.pending ? <p className="type-metadata text-text-secondary">{t('common:state.loading')}</p> : null}
+                {options(organizationChoices.options, organizations, setOrganizations)}
+              </CheckboxGroup>
               {errors.organizations ? <p className="type-metadata text-danger">{errors.organizations}</p> : null}
             </div>
           ) : (
-            <Field label={t('webinar.form.organizations')} description={t('webinar.form.idsHint')} error={errors.organizations}>
+            <Field label={t('webinar.form.organizations')} description={`${t('webinar.form.organizationsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.organizations}>
               <Input id={FIELD.organizations} name="organizations" autoComplete="off" />
             </Field>
           )}
@@ -275,10 +281,13 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         />
       </Field>
 
-      {pickers ? (
+      {presenterChoices.options ? (
         <Fieldset legend={t('webinar.form.presenters')} description={t('webinar.form.presentersHint')}>
           <div id={FIELD.presenters} tabIndex={-1} className="gap-1 flex flex-col">
-            <CheckboxGroup legend={t('webinar.form.presenters')}>{options(SAMPLE_PRESENTER_OPTIONS, presenters, setPresenters)}</CheckboxGroup>
+            <CheckboxGroup legend={t('webinar.form.presenters')}>
+              {presenterChoices.pending ? <p className="type-metadata text-text-secondary">{t('common:state.loading')}</p> : null}
+              {options(presenterChoices.options, presenters, setPresenters)}
+            </CheckboxGroup>
             {errors.presenters ? <p className="type-metadata text-danger">{errors.presenters}</p> : null}
           </div>
         </Fieldset>
@@ -292,18 +301,18 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         </Field>
       )}
 
-      {pickers ? (
+      {moderatorChoices.options ? (
         <div id={FIELD.moderator} tabIndex={-1}>
           <Field label={t('webinar.form.moderator')} description={t('webinar.form.moderatorHint')} error={errors.moderator}>
             <Select
-              options={[{ value: '', label: t('webinar.form.noModerator') }, ...SAMPLE_MODERATOR_OPTIONS]}
+              options={[{ value: '', label: t('webinar.form.noModerator') }, ...moderatorChoices.options]}
               value={moderator}
               onValueChange={(value) => setModerator(value ?? '')}
             />
           </Field>
         </div>
       ) : (
-        <Field label={t('webinar.form.moderator')} description={t('webinar.form.moderatorHint')} error={errors.moderator}>
+        <Field label={t('webinar.form.moderator')} description={`${t('webinar.form.moderatorHint')} ${t('webinar.form.hostsUnavailable')}`} error={errors.moderator}>
           <Input id={FIELD.moderator} name="moderator" autoComplete="off" />
         </Field>
       )}

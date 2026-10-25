@@ -255,6 +255,16 @@ describe('webinar live routes', () => {
     expect(last()).toMatchObject({ url: 'http://x/api/webinars/web_1/recording', method: 'GET' });
   });
 
+  it('lists the polls for a late joiner and reads closed results', async () => {
+    const list = setup({ items: [{ poll: { ...POLL, openedAt: AT, closedAt: END }, results: RESULTS, voted: true }] });
+    await expect(list.api.listPolls('web_1')).resolves.toMatchObject({ items: [{ voted: true, results: RESULTS }] });
+    expect(list.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/polls', method: 'GET' });
+
+    const results = setup(RESULTS);
+    await expect(results.api.pollResults('web_1', 'poll_1')).resolves.toEqual(RESULTS);
+    expect(results.last()).toMatchObject({ url: 'http://x/api/webinars/web_1/polls/poll_1/results', method: 'GET' });
+  });
+
   it('stops the recording early', async () => {
     const { api, last } = setup({ webinarId: 'web_1', status: 'processing', startedAt: AT, stoppedAt: END });
     await expect(api.stopRecording('web_1')).resolves.toMatchObject({ status: 'processing' });
@@ -294,6 +304,30 @@ describe('webinar operations routes', () => {
       code: 'capacity_above_limit',
       details: { field: 'capacity', limit: 250 },
     });
+  });
+
+  it("lists the caller's hosted occurrences and reads one occurrence", async () => {
+    const list = setup({ items: [OCCURRENCE], nextCursor: null });
+    await list.api.listOps({ mine: true });
+    expect(list.last()).toMatchObject({ url: 'http://x/api/ops/webinars?mine=true', method: 'GET' });
+    await list.api.listOps({ mine: false, status: 'draft' });
+    expect(list.last().url).toBe('http://x/api/ops/webinars?status=draft');
+
+    const one = setup(OCCURRENCE);
+    await expect(one.api.getOps('web_1')).resolves.toEqual(OCCURRENCE);
+    expect(one.last()).toMatchObject({ url: 'http://x/api/ops/webinars/web_1', method: 'GET' });
+  });
+
+  it('reads the host candidates and the organisations for the form', async () => {
+    const hosts = setup({ items: [{ userId: 'user_milica', displayName: 'Milica' }] });
+    await expect(hosts.api.hostCandidates({ role: 'presenter', q: 'Mil' })).resolves.toEqual({ items: [{ userId: 'user_milica', displayName: 'Milica' }] });
+    expect(hosts.last()).toMatchObject({ url: 'http://x/api/ops/webinars/host-candidates?role=presenter&q=Mil', method: 'GET' });
+
+    const orgs = setup({ items: [{ id: 'org_sample', name: 'Example d.o.o.' }] });
+    await orgs.api.organizations({ q: 'Ex' });
+    expect(orgs.last()).toMatchObject({ url: 'http://x/api/ops/orgs?q=Ex', method: 'GET' });
+    await orgs.api.organizations();
+    expect(orgs.last().url).toBe('http://x/api/ops/orgs');
   });
 
   it('publishes and cancels', async () => {

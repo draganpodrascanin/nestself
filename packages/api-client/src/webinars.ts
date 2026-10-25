@@ -23,8 +23,10 @@ import {
   WEBINAR_EVENT_NAMES,
   WEBINAR_ROOM_ADDED_EVENT_NAMES,
   WebinarAttendanceResponseSchema,
+  OpsOrganizationsResponseSchema,
   WebinarFloorResponseSchema,
   WebinarHandRaiseResponseSchema,
+  WebinarHostCandidatesResponseSchema,
   WebinarJoinResponseSchema,
   WebinarListResponseSchema,
   WebinarMessageListResponseSchema,
@@ -33,6 +35,7 @@ import {
   WebinarModerationMessageSchema,
   WebinarOpsListResponseSchema,
   WebinarOpsResponseSchema,
+  WebinarPollListResponseSchema,
   WebinarPollResultsSchema,
   WebinarPollSchema,
   WebinarPollVoteResponseSchema,
@@ -45,6 +48,7 @@ import {
 } from '@nestself/contracts';
 import type {
   WebinarCreateRequestSchema,
+  WebinarHostRole,
   WebinarMessageAnswerRequest,
   WebinarMessageCreateRequest,
   WebinarMessagePublishRequest,
@@ -67,6 +71,18 @@ export interface WebinarListParams {
   /** Exclusive upper bound of `startsAt` (ISO date-time). */
   to?: string;
   orgId?: string;
+}
+
+/** Query of `GET /ops/webinars`: `mine` lists the occurrences the caller hosts (presenters and moderators, any context). */
+export interface WebinarOpsListParams extends WebinarListParams {
+  mine?: boolean;
+}
+
+/** Query of `GET /ops/webinars/host-candidates`. */
+export interface WebinarHostCandidatesParams {
+  role: WebinarHostRole;
+  /** Narrows by name. */
+  q?: string;
 }
 
 /** Query of `GET /webinars/:id/messages`. */
@@ -197,6 +213,14 @@ export function createWebinarsApi(client: ApiClient) {
     closePoll: (webinarId: string, pollId: string) =>
       client.request(webinarPath(webinarId, `/polls/${id(pollId)}/close`), { ...json('POST'), schema: WebinarPollResultsSchema }),
 
+    /** GET /webinars/:id/polls: opened polls with results and the caller's own `voted` (moderating: every poll), for a late joiner or a reload. */
+    listPolls: (webinarId: string) =>
+      client.request(webinarPath(webinarId, '/polls'), { method: 'GET', schema: WebinarPollListResponseSchema }),
+
+    /** GET /webinars/:id/polls/:pollId/results: the aggregate counts once closed (hosts and moderating staff). */
+    pollResults: (webinarId: string, pollId: string) =>
+      client.request(webinarPath(webinarId, `/polls/${id(pollId)}/results`), { method: 'GET', schema: WebinarPollResultsSchema }),
+
     /** The option only: no voter field fits (CW-R-24). */
     vote: (webinarId: string, pollId: string, body: WebinarPollVoteRequest) =>
       client.request(webinarPath(webinarId, `/polls/${id(pollId)}/vote`), { ...json('POST', body), schema: WebinarPollVoteResponseSchema }),
@@ -213,9 +237,23 @@ export function createWebinarsApi(client: ApiClient) {
 
     // ── Operations (WBN-30 to WBN-33) ──────────────────────────────────────
 
-    /** GET /ops/webinars: the occurrences the caller may manage or moderate, every status. */
-    listOps: (params: WebinarListParams = {}) =>
-      client.request(`/api/ops/webinars${queryString(params)}`, { method: 'GET', schema: WebinarOpsListResponseSchema }),
+    /** GET /ops/webinars: the occurrences the caller may manage or moderate, every status; `mine` the ones they host. */
+    listOps: (params: WebinarOpsListParams = {}) =>
+      client.request(`/api/ops/webinars${queryString({ ...params, mine: params.mine ? 'true' : undefined })}`, {
+        method: 'GET',
+        schema: WebinarOpsListResponseSchema,
+      }),
+
+    /** GET /ops/webinars/:id: one occurrence with its audience and hosts (manage or moderate). */
+    getOps: (webinarId: string) => client.request(opsPath(webinarId), { method: 'GET', schema: WebinarOpsResponseSchema }),
+
+    /** GET /ops/webinars/host-candidates: the people who may present or moderate, by first name (the form's pickers). */
+    hostCandidates: (params: WebinarHostCandidatesParams) =>
+      client.request(`/api/ops/webinars/host-candidates${queryString(params)}`, { method: 'GET', schema: WebinarHostCandidatesResponseSchema }),
+
+    /** GET /ops/orgs: active client organisations by name (the form's audience picker). */
+    organizations: (params: { q?: string } = {}) =>
+      client.request(`/api/ops/orgs${queryString(params)}`, { method: 'GET', schema: OpsOrganizationsResponseSchema }),
 
     /** POST /ops/webinars: a `draft`. 400 `capacity_above_limit` above 250 until M3 (D-CW-36). */
     createOps: (body: WebinarCreateBody) =>

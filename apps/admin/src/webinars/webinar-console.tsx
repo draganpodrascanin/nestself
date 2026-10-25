@@ -201,6 +201,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [roomUnavailable, setRoomUnavailable] = useState(false);
   // The join response's recording state; undefined until joined, null when the response carries none.
@@ -232,7 +233,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
     }
     setJoining(true);
     try {
-      const response: WebinarJoinResponse & { recordingStatus?: RecordingStatus } = await webinarsApi.join(webinar.id);
+      const response = await webinarsApi.join(webinar.id);
       if (response.role === 'attendee') throw new Error('An attendee cannot open the host view');
       setRoomUnavailable(false);
       setJoinRecording(response.recordingStatus ?? null);
@@ -262,6 +263,25 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
       },
       (err: unknown) => {
         if (current) setChatError(mapWebinarError(err, t));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [client, role, webinar.id, t]);
+
+  // The polls so far with their results, for a reloaded console (the moderator gets every poll).
+  useEffect(() => {
+    if (isSampleDataMode || !client || !role) return undefined;
+    let current = true;
+    webinarsApi.listPolls(webinar.id).then(
+      (page) => {
+        if (!current) return;
+        setPollError(null);
+        client.hydrate({ polls: page.items.map((item) => item.poll), results: page.items.flatMap((item) => (item.results ? [item.results] : [])) });
+      },
+      (err: unknown) => {
+        if (current) setPollError(mapWebinarError(err, t));
       },
     );
     return () => {
@@ -377,7 +397,7 @@ export function WebinarConsole({ webinar }: { webinar: WebinarResponse }) {
           </div>
           <aside aria-label={t('webinar.moderation.title')} className="gap-4 xl:w-[28rem] flex flex-col">
             <ModeratorQueue client={client} />
-            <PollPanel client={client} />
+            <PollPanel client={client} error={pollError} />
             {isModerator ? <PollCreator webinarId={webinar.id} client={client} /> : null}
             <ChatPanel client={client} error={chatError} />
           </aside>
