@@ -17,8 +17,8 @@ import type { CallSessionControllerApi } from '../types';
 import type { WebinarClientApi } from '../webinar/types';
 import { CONTROL_BAR_WIDE_QUERY } from './ControlBar';
 import { HandRaiseButton } from './HandRaiseButton';
-import { useChangeAnnouncement } from './WebinarStageHooks';
-import { Announcer } from './WebinarStageParts';
+import { useChangeAnnouncement, useErrorMessages, useMicrophoneBlocked } from './WebinarStageHooks';
+import { Announcer, ErrorStack } from './WebinarStageParts';
 
 export interface WebinarStageAttendeeControlsProps {
   controller: CallSessionControllerApi;
@@ -72,6 +72,7 @@ export function WebinarStageAttendeeControls({ controller, client, soundMuted, o
   const lockedId = useId();
   const floor = stage.myFloor.status === 'given';
   const locked = floor && !stage.myFloor.acknowledged;
+  const errors = useErrorMessages(null, useMicrophoneBlocked(client, controller), stage.errorOf('floor'));
 
   const announcement = useChangeAnnouncement(`${floor && !media.muted}|${soundMuted}`, (previous, next) => {
     const [wasTalking, wasSilent] = previous.split('|');
@@ -82,46 +83,51 @@ export function WebinarStageAttendeeControls({ controller, client, soundMuted, o
   });
 
   return (
-    <div role="group" aria-label={t('webinar.controlsLabel')} className="gap-2 p-2 flex max-w-full flex-wrap items-center justify-center rounded-card bg-raised shadow-menu" data-testid="webinar-attendee-controls">
+    <div className="gap-2 flex max-w-full flex-col items-center">
       <MotionFeatures>
-        <AnimatePresence initial={false}>
-          {floor ? (
-            <m.div key="microphone" {...popover} data-testid="webinar-floor-microphone" className="origin-bottom">
-              <Control
-                wide={wide}
-                label={media.muted ? t('controls.unmute') : t('controls.mute')}
-                icon={media.muted ? <MicrophoneSlash size={22} weight="bold" /> : <Microphone size={22} weight="bold" />}
-                off={media.muted}
-                disabled={locked}
-                describedBy={locked ? lockedId : undefined}
-                onClick={() => controller.setMuted(!media.muted)}
-              />
-              <span id={lockedId} className="sr-only">
-                {t('webinar.microphoneLocked')}
-              </span>
-            </m.div>
-          ) : null}
-        </AnimatePresence>
+        <ErrorStack messages={errors} testId="webinar-controls-error" />
       </MotionFeatures>
-      <Control
-        wide={wide}
-        label={soundMuted ? t('webinar.unmuteSound') : t('webinar.muteSound')}
-        icon={soundMuted ? <SpeakerSlash size={22} weight="bold" /> : <SpeakerHigh size={22} weight="bold" />}
-        off={soundMuted}
-        onClick={onToggleSound}
-        testId="webinar-sound-toggle"
-      />
-      <HandRaiseButton client={client} showLabel={wide} />
-      {fullscreen.supported ? (
+      <div role="group" aria-label={t('webinar.controlsLabel')} className="gap-2 p-2 flex max-w-full flex-wrap items-center justify-center rounded-card bg-raised shadow-menu" data-testid="webinar-attendee-controls">
+        <MotionFeatures>
+          <AnimatePresence initial={false}>
+            {floor ? (
+              <m.div key="microphone" {...popover} data-testid="webinar-floor-microphone" className="origin-bottom">
+                <Control
+                  wide={wide}
+                  label={media.muted ? t('controls.unmute') : t('controls.mute')}
+                  icon={media.muted ? <MicrophoneSlash size={22} weight="bold" /> : <Microphone size={22} weight="bold" />}
+                  off={media.muted}
+                  disabled={locked}
+                  describedBy={locked ? lockedId : undefined}
+                  onClick={() => controller.setMuted(!media.muted)}
+                />
+                <span id={lockedId} className="sr-only">
+                  {t('webinar.microphoneLocked')}
+                </span>
+              </m.div>
+            ) : null}
+          </AnimatePresence>
+        </MotionFeatures>
         <Control
           wide={wide}
-          label={fullscreen.active ? t('controls.exitFullscreen') : t('controls.fullscreen')}
-          icon={fullscreen.active ? <CornersIn size={22} weight="bold" /> : <CornersOut size={22} weight="bold" />}
-          onClick={fullscreen.toggle}
+          label={soundMuted ? t('webinar.unmuteSound') : t('webinar.muteSound')}
+          icon={soundMuted ? <SpeakerSlash size={22} weight="bold" /> : <SpeakerHigh size={22} weight="bold" />}
+          off={soundMuted}
+          onClick={onToggleSound}
+          testId="webinar-sound-toggle"
         />
-      ) : null}
-      <Control wide={wide} label={t('consultation.leave')} icon={<PhoneDisconnect size={22} weight="bold" />} danger onClick={onLeave} />
-      <Announcer announcement={announcement} testId="webinar-controls-announcer" />
+        <HandRaiseButton client={client} showLabel={wide} />
+        {fullscreen.supported ? (
+          <Control
+            wide={wide}
+            label={fullscreen.active ? t('controls.exitFullscreen') : t('controls.fullscreen')}
+            icon={fullscreen.active ? <CornersIn size={22} weight="bold" /> : <CornersOut size={22} weight="bold" />}
+            onClick={fullscreen.toggle}
+          />
+        ) : null}
+        <Control wide={wide} label={t('consultation.leave')} icon={<PhoneDisconnect size={22} weight="bold" />} danger onClick={onLeave} />
+        <Announcer announcement={announcement} testId="webinar-controls-announcer" />
+      </div>
     </div>
   );
 }

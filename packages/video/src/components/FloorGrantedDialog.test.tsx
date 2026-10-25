@@ -87,9 +87,19 @@ describe('FloorGrantedDialog (CW-R-125, WBN-10, WBN-25)', () => {
     await waitFor(() => expect(screen.queryByTestId('webinar-floor-taken-notice')).toBeNull());
   });
 
+  it('shows a blocked microphone inside the dialog from the controller permission state', async () => {
+    const { server, controller, attendee, participantId } = await setup();
+    renderWithI18n(<FloorGrantedDialog client={attendee} controller={controller} />);
+    act(() => void server.simulate.floorGiven(participantId));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    act(() => controller.simulate.microphonePermission('error'));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(t('webinar.errors.microphoneUnavailable'));
+  });
+
   it('shows a microphone failure inside the dialog', async () => {
     const { server, attendee, participantId } = await setup();
-    const failing = { setMuted: () => undefined };
+    const failing = new FakeCallSessionController({ role: 'attendee', format: 'webinar' });
     const broken = new FakeWebinarClient({
       server,
       role: 'attendee',

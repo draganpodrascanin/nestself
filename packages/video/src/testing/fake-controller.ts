@@ -12,6 +12,7 @@ import type { PreferenceStore } from '../preferences';
 import type { ConnectionQuality } from '../quality-thresholds';
 import type {
   CallSessionControllerApi,
+  MediaPermission,
   CallSessionSnapshot,
   CallSessionStatus,
   DeviceKind,
@@ -304,6 +305,9 @@ export class FakeCallSessionController implements CallSessionControllerApi {
     reconnecting: () => this.update({ session: { status: 'reconnecting', reconnectStartedAt: Date.now() } }),
     reconnectFailed: () => this.update({ session: { status: 'failed', failure: 'reconnect_timeout', reconnectStartedAt: null } }),
     ended: () => this.update({ session: { status: 'left', endReason: 'ended' } }),
+    /** The browser's microphone permission, for example `denied` when a webinar attendee given the floor blocks it. */
+    microphonePermission: (microphone: MediaPermission) =>
+      this.update({ devices: { permissions: { ...this.snapshot.devices.permissions, microphone } } }),
   };
 
   /** Draws a slow abstract gradient on the theme tokens into the video element. */

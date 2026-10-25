@@ -1,5 +1,5 @@
-import { HandPalm, PhoneDisconnect, PlayCircle, Record, UserCircle, UsersThree } from '@phosphor-icons/react/dist/ssr';
-import { AnimatePresence, Badge, Button, MotionFeatures, cn, m, useMotionPreset } from '@nestself/ui';
+import { HandPalm, MicrophoneStage, PhoneDisconnect, PlayCircle, Record, UserCircle, UsersThree } from '@phosphor-icons/react/dist/ssr';
+import { Alert, AnimatePresence, Badge, Button, MotionFeatures, cn, m, useMotionPreset } from '@nestself/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,12 @@ export interface WebinarStageProps {
   /** Hosts in the lobby: `POST /webinars/:id/start` (WBN-16, WBN-17); the button shows only when given. */
   onStart?: () => void;
   startPending?: boolean;
+  /**
+   * Hosts: called after "End webinar for everyone" succeeded (the client's
+   * `end` action, `POST /webinars/:id/end`, WBN-21, WBN-29), for example to
+   * leave the page. A failure stays on the stage.
+   */
+  onEnd?: () => void;
   /** Extra top-bar content, for example the session timer or the connection badge. */
   header?: ReactNode;
   /** A failure from outside (start, join), already translated. */
@@ -89,6 +95,7 @@ export function WebinarStage({
   onLeave,
   onStart,
   startPending = false,
+  onEnd,
   header,
   error,
   className,
@@ -103,7 +110,7 @@ export function WebinarStage({
   const popover = useMotionPreset('popover');
   const audioRef = useRef<HTMLAudioElement>(null);
   const [soundMuted, setSoundMuted] = useState(false);
-  const errors = useErrorMessages(error);
+  const errors = useErrorMessages(error, stage.errorOf('end'));
 
   const lobby = stage.status === 'draft' || stage.status === 'published';
   const now = useNow(lobby);
@@ -220,17 +227,34 @@ export function WebinarStage({
                   </Badge>
                   <Badge>
                     <HandPalm size={16} aria-hidden />
-                    {t('webinar.handCount', { count: stage.hands.length })}
+                    {t('webinar.handCount', { count: stage.raisedHandCount })}
                   </Badge>
                   <Badge>{t('webinar.publishedCount', { count: stage.publicMessages.length })}</Badge>
                 </span>
               ) : null}
+              <AnimatePresence>
+                {stage.floorActive && isLive ? (
+                  <m.span key="speaking" {...popover} role="status" data-testid="webinar-floor-active" className="origin-left">
+                    <Badge tone="info">
+                      <MicrophoneStage size={16} weight="fill" aria-hidden />
+                      {t('webinar.participantSpeaking')}
+                    </Badge>
+                  </m.span>
+                ) : null}
+              </AnimatePresence>
             </div>
             {header ? <div className="gap-2 flex flex-wrap items-center">{header}</div> : null}
           </div>
           <div className="gap-2 flex w-full max-w-xl flex-col">
             <ErrorStack messages={errors} testId="webinar-stage-error" />
             {!isHost ? <FloorTakenNotice client={client} /> : null}
+            <AnimatePresence>
+              {isHost && stage.recording.status === 'failed' ? (
+                <m.div key="recording-failed" {...popover} data-testid="webinar-recording-failed" className="origin-top">
+                  <Alert tone="warning">{t('webinar.recordingFailed')}</Alert>
+                </m.div>
+              ) : null}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -268,6 +292,7 @@ export function WebinarStage({
               ) : (
                 <>
                   <p className="type-body">{t('webinar.lobby')}</p>
+                  <p className="type-body">{t('webinar.lobbyFloorRecording')}</p>
                   <Button variant="secondary" leadingIcon={<PhoneDisconnect size={20} />} onClick={onLeave} className="self-start">
                     {t('consultation.leave')}
                   </Button>
@@ -294,7 +319,14 @@ export function WebinarStage({
         {!isEnded ? (
           <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] absolute inset-x-0 bottom-0 z-20 flex justify-center">
             {isHost ? (
-              <WebinarStageHostControls controller={controller} role={stage.role === 'moderator' ? 'moderator' : 'presenter'} fullscreen={fullscreenControl} onLeave={onLeave} />
+              <WebinarStageHostControls
+                controller={controller}
+                role={stage.role === 'moderator' ? 'moderator' : 'presenter'}
+                fullscreen={fullscreenControl}
+                onLeave={onLeave}
+                onEndForEveryone={isLive ? () => void stage.end().then(() => onEnd?.(), () => undefined) : undefined}
+                endPending={stage.isPending('webinar.end')}
+              />
             ) : isLive ? (
               <WebinarStageAttendeeControls
                 controller={controller}

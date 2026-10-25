@@ -139,6 +139,7 @@ describe('WebinarStage (WBN-06 to WBN-08, WBN-16 to WBN-19, WBN-28)', () => {
     expect(screen.getByTestId('webinar-lobby-countdown')).toHaveTextContent(t('webinar.startsIn', { time: '05:00' }));
     expect(lobby).toHaveTextContent(t('webinar.recordingNotice'));
     expect(lobby).toHaveTextContent(t('webinar.lobby'));
+    expect(lobby).toHaveTextContent(t('webinar.lobbyFloorRecording'));
     expect(screen.queryByTestId('webinar-attendee-controls')).toBeNull();
     await expectNoA11yViolations(container);
 
@@ -147,6 +148,7 @@ describe('WebinarStage (WBN-06 to WBN-08, WBN-16 to WBN-19, WBN-28)', () => {
     await waitFor(() => expect(screen.queryByTestId('webinar-lobby')).toBeNull());
     expect(screen.getByTestId('webinar-stage-announcer')).toHaveTextContent(t('webinar.started'));
     expect(screen.getByTestId('webinar-attendee-controls')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t('webinar.endForEveryone') })).toBeNull();
   });
 
   it('offers hosts "Start webinar" in the lobby and renders an outside error', async () => {
@@ -158,6 +160,78 @@ describe('WebinarStage (WBN-06 to WBN-08, WBN-16 to WBN-19, WBN-28)', () => {
     expect(onStart).toHaveBeenCalledOnce();
     expect(screen.getByRole('alert')).toHaveTextContent(t('errors.webinarNotOpen'));
     expect(screen.getByTestId('webinar-share-screen')).toHaveTextContent(t('controls.shareScreen'));
+  });
+
+  it('shows "a participant is speaking" to everyone while an attendee has the floor (WBN-25.8)', async () => {
+    const { server, controller, client } = await setup();
+    renderStage({ controller, client });
+    expect(screen.queryByTestId('webinar-floor-active')).toBeNull();
+    act(() => void server.simulate.floorGiven('sample-participant-other'));
+    const badge = screen.getByTestId('webinar-floor-active');
+    expect(badge).toHaveAttribute('role', 'status');
+    expect(badge).toHaveTextContent(t('webinar.participantSpeaking'));
+    act(() => void server.simulate.floorTaken('sample-participant-other'));
+    expect(screen.queryByTestId('webinar-floor-active')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('webinar-floor-active')).toBeNull());
+  });
+
+  it('tells an attendee with the floor that the microphone is blocked', async () => {
+    const { server, controller, client } = await setup();
+    renderStage({ controller, client });
+    act(() => void server.simulate.floorGiven(client.getSnapshot().participantId!));
+    act(() => controller.simulate.microphonePermission('denied'));
+    expect(within(await screen.findByTestId('webinar-controls-error')).getByRole('alert')).toHaveTextContent(t('webinar.errors.microphoneUnavailable'));
+  });
+
+  it('lets a host end the webinar for everyone after a confirmation; attendees have no such control', async () => {
+    const user = userEvent.setup();
+    const { server, controller, client } = await setup('presenter');
+    const attendee = new FakeWebinarClient({ server, role: 'attendee' });
+    attendee.connect();
+    const onEnd = vi.fn();
+    renderStage({ controller, client, onEnd });
+
+    await user.click(screen.getByRole('button', { name: t('webinar.endForEveryone') }));
+    const dialog = await screen.findByRole('alertdialog', { name: t('webinar.endConfirmTitle') });
+    expect(dialog).toHaveAccessibleDescription(t('webinar.endConfirmBody'));
+    await user.click(within(dialog).getByRole('button', { name: t('webinar.keepGoing') }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(server.requests.some((request) => request.action === 'webinar.end')).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: t('webinar.endForEveryone') }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: t('webinar.endForEveryone') }));
+    await waitFor(() => expect(onEnd).toHaveBeenCalledOnce());
+    expect(attendee.getSnapshot().status).toBe('ended');
+    expect(await screen.findByTestId('webinar-ended')).toBeInTheDocument();
+  });
+
+  it('shows a failed end on the stage and keeps the webinar going', async () => {
+    const user = userEvent.setup();
+    const { server, controller, client } = await setup('moderator');
+    server.simulate.failNext('webinar.end', 'network');
+    const onEnd = vi.fn();
+    renderStage({ controller, client, onEnd });
+    await user.click(screen.getByRole('button', { name: t('webinar.endForEveryone') }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: t('webinar.endForEveryone') }));
+    expect(await screen.findByTestId('webinar-stage-error')).toHaveTextContent(t('errors.network'));
+    expect(onEnd).not.toHaveBeenCalled();
+    expect(client.getSnapshot().status).toBe('live');
+  });
+
+  it('tells hosts, and only hosts, that the recording failed (CW-R-121)', async () => {
+    const { server, controller, client } = await setup('moderator');
+    const attendee = await setup();
+    renderStage({ controller, client });
+    act(() => server.simulate.recording('started'));
+    expect(screen.queryByTestId('webinar-recording-failed')).toBeNull();
+    act(() => server.simulate.recording('failed'));
+    expect(screen.getByTestId('webinar-recording-failed')).toHaveTextContent(t('webinar.recordingFailed'));
+    expect(screen.queryByTestId('webinar-rec-indicator')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('webinar-rec-indicator')).toBeNull());
+
+    const other = renderStage({ controller: attendee.controller, client: attendee.client });
+    act(() => attendee.server.simulate.recording('failed'));
+    expect(within(other.container).queryByTestId('webinar-recording-failed')).toBeNull();
   });
 
   it('leaves the meeting and says so when the webinar ends', async () => {

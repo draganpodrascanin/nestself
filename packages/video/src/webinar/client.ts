@@ -1,9 +1,11 @@
 /**
  * `WebinarClient`: the framework-agnostic state of a live webinar (T-CW-2.3).
- * It joins `webinar:{webinarId}` (everyone) and `webinar:{webinarId}:moderation`
- * (hosts) through an injected `WebinarTransport`, validates every room event
- * with the contract's `ROOM_EVENT_PAYLOAD_SCHEMAS`, applies it to an immutable
- * snapshot and performs the chat, hand, floor, poll and recording actions.
+ * It joins `webinar:{webinarId}` (everyone), `webinar:{webinarId}:hosts`
+ * (presenters and moderators: counts and the floor holder's id) and
+ * `webinar:{webinarId}:moderation` (moderators: names) through an injected
+ * `WebinarTransport`, validates every room event with the contract's payload
+ * schemas for that room, applies it to an immutable snapshot and performs
+ * the chat, hand, floor, poll, recording and end actions.
  *
  * Besides the section 7 events it accepts the two canonical additions of
  * T-CW-2.3 on the public room: `webinar.message.removed` (a published message
@@ -13,8 +15,9 @@
  * Role rules held here, on top of the server's (D-CW-15, D-CW-35, WBN-08):
  * - an attendee's state never holds a roster, a name, a hand list or a count;
  *   moderation-room events reaching an attendee client are dropped;
- * - a presenter's hands carry no names (WBN-10) and a presenter sees only
- *   published and answered messages (WBN-20);
+ * - a presenter never joins the moderation room: they get the hand count
+ *   and the floor holder's id from the hosts' room, never a name (WBN-10,
+ *   WBN-20), and see only published and answered messages;
  * - the floor is audio only: `webinar.floor.given` for this participant calls
  *   `setAudioCapability(true)` and stays muted until the attendee unmutes;
  *   `webinar.floor.taken` mutes and calls `setAudioCapability(false)`. The
@@ -22,6 +25,10 @@
  */
 import {
   ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_HOSTS_ROOM_EVENT_NAMES,
+  WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_EVENT_NAMES,
   WEBINAR_PARTICIPANT_EVENT_NAMES,
   WEBINAR_ROOM_ADDED_EVENT_NAMES,
@@ -35,12 +42,17 @@ import {
   WebinarMessageSchema,
   WebinarModerationMessageSchema,
   WebinarRecordingStatusResponseSchema,
+  webinarHostsRoomName,
   webinarModerationRoomName,
   webinarRoomName,
 } from '@nestself/contracts';
 import type {
   WebinarEventName,
   WebinarEventPayloads,
+  WebinarHostsRoomEventName,
+  WebinarHostsRoomEventPayloads,
+  WebinarJoinResponse,
+  WebinarModerationRoomAddedEventName,
   WebinarMessage,
   WebinarMessageCreateRequest,
   WebinarModerationMessage,
@@ -71,12 +83,17 @@ export interface WebinarClientOptions {
   participantId?: string | null;
   /** The call controller (`CallSessionController`): audio capability and mute for the floor. */
   audio?: WebinarAudioControl | null;
-  /** Join the moderation room. Defaults to true for hosts; the server authorises it with `event.moderate`. */
+  /**
+   * Join the moderation room. Defaults to true for the moderator only: the
+   * room carries registration names (D-CW-15), and the server admits
+   * moderators and moderating principals only (`event.moderate`). Presenters
+   * and moderators always join the hosts' room.
+   */
   moderationRoom?: boolean;
   initial?: WebinarInitialState;
 }
 
-type ClientEventName = WebinarEventName | WebinarRoomAddedEventName;
+type ClientEventName = WebinarEventName | WebinarRoomAddedEventName | WebinarModerationRoomAddedEventName;
 
 const PUBLIC_EVENTS: ReadonlySet<string> = new Set<string>([
   ...WEBINAR_ROOM_EVENT_NAMES,
@@ -84,9 +101,16 @@ const PUBLIC_EVENTS: ReadonlySet<string> = new Set<string>([
   ...WEBINAR_PARTICIPANT_EVENT_NAMES,
 ]);
 /** Every payload schema the client validates against: the contract's room events and the T-CW-2.3 additions. */
-const PAYLOAD_SCHEMAS = { ...ROOM_EVENT_PAYLOAD_SCHEMAS, ...WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS };
-const MODERATION_EVENTS: ReadonlySet<string> = new Set<string>([...WEBINAR_MODERATION_ROOM_EVENT_NAMES, 'webinar.ended']);
-const HOST_ONLY_EVENTS: ReadonlySet<string> = new Set<string>(WEBINAR_MODERATION_ROOM_EVENT_NAMES);
+const PAYLOAD_SCHEMAS = { ...ROOM_EVENT_PAYLOAD_SCHEMAS, ...WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS, ...WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS };
+
+/** The `webinar.recording` event status as the snapshot's recording status. */
+const RECORDING_STATUS_BY_EVENT = { started: 'recording', stopped: 'processing', ready: 'ready', failed: 'failed' } as const;
+const MODERATION_EVENTS: ReadonlySet<string> = new Set<string>([
+  ...WEBINAR_MODERATION_ROOM_EVENT_NAMES,
+  ...WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES,
+  'webinar.ended',
+]);
+const HOSTS_EVENTS: ReadonlySet<string> = new Set<string>(WEBINAR_HOSTS_ROOM_EVENT_NAMES);
 
 const now = () => new Date().toISOString();
 
@@ -124,11 +148,12 @@ function emptySnapshot(options: WebinarClientOptions): WebinarSnapshot {
     status: 'published',
     endedAt: null,
     attendanceCount: null,
-    recording: { status: 'scheduled' },
+    recording: { status: null },
     publicMessages: [],
     moderationMessages: [],
     ownMessageIds: [],
     hands: [],
+    handCount: null,
     speakers: [],
     polls: { list: [], results: {}, votes: {} },
     myHand: { raised: false, raisedAt: null },
@@ -147,11 +172,17 @@ export class WebinarClient implements WebinarClientApi {
   private readonly moderationRoom: boolean;
   private connections = 0;
   private unsubscribers: Array<() => void> = [];
+  /**
+   * The moderator's registration names by participant id (from raised hands
+   * and messages), so a speaker keeps the name after the hand is lowered.
+   * Never filled for anyone else.
+   */
+  private readonly names = new Map<string, string>();
 
   constructor(options: WebinarClientOptions) {
     this.transport = options.transport;
     this.audio = options.audio ?? null;
-    this.moderationRoom = options.moderationRoom ?? options.role !== 'attendee';
+    this.moderationRoom = options.moderationRoom ?? options.role === 'moderator';
     this.snapshot = emptySnapshot(options);
     if (options.initial) this.hydrate(options.initial);
   }
@@ -187,6 +218,9 @@ export class WebinarClient implements WebinarClientApi {
     if (this.connections === 1) {
       const { webinarId } = this.snapshot;
       this.unsubscribers = [this.transport.subscribe(webinarRoomName(webinarId), (event, payload) => this.receive('public', event, payload))];
+      if (this.isHost) {
+        this.unsubscribers.push(this.transport.subscribe(webinarHostsRoomName(webinarId), (event, payload) => this.receiveHosts(event, payload)));
+      }
       if (this.isHost && this.moderationRoom) {
         this.unsubscribers.push(
           this.transport.subscribe(webinarModerationRoomName(webinarId), (event, payload) => this.receive('moderation', event, payload)),
@@ -218,13 +252,50 @@ export class WebinarClient implements WebinarClientApi {
   private receive(room: 'public' | 'moderation', event: string, payload: unknown): void {
     const allowed = room === 'public' ? PUBLIC_EVENTS : MODERATION_EVENTS;
     if (!allowed.has(event)) return;
-    if (HOST_ONLY_EVENTS.has(event) && !this.isHost) return;
+    // Names never reach anyone but the moderator, whatever a transport delivers (D-CW-15).
+    if (room === 'moderation' && !this.isModerator) return;
     const schema = PAYLOAD_SCHEMAS[event as ClientEventName];
     const parsed = schema.safeParse(payload);
     if (!parsed.success) return;
     const data = parsed.data as { webinarId?: string };
     if (data.webinarId !== undefined && data.webinarId !== this.snapshot.webinarId) return;
     this.apply(event as ClientEventName, parsed.data);
+  }
+
+  /** The hosts' room: counts and the floor holder's participant id, validated with that room's schemas. */
+  private receiveHosts(event: string, payload: unknown): void {
+    if (!this.isHost || !HOSTS_EVENTS.has(event)) return;
+    const parsed = WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarHostsRoomEventName].safeParse(payload);
+    if (!parsed.success) return;
+    const data = parsed.data as { webinarId?: string };
+    if (data.webinarId !== undefined && data.webinarId !== this.snapshot.webinarId) return;
+    switch (event as WebinarHostsRoomEventName) {
+      case 'webinar.attendance.count':
+        this.update({ attendanceCount: (parsed.data as WebinarHostsRoomEventPayloads['webinar.attendance.count']).count });
+        return;
+      case 'webinar.hand.count':
+        this.update({ handCount: (parsed.data as WebinarHostsRoomEventPayloads['webinar.hand.count']).count });
+        return;
+      case 'webinar.floor.state':
+        this.applyFloorHolder(parsed.data as WebinarHostsRoomEventPayloads['webinar.floor.state']);
+        return;
+    }
+  }
+
+  /** Any host can take the floor back after a reload: the speakers come from the hosts' room (WBN-25). */
+  private applyFloorHolder({ active, participantId }: WebinarHostsRoomEventPayloads['webinar.floor.state']): void {
+    const speakers = this.snapshot.speakers;
+    let next: readonly WebinarSpeaker[] = speakers;
+    if (participantId === undefined) {
+      if (!active) next = [];
+    } else if (active) {
+      if (!speakers.some((entry) => entry.participantId === participantId)) {
+        next = [...speakers, { participantId, name: this.nameOf(participantId) }];
+      }
+    } else {
+      next = speakers.filter((entry) => entry.participantId !== participantId);
+    }
+    this.update({ floorActive: active || next.length > 0, ...(next === speakers ? {} : { speakers: next }) });
   }
 
   private apply(event: ClientEventName, payload: unknown): void {
@@ -253,9 +324,13 @@ export class WebinarClient implements WebinarClientApi {
         return;
       case 'webinar.recording': {
         const { status } = payload as WebinarEventPayloads['webinar.recording'];
-        this.update({ recording: { status: status === 'started' ? 'recording' : 'processing' } });
+        this.update({ recording: { status: RECORDING_STATUS_BY_EVENT[status] } });
         return;
       }
+      case 'webinar.recording.failed':
+        // CW-R-121: the moderators learn of the failure; the reason is for support and is never shown.
+        this.update({ recording: { status: 'failed' } });
+        return;
       case 'webinar.message.published':
       case 'webinar.message.answered': {
         const message = payload as WebinarMessage;
@@ -287,7 +362,7 @@ export class WebinarClient implements WebinarClientApi {
         return;
       case 'webinar.hand.raised': {
         const hand = payload as WebinarEventPayloads['webinar.hand.raised'];
-        this.upsertHand({ participantId: hand.participantId, name: this.isModerator ? hand.participantName : null, raisedAt: hand.raisedAt });
+        this.upsertHand({ participantId: hand.participantId, name: hand.participantName, raisedAt: hand.raisedAt });
         return;
       }
       case 'webinar.hand.lowered':
@@ -299,13 +374,21 @@ export class WebinarClient implements WebinarClientApi {
     }
   }
 
+  private nameOf(participantId: string): string | null {
+    return this.isModerator ? (this.names.get(participantId) ?? null) : null;
+  }
+
+  private rememberName(participantId: string | null, name: string | null): void {
+    if (this.isModerator && participantId && name) this.names.set(participantId, name);
+  }
+
   private isMe(participantId: string): boolean {
     return this.snapshot.role === 'attendee' && this.snapshot.participantId !== null && participantId === this.snapshot.participantId;
   }
 
   private markEnded(endedAt: string): void {
     const recording = this.snapshot.recording.status === 'recording' ? { status: 'processing' as const } : this.snapshot.recording;
-    this.update({ status: 'ended', endedAt: this.snapshot.endedAt ?? endedAt, recording, floorActive: false });
+    this.update({ status: 'ended', endedAt: this.snapshot.endedAt ?? endedAt, recording, floorActive: false, speakers: [] });
   }
 
   // -------------------------------------------------------------------------
@@ -354,6 +437,7 @@ export class WebinarClient implements WebinarClientApi {
   }
 
   private upsertModeration(message: WebinarModerationMessage): void {
+    this.rememberName(message.authorParticipantId, message.authorName);
     const rest = this.snapshot.moderationMessages.filter((entry) => entry.id !== message.id);
     this.update({ moderationMessages: sortMessages([...rest, message], (entry) => entry.createdAt) });
   }
@@ -365,7 +449,8 @@ export class WebinarClient implements WebinarClientApi {
   }
 
   private upsertHand(hand: WebinarHand): void {
-    if (!this.isHost) return;
+    if (!this.isModerator) return;
+    this.rememberName(hand.participantId, hand.name);
     const rest = this.snapshot.hands.filter((entry) => entry.participantId !== hand.participantId);
     this.update({ hands: [...rest, hand].sort((a, b) => a.raisedAt.localeCompare(b.raisedAt)) });
   }
@@ -403,6 +488,8 @@ export class WebinarClient implements WebinarClientApi {
     if (initial.status) this.update({ status: initial.status });
     if (initial.recordingStatus) this.update({ recording: { status: initial.recordingStatus } });
     if (initial.attendanceCount !== undefined && isHost) this.update({ attendanceCount: initial.attendanceCount });
+    if (initial.handCount !== undefined && isHost) this.update({ handCount: initial.handCount });
+    if (initial.floorActive !== undefined) this.update({ floorActive: initial.floorActive });
     for (const message of initial.publicMessages ?? []) this.upsertPublic(message);
     if (this.isModerator) {
       for (const message of initial.moderationMessages ?? []) {
@@ -417,7 +504,7 @@ export class WebinarClient implements WebinarClientApi {
       this.update({ polls: { ...this.snapshot.polls, results } });
     }
     if (isHost) {
-      for (const hand of initial.hands ?? []) this.upsertHand({ ...hand, name: this.isModerator ? hand.name : null });
+      if (this.isModerator) for (const hand of initial.hands ?? []) this.upsertHand(hand);
       if (initial.speakers) this.update({ speakers: initial.speakers.map((s) => ({ ...s, name: this.isModerator ? s.name : null })) });
     } else if (initial.myHand) {
       this.update({ myHand: initial.myHand });
@@ -525,8 +612,7 @@ export class WebinarClient implements WebinarClientApi {
     if (!this.isHost) return this.fail('floor', 'floor.give', 'forbidden');
     const response = WebinarFloorResponseSchema.safeParse(await this.run('floor', 'floor.give', { participantId, body: {} }, participantId));
     if (response.success && !response.data.hasFloor) return;
-    const hand = this.snapshot.hands.find((entry) => entry.participantId === participantId);
-    const speaker: WebinarSpeaker = { participantId, name: hand?.name ?? null };
+    const speaker: WebinarSpeaker = { participantId, name: this.nameOf(participantId) };
     this.update({ speakers: [...this.snapshot.speakers.filter((entry) => entry.participantId !== participantId), speaker] });
     this.removeHand(participantId);
   }
@@ -551,9 +637,25 @@ export class WebinarClient implements WebinarClientApi {
     if (poll && !poll.closedAt) this.patchPoll(pollId, { closedAt: now() });
   }
 
+  async end(): Promise<void> {
+    if (!this.isHost) return this.fail('end', 'webinar.end', 'forbidden');
+    await this.run('end', 'webinar.end', { body: {} });
+    this.markEnded(now());
+  }
+
   async stopRecording(): Promise<void> {
     if (!this.isModerator) return this.fail('recording', 'recording.stop', 'forbidden');
     const response = WebinarRecordingStatusResponseSchema.safeParse(await this.run('recording', 'recording.stop', { body: {} }));
     this.update({ recording: { status: response.success ? response.data.status : 'processing' } });
   }
+}
+
+/**
+ * What the join response tells the client before any room event: the
+ * recording state for the REC indicator (UX-45). Pass it as `initial` or to
+ * `hydrate`. Without a `recordingStatus` the state stays unknown, and a live
+ * webinar shows REC (every webinar is recorded, D-CW-34).
+ */
+export function webinarInitialStateFromJoin(join: Pick<WebinarJoinResponse, 'recordingStatus'>): WebinarInitialState {
+  return join.recordingStatus ? { recordingStatus: join.recordingStatus } : {};
 }

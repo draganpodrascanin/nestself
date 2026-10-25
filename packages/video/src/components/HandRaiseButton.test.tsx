@@ -53,7 +53,10 @@ describe('HandRaiseButton (WBN-10, UX-27)', () => {
     await waitFor(() => expect(button).toHaveAttribute('data-state', 'lowered'));
     expect(button).toHaveAccessibleName(t('webinar.hand.raise'));
     expect(screen.getByTestId('webinar-hand-announcer')).toHaveTextContent(t('webinar.hand.lowered'));
-    expect(server.emitted.at(-1)).toMatchObject({ room: 'webinar:sample-webinar:moderation', event: 'webinar.hand.lowered' });
+    expect(server.emitted.filter((entry) => entry.event === 'webinar.hand.lowered')).toEqual([
+      expect.objectContaining({ room: 'webinar:sample-webinar:moderation' }),
+    ]);
+    expect(server.emitted.at(-1)).toMatchObject({ room: 'webinar:sample-webinar:hosts', event: 'webinar.hand.count', payload: { count: 0 } });
   });
 
   it('shows a failed raise on screen and keeps the hand lowered', async () => {

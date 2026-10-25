@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { WebinarPoll } from '@nestself/contracts';
 import { FakeWebinarClient, FakeWebinarServer } from '../testing/fake-webinar';
+import { WebinarClient, webinarInitialStateFromJoin } from '../webinar/client';
 import { useWebinarStage } from './useWebinarStage';
 
 const POLL: WebinarPoll = {
@@ -67,6 +68,44 @@ describe('useWebinarStage', () => {
     expect(result.current.errorOf('moderation')).toBeNull();
     expect(result.current.pendingMessages).toEqual([]);
     expect(result.current.publicMessages.map((entry) => entry.id)).toEqual([message.id]);
+  });
+
+  it('shows REC for a live webinar whose recording status is not known yet, and follows the status once known', () => {
+    const { transport, rooms } = (() => {
+      const rooms = new Map<string, (event: string, payload: unknown) => void>();
+      return {
+        rooms,
+        transport: {
+          subscribe: (room: string, handler: (event: string, payload: unknown) => void) => {
+            rooms.set(room, handler);
+            return () => rooms.delete(room);
+          },
+          post: async () => undefined,
+        },
+      };
+    })();
+    const client = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p1', transport });
+    const { result } = renderHook(() => useWebinarStage(client));
+    expect(result.current.isRecording).toBe(false);
+    act(() => rooms.get('webinar:w1')!('webinar.state', { webinarId: 'w1', status: 'live' }));
+    expect(result.current.isRecording).toBe(true);
+    act(() => rooms.get('webinar:w1')!('webinar.recording', { webinarId: 'w1', status: 'stopped' }));
+    expect(result.current.isRecording).toBe(false);
+
+    const hydrated = new WebinarClient({ webinarId: 'w1', role: 'attendee', transport, initial: { status: 'live', ...webinarInitialStateFromJoin({ recordingStatus: 'processing' }) } });
+    expect(renderHook(() => useWebinarStage(hydrated)).result.current.isRecording).toBe(false);
+  });
+
+  it('ends the webinar for everyone from a host', async () => {
+    const server = new FakeWebinarServer({ status: 'live' });
+    const presenter = new FakeWebinarClient({ server, role: 'presenter' });
+    const attendee = new FakeWebinarClient({ server, role: 'attendee' });
+    attendee.connect();
+    const { result } = renderHook(() => useWebinarStage(presenter));
+    await act(() => result.current.end());
+    expect(result.current.isEnded).toBe(true);
+    expect(attendee.getSnapshot().status).toBe('ended');
+    await expect(attendee.end()).rejects.toMatchObject({ code: 'forbidden' });
   });
 
   it('toggles the hand between raised and lowered', async () => {

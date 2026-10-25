@@ -5,8 +5,11 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useControllerSlice } from '../hooks/useControllerSlice';
+import { useWebinarStage } from '../hooks/useWebinarStage';
+import type { CallSessionControllerApi } from '../types';
 import { webinarErrorMessage } from '../webinar/errors';
-import type { WebinarActionErrorLike } from '../webinar/types';
+import type { WebinarActionErrorLike, WebinarClientApi } from '../webinar/types';
 
 /** Translated messages for coded action errors, plus an already translated external error. */
 export function useErrorMessages(external: string | null | undefined, ...coded: Array<WebinarActionErrorLike | null | undefined>): string[] {
@@ -44,3 +47,20 @@ export function useShortTime(): (iso: string | null) => string {
     }
   };
 }
+
+/**
+ * The browser blocked the microphone while this attendee has the floor: the
+ * coded `microphone_unavailable` error, shown as
+ * `webinar.errors.microphoneUnavailable` by the dialog and the controls.
+ */
+export function useMicrophoneBlocked(
+  client: WebinarClientApi,
+  controller: Pick<CallSessionControllerApi, 'getSnapshot' | 'subscribe'>,
+): WebinarActionErrorLike | null {
+  const stage = useWebinarStage(client);
+  const { permissions } = useControllerSlice(controller, 'devices');
+  const blocked = stage.myFloor.status === 'given' && (permissions.microphone === 'denied' || permissions.microphone === 'error');
+  return blocked ? MICROPHONE_BLOCKED : null;
+}
+
+const MICROPHONE_BLOCKED: WebinarActionErrorLike = { code: 'microphone_unavailable', action: 'floor.audio' };

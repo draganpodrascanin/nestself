@@ -424,6 +424,12 @@ export type WebinarJoinRequest = z.infer<typeof WebinarJoinRequestSchema>;
 
 const joinFields = {
   webinarId: idField,
+  /**
+   * The occurrence's recording state at join, for the REC indicator before
+   * the first `webinar.recording` event (UX-45). Optional until the API
+   * fills it; a client that gets none treats a live webinar as recording.
+   */
+  recordingStatus: RecordingStatusSchema.optional(),
   sessionId: idField,
   participantId: idField,
   format: z.literal('webinar'),
@@ -752,6 +758,16 @@ export function webinarModerationRoomName(webinarId: string): string {
   return `webinar:${webinarId}:moderation`;
 }
 
+/**
+ * The hosts' room (T-CW-2.3): presenters and moderators. It carries counts
+ * and the floor holder's participant id, never a name, so presenters can
+ * follow the session without the moderation room's registration names
+ * (D-CW-15, CW-R-36a, WBN-19, WBN-20).
+ */
+export function webinarHostsRoomName(webinarId: string): string {
+  return `webinar:${webinarId}:hosts`;
+}
+
 /** `webinar.state`: the new status, for example `{ status: 'live' }` on start (WBN-17). */
 export const WebinarStatePayloadSchema = WebinarStatusResponseSchema;
 export type WebinarStatePayload = WebinarStatusResponse;
@@ -803,8 +819,12 @@ export const WebinarFloorTakenPayloadSchema = z.strictObject({
 });
 export type WebinarFloorTakenPayload = z.infer<typeof WebinarFloorTakenPayloadSchema>;
 
-/** The `webinar.recording` event drives the persistent REC indicator (UX-45). */
-export const WEBINAR_RECORDING_EVENT_STATUSES = ['started', 'stopped'] as const;
+/**
+ * The `webinar.recording` event drives the persistent REC indicator (UX-45):
+ * `started` and `stopped`, then `ready` once the recording is finalised and
+ * `failed` when the media pipeline failed (CW-R-121, T-CW-2.3 addition).
+ */
+export const WEBINAR_RECORDING_EVENT_STATUSES = ['started', 'stopped', 'ready', 'failed'] as const;
 export const WebinarRecordingPayloadSchema = z.strictObject({
   webinarId: idField,
   status: z.enum(WEBINAR_RECORDING_EVENT_STATUSES),
@@ -955,4 +975,68 @@ export const WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS = {
 
 export type WebinarRoomAddedEventPayloads = {
   [E in WebinarRoomAddedEventName]: z.infer<(typeof WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};
+
+// ---------------------------------------------------------------------------
+// The hosts' room `webinar:{webinarId}:hosts` (T-CW-2.3)
+// ---------------------------------------------------------------------------
+
+/** `webinar.hand.count`, hosts room: how many hands are raised; a number, never names (WBN-10, WBN-19). */
+export const WebinarHandCountPayloadSchema = z.strictObject({
+  count,
+});
+export type WebinarHandCountPayload = z.infer<typeof WebinarHandCountPayloadSchema>;
+
+/**
+ * `webinar.floor.state` on the hosts room: the public flag plus the holder's
+ * participant id, so any host can take the floor back after a reload
+ * (WBN-25). Never a name. The public room's payload stays `{ active }`.
+ */
+export const WebinarHostsFloorStatePayloadSchema = z.strictObject({
+  active: z.boolean(),
+  /** The attendee whose floor changed; absent when the floor is cleared for everyone. */
+  participantId: idField.optional(),
+});
+export type WebinarHostsFloorStatePayload = z.infer<typeof WebinarHostsFloorStatePayloadSchema>;
+
+/** Events of the hosts' room; `webinar.attendance.count` is also sent to the moderation room. */
+export const WEBINAR_HOSTS_ROOM_EVENT_NAMES = ['webinar.attendance.count', 'webinar.hand.count', 'webinar.floor.state'] as const;
+export type WebinarHostsRoomEventName = (typeof WEBINAR_HOSTS_ROOM_EVENT_NAMES)[number];
+
+export const WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS = {
+  'webinar.attendance.count': WebinarAttendanceCountPayloadSchema,
+  'webinar.hand.count': WebinarHandCountPayloadSchema,
+  'webinar.floor.state': WebinarHostsFloorStatePayloadSchema,
+} as const satisfies { readonly [E in WebinarHostsRoomEventName]: z.ZodType };
+
+export type WebinarHostsRoomEventPayloads = {
+  [E in WebinarHostsRoomEventName]: z.infer<(typeof WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS)[E]>;
+};
+
+// ---------------------------------------------------------------------------
+// Moderation-room additions (T-CW-2.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * `webinar.recording.failed`, moderation room (CW-R-121): the media pipeline
+ * failed and the webinar continues without recording. `reason` is a short
+ * machine reason for support (an error name or code), never shown to people
+ * as it is; the client shows its own translated notice to hosts.
+ */
+export const WebinarRecordingFailedPayloadSchema = z.strictObject({
+  webinarId: idField,
+  reason: z.string().trim().min(1).max(200),
+});
+export type WebinarRecordingFailedPayload = z.infer<typeof WebinarRecordingFailedPayloadSchema>;
+
+/** Moderation-room events added in T-CW-2.3, kept out of `WEBINAR_MODERATION_ROOM_EVENT_NAMES` (section 7). */
+export const WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES = ['webinar.recording.failed'] as const;
+export type WebinarModerationRoomAddedEventName = (typeof WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES)[number];
+
+export const WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS = {
+  'webinar.recording.failed': WebinarRecordingFailedPayloadSchema,
+} as const satisfies { readonly [E in WebinarModerationRoomAddedEventName]: z.ZodType };
+
+export type WebinarModerationRoomAddedEventPayloads = {
+  [E in WebinarModerationRoomAddedEventName]: z.infer<(typeof WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS)[E]>;
 };

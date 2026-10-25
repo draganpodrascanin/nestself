@@ -95,7 +95,7 @@ export { FakeCallSessionController } from './testing/fake-controller';
 export type { FakeCallSessionControllerOptions } from './testing/fake-controller';
 
 // Webinar client (T-CW-2.3): state, transport contract and coded errors
-export { WebinarClient } from './webinar/client';
+export { WebinarClient, webinarInitialStateFromJoin } from './webinar/client';
 export type { WebinarClientOptions } from './webinar/client';
 export { WebinarActionError, toWebinarActionError, webinarErrorMessage } from './webinar/errors';
 export { WEBINAR_ACTIONS, WEBINAR_ACTION_ROUTES } from './webinar/types';

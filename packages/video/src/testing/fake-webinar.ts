@@ -1,18 +1,33 @@
 /**
  * An in-memory webinar for stories, unit tests and the apps' sample mode
- * (T-CW-2.3). `FakeWebinarServer` plays the API and the two Socket.IO rooms:
- * it answers the client's actions, keeps messages, hands, polls and the
- * recording state, and emits the contract events (validated with
- * `ROOM_EVENT_PAYLOAD_SCHEMAS` before they leave, so a malformed fake event
- * fails loudly). `FakeWebinarClient` is a real `WebinarClient` on a transport
+ * (T-CW-2.3). `FakeWebinarServer` plays the API and the Socket.IO rooms as
+ * the API serves them: the public room, the moderation room (moderators
+ * only) and the hosts' room (presenters and moderators). It answers the
+ * client's actions, keeps messages, hands, the floor, polls and the
+ * recording state, and emits what the API emits: `webinar.hand.lowered` and
+ * `webinar.floor.state` on giving the floor, `webinar.message.removed` on
+ * dismissing a published message, the hand count and the floor holder on
+ * the hosts' room. Every payload is validated with the contract schema of
+ * its room before it leaves, so a malformed fake event fails loudly. `FakeWebinarClient` is a real `WebinarClient` on a transport
  * of that server, so several clients (an attendee and a moderator) can share
  * one webinar. Nothing reaches a network, and votes are counted without a
  * voter, as on the server (D-CW-16).
  */
-import { ROOM_EVENT_PAYLOAD_SCHEMAS, webinarModerationRoomName, webinarRoomName } from '@nestself/contracts';
+import {
+  ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
+  webinarHostsRoomName,
+  webinarModerationRoomName,
+  webinarRoomName,
+} from '@nestself/contracts';
 import type {
   RecordingStatus,
   WebinarEventName,
+  WebinarHostsRoomEventName,
+  WebinarModerationRoomAddedEventName,
+  WebinarRoomAddedEventName,
   WebinarMessage,
   WebinarMessageKind,
   WebinarModerationMessage,
@@ -40,9 +55,11 @@ export interface FakeWebinarServerOptions {
   delayMs?: number;
 }
 
+type FakeEventName = WebinarEventName | WebinarRoomAddedEventName | WebinarHostsRoomEventName | WebinarModerationRoomAddedEventName;
+
 export interface FakeWebinarEmission {
   room: string;
-  event: WebinarEventName;
+  event: FakeEventName;
   payload: unknown;
   /** Set for per-participant events (`webinar.floor.given`, `webinar.floor.taken`). */
   to?: string;
@@ -78,7 +95,7 @@ function toPublic(message: WebinarModerationMessage): WebinarMessage {
   return rest;
 }
 
-const HOST_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>(['floor.give', 'floor.take']);
+const HOST_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>(['floor.give', 'floor.take', 'webinar.end']);
 const MODERATOR_ACTIONS: ReadonlySet<WebinarAction> = new Set<WebinarAction>([
   'message.publish',
   'message.answer',
@@ -99,6 +116,10 @@ export class FakeWebinarServer {
   private readonly messages = new Map<string, WebinarModerationMessage>();
   private readonly polls = new Map<string, { poll: WebinarPoll; counts: Map<string, number> }>();
   private readonly hands = new Map<string, { name: string; raisedAt: string }>();
+  /** Attendees who have the floor, with the registration name the moderator may see. */
+  private readonly speakers = new Map<string, string | null>();
+  /** Registration names by participant id, for the moderator's view of the speakers. */
+  private readonly names = new Map<string, string>();
   private readonly failures = new Map<WebinarAction, string>();
   private readonly delayMs: number;
   private status: WebinarStatus;
@@ -122,6 +143,10 @@ export class FakeWebinarServer {
     return webinarModerationRoomName(this.webinarId);
   }
 
+  private get hostsRoom(): string {
+    return webinarHostsRoomName(this.webinarId);
+  }
+
   private id(prefix: string): string {
     return `sample-${prefix}-${this.nextId++}`;
   }
@@ -139,9 +164,11 @@ export class FakeWebinarServer {
   initialFor(identity: FakeWebinarIdentity): WebinarInitialState {
     const all = [...this.messages.values()];
     const host = identity.role !== 'attendee';
+    const moderator = identity.role === 'moderator';
     return {
       status: this.status,
       recordingStatus: this.recordingStatus,
+      floorActive: this.speakers.size > 0,
       polls: [...this.polls.values()].map((entry) => entry.poll).filter((poll) => identity.role === 'moderator' || poll.openedAt !== null),
       results: [...this.polls.values()].filter((entry) => entry.poll.closedAt !== null).map((entry) => this.results(entry.poll.id)),
       publicMessages: all.filter((m) => m.status === 'published' || m.status === 'answered').map(toPublic),
@@ -149,7 +176,9 @@ export class FakeWebinarServer {
       ...(host
         ? {
             attendanceCount: this.attendance,
-            hands: [...this.hands].map(([participantId, hand]) => ({ participantId, name: hand.name, raisedAt: hand.raisedAt })),
+            handCount: this.hands.size,
+            speakers: [...this.speakers].map(([participantId, name]) => ({ participantId, name: moderator ? name : null })),
+            ...(moderator ? { hands: [...this.hands].map(([participantId, hand]) => ({ participantId, name: hand.name, raisedAt: hand.raisedAt })) } : {}),
           }
         : identity.participantId && this.hands.has(identity.participantId)
           ? { myHand: { raised: true, raisedAt: this.hands.get(identity.participantId)?.raisedAt ?? null } }
@@ -160,8 +189,10 @@ export class FakeWebinarServer {
   transportFor(identity: FakeWebinarIdentity): WebinarTransport {
     return {
       subscribe: (room, handler) => {
-        // The moderation room needs `event.moderate`: an attendee's subscription is refused.
-        if (room === this.moderationRoom && identity.role === 'attendee') return () => undefined;
+        // As the API: the moderation room admits moderators only (names), the hosts' room presenters and moderators.
+        if (room === this.moderationRoom && identity.role !== 'moderator') return () => undefined;
+        if (room === this.hostsRoom && identity.role === 'attendee') return () => undefined;
+        if (identity.participantId && identity.name) this.names.set(identity.participantId, identity.name);
         const subscription: Subscription = { room, handler, identity };
         this.subscriptions.add(subscription);
         return () => {
@@ -183,14 +214,28 @@ export class FakeWebinarServer {
     };
   }
 
-  private emit(room: string, event: WebinarEventName, payload: unknown, to?: string): void {
-    ROOM_EVENT_PAYLOAD_SCHEMAS[event].parse(payload);
+  private emit(room: string, event: FakeEventName, payload: unknown, to?: string): void {
+    this.schemaFor(room, event).parse(payload);
     this.emitted.push({ room, event, payload, ...(to ? { to } : {}) });
     for (const subscription of [...this.subscriptions]) {
       if (subscription.room !== room) continue;
       if (to !== undefined && subscription.identity.participantId !== to) continue;
       subscription.handler(event, structuredClone(payload));
     }
+  }
+
+  /** The contract schema of `event` on `room`: the hosts' room and the T-CW-2.3 additions have their own. */
+  private schemaFor(room: string, event: FakeEventName) {
+    if (room === this.hostsRoom) return WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarHostsRoomEventName];
+    if (event in WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS) return WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event as WebinarRoomAddedEventName];
+    if (event in WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS) {
+      return WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event as WebinarModerationRoomAddedEventName];
+    }
+    return ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarEventName];
+  }
+
+  private handCount(): void {
+    this.emit(this.hostsRoom, 'webinar.hand.count', { count: this.hands.size });
   }
 
   private results(pollId: string): WebinarPollResults {
@@ -251,19 +296,44 @@ export class FakeWebinarServer {
   private raise(participantId: string, name: string): string {
     const raisedAt = now();
     this.hands.set(participantId, { name, raisedAt });
+    this.names.set(participantId, name);
     this.emit(this.moderationRoom, 'webinar.hand.raised', { participantId, participantName: name, raisedAt });
+    this.handCount();
     return raisedAt;
   }
 
   private lower(participantId: string): void {
     if (!this.hands.delete(participantId)) return;
     this.emit(this.moderationRoom, 'webinar.hand.lowered', { participantId });
+    this.handCount();
   }
 
+  /**
+   * As the API: giving the floor lowers the hand, then the attendee's own
+   * room gets the floor event, the audience the anonymous flag and the hosts
+   * the holder's participant id.
+   */
   private floor(participantId: string, given: boolean) {
     const capabilities = { audio: given ? ('send_receive' as const) : ('receive' as const), video: 'receive' as const, content: 'receive' as const };
+    if (given) {
+      this.lower(participantId);
+      this.speakers.set(participantId, this.names.get(participantId) ?? null);
+    } else {
+      this.speakers.delete(participantId);
+    }
     this.emit(this.room, given ? 'webinar.floor.given' : 'webinar.floor.taken', { participantId, capabilities }, participantId);
+    this.emit(this.room, 'webinar.floor.state', { active: this.speakers.size > 0 });
+    this.emit(this.hostsRoom, 'webinar.floor.state', { active: given, participantId });
     return { participantId, hasFloor: given, capabilities };
+  }
+
+  private endWebinar(): void {
+    this.status = 'ended';
+    if (this.recordingStatus === 'recording') this.recordingStatus = 'processing';
+    this.speakers.clear();
+    const payload = { webinarId: this.webinarId, endedAt: now() };
+    this.emit(this.room, 'webinar.ended', payload);
+    this.emit(this.moderationRoom, 'webinar.ended', payload);
   }
 
   private openPoll(pollId: string): WebinarPoll {
@@ -285,14 +355,11 @@ export class FakeWebinarServer {
     return results;
   }
 
-  private setRecording(status: 'started' | 'stopped'): void {
-    if (status === 'started') {
-      this.recordingStatus = 'recording';
-      this.recordingStartedAt = now();
-    } else {
-      this.recordingStatus = 'processing';
-    }
+  private setRecording(status: 'started' | 'stopped' | 'ready' | 'failed'): void {
+    if (status === 'started') this.recordingStartedAt = now();
+    this.recordingStatus = { started: 'recording', stopped: 'processing', ready: 'ready', failed: 'failed' }[status] as RecordingStatus;
     this.emit(this.room, 'webinar.recording', { webinarId: this.webinarId, status });
+    if (status === 'failed') this.emit(this.moderationRoom, 'webinar.recording.failed', { webinarId: this.webinarId, reason: 'SamplePipelineFailure' });
   }
 
   private handle(action: WebinarAction, rawInput: unknown, identity: FakeWebinarIdentity): unknown {
@@ -320,7 +387,10 @@ export class FakeWebinarServer {
       }
       case 'message.dismiss': {
         const { messageId } = rawInput as WebinarActionInputs['message.dismiss'];
-        return this.change(messageId, { status: 'dismissed', answerText: null });
+        const wasPublic = ['published', 'answered'].includes(this.messages.get(messageId)?.status ?? '');
+        const message = this.change(messageId, { status: 'dismissed', answerText: null });
+        if (wasPublic) this.emit(this.room, 'webinar.message.removed', { messageId });
+        return message;
       }
       case 'hand.raise': {
         if (!identity.participantId) throw apiError('not_found');
@@ -351,6 +421,11 @@ export class FakeWebinarServer {
         this.setRecording('stopped');
         return { webinarId: this.webinarId, status: this.recordingStatus, startedAt: this.recordingStartedAt, stoppedAt: now() };
       }
+      case 'webinar.end': {
+        if (this.status !== 'live') throw apiError('webinar_not_open');
+        this.endWebinar();
+        return { webinarId: this.webinarId, status: this.status };
+      }
     }
   }
 
@@ -362,25 +437,23 @@ export class FakeWebinarServer {
       this.emit(this.room, 'webinar.state', { webinarId: this.webinarId, status: 'live' });
       this.setRecording('started');
     },
-    recording: (status: 'started' | 'stopped') => this.setRecording(status),
+    recording: (status: 'started' | 'stopped' | 'ready' | 'failed') => this.setRecording(status),
     /** `webinar.ended` on both rooms (guidelines 4.8). */
-    end: () => {
-      this.status = 'ended';
-      if (this.recordingStatus === 'recording') this.recordingStatus = 'processing';
-      const payload = { webinarId: this.webinarId, endedAt: now() };
-      this.emit(this.room, 'webinar.ended', payload);
-      this.emit(this.moderationRoom, 'webinar.ended', payload);
-    },
-    /** Attendees joined or left: the moderation room gets the new count, a number only (WBN-19). */
+    end: () => this.endWebinar(),
+    /** Attendees joined or left: the moderation and hosts' rooms get the new count, a number only (WBN-19). */
     attendance: (delta: number) => {
       this.attendance = Math.max(0, this.attendance + delta);
-      this.emit(this.moderationRoom, 'webinar.attendance.count', { webinarId: this.webinarId, count: this.attendance });
+      const payload = { webinarId: this.webinarId, count: this.attendance };
+      this.emit(this.moderationRoom, 'webinar.attendance.count', payload);
+      this.emit(this.hostsRoom, 'webinar.attendance.count', payload);
     },
     /** An attendee wrote to the hosts. */
     attendeeMessage: (from: { participantId: string; name: string }, text: string, options: { kind?: 'attendee' | 'question'; showFirstName?: boolean } = {}) =>
       this.submit({ role: 'attendee', ...from }, options.kind ?? 'attendee', text, options.showFirstName ?? false),
     /** A host posted to everyone. */
     hostMessage: (name: string, text: string) => this.postHost({ role: 'presenter', name }, text),
+    /** A host dismissed a message; a published one leaves the public chat. */
+    dismiss: (messageId: string) => this.handle('message.dismiss', { messageId, body: {} }, { role: 'moderator' }),
     publish: (messageId: string) => {
       const message = this.change(messageId, { status: 'published', publishedAt: now() });
       this.emit(this.room, 'webinar.message.published', toPublic(message));

@@ -11,6 +11,10 @@ import {
   USER_ROOM_EVENT_NAMES,
   WEBINAR_EVENT_NAMES,
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_HOSTS_ROOM_EVENT_NAMES,
+  WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_MODERATION_ROOM_EVENT_NAMES,
   WEBINAR_PARTICIPANT_EVENT_NAMES,
   WEBINAR_ROOM_ADDED_EVENT_NAMES,
@@ -28,6 +32,7 @@ describe('parseRoom', () => {
     ['call:call_session_sample_consultation', 'call', 'call_session_sample_consultation'],
     [`webinar:${UUID}`, 'webinar', UUID],
     ['webinar:webinar_sample_upcoming:moderation', 'webinar_moderation', 'webinar_sample_upcoming'],
+    ['webinar:webinar_sample_upcoming:hosts', 'webinar_hosts', 'webinar_sample_upcoming'],
     ['org:org_sample:programme', 'org_programme', 'org_sample'],
     ['user:user_jovan', 'user', 'user_jovan'],
     [`user:${UUID}`, 'user', UUID],
@@ -48,7 +53,9 @@ describe('parseRoom', () => {
     `call:${'a'.repeat(129)}`,
     'webinar:w:moderation:extra',
     'webinar::moderation',
-    'webinar:w:hosts',
+    'webinar::hosts',
+    'webinar:w:hosts:extra',
+    'webinar:w:presenters',
     'org:org_sample:notifications',
     'user:',
     'user:a:b',
@@ -131,7 +138,7 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
     expect(ROOM_EVENTS['appointment.times_suggested'].roomKinds).toEqual(['call', 'user']);
     expect(ROOM_EVENTS['appointment.remind']).toEqual({ roomKinds: ['user'], schema: AppointmentRemindPayloadSchema });
     expect(Object.keys(ROOM_EVENTS).sort()).toEqual(
-      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES, ...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES])].sort(),
+      [...new Set<string>([...CALL_ROOM_EVENT_NAMES, ...USER_ROOM_EVENT_NAMES, ...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES, ...WEBINAR_HOSTS_ROOM_EVENT_NAMES, ...WEBINAR_MODERATION_ROOM_ADDED_EVENT_NAMES])].sort(),
     );
   });
 
@@ -141,15 +148,39 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
       expect(ROOM_EVENTS[event].schema).toBe(WEBINAR_EVENT_PAYLOAD_SCHEMAS[event]);
     }
     for (const event of WEBINAR_MODERATION_ROOM_EVENT_NAMES) {
-      expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['webinar_moderation'], schema: WEBINAR_EVENT_PAYLOAD_SCHEMAS[event] });
+      expect(ROOM_EVENTS[event].roomKinds).toContain('webinar_moderation');
+      expect(ROOM_EVENTS[event].schema).toBe(WEBINAR_EVENT_PAYLOAD_SCHEMAS[event]);
+    }
+    // The hosts' room: counts and the floor holder's id, never a name (D-CW-15).
+    expect(ROOM_EVENTS['webinar.attendance.count'].roomKinds).toEqual(['webinar_moderation', 'webinar_hosts']);
+    expect(ROOM_EVENTS['webinar.hand.count']).toEqual({ roomKinds: ['webinar_hosts'], schema: WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS['webinar.hand.count'] });
+    for (const event of ['webinar.hand.raised', 'webinar.hand.lowered', 'webinar.message.submitted'] as const) {
+      expect(ROOM_EVENTS[event].roomKinds).toEqual(['webinar_moderation']);
     }
     for (const event of WEBINAR_PARTICIPANT_EVENT_NAMES) {
       expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['user'], schema: WEBINAR_EVENT_PAYLOAD_SCHEMAS[event] });
     }
-    for (const event of WEBINAR_ROOM_ADDED_EVENT_NAMES) {
-      expect(ROOM_EVENTS[event]).toEqual({ roomKinds: ['webinar'], schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS[event] });
-    }
+    expect(ROOM_EVENTS['webinar.message.removed']).toEqual({ roomKinds: ['webinar'], schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.message.removed'] });
+    expect(ROOM_EVENTS['webinar.floor.state']).toEqual({
+      roomKinds: ['webinar', 'webinar_hosts'],
+      schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.floor.state'],
+      schemaByRoomKind: { webinar_hosts: WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS['webinar.floor.state'] },
+    });
     expect(ROOM_EVENTS['webinar.ended'].roomKinds).toEqual(['webinar', 'webinar_moderation']);
+    expect(ROOM_EVENTS['webinar.recording.failed']).toEqual({
+      roomKinds: ['webinar_moderation'],
+      schema: WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.recording.failed'],
+    });
+  });
+
+  it('carries the recording outcome: ready and failed publicly, the failure reason to the moderators only (CW-R-121)', () => {
+    for (const status of ['started', 'stopped', 'ready', 'failed']) {
+      expect(checkRoomEvent('webinar:w1', 'webinar.recording', { webinarId: 'w1', status })).toEqual({ webinarId: 'w1', status });
+    }
+    const failed = { webinarId: 'w1', reason: 'MediaCapturePipelineFailed' };
+    expect(checkRoomEvent('webinar:w1:moderation', 'webinar.recording.failed', failed)).toEqual(failed);
+    expect(checkRoomEvent('webinar:w1', 'webinar.recording.failed', failed)).toBeNull();
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.recording.failed', failed)).toBeNull();
   });
 
   it('keeps names and counts off the public webinar room and the floor off every shared room', () => {
@@ -162,6 +193,18 @@ describe('ROOM_EVENTS (CW-R-36)', () => {
     expect(checkRoomEvent('user:user_jovan', 'webinar.floor.given', floor)).toEqual(floor);
     expect(checkRoomEvent('webinar:w1', 'webinar.floor.state', { active: true })).toEqual({ active: true });
     expect(checkRoomEvent('webinar:w1', 'webinar.message.removed', { messageId: 'm1', text: 'x' })).toBeNull();
+  });
+
+  it('names the floor holder by participant id on the hosts room only, and carries no name there', () => {
+    const holder = { active: true, participantId: 'p1' };
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.state', holder)).toEqual(holder);
+    expect(checkRoomEvent('webinar:w1', 'webinar.floor.state', holder)).toBeNull();
+    expect(checkRoomEvent('webinar:w1:moderation', 'webinar.floor.state', holder)).toBeNull();
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.floor.state', { ...holder, participantName: 'Jovan' })).toBeNull();
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.hand.count', { count: 2 })).toEqual({ count: 2 });
+    expect(checkRoomEvent('webinar:w1', 'webinar.hand.count', { count: 2 })).toBeNull();
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.attendance.count', { webinarId: 'w1', count: 3 })).toEqual({ webinarId: 'w1', count: 3 });
+    expect(checkRoomEvent('webinar:w1:hosts', 'webinar.hand.raised', { participantId: 'p1', participantName: 'Jovan', raisedAt: '2026-11-10T15:00:00.000Z' })).toBeNull();
   });
 });
 

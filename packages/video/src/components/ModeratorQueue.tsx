@@ -21,7 +21,11 @@ import { useChangeAnnouncement, useErrorMessages, useShortTime } from './Webinar
 import { Announcer, ErrorStack } from './WebinarStageParts';
 
 export interface ModeratorQueueProps {
-  /** A host's webinar client. The moderator sees names and reviews messages; a presenter sees anonymous hands only. */
+  /**
+   * A host's webinar client. The moderator sees names, gives the floor and
+   * reviews messages; a presenter sees how many hands are raised and who has
+   * the floor (by participant, never by name) and can take the floor back.
+   */
   client: WebinarClientApi;
   /** A failure from outside (loading the queue), already translated. */
   error?: string | null;
@@ -116,10 +120,11 @@ function StopRecording({ stage }: { stage: UseWebinarStageResult }) {
  * The hosts' queue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28): the attendance
  * count (a number, never names), the recording state with the moderator's
  * early stop, attendees speaking now with "take the floor back", raised
- * hands with "give the floor" (the moderator sees the registration name, a
- * presenter sees "a participant asked to speak"), and for the moderator the
- * messages waiting for review with publish, edit, answer and dismiss. Items
- * animate in and out; arrivals and actions are announced (WBN-15).
+ * hands (the moderator sees the registration name and gives the floor; a
+ * presenter, who never receives names, sees "a participant asked to speak"
+ * and the count), and for the moderator the messages waiting for review with
+ * publish, edit, answer and dismiss. Items animate in and out; arrivals and
+ * actions are announced (WBN-15).
  */
 export function ModeratorQueue({ client, error, className }: ModeratorQueueProps) {
   const { t } = useTranslation('calls');
@@ -129,7 +134,8 @@ export function ModeratorQueue({ client, error, className }: ModeratorQueueProps
   const errors = useErrorMessages(error, stage.errorOf('moderation'), stage.errorOf('floor'), stage.errorOf('recording'));
 
   const pendingIds = stage.pendingMessages.map((message) => message.id);
-  const key = [pendingIds.join(','), stage.hands.map((hand) => hand.participantId).join(','), stage.speakers.map((s) => s.participantId).join(',')].join('|');
+  const handKeys = stage.isModerator ? stage.hands.map((hand) => hand.participantId) : Array.from({ length: stage.raisedHandCount }, (_, i) => `hand-${i}`);
+  const key = [pendingIds.join(','), handKeys.join(','), stage.speakers.map((s) => s.participantId).join(',')].join('|');
   const announcement = useChangeAnnouncement(key, (previous, next) => {
     const parse = (value: string) => value.split('|').map((part) => part.split(',').filter(Boolean));
     const [prevPending = [], prevHands = [], prevSpeakers = []] = parse(previous);
@@ -189,16 +195,35 @@ export function ModeratorQueue({ client, error, className }: ModeratorQueueProps
 
         <section aria-label={t('webinar.moderation.handsTitle')} className="gap-2 flex flex-col">
           <h3 className="type-label">{t('webinar.moderation.handsTitle')}</h3>
-          {stage.hands.length === 0 ? <p className="type-metadata text-text-secondary">{t('webinar.moderation.handsEmpty')}</p> : null}
-          <ul className="gap-2 flex flex-col">
+          {stage.raisedHandCount === 0 ? <p className="type-metadata text-text-secondary">{t('webinar.moderation.handsEmpty')}</p> : null}
+          {stage.isModerator ? (
+            <ul className="gap-2 flex flex-col">
+              <AnimatePresence initial={false}>
+                {stage.hands.map((hand) => (
+                  <m.li key={hand.participantId} {...itemMotion} className="origin-top">
+                    <HandItem hand={hand} stage={stage} />
+                  </m.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          ) : (
             <AnimatePresence initial={false}>
-              {stage.hands.map((hand) => (
-                <m.li key={hand.participantId} {...itemMotion} className="origin-top">
-                  <HandItem hand={hand} stage={stage} />
-                </m.li>
-              ))}
+              {stage.raisedHandCount > 0 ? (
+                <m.p
+                  key="hand-count"
+                  {...itemMotion}
+                  data-testid="webinar-queue-hand-count"
+                  className="gap-2 p-3 flex flex-wrap items-center justify-between rounded-card border border-border-subtle bg-surface origin-top"
+                >
+                  <span className="gap-2 flex items-center type-body font-[var(--font-weight-label)]">
+                    <HandPalm size={18} weight="fill" aria-hidden />
+                    {t('webinar.handRaisedPresenter')}
+                  </span>
+                  <Badge>{t('webinar.handCount', { count: stage.raisedHandCount })}</Badge>
+                </m.p>
+              ) : null}
             </AnimatePresence>
-          </ul>
+          )}
         </section>
 
         {stage.isModerator ? (

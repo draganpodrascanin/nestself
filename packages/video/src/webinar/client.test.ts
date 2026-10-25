@@ -35,7 +35,7 @@ function audioSpy() {
 }
 
 describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
-  it('joins the public room for an attendee and both rooms for a moderator, once per webinar', () => {
+  it('joins the public room for an attendee, adds the hosts room for a presenter and all three for a moderator, once per webinar', () => {
     const attendee = recordingTransport();
     const client = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p1', transport: attendee.transport });
     const release = client.connect();
@@ -48,9 +48,13 @@ describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
     expect(attendee.rooms.size).toBe(0);
     expect(client.getSnapshot().connected).toBe(false);
 
+    const presenter = recordingTransport();
+    new WebinarClient({ webinarId: 'w1', role: 'presenter', transport: presenter.transport }).connect();
+    expect([...presenter.rooms.keys()]).toEqual(['webinar:w1', 'webinar:w1:hosts']);
+
     const moderator = recordingTransport();
     new WebinarClient({ webinarId: 'w1', role: 'moderator', transport: moderator.transport }).connect();
-    expect([...moderator.rooms.keys()]).toEqual(['webinar:w1', 'webinar:w1:moderation']);
+    expect([...moderator.rooms.keys()]).toEqual(['webinar:w1', 'webinar:w1:hosts', 'webinar:w1:moderation']);
   });
 
   it('applies validated events only, from the right room and webinar', () => {
@@ -60,6 +64,7 @@ describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
     const publicRoom = rooms.get('webinar:w1')!;
     const moderationRoom = rooms.get('webinar:w1:moderation')!;
 
+    expect(client.getSnapshot().recording.status).toBeNull();
     publicRoom('webinar.state', { webinarId: 'w1', status: 'live' });
     expect(client.getSnapshot().status).toBe('live');
     publicRoom('webinar.state', { webinarId: 'other', status: 'ended' });
@@ -91,27 +96,36 @@ describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
     expect(JSON.stringify(attendee.getSnapshot())).not.toContain('Ana');
 
     const presenterRooms = recordingTransport();
-    const presenter = new WebinarClient({ webinarId: 'w1', role: 'presenter', transport: presenterRooms.transport });
+    const presenter = new WebinarClient({ webinarId: 'w1', role: 'presenter', transport: presenterRooms.transport, moderationRoom: true });
     presenter.connect();
-    const moderation = presenterRooms.rooms.get('webinar:w1:moderation')!;
-    moderation('webinar.hand.raised', { participantId: 'p2', participantName: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' });
-    moderation('webinar.message.submitted', {
-      id: 'm1',
-      webinarId: 'w1',
-      kind: 'question',
-      status: 'pending',
-      text: 'A question',
-      authorFirstName: null,
-      answerText: null,
-      publishedAt: null,
-      createdAt: '2026-10-25T10:00:00.000Z',
-      authorParticipantId: 'p2',
-      authorName: 'Ana Kovač',
-      showFirstName: false,
-    });
-    expect(presenter.getSnapshot().hands).toEqual([{ participantId: 'p2', name: null, raisedAt: '2026-10-25T10:00:00.000Z' }]);
+    // Even when told to, a presenter's client drops what a moderation room would carry.
+    presenterRooms.rooms.get('webinar:w1:moderation')!('webinar.hand.raised', { participantId: 'p2', participantName: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' });
+    const hosts = presenterRooms.rooms.get('webinar:w1:hosts')!;
+    hosts('webinar.hand.raised', { participantId: 'p2', participantName: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' });
+    hosts('webinar.hand.count', { count: 1 });
+    hosts('webinar.floor.state', { active: true, participantId: 'p2', participantName: 'Ana Kovač' });
+    expect(presenter.getSnapshot().speakers).toEqual([]);
+    hosts('webinar.floor.state', { active: true, participantId: 'p2' });
+    expect(presenter.getSnapshot()).toMatchObject({ hands: [], handCount: 1, speakers: [{ participantId: 'p2', name: null }], floorActive: true });
     expect(presenter.getSnapshot().moderationMessages).toEqual([]);
     expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
+  });
+
+  it('gives every host the floor holder from the hosts room, so any moderator can take the floor back after a reload (WBN-25)', () => {
+    const { transport, rooms } = recordingTransport();
+    const moderator = new WebinarClient({
+      webinarId: 'w1',
+      role: 'moderator',
+      transport,
+      initial: { hands: [{ participantId: 'p2', name: 'Ana Kovač (sample)', raisedAt: '2026-10-25T10:00:00.000Z' }] },
+    });
+    moderator.connect();
+    const hosts = rooms.get('webinar:w1:hosts')!;
+    rooms.get('webinar:w1:moderation')!('webinar.hand.lowered', { participantId: 'p2' });
+    hosts('webinar.floor.state', { active: true, participantId: 'p2' });
+    expect(moderator.getSnapshot().speakers).toEqual([{ participantId: 'p2', name: 'Ana Kovač (sample)' }]);
+    hosts('webinar.floor.state', { active: false, participantId: 'p2' });
+    expect(moderator.getSnapshot()).toMatchObject({ speakers: [], floorActive: false });
   });
 });
 
@@ -193,7 +207,10 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
 
     await attendee.raiseHand();
     expect(attendee.getSnapshot().myHand.raised).toBe(true);
-    expect(server.emitted.at(-1)).toMatchObject({ room: 'webinar:sample-webinar:moderation', event: 'webinar.hand.raised' });
+    expect(server.emitted.slice(-2)).toEqual([
+      expect.objectContaining({ room: 'webinar:sample-webinar:moderation', event: 'webinar.hand.raised' }),
+      expect.objectContaining({ room: 'webinar:sample-webinar:hosts', event: 'webinar.hand.count', payload: { count: 1 } }),
+    ]);
     expect(moderator.getSnapshot().hands).toEqual([expect.objectContaining({ participantId: attendee.getSnapshot().participantId, name: 'Ana Kovač (sample)' })]);
 
     await moderator.giveFloor(attendee.getSnapshot().participantId!);
@@ -201,7 +218,11 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
     expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: false });
     expect(moderator.getSnapshot().speakers).toEqual([expect.objectContaining({ name: 'Ana Kovač (sample)' })]);
     expect(moderator.getSnapshot().hands).toEqual([]);
-    expect(server.emitted.at(-1)).toMatchObject({ event: 'webinar.floor.given', to: attendee.getSnapshot().participantId, payload: { capabilities: { video: 'receive' } } });
+    expect(server.emitted.find((entry) => entry.event === 'webinar.floor.given')).toMatchObject({
+      to: attendee.getSnapshot().participantId,
+      payload: { capabilities: { video: 'receive' } },
+    });
+    expect(attendee.getSnapshot().floorActive).toBe(true);
 
     attendee.acknowledgeFloor();
     expect(attendee.getSnapshot().myFloor).toEqual({ status: 'given', acknowledged: true });
@@ -335,11 +356,32 @@ describe('WebinarClient canonical additions (T-CW-2.3)', () => {
   });
 });
 
+describe('WebinarClient recording outcome (CW-R-121)', () => {
+  it('follows ready and failed, and takes the moderators-only failure event', () => {
+    const attendeeRooms = recordingTransport();
+    const attendee = new WebinarClient({ webinarId: 'w1', role: 'attendee', participantId: 'p1', transport: attendeeRooms.transport });
+    attendee.connect();
+    const publicRoom = attendeeRooms.rooms.get('webinar:w1')!;
+    publicRoom('webinar.recording', { webinarId: 'w1', status: 'ready' });
+    expect(attendee.getSnapshot().recording.status).toBe('ready');
+    publicRoom('webinar.recording', { webinarId: 'w1', status: 'failed' });
+    expect(attendee.getSnapshot().recording.status).toBe('failed');
+
+    const moderatorRooms = recordingTransport();
+    const moderator = new WebinarClient({ webinarId: 'w1', role: 'moderator', transport: moderatorRooms.transport, initial: { recordingStatus: 'recording' } });
+    moderator.connect();
+    moderatorRooms.rooms.get('webinar:w1:moderation')!('webinar.recording.failed', { webinarId: 'w1', reason: 'MediaCapturePipelineFailed' });
+    expect(moderator.getSnapshot().recording.status).toBe('failed');
+    expect(JSON.stringify(moderator.getSnapshot())).not.toContain('MediaCapturePipelineFailed');
+  });
+});
+
 describe('webinarErrorMessage (error visibility rule)', () => {
   it('maps contract codes and generic codes to copy, and unknown codes to errors.unknown', () => {
     expect(webinarErrorMessage('floor_not_available', t)).toBe(t('errors.floorNotAvailable'));
     expect(webinarErrorMessage(new WebinarActionError('message.send', 'network'), t)).toBe(t('errors.network'));
     expect(webinarErrorMessage('something_new', t)).toBe(t('errors.unknown'));
+    expect(webinarErrorMessage('not_editable', t)).toBe(t('webinar.errors.notEditable'));
     expect(webinarErrorMessage(null, t)).toBeNull();
   });
 });

@@ -51,6 +51,7 @@ export const WEBINAR_ACTIONS = [
   'poll.close',
   'poll.vote',
   'recording.stop',
+  'webinar.end',
 ] as const;
 export type WebinarAction = (typeof WEBINAR_ACTIONS)[number];
 
@@ -68,6 +69,7 @@ export const WEBINAR_ACTION_ROUTES = {
   'poll.close': { method: 'POST', path: '/webinars/:id/polls/:pollId/close' },
   'poll.vote': { method: 'POST', path: '/webinars/:id/polls/:pollId/vote' },
   'recording.stop': { method: 'POST', path: '/webinars/:id/recording/stop' },
+  'webinar.end': { method: 'POST', path: '/webinars/:id/end' },
 } as const satisfies Record<WebinarAction, { method: 'POST' | 'DELETE'; path: string }>;
 
 type EmptyBody = Record<string, never>;
@@ -90,6 +92,7 @@ export interface WebinarActionInputs {
   'poll.close': { pollId: string; body: EmptyBody };
   'poll.vote': { pollId: string; body: WebinarPollVoteRequest };
   'recording.stop': { body: EmptyBody };
+  'webinar.end': { body: EmptyBody };
 }
 
 /** Receives one event of a room: its name and its raw payload, validated by the client. */
@@ -113,16 +116,20 @@ export interface WebinarTransport {
 export type WebinarAudioControl = Pick<CallSessionControllerApi, 'setAudioCapability' | 'setMuted'>;
 
 /** Action groups for pending and error state; one error per group is shown at a time. */
-export type WebinarActionArea = 'chat' | 'hand' | 'moderation' | 'floor' | 'poll' | 'recording';
+export type WebinarActionArea = 'chat' | 'hand' | 'moderation' | 'floor' | 'poll' | 'recording' | 'end';
 
-/** A raised hand as a host sees it. `name` is the registration name for the moderator, null for a presenter (WBN-10). */
+/** A raised hand as the moderator sees it, with the registration name (WBN-10); presenters get the count only. */
 export interface WebinarHand {
   participantId: string;
   name: string | null;
   raisedAt: string;
 }
 
-/** An attendee a host gave the floor to; kept until a host takes it back, even if the hand is lowered. */
+/**
+ * An attendee who has the floor; kept until a host takes it back, even if the
+ * hand is lowered. Every host learns of it from `webinar.floor.state` on the
+ * hosts' room (the participant id); only the moderator may know the name.
+ */
 export interface WebinarSpeaker {
   participantId: string;
   name: string | null;
@@ -167,17 +174,24 @@ export interface WebinarSnapshot {
   endedAt: string | null;
   /** Hosts only (`webinar.attendance.count`, a number, never names); null for attendees and until the first count. */
   attendanceCount: number | null;
-  /** Drives the persistent REC indicator while `recording` (UX-45). Every webinar is recorded, so it starts `scheduled`. */
-  recording: { status: RecordingStatus };
+  /**
+   * Drives the persistent REC indicator (UX-45). Null until the join response
+   * or the first `webinar.recording` event says: a live webinar with an
+   * unknown status counts as recording, because every webinar is recorded
+   * (D-CW-34).
+   */
+  recording: { status: RecordingStatus | null };
   /** Published and answered messages: the chat everyone sees (CW-R-34a). */
   publicMessages: readonly WebinarMessage[];
   /** Moderator only: every message with the registration name (WBN-23). */
   moderationMessages: readonly WebinarModerationMessage[];
   /** Ids of messages this viewer sent, to tell them when a host publishes one. */
   ownMessageIds: readonly string[];
-  /** Hosts only. */
+  /** The moderator only (moderation room, names). */
   hands: readonly WebinarHand[];
-  /** Hosts only. */
+  /** Hosts only: raised hands as a number (`webinar.hand.count` on the hosts' room); null until the first count. */
+  handCount: number | null;
+  /** Hosts only: who has the floor (`webinar.floor.state` on the hosts' room). */
   speakers: readonly WebinarSpeaker[];
   polls: WebinarPollsState;
   /** Attendees: this viewer's hand. */
@@ -207,7 +221,10 @@ export interface WebinarInitialState {
   polls?: readonly WebinarPoll[];
   results?: readonly WebinarPollResults[];
   hands?: readonly WebinarHand[];
+  handCount?: number | null;
+  /** Optional: the hosts' room's `webinar.floor.state` fills it after a reload. */
   speakers?: readonly WebinarSpeaker[];
+  floorActive?: boolean;
   myHand?: WebinarHandState;
 }
 
@@ -237,6 +254,8 @@ export interface WebinarClientApi {
   openPoll(pollId: string): Promise<void>;
   closePoll(pollId: string): Promise<void>;
   stopRecording(): Promise<void>;
+  /** Hosts: `POST /webinars/:id/end`, the webinar ends for everyone (WBN-21, WBN-29). */
+  end(): Promise<void>;
 
   clearError(area: WebinarActionArea): void;
   destroy(): void;

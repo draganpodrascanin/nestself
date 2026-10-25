@@ -1,8 +1,15 @@
 /**
- * A scripted sample webinar for stories and sample mode: host posts, a
- * published message, an answered question, a pending message, raised hands
- * and a poll. Every name is a placeholder marked "(sample)"; nothing here is
- * a real person, and nothing is sent anywhere.
+ * A scripted sample webinar for Storybook and the apps' sample mode ONLY
+ * (sample-data rule): host posts, a published message, a pending message,
+ * raised hands and a poll on a `FakeWebinarServer`. Production code never
+ * imports it; the apps reach it only behind `VITE_DATA_SOURCE=sample`, with
+ * the `SampleDataBanner` on screen. Every name is a placeholder marked
+ * "(sample)", nobody here is a real person, and nothing is sent anywhere.
+ *
+ * The people and the poll stay here rather than in `packages/sample-data`
+ * because `@nestself/video` does not depend on that package and adding the
+ * dependency needs an install; move them there (with the `SAMPLE_` prefix)
+ * when the dependency is added.
  */
 import type { WebinarPoll } from '@nestself/contracts';
 import { FakeWebinarServer } from './fake-webinar';

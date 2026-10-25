@@ -6,7 +6,7 @@ import type { CallSessionControllerApi, CallSessionSnapshot } from '../types';
  * identity until they change, so components re-render only for their slice.
  */
 export function useControllerSlice<K extends keyof CallSessionSnapshot>(
-  controller: CallSessionControllerApi,
+  controller: Pick<CallSessionControllerApi, 'getSnapshot' | 'subscribe'>,
   key: K,
 ): CallSessionSnapshot[K] {
   const subscribe = useCallback((listener: () => void) => controller.subscribe(listener), [controller]);

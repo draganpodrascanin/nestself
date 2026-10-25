@@ -33,23 +33,20 @@ export function toWebinarActionError(action: WebinarAction | 'floor.audio', erro
 
 type CallsT = (key: string, options?: Record<string, unknown>) => string;
 
-const CALL_ERROR_KEYS: { readonly [Code in CallErrorCode]: string } = {
-  join_window_closed: 'errors.joinWindowClosed',
-  appointment_not_joinable: 'errors.appointmentNotJoinable',
-  appointment_not_proposed: 'errors.appointmentNotProposed',
-  approval_not_pending: 'errors.approvalNotPending',
-  approver_missing: 'errors.approverMissing',
-  follow_up_not_allowed: 'errors.followUpNotAllowed',
-  video_provider_unavailable: 'errors.videoProviderUnavailable',
-  webinar_full: 'errors.webinarFull',
-  webinar_not_open: 'errors.webinarNotOpen',
-  registration_closed: 'errors.registrationClosed',
-  already_registered: 'errors.alreadyRegistered',
-  not_eligible: 'errors.notEligible',
-  floor_not_available: 'errors.floorNotAvailable',
-  recording_not_allowed: 'errors.recordingNotAllowed',
-  capacity_above_limit: 'webinar.capacityAboveLimit',
-  invalid_ticket: 'errors.invalidTicket',
+/**
+ * Every call error code has copy at `calls:errors.<camelCase code>` (the
+ * i18n package's test enforces it for each `CALL_ERROR_CODES` entry), except
+ * the capacity limit, whose copy names the limit.
+ */
+function callErrorKey(code: CallErrorCode): string {
+  if (code === 'capacity_above_limit') return 'webinar.capacityAboveLimit';
+  return `errors.${code.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
+}
+
+/** Codes whose webinar copy differs from the shared call copy, checked first. */
+const WEBINAR_KEYS: Readonly<Record<string, string>> = {
+  /** An occurrence edit its status no longer allows (hosts and operations only). */
+  not_editable: 'webinar.errors.notEditable',
 };
 
 const GENERIC_KEYS: Readonly<Record<string, string>> = {
@@ -73,7 +70,9 @@ function isCallErrorCode(code: string): code is CallErrorCode {
 export function webinarErrorMessage(error: WebinarActionErrorLike | string | null | undefined, t: CallsT): string | null {
   if (!error) return null;
   const code = typeof error === 'string' ? error : error.code;
-  if (isCallErrorCode(code)) return t(CALL_ERROR_KEYS[code], { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
+  const webinarKey = WEBINAR_KEYS[code];
+  if (webinarKey) return t(webinarKey);
+  if (isCallErrorCode(code)) return t(callErrorKey(code), { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
   const generic = GENERIC_KEYS[code];
   return t(generic ?? 'errors.unknown');
 }

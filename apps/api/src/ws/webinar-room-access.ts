@@ -1,6 +1,6 @@
 /**
  * Who may subscribe to the webinar rooms (T-CW-2.3, D-CW-15, D-CW-16,
- * guidelines 8, WBN-19, WBN-23):
+ * CW-R-36a, guidelines 8, WBN-19, WBN-20, WBN-23):
  *
  * - `webinar:{webinarId}` (everyone in the occurrence): its hosts, a
  *   moderating principal, and every active registrant. A host subscribes on
@@ -9,10 +9,12 @@
  *   principal without a host row (`event.moderate` on the occurrence,
  *   operations) on `event.moderate`; a registrant on `event.register` on
  *   their own registration (`own` scope).
- * - `webinar:{webinarId}:moderation` (names, hands, the attendance count):
- *   hosts, presenters included so the presenter sees the count and the
- *   anonymous hands (WBN-19, WBN-10), and moderating principals. The
- *   moderation ACTIONS still need `event.moderate` on the server.
+ * - `webinar:{webinarId}:moderation` (pending messages and hands with the
+ *   registration names): moderators only, the host row with the moderator
+ *   role or a moderating principal. Presenters never see names (WBN-20.2).
+ * - `webinar:{webinarId}:hosts` (the attendance count, the hand count and the
+ *   floor holder's participant id, never a name): presenters and moderators
+ *   (WBN-19, WBN-25).
  *
  * A missing occurrence and a principal with no place in it both resolve to
  * null, which `SubscriptionAuthorizer` answers `not_found` (D-CW-30), and
@@ -21,10 +23,10 @@
  * `WebinarsModule` imports `WsModule`, so `WsModule` cannot import it back:
  * {@link WebinarRoomResolvers} looks the repository and the access service
  * up through `ModuleRef` once the application has started and registers the
- * two resolvers then. Where the webinars module is absent the rooms stay
- * unserved (`room_not_available`).
+ * three resolvers then. A failed lookup throws at start-up: the API must not
+ * run with webinar rooms silently unserved.
  */
-import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ModuleRef } from '@nestjs/core';
 import { ACTIONS, type Principal } from '@nestself/contracts';
@@ -64,29 +66,39 @@ export async function webinarRoomTarget(source: WebinarRoomSource, webinarId: st
   return { action: ACTIONS['event.register'], resource: webinarRegistrantResourceOf(webinar, principal) };
 }
 
-/** `webinar:{webinarId}:moderation`: hosts (presenters and the moderator) and moderating principals. */
+/** `webinar:{webinarId}:moderation`: the moderator (host row) and moderating principals; never a presenter. */
 export async function webinarModerationRoomTarget(
   source: WebinarRoomSource,
   webinarId: string,
   principal: Principal,
 ): Promise<RoomTarget | null> {
   const webinar = await source.repo.findById(webinarId);
+  if (!webinar) return null;
+  const host = await source.access.host(webinar, principal);
+  const moderates = host?.role === 'moderator' || (await source.access.canModerate(webinar, principal));
+  return moderates ? { action: ACTIONS['event.moderate'], resource: webinarStaffResourceOf(webinar) } : null;
+}
+
+/** `webinar:{webinarId}:hosts`: presenters, the moderator and moderating principals. */
+export async function webinarHostsRoomTarget(source: WebinarRoomSource, webinarId: string, principal: Principal): Promise<RoomTarget | null> {
+  const webinar = await source.repo.findById(webinarId);
   return webinar ? staffTarget(source, webinar, principal) : null;
 }
 
-/** Registers both webinar room resolvers on the registry; returns the function that removes them. */
+const WEBINAR_ROOM_KINDS = ['webinar', 'webinar_moderation', 'webinar_hosts'] as const;
+
+/** Registers the three webinar room resolvers on the registry; returns the function that removes them. */
 export function registerWebinarRooms(registry: RoomAccessRegistry, source: WebinarRoomSource): () => void {
   registry.register('webinar', (id, principal) => webinarRoomTarget(source, id, principal));
   registry.register('webinar_moderation', (id, principal) => webinarModerationRoomTarget(source, id, principal));
+  registry.register('webinar_hosts', (id, principal) => webinarHostsRoomTarget(source, id, principal));
   return () => {
-    registry.unregister('webinar');
-    registry.unregister('webinar_moderation');
+    for (const kind of WEBINAR_ROOM_KINDS) registry.unregister(kind);
   };
 }
 
 @Injectable()
 export class WebinarRoomResolvers implements OnApplicationBootstrap, OnModuleDestroy {
-  private readonly logger = new Logger(WebinarRoomResolvers.name);
   private unregister: (() => void) | null = null;
 
   constructor(
@@ -96,12 +108,7 @@ export class WebinarRoomResolvers implements OnApplicationBootstrap, OnModuleDes
 
   onApplicationBootstrap(): void {
     if (this.unregister) return;
-    const source = this.lookup();
-    if (!source) {
-      this.logger.warn('Webinar rooms not served: the webinars module is not loaded');
-      return;
-    }
-    this.unregister = registerWebinarRooms(this.registry, source);
+    this.unregister = registerWebinarRooms(this.registry, this.lookup());
   }
 
   onModuleDestroy(): void {
@@ -109,14 +116,15 @@ export class WebinarRoomResolvers implements OnApplicationBootstrap, OnModuleDes
     this.unregister = null;
   }
 
-  private lookup(): WebinarRoomSource | null {
+  /** The webinars module's repository and access service; throws when the module is not loaded. */
+  private lookup(): WebinarRoomSource {
     try {
       return {
         repo: this.moduleRef.get(WebinarsRepository, { strict: false }),
         access: this.moduleRef.get(WebinarAccess, { strict: false }),
       };
-    } catch {
-      return null;
+    } catch (error) {
+      throw new Error('WebinarRoomResolvers: the webinars module is not loaded; the webinar rooms cannot be served', { cause: error });
     }
   }
 }

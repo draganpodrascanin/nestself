@@ -16,13 +16,17 @@ import { useWebinarStage } from '../hooks/useWebinarStage';
 import type { CallSessionControllerApi } from '../types';
 import type { WebinarClientApi } from '../webinar/types';
 import { ErrorStack } from './WebinarStageParts';
-import { useErrorMessages } from './WebinarStageHooks';
+import { useErrorMessages, useMicrophoneBlocked } from './WebinarStageHooks';
 
 export interface FloorGrantedDialogProps {
   /** The attendee's webinar client; the dialog opens on `webinar.floor.given` for this participant. */
   client: WebinarClientApi;
-  /** "Unmute now" unmutes through the call controller. The floor is audio only; nothing here touches video. */
-  controller: Pick<CallSessionControllerApi, 'setMuted'>;
+  /**
+   * "Unmute now" unmutes through the call controller, and a blocked
+   * microphone is read from its devices state. The floor is audio only;
+   * nothing here touches video.
+   */
+  controller: Pick<CallSessionControllerApi, 'setMuted' | 'getSnapshot' | 'subscribe'>;
   /** A failure from outside, already translated. */
   error?: string | null;
 }
@@ -39,7 +43,8 @@ export function FloorGrantedDialog({ client, controller, error }: FloorGrantedDi
   const { t } = useTranslation('calls');
   const stage = useWebinarStage(client);
   const open = stage.myFloor.status === 'given' && !stage.myFloor.acknowledged;
-  const errors = useErrorMessages(error, stage.errorOf('floor'));
+  const microphoneBlocked = useMicrophoneBlocked(client, controller);
+  const errors = useErrorMessages(error, stage.errorOf('floor'), microphoneBlocked);
 
   return (
     <Dialog

@@ -6,13 +6,14 @@
  * over a mocked Socket.IO server and an in-memory webinar repository. Only
  * the `ContextLoader` is stubbed, with the grants each person holds.
  *
- * Covered: registrants and hosts subscribe to `webinar:{id}`; only hosts
- * (presenters included, WBN-19) and moderating principals subscribe to
- * `webinar:{id}:moderation`; an unknown occurrence, a canceled registration,
- * a principal with no registration and a host row the engine no longer backs
- * are all refused as `not_found`; each webinar event reaches only its room
- * kind (names and counts never reach the public room, the floor events only
- * the attendee's own room); the two canonical additions reach the public room.
+ * Covered: registrants and hosts subscribe to `webinar:{id}`; only the
+ * moderator and moderating principals subscribe to `webinar:{id}:moderation`
+ * (names, CW-R-36a), presenters are refused there and use
+ * `webinar:{id}:hosts` (counts and the floor holder's id, WBN-19); an unknown
+ * occurrence, a canceled registration, a principal with no registration and a
+ * host row the engine no longer backs are all refused as `not_found`; each
+ * webinar event reaches only its room kind; the resolvers register at
+ * start-up and a missing webinars module fails the start-up.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
@@ -34,12 +35,19 @@ import { RoomAccessRegistry } from './room-access.registry.js';
 import { RoomEmitter } from './room-emitter.js';
 import { RoomEventRelay } from './room-event-relay.js';
 import { SubscriptionAuthorizer } from './subscription-authorizer.js';
-import { registerWebinarRooms, webinarModerationRoomTarget, webinarRoomTarget } from './webinar-room-access.js';
+import {
+  WebinarRoomResolvers,
+  registerWebinarRooms,
+  webinarHostsRoomTarget,
+  webinarModerationRoomTarget,
+  webinarRoomTarget,
+} from './webinar-room-access.js';
 
 const ORG = 'org_sample';
 const WEBINAR = 'webinar_live';
 const ROOM = `webinar:${WEBINAR}`;
 const MODERATION = `webinar:${WEBINAR}:moderation`;
+const HOSTS = `webinar:${WEBINAR}:hosts`;
 
 const PRESENTER = 'user_milica';
 const MODERATOR = 'user_nikola';
@@ -282,7 +290,7 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
 
     access = new WebinarAccess(
       repo as unknown as WebinarsRepository,
-      {} as DbService,
+      { withOrgScope: (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(undefined) } as unknown as DbService,
       contextLoader as unknown as ContextLoader,
       { record: vi.fn(async () => undefined) } as unknown as AuditWriter,
     );
@@ -296,34 +304,41 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
   });
 
   describe('subscription', () => {
-    it('registers both webinar room kinds, once', () => {
+    it('registers the three webinar room kinds, once', () => {
       expect(registry.resolverFor('webinar')).toBeTypeOf('function');
       expect(registry.resolverFor('webinar_moderation')).toBeTypeOf('function');
+      expect(registry.resolverFor('webinar_hosts')).toBeTypeOf('function');
       expect(() => registerWebinarRooms(registry, { repo: repo as unknown as WebinarsRepository, access })).toThrow(/already registered/);
     });
 
     it('lets an active registrant into the public room only', async () => {
       const socket = await subscribed(registrant, ROOM);
+      for (const room of [MODERATION, HOSTS]) {
+        expect(await subscribe(socket, room)).toEqual({ event: 'subscribe:denied', data: { room, reason: 'not_found' } });
+      }
+    });
+
+    it('lets presenters into the public and hosts rooms but never the moderation room, which carries names (CW-R-36a)', async () => {
+      const socket = await subscribed(presenter, ROOM, HOSTS);
       expect(await subscribe(socket, MODERATION)).toEqual({ event: 'subscribe:denied', data: { room: MODERATION, reason: 'not_found' } });
     });
 
-    it('lets presenters and the moderator into both rooms (WBN-19), and a moderating principal without a host row', async () => {
-      await subscribed(presenter, ROOM, MODERATION);
-      await subscribed(moderator, ROOM, MODERATION);
-      await subscribed(principalOf(OPERATIONS, 'operations'), ROOM, MODERATION);
+    it('lets the moderator and a moderating principal without a host row into all three rooms', async () => {
+      await subscribed(moderator, ROOM, MODERATION, HOSTS);
+      await subscribed(principalOf(OPERATIONS, 'operations'), ROOM, MODERATION, HOSTS);
     });
 
     it.each([
       ['a canceled registration', CANCELED, ROOM],
       ['no registration, though the engine alone would allow the own scope', NOT_REGISTERED, ROOM],
-      ['a host row the engine no longer backs', STALE_PRESENTER, MODERATION],
+      ['a host row the engine no longer backs', STALE_PRESENTER, HOSTS],
     ])('refuses %s as not_found', async (_label, userId, room) => {
       const principal = principalOf(userId, userId === STALE_PRESENTER ? 'expert' : 'organization');
       expect(await subscribe(socketOf(principal), room)).toEqual({ event: 'subscribe:denied', data: { room, reason: 'not_found' } });
     });
 
     it('answers an unknown occurrence exactly as a refusal', async () => {
-      for (const room of ['webinar:no_such_webinar', 'webinar:no_such_webinar:moderation']) {
+      for (const room of ['webinar:no_such_webinar', 'webinar:no_such_webinar:moderation', 'webinar:no_such_webinar:hosts']) {
         expect(await subscribe(socketOf(moderator), room)).toEqual({ event: 'subscribe:denied', data: { room, reason: 'not_found' } });
       }
     });
@@ -334,7 +349,8 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
         action: 'event.register',
         resource: { type: 'webinar', id: WEBINAR, orgId: ORG, ownerId: REGISTRANT },
       });
-      expect(await webinarModerationRoomTarget(source, WEBINAR, presenter)).toEqual({
+      expect(await webinarModerationRoomTarget(source, WEBINAR, presenter)).toBeNull();
+      expect(await webinarHostsRoomTarget(source, WEBINAR, presenter)).toEqual({
         action: 'event.present',
         resource: { type: 'webinar', id: WEBINAR, orgId: ORG },
       });
@@ -343,6 +359,7 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
         resource: { type: 'webinar', id: WEBINAR, orgId: ORG },
       });
       expect(await webinarModerationRoomTarget(source, WEBINAR, registrant)).toBeNull();
+      expect(await webinarHostsRoomTarget(source, WEBINAR, registrant)).toBeNull();
     });
 
     it('answers unavailable when the lookup fails (fail closed)', async () => {
@@ -352,21 +369,27 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
   });
 
   describe('events', () => {
-    it('delivers public events to registrants and hosts, moderation events to hosts only', async () => {
+    it('delivers public events to everyone, names to the moderator only, counts and the floor holder to all hosts', async () => {
       const attendee = await subscribed(registrant, ROOM);
-      const host = await subscribed(presenter, ROOM, MODERATION);
+      const host = await subscribed(presenter, ROOM, HOSTS);
+      const mod = await subscribed(moderator, ROOM, MODERATION, HOSTS);
 
       expect(rooms.emit(ROOM, 'webinar.state', { webinarId: WEBINAR, status: 'live' })).toBe(true);
       expect(rooms.emit(MODERATION, 'webinar.hand.raised', { participantId: 'p1', participantName: 'Jovan', raisedAt: NOW.toISOString() })).toBe(true);
-      expect(rooms.emit(MODERATION, 'webinar.attendance.count', { webinarId: WEBINAR, count: 12 })).toBe(true);
+      expect(rooms.emit(HOSTS, 'webinar.hand.count', { count: 1 })).toBe(true);
+      expect(rooms.emit(HOSTS, 'webinar.attendance.count', { webinarId: WEBINAR, count: 12 })).toBe(true);
+      expect(rooms.emit(HOSTS, 'webinar.floor.state', { active: true, participantId: 'p1' })).toBe(true);
+      expect(rooms.emit(ROOM, 'webinar.floor.state', { active: true })).toBe(true);
       await flush();
 
-      expect(attendee.events('webinar.state')).toEqual([{ webinarId: WEBINAR, status: 'live' }]);
-      expect(host.events('webinar.state')).toHaveLength(1);
-      expect(host.events('webinar.hand.raised')).toHaveLength(1);
+      expect(attendee.received.map((r) => r.event)).toEqual(['webinar.state', 'webinar.floor.state']);
+      expect(attendee.events('webinar.floor.state')).toEqual([{ active: true }]);
+      expect(host.events('webinar.hand.raised')).toEqual([]);
+      expect(host.events('webinar.hand.count')).toEqual([{ count: 1 }]);
       expect(host.events('webinar.attendance.count')).toEqual([{ webinarId: WEBINAR, count: 12 }]);
-      expect(attendee.received.map((r) => r.event)).toEqual(['webinar.state']);
-      expect(JSON.stringify(attendee.received)).not.toContain('Jovan');
+      expect(host.events('webinar.floor.state')).toEqual([{ active: true, participantId: 'p1' }, { active: true }]);
+      expect(mod.events('webinar.hand.raised')).toHaveLength(1);
+      for (const socket of [attendee, host]) expect(JSON.stringify(socket.received)).not.toContain('Jovan');
     });
 
     it('refuses moderation events, names and counts on the public room (D-CW-15)', async () => {
@@ -407,6 +430,35 @@ describe('webinar rooms: Socket.IO subscription and events (T-CW-2.3)', () => {
       await flush();
       expect(attendee.events('webinar.message.removed')).toEqual([{ messageId: 'm1' }]);
       expect(attendee.events('webinar.floor.state')).toEqual([{ active: true }]);
+    });
+  });
+
+  describe('start-up', () => {
+    function moduleRefWith(get: (token: unknown) => unknown) {
+      return { get: vi.fn(get) } as never;
+    }
+
+    it('registers the three resolvers at application bootstrap and removes them on shutdown', () => {
+      const fresh = new RoomAccessRegistry();
+      const resolvers = new WebinarRoomResolvers(fresh, moduleRefWith((token) => (token === WebinarAccess ? access : repo)));
+      resolvers.onApplicationBootstrap();
+      expect(['webinar', 'webinar_moderation', 'webinar_hosts'].map((kind) => typeof fresh.resolverFor(kind as never))).toEqual([
+        'function',
+        'function',
+        'function',
+      ]);
+      resolvers.onModuleDestroy();
+      expect(fresh.resolverFor('webinar')).toBeUndefined();
+    });
+
+    it('fails the start-up loudly when the webinars module cannot be found', () => {
+      const resolvers = new WebinarRoomResolvers(
+        new RoomAccessRegistry(),
+        moduleRefWith(() => {
+          throw new Error('Nest could not find WebinarsRepository element');
+        }),
+      );
+      expect(() => resolvers.onApplicationBootstrap()).toThrow(/webinars module is not loaded/);
     });
   });
 });

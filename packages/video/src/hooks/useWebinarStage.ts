@@ -31,6 +31,8 @@ export function useWebinarStage(client: WebinarClientApi) {
   return useMemo(() => {
     const isHost = snapshot.role !== 'attendee';
     const isModerator = snapshot.role === 'moderator';
+    const isLive = snapshot.status === 'live';
+    const recordingStatus = snapshot.recording.status;
     const pendingMessages: readonly WebinarModerationMessage[] = isModerator
       ? snapshot.moderationMessages.filter((message) => message.status === 'pending')
       : [];
@@ -38,10 +40,15 @@ export function useWebinarStage(client: WebinarClientApi) {
       ...snapshot,
       isHost,
       isModerator,
-      isLive: snapshot.status === 'live',
+      isLive,
       isEnded: snapshot.status === 'ended' || snapshot.status === 'canceled',
-      /** Show the REC indicator (UX-45). */
-      isRecording: snapshot.recording.status === 'recording',
+      /**
+       * Show the REC indicator (UX-45): recording, or live with no status yet,
+       * because every webinar is recorded (D-CW-34).
+       */
+      isRecording: recordingStatus === 'recording' || (recordingStatus === null && isLive),
+      /** Raised hands as a number for any host: the moderator counts the names, a presenter gets the count. */
+      raisedHandCount: isModerator ? snapshot.hands.length : (snapshot.handCount ?? 0),
       /** Moderator only: attendee messages and questions waiting for review (WBN-23). */
       pendingMessages,
       /** The poll that is open right now, if any. */
@@ -67,6 +74,7 @@ export function useWebinarStage(client: WebinarClientApi) {
       openPoll: (pollId: string) => client.openPoll(pollId),
       closePoll: (pollId: string) => client.closePoll(pollId),
       stopRecording: () => client.stopRecording(),
+      end: () => client.end(),
       clearError: (area: WebinarActionArea) => client.clearError(area),
     };
   }, [client, snapshot]);

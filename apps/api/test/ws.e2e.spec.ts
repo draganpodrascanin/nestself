@@ -38,6 +38,7 @@ const CALL_ROOM = 'call:call_session_sample_consultation';
 /** The seeded ended webinar: user_milica presents, user_nikola moderates, user_jovan is registered (T-CW-2.3). */
 const WEBINAR_ROOM = 'webinar:webinar_sample_ended';
 const WEBINAR_MODERATION_ROOM = 'webinar:webinar_sample_ended:moderation';
+const WEBINAR_HOSTS_ROOM = 'webinar:webinar_sample_ended:hosts';
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -321,18 +322,21 @@ describe.skipIf(!shouldRun)('WebSocket auth (e2e)', () => {
 
   // -----------------------------------------------------------------------
   // 3b'. Webinar rooms (T-CW-2.3): registrants and hosts in the public room,
-  //      hosts (presenters included, WBN-19) in the moderation room; anyone
-  //      else and an unknown occurrence get the same not_found.
+  //      presenters in the hosts room (counts, WBN-19) but never in the
+  //      moderation room, which carries names (CW-R-36a); anyone else and an
+  //      unknown occurrence get the same not_found.
   // -----------------------------------------------------------------------
 
-  it('subscribe: webinar rooms are open to registrants and hosts, the moderation room to hosts only', async () => {
+  it('subscribe: webinar rooms are open to registrants and hosts; presenters get the hosts room, not the moderation room', async () => {
     const { cookie: employeeCookie } = await signIn('user_jovan@example.com');
     const registrant = new TestSocket({ baseUrl, cookie: employeeCookie, origin: 'http://localhost:5173' });
     await registrant.connect(5000);
     await registrant.emitEvent('subscribe', { room: WEBINAR_ROOM });
     expect(await registrant.waitForEvent('subscribe:ok', 5000)).toEqual({ room: WEBINAR_ROOM });
-    await registrant.emitEvent('subscribe', { room: WEBINAR_MODERATION_ROOM });
-    expect(await registrant.waitForEvent('subscribe:denied', 5000)).toEqual({ room: WEBINAR_MODERATION_ROOM, reason: 'not_found' });
+    for (const room of [WEBINAR_MODERATION_ROOM, WEBINAR_HOSTS_ROOM]) {
+      await registrant.emitEvent('subscribe', { room });
+      expect(await registrant.waitForEvent('subscribe:denied', 5000)).toEqual({ room, reason: 'not_found' });
+    }
 
     const worker = new RoomEmitter(app.get<KeyValueStore>(KEY_VALUE_STORE));
     expect(worker.emit(WEBINAR_ROOM, 'webinar.floor.state', { active: true })).toBe(true);
@@ -342,18 +346,22 @@ describe.skipIf(!shouldRun)('WebSocket auth (e2e)', () => {
     const { cookie: expertCookie } = await signInExpert('user_milica@example.com');
     const presenter = new TestSocket({ baseUrl, cookie: expertCookie, origin: 'http://localhost:5174' });
     await presenter.connect(5000);
-    for (const room of [WEBINAR_ROOM, WEBINAR_MODERATION_ROOM]) {
+    for (const room of [WEBINAR_ROOM, WEBINAR_HOSTS_ROOM]) {
       await presenter.emitEvent('subscribe', { room });
       expect(await presenter.waitForEvent('subscribe:ok', 5000)).toEqual({ room });
     }
-    expect(worker.emit(WEBINAR_MODERATION_ROOM, 'webinar.attendance.count', { webinarId: 'webinar_sample_ended', count: 2 })).toBe(true);
+    await presenter.emitEvent('subscribe', { room: WEBINAR_MODERATION_ROOM });
+    expect(await presenter.waitForEvent('subscribe:denied', 5000)).toEqual({ room: WEBINAR_MODERATION_ROOM, reason: 'not_found' });
+    expect(worker.emit(WEBINAR_HOSTS_ROOM, 'webinar.attendance.count', { webinarId: 'webinar_sample_ended', count: 2 })).toBe(true);
     expect(await presenter.waitForEvent('webinar.attendance.count', 5000)).toEqual({ webinarId: 'webinar_sample_ended', count: 2 });
+    expect(worker.emit(WEBINAR_HOSTS_ROOM, 'webinar.floor.state', { active: true, participantId: 'call_participant_sample_attendee_jovan' })).toBe(true);
+    expect(await presenter.waitForEvent('webinar.floor.state', 5000)).toEqual({ active: true, participantId: 'call_participant_sample_attendee_jovan' });
     await presenter.disconnect();
 
     const { cookie: hrCookie } = await signIn('user_ivana@example.com');
     const outsider = new TestSocket({ baseUrl, cookie: hrCookie, origin: 'http://localhost:5173' });
     await outsider.connect(5000);
-    for (const room of [WEBINAR_ROOM, WEBINAR_MODERATION_ROOM, 'webinar:no_such_webinar', 'webinar:no_such_webinar:moderation']) {
+    for (const room of [WEBINAR_ROOM, WEBINAR_MODERATION_ROOM, WEBINAR_HOSTS_ROOM, 'webinar:no_such_webinar', 'webinar:no_such_webinar:hosts']) {
       await outsider.emitEvent('subscribe', { room });
       expect(await outsider.waitForEvent('subscribe:denied', 5000)).toEqual({ room, reason: 'not_found' });
     }

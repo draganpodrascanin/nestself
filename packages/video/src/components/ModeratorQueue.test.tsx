@@ -72,7 +72,7 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     expect(server.requests.at(-1)).toMatchObject({ action: 'message.publish', input: { body: { text: 'The slides are clear' } } });
   });
 
-  it('shows the registration name of a raised hand to the moderator, and only "a participant" to a presenter', async () => {
+  it('shows the registration name of a raised hand to the moderator, and only an anonymous count to a presenter', async () => {
     const { server, attendee, moderator } = await setup();
     const presenter = new FakeWebinarClient({ server, role: 'presenter', name: 'Marko' });
     renderWithI18n(
@@ -91,9 +91,12 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     expect(moderatorHand).toHaveTextContent('Ana Kovač (sample)');
     expect(within(moderatorHand).getByRole('button', { name: t('webinar.moderation.giveFloorTo', { name: 'Ana Kovač (sample)' }) })).toBeInTheDocument();
     const presenterView = screen.getByTestId('presenter');
-    const presenterHand = await within(presenterView).findByTestId('webinar-queue-hand');
+    const presenterHand = await within(presenterView).findByTestId('webinar-queue-hand-count');
     expect(presenterHand).toHaveTextContent(t('webinar.handRaisedPresenter'));
+    expect(presenterHand).toHaveTextContent(t('webinar.handCount', { count: 1 }));
+    expect(within(presenterView).queryByRole('button', { name: t('webinar.moderation.giveFloor') })).toBeNull();
     expect(presenterView).not.toHaveTextContent('Ana');
+    expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
     expect(within(presenterView).queryByText(t('webinar.moderation.pendingTitle'))).toBeNull();
   });
 
@@ -131,8 +134,27 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(false));
     expect(controller.getSnapshot().media.muted).toBe(true);
     expect(attendee.getSnapshot().myFloor.status).toBe('taken');
-    expect(server.emitted.at(-1)).toMatchObject({ event: 'webinar.floor.taken', to: participantId, payload: { capabilities: { audio: 'receive', video: 'receive' } } });
+    expect(server.emitted.find((entry) => entry.event === 'webinar.floor.taken')).toMatchObject({
+      to: participantId,
+      payload: { capabilities: { audio: 'receive', video: 'receive' } },
+    });
     await waitFor(() => expect(screen.queryByTestId('webinar-queue-speakers')).toBeNull());
+  });
+
+  it('lets a presenter take the floor back from the floor holder the hosts room names, anonymously (WBN-25)', async () => {
+    const user = userEvent.setup();
+    const { server, controller, attendee, moderator, participantId } = await setup();
+    await attendee.raiseHand();
+    await moderator.giveFloor(participantId);
+    // The presenter arrives after the floor was given (a reload): the hosts room's snapshot names the holder by id.
+    const presenter = new FakeWebinarClient({ server, role: 'presenter', name: 'Marko' });
+    renderWithI18n(<ModeratorQueue client={presenter} />);
+    const speaker = await screen.findByTestId('webinar-queue-speaker');
+    expect(speaker).toHaveTextContent(t('webinar.chat.participant'));
+    expect(speaker).not.toHaveTextContent('Ana');
+    await user.click(within(speaker).getByRole('button', { name: t('webinar.moderation.takeFloorFrom', { name: t('webinar.chat.participant') }) }));
+    await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(false));
+    await waitFor(() => expect(screen.queryByTestId('webinar-queue-speaker')).toBeNull());
   });
 
   it('shows the attendance count as a number and stops the recording after a confirmation', async () => {

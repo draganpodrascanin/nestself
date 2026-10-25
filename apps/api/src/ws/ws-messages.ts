@@ -7,7 +7,8 @@
  *
  *   call:{sessionId}                  consultation.join on the session's appointment, participants only
  *   webinar:{webinarId}               active registrants (event.register on their registration) and hosts (T-CW-2.3)
- *   webinar:{webinarId}:moderation    hosts: presenters (event.present) and moderators (event.moderate) (T-CW-2.3)
+ *   webinar:{webinarId}:moderation    moderators only (event.moderate): it carries registration names (D-CW-15)
+ *   webinar:{webinarId}:hosts         presenters (event.present) and moderators: counts and the floor holder's id (T-CW-2.3)
  *   org:{orgId}:programme             program.overview on the organization (T-1.11)
  *   user:{userId}                     that user only, by identity, no engine decision (T-CW-1.9)
  *
@@ -23,6 +24,8 @@ import {
   AppointmentRemindPayloadSchema,
   CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   type AppointmentRemindPayload,
   type CallRoomEventName,
@@ -30,6 +33,10 @@ import {
   type UserRoomEventName,
   type WebinarEventName,
   type WebinarEventPayloads,
+  type WebinarHostsRoomEventName,
+  type WebinarHostsRoomEventPayloads,
+  type WebinarModerationRoomAddedEventName,
+  type WebinarModerationRoomAddedEventPayloads,
   type WebinarRoomAddedEventName,
   type WebinarRoomAddedEventPayloads,
 } from '@nestself/contracts';
@@ -45,7 +52,7 @@ import {
  */
 const ROOM_ID = '[A-Za-z0-9][A-Za-z0-9_-]{0,127}';
 
-export const ROOM_KINDS = ['call', 'webinar', 'webinar_moderation', 'org_programme', 'user'] as const;
+export const ROOM_KINDS = ['call', 'webinar', 'webinar_moderation', 'webinar_hosts', 'org_programme', 'user'] as const;
 export type RoomKind = (typeof ROOM_KINDS)[number];
 
 /**
@@ -67,6 +74,7 @@ const ROOM_PATTERNS: readonly (readonly [RoomKind, RegExp])[] = [
   ['call', new RegExp(`^call:(${ROOM_ID})$`)],
   ['webinar', new RegExp(`^webinar:(${ROOM_ID})$`)],
   ['webinar_moderation', new RegExp(`^webinar:(${ROOM_ID}):moderation$`)],
+  ['webinar_hosts', new RegExp(`^webinar:(${ROOM_ID}):hosts$`)],
   ['org_programme', new RegExp(`^org:(${ROOM_ID}):programme$`)],
   ['user', new RegExp(`^user:(${ROOM_ID})$`)],
 ];
@@ -158,15 +166,25 @@ export type SubscribeDenialReason =
 // Server-side room events (CW-R-36)
 // ---------------------------------------------------------------------------
 
-export type RoomEventName = CallRoomEventName | UserRoomEventName | WebinarEventName | WebinarRoomAddedEventName;
+export type RoomEventName =
+  | CallRoomEventName
+  | UserRoomEventName
+  | WebinarEventName
+  | WebinarRoomAddedEventName
+  | WebinarHostsRoomEventName
+  | WebinarModerationRoomAddedEventName;
 export type RoomEventPayloads = CallRoomEventPayloads & { 'appointment.remind': AppointmentRemindPayload } & WebinarEventPayloads &
-  WebinarRoomAddedEventPayloads;
+  WebinarRoomAddedEventPayloads &
+  WebinarHostsRoomEventPayloads &
+  WebinarModerationRoomAddedEventPayloads;
 export type RoomEventPayload<E extends RoomEventName> = RoomEventPayloads[E];
 
 export interface RoomEventSpec {
   /** The only room kinds the event may be emitted to. */
   roomKinds: readonly RoomKind[];
   schema: z.ZodType;
+  /** Another payload schema for one room kind (`webinar.floor.state` names the holder on the hosts room only). */
+  schemaByRoomKind?: Partial<Record<RoomKind, z.ZodType>>;
 }
 
 function callRoomEvent(event: CallRoomEventName): RoomEventSpec {
@@ -198,7 +216,12 @@ function addedWebinarEvent(event: WebinarRoomAddedEventName): RoomEventSpec {
  * the moderation room carries submitted messages, hands and the attendance
  * count, which name people or count them and so never reach the public room
  * (D-CW-15); `webinar.ended` goes to both; the floor events go to the one
- * attendee's own room `user:{userId}` only (CW-R-34).
+ * attendee's own room `user:{userId}` only (CW-R-34). The hosts' room
+ * `webinar:{webinarId}:hosts` (presenters and moderators) carries the
+ * attendance count, `webinar.hand.count` and `webinar.floor.state` with the
+ * holder's participant id: numbers and ids only. The public room's
+ * `webinar.floor.state` is the anonymous `{ active }`. A failed recording
+ * pipeline reaches the moderators as `webinar.recording.failed` (CW-R-121).
  */
 export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'call.participant.joined': callRoomEvent('call.participant.joined'),
@@ -233,9 +256,18 @@ export const ROOM_EVENTS: { readonly [E in RoomEventName]: RoomEventSpec } = {
   'webinar.message.submitted': webinarEvent('webinar.message.submitted', ['webinar_moderation']),
   'webinar.hand.raised': webinarEvent('webinar.hand.raised', ['webinar_moderation']),
   'webinar.hand.lowered': webinarEvent('webinar.hand.lowered', ['webinar_moderation']),
-  'webinar.attendance.count': webinarEvent('webinar.attendance.count', ['webinar_moderation']),
+  'webinar.attendance.count': webinarEvent('webinar.attendance.count', ['webinar_moderation', 'webinar_hosts']),
+  'webinar.hand.count': { roomKinds: ['webinar_hosts'], schema: WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS['webinar.hand.count'] },
   'webinar.message.removed': addedWebinarEvent('webinar.message.removed'),
-  'webinar.floor.state': addedWebinarEvent('webinar.floor.state'),
+  'webinar.recording.failed': {
+    roomKinds: ['webinar_moderation'],
+    schema: WEBINAR_MODERATION_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.recording.failed'],
+  },
+  'webinar.floor.state': {
+    roomKinds: ['webinar', 'webinar_hosts'],
+    schema: WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS['webinar.floor.state'],
+    schemaByRoomKind: { webinar_hosts: WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS['webinar.floor.state'] },
+  },
 };
 
 /**
@@ -249,7 +281,7 @@ export function checkRoomEvent(room: string, event: string, payload: unknown): R
   const spec = ROOM_EVENTS[event as RoomEventName];
   const kind = parseRoom(room)?.kind;
   if (!kind || !spec.roomKinds.includes(kind)) return null;
-  const parsed = spec.schema.safeParse(payload);
+  const parsed = (spec.schemaByRoomKind?.[kind] ?? spec.schema).safeParse(payload);
   return parsed.success ? (parsed.data as Record<string, unknown>) : null;
 }
 
