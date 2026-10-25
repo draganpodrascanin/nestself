@@ -313,18 +313,17 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
     }
   };
 
-  // Resolve CTA from the read model (LIB-R-23).
-  // The API drops unavailable targets, so if `detail.cta.targetId` is present
-  // and has a workspace route, the CTA is actionable.
+  // Resolve CTA from the body node's attrs (LIB-R-23, FMT-R-27).
+  // ContentRenderer calls this when it encounters a `cta` node in the body.
+  // The API builds `detail.cta` from the same node, so both carry the same data.
   const resolveCta = (cta: { ctaKind: string; targetId?: string | null; label?: string | null }): ResolvedCta | null => {
-    if (!detail.cta) return null;
-    if (!detail.cta.targetId) return null;
-    const href = ctaHref(detail.cta.kind, detail.cta.targetId);
+    if (!cta.targetId) return null;
+    const href = ctaHref(cta.ctaKind, cta.targetId);
     if (!href) return null; // No destination screen for this CTA kind at M1
     return {
       kind: 'link' as const,
       href,
-      label: ctaLabel(detail.cta.kind, cta.label ?? detail.cta.label),
+      label: ctaLabel(cta.ctaKind, cta.label),
     };
   };
 
@@ -422,22 +421,6 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
           documentKey={detail.id}
         />
       ) : null}
-
-      {/* Standalone CTA (detail.cta rendered outside the body) */}
-      {detail.cta && detail.cta.targetId && (() => {
-        const href = ctaHref(detail.cta!.kind, detail.cta!.targetId!);
-        if (!href) return null;
-        return (
-          <div className="pt-4">
-            <Link
-              to={href}
-              className="inline-flex items-center justify-center gap-2 rounded-control bg-primary text-text-on-primary px-5 py-2.5 type-label hover:bg-primary-hover transition-colors no-underline"
-            >
-              {ctaLabel(detail.cta!.kind, detail.cta!.label)}
-            </Link>
-          </div>
-        );
-      })()}
 
       {/* Save button */}
       {onToggleSave ? (

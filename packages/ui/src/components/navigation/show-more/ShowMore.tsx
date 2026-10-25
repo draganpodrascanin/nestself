@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+'use client';
+
+import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { Button } from '../../actions/button/Button';
+import { useAnnounce } from '../../foundation/live-region/LiveRegion';
 import { cn } from '../../../lib/cn';
 
 export interface ShowMoreProps {
@@ -25,6 +28,13 @@ export interface ShowMoreProps {
   className?: string;
 }
 
+/**
+ * "Show more" button for paginated lists. Announces new items through the
+ * nearest `AnnouncerProvider` and moves focus to the first new item.
+ *
+ * Only user-initiated loads (click) trigger an announcement, preventing
+ * spurious announcements on first render, refetch or item removal.
+ */
 export function ShowMore({
   label,
   onLoadMore,
@@ -35,9 +45,7 @@ export function ShowMore({
   focusTargetRef,
   className,
 }: ShowMoreProps) {
-  // Deferred announcement so the live region is in the DOM *before* its text
-  // changes — screen readers detect the mutation and announce the new content.
-  const [announced, setAnnounced] = useState('');
+  const { announce } = useAnnounce();
   const prevLoadingRef = useRef(loading);
 
   // Only announce/focus after a user-triggered click on "Show more".
@@ -49,7 +57,7 @@ export function ShowMore({
     onLoadMore();
   };
 
-  // Single effect: announce and focus only when a user-triggered load finishes
+  // Announce and focus only when a user-triggered load finishes
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
     prevLoadingRef.current = loading;
@@ -62,24 +70,12 @@ export function ShowMore({
         focusTargetRef.current.focus({ preventScroll: false });
       }
 
-      // Clear then re-set so repeated identical announcements are still picked up
-      const clearId = setTimeout(() => setAnnounced(''), 0);
-      const setId = setTimeout(() => setAnnounced(addedAnnouncement), 50);
-      return () => {
-        clearTimeout(clearId);
-        clearTimeout(setId);
-      };
+      announce(addedAnnouncement);
     }
+  }, [loading, addedAnnouncement, focusTargetRef, announce]);
 
-    // Not user-triggered: keep region empty (avoids stale text from prior loads)
-    if (!userTriggeredRef.current) {
-      const clearId = setTimeout(() => setAnnounced(''), 0);
-      return () => clearTimeout(clearId);
-    }
-  }, [loading, addedAnnouncement, focusTargetRef]);
-
-  // Always render the container so the live region stays mounted and focus
-  // doesn't drop to <body> when the last page loads.
+  // Always render the container so focus doesn't drop to <body> when the
+  // last page loads and the button disappears.
   return (
     <div className={cn('flex flex-col items-center gap-2 py-4', className)}>
       {hasMore ? (
@@ -93,9 +89,6 @@ export function ShowMore({
           {label}
         </Button>
       ) : null}
-      <div role="status" aria-live="polite" className="sr-only">
-        {announced}
-      </div>
     </div>
   );
 }

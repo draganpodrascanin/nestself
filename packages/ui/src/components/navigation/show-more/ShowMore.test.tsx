@@ -3,29 +3,35 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ShowMore } from './ShowMore';
+import { AnnouncerProvider } from '../../foundation/live-region/LiveRegion';
 import { expectNoA11yViolations } from '../../../test/axe';
+import type { ReactNode } from 'react';
+
+/** Wrap component in AnnouncerProvider (required by useAnnounce). */
+function Wrapper({ children }: { children: ReactNode }) {
+  return <AnnouncerProvider>{children}</AnnouncerProvider>;
+}
 
 describe('ShowMore', () => {
   it('renders the button when hasMore is true', () => {
-    render(<ShowMore label="Show more" onLoadMore={() => {}} hasMore />);
+    render(<ShowMore label="Show more" onLoadMore={() => {}} hasMore />, { wrapper: Wrapper });
     expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
   });
 
   it('still renders the container when hasMore is false (no focus loss)', () => {
     const { container } = render(
       <ShowMore label="Show more" onLoadMore={() => {}} hasMore={false} />,
+      { wrapper: Wrapper },
     );
     // Container is in the DOM, but button is not
     expect(container.innerHTML).not.toBe('');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    // Live region remains mounted
-    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('calls onLoadMore when clicked', async () => {
     const user = userEvent.setup();
     const onLoadMore = vi.fn();
-    render(<ShowMore label="Show more" onLoadMore={onLoadMore} hasMore />);
+    render(<ShowMore label="Show more" onLoadMore={onLoadMore} hasMore />, { wrapper: Wrapper });
     await user.click(screen.getByRole('button', { name: 'Show more' }));
     expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
@@ -33,7 +39,7 @@ describe('ShowMore', () => {
   it('is keyboard accessible', async () => {
     const user = userEvent.setup();
     const onLoadMore = vi.fn();
-    render(<ShowMore label="Show more" onLoadMore={onLoadMore} hasMore />);
+    render(<ShowMore label="Show more" onLoadMore={onLoadMore} hasMore />, { wrapper: Wrapper });
     const btn = screen.getByRole('button', { name: 'Show more' });
     btn.focus();
     await user.keyboard('{Enter}');
@@ -49,13 +55,14 @@ describe('ShowMore', () => {
         loading
         loadingLabel="Loading"
       />,
+      { wrapper: Wrapper },
     );
     const btn = screen.getByRole('button', { name: /Show more/i });
     expect(btn).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('live region is always in the DOM (even without announcement)', () => {
-    render(<ShowMore label="Show more" onLoadMore={() => {}} hasMore />);
+  it('AnnouncerProvider live region is in the DOM', () => {
+    render(<ShowMore label="Show more" onLoadMore={() => {}} hasMore />, { wrapper: Wrapper });
     const liveRegion = screen.getByRole('status');
     expect(liveRegion).toBeInTheDocument();
     expect(liveRegion).toHaveTextContent('');
@@ -71,6 +78,7 @@ describe('ShowMore', () => {
         hasMore
         addedAnnouncement="5 more items loaded"
       />,
+      { wrapper: Wrapper },
     );
     const liveRegion = screen.getByRole('status');
     // Wait enough time for any deferred announcement to fire
@@ -82,23 +90,27 @@ describe('ShowMore', () => {
 
   it('does NOT announce on a refetch (loading cycle without user click)', async () => {
     const { rerender } = render(
-      <ShowMore
-        label="Show more"
-        onLoadMore={() => {}}
-        hasMore
-        loading
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          loading
+        />
+      </AnnouncerProvider>,
     );
 
     // Simulate refetch completing: loading true -> false, with announcement text
     rerender(
-      <ShowMore
-        label="Show more"
-        onLoadMore={() => {}}
-        hasMore
-        loading={false}
-        addedAnnouncement="3 items loaded"
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          loading={false}
+          addedAnnouncement="3 items loaded"
+        />
+      </AnnouncerProvider>,
     );
 
     const liveRegion = screen.getByRole('status');
@@ -110,22 +122,26 @@ describe('ShowMore', () => {
 
   it('does NOT announce when items are removed (no click preceded the change)', async () => {
     const { rerender } = render(
-      <ShowMore
-        label="Show more"
-        onLoadMore={() => {}}
-        hasMore
-        addedAnnouncement="5 items"
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          addedAnnouncement="5 items"
+        />
+      </AnnouncerProvider>,
     );
 
     // Announcement text changes, but no user click happened
     rerender(
-      <ShowMore
-        label="Show more"
-        onLoadMore={() => {}}
-        hasMore
-        addedAnnouncement="4 items"
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={() => {}}
+          hasMore
+          addedAnnouncement="4 items"
+        />
+      </AnnouncerProvider>,
     );
 
     const liveRegion = screen.getByRole('status');
@@ -140,11 +156,13 @@ describe('ShowMore', () => {
     const onLoadMore = vi.fn();
 
     const { rerender } = render(
-      <ShowMore
-        label="Show more"
-        onLoadMore={onLoadMore}
-        hasMore
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={onLoadMore}
+          hasMore
+        />
+      </AnnouncerProvider>,
     );
 
     // 1. User clicks Show more
@@ -153,23 +171,27 @@ describe('ShowMore', () => {
 
     // 2. Loading starts
     rerender(
-      <ShowMore
-        label="Show more"
-        onLoadMore={onLoadMore}
-        hasMore
-        loading
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={onLoadMore}
+          hasMore
+          loading
+        />
+      </AnnouncerProvider>,
     );
 
     // 3. Loading finishes with announcement
     rerender(
-      <ShowMore
-        label="Show more"
-        onLoadMore={onLoadMore}
-        hasMore
-        loading={false}
-        addedAnnouncement="5 more items loaded"
-      />,
+      <AnnouncerProvider>
+        <ShowMore
+          label="Show more"
+          onLoadMore={onLoadMore}
+          hasMore
+          loading={false}
+          addedAnnouncement="5 more items loaded"
+        />
+      </AnnouncerProvider>,
     );
 
     const liveRegion = screen.getByRole('status');
@@ -184,15 +206,17 @@ describe('ShowMore', () => {
     const onLoadMore = vi.fn();
 
     const { rerender } = render(
-      <div>
-        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
-        <ShowMore
-          label="Show more"
-          onLoadMore={onLoadMore}
-          hasMore
-          focusTargetRef={ref}
-        />
-      </div>,
+      <AnnouncerProvider>
+        <div>
+          <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+          <ShowMore
+            label="Show more"
+            onLoadMore={onLoadMore}
+            hasMore
+            focusTargetRef={ref}
+          />
+        </div>
+      </AnnouncerProvider>,
     );
 
     // Click show more
@@ -200,31 +224,35 @@ describe('ShowMore', () => {
 
     // Loading starts
     rerender(
-      <div>
-        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
-        <ShowMore
-          label="Show more"
-          onLoadMore={onLoadMore}
-          hasMore
-          loading
-          focusTargetRef={ref}
-        />
-      </div>,
+      <AnnouncerProvider>
+        <div>
+          <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+          <ShowMore
+            label="Show more"
+            onLoadMore={onLoadMore}
+            hasMore
+            loading
+            focusTargetRef={ref}
+          />
+        </div>
+      </AnnouncerProvider>,
     );
 
     // Loading finishes
     rerender(
-      <div>
-        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
-        <ShowMore
-          label="Show more"
-          onLoadMore={onLoadMore}
-          hasMore
-          loading={false}
-          addedAnnouncement="3 items loaded"
-          focusTargetRef={ref}
-        />
-      </div>,
+      <AnnouncerProvider>
+        <div>
+          <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+          <ShowMore
+            label="Show more"
+            onLoadMore={onLoadMore}
+            hasMore
+            loading={false}
+            addedAnnouncement="3 items loaded"
+            focusTargetRef={ref}
+          />
+        </div>
+      </AnnouncerProvider>,
     );
 
     await waitFor(() => {
@@ -239,31 +267,35 @@ describe('ShowMore', () => {
     button.focus();
 
     const { rerender } = render(
-      <div>
-        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
-        <ShowMore
-          label="Show more"
-          onLoadMore={() => {}}
-          hasMore
-          loading
-          focusTargetRef={ref}
-        />
-      </div>,
+      <AnnouncerProvider>
+        <div>
+          <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+          <ShowMore
+            label="Show more"
+            onLoadMore={() => {}}
+            hasMore
+            loading
+            focusTargetRef={ref}
+          />
+        </div>
+      </AnnouncerProvider>,
     );
 
     // Loading finishes without user click
     rerender(
-      <div>
-        <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
-        <ShowMore
-          label="Show more"
-          onLoadMore={() => {}}
-          hasMore
-          loading={false}
-          addedAnnouncement="3 items loaded"
-          focusTargetRef={ref}
-        />
-      </div>,
+      <AnnouncerProvider>
+        <div>
+          <div ref={ref} tabIndex={-1} data-testid="target">Card</div>
+          <ShowMore
+            label="Show more"
+            onLoadMore={() => {}}
+            hasMore
+            loading={false}
+            addedAnnouncement="3 items loaded"
+            focusTargetRef={ref}
+          />
+        </div>
+      </AnnouncerProvider>,
     );
 
     await act(async () => {
@@ -279,6 +311,7 @@ describe('ShowMore', () => {
   it('has no a11y violations', async () => {
     const { container } = render(
       <ShowMore label="Show more" onLoadMore={() => {}} hasMore />,
+      { wrapper: Wrapper },
     );
     await expectNoA11yViolations(container);
   });

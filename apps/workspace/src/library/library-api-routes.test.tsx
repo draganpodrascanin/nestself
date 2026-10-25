@@ -313,7 +313,7 @@ describe('Library API-mode routes', () => {
 
   // --- CTA ---
 
-  it('CTA open_content renders a link to /content/<targetId>', async () => {
+  it('CTA open_content in body renders exactly one link to /content/<targetId>', async () => {
     const detail = makeDetail({
       cta: { kind: 'open_content', targetId: 'res_target_123', label: 'Read now' },
     });
@@ -328,10 +328,11 @@ describe('Library API-mode routes', () => {
       expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     });
 
-    // The CTA should render a link with the label
-    const link = screen.getByRole('link', { name: 'Read now' });
-    expect(link).toBeInTheDocument();
-    expect(link.getAttribute('href')).toBe('/content/res_target_123');
+    // The CTA renders exactly once (from the body node via ContentRenderer,
+    // not duplicated by a standalone block).
+    const links = screen.getAllByRole('link', { name: 'Read now' });
+    expect(links).toHaveLength(1);
+    expect(links[0]!.getAttribute('href')).toBe('/content/res_target_123');
   });
 
   it('CTA suggest_topic is omitted (no destination screen at M1)', async () => {
@@ -362,6 +363,22 @@ function makeDetail(overrides?: {
   saved?: boolean;
   cta?: { kind: string; targetId: string; label: string | null } | null;
 }) {
+  // When a CTA is provided, inject it as a body node (FMT-R-27: the API
+  // extracts detail.cta from the body's cta node, so both carry the same data).
+  const bodyContent: unknown[] = [
+    { type: 'paragraph', content: [{ type: 'text', text: 'Body text.' }] },
+  ];
+  if (overrides?.cta) {
+    bodyContent.push({
+      type: 'cta',
+      attrs: {
+        ctaKind: overrides.cta.kind,
+        targetId: overrides.cta.targetId,
+        label: overrides.cta.label,
+      },
+    });
+  }
+
   return {
     id: 'res_test',
     type: 'article',
@@ -372,7 +389,7 @@ function makeDetail(overrides?: {
     body: {
       type: 'doc',
       schemaVersion: 1,
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Body text.' }] }],
+      content: bodyContent,
     },
     durationSeconds: 300,
     durationBand: 'under_5',
