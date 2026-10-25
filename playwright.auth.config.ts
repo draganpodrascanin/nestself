@@ -93,6 +93,8 @@ export default defineConfig({
         ...(E2E_DATABASE_URL ? { DATABASE_URL: E2E_DATABASE_URL } : {}),
         AUTH_MODE: 'stub',
         FAKE_IDP_FIXED_OTP: '123456',
+        // The federated sign-in journey verifies acme.example through the API.
+        FAKE_DNS_TXT_AUTOVERIFY: 'true',
         SESSION_COOKIE_INSECURE_DEV: 'true',
         NODE_ENV: 'development',
       },
