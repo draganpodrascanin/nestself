@@ -330,7 +330,12 @@ export function createCmsApi(client: ApiClient) {
 
     // ─── Publications ──────────────────────────────────────────────
 
-    /** POST /api/ops/cms/publications — publish now. */
+    /**
+     * POST /api/ops/cms/publications — publish now.
+     *
+     * Returns `{ publications: [...] }`, one per published locale
+     * (coordinator shape update 2026-10-25).
+     */
     publishNow: (body: PublicationCreateRequest) =>
       client.request(`${base}/publications`, {
         method: 'POST',
@@ -339,7 +344,7 @@ export function createCmsApi(client: ApiClient) {
           'Content-Type': 'application/json',
           'Idempotency-Key': generateIdempotencyKey(),
         },
-        schema: z.unknown(),
+        schema: z.object({ publications: z.array(PublicationResponseSchema) }),
       }),
 
     // ─── Media ─────────────────────────────────────────────────────

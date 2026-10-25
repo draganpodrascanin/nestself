@@ -82,7 +82,9 @@ export function ContentEditor({
   onInsertImage,
 }: ContentEditorProps) {
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   const handleUpdate = useCallback(
     ({ editor: ed }: { editor: Editor }) => {
@@ -143,4 +145,3 @@ export function ContentEditor({
   );
 }
 
-export { toContentDocument, fromContentDocument } from './converters.ts';

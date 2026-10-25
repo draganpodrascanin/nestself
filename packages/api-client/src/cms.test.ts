@@ -188,7 +188,7 @@ describe('createCmsApi', () => {
   });
 
   it('publishNow sends POST with Idempotency-Key', async () => {
-    const { client, last } = recorder({}, 201);
+    const { client, last } = recorder({ publications: [] }, 201);
     const api = createCmsApi(client);
     await api.publishNow({
       resourceId: 'res_1',

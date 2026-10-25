@@ -20,6 +20,15 @@ export default defineConfig({
           setupFiles: ['src/test/setup.ts'],
         },
       },
+      {
+        // Editor tests run in jsdom with the test setup
+        test: {
+          name: 'editor',
+          environment: 'jsdom',
+          include: ['src/editor/**/*.test.tsx'],
+          setupFiles: ['src/test/setup.ts'],
+        },
+      },
     ],
   },
 });

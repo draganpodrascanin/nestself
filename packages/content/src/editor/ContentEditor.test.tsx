@@ -7,7 +7,7 @@
  * - Toolbar keyboard path (bold toggles)
  */
 import { describe, it, expect } from 'vitest';
-import { toContentDocument, fromContentDocument } from './converters.ts';
+import { fromContentDocument } from './converters.ts';
 import type { ContentDocument } from '../schema/document.ts';
 import { CURRENT_SCHEMA_VERSION } from '../schema/document.ts';
 
@@ -256,14 +256,14 @@ describe('paste normalization (FMT-R-12)', () => {
 // ---------------------------------------------------------------------------
 
 describe('editor extensions', () => {
-  it('creates extensions without errors', () => {
-    const { createEditorExtensions } = require('./editor-extensions.ts');
+  it('creates extensions without errors', async () => {
+    const { createEditorExtensions } = await import('./editor-extensions.ts');
     const extensions = createEditorExtensions({ placeholder: 'Type here' });
     expect(extensions.length).toBeGreaterThan(0);
   });
 
-  it('includes all required node types', () => {
-    const { createEditorExtensions } = require('./editor-extensions.ts');
+  it('includes all required node types', async () => {
+    const { createEditorExtensions } = await import('./editor-extensions.ts');
     const extensions = createEditorExtensions();
     const names = extensions
       .filter((ext: { name?: string }) => ext && typeof ext === 'object' && 'name' in ext)
