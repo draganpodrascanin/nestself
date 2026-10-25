@@ -373,6 +373,7 @@
         "email": "Line {{line}}: \"{{value}}\" is not a valid email address.",
         "template": "Line {{line}}: \"{{value}}\" is not a template people can be invited with.",
         "orgUnit": "Line {{line}}: there is no org unit \"{{value}}\".",
+        "orgUnitAmbiguous": "Line {{line}}: more than one org unit is called \"{{value}}\". Use the org unit id instead.",
         "tooMany": "{{rows}} rows: one import takes at most {{max}}."
       },
       "fixProblems": "Fix the rows listed below, then import again.",

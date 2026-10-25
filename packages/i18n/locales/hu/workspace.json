@@ -370,6 +370,7 @@
         "email": "{{line}}. sor: „{{value}}” nem érvényes e-mail-cím.",
         "template": "{{line}}. sor: „{{value}}” nem olyan sablon, amellyel meghívás küldhető.",
         "orgUnit": "{{line}}. sor: nincs „{{value}}” nevű szervezeti egység.",
+        "orgUnitAmbiguous": "{{line}}. sor: több szervezeti egység neve is „{{value}}”. Használd inkább az egység azonosítóját.",
         "tooMany": "{{rows}} sor: egy importálás legfeljebb {{max}} sort fogad."
       },
       "fixProblems": "Javítsd az alább felsorolt sorokat, majd importálj újra.",

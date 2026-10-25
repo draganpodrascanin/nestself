@@ -17,6 +17,7 @@ import type {
   OwnershipTransferRequest,
 } from '@nestself/contracts';
 import { api } from '../../api';
+import { orgUnitsQuery } from '../org/use-org-units';
 import { useAuth, withStepUp } from '../../auth';
 import type { AccessMember, AccessOrgUnit } from './access-labels';
 
@@ -29,7 +30,6 @@ export const accessKeys = {
   org: (orgId: string) => ['org-admin', orgId] as const,
   grants: (orgId: string) => ['org-admin', orgId, 'grants'] as const,
   members: (orgId: string) => ['org-admin', orgId, 'members'] as const,
-  orgUnits: (orgId: string) => ['org-admin', orgId, 'org-units'] as const,
   preview: (orgId: string, userId: string) => ['org-admin', orgId, 'preview', userId] as const,
 };
 
@@ -52,14 +52,12 @@ export function useMembers(adminApi: OrgAdminApi, orgId: string | null) {
   });
 }
 
+/** Active org units as `{ id, name }`, derived from the shared org-unit query. */
 export function useOrgUnits(adminApi: OrgAdminApi, orgId: string | null) {
   return useQuery({
-    queryKey: accessKeys.orgUnits(orgId ?? ''),
-    queryFn: async (): Promise<AccessOrgUnit[]> =>
-      (await adminApi.listOrgUnits(orgId!))
-        .filter((u) => u.archivedAt === null)
-        .map((u) => ({ id: u.id, name: u.name })),
-    enabled: orgId !== null,
+    ...orgUnitsQuery(adminApi, orgId),
+    select: (units): AccessOrgUnit[] =>
+      units.filter((u) => u.archivedAt === null).map((u) => ({ id: u.id, name: u.name })),
   });
 }
 

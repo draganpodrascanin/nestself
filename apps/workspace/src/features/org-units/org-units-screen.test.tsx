@@ -12,9 +12,13 @@ import {
   apiError,
   makeAdminApi,
   makeAuth,
+  makeQueryClient,
   renderWithProviders,
   t,
 } from '../people/people-test-harness';
+import { QueryClient } from '@tanstack/react-query';
+import { AccessScreen } from '../access/access-screen';
+import { useOrgUnits } from '../access/use-org-admin';
 import { OrgUnitsScreen } from './org-units-screen';
 
 function renderScreen(opts: { adminApi?: OrgAdminApi; auth?: AuthContextValue; sampleMode?: boolean } = {}) {
@@ -249,5 +253,47 @@ describe('OrgUnitsScreen: move', () => {
     await user.click(within(dialog).getByRole('button', { name: t('workspace:orgUnits.move.submit') }));
     await waitFor(() => expect(moveOrgUnit).toHaveBeenCalledTimes(2));
     expect(auth.stepUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('org-unit cache shared with the access screen', () => {
+  it('the tree stays populated after the access screen loaded the same organization', async () => {
+    // The app's default staleTime, so the second screen reads the cache.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+    const archived = { ...ORG_UNITS[2]!, id: 'team_old', name: 'Old team', archivedAt: '2026-01-01T00:00:00.000Z' };
+    const adminApi = makeAdminApi({
+      listOrgUnits: vi.fn().mockResolvedValue([...ORG_UNITS, archived]),
+      listGrants: vi.fn().mockResolvedValue({ items: [] }),
+      previewAccess: vi.fn().mockResolvedValue({ userId: 'x', orgId: ORG_ID, actions: [], grantIds: [], assignmentIds: [] }),
+    });
+    const auth = makeAuth({ effectiveActions: [...makeAuth().effectiveActions, 'access.preview', 'access.grant'] });
+
+    const first = renderWithProviders(<AccessScreen adminApi={adminApi} sampleMode={false} />, auth, queryClient);
+    await waitFor(() => expect(adminApi.listOrgUnits).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(queryClient.getQueryData(['org-admin', ORG_ID, 'org-units'])).toBeDefined());
+    first.unmount();
+
+    renderWithProviders(<OrgUnitsScreen adminApi={adminApi} sampleMode={false} />, auth, queryClient);
+    const tree = await screen.findByRole('list', { name: t('workspace:orgUnits.treeLabel') });
+    expect(within(tree).getAllByRole('listitem')).toHaveLength(ORG_UNITS.length);
+    expect(within(tree).getByText('Engineering')).toBeInTheDocument();
+    expect(adminApi.listOrgUnits).toHaveBeenCalledTimes(1);
+  });
+
+  it('the access screen still gets active units only from the full cached list', async () => {
+    const queryClient = makeQueryClient();
+    const archived = { ...ORG_UNITS[2]!, id: 'team_old', name: 'Old team', archivedAt: '2026-01-01T00:00:00.000Z' };
+    queryClient.setQueryData(['org-admin', ORG_ID, 'org-units'], [...ORG_UNITS, archived]);
+    const seen: unknown[] = [];
+    function Probe() {
+      const q = useOrgUnits(makeAdminApi(), ORG_ID);
+      seen.push(q.data);
+      return null;
+    }
+    renderWithProviders(<Probe />, makeAuth(), queryClient);
+    await waitFor(() => expect(seen.at(-1)).toBeDefined());
+    const units = seen.at(-1) as { id: string; name: string }[];
+    expect(units.map((u) => u.id)).not.toContain('team_old');
+    expect(units[0]).toEqual({ id: 'ou_root', name: 'Example d.o.o.' });
   });
 });

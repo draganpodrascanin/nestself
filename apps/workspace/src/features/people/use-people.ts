@@ -36,7 +36,6 @@ export const peopleKeys = {
   members: (orgId: string, filters: MemberFilters) => ['org-admin', orgId, 'people', 'members', filters] as const,
   directory: (orgId: string) => ['org-admin', orgId, 'people', 'directory'] as const,
   invitations: (orgId: string) => ['org-admin', orgId, 'people', 'invitations'] as const,
-  orgUnits: (orgId: string) => ['org-admin', orgId, 'org-units'] as const,
 };
 
 export function useMemberPages(adminApi: OrgAdminApi, orgId: string | null, filters: MemberFilters) {
@@ -91,14 +90,6 @@ export function useInvitationPages(adminApi: OrgAdminApi, orgId: string | null) 
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
-    enabled: orgId !== null,
-  });
-}
-
-export function useOrgUnitList(adminApi: OrgAdminApi, orgId: string | null) {
-  return useQuery({
-    queryKey: peopleKeys.orgUnits(orgId ?? ''),
-    queryFn: () => adminApi.listOrgUnits(orgId!),
     enabled: orgId !== null,
   });
 }

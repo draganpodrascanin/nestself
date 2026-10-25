@@ -13,7 +13,7 @@ export const IMPORT_MAX_ROWS = 500;
 
 export type ImportRow = InvitationImportRequest['invitations'][number];
 
-export type ImportProblemKind = 'columns' | 'email' | 'template' | 'orgUnit' | 'tooMany';
+export type ImportProblemKind = 'columns' | 'email' | 'template' | 'orgUnit' | 'orgUnitAmbiguous' | 'tooMany';
 
 export interface ImportProblem {
   /** 1-based line number in the textarea; 0 for the whole batch. */
@@ -58,9 +58,14 @@ export function parseImport(text: string, units: readonly OrgUnitResponse[]): Pa
     }
     let orgUnitId: string | undefined;
     if (unitCell) {
-      const unit =
-        units.find((u) => u.id === unitCell) ??
-        units.find((u) => u.name.toLowerCase() === unitCell.toLowerCase());
+      const byId = units.find((u) => u.id === unitCell);
+      const byName = units.filter((u) => u.name.toLowerCase() === unitCell.toLowerCase());
+      if (!byId && byName.length > 1) {
+        // Two units share the name: never guess which one was meant.
+        problems.push({ line, kind: 'orgUnitAmbiguous', value: unitCell });
+        return;
+      }
+      const unit = byId ?? byName[0];
       if (!unit) {
         problems.push({ line, kind: 'orgUnit', value: unitCell });
         return;

@@ -90,6 +90,30 @@ describe('PeopleScreen: members', () => {
     expect(screen.getByText('Ivana Jovanović')).toBeInTheDocument();
   });
 
+  it('a changed filter shows only the first page of the new filter', async () => {
+    const user = userEvent.setup();
+    const listMembers = vi.fn(async (_orgId: string, query: { cursor?: string; orgUnitId?: string; limit?: number }) => {
+      if (query.limit === 100) return { items: MEMBERS, nextCursor: null };
+      if (query.orgUnitId === 'team_sales') {
+        return { items: [member('user_jovan', 'Jovan Petrović', { orgUnitId: 'team_sales' })], nextCursor: 'sales_2' };
+      }
+      if (query.cursor === 'cursor_2') return { items: [MEMBERS[2]!], nextCursor: null };
+      return { items: MEMBERS.slice(0, 2), nextCursor: 'cursor_2' };
+    });
+    renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    await user.click(await screen.findByRole('button', { name: t('workspace:people.paging.loadMore') }));
+    expect(await screen.findByText(t('workspace:people.paging.showing', { count: 3 }))).toBeInTheDocument();
+
+    await choose(user, t('workspace:people.filters.orgUnit'), 'Sales');
+
+    expect(await screen.findByText('Jovan Petrović')).toBeInTheDocument();
+    const table = screen.getByRole('region', { name: t('workspace:people.members.caption') });
+    expect(within(table).queryByText('Ivana Jovanović')).not.toBeInTheDocument();
+    expect(within(table).queryByText('Ana Nikolić')).not.toBeInTheDocument();
+    expect(screen.getByText(t('workspace:people.paging.showingMore', { count: 1 }))).toBeInTheDocument();
+    expect(listMembers).toHaveBeenLastCalledWith(ORG_ID, { limit: 25, orgUnitId: 'team_sales' });
+  });
+
   it('sends the org unit, status and debounced search filters to the API', async () => {
     const user = userEvent.setup();
     const { adminApi } = renderScreen();

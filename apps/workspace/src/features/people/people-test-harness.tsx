@@ -132,8 +132,15 @@ export function actionsWithout(...removed: string[]): string[] {
   return SAMPLE_PRINCIPALS.hr_admin.effectiveActions.filter((a) => !removed.includes(a));
 }
 
-export function renderWithProviders(element: ReactElement, auth: AuthContextValue = makeAuth()) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+export function makeQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+export function renderWithProviders(
+  element: ReactElement,
+  auth: AuthContextValue = makeAuth(),
+  queryClient: QueryClient = makeQueryClient(),
+) {
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={testI18n}>

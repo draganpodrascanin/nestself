@@ -8,7 +8,7 @@ import type { OrgAdminApi } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { sampleOrgUnits } from '../people/sample-people';
 import { useOrgContext } from '../people/use-org-context';
-import { useOrgUnitList } from '../people/use-people';
+import { useOrgUnitList } from '../org/use-org-units';
 import { OrgUnitDialog } from './org-unit-dialogs';
 import type { OrgUnitAction } from './org-unit-dialogs';
 import { orgUnitErrorKey } from './org-units-errors';

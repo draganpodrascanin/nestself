@@ -373,6 +373,7 @@
         "email": "Red {{line}}: „{{value}}” nije ispravna imejl adresa.",
         "template": "Red {{line}}: „{{value}}” nije šablon sa kojim se ljudi mogu pozvati.",
         "orgUnit": "Red {{line}}: ne postoji organizaciona jedinica „{{value}}”.",
+        "orgUnitAmbiguous": "Red {{line}}: više organizacionih jedinica se zove „{{value}}”. Umesto naziva upotrebi id jedinice.",
         "tooMany": "{{rows}} redova: jedan uvoz prima najviše {{max}}."
       },
       "fixProblems": "Ispravi redove navedene ispod, pa pokreni uvoz ponovo.",

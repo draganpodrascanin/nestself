@@ -9,7 +9,7 @@ import { MembersPanel } from './members-panel';
 import { peopleErrorKey } from './people-errors';
 import { sampleInvitations, sampleMembers, sampleOrgUnits } from './sample-people';
 import { useOrgContext } from './use-org-context';
-import { useOrgUnitList } from './use-people';
+import { useOrgUnitList } from '../org/use-org-units';
 
 export interface PeopleScreenProps {
   adminApi: OrgAdminApi;
