@@ -228,8 +228,9 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
 
     attendee.acknowledgeFloor();
     expect(attendee.getSnapshot().myFloor).toMatchObject({ status: 'given', acknowledged: true });
-    // Acknowledging does not lower the hand.
-    expect(attendee.getSnapshot().myHand.raised).toBe(true);
+    // The API lowers the hand with the floor; acknowledging sends nothing more.
+    expect(attendee.getSnapshot().myHand.raised).toBe(false);
+    expect(server.requests.some((request) => request.action === 'hand.lower')).toBe(false);
 
     await moderator.takeFloor(attendee.getSnapshot().participantId!);
     await vi.waitFor(() => expect(audio.setAudioCapability).toHaveBeenLastCalledWith(false));

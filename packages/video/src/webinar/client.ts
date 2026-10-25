@@ -446,7 +446,8 @@ export class WebinarClient implements WebinarClientApi {
 
   private async floorGiven(primaryAttendee?: WebinarPrimaryAttendee): Promise<void> {
     if (this.snapshot.myFloor.status === 'given') return;
-    this.update({ myFloor: { status: 'given', acknowledged: false, mutedByHost: false, unmuteRequested: false } });
+    // The API lowers the hand with the floor; the attendee's control follows.
+    this.update({ myFloor: { status: 'given', acknowledged: false, mutedByHost: false, unmuteRequested: false }, myHand: { raised: false, raisedAt: null } });
     if (primaryAttendee) {
       // A replica attendee speaks through a promotion onto the primary meeting, audio only (T-CW-3.2).
       this.floorPath = 'promotion';

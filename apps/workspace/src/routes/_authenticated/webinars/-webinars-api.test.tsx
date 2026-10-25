@@ -378,6 +378,34 @@ describe('the live webinar (API mode)', { timeout: 30_000 }, () => {
     expect(within(dialog).getByText(en.webinar.recordingNoticeFloor)).toBeInTheDocument();
   });
 
+  it('lowers the hand with the floor and shows the unmute request from the user room', async () => {
+    serve({
+      [`GET /api/webinars/${ID}`]: () => json(200, webinar({ status: 'live', registered: true })),
+      [`POST /api/webinars/${ID}/join`]: () => json(200, { ...joinResponse(), recordingStatus: 'recording' }),
+      [`GET /api/webinars/${ID}/messages`]: () => json(200, { items: [], nextCursor: null }),
+      [`GET /api/webinars/${ID}/polls`]: () => json(200, { items: [] }),
+      [`POST /api/webinars/${ID}/hand`]: () => json(200, { raised: true, raisedAt: new Date().toISOString() }),
+    });
+    const user = userEvent.setup();
+    renderAt(`/webinars/${ID}/live`);
+    await joinFromPrejoin(user);
+    const controls = await screen.findByTestId('webinar-attendee-controls', {}, { timeout: 5000 });
+    await user.click(within(controls).getByRole('button', { name: en.webinar.hand.raise }));
+    expect(await within(controls).findByRole('button', { name: en.webinar.hand.lower })).toBeInTheDocument();
+
+    const userRoom = `user:${employee.principal.userId}`;
+    emit('webinar.floor.given', { participantId: 'part_1', capabilities: { audio: 'send_receive', video: 'receive', content: 'receive' } }, userRoom);
+    // The API lowered the hand with the floor (the floor dialog is modal, so the control is read by its state).
+    const floor = await screen.findByRole('dialog', { name: en.webinar.floorDialog.title });
+    await waitFor(() => expect(within(controls).getByTestId('webinar-hand-raise')).toHaveAttribute('data-state', 'lowered'));
+    await user.click(within(floor).getByRole('button', { name: en.webinar.floorDialog.later }));
+
+    // A host mutes, then asks to unmute: the consent prompt opens (WBN-26).
+    emit('webinar.floor.muted', {}, userRoom);
+    emit('webinar.floor.unmute_requested', {}, userRoom);
+    expect(await screen.findByRole('dialog', { name: en.webinar.unmuteRequest.title })).toBeInTheDocument();
+  });
+
   it("posts the controller's client events for the session when the attendee leaves", async () => {
     const sent = serve({
       [`GET /api/webinars/${ID}`]: () => json(200, webinar({ status: 'live', registered: true })),

@@ -8,7 +8,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiClient } from './client';
 import { ApiError } from './errors';
 import type { RoomSocket } from './call-room';
+import * as contracts from '@nestself/contracts';
 import {
+  WEBINAR_FORWARDED_EVENTS,
   WEBINAR_TRANSPORT_ACTIONS,
   WEBINAR_TRANSPORT_ROUTES,
   createWebinarRoomClient,
@@ -431,6 +433,24 @@ describe('webinar room client', () => {
     release();
     socket.fire('webinar.state', { webinarId: 'web_1', status: 'ended' });
     expect(onEvent).toHaveBeenCalledTimes(4);
+  });
+
+  it("forwards every name of the contracts' webinar event lists, each once", () => {
+    const lists = Object.entries(contracts).filter(([name, value]) => /^WEBINAR_.*EVENT_NAMES$/.test(name) && Array.isArray(value));
+    expect(lists.length).toBeGreaterThan(5);
+    for (const [name, list] of lists) {
+      for (const event of list as readonly string[]) expect(WEBINAR_FORWARDED_EVENTS, `${name}: ${event}`).toContain(event);
+    }
+    expect(new Set(WEBINAR_FORWARDED_EVENTS).size).toBe(WEBINAR_FORWARDED_EVENTS.length);
+
+    // The attendee's consent prompt depends on these two (WBN-26).
+    const socket = new FakeSocket();
+    const onEvent = vi.fn();
+    createWebinarRoomClient(() => socket).subscribe(['webinar:web_1', 'user:user_jovan'], { onEvent });
+    socket.fire('webinar.floor.muted', {});
+    socket.fire('webinar.floor.unmute_requested', {});
+    socket.fire('webinar.floor.state', { active: true });
+    expect(onEvent.mock.calls.map(([event]) => event)).toEqual(['webinar.floor.muted', 'webinar.floor.unmute_requested', 'webinar.floor.state']);
   });
 
   it('reports a refused subscription or a failed connection', () => {

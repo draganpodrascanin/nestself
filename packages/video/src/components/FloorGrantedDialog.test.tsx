@@ -58,7 +58,8 @@ describe('FloorGrantedDialog (CW-R-125, WBN-10, WBN-25)', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(attendee.getSnapshot().myFloor.acknowledged).toBe(true);
-    expect(attendee.getSnapshot().myHand.raised).toBe(true);
+    // The floor itself lowered the hand (the API does so with the floor); the dialog sent no hand.lower.
+    expect(attendee.getSnapshot().myHand.raised).toBe(false);
     expect(controller.getSnapshot().media.muted).toBe(true);
     expect(server.requests.some((request) => request.action === 'hand.lower')).toBe(false);
   });
