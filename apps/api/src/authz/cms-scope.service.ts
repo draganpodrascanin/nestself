@@ -27,6 +27,10 @@ export class CmsScopeService {
 
   /**
    * Return the list of category ids the principal may access for the given action.
+   *
+   * Builds the authorization context ONCE for the principal, then evaluates
+   * all categories against it in a single `authorizeMany` call (O(1) context
+   * build per list request, not O(n) per category).
    */
   async allowedCategoryIds(
     principal: Principal,
@@ -35,21 +39,23 @@ export class CmsScopeService {
     const allIds = await this.listCategoryIds();
     if (allIds.length === 0) return [];
 
-    // Build contexts and evaluate in batch
-    const results: boolean[] = [];
-    for (const catId of allIds) {
-      const resource: Resource = { type: 'content_resource', collectionId: catId };
-      const ctx = await this.contextLoader.build(principal, resource, { action });
-      const requests: AuthorizationRequest[] = [{
-        principal,
-        action,
-        resource,
-        ctx,
-      }];
-      const [decision] = authorizeMany(requests);
-      results.push(decision!.allowed);
-    }
-    return allIds.filter((_, i) => results[i]);
+    // Build context once — the principal's grants and assignments are
+    // category-independent; scope matching happens inside authorizeMany.
+    const ctx = await this.contextLoader.build(
+      principal,
+      { type: 'content_resource' },
+      { action },
+    );
+
+    // Evaluate all categories in one pass
+    const requests: AuthorizationRequest[] = allIds.map((catId) => ({
+      principal,
+      action,
+      resource: { type: 'content_resource', collectionId: catId } as Resource,
+      ctx,
+    }));
+    const decisions = authorizeMany(requests);
+    return allIds.filter((_, i) => decisions[i]!.allowed);
   }
 
   private async listCategoryIds(): Promise<string[]> {

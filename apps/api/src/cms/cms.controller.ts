@@ -178,7 +178,7 @@ export class CmsController {
     @Body(new ZodValidationPipe(VariantCreateRequestSchema)) body: VariantCreateRequest,
     @CurrentPrincipal() principal: Principal,
   ) {
-    return this.cmsService.addVariant(resourceId, body.locale, principal);
+    return this.cmsService.addVariant(resourceId, body.locale, principal, body.fromLocale);
   }
 
   // ─── Revisions ──────────────────────────────────────────────────────

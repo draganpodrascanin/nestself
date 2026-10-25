@@ -15,7 +15,8 @@ import { describe, it, expect } from 'vitest';
 
 // Import the real exported functions from the service module.
 // extractMediaRefs and checkAudienceContainmentPure are re-exported for testing.
-import { extractMediaRefs, checkAudienceContainmentPure } from './cms-helpers.js';
+import { extractMediaRefs, extractCtaFromBody, addBusinessDays, checkAudienceContainmentPure } from './cms-helpers.js';
+import { AudienceEntrySchema } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 
 // ---------------------------------------------------------------------------
@@ -204,6 +205,99 @@ describe('Audience containment (C-12)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// CTA extraction from ProseMirror documents (FMT-R-27)
+// ---------------------------------------------------------------------------
+
+describe('extractCtaFromBody (FMT-R-27)', () => {
+  const doc = (extra: unknown[] = []) => ({
+    type: 'doc', schemaVersion: 1,
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'hello' }] },
+      ...extra,
+    ],
+  });
+
+  it('extracts a cta node from the body', () => {
+    const cta = extractCtaFromBody(doc([
+      { type: 'cta', attrs: { kind: 'link', targetId: 'res_1' } },
+    ]));
+    expect(cta).toEqual({ kind: 'link', targetId: 'res_1' });
+  });
+
+  it('returns null when no cta node is present', () => {
+    expect(extractCtaFromBody(doc())).toBeNull();
+  });
+
+  it('finds nested cta nodes', () => {
+    const cta = extractCtaFromBody({
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          content: [
+            { type: 'cta', attrs: { kind: 'download' } },
+          ],
+        },
+      ],
+    });
+    expect(cta).toEqual({ kind: 'download', targetId: undefined });
+  });
+
+  it('returns the first cta node when multiple exist', () => {
+    const cta = extractCtaFromBody(doc([
+      { type: 'cta', attrs: { kind: 'first', targetId: 'a' } },
+      { type: 'cta', attrs: { kind: 'second', targetId: 'b' } },
+    ]));
+    expect(cta!.kind).toBe('first');
+  });
+
+  it('ignores cta nodes with missing kind', () => {
+    expect(extractCtaFromBody(doc([
+      { type: 'cta', attrs: { targetId: 'res_1' } },
+    ]))).toBeNull();
+  });
+
+  it('ignores cta nodes without attrs', () => {
+    expect(extractCtaFromBody(doc([
+      { type: 'cta' },
+    ]))).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Business day arithmetic (review_due_at)
+// ---------------------------------------------------------------------------
+
+describe('addBusinessDays', () => {
+  it('adds 2 business days from Monday → Wednesday', () => {
+    const mon = new Date('2026-10-26T09:00:00Z'); // Monday
+    const result = addBusinessDays(mon, 2);
+    expect(result.getDay()).toBe(3); // Wednesday
+    expect(result.getDate()).toBe(28);
+  });
+
+  it('skips weekends (Thursday + 2 = Monday)', () => {
+    const thu = new Date('2026-10-22T09:00:00Z'); // Thursday
+    const result = addBusinessDays(thu, 2);
+    expect(result.getDay()).toBe(1); // Monday
+    expect(result.getDate()).toBe(26);
+  });
+
+  it('handles Friday + 1 = Monday', () => {
+    const fri = new Date('2026-10-23T09:00:00Z'); // Friday
+    const result = addBusinessDays(fri, 1);
+    expect(result.getDay()).toBe(1); // Monday
+    expect(result.getDate()).toBe(26);
+  });
+
+  it('handles 0 business days (same day)', () => {
+    const date = new Date('2026-10-26T09:00:00Z');
+    const result = addBusinessDays(date, 0);
+    expect(result.getDate()).toBe(26);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Revision state transition preconditions
 // ---------------------------------------------------------------------------
 
@@ -298,5 +392,56 @@ describe('Locale completeness (WRK-R-36)', () => {
     const otherLocales = AUTHORED_LOCALES.filter((l) => !requestedLocales.includes(l));
     expect(otherLocales).toEqual(['sr-Latn', 'en']);
     // Other locales need live publications (tested in e2e)
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AudienceEntrySchema per-kind validation (WRK-R-38)
+// ---------------------------------------------------------------------------
+
+describe('AudienceEntrySchema per-kind validation (WRK-R-38)', () => {
+  it('accepts all_eligible without orgId or orgUnitId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'all_eligible' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects all_eligible with orgId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'all_eligible', orgId: 'org_1' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects all_eligible with orgUnitId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'all_eligible', orgUnitId: 'ou_1' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts organization with orgId only', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'organization', orgId: 'org_1' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects organization without orgId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'organization' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects organization with orgUnitId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'organization', orgId: 'org_1', orgUnitId: 'ou_1' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts org_unit with both orgId and orgUnitId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'org_unit', orgId: 'org_1', orgUnitId: 'ou_1' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects org_unit without orgId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'org_unit', orgUnitId: 'ou_1' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects org_unit without orgUnitId', () => {
+    const result = AudienceEntrySchema.safeParse({ kind: 'org_unit', orgId: 'org_1' });
+    expect(result.success).toBe(false);
   });
 });

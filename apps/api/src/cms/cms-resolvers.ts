@@ -7,12 +7,39 @@
  *
  * @see authorize.decorator.ts for ResolverDeps
  */
-import type { Action, Principal, Resource } from '@nestself/contracts';
+import { ACTIONS, type Action, type Principal, type Resource } from '@nestself/contracts';
 import type { ResourceResolver, ResolverDeps } from '../authz/authorize.decorator.js';
 import { assertOperationsSession } from '../authz/resolvers.js';
 import { CmsResourceLoader } from './cms-resource-loader.js';
 import { CmsScopeService } from '../authz/cms-scope.service.js';
+import { AuthorizationService } from '../authz/authorization.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+
+// ---------------------------------------------------------------------------
+// Visibility helper (WRK-R-39)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether the principal holds `content.preview` on the resource's
+ * primary category. Used by the discipline ruling to decide 403 vs 404.
+ */
+async function hasPreviewAccess(
+  deps: ResolverDeps,
+  principal: Principal,
+  primaryCategoryId: string | null,
+): Promise<boolean> {
+  if (!primaryCategoryId) return false;
+  try {
+    const authzService = deps.get(AuthorizationService);
+    await authzService.require(principal, ACTIONS['content.preview'], {
+      type: 'content_resource',
+      collectionId: primaryCategoryId,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Item resolver factory
@@ -52,16 +79,82 @@ export function cmsResource(
         throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
       }
 
-      // ACC-R-07 fail-closed: refuse before the engine when discipline is null
+      // WRK-R-39: discipline ruling
+      // Outside-discipline reviewer → 403 content_review_discipline when they
+      // hold content.preview on the primary category, else 404.
+      // Non-reviewers → return to engine, denyAs:'not_found' → 404.
+      //
+      // Disciplines are evaluated by the engine through the 'categories'
+      // condition on the grant: resource.category is compared against
+      // condition.allowed.  When category is null the condition passes
+      // vacuously, so a scope-only check (no category) tells us whether
+      // the user is a reviewer *at all*, while a full check (with
+      // category = reviewDiscipline) tests the discipline.
       if (opts?.review) {
+        const authzService = deps!.get(AuthorizationService);
+
+        // Step 1: scope check — does the principal hold content.review
+        // on the primary category?  (category omitted → condition passes)
+        let isReviewerForCategory = false;
+        try {
+          await authzService.require(principal, ACTIONS['content.review'], {
+            type: loaded.type,
+            id: loaded.id,
+            collectionId: loaded.collectionId ?? undefined,
+            // Omit category so the 'categories' condition passes vacuously.
+          });
+          isReviewerForCategory = true;
+        } catch (err) {
+          if (!(err instanceof ApiHttpException) || err.getStatus() >= 500) throw err;
+        }
+
+        if (!isReviewerForCategory) {
+          // Not a reviewer for this category (author, publisher, etc.).
+          // Return the resource; the engine will deny and denyAs:'not_found'
+          // converts the denial to 404.
+          return { ...loaded, collectionId: loaded.collectionId ?? undefined };
+        }
+
+        // Step 2: the principal IS a reviewer for this category.
+        // If no discipline is configured, the review cannot proceed.
         if (!loaded.reviewDiscipline) {
+          const canPreview = await hasPreviewAccess(deps!, principal, loaded.collectionId);
           throw new ApiHttpException({
-            status: 403,
-            code: 'content_review_discipline',
-            message: 'The resource has no review discipline configured',
+            status: canPreview ? 403 : 404,
+            code: canPreview ? 'content_review_discipline' : 'not_found',
+            message: canPreview
+              ? 'The resource has no review discipline configured'
+              : 'Resource not found',
           });
         }
+
+        // Step 3: full authorization including the discipline condition
+        // (category = reviewDiscipline).
         loaded.category = loaded.reviewDiscipline;
+        let hasDisciplineGrant = false;
+        try {
+          await authzService.require(principal, ACTIONS['content.review'], {
+            type: loaded.type,
+            id: loaded.id,
+            collectionId: loaded.collectionId ?? undefined,
+            category: loaded.reviewDiscipline,
+          });
+          hasDisciplineGrant = true;
+        } catch (err) {
+          if (!(err instanceof ApiHttpException) || err.getStatus() >= 500) throw err;
+        }
+
+        if (!hasDisciplineGrant) {
+          // Reviewer for this category but NOT for this discipline.
+          const canPreview = await hasPreviewAccess(deps!, principal, loaded.collectionId);
+          throw new ApiHttpException({
+            status: canPreview ? 403 : 404,
+            code: canPreview ? 'content_review_discipline' : 'not_found',
+            message: canPreview
+              ? `Reviewer is not authorized for the ${loaded.reviewDiscipline} discipline`
+              : 'Resource not found',
+          });
+        }
       }
 
       return { ...loaded, collectionId: loaded.collectionId ?? undefined };

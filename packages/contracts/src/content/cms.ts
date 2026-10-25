@@ -56,12 +56,38 @@ export const AudienceEntrySchema = z.object({
   orgUnitId: z.string().min(1).optional(),
   includeDescendants: z.boolean().default(true),
 }).superRefine((data, ctx) => {
-  if (data.kind === 'organization' && !data.orgId) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'orgId is required for organization audience',
-      path: ['orgId'],
-    });
+  // WRK-R-38: strict per-kind validation
+  if (data.kind === 'all_eligible') {
+    if (data.orgId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'orgId must not be set for all_eligible audience',
+        path: ['orgId'],
+      });
+    }
+    if (data.orgUnitId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'orgUnitId must not be set for all_eligible audience',
+        path: ['orgUnitId'],
+      });
+    }
+  }
+  if (data.kind === 'organization') {
+    if (!data.orgId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'orgId is required for organization audience',
+        path: ['orgId'],
+      });
+    }
+    if (data.orgUnitId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'orgUnitId must not be set for organization audience',
+        path: ['orgUnitId'],
+      });
+    }
   }
   if (data.kind === 'org_unit') {
     if (!data.orgId) {

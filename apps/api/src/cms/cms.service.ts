@@ -50,7 +50,7 @@ import {
   contentPublicationAudiences,
 } from '../db/schema/cms.js';
 import { mediaAssets } from '../db/schema/media.js';
-import { orgUnits } from '../db/schema/organization.js';
+import { organizations, orgUnits } from '../db/schema/organization.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditWriter } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -61,7 +61,7 @@ import { AvailabilityVersionService } from '../library/availability/availability
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 
-import { extractMediaRefs } from './cms-helpers.js';
+import { extractMediaRefs, extractCtaFromBody, addBusinessDays } from './cms-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Service
@@ -247,6 +247,7 @@ export class CmsService {
     resourceId: string,
     locale: AuthoredLocale,
     principal: Principal,
+    fromLocale?: AuthoredLocale,
   ) {
     if ((locale as string) === 'sr-Cyrl') {
       throw new ApiHttpException({
@@ -293,6 +294,55 @@ export class CmsService {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
     };
 
+    // Honour fromLocale: copy the latest revision from the source variant
+    let sourceRevision: {
+      body: unknown;
+      title: string;
+      summary: string;
+      outcome: string | null;
+      durationSeconds: number | null;
+      difficulty: string | null;
+      sources: unknown;
+      proposedAudience: unknown;
+      cta: unknown;
+      relatedResourceIds: string[];
+    } | null = null;
+
+    if (fromLocale) {
+      const sourceVariantRows = await this.dbService.db
+        .select({ id: contentVariants.id })
+        .from(contentVariants)
+        .where(
+          and(
+            eq(contentVariants.contentResourceId, resourceId),
+            eq(contentVariants.locale, fromLocale),
+          ),
+        )
+        .limit(1);
+      if (sourceVariantRows.length > 0) {
+        const sourceRevRows = await this.dbService.db
+          .select()
+          .from(contentRevisions)
+          .where(eq(contentRevisions.contentVariantId, sourceVariantRows[0]!.id))
+          .orderBy(desc(contentRevisions.revisionNumber))
+          .limit(1);
+        if (sourceRevRows[0]) {
+          sourceRevision = {
+            body: sourceRevRows[0].body,
+            title: sourceRevRows[0].title,
+            summary: sourceRevRows[0].summary,
+            outcome: sourceRevRows[0].outcome,
+            durationSeconds: sourceRevRows[0].durationSeconds,
+            difficulty: sourceRevRows[0].difficulty,
+            sources: sourceRevRows[0].sources,
+            proposedAudience: sourceRevRows[0].proposedAudience,
+            cta: sourceRevRows[0].cta,
+            relatedResourceIds: sourceRevRows[0].relatedResourceIds ?? [],
+          };
+        }
+      }
+    }
+
     await this.withUniqueViolationAs409(async () => {
       await this.dbService.db.transaction(async (tx) => {
         await tx.insert(contentVariants).values({
@@ -307,9 +357,16 @@ export class CmsService {
           contentVariantId: variantId,
           revisionNumber: 1,
           state: 'draft',
-          body: emptyDoc,
-          title: '',
-          summary: '',
+          body: sourceRevision?.body ?? emptyDoc,
+          title: sourceRevision?.title ?? '',
+          summary: sourceRevision?.summary ?? '',
+          outcome: sourceRevision?.outcome ?? null,
+          durationSeconds: sourceRevision?.durationSeconds ?? null,
+          difficulty: sourceRevision?.difficulty ?? null,
+          sources: sourceRevision?.sources ?? null,
+          proposedAudience: sourceRevision?.proposedAudience ?? null,
+          cta: sourceRevision?.cta ?? null,
+          relatedResourceIds: sourceRevision?.relatedResourceIds ?? [],
           authorUserId: principal.userId,
           lastEditorUserId: principal.userId,
           lockVersion: 1,
@@ -359,6 +416,24 @@ export class CmsService {
       body = { ...body, body: result.document as unknown as Record<string, unknown> };
     }
 
+    // FMT-R-27: derive CTA from the body document (single source of truth).
+    // Reject a top-level `cta` that differs from the body node.
+    let derivedCta: { kind: string; targetId?: string } | null | undefined;
+    if (body.body) {
+      const bodyCta = extractCtaFromBody(body.body as Record<string, unknown>);
+      if (body.cta !== undefined && body.cta !== null && bodyCta !== null) {
+        if (body.cta.kind !== bodyCta.kind || (body.cta.targetId ?? undefined) !== bodyCta.targetId) {
+          throw new ApiHttpException({
+            status: 400,
+            code: 'validation',
+            message: 'Top-level cta must match the cta node in the body document',
+            details: { expected: bodyCta, received: body.cta },
+          });
+        }
+      }
+      derivedCta = bodyCta; // may be null (no cta node in body)
+    }
+
     // Build update set
     const updateSet: Record<string, unknown> = {
       lockVersion: sql`lock_version + 1`,
@@ -374,7 +449,12 @@ export class CmsService {
     if (body.difficulty !== undefined) updateSet.difficulty = body.difficulty;
     if (body.sources !== undefined) updateSet.sources = body.sources;
     if (body.proposedAudience !== undefined) updateSet.proposedAudience = body.proposedAudience;
-    if (body.cta !== undefined) updateSet.cta = body.cta;
+    // FMT-R-27: body-derived CTA overrides top-level cta
+    if (derivedCta !== undefined) {
+      updateSet.cta = derivedCta;
+    } else if (body.cta !== undefined) {
+      updateSet.cta = body.cta;
+    }
     if (body.relatedResourceIds !== undefined) updateSet.relatedResourceIds = body.relatedResourceIds;
     if (body.quicklyOutdated !== undefined) updateSet.quicklyOutdated = body.quicklyOutdated;
 
@@ -646,6 +726,7 @@ export class CmsService {
         .set({
           state: 'in_review',
           submittedAt: now,
+          reviewDueAt: addBusinessDays(now, 2),
           updatedAt: now,
         })
         .where(
@@ -1100,6 +1181,9 @@ export class CmsService {
           });
         }
 
+        // WRK-R-38: validate org/unit IDs exist before containment check
+        await this.validateAudienceIds(tx, input.audience);
+
         // Entry-by-entry audience containment (C-12)
         await this.checkAudienceContainment(tx, input.audience, approvedRev.proposedAudience);
 
@@ -1490,6 +1574,61 @@ export class CmsService {
         mediaAssetId: ref.mediaAssetId,
         usageKind: ref.usageKind,
       });
+    }
+  }
+
+  // =========================================================================
+  // Audience ID validation (WRK-R-38)
+  // =========================================================================
+
+  /**
+   * Verify that every org and org-unit id in the audience entries actually
+   * exists, and that each org-unit belongs to its stated org.
+   * Throws 400 on unknown ids.
+   */
+  private async validateAudienceIds(
+    tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
+    audience: AudienceEntry[],
+  ): Promise<void> {
+    for (const entry of audience) {
+      if (entry.orgId) {
+        const orgRows = await tx
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(eq(organizations.id, entry.orgId))
+          .limit(1);
+        if (orgRows.length === 0) {
+          throw new ApiHttpException({
+            status: 400,
+            code: 'validation',
+            message: `Organization ${entry.orgId} not found`,
+            details: { orgId: entry.orgId },
+          });
+        }
+      }
+      if (entry.orgUnitId) {
+        const unitRows = await tx
+          .select({ id: orgUnits.id, orgId: orgUnits.orgId })
+          .from(orgUnits)
+          .where(eq(orgUnits.id, entry.orgUnitId))
+          .limit(1);
+        if (unitRows.length === 0) {
+          throw new ApiHttpException({
+            status: 400,
+            code: 'validation',
+            message: `Org unit ${entry.orgUnitId} not found`,
+            details: { orgUnitId: entry.orgUnitId },
+          });
+        }
+        if (entry.orgId && unitRows[0]!.orgId !== entry.orgId) {
+          throw new ApiHttpException({
+            status: 400,
+            code: 'validation',
+            message: `Org unit ${entry.orgUnitId} does not belong to organization ${entry.orgId}`,
+            details: { orgUnitId: entry.orgUnitId, orgId: entry.orgId },
+          });
+        }
+      }
     }
   }
 

@@ -52,6 +52,65 @@ export function extractMediaRefs(doc: Record<string, unknown>): MediaRef[] {
 }
 
 // ---------------------------------------------------------------------------
+// CTA extraction from ProseMirror documents (FMT-R-27)
+// ---------------------------------------------------------------------------
+
+export interface CtaRef {
+  kind: string;
+  targetId?: string;
+}
+
+/**
+ * Walk a ProseMirror document and find the first `cta` node.
+ * Returns `null` when no CTA node is present in the document.
+ *
+ * FMT-R-27: the body document is the single source of truth for CTA;
+ * the top-level `cta` field is derived from this node on save.
+ */
+export function extractCtaFromBody(doc: Record<string, unknown>): CtaRef | null {
+  let found: CtaRef | null = null;
+
+  function walk(node: Record<string, unknown>) {
+    if (found) return; // first occurrence wins
+    if (node.type === 'cta' && node.attrs) {
+      const attrs = node.attrs as Record<string, unknown>;
+      if (typeof attrs.kind === 'string' && attrs.kind.length > 0) {
+        found = {
+          kind: attrs.kind,
+          targetId: typeof attrs.targetId === 'string' ? attrs.targetId : undefined,
+        };
+      }
+    }
+    if (Array.isArray(node.content)) {
+      for (const child of node.content as Record<string, unknown>[]) {
+        walk(child);
+      }
+    }
+  }
+  walk(doc);
+  return found;
+}
+
+// ---------------------------------------------------------------------------
+// Business-day arithmetic (review_due_at)
+// ---------------------------------------------------------------------------
+
+/**
+ * Add `days` business days to the given date (skips Saturday/Sunday).
+ * Used to set `review_due_at` on submit (2 business days per SLA).
+ */
+export function addBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Audience containment (pure, without DB lookups)
 // ---------------------------------------------------------------------------
 
