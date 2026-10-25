@@ -46,11 +46,30 @@ describe('parseAcceptLanguageLocale', () => {
     expect(parseAcceptLanguageLocale('sr-Cyrl-RS')).toBe('sr-Cyrl');
   });
 
+  it('returns sr-Latn for sr-RS alias', () => {
+    expect(parseAcceptLanguageLocale('sr-RS')).toBe('sr-Latn');
+  });
+
   it('returns sr-Latn for unknown locales', () => {
     expect(parseAcceptLanguageLocale('ja')).toBe('sr-Latn');
   });
 
   it('handles multiple locales with quality values', () => {
     expect(parseAcceptLanguageLocale('de;q=0.3, hu;q=0.8, en;q=0.5')).toBe('hu');
+  });
+
+  it('is case-insensitive', () => {
+    expect(parseAcceptLanguageLocale('sr-cyrl')).toBe('sr-Cyrl');
+    expect(parseAcceptLanguageLocale('SR-LATN')).toBe('sr-Latn');
+    expect(parseAcceptLanguageLocale('HU')).toBe('hu');
+    expect(parseAcceptLanguageLocale('EN')).toBe('en');
+  });
+
+  it('excludes q=0 entries', () => {
+    expect(parseAcceptLanguageLocale('sr-Cyrl;q=0, en;q=0.5')).toBe('en');
+  });
+
+  it('excludes q=0 and falls back to default if no other match', () => {
+    expect(parseAcceptLanguageLocale('sr-Cyrl;q=0')).toBe('sr-Latn');
   });
 });

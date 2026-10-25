@@ -2,11 +2,23 @@
  * Parse the Accept-Language header to a reader locale (C-28, LIB-R-31).
  *
  * Restricted to the four interface locales: sr-Latn, sr-Cyrl, hu, en.
- * Default: sr-Latn.
+ * Case-insensitive matching, q=0 excluded. Default: sr-Latn.
  */
+import { ContentLocaleSchema } from '@nestself/contracts';
 import type { ReaderLocale } from './availability/availability-context.js';
 
-const VALID_LOCALES = new Set<string>(['sr-Latn', 'sr-Cyrl', 'hu', 'en']);
+/** Canonical locales from the contract schema. */
+const VALID_LOCALES: Set<string> = new Set(ContentLocaleSchema.options);
+
+/** Map Accept-Language tag (lowercased) to a canonical locale. */
+const ALIAS_MAP: Record<string, ReaderLocale> = {
+  'sr': 'sr-Latn',
+  'sr-latn': 'sr-Latn',
+  'sr-latn-rs': 'sr-Latn',
+  'sr-rs': 'sr-Latn',
+  'sr-cyrl': 'sr-Cyrl',
+  'sr-cyrl-rs': 'sr-Cyrl',
+};
 
 /**
  * Extract the first matching reader locale from the Accept-Language header.
@@ -25,18 +37,26 @@ export function parseAcceptLanguageLocale(
     return { tag: tag!.trim(), q: Number.isFinite(q) ? q : 1 };
   });
 
-  // Sort by quality descending
+  // Sort by quality descending, then filter out q=0
   entries.sort((a, b) => b.q - a.q);
 
-  for (const { tag } of entries) {
+  for (const { tag, q } of entries) {
+    if (q === 0) continue;
+
+    const lower = tag.toLowerCase();
+
+    // Direct match (case-insensitive)
     if (VALID_LOCALES.has(tag)) {
       return tag as ReaderLocale;
     }
-    // Map common aliases
-    if (tag === 'sr' || tag === 'sr-Latn-RS') return 'sr-Latn';
-    if (tag === 'sr-Cyrl-RS') return 'sr-Cyrl';
-    if (tag.startsWith('hu')) return 'hu';
-    if (tag.startsWith('en')) return 'en';
+
+    // Alias match (lowercased)
+    const alias = ALIAS_MAP[lower];
+    if (alias) return alias;
+
+    // Prefix match for language subtags
+    if (lower.startsWith('hu')) return 'hu';
+    if (lower.startsWith('en')) return 'en';
   }
 
   return 'sr-Latn';

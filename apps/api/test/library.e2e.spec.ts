@@ -2,9 +2,9 @@
  * Library e2e tests (T-C1.11): content detail, list and saved items.
  *
  * Uses real sessions of the seeded acceptance employees:
- * - Jovan (Employee A, org A) — user_jovan
- * - Emilija (Employee B, org B) — user_emilija
- * - Mirjam (multi-org, orgs A and B) — user_mirjam
+ * - Jovan (Employee A, org A) -- user_jovan
+ * - Emilija (Employee B, org B) -- user_emilija
+ * - Mirjam (multi-org, orgs A and B) -- user_mirjam
  *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
@@ -15,12 +15,18 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
+import {
+  LibraryContentDetailSchema,
+  LibraryContentListSchema,
+  SavedItemsListSchema,
+} from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
   externalIdentities,
   contentPublications,
+  contentRevisions,
   savedItems,
 } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
@@ -42,14 +48,29 @@ const RES_ORG_A_ONLY = 'res_sample_team_meeting';
 const RES_FUTURE = 'res_sample_desk_stretch';
 const RES_WITHDRAWN = 'res_sample_harder_conversation';
 
-const _ORG_A = 'org_sample';
 const ORG_B = 'org_sample_b';
 
-// The list of forbidden keys that must never appear in detail responses
-const FORBIDDEN_KEYS = [
+// Forbidden keys that must never appear anywhere in a response body tree
+const FORBIDDEN_KEYS = new Set([
   'revisionId', 'reviewComments', 'audiences', 'membershipId',
   'draftId', 'privateSourceSubmissionId', 'unpublishedTranslations',
-];
+]);
+
+/** Walk all keys in a nested object and collect any forbidden ones found. */
+function findForbiddenKeys(obj: unknown, path = ''): string[] {
+  if (!obj || typeof obj !== 'object') return [];
+  const found: string[] = [];
+  for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+    if (FORBIDDEN_KEYS.has(key)) found.push(`${path}.${key}`);
+    if (val && typeof val === 'object') {
+      found.push(...findForbiddenKeys(val, `${path}.${key}`));
+    }
+  }
+  return found;
+}
+
+/** Serbian Latin diacritics that must not appear in Cyrillic output. */
+const SERBIAN_LATIN_DIACRITICS = /[čćžšđ]/i;
 
 describe.skipIf(!shouldRun)('Library (e2e)', () => {
   let app: INestApplication;
@@ -102,11 +123,14 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
   }, 180_000);
 
   afterAll(async () => {
+    if (testDb?.db) {
+      await testDb.db.delete(savedItems);
+    }
     await app?.close();
     await testDb?.close();
   });
 
-  // ─── Auth helpers ─────────────────────────────────────────────────
+  // -- Auth helpers -------------------------------------------------------
 
   function extractCsrf(res: request.Response): string {
     const cookies = res.headers['set-cookie'] as string[] | undefined;
@@ -117,7 +141,6 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
     return csrf[1]!;
   }
 
-  /** Sign in to personal context (default for employees). */
   async function signInPersonal(userId: string) {
     const email = `${userId}@example.com`;
     const agent = request.agent(app.getHttpServer());
@@ -131,7 +154,6 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
     return { agent, csrf: extractCsrf(verify) };
   }
 
-  /** Switch to personal context for a specific org. */
   async function switchToPersonalOrg(
     session: { agent: ReturnType<typeof request.agent>; csrf: string },
     orgId: string,
@@ -141,51 +163,42 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       .set('x-csrf-token', session.csrf)
       .send({ context: { kind: 'personal', orgId } });
     expect(res.status).toBe(200);
-    // Context switch may or may not set a new CSRF cookie — keep the existing one if not.
     let csrf = session.csrf;
-    try {
-      csrf = extractCsrf(res);
-    } catch {
-      // No new CSRF cookie — reuse the one from sign-in
-    }
+    try { csrf = extractCsrf(res); } catch { /* reuse existing */ }
     return { agent: session.agent, csrf };
   }
 
-  // ─── Content detail ───────────────────────────────────────────────
+  // -- Content detail -----------------------------------------------------
 
   describe('GET /api/library/content/:contentId', () => {
-    it('Employee A reads the all-eligible article (200, correct field set)', async () => {
+    it('strict-parses against LibraryContentDetailSchema, no forbidden keys, correct headers', async () => {
       const session = await signInPersonal(JOVAN);
       const res = await session.agent
         .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(200);
 
-      const body = res.body;
-      // Required fields
-      expect(body.id).toBe(RES_ALL_ELIGIBLE_1);
-      expect(body.type).toBe('article');
-      expect(body.locale).toBe('sr-Latn');
-      expect(body.title).toBeTruthy();
-      expect(body.summary).toBeTruthy();
-      expect(typeof body.outcome).toBe('string');
-      expect(body.body).toBeTruthy();
-      expect(body.category).toBeTruthy();
-      expect(body.category.id).toBeTruthy();
-      expect(body.category.label).toBeTruthy();
-      expect(typeof body.saved).toBe('boolean');
-      expect(Array.isArray(body.sources)).toBe(true);
-      expect(Array.isArray(body.media)).toBe(true);
-      expect(Array.isArray(body.relatedResources)).toBe(true);
-      expect(Array.isArray(body.availableLocales)).toBe(true);
+      // Strict contract parse
+      const parsed = LibraryContentDetailSchema.strict().safeParse(res.body);
+      expect(parsed.success).toBe(true);
 
-      // Forbidden keys
-      const json = JSON.stringify(body);
-      for (const key of FORBIDDEN_KEYS) {
-        expect(body).not.toHaveProperty(key);
-      }
-      // No email-like strings in the response
-      expect(json).not.toMatch(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      // Forbidden keys (walk nested)
+      const forbidden = findForbiddenKeys(res.body);
+      expect(forbidden).toEqual([]);
+
+      // No email-like strings
+      expect(JSON.stringify(res.body)).not.toMatch(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+
+      // Required response headers
+      expect(res.headers['vary']).toMatch(/Accept-Language/i);
+      expect(res.headers['cache-control']).toMatch(/private/);
+      expect(res.headers['cache-control']).toMatch(/no-store/);
+
+      // Field checks
+      expect(res.body.id).toBe(RES_ALL_ELIGIBLE_1);
+      expect(res.body.type).toBe('article');
+      expect(res.body.locale).toBe('sr-Latn');
+      expect(res.body.availableLocales).toEqual(expect.arrayContaining(['sr-Latn', 'sr-Cyrl', 'hu', 'en']));
     });
 
     it('Employee A reads the org-A-only article', async () => {
@@ -206,7 +219,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.body.code).toBe('content_not_available');
     });
 
-    it('returns the same 404 body for an unknown id as for an unavailable one', async () => {
+    it('returns the same full 404 body for unknown id as for unavailable', async () => {
       const session = await signInPersonal(EMILIJA);
       const orgARes = await session.agent
         .get(`/api/library/content/${RES_ORG_A_ONLY}`)
@@ -217,10 +230,12 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
 
       expect(orgARes.status).toBe(404);
       expect(unknownRes.status).toBe(404);
+      // Compare the full body shape (ignoring request-specific fields like requestId)
       expect(orgARes.body.code).toBe(unknownRes.body.code);
+      expect(orgARes.body.message).toBe(unknownRes.body.message);
     });
 
-    it('future article returns 404 for everyone', async () => {
+    it('future article returns 404', async () => {
       const session = await signInPersonal(JOVAN);
       const res = await session.agent
         .get(`/api/library/content/${RES_FUTURE}`)
@@ -229,7 +244,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.body.code).toBe('content_not_available');
     });
 
-    it('withdrawn article returns 404 for everyone', async () => {
+    it('withdrawn article returns 404', async () => {
       const session = await signInPersonal(JOVAN);
       const res = await session.agent
         .get(`/api/library/content/${RES_WITHDRAWN}`)
@@ -238,7 +253,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.body.code).toBe('content_not_available');
     });
 
-    it('sr-Cyrl returns Cyrillic text with no Latin Serbian letters (outside exception list)', async () => {
+    it('sr-Cyrl: full Cyrillic check on title, summary, outcome, category label', async () => {
       const session = await signInPersonal(JOVAN);
       const res = await session.agent
         .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
@@ -246,11 +261,22 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body.locale).toBe('sr-Cyrl');
 
-      // Check that title/summary/outcome do not contain Latin Serbian letters
-      // Exception list: certain words may still appear in Latin
-      const serbianLatinLetters = /[čćžšđ]/i;
-      expect(res.body.title).not.toMatch(serbianLatinLetters);
-      expect(res.body.summary).not.toMatch(serbianLatinLetters);
+      // None of these fields should contain Serbian Latin diacritics
+      expect(res.body.title).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      expect(res.body.summary).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      expect(res.body.outcome).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      expect(res.body.category.label).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      if (res.body.category.description) {
+        expect(res.body.category.description).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      }
+      expect(res.body.authorName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      if (res.body.reviewerName) {
+        expect(res.body.reviewerName).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      }
+      // Sources
+      for (const src of res.body.sources) {
+        expect(src.label).not.toMatch(SERBIAN_LATIN_DIACRITICS);
+      }
     });
 
     it('hu returns the Hungarian variant', async () => {
@@ -260,30 +286,121 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .set('accept-language', 'hu');
       expect(res.status).toBe(200);
       expect(res.body.locale).toBe('hu');
-      // Hungarian title should contain Hungarian characters
       expect(res.body.title).toContain('Nyugodtabb');
+    });
+
+    it('case-insensitive Accept-Language (sr-cyrl)', async () => {
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+        .set('accept-language', 'sr-cyrl');
+      expect(res.status).toBe(200);
+      expect(res.body.locale).toBe('sr-Cyrl');
+    });
+
+    it('q=0 excludes a locale', async () => {
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+        .set('accept-language', 'sr-Cyrl;q=0, en;q=0.5');
+      expect(res.status).toBe(200);
+      expect(res.body.locale).toBe('en');
+    });
+
+    it('string-shaped sources are normalized to { label, url }', async () => {
+      // Seed a string source
+      await testDb.db
+        .update(contentRevisions)
+        .set({ sources: JSON.parse('["WHO, Mental health at work, 2022"]') })
+        .where(eq(contentRevisions.id, 'rev_var_team_meeting_sr-Latn_1'));
+
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ORG_A_ONLY}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(200);
+
+      // Strict parse still succeeds
+      const parsed = LibraryContentDetailSchema.strict().safeParse(res.body);
+      expect(parsed.success).toBe(true);
+      expect(res.body.sources[0].label).toBe('WHO, Mental health at work, 2022');
+      expect(res.body.sources[0].url).toBeNull();
+
+      // Cleanup
+      await testDb.db
+        .update(contentRevisions)
+        .set({ sources: [] })
+        .where(eq(contentRevisions.id, 'rev_var_team_meeting_sr-Latn_1'));
+    });
+
+    it('related resources use the availability formula (future revision title never leaks)', async () => {
+      // Add a future-scheduled publication with a distinctive title
+      await testDb.pool.query(`INSERT INTO content_revisions
+        SELECT (jsonb_populate_record(null::content_revisions, to_jsonb(r) || jsonb_build_object(
+          'id','rev_probe_future','revision_number',2,'title','PROBE UNRELEASED TITLE','summary','PROBE UNRELEASED SUMMARY'))).*
+        FROM content_revisions r WHERE r.id='rev_var_evening_wind_down_sr-Latn_1'`);
+      await testDb.pool.query(`INSERT INTO content_publications
+        SELECT (jsonb_populate_record(null::content_publications, to_jsonb(p) || jsonb_build_object(
+          'id','pub_probe_future','content_revision_id','rev_probe_future','state','scheduled',
+          'starts_at', (now() + interval '7 days')))).*
+        FROM content_publications p WHERE p.id='pub_var_evening_wind_down_sr-Latn'`);
+      await testDb.pool.query(`INSERT INTO content_publication_audiences
+        SELECT (jsonb_populate_record(null::content_publication_audiences, to_jsonb(a) || jsonb_build_object(
+          'id','aud_probe_future','publication_id','pub_probe_future'))).*
+        FROM content_publication_audiences a WHERE a.publication_id='pub_var_evening_wind_down_sr-Latn'`);
+      // Make pay_day_plan reference evening_wind_down as related
+      await testDb.pool.query(`UPDATE content_revisions SET related_resource_ids = ARRAY['res_sample_evening_wind_down'] WHERE id='rev_var_pay_day_plan_sr-Latn_1'`);
+
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get(`/api/library/content/${RES_ALL_ELIGIBLE_2}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(200);
+
+      // The related resource must show the LIVE title, not the future one
+      const related = res.body.relatedResources.find(
+        (r: { resourceId: string }) => r.resourceId === RES_ALL_ELIGIBLE_1,
+      );
+      if (related) {
+        expect(related.title).not.toContain('PROBE UNRELEASED');
+        expect(related.summary).not.toContain('PROBE UNRELEASED');
+      }
+
+      // Cleanup
+      await testDb.pool.query(`DELETE FROM content_publication_audiences WHERE id='aud_probe_future'`);
+      await testDb.pool.query(`DELETE FROM content_publications WHERE id='pub_probe_future'`);
+      await testDb.pool.query(`DELETE FROM content_revisions WHERE id='rev_probe_future'`);
+      await testDb.pool.query(`UPDATE content_revisions SET related_resource_ids = '{}' WHERE id='rev_var_pay_day_plan_sr-Latn_1'`);
     });
   });
 
-  // ─── Content list ─────────────────────────────────────────────────
+  // -- Content list -------------------------------------------------------
 
   describe('GET /api/library/content', () => {
-    it('returns a list of available content for Employee A', async () => {
+    it('strict-parses the list response and returns correct items for Employee A', async () => {
       const session = await signInPersonal(JOVAN);
       const res = await session.agent
         .get('/api/library/content')
         .set('accept-language', 'sr-Latn');
-      if (res.status !== 200) {
-        console.error('List content response:', res.status, JSON.stringify(res.body, null, 2));
-      }
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.items)).toBe(true);
+
+      const parsed = LibraryContentListSchema.strict().safeParse(res.body);
+      expect(parsed.success).toBe(true);
+
       // Employee A (org A) should see all_eligible and org_a articles (3 total)
       expect(res.body.items.length).toBeGreaterThanOrEqual(3);
-      // Should not include future or withdrawn
       const ids = res.body.items.map((i: { resourceId: string }) => i.resourceId);
       expect(ids).not.toContain(RES_FUTURE);
       expect(ids).not.toContain(RES_WITHDRAWN);
+
+      // Each card has availableLocales
+      for (const item of res.body.items) {
+        expect(item.availableLocales).toEqual(expect.arrayContaining(['sr-Latn', 'sr-Cyrl', 'hu', 'en']));
+      }
+
+      // Response headers
+      expect(res.headers['vary']).toMatch(/Accept-Language/i);
+      expect(res.headers['cache-control']).toMatch(/private/);
     });
 
     it('Employee B does not see org-A-only content', async () => {
@@ -298,79 +415,72 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
 
     it('pagination is stable across pages', async () => {
       const session = await signInPersonal(JOVAN);
-      // Page 1: limit 1
       const page1 = await session.agent
         .get('/api/library/content?limit=1')
         .set('accept-language', 'sr-Latn');
       expect(page1.status).toBe(200);
       expect(page1.body.items.length).toBe(1);
+      expect(page1.body.nextCursor).toBeTruthy();
 
-      if (page1.body.nextCursor) {
-        const page2 = await session.agent
-          .get(`/api/library/content?limit=1&cursor=${page1.body.nextCursor}`)
-          .set('accept-language', 'sr-Latn');
-        expect(page2.status).toBe(200);
-        // Different items on page 2
-        if (page2.body.items.length > 0) {
-          expect(page2.body.items[0].resourceId).not.toBe(page1.body.items[0].resourceId);
-        }
-      }
+      const page2 = await session.agent
+        .get(`/api/library/content?limit=1&cursor=${page1.body.nextCursor}`)
+        .set('accept-language', 'sr-Latn');
+      expect(page2.status).toBe(200);
+      expect(page2.body.items.length).toBeGreaterThanOrEqual(1);
+      expect(page2.body.items[0].resourceId).not.toBe(page1.body.items[0].resourceId);
+    });
+
+    it('malformed cursor returns 400 validation', async () => {
+      const session = await signInPersonal(JOVAN);
+      const bad = Buffer.from('not-valid-json').toString('base64url');
+      const res = await session.agent
+        .get(`/api/library/content?cursor=${bad}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(400);
+    });
+
+    it('limit=0 returns 400 validation', async () => {
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get('/api/library/content?limit=0')
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(400);
     });
   });
 
-  // ─── Saved items ──────────────────────────────────────────────────
+  // -- Saved items --------------------------------------------------------
 
   describe('Saved items', () => {
     it('Employee A saves an article twice, only one row created', async () => {
       const session = await signInPersonal(JOVAN);
 
-      // Save
       const save1 = await session.agent
         .put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', session.csrf)
         .set('accept-language', 'sr-Latn');
       expect(save1.status).toBe(204);
 
-      // Save again (idempotent)
       const save2 = await session.agent
         .put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', session.csrf)
         .set('accept-language', 'sr-Latn');
       expect(save2.status).toBe(204);
 
-      // Check the list: should have exactly one entry for this resource
       const list = await session.agent
         .get('/api/me/saved')
         .set('accept-language', 'sr-Latn');
       expect(list.status).toBe(200);
+
+      // Strict parse
+      const parsed = SavedItemsListSchema.strict().safeParse(list.body);
+      expect(parsed.success).toBe(true);
+
       const matching = list.body.items.filter(
         (i: { resourceId: string }) => i.resourceId === RES_ALL_ELIGIBLE_1,
       );
       expect(matching.length).toBe(1);
-    });
-
-    it("Employee A's saved list in org A does not show in Mirjam's org B context", async () => {
-      // Ensure Jovan has saved something
-      const jovanSession = await signInPersonal(JOVAN);
-      await jovanSession.agent
-        .put(`/api/me/saved/${RES_ALL_ELIGIBLE_2}`)
-        .set('x-csrf-token', jovanSession.csrf)
-        .set('accept-language', 'sr-Latn');
-
-      // Mirjam signs in, switches to org B
-      const mirjamSession = await signInPersonal(MIRJAM);
-      // By default Mirjam's first org is org A, switch to org B
-      const mirjamB = await switchToPersonalOrg(mirjamSession, ORG_B);
-
-      const list = await mirjamB.agent
-        .get('/api/me/saved')
-        .set('accept-language', 'sr-Latn');
-      expect(list.status).toBe(200);
-      // Mirjam in org B should not see Jovan's saved items
-      const jovanItem = list.body.items.find(
-        (i: { resourceId: string }) => i.resourceId === RES_ALL_ELIGIBLE_2,
-      );
-      expect(jovanItem).toBeUndefined();
+      expect(matching[0].status).toBe('available');
+      expect(matching[0].title).toBeTruthy();
     });
 
     it('Employee B never sees Employee A saved items', async () => {
@@ -379,7 +489,6 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get('/api/me/saved')
         .set('accept-language', 'sr-Latn');
       expect(list.status).toBe(200);
-      // Emilija should not see Jovan's saved items
       const ids = list.body.items.map((i: { resourceId: string }) => i.resourceId);
       expect(ids).not.toContain(RES_ALL_ELIGIBLE_1);
       expect(ids).not.toContain(RES_ALL_ELIGIBLE_2);
@@ -387,7 +496,6 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
 
     it('Mirjam saves in org A, switches to org B, org B saved list is empty', async () => {
       const mirjamSession = await signInPersonal(MIRJAM);
-      // Default context is org A
       await mirjamSession.agent
         .put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', mirjamSession.csrf)
@@ -407,28 +515,44 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get('/api/me/saved')
         .set('accept-language', 'sr-Latn');
       expect(listB.status).toBe(200);
-      // Org B list should not contain the org A save
       const idsB = listB.body.items.map((i: { resourceId: string }) => i.resourceId);
       expect(idsB).not.toContain(RES_ALL_ELIGIBLE_1);
     });
 
-    it('withdrawing a publication makes the saved item show as unavailable', async () => {
+    it("Employee A's saved list in org A does not show in Mirjam's org B context", async () => {
       const jovanSession = await signInPersonal(JOVAN);
-
-      // Save the all-eligible-2 article
       await jovanSession.agent
         .put(`/api/me/saved/${RES_ALL_ELIGIBLE_2}`)
         .set('x-csrf-token', jovanSession.csrf)
         .set('accept-language', 'sr-Latn');
 
-      // Withdraw it via direct DB update
-      const pubId = `pub_var_pay_day_plan_sr-Latn`;
+      const mirjamSession = await signInPersonal(MIRJAM);
+      const mirjamB = await switchToPersonalOrg(mirjamSession, ORG_B);
+
+      const list = await mirjamB.agent
+        .get('/api/me/saved')
+        .set('accept-language', 'sr-Latn');
+      expect(list.status).toBe(200);
+      const jovanItem = list.body.items.find(
+        (i: { resourceId: string }) => i.resourceId === RES_ALL_ELIGIBLE_2,
+      );
+      expect(jovanItem).toBeUndefined();
+    });
+
+    it('withdrawing a publication makes the saved item show as unavailable', async () => {
+      const jovanSession = await signInPersonal(JOVAN);
+
+      await jovanSession.agent
+        .put(`/api/me/saved/${RES_ALL_ELIGIBLE_2}`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('accept-language', 'sr-Latn');
+
+      const pubId = 'pub_var_pay_day_plan_sr-Latn';
       await testDb.db
         .update(contentPublications)
         .set({ withdrawnAt: new Date(), state: 'withdrawn' })
         .where(eq(contentPublications.id, pubId));
 
-      // Check saved list: should show as unavailable
       const list = await jovanSession.agent
         .get('/api/me/saved')
         .set('accept-language', 'sr-Latn');
@@ -436,10 +560,9 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       const item = list.body.items.find(
         (i: { resourceId: string }) => i.resourceId === RES_ALL_ELIGIBLE_2,
       );
-      if (item) {
-        expect(item.status).toBe('unavailable');
-        expect(item.title).toBeNull();
-      }
+      expect(item).toBeTruthy();
+      expect(item.status).toBe('unavailable');
+      expect(item.title).toBeNull();
 
       // Detail should 404
       const detail = await jovanSession.agent
@@ -447,7 +570,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .set('accept-language', 'sr-Latn');
       expect(detail.status).toBe(404);
 
-      // Restore for other tests
+      // Restore
       await testDb.db
         .update(contentPublications)
         .set({ withdrawnAt: null, state: 'live' })
@@ -456,21 +579,17 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
 
     it('DELETE saved item is idempotent', async () => {
       const session = await signInPersonal(JOVAN);
-
-      // Save an item first
       await session.agent
         .put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', session.csrf)
         .set('accept-language', 'sr-Latn');
 
-      // Delete
       const del1 = await session.agent
         .delete(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', session.csrf)
         .set('accept-language', 'sr-Latn');
       expect(del1.status).toBe(204);
 
-      // Delete again (idempotent)
       const del2 = await session.agent
         .delete(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`)
         .set('x-csrf-token', session.csrf)
@@ -487,12 +606,43 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
       expect(res.status).toBe(404);
       expect(res.body.code).toBe('content_not_available');
     });
-  });
 
-  // ─── Cleanup: remove saved items created during tests ─────────────
-  afterAll(async () => {
-    if (testDb?.db) {
-      await testDb.db.delete(savedItems);
-    }
+    it('saved list limit=0 returns 400', async () => {
+      const session = await signInPersonal(JOVAN);
+      const res = await session.agent
+        .get('/api/me/saved?limit=0')
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(400);
+    });
+
+    it('saved list malformed cursor returns 400', async () => {
+      const session = await signInPersonal(JOVAN);
+      const bad = Buffer.from('not-valid-json').toString('base64url');
+      const res = await session.agent
+        .get(`/api/me/saved?cursor=${bad}`)
+        .set('accept-language', 'sr-Latn');
+      expect(res.status).toBe(400);
+    });
+
+    it('saved list pagination works', async () => {
+      const session = await signInPersonal(JOVAN);
+      // Ensure at least 2 saved items
+      await session.agent.put(`/api/me/saved/${RES_ALL_ELIGIBLE_1}`).set('x-csrf-token', session.csrf).set('accept-language', 'sr-Latn');
+      await session.agent.put(`/api/me/saved/${RES_ALL_ELIGIBLE_2}`).set('x-csrf-token', session.csrf).set('accept-language', 'sr-Latn');
+
+      const page1 = await session.agent
+        .get('/api/me/saved?limit=1')
+        .set('accept-language', 'sr-Latn');
+      expect(page1.status).toBe(200);
+      expect(page1.body.items.length).toBe(1);
+      expect(page1.body.nextCursor).toBeTruthy();
+
+      const page2 = await session.agent
+        .get(`/api/me/saved?limit=1&cursor=${page1.body.nextCursor}`)
+        .set('accept-language', 'sr-Latn');
+      expect(page2.status).toBe(200);
+      expect(page2.body.items.length).toBeGreaterThanOrEqual(1);
+      expect(page2.body.items[0].resourceId).not.toBe(page1.body.items[0].resourceId);
+    });
   });
 });

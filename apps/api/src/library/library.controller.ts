@@ -10,6 +10,7 @@
 import {
   Controller,
   Get,
+  Header,
   Headers,
   HttpStatus,
   Param,
@@ -39,6 +40,8 @@ export class LibraryController {
 
   @Get('content/:contentId')
   @Authorize(ACTIONS['content.read'], personalOrgResource('library', contentIdFromReq))
+  @Header('Vary', 'Accept-Language')
+  @Header('Cache-Control', 'private, no-store')
   async getContentDetail(
     @Param('contentId') contentId: string,
     @Headers('accept-language') acceptLanguage: string | undefined,
@@ -62,6 +65,8 @@ export class LibraryController {
 
   @Get('content')
   @Authorize(ACTIONS['content.read'], personalOrgResource('library'))
+  @Header('Vary', 'Accept-Language')
+  @Header('Cache-Control', 'private, no-store')
   async listContent(
     @Query(new ZodValidationPipe(LibraryContentListQuerySchema)) query: LibraryContentListQuery,
     @Headers('accept-language') acceptLanguage: string | undefined,

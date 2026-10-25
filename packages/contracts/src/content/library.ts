@@ -5,8 +5,8 @@
  * experience. Error codes used by library endpoints.
  */
 import { z } from 'zod';
-import { ContentTypeSchema } from './cms.js';
-import { ContentLocaleSchema } from './media.js';
+import { ContentTypeSchema } from './cms.ts';
+import { ContentLocaleSchema, MediaKindSchema, MediaRenditionKindSchema } from './media.ts';
 
 // ---------------------------------------------------------------------------
 // Shared sub-schemas
@@ -35,7 +35,7 @@ export const SourceSchema = z.object({
 });
 
 export const MediaRenditionRefSchema = z.object({
-  kind: z.string(),
+  kind: MediaRenditionKindSchema,
   mimeType: z.string(),
   width: z.number().nullable(),
   height: z.number().nullable(),
@@ -43,7 +43,7 @@ export const MediaRenditionRefSchema = z.object({
 
 export const MediaReferenceSummarySchema = z.object({
   assetId: z.string(),
-  kind: z.string(),
+  kind: MediaKindSchema,
   renditions: z.array(MediaRenditionRefSchema),
   width: z.number().nullable(),
   height: z.number().nullable(),
@@ -111,6 +111,7 @@ export const LibraryCardSchema = z.object({
   durationBand: DurationBandSchema.nullable(),
   coverImageUrl: z.string().nullable(),
   saved: z.boolean(),
+  availableLocales: z.array(ContentLocaleSchema),
 });
 export type LibraryCard = z.infer<typeof LibraryCardSchema>;
 
@@ -152,6 +153,12 @@ export const SavedItemsListSchema = z.object({
 });
 export type SavedItemsList = z.infer<typeof SavedItemsListSchema>;
 
+export const SavedItemsListQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type SavedItemsListQuery = z.infer<typeof SavedItemsListQuerySchema>;
+
 // ---------------------------------------------------------------------------
 // Error codes
 // ---------------------------------------------------------------------------
@@ -159,6 +166,7 @@ export type SavedItemsList = z.infer<typeof SavedItemsListSchema>;
 export const LIBRARY_ERROR_CODES = [
   'content_not_available',
   'invalid_context',
+  'org_context_expired',
 ] as const;
 
 export type LibraryErrorCode = (typeof LIBRARY_ERROR_CODES)[number];
