@@ -90,6 +90,8 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { email: 'user_stefan@example.com' },
       { email: 'user_ivana@example.com' },
       { email: 'user_nikola@example.com', password: 'TempPassword1!', temporaryPassword: 'TempPassword1!' },
+      // Editorial staff (CMS): email-OTP for e2e simplicity.
+      { email: 'user_katarina@example.com' },
       // Pool-only users for the retry cases: they never reach a session.
       { email: 'retry_exhaust@example.com' },
       { email: 'retry_lock@example.com' },
@@ -101,6 +103,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { localId: 'user_stefan', email: 'user_stefan@example.com' },
       { localId: 'user_ivana', email: 'user_ivana@example.com' },
       { localId: 'user_nikola', email: 'user_nikola@example.com' },
+      { localId: 'user_katarina', email: 'user_katarina@example.com' },
     ];
     for (const p of people) {
       const idpUser = await idp.findUserByEmail(p.email);
@@ -819,6 +822,29 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(me.body.effectiveActions).not.toContain('program.overview');
       expect(me.body.effectiveActions).not.toContain('access.preview');
       await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
+
+    it("katarina's /me in the operations context lists content.write and content.preview (assigned_collections fix)", async () => {
+      // Katarina is a content_author with assigned_collections scope and
+      // COLLECTION assignments to all six launch categories. Before the
+      // effective-actions fix, the synthetic resource lacked `collectionId`
+      // so the scope check always failed and she got no content.* actions.
+      const katarina = await signInAs('user_katarina@example.com');
+
+      // The default context for staff is operations.
+      expect(katarina.body.effectiveActions).toEqual(
+        expect.arrayContaining(['content.write', 'content.preview']),
+      );
+
+      const me = await katarina.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toEqual(
+        expect.arrayContaining(['content.write', 'content.preview', 'content.submit']),
+      );
+      // She is NOT editorial_lead, so she must not have taxonomy.manage.
+      expect(me.body.effectiveActions).not.toContain('taxonomy.manage');
+
+      await katarina.agent.post('/api/auth/sign-out').set('X-CSRF-Token', katarina.csrf);
     });
   });
 

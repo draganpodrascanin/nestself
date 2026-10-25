@@ -48,13 +48,19 @@ export function effectiveAccess(
     if (grant.validFrom != null && grant.validFrom > ctx.now) continue;
     if (grant.validUntil != null && grant.validUntil <= ctx.now) continue;
 
+    const resources = syntheticResources(grant, ctx);
+    if (resources.length === 0) continue;
+
     for (const action of actions) {
       if (!grant.actions.includes(action)) continue;
 
-      const resource = syntheticResource(grant);
-      const decision = authorize(principal, action as Action, resource, contextAt(grant, ctx));
+      const grantCtx = contextAt(grant, ctx);
+      const isAllowed = resources.some((resource) => {
+        const decision = authorize(principal, action as Action, resource, grantCtx);
+        return decision.allowed && decision.grantIds.includes(grant.id);
+      });
 
-      if (decision.allowed && decision.grantIds.includes(grant.id)) {
+      if (isAllowed) {
         entries.push({
           action: action as Action,
           scopeType: grant.scopeType,
@@ -94,9 +100,13 @@ export function effectiveActions(
         (g.validFrom == null || g.validFrom <= ctx.now) &&
         (g.validUntil == null || g.validUntil > ctx.now),
     );
-    const isAllowed = candidates.some(
-      (grant) => authorize(principal, action, syntheticResource(grant), contextAt(grant, ctx)).allowed,
-    );
+    const isAllowed = candidates.some((grant) => {
+      const resources = syntheticResources(grant, ctx);
+      const grantCtx = contextAt(grant, ctx);
+      return resources.some(
+        (resource) => authorize(principal, action, resource, grantCtx).allowed,
+      );
+    });
     if (isAllowed) allowed.add(action);
   }
 
@@ -111,6 +121,77 @@ export function effectiveActions(
 function contextAt(grant: GrantInput, ctx: AuthorizationContext): AuthorizationContext {
   if (grant.scopeOrgUnitId == null || ctx.ancestorIds.includes(grant.scopeOrgUnitId)) return ctx;
   return { ...ctx, ancestorIds: [...ctx.ancestorIds, grant.scopeOrgUnitId] };
+}
+
+// ---------------------------------------------------------------------------
+// Assignment-scoped synthetic resources
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from assignment-scoped grant `scopeType` to the assignment kind and
+ * the `Resource` field that the scope check needs populated.
+ *
+ * `assigned_cases` matches both CASE and SUPPORT_CASE assignments (see
+ * `scope.ts:79-86`), so two kinds are listed.
+ */
+const ASSIGNMENT_SCOPE_MAP: ReadonlyMap<
+  string,
+  { kinds: readonly string[]; field: keyof Resource }
+> = new Map([
+  ['assigned_collections', { kinds: ['COLLECTION'], field: 'collectionId' }],
+  ['assigned_clients', { kinds: ['CLIENT'], field: 'orgId' }],
+  ['assigned_queues', { kinds: ['QUEUE'], field: 'queueId' }],
+  ['assigned_cases', { kinds: ['CASE', 'SUPPORT_CASE'], field: 'id' }],
+  ['assigned_practice', { kinds: ['PRACTICE_GROUP'], field: 'practiceGroupId' }],
+]);
+
+function isAssignmentCurrent(
+  a: { startAt: Date; endAt: Date | null },
+  now: Date,
+): boolean {
+  if (a.startAt > now) return false;
+  if (a.endAt != null && a.endAt <= now) return false;
+  return true;
+}
+
+/**
+ * Yield the synthetic resources for a grant.
+ *
+ * For an assignment-scoped grant (`assigned_collections`, `assigned_clients`,
+ * etc.) **without** a `scopeRefId`, the single `syntheticResource(grant)` has
+ * no `collectionId` / `orgId` / etc., so `matchesScope` always fails. We fix
+ * this by emitting one synthetic resource per current assignment of the
+ * matching kind, each carrying the assignment's `targetId` in the field the
+ * scope check inspects.
+ *
+ * Effective actions answer "may this user perform this action *somewhere* in
+ * this context". Conditions that depend on resource attributes the synthetic
+ * resource lacks (e.g. the `categories` condition, which passes when
+ * `resource.category` is null) keep their current scope-only behaviour.
+ */
+function syntheticResources(
+  grant: GrantInput,
+  ctx: AuthorizationContext,
+): Resource[] {
+  const base = syntheticResource(grant);
+
+  // When a scopeRefId is present the base resource already has the right
+  // field set (the original path).
+  if (grant.scopeRefId != null) return [base];
+
+  const mapping = ASSIGNMENT_SCOPE_MAP.get(grant.scopeType);
+  if (mapping == null) return [base];
+
+  // Build one resource per matching, current assignment.
+  const resources: Resource[] = [];
+  for (const assignment of ctx.assignments) {
+    if (!mapping.kinds.includes(assignment.kind)) continue;
+    if (!isAssignmentCurrent(assignment, ctx.now)) continue;
+    resources.push({ ...base, [mapping.field]: assignment.targetId });
+  }
+
+  // No matching assignments → the grant is genuinely ineffective.
+  return resources;
 }
 
 /**
