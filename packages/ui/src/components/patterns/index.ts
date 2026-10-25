@@ -11,3 +11,4 @@ export * from './avatar';
 export * from './sample-data-banner';
 export * from './booking-demo';
 export * from './card';
+export * from './content-card';

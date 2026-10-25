@@ -42,13 +42,16 @@ export function contextKey(
 export const libraryKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'library'] as const,
   home: (ctx: ActiveContext, locale: string) => [...contextKey(ctx), 'library', 'home', locale] as const,
-  contentDetail: (ctx: ActiveContext, contentId: string) =>
-    [...contextKey(ctx), 'library', 'content', contentId] as const,
+  contentList: (ctx: ActiveContext, locale: string) =>
+    [...contextKey(ctx), 'library', 'content', 'list', locale] as const,
+  contentDetail: (ctx: ActiveContext, contentId: string, locale: string) =>
+    [...contextKey(ctx), 'library', 'content', contentId, locale] as const,
 };
 
 export const savedKeys = {
-  all: (ctx: ActiveContext) => [...contextKey(ctx), 'saved'] as const,
-  list: (ctx: ActiveContext) => [...contextKey(ctx), 'saved', 'list'] as const,
+  all: (ctx: ActiveContext) => [...contextKey(ctx), 'me', 'saved'] as const,
+  list: (ctx: ActiveContext, locale: string) =>
+    [...contextKey(ctx), 'me', 'saved', locale] as const,
 };
 
 export const requestKeys = {

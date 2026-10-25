@@ -6,24 +6,28 @@ import enCommon from '../locales/en/common.json';
 import enMarketing from '../locales/en/marketing.json';
 import enMobile from '../locales/en/mobile.json';
 import enWorkspace from '../locales/en/workspace.json';
+import enLibrary from '../locales/en/library.json';
 import srCyrlAdmin from '../locales/sr-Cyrl/admin.json';
 import srCyrlAuth from '../locales/sr-Cyrl/auth.json';
 import srCyrlCommon from '../locales/sr-Cyrl/common.json';
 import srCyrlMarketing from '../locales/sr-Cyrl/marketing.json';
 import srCyrlMobile from '../locales/sr-Cyrl/mobile.json';
 import srCyrlWorkspace from '../locales/sr-Cyrl/workspace.json';
+import srCyrlLibrary from '../locales/sr-Cyrl/library.json';
 import huAdmin from '../locales/hu/admin.json';
 import huAuth from '../locales/hu/auth.json';
 import huCommon from '../locales/hu/common.json';
 import huMarketing from '../locales/hu/marketing.json';
 import huMobile from '../locales/hu/mobile.json';
 import huWorkspace from '../locales/hu/workspace.json';
+import huLibrary from '../locales/hu/library.json';
 import srLatnAdmin from '../locales/sr-Latn/admin.json';
 import srLatnAuth from '../locales/sr-Latn/auth.json';
 import srLatnCommon from '../locales/sr-Latn/common.json';
 import srLatnMarketing from '../locales/sr-Latn/marketing.json';
 import srLatnMobile from '../locales/sr-Latn/mobile.json';
 import srLatnWorkspace from '../locales/sr-Latn/workspace.json';
+import srLatnLibrary from '../locales/sr-Latn/library.json';
 
 export const resources = {
   en: {
@@ -33,6 +37,7 @@ export const resources = {
     admin: enAdmin,
     mobile: enMobile,
     auth: enAuth,
+    library: enLibrary,
   },
   'sr-Latn': {
     common: srLatnCommon,
@@ -41,6 +46,7 @@ export const resources = {
     admin: srLatnAdmin,
     mobile: srLatnMobile,
     auth: srLatnAuth,
+    library: srLatnLibrary,
   },
   'sr-Cyrl': {
     common: srCyrlCommon,
@@ -49,6 +55,7 @@ export const resources = {
     admin: srCyrlAdmin,
     mobile: srCyrlMobile,
     auth: srCyrlAuth,
+    library: srCyrlLibrary,
   },
   hu: {
     common: huCommon,
@@ -57,6 +64,7 @@ export const resources = {
     admin: huAdmin,
     mobile: huMobile,
     auth: huAuth,
+    library: huLibrary,
   },
 } as const;
 

@@ -60,10 +60,17 @@ describe('libraryKeys', () => {
     expect(key).toEqual(['ctx', 'personal', 'org_b', 'library', 'home', 'sr-Latn']);
   });
 
-  it('.contentDetail includes the content id', () => {
-    const key = libraryKeys.contentDetail(ctx, 'c-123');
+  it('.contentDetail includes the content id and locale', () => {
+    const key = libraryKeys.contentDetail(ctx, 'c-123', 'en');
     expect(key).toEqual([
-      'ctx', 'personal', 'org_b', 'library', 'content', 'c-123',
+      'ctx', 'personal', 'org_b', 'library', 'content', 'c-123', 'en',
+    ]);
+  });
+
+  it('.contentList includes the locale', () => {
+    const key = libraryKeys.contentList(ctx, 'hu');
+    expect(key).toEqual([
+      'ctx', 'personal', 'org_b', 'library', 'content', 'list', 'hu',
     ]);
   });
 });
@@ -72,12 +79,12 @@ describe('savedKeys', () => {
   const ctx: ActiveContext = { kind: 'organization', orgId: 'org_c' };
 
   it('.all starts with contextKey', () => {
-    expect(savedKeys.all(ctx)).toEqual(['ctx', 'organization', 'org_c', 'saved']);
+    expect(savedKeys.all(ctx)).toEqual(['ctx', 'organization', 'org_c', 'me', 'saved']);
   });
 
-  it('.list extends .all', () => {
-    expect(savedKeys.list(ctx)).toEqual([
-      'ctx', 'organization', 'org_c', 'saved', 'list',
+  it('.list includes locale', () => {
+    expect(savedKeys.list(ctx, 'en')).toEqual([
+      'ctx', 'organization', 'org_c', 'me', 'saved', 'en',
     ]);
   });
 });

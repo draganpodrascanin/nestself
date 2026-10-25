@@ -1,21 +1,28 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
   Heading,
-  Text,
-  CategoryIcon,
-  Avatar,
+  Skeleton,
   StatusBlock,
-  PhotoFigure,
-  CoverageNotice,
+  Alert,
+  ContentCard,
+  DurationBadge,
+  ShowMore,
+  SampleDataBanner,
 } from '@nestself/ui';
-import { supportAreaIcon } from '@nestself/contracts';
-import type { SupportArea } from '@nestself/contracts';
-import { SAMPLE_BOOKING, SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { formatDateTime } from '@nestself/i18n';
-import type { Locale } from '@nestself/i18n';
+import type { LibraryCard } from '@nestself/contracts';
+import { libraryKeys } from '@nestself/api-client';
 import { useAuth } from '../../auth';
+import { isSampleDataMode } from '../../data-source';
+import { api } from '../../api';
+import { sampleContentCards } from '../../library/sample-library-data';
+import { mapLibraryError } from '../../library/map-library-error';
+import type { Locale } from '@nestself/i18n';
+import {
+  LibraryContentListSchema,
+} from '@nestself/contracts';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
@@ -27,20 +34,123 @@ export const Route = createFileRoute('/_authenticated/')({
 });
 
 function HomePage() {
-  const { t, i18n } = useTranslation(['workspace', 'common']);
-  const { principal } = useAuth();
-  const { denied } = Route.useSearch();
+  const { i18n } = useTranslation(['library', 'common']);
   const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
+  const { denied } = Route.useSearch();
 
-  const supportAreas: SupportArea[] = ['psychological', 'legal', 'financial'];
+  if (isSampleDataMode) {
+    return <SampleHomePage locale={locale} denied={denied} />;
+  }
 
-  // Latest two posts
-  const latestPosts = SAMPLE_POSTS.slice(0, 2);
+  return <ApiHomePage locale={locale} denied={denied} />;
+}
 
-  const findPersonName = (authorId: string) => {
-    const person = SAMPLE_PEOPLE.find((p) => p.id === authorId);
-    return person?.displayName ?? authorId;
-  };
+function SampleHomePage({ locale, denied }: { locale: string; denied?: string }) {
+  const { t } = useTranslation(['library', 'common']);
+  const { principal } = useAuth();
+  const cards = sampleContentCards(locale);
+
+  return (
+    <div className="space-y-8">
+      <SampleDataBanner message={t('common:sample.banner')} />
+      {denied ? (
+        <StatusBlock
+          state="permission"
+          title={t('common:state.permission.title')}
+          body={t('common:state.permission.body')}
+        />
+      ) : null}
+
+      <Heading level={1} typeRole="screenTitle">
+        {t('library:home.greeting', { name: principal?.displayName ?? '' })}
+      </Heading>
+
+      <section>
+        <Heading level={2} typeRole="sectionTitle" className="mb-4">
+          {t('library:home.availableResources')}
+        </Heading>
+        {cards.length === 0 ? (
+          <StatusBlock
+            state="empty"
+            title={t('library:home.empty.title')}
+            body={t('library:home.empty.body')}
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {cards.map((card) => (
+              <ContentCard
+                key={card.resourceId}
+                resourceId={card.resourceId}
+                title={card.title}
+                outcome={card.summary}
+                formatLabel={t('library:card.article')}
+                durationBadge={
+                  card.durationBand ? (
+                    <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
+                  ) : null
+                }
+                href={`/content/${card.resourceId}`}
+                renderLink={({ className, children }) => (
+                  <Link
+                    to="/content/$contentId"
+                    params={{ contentId: card.resourceId }}
+                    className={className}
+                  >
+                    {children}
+                  </Link>
+                )}
+                placeholder
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
+  const { t } = useTranslation(['library', 'common']);
+  const { principal } = useAuth();
+
+  const ctx = principal?.context ?? { kind: 'personal' as const };
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: libraryKeys.contentList(ctx, locale),
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (pageParam) params.set('cursor', pageParam);
+      const qs = params.toString();
+      return api.request(`/api/library/content${qs ? `?${qs}` : ''}`, {
+        schema: LibraryContentListSchema,
+        headers: { 'Accept-Language': locale },
+      });
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+
+  const allCards: LibraryCard[] = data?.pages.flatMap((page) => page.items) ?? [];
+  const addedCount = isFetchingNextPage ? 0 : (data?.pages[data.pages.length - 1]?.items.length ?? 0);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <Heading level={1} typeRole="screenTitle">
+          {t('library:home.greeting', { name: principal?.displayName ?? '' })}
+        </Heading>
+        <Skeleton lines={3} label={t('common:state.loading')} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -53,83 +163,70 @@ function HomePage() {
       ) : null}
 
       <Heading level={1} typeRole="screenTitle">
-        {t('workspace:home.greeting', { name: principal?.displayName ?? '' })}
+        {t('library:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
 
-      {/* Support area cards */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.supportAreas')}
-        </Heading>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {supportAreas.map((area) => (
-            <Link
-              key={area}
-              to="/support/$area"
-              params={{ area }}
-              className="flex flex-col items-center gap-3 p-6 rounded-card border border-border-subtle bg-surface hover:bg-tint transition-colors no-underline"
-            >
-              <CategoryIcon category={supportAreaIcon[area]} size={48} />
-              <Text className="font-[var(--font-weight-label)] text-center">
-                {t(`workspace:categories.${area}`)}
-              </Text>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {isError ? (
+        <Alert tone="danger">
+          {mapLibraryError(error, t as Parameters<typeof mapLibraryError>[1])}
+        </Alert>
+      ) : null}
 
-      {/* Next appointment card */}
       <section>
         <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.upcoming')}
+          {t('library:home.availableResources')}
         </Heading>
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Avatar initials="MR" name={SAMPLE_BOOKING.advisorName} size="md" />
-            <div>
-              <Text className="font-[var(--font-weight-label)]">
-                {t('workspace:appointment.with', { name: SAMPLE_BOOKING.advisorName })}
-              </Text>
-              <Text className="type-metadata text-text-secondary">
-                {formatDateTime(new Date(SAMPLE_BOOKING.appointmentAt), locale)}
-              </Text>
+        {allCards.length === 0 && !isError ? (
+          <StatusBlock
+            state="empty"
+            title={t('library:home.empty.title')}
+            body={t('library:home.empty.body')}
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {allCards.map((card) => (
+                <ContentCard
+                  key={card.resourceId}
+                  resourceId={card.resourceId}
+                  title={card.title}
+                  outcome={card.summary}
+                  formatLabel={t('library:card.article')}
+                  imageUrl={card.coverImageUrl}
+                  durationBadge={
+                    card.durationBand ? (
+                      <DurationBadge bandLabel={t(`library:duration.${card.durationBand}`)} />
+                    ) : null
+                  }
+                  saved={card.saved}
+                  href={`/content/${card.resourceId}`}
+                  renderLink={({ className, children }) => (
+                    <Link
+                      to="/content/$contentId"
+                      params={{ contentId: card.resourceId }}
+                      className={className}
+                    >
+                      {children}
+                    </Link>
+                  )}
+                />
+              ))}
             </div>
-          </div>
-          <CoverageNotice>
-            {t('workspace:appointment.format')}: {t(`workspace:appointment.${SAMPLE_BOOKING.format}`)}
-          </CoverageNotice>
-        </div>
+            <ShowMore
+              label={t('library:home.showMore')}
+              onLoadMore={() => void fetchNextPage()}
+              loading={isFetchingNextPage}
+              loadingLabel={t('library:home.showMoreLoading')}
+              hasMore={!!hasNextPage}
+              addedAnnouncement={
+                addedCount > 0
+                  ? t('library:home.showMoreAnnouncement', { count: addedCount })
+                  : undefined
+              }
+            />
+          </>
+        )}
       </section>
-
-      {/* Channel digest */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.recentMessages')}
-        </Heading>
-        <div className="space-y-3">
-          {latestPosts.map((post) => (
-            <div
-              key={post.id}
-              className="rounded-card border border-border-subtle bg-surface p-4"
-            >
-              <Text className="font-[var(--font-weight-label)] mb-1">
-                {findPersonName(post.authorId)}
-              </Text>
-              <Text className="text-text-secondary">{post.content}</Text>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* One optional photo */}
-      <PhotoFigure
-        photo="family-play"
-        alt=""
-        imageRole="card"
-        sizes="(min-width: 768px) 50vw, 100vw"
-        decorative
-        className="rounded-card overflow-hidden"
-      />
     </div>
   );
 }

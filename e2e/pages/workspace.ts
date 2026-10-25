@@ -17,6 +17,11 @@ export const workspacePages: PageEntry[] = [
   { name: 'workspace-hr', url: `${WORKSPACE_URL}/hr?role=hr_admin`, prepare: 'setHrAdminRole' },
   { name: 'workspace-manage', url: `${WORKSPACE_URL}/manage?role=manager`, prepare: 'setManagerRole' },
   { name: 'workspace-sign-in', url: `${WORKSPACE_URL}/sign-in` },
+  { name: 'workspace-library-home', url: `${WORKSPACE_URL}/` },
+  { name: 'workspace-content-detail', url: `${WORKSPACE_URL}/content/res_sample_evening_wind_down` },
+  { name: 'workspace-saved', url: `${WORKSPACE_URL}/saved` },
+  { name: 'workspace-explore', url: `${WORKSPACE_URL}/explore` },
+  { name: 'workspace-requests', url: `${WORKSPACE_URL}/requests` },
 ];
 
 export const workspacePrepareActions: Record<string, (page: Page) => Promise<void>> = {

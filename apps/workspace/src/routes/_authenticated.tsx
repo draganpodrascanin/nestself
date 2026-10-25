@@ -11,6 +11,9 @@ import {
   Users,
   Buildings,
   ShieldCheck,
+  BookmarkSimple,
+  Compass,
+  PaperPlaneTilt,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -29,23 +32,51 @@ export const Route = createFileRoute('/_authenticated')({
   component: AuthenticatedLayout,
 });
 
+interface NavEntry {
+  to: string;
+  icon: typeof House;
+  label: string;
+  group?: string;
+}
+
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace']);
+  const { t } = useTranslation(['common', 'workspace', 'library']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
 
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
-  const navItems = [
-    { to: '/' as const, icon: House, label: t('nav.home') },
-    { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
-    { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
-    { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
-    { to: '/polls' as const, icon: ChartBar, label: t('nav.polls') },
-    { to: '/settings' as const, icon: Gear, label: t('nav.settings') },
+  // In api mode: Home, Explore, Saved, My requests (CLI-R-04)
+  const apiNavItems: NavEntry[] = [
+    { to: '/', icon: House, label: t('library:nav.home') },
+    { to: '/explore', icon: Compass, label: t('library:nav.explore') },
+    { to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') },
+    { to: '/requests', icon: PaperPlaneTilt, label: t('library:nav.myRequests') },
+    { to: '/settings', icon: Gear, label: t('common:nav.settings') },
   ];
+
+  // Legacy sample-mode nav
+  const sampleNavItems: NavEntry[] = [
+    { to: '/', icon: House, label: t('library:nav.home') },
+    { to: '/explore', icon: Compass, label: t('library:nav.explore') },
+    { to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') },
+    { to: '/requests', icon: PaperPlaneTilt, label: t('library:nav.myRequests') },
+    { to: '/settings', icon: Gear, label: t('common:nav.settings') },
+  ];
+
+  // Prototype screens only in sample mode (CLI-R-05)
+  const prototypeItems: NavEntry[] = isSampleDataMode
+    ? [
+        { to: '/support', icon: Heart, label: t('common:nav.support'), group: t('library:prototype.group') },
+        { to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments'), group: t('library:prototype.group') },
+        { to: '/messages', icon: ChatCircleText, label: t('common:nav.messages'), group: t('library:prototype.group') },
+        { to: '/channels', icon: Megaphone, label: t('common:nav.channels'), group: t('library:prototype.group') },
+        { to: '/polls', icon: ChartBar, label: t('common:nav.polls'), group: t('library:prototype.group') },
+      ]
+    : [];
+
+  const mainItems = isSampleDataMode ? sampleNavItems : apiNavItems;
 
   const showManager = principal
     ? can(principal, 'events.request', undefined, effectiveActions)
@@ -54,55 +85,70 @@ function AuthenticatedLayout() {
     ? can(principal, 'program.overview', undefined, effectiveActions)
     : false;
 
-  const managerNav = showManager
-    ? [{ to: '/manage' as const, icon: Users, label: t('nav.manage') }]
+  const managerNav: NavEntry[] = showManager
+    ? [{ to: '/manage', icon: Users, label: t('common:nav.manage') }]
     : [];
 
-  // `/hr/access` sits under the `_hr` gate, so it needs `program.overview` too.
   const showAccess =
     showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
-  const hrNav = showHr
-    ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
+  const hrNav: NavEntry[] = showHr
+    ? [{ to: '/hr', icon: Buildings, label: t('common:nav.hr') }]
     : [];
 
-  const accessNav = showAccess
-    ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
+  const accessNav: NavEntry[] = showAccess
+    ? [{ to: '/hr/access', icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...hrNav, ...accessNav];
+  const allNavItems = [...mainItems, ...prototypeItems, ...managerNav, ...hrNav, ...accessNav];
 
-  /** Bottom bar: at most 5 items. */
-  const bottomBarItems = [
-    { to: '/' as const, icon: House, label: t('nav.home') },
-    { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
-    { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
-    { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
-  ];
+  /** Bottom bar: at most 5 items (main nav only). */
+  const bottomBarItems = mainItems.slice(0, 4);
 
   const renderNavItemList = (
     items: typeof allNavItems,
     variant: 'sidebar' | 'bottom' = 'sidebar',
   ) =>
-    items.map((item) => (
-      <NavItem
-        key={item.to}
-        variant={variant}
-        href={item.to}
-        icon={item.icon}
-        label={item.label}
-        active={item.to === '/' ? matches[matches.length - 1]?.pathname === '/' : isActive(item.to)}
-        render={(props) => (
-          <Link to={item.to} className={props.className} aria-current={props['aria-current']}>
-            {props.children}
-          </Link>
-        )}
-      />
-    ));
+    items.map((item, index) => {
+      const prevGroup = items.slice(0, index).reverse().find((i) => i.group)?.group;
+      const groupLabel =
+        variant === 'sidebar' && item.group && item.group !== prevGroup
+          ? item.group
+          : null;
+
+      return (
+        <div key={item.to}>
+          {groupLabel ? (
+            <p className="px-2 pt-4 pb-1 type-metadata text-text-secondary">
+              {groupLabel}
+            </p>
+          ) : null}
+          <NavItem
+            variant={variant}
+            href={item.to}
+            icon={item.icon}
+            label={item.label}
+            active={
+              item.to === '/'
+                ? matches[matches.length - 1]?.pathname === '/'
+                : isActive(item.to)
+            }
+            render={(props) => (
+              <Link
+                to={item.to}
+                className={props.className}
+                aria-current={props['aria-current']}
+              >
+                {props.children}
+              </Link>
+            )}
+          />
+        </div>
+      );
+    });
 
   const sidebar = (
-    <nav aria-label={t('nav.menu')} className="gap-1 p-4 flex flex-col">
+    <nav aria-label={t('common:nav.menu')} className="gap-1 p-4 flex flex-col">
       <p className="px-2 py-3 type-label text-primary">NestSelf</p>
       {renderNavItemList(allNavItems)}
     </nav>
@@ -119,7 +165,7 @@ function AuthenticatedLayout() {
   );
 
   const bottomBar = (
-    <nav aria-label={t('nav.menu')} className="py-1 flex items-center justify-around">
+    <nav aria-label={t('common:nav.menu')} className="py-1 flex items-center justify-around">
       {renderNavItemList(bottomBarItems, 'bottom')}
     </nav>
   );

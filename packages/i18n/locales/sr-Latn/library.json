@@ -1,0 +1,86 @@
+{
+  "nav": {
+    "home": "Početna",
+    "explore": "Istraži",
+    "saved": "Sačuvano",
+    "myRequests": "Moji zahtevi"
+  },
+  "home": {
+    "greeting": "Zdravo, {{name}}",
+    "availableResources": "Dostupni resursi",
+    "showMore": "Prikaži više",
+    "showMoreLoading": "Učitavanje",
+    "showMoreAnnouncement": "{{count}} više stavki učitano",
+    "empty": {
+      "title": "Nema dostupnih resursa",
+      "body": "Sadržaj se priprema. Navratite uskoro."
+    }
+  },
+  "card": {
+    "save": "Sačuvaj",
+    "unsave": "Ukloni iz sačuvanih",
+    "article": "Članak"
+  },
+  "detail": {
+    "outcome": "Šta dobijate",
+    "duration": "Trajanje",
+    "reviewedBy": "Pregledao: {{name}}",
+    "reviewedOn": "Pregledano: {{date}}",
+    "sources": "Izvori",
+    "related": "Povezani resursi",
+    "save": "Sačuvaj ovaj resurs",
+    "unsave": "Ukloni iz sačuvanih",
+    "saveDemo": "Ovo je demonstracija. Ništa nije sačuvano.",
+    "backToHome": "Nazad na početnu"
+  },
+  "saved": {
+    "title": "Sačuvano",
+    "empty": {
+      "title": "Nema sačuvanih stavki",
+      "body": "Sačuvajte resurse da biste ih kasnije našli ovde."
+    },
+    "unavailable": "Ovaj sadržaj više nije dostupan",
+    "remove": "Ukloni",
+    "removeDemo": "Ovo je demonstracija. Ništa nije uklonjeno."
+  },
+  "content": {
+    "unavailable": "Ovaj sadržaj nije dostupan"
+  },
+  "explore": {
+    "comingSoon": {
+      "title": "Istraži",
+      "body": "Pregledajte i filtrirajte resurse po temi, formatu i trajanju. Dolazi u sledećoj verziji."
+    }
+  },
+  "requests": {
+    "comingSoon": {
+      "title": "Moji zahtevi",
+      "body": "Pošaljite i pratite zahteve za sadržaj. Dolazi u sledećoj verziji."
+    }
+  },
+  "prototype": {
+    "group": "Prototip ekrani"
+  },
+  "renderer": {
+    "transcript": "Transkript",
+    "noteWarning": "Upozorenje",
+    "noteTip": "Savet",
+    "noteDisclaimer": "Napomena o odgovornosti",
+    "noteDefault": "Napomena",
+    "checklist": "Lista za proveru",
+    "opensInNewTab": "Otvara se u novom tabu",
+    "downloadPdf": "Preuzmi PDF",
+    "imageUnavailable": "Slika nije dostupna"
+  },
+  "duration": {
+    "under_5": "Do 5 min",
+    "5_to_15": "5–15 min",
+    "over_15": "Preko 15 min"
+  },
+  "error": {
+    "contentNotAvailable": "Ovaj sadržaj nije dostupan.",
+    "invalidContext": "Prebacite se u odgovarajući kontekst da biste videli ovaj sadržaj.",
+    "network": "Nije moguće učitati sadržaj. Proverite vezu i pokušajte ponovo.",
+    "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
+  }
+}

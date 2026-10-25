@@ -1,0 +1,86 @@
+{
+  "nav": {
+    "home": "Home",
+    "explore": "Explore",
+    "saved": "Saved",
+    "myRequests": "My requests"
+  },
+  "home": {
+    "greeting": "Hello, {{name}}",
+    "availableResources": "Available resources",
+    "showMore": "Show more",
+    "showMoreLoading": "Loading more",
+    "showMoreAnnouncement": "{{count}} more items loaded",
+    "empty": {
+      "title": "No resources available yet",
+      "body": "Content is being prepared. Check back soon."
+    }
+  },
+  "card": {
+    "save": "Save",
+    "unsave": "Remove from saved",
+    "article": "Article"
+  },
+  "detail": {
+    "outcome": "What you get",
+    "duration": "Duration",
+    "reviewedBy": "Reviewed by {{name}}",
+    "reviewedOn": "Reviewed on {{date}}",
+    "sources": "Sources",
+    "related": "Related resources",
+    "save": "Save this resource",
+    "unsave": "Remove from saved",
+    "saveDemo": "This is a demonstration. Nothing was saved.",
+    "backToHome": "Back to Home"
+  },
+  "saved": {
+    "title": "Saved",
+    "empty": {
+      "title": "No saved items",
+      "body": "Save resources to find them here later."
+    },
+    "unavailable": "This content is no longer available",
+    "remove": "Remove",
+    "removeDemo": "This is a demonstration. Nothing was removed."
+  },
+  "content": {
+    "unavailable": "This content is not available"
+  },
+  "explore": {
+    "comingSoon": {
+      "title": "Explore",
+      "body": "Browse and filter resources by topic, format and duration. Coming in the next release."
+    }
+  },
+  "requests": {
+    "comingSoon": {
+      "title": "My requests",
+      "body": "Submit and track content requests. Coming in the next release."
+    }
+  },
+  "prototype": {
+    "group": "Prototype screens"
+  },
+  "renderer": {
+    "transcript": "Transcript",
+    "noteWarning": "Warning",
+    "noteTip": "Tip",
+    "noteDisclaimer": "Disclaimer",
+    "noteDefault": "Note",
+    "checklist": "Checklist",
+    "opensInNewTab": "Opens in a new tab",
+    "downloadPdf": "Download PDF",
+    "imageUnavailable": "Image unavailable"
+  },
+  "duration": {
+    "under_5": "Under 5 min",
+    "5_to_15": "5–15 min",
+    "over_15": "Over 15 min"
+  },
+  "error": {
+    "contentNotAvailable": "This content is not available.",
+    "invalidContext": "Please switch to a valid context to view this content.",
+    "network": "Could not load content. Check your connection and try again.",
+    "unknown": "Something went wrong. Please try again."
+  }
+}
