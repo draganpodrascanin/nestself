@@ -55,6 +55,23 @@ describe('NestSelfComputeStack -- staging', () => {
     template.resourceCountIs('AWS::ECR::Repository', 2);
   });
 
+  it('passes the surface and API origins the API requires in cognito mode', () => {
+    template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+      Family: 'nestself-staging-api',
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: 'api',
+          Environment: Match.arrayWith([
+            { Name: 'AUTH_MODE', Value: 'cognito' },
+            { Name: 'WORKSPACE_URL', Value: 'https://app.staging.nestself.rs' },
+            { Name: 'ADMIN_URL', Value: 'https://admin.staging.nestself.rs' },
+            { Name: 'API_PUBLIC_URL', Value: 'https://app.staging.nestself.rs' },
+          ]),
+        }),
+      ]),
+    });
+  });
+
   it('lets the API task role list users and read one with AdminGetUser (MFA enrolment lookup)', () => {
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {

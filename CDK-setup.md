@@ -253,7 +253,7 @@ Do this when the first features are complete. Each item is a manual prerequisite
 6. Deploy everything: `pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true -c edgeWafArn=<ARN>`.
 7. Run the migration task once (`aws ecs run-task ... nestself-staging-migrate`, see `infra/cdk/README.md`), then push the first images through the `deploy-staging` workflow.
 8. GitHub: create the `staging` environment and set the variables the workflow reads: `DEPLOY_ROLE_ARN`, `ECR_REPO_URI`, `ECR_REPO_NAME`, `ECR_REPO_MARKETING_URI`, `MIGRATE_NETWORK_CONFIG`, `SPA_WORKSPACE_BUCKET`, `SPA_ADMIN_BUCKET`, `CF_WORKSPACE_DIST_ID`, `CF_ADMIN_DIST_ID` (all are stack outputs). The deploy role trusts `main` and pull requests for staging, `v*` tags for production.
-9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); set `TRUST_PROXY_HOPS=1` behind the load balancer and `API_PUBLIC_URL`, `WORKSPACE_URL`, `ADMIN_URL` to the public origins.
+9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); the compute stack passes `WORKSPACE_URL`, `ADMIN_URL` and `API_PUBLIC_URL` from the stage config (`lib/config.ts`: the SPAs proxy `/api`, so the API origin is the workspace origin); set `TRUST_PROXY_HOPS=1` behind the load balancer.
 10. Repeat for production with `-c stage=production`; enable the phase 2 security baseline (Service Control Policies, Security Hub) before real users.
 
 ## 9. Last: mobile
@@ -274,7 +274,7 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | --- | --- | --- |
 | Shell | `AWS_PROFILE`, `AWS_REGION`, `AWS_ACCOUNT_DEV` (`AWS_ACCOUNT_STAGING`, `AWS_ACCOUNT_PRODUCTION`) | you, section 2 |
 | `apps/api/.env` | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_WEB_CLIENT_ID`, `COGNITO_WEB_CLIENT_SECRET`, `COGNITO_MOBILE_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_ISSUER`, `SESSION_ENCRYPTION_KEY` | `env-from-outputs.mjs <stage>` |
-| `apps/api/.env` | `AUTH_MODE=cognito`, `REDIS_URL`, `SESSION_COOKIE_INSECURE_DEV=true` (local only), `AWS_PROFILE` or access keys, optional `SES_FROM_EMAIL`, `IP_HASH_SALT`, `JOBS_TIMEZONE`; `API_PUBLIC_URL` (public API origin for the SSO start and callback URLs, default `http://localhost:4000`) | you, section 5 |
+| `apps/api/.env` | `AUTH_MODE=cognito`, `REDIS_URL`, `SESSION_COOKIE_INSECURE_DEV=true` (local only), `AWS_PROFILE` or access keys, optional `SES_FROM_EMAIL`, `IP_HASH_SALT`, `JOBS_TIMEZONE`; `API_PUBLIC_URL=http://localhost:4000`, `WORKSPACE_URL`, `ADMIN_URL` (required in cognito mode: the SSO start and callback URLs and where the callback sends the browser) | you, section 5 |
 | `apps/workspace/.env.local`, `apps/admin/.env.local` | `VITE_DATA_SOURCE=api`, `VITE_API_URL` | you, section 6 |
 | `apps/mobile/.env.local` | `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_DATA_SOURCE=api`, `EXPO_PUBLIC_API_URL` | `env-from-outputs.mjs <stage> --mobile`, section 9 |
 | GitHub environment | `DEPLOY_ROLE_ARN`, `ECR_*`, `MIGRATE_NETWORK_CONFIG`, `SPA_*_BUCKET`, `CF_*_DIST_ID` | stack outputs, section 8 |

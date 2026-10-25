@@ -140,6 +140,10 @@ export class NestSelfComputeStack extends cdk.Stack {
       COGNITO_MOBILE_CLIENT_ID: cdk.Fn.importValue(`nestself-${stage}-cognito-mobile-client-id`),
       COGNITO_DOMAIN: cdk.Fn.importValue(`nestself-${stage}-cognito-domain`),
       COGNITO_ISSUER: cdk.Fn.importValue(`nestself-${stage}-cognito-issuer`),
+      // Required by the API in cognito mode: SSO redirects and the discover start URL (docs/auth/implementation.md 22).
+      WORKSPACE_URL: config.workspaceUrl,
+      ADMIN_URL: config.adminUrl,
+      API_PUBLIC_URL: config.apiPublicUrl,
     };
 
     const sharedSecrets: Record<string, ecs.Secret> = {
