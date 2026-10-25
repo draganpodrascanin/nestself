@@ -89,8 +89,8 @@ export interface ChimeVideoProviderOptions {
   eventsQueueArn: string;
   /**
    * `RECORDINGS_BUCKET`: webinar captures land under the caller's prefix,
-   * `recordings/{webinarId}/raw/`, and the concatenated MP4 under
-   * `recordings/{webinarId}/final/` (D-CW-18, T-CW-2.5).
+   * `raw/{webinarId}/` (expired after 30 days), and the concatenated MP4
+   * under `final/{webinarId}/` (D-CW-18, T-CW-2.5).
    */
   recordingsBucket: string;
   /** Deployment stage for the `stage` tag (D-CW-11). */

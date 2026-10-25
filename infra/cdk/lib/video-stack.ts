@@ -22,12 +22,11 @@ export interface VideoStackProps extends cdk.StackProps {
 }
 
 /**
- * Prefix whose objects expire after 30 days (D-CW-18): the spike scripts'
- * capture segments. Webinar recordings use `recordings/{webinarId}/raw/` and
- * `recordings/{webinarId}/final/` (T-CW-2.5 step 7), which a lifecycle
- * filter cannot match (prefixes are literal, no wildcard), so their raw
- * segments are not expired by this rule; README "Recordings: raw-segment
- * expiry" lists the options.
+ * Prefix whose objects expire after 30 days (D-CW-18, retention 16.3): the
+ * capture pipeline's segments, `raw/{webinarId}/` (and the spike scripts'
+ * `raw/spike-cw-nn/`). The segments lead the key because a lifecycle filter
+ * is a literal prefix. The concatenated MP4 under `final/{webinarId}/` is
+ * kept (T-CW-2.5 step 7, CW-R-79d).
  */
 const RECORDINGS_RAW_PREFIX = 'raw/';
 

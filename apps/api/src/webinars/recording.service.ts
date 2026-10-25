@@ -13,8 +13,9 @@
  *   (`no_meeting`, `no_presenter`). Starts the media capture pipeline with
  *   `SelectedVideoStreams` set to the attendee ids of the session's
  *   PRESENTER participants and `CompositedVideo` `PresenterOnly` at HD with
- *   the audio muxed in, into `recordings/{webinarId}/raw/`; SCHEDULED to
- *   RECORDING, `webinar.recording { started }` on `webinar:{id}` for the REC
+ *   the audio muxed in, into `raw/{webinarId}/` (the bucket's `raw/` rule
+ *   expires it after 30 days); SCHEDULED to RECORDING,
+ *   `webinar.recording { started }` on `webinar:{id}` for the REC
  *   indicator (UX-45), audit `webinar.recording.started`. Attendees are never
  *   on video: they can never send it (D-CW-35) and are never selected. An
  *   attendee given the floor is on the audio track; the client tells them
@@ -29,8 +30,9 @@
  *   recording started is 409 `recording_not_allowed`; an end before it started
  *   is FAILED (`ended_before_start`).
  * - `webinar.recording.finalize` (worker): `DeleteMediaCapturePipeline`
- *   (idempotent), then one `CreateMediaConcatenationPipeline` per attempt
- *   from the capture's ARN into `recordings/{webinarId}/final/`, polled every
+ *   (idempotent, sent before each new concatenation), then one
+ *   `CreateMediaConcatenationPipeline` per attempt
+ *   from the capture's ARN into `final/{webinarId}/`, polled every
  *   30 seconds (without spending an attempt) for up to 3 hours; READY with
  *   `concatenated_key` and audit `webinar.recording.ready`, then the CMS
  *   handoff: `handoff_status = 'pending'` with `handoff_location` (the
@@ -51,7 +53,7 @@
  * webinar meeting should reserve one seat for it); SPIKE-CW-04, that
  * `SelectedVideoStreams` and `PresenterOnly` combine into a presenter-only
  * composite, and the object name Chime gives the concatenated MP4 under
- * `final/composited-video/` (the key stored is that folder until then).
+ * `final/{webinarId}/composited-video/` (the key stored is that folder until then).
  *
  * Audit details carry identifiers, a reason or a key only (CW-R-33a).
  */
@@ -197,7 +199,7 @@ export class WebinarRecordingService {
       return { webinarId, started: false, recordingId: row.id, skipped: 'failed' };
     }
 
-    const started = await this.access.scoped(webinar.orgId, async (tx) => {
+    const started = await this.access.transaction(webinar.orgId, async (tx) => {
       const moved = await this.recordings.transition(
         row.id,
         ['scheduled'],
@@ -273,6 +275,12 @@ export class WebinarRecordingService {
         await this.stopRow(webinar, row, actor, 'ended');
         return;
       }
+      if (row?.status === 'processing') {
+        // A stop whose finalize job was lost (no queue at the time, an enqueue error) gets it now;
+        // the deterministic job id makes a second enqueue a no-op.
+        await this.enqueueFinalize(webinar, row);
+        return;
+      }
       if (row && row.status !== 'scheduled') return;
       if (!row) {
         const current = await this.webinars.findById(webinar.id);
@@ -294,7 +302,7 @@ export class WebinarRecordingService {
     actor: RecordingActor,
     reason: 'moderator' | 'ended',
   ): Promise<WebinarRecordingRecord | null> {
-    const stopped = await this.access.scoped(webinar.orgId, async (tx) => {
+    const stopped = await this.access.transaction(webinar.orgId, async (tx) => {
       const moved = await this.recordings.transition(row.id, ['recording'], 'processing', { stoppedAt: new Date() }, tx);
       if (moved) await this.recordings.setWebinarStatus(webinar.id, 'processing', tx);
       return moved;
@@ -308,8 +316,14 @@ export class WebinarRecordingService {
       recordingId: row.id,
       reason,
     });
+    await this.enqueueFinalize(webinar, row);
+    this.logger.log({ webinarId: webinar.id, recordingId: row.id, operation: 'recording.stop', reason }, 'Webinar recording stopped');
+    return stopped;
+  }
+
+  /** `webinar.recording.finalize`, once per session by job id: the worker deletes the capture and concatenates (CW-R-79a). */
+  private async enqueueFinalize(webinar: Pick<WebinarRecord, 'id'>, row: WebinarRecordingRecord): Promise<void> {
     try {
-      // The worker deletes the capture pipeline and concatenates (CW-R-79a).
       if (!(await this.scheduler.enqueueRecordingFinalize(webinar.id, row.sessionId))) {
         this.logger.warn({ webinarId: webinar.id, recordingId: row.id, operation: 'enqueueFinalize' }, 'No queue; the recording is not finalized');
       }
@@ -319,8 +333,6 @@ export class WebinarRecordingService {
         'Recording finalize not enqueued',
       );
     }
-    this.logger.log({ webinarId: webinar.id, recordingId: row.id, operation: 'recording.stop', reason }, 'Webinar recording stopped');
-    return stopped;
   }
 
   // ── webinar.recording.finalize (worker) ───────────────────────────────────
@@ -341,7 +353,6 @@ export class WebinarRecordingService {
 
     const finalPrefix = recordingFinalPrefix(webinarId);
     try {
-      if (row.providerPipelineId) await this.video.stopRecording({ pipelineId: row.providerPipelineId });
       if (!row.providerPipelineArn) {
         await this.fail(webinar, row, 'no_capture', JOB_ACTOR);
         return { webinarId, finalized: false, recordingId: row.id, skipped: 'failed' };
@@ -349,6 +360,8 @@ export class WebinarRecordingService {
 
       let concatenationPipelineId = row.concatenationPipelineId;
       if (!concatenationPipelineId) {
+        // Once per concatenation, not on every poll: Chime concatenates a capture only after it finished.
+        if (row.providerPipelineId) await this.video.stopRecording({ pipelineId: row.providerPipelineId });
         ({ pipelineId: concatenationPipelineId } = await this.video.startConcatenation({
           sessionId,
           capturePipelineArn: row.providerPipelineArn,
@@ -377,7 +390,7 @@ export class WebinarRecordingService {
         throw new ConcatenationFailedError();
       }
 
-      const ready = await this.access.scoped(webinar.orgId, async (tx) => {
+      const ready = await this.access.transaction(webinar.orgId, async (tx) => {
         const moved = await this.recordings.transition(
           row.id,
           ['processing'],
@@ -459,7 +472,7 @@ export class WebinarRecordingService {
     reason: string,
     actor: RecordingActor,
   ): Promise<void> {
-    const failed = await this.access.scoped(webinar.orgId, async (tx) => {
+    const failed = await this.access.transaction(webinar.orgId, async (tx) => {
       if (row) {
         const moved = await this.recordings.transition(row.id, FAILABLE, 'failed', { failureReason: reason, failedAt: new Date() }, tx);
         if (!moved) return null;

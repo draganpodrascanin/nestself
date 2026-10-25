@@ -1186,7 +1186,7 @@ Resources:
 
 1. **SQS queue** `chime-events`: server-side encryption with the platform KMS key, dead-letter queue after 5 receives, a resource policy allowing `meetings.chime.amazonaws.com` to send messages with `aws:SourceAccount` condition [D-CW-12, OPS-16].
 2. **EventBridge rule**: `source: aws.chime`, `detail-type: Chime Meeting State Change`, target is the SQS queue. This is the backstop; direct SQS notification from `CreateMeeting` is the primary path [D-CW-12, OPS-09].
-3. **S3 bucket** `recordings`: SSE-KMS on the platform key, block-public-access, bucket policy for `mediapipelines.chime.amazonaws.com` with `aws:SourceAccount` and `aws:SourceArn` conditions, lifecycle rule expiring raw segments after 30 days [D-CW-18, WEB-27].
+3. **S3 bucket** `recordings`: SSE-KMS on the platform key, block-public-access, bucket policy for `mediapipelines.chime.amazonaws.com` with `aws:SourceAccount` and `aws:SourceArn` conditions, lifecycle rule expiring the raw segments under `raw/` after 30 days. Layout: capture segments under `raw/{webinarId}/`, the concatenated MP4 under `final/{webinarId}/` (a lifecycle filter is a literal prefix, so the segments lead the key) [D-CW-18, WEB-27, T-CW-2.5].
 4. **IAM managed policy** `VideoApiPolicy`: `chime:CreateMeeting`, `chime:CreateMeetingWithAttendees`, `chime:CreateAttendee`, `chime:UpdateAttendeeCapabilities`, `chime:DeleteAttendee`, `chime:DeleteMeeting`, `chime:GetMeeting` on `Resource: *` with a cdk-nag `AwsSolutions-IAM5` suppression (meeting actions carry no resource-level permissions, OPS-21, OPS-22) [D-CW-31].
 5. **IAM managed policy** `VideoWorkerPolicy`: SQS receive and delete on the queue, media pipeline actions on `Resource: *` with cdk-nag suppression, S3 put, get and list on the recordings bucket [D-CW-31].
 
@@ -1255,7 +1255,7 @@ This section enumerates security constraints that apply across the epic. Each is
 
 **CW-R-79c**: webinar recording uses `SelectedVideoStreams` set to the presenter participants' attendee ids and `CompositedVideo` layout `PresenterOnly` at HD. Attendees are receive-only, so no attendee video can appear in the capture. An attendee given the floor has audio `SendReceive` only; their voice may be captured. The floor dialog warns the attendee that their voice is part of the recording before they unmute [D-CW-18, D-CW-35, WEB-23 to WEB-26].
 
-**CW-R-79d**: when a moderator stops recording, the `webinar.recording.finalize` job runs a concatenation pipeline: it lists the raw segments in the recordings bucket under the session prefix, concatenates them into a single MP4, writes the result back to the bucket under the `concatenated/` prefix, and updates `webinar_recordings.status` to `ready` [D-CW-18, WEB-29]. The raw segments expire after 30 days via the bucket lifecycle rule.
+**CW-R-79d**: when the recording stops (the moderator's early stop or the end of the webinar), the `webinar.recording.finalize` job deletes the capture pipeline and runs a concatenation pipeline from it: the segments under `raw/{webinarId}/` become a single MP4 under `final/{webinarId}/`, and `webinar_recordings.status` moves to `ready` [D-CW-18, WEB-29]. The raw segments expire after 30 days via the bucket's `raw/` lifecycle rule.
 
 **CW-R-79e**: the CMS handoff creates a draft content item through the CMS media module interface (NS-CONTENT-01). Until that interface exists, the handoff writes the S3 key and metadata to `webinar_recordings` with `handoff_status = 'pending'` [D-CW-03].
 

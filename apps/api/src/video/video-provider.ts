@@ -346,7 +346,7 @@ export interface StartRecordingInput {
   presenterAttendeeIds: string[];
   /**
    * Key prefix of the capture segments in the recordings bucket, ending in
-   * `/`: `recordings/{webinarId}/raw/` (T-CW-2.5 step 7, {@link recordingRawPrefix}).
+   * `/`: `raw/{webinarId}/` (T-CW-2.5 step 7, {@link recordingRawPrefix}).
    */
   s3Prefix: string;
 }
@@ -360,7 +360,7 @@ export interface StartConcatenationInput {
   sessionId: string;
   /** The capture pipeline's ARN, created within 30 days (WEB-29). */
   capturePipelineArn: string;
-  /** Destination key prefix, ending in `/`: `recordings/{webinarId}/final/` ({@link recordingFinalPrefix}). */
+  /** Destination key prefix, ending in `/`: `final/{webinarId}/` ({@link recordingFinalPrefix}). */
   s3Prefix: string;
   /** 1-based attempt: the idempotency token is per attempt, so a retry after a failed concatenation starts anew. */
   attempt: number;
@@ -376,14 +376,18 @@ export interface DescribeConcatenationInput {
 // Recordings bucket layout (T-CW-2.5 step 7, D-CW-18)
 // ---------------------------------------------------------------------------
 
-/** `recordings/{webinarId}/raw/`: the capture pipeline's 5-second segments. */
+/**
+ * `raw/{webinarId}/`: the capture pipeline's 5-second segments, under the
+ * bucket's `raw/` lifecycle rule, which expires them after 30 days (an S3
+ * lifecycle filter is a literal prefix, so the segments lead the key).
+ */
 export function recordingRawPrefix(webinarId: string): string {
-  return `recordings/${webinarId}/raw/`;
+  return `raw/${webinarId}/`;
 }
 
-/** `recordings/{webinarId}/final/`: the concatenated MP4. */
+/** `final/{webinarId}/`: the concatenated MP4, kept until the CMS takes it (D-CW-03). */
 export function recordingFinalPrefix(webinarId: string): string {
-  return `recordings/${webinarId}/final/`;
+  return `final/${webinarId}/`;
 }
 
 /**
@@ -401,7 +405,7 @@ const RECORDING_PREFIX_PATTERN = /^(?!\/)(?!.*\.\.)[A-Za-z0-9!_.*'()/-]+\/$/;
 /** Both adapters refuse a recording prefix that is not a relative folder, before any provider call. */
 export function assertRecordingPrefix(prefix: string): void {
   if (!RECORDING_PREFIX_PATTERN.test(prefix)) {
-    throw new Error('A recording prefix is a relative folder key ending in "/" (recordings/{webinarId}/raw/)');
+    throw new Error('A recording prefix is a relative folder key ending in "/" (raw/{webinarId}/)');
   }
 }
 

@@ -174,6 +174,8 @@ async function setup(options: SetupOptions = {}) {
   const access = {
     load: vi.fn(async () => webinar),
     scoped: async (_orgId: string | null, fn: (tx: undefined) => Promise<unknown>) => fn(undefined),
+    // A transaction even without an organisation (system context): the status pairs commit together.
+    transaction: vi.fn(async (_orgId: string | null, fn: (tx: undefined) => Promise<unknown>) => fn(undefined)),
     host: vi.fn(async () => (allowed.host ? { role: 'presenter' } : null)),
     canModerate: vi.fn(async () => allowed.moderate),
     allows: vi.fn(async () => allowed.manage),
@@ -212,7 +214,7 @@ afterEach(() => {
 });
 
 describe('webinar.recording.start (WBN-28, CW-R-121)', () => {
-  it('captures the presenters only, under recordings/{webinarId}/raw/, and announces the REC indicator', async () => {
+  it('captures the presenters only, under raw/{webinarId}/, and announces the REC indicator', async () => {
     const { service, video, recordings, participants, toAudience, audits } = await setup({ roles: ['presenter', 'attendee'] });
     const start = vi.spyOn(video, 'startRecording');
 
@@ -224,13 +226,13 @@ describe('webinar.recording.start (WBN-28, CW-R-121)', () => {
       sessionId: SESSION_ID,
       providerMeetingId: `fake-meeting-${SESSION_ID}`,
       presenterAttendeeIds: [presenter.providerAttendeeId],
-      s3Prefix: `recordings/${WEBINAR_ID}/raw/`,
+      s3Prefix: `raw/${WEBINAR_ID}/`,
     });
     expect(recordings.only()).toMatchObject({
       status: 'recording',
       providerPipelineId: `fake-pipeline-${SESSION_ID}`,
       providerPipelineArn: expect.stringContaining(':media-pipeline/'),
-      rawSegmentsPrefix: `recordings/${WEBINAR_ID}/raw/`,
+      rawSegmentsPrefix: `raw/${WEBINAR_ID}/`,
       startedAt: expect.any(Date),
     });
     expect(recordings.webinarStatus).toBe('recording');
@@ -374,6 +376,30 @@ describe('stop: POST /webinars/:id/recording/stop and the end (WBN-28 criteria 3
     vi.spyOn(broken.recordings, 'findLatest').mockRejectedValue(new Error('db down'));
     await expect(broken.service.stopForEnd(broken.webinar, asModerator)).resolves.toBeUndefined();
   });
+
+  it('at the end, enqueues the finalize job again for a recording already PROCESSING (a lost enqueue; idempotent by job id)', async () => {
+    const { service, webinar, recordings, scheduler, audits } = await setup();
+    await service.start(startJob, context());
+    scheduler.enqueueRecordingFinalize.mockRejectedValueOnce(new Error('redis down'));
+    await service.stopByModerator(WEBINAR_ID, moderator);
+    expect(recordings.only().status).toBe('processing');
+    audits.length = 0;
+
+    await service.stopForEnd(webinar, asModerator);
+    expect(scheduler.enqueueRecordingFinalize).toHaveBeenCalledTimes(2);
+    expect(scheduler.enqueueRecordingFinalize).toHaveBeenLastCalledWith(WEBINAR_ID, SESSION_ID);
+    // No second stop: the state, the audit and the room stay as they were.
+    expect(recordings.only().status).toBe('processing');
+    expect(audits).toEqual([]);
+  });
+
+  it('writes each status change and the occurrence summary in one transaction, organisation or not', async () => {
+    const { service, access } = await setup({ webinar: { orgId: null } });
+    await service.start(startJob, context());
+    await service.stopByModerator(WEBINAR_ID, moderator);
+    expect(access.transaction).toHaveBeenCalledTimes(2);
+    expect(access.transaction.mock.calls.map((call) => call[0])).toEqual([null, null]);
+  });
 });
 
 describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
@@ -386,7 +412,7 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
     return env;
   }
 
-  it('stops the capture, concatenates into recordings/{webinarId}/final/, sets READY and hands off as pending', async () => {
+  it('stops the capture, concatenates into final/{webinarId}/, sets READY and hands off as pending', async () => {
     const { service, video, recordings, audits } = await stopped();
     const concatenate = vi.spyOn(video, 'startConcatenation');
 
@@ -396,15 +422,15 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
     expect(concatenate).toHaveBeenCalledWith({
       sessionId: SESSION_ID,
       capturePipelineArn: expect.stringContaining(`fake-pipeline-${SESSION_ID}`),
-      s3Prefix: `recordings/${WEBINAR_ID}/final/`,
+      s3Prefix: `final/${WEBINAR_ID}/`,
       attempt: 1,
     });
     const row = recordings.only();
     expect(row).toMatchObject({
       status: 'ready',
-      concatenatedKey: `recordings/${WEBINAR_ID}/final/composited-video/`,
+      concatenatedKey: `final/${WEBINAR_ID}/composited-video/`,
       handoffStatus: 'pending',
-      handoffLocation: `s3://fake-recordings/recordings/${WEBINAR_ID}/final/composited-video/`,
+      handoffLocation: `s3://fake-recordings/final/${WEBINAR_ID}/composited-video/`,
       readyAt: expect.any(Date),
       failureReason: null,
     });
@@ -428,10 +454,13 @@ describe('webinar.recording.finalize (WBN-34, CW-R-79d, CW-R-79e)', () => {
     vi.spyOn(video, 'describeConcatenation').mockResolvedValue({ status: 'in_progress', concatenatedKey: null, location: null });
     const concatenate = vi.spyOn(video, 'startConcatenation');
 
+    const stopCapture = vi.spyOn(video, 'stopRecording');
+
     await expect(service.finalize(finalizeJob, context())).rejects.toBeInstanceOf(WebinarJobDelay);
     await expect(service.finalize(finalizeJob, context())).rejects.toBeInstanceOf(WebinarJobDelay);
-    // The concatenation started once; the next run polls it.
+    // The concatenation started once and the capture was deleted once; the next run only polls.
     expect(concatenate).toHaveBeenCalledTimes(1);
+    expect(stopCapture).toHaveBeenCalledTimes(1);
     expect(recordings.only().concatenationPipelineId).toBe(`fake-concat-${SESSION_ID}-1`);
 
     const late = context({ enqueuedAt: new Date(Date.now() - 4 * 60 * MINUTE) });
@@ -524,13 +553,13 @@ describe('against the Chime adapter (aws-sdk-client-mock)', () => {
     pipelines.on(GetMediaPipelineCommand).resolves({ MediaPipeline: { MediaConcatenationPipeline: { Status: 'Stopped' } } });
   });
 
-  it('sends a presenter-only capture to recordings/{webinarId}/raw and concatenates to recordings/{webinarId}/final', async () => {
+  it('sends a presenter-only capture to raw/{webinarId} and concatenates to final/{webinarId}', async () => {
     const video = new ChimeVideoProvider({ eventsQueueArn: 'arn:aws:sqs:eu-central-1:111122223333:q', recordingsBucket: BUCKET, stage: 'dev' });
     const { service, recordings } = await setup({ video });
 
     await service.start(startJob, context());
     const capture = pipelines.commandCalls(CreateMediaCapturePipelineCommand)[0]!.args[0].input;
-    expect(capture.SinkArn).toBe(`arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/raw`);
+    expect(capture.SinkArn).toBe(`arn:aws:s3:::${BUCKET}/raw/${WEBINAR_ID}`);
     // Only the presenter's video; the moderator and the attendee are never selected (D-CW-18, D-CW-35).
     expect(capture.ChimeSdkMeetingConfiguration?.SourceConfiguration).toEqual({
       SelectedVideoStreams: { AttendeeIds: ['attendee-presenter'] },
@@ -548,10 +577,10 @@ describe('against the Chime adapter (aws-sdk-client-mock)', () => {
     expect(pipelines.commandCalls(DeleteMediaCapturePipelineCommand)[0]!.args[0].input).toEqual({ MediaPipelineId: 'capture-1' });
     const concatenation = pipelines.commandCalls(CreateMediaConcatenationPipelineCommand)[0]!.args[0].input;
     expect(concatenation.Sources?.[0]?.MediaCapturePipelineSourceConfiguration?.MediaPipelineArn).toBe(CAPTURE_ARN);
-    expect(concatenation.Sinks?.[0]?.S3BucketSinkConfiguration?.Destination).toBe(`arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/final`);
+    expect(concatenation.Sinks?.[0]?.S3BucketSinkConfiguration?.Destination).toBe(`arn:aws:s3:::${BUCKET}/final/${WEBINAR_ID}`);
     expect(recordings.only()).toMatchObject({
       status: 'ready',
-      handoffLocation: `s3://${BUCKET}/recordings/${WEBINAR_ID}/final/composited-video/`,
+      handoffLocation: `s3://${BUCKET}/final/${WEBINAR_ID}/composited-video/`,
     });
   });
 });

@@ -931,7 +931,7 @@ Within a milestone, lanes B and A can run in parallel after M0 foundation merges
 4. An attendee given the floor is told, before they unmute, that their voice is part of the recording (message in the "you can speak now" dialog, from T-CW-2.3).
 5. The recording notice appears in three places: registration page ("This webinar is recorded; only the presenters are on the recording"), confirmation email (same sentence), and the lobby (same sentence plus "if you are given the floor, your voice will be on the recording").
 6. Finalize job: call concatenation pipeline (or simulate with `FakeVideoProvider`), update `recording_status` to `READY`, set `concatenatedKey`. CMS handoff: set `handoffStatus = 'pending'`, write the S3 object location. A one-line adapter is added when the CMS interface lands (D-CW-03). Audit `webinar.recording.ready`, `webinar.recording.handed_off`.
-7. S3 layout: `recordings/{webinarId}/raw/` for segments (lifecycle 30 days), `recordings/{webinarId}/final/` for the concatenated MP4.
+7. S3 layout: `raw/{webinarId}/` for segments (lifecycle 30 days on `raw/`), `final/{webinarId}/` for the concatenated MP4. The segments lead the key because an S3 lifecycle filter is a literal prefix (ruling during the T-CW-2.5 review; the first draft had `recordings/{webinarId}/raw/` and `recordings/{webinarId}/final/`).
 8. Quota request checklist: document that the default media-pipeline quota in eu-central-1 is 10 concurrent pipelines (WEB-41) and a quota increase should be requested before the first month with more than 5 recorded webinars.
 
 **Tests.** `apps/api/src/webinars/recording.service.test.ts` with `aws-sdk-client-mock`.

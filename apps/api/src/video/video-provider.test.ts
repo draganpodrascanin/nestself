@@ -53,6 +53,8 @@ import {
   encodeTenantId,
   parseReplicaExternalMeetingId,
   pickReplica,
+  recordingFinalPrefix,
+  recordingRawPrefix,
   replicaCapacities,
   replicaExternalMeetingId,
   type CreateSessionInput,
@@ -748,10 +750,10 @@ describe('ChimeVideoProvider', () => {
   });
 
   describe('startRecording', () => {
-    const RAW_PREFIX = `recordings/${WEBINAR_ID}/raw/`;
+    const RAW_PREFIX = `raw/${WEBINAR_ID}/`;
     const PIPELINE_ARN = 'arn:aws:chime:eu-central-1:111122223333:media-pipeline/pipeline-1';
 
-    it('captures presenter-only composited HD video into recordings/{webinarId}/raw/ (D-CW-18, T-CW-2.5)', async () => {
+    it('captures presenter-only composited HD video into raw/{webinarId}/, under the 30-day rule (D-CW-18, T-CW-2.5)', async () => {
       meetings.on(GetMeetingCommand).resolves({ Meeting: MEETING });
       pipelines.on(CreateMediaCapturePipelineCommand).resolves({
         MediaCapturePipeline: { MediaPipelineId: 'pipeline-1', MediaPipelineArn: PIPELINE_ARN },
@@ -769,7 +771,7 @@ describe('ChimeVideoProvider', () => {
         SourceType: 'ChimeSdkMeeting',
         SourceArn: 'arn:aws:chime::111122223333:meeting:meeting-1',
         SinkType: 'S3Bucket',
-        SinkArn: `arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/raw`,
+        SinkArn: `arn:aws:s3:::${BUCKET}/raw/${WEBINAR_ID}`,
         ChimeSdkMeetingConfiguration: {
           SourceConfiguration: { SelectedVideoStreams: { AttendeeIds: ['attendee-1', 'attendee-3'] } },
           ArtifactsConfiguration: {
@@ -789,7 +791,7 @@ describe('ChimeVideoProvider', () => {
 
     it('refuses a prefix that is empty, absolute or not a folder, and an empty presenter list, before any SDK call', async () => {
       const base = { sessionId: SESSION_ID, providerMeetingId: 'meeting-1', presenterAttendeeIds: ['attendee-1'] };
-      for (const s3Prefix of ['', '/recordings/w/raw/', 'recordings/w/raw', 'recordings/../raw/']) {
+      for (const s3Prefix of ['', '/raw/w/', 'raw/w', 'raw/../w/']) {
         await expect(provider.startRecording({ ...base, s3Prefix })).rejects.toThrow(/prefix/);
       }
       await expect(provider.startRecording({ ...base, presenterAttendeeIds: [], s3Prefix: RAW_PREFIX })).rejects.toThrow(
@@ -844,11 +846,16 @@ describe('ChimeVideoProvider', () => {
     });
   });
 
+  it('lays recordings out as raw/{webinarId}/ (expired after 30 days by the raw/ rule) and final/{webinarId}/', () => {
+    expect(recordingRawPrefix(WEBINAR_ID)).toBe(`raw/${WEBINAR_ID}/`);
+    expect(recordingFinalPrefix(WEBINAR_ID)).toBe(`final/${WEBINAR_ID}/`);
+  });
+
   describe('startConcatenation and describeConcatenation (WEB-29, T-CW-2.5)', () => {
     const CAPTURE_ARN = 'arn:aws:chime:eu-central-1:111122223333:media-pipeline/pipeline-1';
-    const FINAL_PREFIX = `recordings/${WEBINAR_ID}/final/`;
+    const FINAL_PREFIX = `final/${WEBINAR_ID}/`;
 
-    it('concatenates the capture into one composited MP4 with the audio under recordings/{webinarId}/final/', async () => {
+    it('concatenates the capture into one composited MP4 with the audio under final/{webinarId}/', async () => {
       pipelines.on(CreateMediaConcatenationPipelineCommand).resolves({
         MediaConcatenationPipeline: { MediaPipelineId: 'concat-1', Status: 'Initializing' },
       });
@@ -884,7 +891,7 @@ describe('ChimeVideoProvider', () => {
           },
         ],
         Sinks: [
-          { Type: 'S3Bucket', S3BucketSinkConfiguration: { Destination: `arn:aws:s3:::${BUCKET}/recordings/${WEBINAR_ID}/final` } },
+          { Type: 'S3Bucket', S3BucketSinkConfiguration: { Destination: `arn:aws:s3:::${BUCKET}/final/${WEBINAR_ID}` } },
         ],
       });
     });
@@ -1462,13 +1469,13 @@ describe('FakeVideoProvider', () => {
       sessionId: SESSION_ID,
       providerMeetingId: session.providerMeetingId,
       presenterAttendeeIds: [session.participant.providerAttendeeId],
-      s3Prefix: `recordings/${WEBINAR_ID}/raw/`,
+      s3Prefix: `raw/${WEBINAR_ID}/`,
     });
 
     expect(recording).toEqual({
       pipelineId: `fake-pipeline-${SESSION_ID}`,
       pipelineArn: `arn:aws:chime:eu-central-1:000000000000:media-pipeline/fake-pipeline-${SESSION_ID}`,
-      rawSegmentsPrefix: `recordings/${WEBINAR_ID}/raw/`,
+      rawSegmentsPrefix: `raw/${WEBINAR_ID}/`,
     });
     expect(fake.isRecording(recording.pipelineId)).toBe(true);
     await expect(fake.stopRecording({ pipelineId: recording.pipelineId })).resolves.toBeUndefined();
@@ -1479,14 +1486,14 @@ describe('FakeVideoProvider', () => {
   it('refuses a recording without a presenter or with a bad prefix, as the Chime adapter does', async () => {
     const session = await fake.createSession(webinarInput);
     const base = { sessionId: SESSION_ID, providerMeetingId: session.providerMeetingId };
-    await expect(fake.startRecording({ ...base, presenterAttendeeIds: [], s3Prefix: 'recordings/w/raw/' })).rejects.toThrow(
+    await expect(fake.startRecording({ ...base, presenterAttendeeIds: [], s3Prefix: 'raw/w/' })).rejects.toThrow(
       /presenter/,
     );
     await expect(fake.startRecording({ ...base, presenterAttendeeIds: ['a'], s3Prefix: 'raw' })).rejects.toThrow(/prefix/);
   });
 
   it('completes a stub concatenation at once, unless told to fail it', async () => {
-    const finalPrefix = `recordings/${WEBINAR_ID}/final/`;
+    const finalPrefix = `final/${WEBINAR_ID}/`;
     const capturePipelineArn = 'arn:aws:chime:eu-central-1:000000000000:media-pipeline/fake-pipeline-x';
     const started = await fake.startConcatenation({ sessionId: SESSION_ID, capturePipelineArn, s3Prefix: finalPrefix, attempt: 1 });
     expect(started).toEqual({ pipelineId: `fake-concat-${SESSION_ID}-1` });
