@@ -15,6 +15,11 @@ export const workspacePages: PageEntry[] = [
   { name: 'workspace-call-prejoin', url: 'http://localhost:5173/call/appt_sample_upcoming' },
   { name: 'workspace-call-waiting', url: 'http://localhost:5173/call/appt_sample_upcoming', prepare: 'joinSampleCall' },
   { name: 'workspace-call-post', url: 'http://localhost:5173/call/appt_sample_upcoming', prepare: 'leaveSampleCall' },
+  // T-CW-2.4: webinar discovery, detail with the lobby, and the attendee's live view (sample mode).
+  { name: 'workspace-webinars', url: 'http://localhost:5173/webinars' },
+  { name: 'workspace-webinar-detail', url: 'http://localhost:5173/webinars/webinar_sample_upcoming' },
+  { name: 'workspace-webinar-prejoin', url: 'http://localhost:5173/webinars/webinar_sample_upcoming/live' },
+  { name: 'workspace-webinar-live', url: 'http://localhost:5173/webinars/webinar_sample_upcoming/live', prepare: 'joinSampleWebinar' },
   { name: 'workspace-messages', url: 'http://localhost:5173/messages' },
   { name: 'workspace-polls', url: 'http://localhost:5173/polls' },
   { name: 'workspace-settings', url: 'http://localhost:5173/settings' },
@@ -26,19 +31,31 @@ export const workspacePages: PageEntry[] = [
   { name: 'workspace-sign-in', url: 'http://localhost:5173/sign-in' },
 ];
 
-/** Sample mode: the pre-join check passes with the fake controller, then Join starts the demonstration call. */
-async function joinSampleCall(page: Page): Promise<void> {
+/** Waits for the fake pre-join check to enable "Join now", then selects it. */
+async function joinWhenReady(page: Page): Promise<void> {
   const join = page.getByRole('button', { name: 'Join now' });
   await join.waitFor();
   await page.waitForFunction(() =>
     Array.from(document.querySelectorAll('button')).some((button) => button.textContent?.includes('Join now') && !button.disabled),
   );
   await join.click();
+}
+
+/** Sample mode: the pre-join check passes with the fake controller, then Join starts the demonstration call. */
+async function joinSampleCall(page: Page): Promise<void> {
+  await joinWhenReady(page);
   await page.getByText(/will join shortly/).waitFor();
+}
+
+/** Sample mode: the attendee's pre-join check passes, then Join opens the demonstration webinar. */
+async function joinSampleWebinar(page: Page): Promise<void> {
+  await joinWhenReady(page);
+  await page.getByTestId('webinar-attendee-controls').waitFor();
 }
 
 export const workspacePrepareActions: Record<string, (page: Page) => Promise<void>> = {
   joinSampleCall,
+  joinSampleWebinar,
   leaveSampleCall: async (page) => {
     await joinSampleCall(page);
     await page.getByRole('button', { name: 'Leave' }).first().click();

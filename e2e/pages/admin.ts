@@ -9,6 +9,11 @@ export const adminPages: PageEntry[] = [
   { name: 'admin-consultations-operations', url: 'http://localhost:5174/consultations?role=operations' },
   { name: 'admin-consultation-completed', url: 'http://localhost:5174/consultations/appt_sample_completed?role=expert' },
   { name: 'admin-consultation-upcoming', url: 'http://localhost:5174/consultations/appt_sample_upcoming?role=expert' },
+  // T-CW-2.4: the occurrence list, form and detail, and the moderator console before joining (sample mode).
+  { name: 'admin-webinars', url: 'http://localhost:5174/webinars?role=operations' },
+  { name: 'admin-webinar-new', url: 'http://localhost:5174/webinars/new?role=operations' },
+  { name: 'admin-webinar-detail', url: 'http://localhost:5174/webinars/webinar_sample_upcoming?role=operations' },
+  { name: 'admin-webinar-console', url: 'http://localhost:5174/webinars/webinar_sample_upcoming/live?role=operations' },
   { name: 'admin-organizations', url: 'http://localhost:5174/organizations' },
   { name: 'admin-content', url: 'http://localhost:5174/content' },
   { name: 'admin-event-requests', url: 'http://localhost:5174/event-requests' },

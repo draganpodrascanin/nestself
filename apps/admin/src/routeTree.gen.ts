@@ -24,9 +24,13 @@ import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
+import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authenticated/webinars/index'
+import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
+import { Route as AuthenticatedWebinarsNewRouteImport } from './routes/_authenticated/webinars/new'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
+import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -109,6 +113,24 @@ const AuthenticatedOrganizationsOrgIdRoute =
     path: '/organizations/$orgId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedWebinarsIndexRoute =
+  AuthenticatedWebinarsIndexRouteImport.update({
+    id: '/webinars/',
+    path: '/webinars/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWebinarsWebinarIdRoute =
+  AuthenticatedWebinarsWebinarIdRouteImport.update({
+    id: '/webinars/$webinarId',
+    path: '/webinars/$webinarId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWebinarsNewRoute =
+  AuthenticatedWebinarsNewRouteImport.update({
+    id: '/webinars/new',
+    path: '/webinars/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -126,6 +148,12 @@ const AuthenticatedOrganizationsOrgIdAccessRoute =
     path: '/access',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
   } as any)
+const AuthenticatedWebinarsWebinarIdLiveRoute =
+  AuthenticatedWebinarsWebinarIdLiveRouteImport.update({
+    id: '/live',
+    path: '/live',
+    getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -137,12 +165,16 @@ export interface FileRoutesByFullPath {
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
+  '/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access/': typeof AuthenticatedAccessIndexRoute
   '/consultations/': typeof AuthenticatedConsultationsIndexRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -154,12 +186,16 @@ export interface FileRoutesByTo {
   '/sign-in': typeof PublicSignInRoute
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
+  '/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access': typeof AuthenticatedAccessIndexRoute
   '/consultations': typeof AuthenticatedConsultationsIndexRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
+  '/webinars': typeof AuthenticatedWebinarsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesById {
@@ -175,12 +211,16 @@ export interface FileRoutesById {
   '/_authenticated/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/_authenticated/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  '/_authenticated/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
+  '/_authenticated/webinars/new': typeof AuthenticatedWebinarsNewRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/access/': typeof AuthenticatedAccessIndexRoute
   '/_authenticated/consultations/': typeof AuthenticatedConsultationsIndexRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -195,12 +235,16 @@ export interface FileRouteTypes {
     | '/consultations/$appointmentId'
     | '/experts/$expertId'
     | '/organizations/$orgId'
+    | '/webinars/$webinarId'
+    | '/webinars/new'
     | '/invite/$token'
     | '/access/'
     | '/consultations/'
     | '/experts/'
     | '/organizations/'
+    | '/webinars/'
     | '/organizations/$orgId/access'
+    | '/webinars/$webinarId/live'
     | '/organizations/$orgId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -212,12 +256,16 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/consultations/$appointmentId'
     | '/experts/$expertId'
+    | '/webinars/$webinarId'
+    | '/webinars/new'
     | '/invite/$token'
     | '/access'
     | '/consultations'
     | '/experts'
     | '/organizations'
+    | '/webinars'
     | '/organizations/$orgId/access'
+    | '/webinars/$webinarId/live'
     | '/organizations/$orgId'
   id:
     | '__root__'
@@ -232,12 +280,16 @@ export interface FileRouteTypes {
     | '/_authenticated/consultations/$appointmentId'
     | '/_authenticated/experts/$expertId'
     | '/_authenticated/organizations/$orgId'
+    | '/_authenticated/webinars/$webinarId'
+    | '/_authenticated/webinars/new'
     | '/_public/invite/$token'
     | '/_authenticated/access/'
     | '/_authenticated/consultations/'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
+    | '/_authenticated/webinars/'
     | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/organizations/$orgId/'
   fileRoutesById: FileRoutesById
 }
@@ -353,6 +405,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/webinars/': {
+      id: '/_authenticated/webinars/'
+      path: '/webinars'
+      fullPath: '/webinars/'
+      preLoaderRoute: typeof AuthenticatedWebinarsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/webinars/$webinarId': {
+      id: '/_authenticated/webinars/$webinarId'
+      path: '/webinars/$webinarId'
+      fullPath: '/webinars/$webinarId'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/webinars/new': {
+      id: '/_authenticated/webinars/new'
+      path: '/webinars/new'
+      fullPath: '/webinars/new'
+      preLoaderRoute: typeof AuthenticatedWebinarsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_public/invite/$token': {
       id: '/_public/invite/$token'
       path: '/invite/$token'
@@ -373,6 +446,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/organizations/$orgId/access'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
+    '/_authenticated/webinars/$webinarId/live': {
+      id: '/_authenticated/webinars/$webinarId/live'
+      path: '/live'
+      fullPath: '/webinars/$webinarId/live'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdLiveRouteImport
+      parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
     }
   }
 }
@@ -395,6 +475,21 @@ const AuthenticatedOrganizationsOrgIdRouteWithChildren =
     AuthenticatedOrganizationsOrgIdRouteChildren,
   )
 
+interface AuthenticatedWebinarsWebinarIdRouteChildren {
+  AuthenticatedWebinarsWebinarIdLiveRoute: typeof AuthenticatedWebinarsWebinarIdLiveRoute
+}
+
+const AuthenticatedWebinarsWebinarIdRouteChildren: AuthenticatedWebinarsWebinarIdRouteChildren =
+  {
+    AuthenticatedWebinarsWebinarIdLiveRoute:
+      AuthenticatedWebinarsWebinarIdLiveRoute,
+  }
+
+const AuthenticatedWebinarsWebinarIdRouteWithChildren =
+  AuthenticatedWebinarsWebinarIdRoute._addFileChildren(
+    AuthenticatedWebinarsWebinarIdRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedContentRoute: typeof AuthenticatedContentRoute
   AuthenticatedEventRequestsRoute: typeof AuthenticatedEventRequestsRoute
@@ -403,10 +498,13 @@ interface AuthenticatedRouteChildren {
   AuthenticatedConsultationsAppointmentIdRoute: typeof AuthenticatedConsultationsAppointmentIdRoute
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
   AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
+  AuthenticatedWebinarsWebinarIdRoute: typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
+  AuthenticatedWebinarsNewRoute: typeof AuthenticatedWebinarsNewRoute
   AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
   AuthenticatedConsultationsIndexRoute: typeof AuthenticatedConsultationsIndexRoute
   AuthenticatedExpertsIndexRoute: typeof AuthenticatedExpertsIndexRoute
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
+  AuthenticatedWebinarsIndexRoute: typeof AuthenticatedWebinarsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -419,10 +517,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedExpertsExpertIdRoute: AuthenticatedExpertsExpertIdRoute,
   AuthenticatedOrganizationsOrgIdRoute:
     AuthenticatedOrganizationsOrgIdRouteWithChildren,
+  AuthenticatedWebinarsWebinarIdRoute:
+    AuthenticatedWebinarsWebinarIdRouteWithChildren,
+  AuthenticatedWebinarsNewRoute: AuthenticatedWebinarsNewRoute,
   AuthenticatedAccessIndexRoute: AuthenticatedAccessIndexRoute,
   AuthenticatedConsultationsIndexRoute: AuthenticatedConsultationsIndexRoute,
   AuthenticatedExpertsIndexRoute: AuthenticatedExpertsIndexRoute,
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
+  AuthenticatedWebinarsIndexRoute: AuthenticatedWebinarsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

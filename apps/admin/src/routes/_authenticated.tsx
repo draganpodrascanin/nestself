@@ -1,12 +1,13 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera, Presentation } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
 import { UserRoomListener } from '../calls/user-room-listener';
+import { canListWebinars } from '../webinars/route-gate';
 import { ApiStatus } from './__root';
 
 function PermissionBlock() {
@@ -46,10 +47,16 @@ function AuthenticatedLayout() {
     ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
     : [];
 
+  // Webinars (T-CW-2.4): occurrences for `event.manage` and `event.moderate`.
+  const webinarsNav = canListWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
+    : [];
+
   const navItems = staffAccess
     ? [
         { to: '/' as const, icon: House, label: t('nav.overview') },
         ...consultationsNav,
+        ...webinarsNav,
         { to: '/experts' as const, icon: Users, label: t('nav.experts') },
         { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
         ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
