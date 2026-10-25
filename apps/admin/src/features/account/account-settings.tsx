@@ -45,7 +45,11 @@ export function AccountSettings({ authApi, sampleMode }: AccountSettingsProps) {
   const updateLocale = useUpdateLocale(authApi);
   const summaryRef = useRef<FormErrorSummaryHandle>(null);
 
-  const [name, setName] = useState(principal?.displayName ?? '');
+  // The field shows the saved name until the user types: the principal can
+  // arrive after the first render (a deep link or reload of /settings), and
+  // a draft initialised from a null principal would stay empty.
+  const [draft, setDraft] = useState<string | null>(null);
+  const name = draft ?? principal?.displayName ?? '';
   const [nameError, setNameError] = useState<string | null>(null);
   const [localeError, setLocaleError] = useState<string | null>(null);
 
@@ -65,7 +69,7 @@ export function AccountSettings({ authApi, sampleMode }: AccountSettingsProps) {
     setNameError(null);
     try {
       await updateName.mutateAsync(trimmed);
-      setName(trimmed);
+      setDraft(null);
       addToast({ title: t('auth:account.displayName.saved'), tone: 'success' });
     } catch (err) {
       failName(t(accountErrorKey(err)));
@@ -116,7 +120,7 @@ export function AccountSettings({ authApi, sampleMode }: AccountSettingsProps) {
           <Input
             name="displayName"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setDraft(e.target.value)}
             disabled={sampleMode}
             autoComplete="name"
           />

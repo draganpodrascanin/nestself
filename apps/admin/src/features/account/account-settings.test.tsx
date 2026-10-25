@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { DISPLAY_NAME_MAX_LENGTH } from '@nestself/contracts';
 import { AccountSettings } from './account-settings';
 import { apiError, makeAccountApi, makeAuth, renderAccount, t, testI18n } from './account-test-harness';
+import { AuthContext } from '../../auth/auth-context';
+import type { AuthContextValue } from '../../auth';
 
 afterEach(async () => {
   cleanup();
@@ -15,6 +19,28 @@ const nameInput = () => screen.getByRole('textbox', { name: new RegExp(t('auth:a
 const saveButton = () => screen.getByRole('button', { name: t('auth:account.displayName.save') });
 
 describe('AccountSettings: display name', () => {
+  it('shows the saved name when the principal arrives after the first render (deep link)', async () => {
+    const signedIn = makeAuth();
+    let arrive: () => void = () => {};
+    function LateAuth({ children }: { children: ReactNode }) {
+      const [value, setValue] = useState<AuthContextValue>(makeAuth({ status: 'loading', principal: null }));
+      arrive = () => setValue(signedIn);
+      return <AuthContext value={value}>{children}</AuthContext>;
+    }
+    renderAccount(
+      <>
+        <AccountSettings authApi={makeAccountApi()} sampleMode={false} />
+        <p>route rendered</p>
+      </>,
+      (children) => <LateAuth>{children}</LateAuth>,
+    );
+    // The form has mounted (and rendered nothing) before the principal arrives.
+    await screen.findByText('route rendered');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    act(() => arrive());
+    expect(await screen.findByRole('textbox')).toHaveValue(signedIn.principal!.displayName);
+  });
+
   it('saves the trimmed name and reloads the principal', async () => {
     const user = userEvent.setup();
     const authApi = makeAccountApi();
