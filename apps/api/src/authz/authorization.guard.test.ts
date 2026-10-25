@@ -55,6 +55,7 @@ function createGuard(mocks: ReturnType<typeof createMocks>) {
     mocks.contextLoader as never,
     mocks.audit as never,
     mocks.store as never,
+    { get: vi.fn() } as never,
   );
 }
 

@@ -3,6 +3,10 @@
  *
  * Manages content resources, variants, revisions and publications.
  * State transitions follow WRK-R-01..36.
+ *
+ * Review-fix round: atomic CAS for save/submit/approve, supersession
+ * moved to publish, entry-by-entry audience containment, media tracking
+ * for image nodes, correction-path coverage check, FOR UPDATE locking.
  */
 import { Injectable, Logger } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -45,6 +49,7 @@ import {
   contentPublicationAudiences,
 } from '../db/schema/cms.js';
 import { mediaAssets } from '../db/schema/media.js';
+import { orgUnits } from '../db/schema/organization.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditWriter } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -52,6 +57,46 @@ import { OutboxWriter } from '../notifications/outbox/outbox-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AvailabilityVersionService } from '../library/availability/availability-version.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+
+// ---------------------------------------------------------------------------
+// Helpers: extract media ids from a ProseMirror document
+// ---------------------------------------------------------------------------
+
+interface MediaRef {
+  mediaAssetId: string;
+  usageKind: 'inline_image' | 'body_media';
+}
+
+function extractMediaRefs(doc: Record<string, unknown>): MediaRef[] {
+  const refs: MediaRef[] = [];
+  const seen = new Set<string>();
+
+  function walk(node: Record<string, unknown>) {
+    // image node → inline_image role
+    if (node.type === 'image' && node.attrs) {
+      const attrs = node.attrs as Record<string, unknown>;
+      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
+        seen.add(attrs.mediaAssetId);
+        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'inline_image' });
+      }
+    }
+    // approvedMedia node → body_media role
+    if (node.type === 'approvedMedia' && node.attrs) {
+      const attrs = node.attrs as Record<string, unknown>;
+      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
+        seen.add(attrs.mediaAssetId);
+        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'body_media' });
+      }
+    }
+    if (Array.isArray(node.content)) {
+      for (const child of node.content as Record<string, unknown>[]) {
+        walk(child);
+      }
+    }
+  }
+  walk(doc);
+  return refs;
+}
 
 // ---------------------------------------------------------------------------
 // Service
@@ -126,6 +171,7 @@ export class CmsService {
       });
     });
 
+    // Audit AFTER the transaction commits
     await this.auditWriter.record({
       action: 'content.created',
       actorUserId: principal.userId,
@@ -307,7 +353,7 @@ export class CmsService {
   }
 
   // =========================================================================
-  // Save working revision (PUT) with If-Match
+  // Save working revision (PUT) with If-Match -- atomic CAS
   // =========================================================================
 
   async saveRevision(
@@ -317,43 +363,7 @@ export class CmsService {
     ifMatchVersion: number,
     principal: Principal,
   ) {
-    // Load the revision
-    const revRows = await this.dbService.db
-      .select()
-      .from(contentRevisions)
-      .where(eq(contentRevisions.id, revisionId))
-      .limit(1);
-
-    const rev = revRows[0];
-    if (!rev) {
-      throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found' });
-    }
-
-    // WRK-R-33: only draft or changes_requested can be edited
-    if (rev.state !== 'draft' && rev.state !== 'changes_requested') {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_revision_locked',
-        message: 'This revision is locked and cannot be edited',
-      });
-    }
-
-    // Check variant match
-    if (rev.contentVariantId !== variantId) {
-      throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found for this variant' });
-    }
-
-    // If-Match check (optimistic concurrency C-06)
-    if (rev.lockVersion !== ifMatchVersion) {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_edit_conflict',
-        message: 'The revision has been modified by another session',
-        details: { currentLockVersion: rev.lockVersion },
-      });
-    }
-
-    // Validate content document if body is provided
+    // Validate content document before the atomic write
     if (body.body) {
       const result = validateContentDocument(body.body, {
         linkHostAllowlist: this.linkHostAllowlist,
@@ -366,13 +376,12 @@ export class CmsService {
           details: { errors: result.errors },
         });
       }
-      // Persist the validated document, not the raw input
       body = { ...body, body: result.document as unknown as Record<string, unknown> };
     }
 
     // Build update set
     const updateSet: Record<string, unknown> = {
-      lockVersion: rev.lockVersion + 1,
+      lockVersion: sql`lock_version + 1`,
       lastEditorUserId: principal.userId,
       updatedAt: new Date(),
     };
@@ -389,23 +398,91 @@ export class CmsService {
     if (body.relatedResourceIds !== undefined) updateSet.relatedResourceIds = body.relatedResourceIds;
     if (body.quicklyOutdated !== undefined) updateSet.quicklyOutdated = body.quicklyOutdated;
 
-    await this.dbService.db
-      .update(contentRevisions)
-      .set(updateSet)
-      .where(
-        and(
-          eq(contentRevisions.id, revisionId),
-          eq(contentRevisions.lockVersion, rev.lockVersion),
-        ),
-      );
+    // Atomic CAS inside a transaction so media sync is all-or-nothing
+    const result = await this.dbService.db.transaction(async (tx) => {
+      // Extract and validate media refs before the update
+      if (body.body) {
+        const refs = extractMediaRefs(body.body as Record<string, unknown>);
+        if (refs.length > 0) {
+          const assetIds = refs.map((r) => r.mediaAssetId);
+          const existing = await tx
+            .select({ id: mediaAssets.id })
+            .from(mediaAssets)
+            .where(inArray(mediaAssets.id, assetIds));
+          if (existing.length !== new Set(assetIds).size) {
+            const existingIds = new Set(existing.map((e) => e.id));
+            const unknown = assetIds.filter((id) => !existingIds.has(id));
+            throw new ApiHttpException({
+              status: 409,
+              code: 'media_not_found',
+              message: `Unknown media asset ids: ${unknown.join(', ')}`,
+            });
+          }
+        }
+      }
 
-    // Maintain content_revision_media from the body's media nodes
-    if (body.body) {
-      await this.syncRevisionMedia(revisionId, body.body as Record<string, unknown>);
-    }
+      // Atomic UPDATE...WHERE...RETURNING (C-06)
+      const updated = await tx
+        .update(contentRevisions)
+        .set(updateSet)
+        .where(
+          and(
+            eq(contentRevisions.id, revisionId),
+            eq(contentRevisions.lockVersion, ifMatchVersion),
+            eq(contentRevisions.contentVariantId, variantId),
+            inArray(contentRevisions.state, ['draft', 'changes_requested']),
+          ),
+        )
+        .returning();
 
-    const updated = await this.getRevision(revisionId);
-    return updated;
+      if (updated.length === 0) {
+        // Re-read to distinguish 404, variant mismatch, or conflict
+        const current = await tx
+          .select()
+          .from(contentRevisions)
+          .where(eq(contentRevisions.id, revisionId))
+          .limit(1);
+        if (!current[0]) {
+          throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found' });
+        }
+        if (current[0].contentVariantId !== variantId) {
+          throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found for this variant' });
+        }
+        if (current[0].state !== 'draft' && current[0].state !== 'changes_requested') {
+          throw new ApiHttpException({
+            status: 409,
+            code: 'content_revision_locked',
+            message: 'This revision is locked and cannot be edited',
+          });
+        }
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_edit_conflict',
+          message: 'The revision has been modified by another session',
+          details: { currentLockVersion: current[0].lockVersion },
+        });
+      }
+
+      // Sync media inside the same transaction
+      if (body.body) {
+        await this.syncRevisionMedia(tx, revisionId, body.body as Record<string, unknown>);
+      }
+
+      return updated[0]!;
+    });
+
+    // Audit after commit
+    await this.auditWriter.record({
+      action: 'content.updated',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_revision',
+      recordId: revisionId,
+      result: 'ALLOWED',
+      sessionId: principal.sessionId ?? null,
+    });
+
+    return result;
   }
 
   // =========================================================================
@@ -458,48 +535,57 @@ export class CmsService {
 
     const newRevisionId = randomUUID();
 
-    await this.dbService.db.insert(contentRevisions).values({
-      id: newRevisionId,
-      contentVariantId: variantId,
-      revisionNumber: nextRevisionNumber,
-      state: 'draft',
-      body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] },
-      title: source?.title ?? '',
-      summary: source?.summary ?? '',
-      outcome: source?.outcome ?? null,
-      durationSeconds: source?.durationSeconds ?? null,
-      difficulty: source?.difficulty ?? null,
-      sources: source?.sources ?? null,
-      cta: source?.cta ?? null,
-      relatedResourceIds: source?.relatedResourceIds ?? [],
-      authorUserId: principal.userId,
-      lastEditorUserId: principal.userId,
-      lockVersion: 1,
+    await this.dbService.db.transaction(async (tx) => {
+      await tx.insert(contentRevisions).values({
+        id: newRevisionId,
+        contentVariantId: variantId,
+        revisionNumber: nextRevisionNumber,
+        state: 'draft',
+        body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] },
+        title: source?.title ?? '',
+        summary: source?.summary ?? '',
+        outcome: source?.outcome ?? null,
+        durationSeconds: source?.durationSeconds ?? null,
+        difficulty: source?.difficulty ?? null,
+        sources: source?.sources ?? null,
+        cta: source?.cta ?? null,
+        relatedResourceIds: source?.relatedResourceIds ?? [],
+        authorUserId: principal.userId,
+        lastEditorUserId: principal.userId,
+        lockVersion: 1,
+      });
+
+      // Copy content_revision_media rows from source (WRK-R-02 media carry)
+      if (source) {
+        const sourceMedia = await tx
+          .select()
+          .from(contentRevisionMedia)
+          .where(eq(contentRevisionMedia.contentRevisionId, source.id));
+        for (const m of sourceMedia) {
+          await tx.insert(contentRevisionMedia).values({
+            id: randomUUID(),
+            contentRevisionId: newRevisionId,
+            mediaAssetId: m.mediaAssetId,
+            usageKind: m.usageKind,
+          });
+        }
+      }
     });
 
     return this.getRevision(newRevisionId);
   }
 
   // =========================================================================
-  // Submit revision (POST revisions/:id/submit)
+  // Submit revision (POST revisions/:id/submit) -- atomic CAS
   // =========================================================================
 
   async submitRevision(
     revisionId: string,
     principal: Principal,
   ) {
+    // Validate document before the state transition
     const rev = await this.loadRevisionOrThrow(revisionId);
 
-    // WRK-R-01: only draft or changes_requested can be submitted
-    if (rev.state !== 'draft' && rev.state !== 'changes_requested') {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_not_submittable',
-        message: `Cannot submit a revision in state ${rev.state}`,
-      });
-    }
-
-    // Validate the document
     const validationResult = validateContentDocument(rev.body, {
       linkHostAllowlist: this.linkHostAllowlist,
     });
@@ -517,26 +603,44 @@ export class CmsService {
 
     const now = new Date();
 
-    await this.dbService.db.transaction(async (tx) => {
-      await tx
-        .update(contentRevisions)
-        .set({
-          state: 'in_review',
-          submittedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(contentRevisions.id, revisionId));
+    // Atomic state transition
+    const updated = await this.dbService.db
+      .update(contentRevisions)
+      .set({
+        state: 'in_review',
+        submittedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(contentRevisions.id, revisionId),
+          inArray(contentRevisions.state, ['draft', 'changes_requested']),
+        ),
+      )
+      .returning();
 
-      await this.auditWriter.record({
-        action: 'content.submitted',
-        actorUserId: principal.userId,
-        actorKind: 'USER',
-        recordType: 'content_revision',
-        recordId: revisionId,
-        result: 'ALLOWED',
-        sessionId: principal.sessionId ?? null,
+    if (updated.length === 0) {
+      // Re-read to give a useful error
+      const current = await this.getRevision(revisionId);
+      throw new ApiHttpException({
+        status: 409,
+        code: 'content_not_submittable',
+        message: `Cannot submit a revision in state ${current?.state ?? 'unknown'}`,
       });
+    }
 
+    // Audit and outbox AFTER the write
+    await this.auditWriter.record({
+      action: 'content.submitted',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_revision',
+      recordId: revisionId,
+      result: 'ALLOWED',
+      sessionId: principal.sessionId ?? null,
+    });
+
+    await this.dbService.db.transaction(async (tx) => {
       await this.outboxWriter.write(tx, {
         type: 'content.review_requested',
         aggregateType: 'content_revision',
@@ -545,17 +649,16 @@ export class CmsService {
       });
     });
 
-    return this.getRevision(revisionId);
+    return updated[0]!;
   }
 
   // =========================================================================
-  // Approve revision (POST revisions/:id/approve)
+  // Approve revision (POST revisions/:id/approve) -- atomic CAS
   // =========================================================================
 
   async approveRevision(
     revisionId: string,
     principal: Principal,
-    _comment?: string,
   ) {
     const rev = await this.loadRevisionOrThrow(revisionId);
 
@@ -576,10 +679,9 @@ export class CmsService {
       });
     }
 
-    // The discipline check is enforced by the authorization guard via
-    // CmsResourceLoader.forRevision({ forReview: true }) which sets
-    // resource.category = review_discipline. But we double-check discipline
-    // existence here (ACC-R-07 fail-closed).
+    // Discipline check is enforced by the authorization guard via the
+    // cmsResource('forRevision', 'revisionId', { review: true }) resolver.
+    // Double-check here for defense in depth (ACC-R-07 fail-closed).
     const resourceRows = await this.dbService.db
       .select({
         reviewDiscipline: contentResources.reviewDiscipline,
@@ -597,6 +699,27 @@ export class CmsService {
         status: 403,
         code: 'content_review_discipline',
         message: 'The resource has no review discipline configured',
+      });
+    }
+
+    // Check: if a newer revision of the same variant is already approved → 409
+    const newerApproved = await this.dbService.db
+      .select({ id: contentRevisions.id })
+      .from(contentRevisions)
+      .where(
+        and(
+          eq(contentRevisions.contentVariantId, rev.contentVariantId),
+          eq(contentRevisions.state, 'approved'),
+          gt(contentRevisions.revisionNumber, rev.revisionNumber),
+        ),
+      )
+      .limit(1);
+
+    if (newerApproved.length > 0) {
+      throw new ApiHttpException({
+        status: 409,
+        code: 'content_approval_stale',
+        message: 'A newer revision is already approved for this variant',
       });
     }
 
@@ -635,40 +758,44 @@ export class CmsService {
 
     const now = new Date();
 
-    await this.dbService.db.transaction(async (tx) => {
-      // Supersede previous approved revisions of the same variant
-      await tx
-        .update(contentRevisions)
-        .set({ state: 'superseded', updatedAt: now })
-        .where(
-          and(
-            eq(contentRevisions.contentVariantId, rev.contentVariantId),
-            eq(contentRevisions.state, 'approved'),
-            ne(contentRevisions.id, revisionId),
-          ),
-        );
+    // Atomic state transition -- no supersession at approve time
+    const updated = await this.dbService.db
+      .update(contentRevisions)
+      .set({
+        state: 'approved',
+        approvedAt: now,
+        approvedByUserId: principal.userId,
+        approvalHash: hash,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(contentRevisions.id, revisionId),
+          eq(contentRevisions.state, 'in_review'),
+        ),
+      )
+      .returning();
 
-      await tx
-        .update(contentRevisions)
-        .set({
-          state: 'approved',
-          approvedAt: now,
-          approvedByUserId: principal.userId,
-          approvalHash: hash,
-          updatedAt: now,
-        })
-        .where(eq(contentRevisions.id, revisionId));
-
-      await this.auditWriter.record({
-        action: 'content.approved',
-        actorUserId: principal.userId,
-        actorKind: 'USER',
-        recordType: 'content_revision',
-        recordId: revisionId,
-        result: 'ALLOWED',
-        sessionId: principal.sessionId ?? null,
+    if (updated.length === 0) {
+      throw new ApiHttpException({
+        status: 409,
+        code: 'content_not_submittable',
+        message: 'The revision state changed concurrently',
       });
+    }
 
+    // Audit and outbox AFTER the write
+    await this.auditWriter.record({
+      action: 'content.approved',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_revision',
+      recordId: revisionId,
+      result: 'ALLOWED',
+      sessionId: principal.sessionId ?? null,
+    });
+
+    await this.dbService.db.transaction(async (tx) => {
       await this.outboxWriter.write(tx, {
         type: 'content.approved',
         aggregateType: 'content_revision',
@@ -677,7 +804,7 @@ export class CmsService {
       });
     });
 
-    return this.getRevision(revisionId);
+    return updated[0]!;
   }
 
   // =========================================================================
@@ -690,96 +817,137 @@ export class CmsService {
   ) {
     const now = new Date();
 
-    // Load resource and its variants
-    const resourceRows = await this.dbService.db
-      .select()
-      .from(contentResources)
-      .where(eq(contentResources.id, input.resourceId))
-      .limit(1);
-    const resource = resourceRows[0];
-    if (!resource) {
-      throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
-    }
-
-    // Get all variants
-    const variants = await this.dbService.db
-      .select()
-      .from(contentVariants)
-      .where(eq(contentVariants.contentResourceId, input.resourceId));
-
-    // Determine which locales to publish
-    const requestedLocales = input.locales ?? [...AUTHORED_LOCALES];
-
-    // WRK-R-36: If not a correction (no locales specified), all authored locales
-    // must have an approved revision
-    if (!input.locales) {
-      const missingLocales: string[] = [];
-      for (const locale of AUTHORED_LOCALES) {
-        const variant = variants.find((v) => v.locale === locale);
-        if (!variant) {
-          missingLocales.push(locale);
-          continue;
-        }
-        const approvedRev = await this.dbService.db
-          .select({ id: contentRevisions.id })
-          .from(contentRevisions)
-          .where(
-            and(
-              eq(contentRevisions.contentVariantId, variant.id),
-              eq(contentRevisions.state, 'approved'),
-            ),
-          )
-          .limit(1);
-        if (approvedRev.length === 0) {
-          missingLocales.push(locale);
-        }
-      }
-      if (missingLocales.length > 0) {
-        throw new ApiHttpException({
-          status: 409,
-          code: 'content_locale_incomplete',
-          message: 'Not all authored locales have an approved revision',
-          details: { missingLocales },
-        });
-      }
-    } else {
-      // Correction case: the specified locales must have an approved revision;
-      // other locales must already have a live publication for this resource
-      for (const locale of requestedLocales) {
-        const variant = variants.find((v) => v.locale === locale);
-        if (!variant) {
-          throw new ApiHttpException({
-            status: 409,
-            code: 'content_locale_incomplete',
-            message: `No variant exists for locale ${locale}`,
-            details: { missingLocales: [locale] },
-          });
-        }
-        const approvedRev = await this.dbService.db
-          .select({ id: contentRevisions.id })
-          .from(contentRevisions)
-          .where(
-            and(
-              eq(contentRevisions.contentVariantId, variant.id),
-              eq(contentRevisions.state, 'approved'),
-            ),
-          )
-          .limit(1);
-        if (approvedRev.length === 0) {
-          throw new ApiHttpException({
-            status: 409,
-            code: 'content_locale_incomplete',
-            message: `No approved revision for locale ${locale}`,
-            details: { missingLocales: [locale] },
-          });
-        }
-      }
-    }
-
     const publicationIds: string[] = [];
+    // Track superseded publications' audience org ids for availability bump
+    const supersededOrgIds = new Set<string>();
 
     await this.dbService.db.transaction(async (tx) => {
-      for (const locale of requestedLocales) {
+      // Lock the resource row FIRST inside the transaction (prevent concurrent publishes)
+      const resourceLockRows = await tx.execute(
+        sql`SELECT * FROM content_resources WHERE id = ${input.resourceId} FOR UPDATE`,
+      );
+      const resource = resourceLockRows.rows?.[0] as {
+        id: string;
+        review_discipline: string | null;
+      } | undefined;
+      if (!resource) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
+      }
+
+      // Get all variants (inside the transaction to see a consistent snapshot)
+      const variants = await tx
+        .select()
+        .from(contentVariants)
+        .where(eq(contentVariants.contentResourceId, input.resourceId));
+
+      // Determine which locales to publish
+      const requestedLocales = input.locales ?? [...AUTHORED_LOCALES];
+
+      // WRK-R-36: locale completeness check
+      if (!input.locales) {
+        // Full publish: all authored locales must have an approved revision
+        const missingLocales: string[] = [];
+        for (const locale of AUTHORED_LOCALES) {
+          const variant = variants.find((v) => v.locale === locale);
+          if (!variant) {
+            missingLocales.push(locale);
+            continue;
+          }
+          const approvedRev = await tx
+            .select({ id: contentRevisions.id })
+            .from(contentRevisions)
+            .where(
+              and(
+                eq(contentRevisions.contentVariantId, variant.id),
+                eq(contentRevisions.state, 'approved'),
+              ),
+            )
+            .limit(1);
+          if (approvedRev.length === 0) {
+            missingLocales.push(locale);
+          }
+        }
+        if (missingLocales.length > 0) {
+          throw new ApiHttpException({
+            status: 409,
+            code: 'content_locale_incomplete',
+            message: 'Not all authored locales have an approved revision',
+            details: { missingLocales },
+          });
+        }
+      } else {
+        // Correction path: specified locales need approved revisions,
+        // ALL OTHER authored locales must have a current live publication.
+        for (const locale of requestedLocales) {
+          const variant = variants.find((v) => v.locale === locale);
+          if (!variant) {
+            throw new ApiHttpException({
+              status: 409,
+              code: 'content_locale_incomplete',
+              message: `No variant exists for locale ${locale}`,
+              details: { missingLocales: [locale] },
+            });
+          }
+          const approvedRev = await tx
+            .select({ id: contentRevisions.id })
+            .from(contentRevisions)
+            .where(
+              and(
+                eq(contentRevisions.contentVariantId, variant.id),
+                eq(contentRevisions.state, 'approved'),
+              ),
+            )
+            .limit(1);
+          if (approvedRev.length === 0) {
+            throw new ApiHttpException({
+              status: 409,
+              code: 'content_locale_incomplete',
+              message: `No approved revision for locale ${locale}`,
+              details: { missingLocales: [locale] },
+            });
+          }
+        }
+
+        // Check that locales NOT in the correction set have live publications
+        const otherLocales = AUTHORED_LOCALES.filter((l) => !requestedLocales.includes(l));
+        for (const locale of otherLocales) {
+          const variant = variants.find((v) => v.locale === locale);
+          if (!variant) {
+            // No variant for this locale and not correcting it — needs a live pub
+            throw new ApiHttpException({
+              status: 409,
+              code: 'content_locale_incomplete',
+              message: `Locale ${locale} has no variant and no live publication (correction requires existing coverage)`,
+              details: { missingLocales: [locale] },
+            });
+          }
+          const livePub = await tx
+            .select({ id: contentPublications.id })
+            .from(contentPublications)
+            .where(
+              and(
+                eq(contentPublications.contentVariantId, variant.id),
+                eq(contentPublications.state, 'live'),
+                isNull(contentPublications.withdrawnAt),
+              ),
+            )
+            .limit(1);
+          if (livePub.length === 0) {
+            throw new ApiHttpException({
+              status: 409,
+              code: 'content_locale_incomplete',
+              message: `Locale ${locale} has no live publication (correction requires existing coverage)`,
+              details: { missingLocales: [locale] },
+            });
+          }
+        }
+      }
+
+      // Sort locales deterministically to prevent deadlock when concurrent
+      // publishes use opposite locale orders (P14).
+      const sortedLocales = [...requestedLocales].sort();
+
+      for (const locale of sortedLocales) {
         const variant = variants.find((v) => v.locale === locale);
         if (!variant) continue;
 
@@ -825,6 +993,9 @@ export class CmsService {
           });
         }
 
+        // Check media readiness at publish time
+        await this.checkMediaReadyTx(tx, approvedRev.id);
+
         // Recompute approval hash and verify (FMT-R-09)
         const mediaRows = await tx
           .select({ mediaAssetId: contentRevisionMedia.mediaAssetId })
@@ -844,7 +1015,7 @@ export class CmsService {
           mediaAssetIds,
           relatedResourceIds: approvedRev.relatedResourceIds ?? [],
           cta: approvedRev.cta,
-          reviewDiscipline: resource.reviewDiscipline ?? '',
+          reviewDiscipline: resource.review_discipline ?? '',
           proposedAudience: approvedRev.proposedAudience,
         };
         const recomputedHash = await approvalHash(hashInput);
@@ -857,13 +1028,25 @@ export class CmsService {
           });
         }
 
-        // Check audience does not exceed proposed_audience (C-12)
-        this.checkAudienceNotBroader(input.audience, approvedRev.proposedAudience);
+        // Entry-by-entry audience containment (C-12)
+        await this.checkAudienceContainment(tx, input.audience, approvedRev.proposedAudience);
 
-        // Supersession: set ends_at on previous live publication
+        // Supersession: mark older approved revisions as superseded (moved from approve)
         await tx
-          .update(contentPublications)
-          .set({ endsAt: now })
+          .update(contentRevisions)
+          .set({ state: 'superseded', updatedAt: now })
+          .where(
+            and(
+              eq(contentRevisions.contentVariantId, variant.id),
+              eq(contentRevisions.state, 'approved'),
+              ne(contentRevisions.id, approvedRev.id),
+            ),
+          );
+
+        // Supersession: set ends_at on previous live publication and collect its audience org ids
+        const previousPubs = await tx
+          .select({ id: contentPublications.id })
+          .from(contentPublications)
           .where(
             and(
               eq(contentPublications.contentVariantId, variant.id),
@@ -871,6 +1054,34 @@ export class CmsService {
               isNull(contentPublications.withdrawnAt),
             ),
           );
+
+        if (previousPubs.length > 0) {
+          // Collect audience org ids from superseded publications for availability bump
+          for (const prevPub of previousPubs) {
+            const prevAuds = await tx
+              .select({ orgId: contentPublicationAudiences.orgId, kind: contentPublicationAudiences.kind })
+              .from(contentPublicationAudiences)
+              .where(eq(contentPublicationAudiences.publicationId, prevPub.id));
+            for (const a of prevAuds) {
+              if (a.kind === 'all_eligible') {
+                supersededOrgIds.add('__global__');
+              } else if (a.orgId) {
+                supersededOrgIds.add(a.orgId);
+              }
+            }
+          }
+
+          await tx
+            .update(contentPublications)
+            .set({ endsAt: now })
+            .where(
+              and(
+                eq(contentPublications.contentVariantId, variant.id),
+                eq(contentPublications.state, 'live'),
+                isNull(contentPublications.withdrawnAt),
+              ),
+            );
+        }
 
         // Create the publication
         const pubId = randomUUID();
@@ -908,7 +1119,7 @@ export class CmsService {
       }
     });
 
-    // Audit
+    // Audit AFTER the transaction commits
     for (const pubId of publicationIds) {
       await this.auditWriter.record({
         action: 'publication.created',
@@ -921,15 +1132,22 @@ export class CmsService {
       });
     }
 
-    // Bump availability version
-    const orgIds = input.audience
-      .filter((a) => a.orgId)
-      .map((a) => a.orgId!);
-    const hasAllEligible = input.audience.some((a) => a.kind === 'all_eligible');
-    if (hasAllEligible) {
+    // Bump availability version for both new and superseded audiences
+    const newOrgIds = new Set(
+      input.audience.filter((a) => a.orgId).map((a) => a.orgId!),
+    );
+    const newHasAllEligible = input.audience.some((a) => a.kind === 'all_eligible');
+    const supersededHasGlobal = supersededOrgIds.has('__global__');
+
+    if (newHasAllEligible || supersededHasGlobal) {
       await this.availabilityVersionService.bump('global');
-    } else if (orgIds.length > 0) {
-      await this.availabilityVersionService.bump(orgIds);
+    } else {
+      // Merge org ids from new and superseded audiences
+      const allOrgIds = new Set([...newOrgIds, ...supersededOrgIds]);
+      allOrgIds.delete('__global__');
+      if (allOrgIds.size > 0) {
+        await this.availabilityVersionService.bump([...allOrgIds]);
+      }
     }
 
     // Return first publication (for API response)
@@ -938,6 +1156,22 @@ export class CmsService {
     }
 
     return this.getPublication(publicationIds[0]!);
+  }
+
+  // =========================================================================
+  // Media asset detail (GET /ops/cms/media/:assetId)
+  // =========================================================================
+
+  async getMediaAsset(assetId: string) {
+    const rows = await this.dbService.db
+      .select()
+      .from(mediaAssets)
+      .where(eq(mediaAssets.id, assetId))
+      .limit(1);
+    if (!rows[0]) {
+      throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Asset not found' });
+    }
+    return rows[0];
   }
 
   // =========================================================================
@@ -1011,88 +1245,162 @@ export class CmsService {
     }
   }
 
-  private checkAudienceNotBroader(
-    publishAudience: AudienceEntry[],
-    proposedAudience: unknown,
-  ): void {
-    // If no proposed_audience was set, the publisher cannot set any audience
-    // restrictions beyond what the approval allows. For M1, if proposedAudience
-    // is null/undefined, we allow the publisher to set any audience (the revision
-    // was approved without a proposed audience constraint).
-    if (!proposedAudience || !Array.isArray(proposedAudience)) return;
+  /**
+   * Transaction-aware media readiness check for publish.
+   */
+  private async checkMediaReadyTx(
+    tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
+    revisionId: string,
+  ): Promise<void> {
+    const mediaRows = await tx
+      .select({
+        mediaAssetId: contentRevisionMedia.mediaAssetId,
+        state: mediaAssets.state,
+        rightsExpiresAt: mediaAssets.rightsExpiresAt,
+      })
+      .from(contentRevisionMedia)
+      .innerJoin(mediaAssets, eq(contentRevisionMedia.mediaAssetId, mediaAssets.id))
+      .where(eq(contentRevisionMedia.contentRevisionId, revisionId));
 
-    // C-12: The publisher may narrow but not broaden the proposed audience.
-    // all_eligible in publish but not in proposed -> broadening
-    const proposedHasAllEligible = (proposedAudience as AudienceEntry[]).some(
-      (a) => a.kind === 'all_eligible',
-    );
-    const publishHasAllEligible = publishAudience.some(
-      (a) => a.kind === 'all_eligible',
-    );
-
-    if (publishHasAllEligible && !proposedHasAllEligible) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'content_audience_exceeds_approval',
-        message: 'Publication audience exceeds the approved proposed audience',
-      });
-    }
-
-    // For organization/org_unit audiences, each publish org must appear in proposed
-    if (!proposedHasAllEligible) {
-      const proposedOrgIds = new Set(
-        (proposedAudience as AudienceEntry[])
-          .filter((a) => a.orgId)
-          .map((a) => a.orgId),
-      );
-      for (const aud of publishAudience) {
-        if (aud.kind === 'all_eligible') continue;
-        if (aud.orgId && !proposedOrgIds.has(aud.orgId)) {
-          throw new ApiHttpException({
-            status: 403,
-            code: 'content_audience_exceeds_approval',
-            message: `Organization ${aud.orgId} is not in the approved proposed audience`,
-          });
-        }
+    for (const row of mediaRows) {
+      if (row.state !== 'ready') {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'media_not_ready',
+          message: `Media asset ${row.mediaAssetId} is not ready (state: ${row.state})`,
+        });
+      }
+      if (row.rightsExpiresAt && row.rightsExpiresAt < new Date()) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'media_rights_expired',
+          message: `Media asset ${row.mediaAssetId} has expired rights`,
+        });
       }
     }
   }
 
   /**
-   * Sync content_revision_media from the document's approvedMedia nodes.
+   * Entry-by-entry audience containment check (C-12).
+   *
+   * Each publish audience entry must be covered by at least one proposed
+   * audience entry. The rules:
+   * - `all_eligible` in publish → proposed must also have `all_eligible`
+   * - `organization(orgId)` → proposed must have `all_eligible` or `organization(orgId)`
+   * - `org_unit(orgId, unitId)` → proposed must have `all_eligible`,
+   *   `organization(orgId)` (and unit must belong to that org),
+   *   or `org_unit(orgId, unitId)` with matching or wider descendants flag
+   *
+   * When `proposedAudience` is null/undefined, any audience is allowed
+   * (approved without a proposed audience constraint).
+   */
+  private async checkAudienceContainment(
+    tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
+    publishAudience: AudienceEntry[],
+    proposedAudience: unknown,
+  ): Promise<void> {
+    if (!proposedAudience || !Array.isArray(proposedAudience)) return;
+    const proposed = proposedAudience as AudienceEntry[];
+
+    const proposedHasAllEligible = proposed.some((a) => a.kind === 'all_eligible');
+
+    for (const pub of publishAudience) {
+      if (pub.kind === 'all_eligible') {
+        if (!proposedHasAllEligible) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'content_audience_exceeds_approval',
+            message: 'Publication audience exceeds the approved proposed audience',
+          });
+        }
+        continue;
+      }
+
+      if (pub.kind === 'organization') {
+        if (proposedHasAllEligible) continue;
+        const orgMatch = proposed.some(
+          (p) => p.kind === 'organization' && p.orgId === pub.orgId,
+        );
+        if (!orgMatch) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'content_audience_exceeds_approval',
+            message: `Organization ${pub.orgId} is not in the approved proposed audience`,
+          });
+        }
+        continue;
+      }
+
+      if (pub.kind === 'org_unit') {
+        if (proposedHasAllEligible) continue;
+
+        // Verify the org unit actually belongs to the stated org
+        if (pub.orgUnitId) {
+          const unitRows = await tx
+            .select({ orgId: orgUnits.orgId })
+            .from(orgUnits)
+            .where(eq(orgUnits.id, pub.orgUnitId))
+            .limit(1);
+          if (unitRows.length > 0 && unitRows[0]!.orgId !== pub.orgId) {
+            throw new ApiHttpException({
+              status: 403,
+              code: 'content_audience_exceeds_approval',
+              message: `Org unit ${pub.orgUnitId} does not belong to organization ${pub.orgId}`,
+            });
+          }
+        }
+
+        // Check if covered by a proposed organization entry
+        const orgCover = proposed.some(
+          (p) => p.kind === 'organization' && p.orgId === pub.orgId,
+        );
+        if (orgCover) continue;
+
+        // Check if covered by a proposed org_unit entry
+        const unitCover = proposed.some(
+          (p) =>
+            p.kind === 'org_unit' &&
+            p.orgId === pub.orgId &&
+            p.orgUnitId === pub.orgUnitId &&
+            // proposed includeDescendants must be >= publish includeDescendants
+            ((p.includeDescendants ?? true) || !(pub.includeDescendants ?? true)),
+        );
+        if (!unitCover) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'content_audience_exceeds_approval',
+            message: `Org unit ${pub.orgUnitId} in org ${pub.orgId} exceeds the approved proposed audience`,
+          });
+        }
+        continue;
+      }
+    }
+  }
+
+  /**
+   * Sync content_revision_media from the document's media nodes.
+   * Maps `image` → `inline_image`, `approvedMedia` → `body_media`.
+   *
+   * Runs inside the caller's transaction.
    */
   private async syncRevisionMedia(
+    tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
     revisionId: string,
     doc: Record<string, unknown>,
   ): Promise<void> {
-    const mediaIds = new Set<string>();
-
-    function walk(node: Record<string, unknown>) {
-      if (node.type === 'approvedMedia' && node.attrs) {
-        const attrs = node.attrs as Record<string, unknown>;
-        if (typeof attrs.mediaAssetId === 'string') {
-          mediaIds.add(attrs.mediaAssetId);
-        }
-      }
-      if (Array.isArray(node.content)) {
-        for (const child of node.content as Record<string, unknown>[]) {
-          walk(child);
-        }
-      }
-    }
-    walk(doc);
+    const refs = extractMediaRefs(doc);
 
     // Delete existing and re-insert
-    await this.dbService.db
+    await tx
       .delete(contentRevisionMedia)
       .where(eq(contentRevisionMedia.contentRevisionId, revisionId));
 
-    for (const mediaAssetId of mediaIds) {
-      await this.dbService.db.insert(contentRevisionMedia).values({
+    for (const ref of refs) {
+      await tx.insert(contentRevisionMedia).values({
         id: randomUUID(),
         contentRevisionId: revisionId,
-        mediaAssetId,
-        usageKind: 'body_media',
+        mediaAssetId: ref.mediaAssetId,
+        usageKind: ref.usageKind,
       });
     }
   }

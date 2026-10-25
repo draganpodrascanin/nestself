@@ -11,19 +11,22 @@ import {
   Inject,
   Injectable,
   Logger,
+  type Type,
   forwardRef,
 } from '@nestjs/common';
- 
-import { Reflector } from '@nestjs/core';
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ModuleRef, Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { IS_AUTHENTICATED_ONLY_KEY } from './authenticated.decorator.js';
 import {
   AUTHORIZE_KEY,
   type AuthorizeMetadata,
+  type ResolverDeps,
 } from './authorize.decorator.js';
- 
+
 import { ContextLoader } from './context-loader.js';
- 
+
 import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from './authorize.js';
 import { denialCode } from './context.js';
@@ -49,6 +52,7 @@ export class AuthorizationGuard implements CanActivate {
     @Inject(forwardRef(() => ContextLoader)) private readonly contextLoader: ContextLoader,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -92,8 +96,12 @@ export class AuthorizationGuard implements CanActivate {
       });
     }
 
-    // Resolve the resource
-    const resource = await meta.resolver(req, principal);
+    // Resolve the resource -- pass the DI-backed deps bag so that
+    // resolvers that need services (e.g. CmsResourceLoader) can fetch them.
+    const deps: ResolverDeps = {
+      get: <T,>(token: Type<T>): T => this.moduleRef.get(token, { strict: false }),
+    };
+    const resource = await meta.resolver(req, principal, deps);
 
     // Build context and authorize
     const ctx = await this.contextLoader.build(principal, resource, {
@@ -135,6 +143,7 @@ export class AuthorizationGuard implements CanActivate {
       }
 
       // Non-disclosure: 404 when no visibility into the org (AUTHZ-R-61)
+      // or when the route declares denyAs: 'not_found' (ACC-R-22/23).
       const hasVisibility = this.hasOrgVisibility(principal, resource);
 
       await this.audit.record({
@@ -153,7 +162,7 @@ export class AuthorizationGuard implements CanActivate {
         },
       });
 
-      if (!hasVisibility) {
+      if (meta.denyAs === 'not_found' || !hasVisibility) {
         throw new ApiHttpException({
           status: 404,
           code: 'not_found',
