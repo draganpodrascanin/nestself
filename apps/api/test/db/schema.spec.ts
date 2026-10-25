@@ -20,6 +20,8 @@ import {
   orgUnitClosure,
   orgUnits,
   posts,
+  ssoConnections,
+  ssoDomains,
 } from '../../src/db/schema/index.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
@@ -44,7 +46,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(6);
+    expect(Number(rows[0]!.n)).toBe(7);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -177,9 +179,9 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
          WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
-                           'conversations','conversation_messages','intake_records')`,
+                           'conversations','conversation_messages','intake_records','sso_domains')`,
       );
-      expect(rows).toHaveLength(16);
+      expect(rows).toHaveLength(17);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -324,6 +326,53 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(conversations)
         .where(eq(conversations.id, 'rls_conv_leak'));
       expect(leaked).toEqual([]);
+    });
+
+    it('sso_domains is isolated by tenant through its connection', async () => {
+      await owner.db.insert(ssoConnections).values([
+        { id: 'rls_sso_a', orgId: 'rls_org_a', protocol: 'SAML', cognitoProviderName: 'org-rlsa-saml' },
+        { id: 'rls_sso_b', orgId: 'rls_org_b', protocol: 'SAML', cognitoProviderName: 'org-rlsb-saml' },
+      ]);
+      await owner.db.insert(ssoDomains).values([
+        { id: 'rls_ssod_a', connectionId: 'rls_sso_a', domain: 'rls-a.example', verificationToken: 'token-a' },
+        { id: 'rls_ssod_b', connectionId: 'rls_sso_b', domain: 'rls-b.example', verificationToken: 'token-b' },
+      ]);
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx
+          .select({ id: ssoDomains.id })
+          .from(ssoDomains)
+          .where(inArray(ssoDomains.id, ['rls_ssod_a', 'rls_ssod_b'])),
+      );
+      expect(fromA.map((d) => d.id)).toEqual(['rls_ssod_a']);
+
+      // System context (no tenant setting) sees both: home-realm discovery runs there.
+      const unscoped = await app.db
+        .select({ id: ssoDomains.id })
+        .from(ssoDomains)
+        .where(inArray(ssoDomains.id, ['rls_ssod_a', 'rls_ssod_b']));
+      expect(unscoped).toHaveLength(2);
+
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx
+          .insert(ssoDomains)
+          .values({ id: 'rls_ssod_leak', connectionId: 'rls_sso_b', domain: 'rls-leak.example', verificationToken: 'x' }),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // An update from another tenant touches nothing.
+      const updated = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx
+          .update(ssoDomains)
+          .set({ verifiedAt: new Date('2026-10-25T00:00:00Z') })
+          .where(eq(ssoDomains.id, 'rls_ssod_a'))
+          .returning({ id: ssoDomains.id }),
+      );
+      expect(updated).toEqual([]);
+      const [row] = await owner.db.select({ verifiedAt: ssoDomains.verifiedAt }).from(ssoDomains).where(eq(ssoDomains.id, 'rls_ssod_a'));
+      expect(row!.verifiedAt).toBeNull();
     });
 
     it('the tenant setting does not leak out of the transaction', async () => {

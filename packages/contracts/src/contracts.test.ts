@@ -17,6 +17,15 @@ import {
   OwnershipTransferResponseSchema,
 } from './org-admin.ts';
 import { AUTH_ERROR_CODES } from './auth.ts';
+import {
+  SsoConnectionCreateRequestSchema,
+  SsoConnectionDomainRequestSchema,
+  SsoConnectionListResponseSchema,
+  SsoConnectionResponseSchema,
+  SsoConnectionUpdateRequestSchema,
+  SsoDomainResponseSchema,
+  SsoTestResponseSchema,
+} from './ops-admin.ts';
 
 describe('roles', () => {
   it('parses a valid OrgRole', () => {
@@ -238,5 +247,174 @@ describe('approval authority schemas', () => {
     expect(ApprovalAuthorityListResponseSchema.parse({ items: [] }).items).toEqual([]);
     expect(ApprovalAuthorityListResponseSchema.safeParse({ items: [{ ...authority, userId: '' }] }).success).toBe(false);
     expect(ApprovalAuthorityListResponseSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('SSO connection schemas (D-12, 5.4)', () => {
+  const domain = {
+    id: 'ssod_1',
+    domain: 'acme.example',
+    verifiedAt: null,
+    txtRecordName: '_nestself-verify.acme.example',
+    txtRecordValue: 'nestself-domain-verification=0123456789abcdef0123456789abcdef',
+  };
+  const connection = {
+    id: 'sso_1',
+    orgId: 'org_sample',
+    protocol: 'SAML',
+    cognitoProviderName: 'org-acme-saml',
+    status: 'DRAFT',
+    metadataUrl: 'https://idp.acme.example/metadata.xml',
+    oidcIssuer: null,
+    oidcClientId: null,
+    idpInitiatedAllowed: false,
+    jitProvisioning: false,
+    defaultOrgUnitId: null,
+    certificateExpiresAt: null,
+    lastTestedAt: null,
+    domains: [domain],
+    spMetadata: {
+      entityId: 'urn:amazon:cognito:sp:eu-central-1_example',
+      acsUrl: 'https://nestself-dev.auth.eu-central-1.amazoncognito.com/saml2/idpresponse',
+    },
+  };
+
+  it('SsoConnectionCreateRequestSchema accepts the strategy fields plus a slug and applies defaults', () => {
+    const parsed = SsoConnectionCreateRequestSchema.parse({
+      orgId: 'org_sample',
+      slug: 'acme',
+      protocol: 'SAML',
+      metadataUrl: 'https://idp.acme.example/metadata.xml',
+    });
+    expect(parsed).toEqual({
+      orgId: 'org_sample',
+      slug: 'acme',
+      protocol: 'SAML',
+      metadataUrl: 'https://idp.acme.example/metadata.xml',
+      idpInitiatedAllowed: false,
+      jitProvisioning: false,
+    });
+  });
+
+  it('SsoConnectionCreateRequestSchema accepts an OIDC connection with a mapping and default unit', () => {
+    const parsed = SsoConnectionCreateRequestSchema.parse({
+      orgId: 'org_sample',
+      slug: 'acme-eu',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.acme.example',
+      oidcClientId: 'client-1',
+      attributeMapping: { email: 'email' },
+      jitProvisioning: true,
+      defaultOrgUnitId: 'ou_sample',
+    });
+    expect(parsed.protocol).toBe('OIDC');
+    expect(parsed.jitProvisioning).toBe(true);
+  });
+
+  it('SsoConnectionCreateRequestSchema enforces the slug pattern', () => {
+    const base = { orgId: 'org_sample', protocol: 'SAML' };
+    for (const slug of ['a', 'abcdefghijklm', 'Acme', 'acme_co', 'acme.co', '']) {
+      expect(SsoConnectionCreateRequestSchema.safeParse({ ...base, slug }).success, slug).toBe(false);
+    }
+    for (const slug of ['ac', 'abcdefghijkl', 'acme-2']) {
+      expect(SsoConnectionCreateRequestSchema.safeParse({ ...base, slug }).success, slug).toBe(true);
+    }
+    expect(SsoConnectionCreateRequestSchema.safeParse(base).success).toBe(false);
+  });
+
+  it('SsoConnectionCreateRequestSchema rejects an unknown protocol and a non-URL metadata URL', () => {
+    const base = { orgId: 'org_sample', slug: 'acme' };
+    expect(SsoConnectionCreateRequestSchema.safeParse({ ...base, protocol: 'WSFED' }).success).toBe(false);
+    expect(
+      SsoConnectionCreateRequestSchema.safeParse({ ...base, protocol: 'SAML', metadataUrl: 'not a url' }).success,
+    ).toBe(false);
+  });
+
+  it('SsoConnectionCreateRequestSchema refuses IdP-initiated sign-in (SSO-R-12)', () => {
+    const result = SsoConnectionCreateRequestSchema.safeParse({
+      orgId: 'org_sample',
+      slug: 'acme',
+      protocol: 'SAML',
+      idpInitiatedAllowed: true,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['idpInitiatedAllowed']);
+  });
+
+  it('SsoConnectionUpdateRequestSchema accepts a status change and metadata fields', () => {
+    expect(SsoConnectionUpdateRequestSchema.parse({ status: 'SUSPENDED' })).toEqual({ status: 'SUSPENDED' });
+    expect(SsoConnectionUpdateRequestSchema.parse({ status: 'ACTIVE' }).status).toBe('ACTIVE');
+    expect(SsoConnectionUpdateRequestSchema.parse({ status: 'DRAFT' }).status).toBe('DRAFT');
+    const patch = {
+      metadataUrl: 'https://idp.acme.example/v2/metadata.xml',
+      metadataXml: '<EntityDescriptor/>',
+      oidcIssuer: 'https://login.acme.example',
+      oidcClientId: 'client-2',
+      attributeMapping: { email: 'mail' },
+      jitProvisioning: true,
+      defaultOrgUnitId: null,
+      idpInitiatedAllowed: false,
+    };
+    expect(SsoConnectionUpdateRequestSchema.parse(patch)).toEqual(patch);
+  });
+
+  it('SsoConnectionUpdateRequestSchema refuses TESTING (only POST :id/test sets it) and unknown statuses', () => {
+    expect(SsoConnectionUpdateRequestSchema.safeParse({ status: 'TESTING' }).success).toBe(false);
+    expect(SsoConnectionUpdateRequestSchema.safeParse({ status: 'DELETED' }).success).toBe(false);
+  });
+
+  it('SsoConnectionUpdateRequestSchema refuses idpInitiatedAllowed: true and an empty patch', () => {
+    const result = SsoConnectionUpdateRequestSchema.safeParse({ idpInitiatedAllowed: true });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['idpInitiatedAllowed']);
+    expect(SsoConnectionUpdateRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoConnectionDomainRequestSchema lowercases and trims, and rejects a non-domain', () => {
+    expect(SsoConnectionDomainRequestSchema.parse({ domain: '  Acme.EXAMPLE ' })).toEqual({ domain: 'acme.example' });
+    for (const bad of ['', '   ', 'acme', 'user@acme.example', 'https://acme.example', 'acme..example', '-acme.example']) {
+      expect(SsoConnectionDomainRequestSchema.safeParse({ domain: bad }).success, bad).toBe(false);
+    }
+  });
+
+  it('SsoDomainResponseSchema accepts pending and verified domains', () => {
+    expect(SsoDomainResponseSchema.parse(domain)).toEqual(domain);
+    const verified = { ...domain, verifiedAt: '2026-10-25T10:00:00.000Z' };
+    expect(SsoDomainResponseSchema.parse(verified)).toEqual(verified);
+    expect(SsoDomainResponseSchema.safeParse({ ...domain, txtRecordValue: undefined }).success).toBe(false);
+  });
+
+  it('SsoDomainResponseSchema never carries the raw verification token column', () => {
+    expect(SsoDomainResponseSchema.parse({ ...domain, verificationToken: 'secret' })).not.toHaveProperty('verificationToken');
+  });
+
+  it('SsoConnectionResponseSchema accepts the strategy shape plus domains and SP metadata', () => {
+    expect(SsoConnectionResponseSchema.parse(connection)).toEqual(connection);
+    expect(SsoConnectionResponseSchema.parse({ ...connection, spMetadata: null, domains: [] }).spMetadata).toBeNull();
+    expect(SsoConnectionResponseSchema.safeParse({ ...connection, status: 'DELETED' }).success).toBe(false);
+    expect(SsoConnectionResponseSchema.safeParse({ ...connection, domains: undefined }).success).toBe(false);
+  });
+
+  it('SsoConnectionResponseSchema strips stored secrets and raw metadata', () => {
+    const parsed = SsoConnectionResponseSchema.parse({ ...connection, metadataXml: '<x/>', oidcClientSecret: 's' });
+    expect(parsed).not.toHaveProperty('metadataXml');
+    expect(parsed).not.toHaveProperty('oidcClientSecret');
+  });
+
+  it('SsoConnectionListResponseSchema wraps connections in items', () => {
+    expect(SsoConnectionListResponseSchema.parse({ items: [connection] }).items).toHaveLength(1);
+    expect(SsoConnectionListResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoTestResponseSchema requires an absolute start URL', () => {
+    const startUrl = 'http://localhost:4000/api/auth/sso/start?connection=org-acme-saml&surface=workspace&test=1';
+    expect(SsoTestResponseSchema.parse({ startUrl })).toEqual({ startUrl });
+    expect(SsoTestResponseSchema.safeParse({ startUrl: '/api/auth/sso/start' }).success).toBe(false);
+  });
+
+  it('AUTH_ERROR_CODES includes the SSO codes', () => {
+    for (const code of ['sso_connection_state', 'domain_blocklisted', 'domain_unverified', 'sso_email_unverified']) {
+      expect(AUTH_ERROR_CODES).toContain(code);
+    }
   });
 });

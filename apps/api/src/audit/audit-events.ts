@@ -21,6 +21,8 @@ export const AUDIT_ACTIONS = [
   'identity.created',
   'identity.linked',
   'identity.unlinked',
+  /** An SSO sign-in matched no identity, invitation or JIT rule; the orphan IdP user was deleted (SSO-R-10). */
+  'identity.denied',
   'invitation.created',
   'invitation.accepted',
   'invitation.revoked',
@@ -60,6 +62,11 @@ export const AUDIT_ACTIONS = [
   'sso_connection.updated',
   'sso_connection.activated',
   'sso_connection.deactivated',
+  /** Any status change; details `{ from, to }`. */
+  'sso_connection.changed',
+  'sso_connection.tested',
+  'sso_domain.added',
+  'sso_domain.verified',
   'data.erasure.requested',
 ] as const;
 
@@ -92,6 +99,7 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action === 'export.generated') return 'CONTENT_ACCESS';
   if (action.startsWith('content.')) return 'CONTENT_ACCESS';
   if (action.startsWith('sso_connection.')) return 'ADMIN';
+  if (action.startsWith('sso_domain.')) return 'ADMIN';
   if (action === 'data.erasure.requested') return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';

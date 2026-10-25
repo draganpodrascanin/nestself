@@ -14,7 +14,14 @@ import {
 import { ssoConnectionStatus, ssoProtocol } from './enums.js';
 import { users } from './identity.js';
 import { organizations, orgUnits } from './organization.js';
-import { createdAt, idColumn, tenantPredicate, ts } from './_shared.js';
+import {
+  CURRENT_ORG_SETTING,
+  createdAt,
+  idColumn,
+  tenantPredicate,
+  tenantPredicateVia,
+  ts,
+} from './_shared.js';
 
 /**
  * A revocable, expiring token that lets an invited person activate a
@@ -107,7 +114,14 @@ export const ssoConnections = pgTable(
   ],
 ).enableRLS();
 
-/** A verified email domain bound to an SSO connection [D-12]. */
+/** A row is visible when its connection belongs to the current tenant. */
+const SSO_DOMAINS_TENANT_EXISTS = `select 1 from "sso_connections" where "sso_connections"."id" = "sso_domains"."connection_id" and "sso_connections"."org_id" = ${CURRENT_ORG_SETTING}`;
+
+/**
+ * A verified email domain bound to an SSO connection [D-12]. Tenant-scoped
+ * (RLS) through `sso_connections.org_id`; home-realm discovery reads it in
+ * the system context (no tenant setting).
+ */
 export const ssoDomains = pgTable(
   'sso_domains',
   {
@@ -122,5 +136,14 @@ export const ssoDomains = pgTable(
     /** Non-null means the DNS TXT check passed. */
     verifiedAt: ts(),
   },
-  (t) => [uniqueIndex('sso_domains_domain_key').on(t.domain)],
-);
+  (t) => [
+    uniqueIndex('sso_domains_domain_key').on(t.domain),
+    /** Domains of a connection, and "has at least one verified domain" (POST :id/test). */
+    index('sso_domains_connection_id_verified_at_idx').on(t.connectionId, t.verifiedAt),
+    pgPolicy('sso_domains_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicateVia(SSO_DOMAINS_TENANT_EXISTS),
+      withCheck: tenantPredicateVia(SSO_DOMAINS_TENANT_EXISTS),
+    }),
+  ],
+).enableRLS();

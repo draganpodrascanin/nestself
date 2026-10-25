@@ -319,6 +319,14 @@ export const AUTH_ERROR_CODES = [
   'cannot_suspend_self',
   /** `POST .../members/:id/end` on the caller's own membership (409). */
   'cannot_end_self',
+  /** An SSO connection is not in the status the operation needs, e.g. test without a verified domain (409). */
+  'sso_connection_state',
+  /** A public email domain (`PUBLIC_EMAIL_DOMAINS`) cannot be bound to an SSO connection (422). */
+  'domain_blocklisted',
+  /** The `_nestself-verify` DNS TXT record was missing or did not match (422). */
+  'domain_unverified',
+  /** The IdP did not assert a verified email (SSO-R-08); the user continues with the email code. */
+  'sso_email_unverified',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

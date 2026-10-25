@@ -43,6 +43,13 @@
       "when": 1792858358076,
       "tag": "0005_drop_legacy_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792912393798,
+      "tag": "0006_sso_domains_rls",
+      "breakpoints": true
     }
   ]
 }
