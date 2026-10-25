@@ -783,12 +783,29 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     expect((await post(nikola, floorPath('give-floor'))).status).toBe(200);
     // The floor does not survive a reconnect (D-CW-35), and the flag follows it.
     expect((await post(jovan, `/webinars/${liveId}/join`)).status).toBe(200);
-    expect(emitted('webinar.floor.state')).toEqual([
-      [`webinar:${liveId}`, 'webinar.floor.state', { active: true }],
-      [`webinar:${liveId}`, 'webinar.floor.state', { active: false }],
-      [`webinar:${liveId}`, 'webinar.floor.state', { active: true }],
-      [`webinar:${liveId}`, 'webinar.floor.state', { active: false }],
+    const floor = (room: string) => emitted('webinar.floor.state').filter((call) => call[0] === room).map((call) => call[2]);
+    expect(floor(`webinar:${liveId}`)).toEqual([{ active: true }, { active: false }, { active: true }, { active: false }]);
+    // The hosts' room names the attendee (an id, never a name) so any host can take the floor back after a reload.
+    const participantId = attendeeJoin.participantId;
+    expect(floor(`webinar:${liveId}:hosts`)).toEqual([
+      { active: true, participantId },
+      { active: false, participantId },
+      { active: true, participantId },
+      { active: false, participantId },
     ]);
+  });
+
+  it('the hosts room counts raised hands and attendance, never names (T-CW-2.3 hosts room, WBN-19)', async () => {
+    expect((await post(jovan, `/webinars/${liveId}/hand`)).status).toBe(200);
+    expect((await del(jovan, `/webinars/${liveId}/hand`)).status).toBe(200);
+    expect(emitted('webinar.hand.count')).toEqual([
+      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 1 }],
+      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 0 }],
+    ]);
+    expect((await post(jovan, `/webinars/${liveId}/join`)).status).toBe(200);
+    const counts = emitted('webinar.attendance.count').map((call) => call[0]);
+    expect(counts).toEqual([`webinar:${liveId}:moderation`, `webinar:${liveId}:hosts`]);
+    expect(JSON.stringify(emitted('webinar.hand.count'))).not.toMatch(/Jovan|user_/);
   });
 
   // ── Polls (WBN-11, WBN-27, CW-R-24) ───────────────────────────────────────

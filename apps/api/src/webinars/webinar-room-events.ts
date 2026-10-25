@@ -12,6 +12,10 @@
  *   `webinar.attendance.count`, and `webinar.ended`;
  * - `user:{userId}` (one attendee, CW-R-34): `webinar.floor.given` and
  *   `webinar.floor.taken`;
+ * - `webinar:{webinarId}:hosts` (presenters and moderators, T-CW-2.3):
+ *   `webinar.attendance.count`, `webinar.hand.count` and
+ *   `webinar.floor.state { active, participantId }`, checked against
+ *   `WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS` (counts and ids, never names);
  * - `webinar:{webinarId}`, the canonical additions of T-CW-2.3
  *   (`WEBINAR_ROOM_ADDED_EVENT_NAMES`): `webinar.message.removed` and the
  *   anonymous `webinar.floor.state`, checked against
@@ -27,12 +31,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   WEBINAR_EVENT_PAYLOAD_SCHEMAS,
+  WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS,
   WEBINAR_ROOM_ADDED_EVENT_PAYLOAD_SCHEMAS,
   userRoomName,
+  webinarHostsRoomName,
   webinarModerationRoomName,
   webinarRoomName,
   type WebinarEventName,
   type WebinarEventPayloads,
+  type WebinarHostsRoomEventName,
+  type WebinarHostsRoomEventPayloads,
   type WebinarModerationRoomEventName,
   type WebinarParticipantEventName,
   type WebinarRoomAddedEventName,
@@ -77,6 +85,20 @@ export class WebinarRoomEvents {
       return false;
     }
     return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarRoomName(webinarId), event, checked.data);
+  }
+
+  /** An event of the hosts' room `webinar:{webinarId}:hosts` (T-CW-2.3): counts and the floor holder's id. */
+  toHosts<E extends WebinarHostsRoomEventName>(
+    webinarId: string,
+    event: E,
+    payload: WebinarHostsRoomEventPayloads[E],
+  ): boolean {
+    const checked = WEBINAR_HOSTS_ROOM_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload);
+    if (!checked.success) {
+      this.logger.error({ event }, 'Webinar room event failed its contract schema; not emitted');
+      return false;
+    }
+    return (this.rooms.emit as unknown as UntypedEmit).call(this.rooms, webinarHostsRoomName(webinarId), event, checked.data);
   }
 
   /** A floor event to one attendee's own room only (CW-R-34). */

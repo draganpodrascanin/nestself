@@ -66,6 +66,20 @@ describe('WebinarRoomEvents', () => {
     ]);
   });
 
+  it('sends counts and the floor holder to webinar:{id}:hosts, never a name (T-CW-2.3 hosts room)', () => {
+    const { emit, events } = setup();
+    expect(events.toHosts('w1', 'webinar.attendance.count', { webinarId: 'w1', count: 3 })).toBe(true);
+    expect(events.toHosts('w1', 'webinar.hand.count', { count: 1 })).toBe(true);
+    expect(events.toHosts('w1', 'webinar.floor.state', { active: true, participantId: 'part_1' })).toBe(true);
+    expect(emit.mock.calls).toEqual([
+      ['webinar:w1:hosts', 'webinar.attendance.count', { webinarId: 'w1', count: 3 }],
+      ['webinar:w1:hosts', 'webinar.hand.count', { count: 1 }],
+      ['webinar:w1:hosts', 'webinar.floor.state', { active: true, participantId: 'part_1' }],
+    ]);
+    expect(events.toHosts('w1', 'webinar.hand.count', { count: 1, participantName: 'Jovan' } as never)).toBe(false);
+    expect(emit).toHaveBeenCalledTimes(3);
+  });
+
   it('never sends a floor flag that names the speaker (D-CW-15)', () => {
     const { emit, events } = setup();
     expect(events.toAudienceAdded('w1', 'webinar.floor.state', { active: true, participantId: 'part_1' } as never)).toBe(false);

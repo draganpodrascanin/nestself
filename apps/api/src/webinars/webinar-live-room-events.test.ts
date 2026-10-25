@@ -8,6 +8,10 @@
  * - `webinar.floor.state { active }` on give-floor (true) and take-floor
  *   (false, unless another attendee still holds the floor). Anonymous: a flag,
  *   never a participant id or a name (D-CW-15).
+ * - The hosts' room `webinar:{id}:hosts`: `webinar.floor.state { active,
+ *   participantId }` for the attendee whose floor changed, and
+ *   `webinar.hand.count { count }` on every raise and lower (and when the
+ *   floor lowers a hand).
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Principal } from '@nestself/contracts';
@@ -42,7 +46,7 @@ function message(status: WebinarMessageRecord['status']): WebinarMessageRecord {
   };
 }
 
-function registration(id: string, floorGivenAt: Date | null): WebinarRegistrationRecord {
+function registration(id: string, floorGivenAt: Date | null, handRaisedAt: Date | null = null): WebinarRegistrationRecord {
   return {
     id,
     webinarId: 'w1',
@@ -50,13 +54,13 @@ function registration(id: string, floorGivenAt: Date | null): WebinarRegistratio
     userId: id === 'reg_1' ? 'user_jovan' : 'user_ana',
     registeredAt: new Date(),
     canceledAt: null,
-    handRaisedAt: null,
+    handRaisedAt,
     floorGivenAt,
     votedPollIds: [],
   };
 }
 
-async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?: number } = {}) {
+async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?: number; othersWithHand?: number } = {}) {
   const video = new FakeVideoProvider();
   const session = await video.createSession({
     sessionId: 'session_1',
@@ -74,6 +78,8 @@ async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?
 
   const floors = new Map<string, Date | null>([['reg_1', null]]);
   for (let i = 0; i < (options.othersWithFloor ?? 0); i += 1) floors.set(`reg_other_${i}`, new Date());
+  const hands = new Map<string, Date | null>([['reg_1', null]]);
+  for (let i = 0; i < (options.othersWithHand ?? 0); i += 1) hands.set(`reg_hand_${i}`, new Date());
   const current = options.message ?? message('published');
 
   const access = {
@@ -94,20 +100,28 @@ async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?
       role: 'ATTENDEE',
       providerAttendeeId: attendee.providerAttendeeId,
     }),
-    findRegistration: async () => registration('reg_1', floors.get('reg_1') ?? null),
+    findRegistration: async () => registration('reg_1', floors.get('reg_1') ?? null, hands.get('reg_1') ?? null),
+    findRegistrationRow: async () => registration('reg_1', floors.get('reg_1') ?? null, hands.get('reg_1') ?? null),
     setFloor: async (id: string, at: Date | null) => {
       floors.set(id, at);
+      if (at) hands.set(id, null);
     },
-    listActiveRegistrations: async () => [...floors.entries()].map(([id, at]) => registration(id, at)),
+    setHand: async (id: string, at: Date | null) => {
+      hands.set(id, at);
+      return registration(id, floors.get(id) ?? null, at);
+    },
+    listActiveRegistrations: async () =>
+      [...new Set([...floors.keys(), ...hands.keys()])].map((id) => registration(id, floors.get(id) ?? null, hands.get(id) ?? null)),
   } as unknown as WebinarsRepository;
   const calls = {
     findSessionById: async () => ({ id: 'session_1', status: 'active', providerMeetingId: session.providerMeetingId }),
   } as unknown as CallsRepository;
-  const toAudienceAdded = vi.fn(() => true);
-  const events = { toParticipant: vi.fn(), toModeration: vi.fn(), toAudience: vi.fn(), toAudienceAdded };
+  const toAudienceAdded = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
+  const toHosts = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
+  const events = { toParticipant: vi.fn(), toModeration: vi.fn(), toAudience: vi.fn(), toAudienceAdded, toHosts };
   const audit = { record: vi.fn(async () => undefined) } as unknown as AuditWriter;
   const service = new WebinarLiveService(repo, access, calls, video, events as unknown as WebinarRoomEvents, audit);
-  return { service, toAudienceAdded };
+  return { service, toAudienceAdded, toHosts, hands };
 }
 
 describe('webinar.message.removed (WBN-24.2)', () => {
@@ -141,5 +155,45 @@ describe('webinar.floor.state (WBN-25.8)', () => {
     const { service, toAudienceAdded } = await setup({ othersWithFloor: 1 });
     await service.takeFloor('w1', 'part_attendee', moderator);
     expect(toAudienceAdded).toHaveBeenCalledWith('w1', 'webinar.floor.state', { active: true });
+  });
+});
+
+describe('the hosts room (webinar:{id}:hosts)', () => {
+  it('names the attendee whose floor changed, with that attendee’s state', async () => {
+    const { service, toHosts } = await setup({ othersWithFloor: 1 });
+    await service.giveFloor('w1', 'part_attendee', moderator);
+    await service.takeFloor('w1', 'part_attendee', moderator);
+    expect(toHosts.mock.calls.filter((call) => call[1] === 'webinar.floor.state')).toEqual([
+      ['w1', 'webinar.floor.state', { active: true, participantId: 'part_attendee' }],
+      ['w1', 'webinar.floor.state', { active: false, participantId: 'part_attendee' }],
+    ]);
+  });
+
+  it('counts the raised hands on every raise and lower, and when the floor lowers a hand', async () => {
+    const { service, toHosts } = await setup({ othersWithHand: 2 });
+    const jovan = { userId: 'user_jovan' } as Principal;
+    // raiseHand needs a joined attendee: the live service resolves it through its own helpers.
+    vi.spyOn(service as unknown as { joinedAttendee: () => unknown }, 'joinedAttendee').mockResolvedValue({
+      webinar,
+      registration: registration('reg_1', null),
+      participantId: 'part_attendee',
+    });
+    vi.spyOn(service as unknown as { registrant: () => unknown }, 'registrant').mockImplementation(async () =>
+      registration('reg_1', null, new Date()),
+    );
+    vi.spyOn(service as unknown as { currentParticipant: () => unknown }, 'currentParticipant').mockResolvedValue({
+      id: 'part_attendee',
+    });
+
+    await service.raiseHand('w1', jovan);
+    await service.lowerHand('w1', jovan);
+    await service.raiseHand('w1', jovan);
+    await service.giveFloor('w1', 'part_attendee', moderator);
+    expect(toHosts.mock.calls.filter((call) => call[1] === 'webinar.hand.count').map((call) => call[2])).toEqual([
+      { count: 3 },
+      { count: 2 },
+      { count: 3 },
+      { count: 2 },
+    ]);
   });
 });

@@ -15,12 +15,15 @@
  *   read published and answered messages only; moderating principals read
  *   every message with its author's registration name.
  * - Hand-raise (WBN-10): an attendee who joined raises or lowers their hand;
- *   the moderation room gets the registration name, nobody else anything.
+ *   the moderation room gets the registration name and the hosts' room the
+ *   number of raised hands (`webinar.hand.count`), nobody else anything.
  * - Floor (WBN-25, WBN-26, D-CW-35, CW-R-108): a host gives an attendee the
  *   floor with `UpdateAttendeeCapabilities` audio `SendReceive` and video and
  *   content `Receive`, and takes it back to receive-only; the events go to
  *   that attendee's own room only (CW-R-34); the audience gets the anonymous
- *   `webinar.floor.state { active }` (WBN-25.8). `webinar.floor.given` is audited
+ *   `webinar.floor.state { active }` (WBN-25.8) and the hosts' room
+ *   `webinar:{id}:hosts` gets `{ active, participantId }` for the attendee
+ *   whose floor changed. `webinar.floor.given` is audited
  *   with `recordingNoticeShown: true` (CW-R-128): the client shows the
  *   recording notice before it lets the attendee unmute.
  * - Polls (WBN-11, WBN-27, CW-R-24): created, opened and closed by moderating
@@ -335,6 +338,7 @@ export class WebinarLiveService {
       participantName: name,
       raisedAt: raisedAt.toISOString(),
     });
+    await this.announceHandCount(webinar);
     return { raised: true, raisedAt: raisedAt.toISOString() };
   }
 
@@ -345,7 +349,16 @@ export class WebinarLiveService {
     await this.access.scoped(webinar.orgId, (tx) => this.repo.setHand(registration.id, null, tx));
     const participant = await this.currentParticipant(webinar, principal.userId);
     if (participant) this.events.toModeration(webinarId, 'webinar.hand.lowered', { participantId: participant.id });
+    await this.announceHandCount(webinar);
     return { raised: false, raisedAt: null };
+  }
+
+  /** `webinar.hand.count` to the hosts' room: a number, never names (WBN-10, WBN-19). */
+  private async announceHandCount(webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<void> {
+    const registrations = await this.access.scoped(webinar.orgId, (tx) => this.repo.listActiveRegistrations(webinar.id, tx));
+    this.events.toHosts(webinar.id, 'webinar.hand.count', {
+      count: registrations.filter((registration) => registration.handRaisedAt !== null).length,
+    });
   }
 
   // ── Floor (WBN-25, WBN-26, D-CW-35) ───────────────────────────────────────
@@ -361,8 +374,11 @@ export class WebinarLiveService {
     await this.access.scoped(target.webinar.orgId, (tx) => this.repo.setFloor(target.registration.id, new Date(), tx));
     if (target.registration.handRaisedAt) this.events.toModeration(webinarId, 'webinar.hand.lowered', { participantId });
     this.events.toParticipant(target.registration.userId, 'webinar.floor.given', { participantId, capabilities: FLOOR });
-    // The audience learns that a participant is speaking, never who (WBN-25.8, D-CW-15).
+    // The audience learns that a participant is speaking, never who (WBN-25.8, D-CW-15); the hosts learn which participant.
     this.events.toAudienceAdded(webinarId, 'webinar.floor.state', { active: true });
+    this.events.toHosts(webinarId, 'webinar.floor.state', { active: true, participantId });
+    // The floor lowered the hand (`setFloor`).
+    if (target.registration.handRaisedAt) await this.announceHandCount(target.webinar);
     await this.record(principal.userId, target.webinar, 'webinar.floor.given', {
       webinarId,
       participantId,
@@ -389,6 +405,8 @@ export class WebinarLiveService {
       await this.access.scoped(target.webinar.orgId, (tx) => this.repo.listActiveRegistrations(webinarId, tx))
     ).some((registration) => registration.floorGivenAt !== null);
     this.events.toAudienceAdded(webinarId, 'webinar.floor.state', { active });
+    // The hosts' flag is this attendee's: the floor they held is back (another may still hold one).
+    this.events.toHosts(webinarId, 'webinar.floor.state', { active: false, participantId });
     await this.record(principal.userId, target.webinar, 'webinar.floor.taken', { webinarId, participantId });
     return { participantId, hasFloor: false, capabilities: RECEIVE_ONLY };
   }

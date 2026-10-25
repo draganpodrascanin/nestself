@@ -360,14 +360,17 @@ export class WebinarsService implements WebinarSessionClosedHandler {
         await this.repo.setFloor(joiner.registration.id, null, tx);
         return (await this.repo.listActiveRegistrations(webinar.id, tx)).some((r) => r.floorGivenAt !== null);
       });
-      // The audience's "a participant is speaking" follows the floor (WBN-25.8).
+      // The audience's "a participant is speaking" follows the floor (WBN-25.8); the hosts see whose ended.
       this.events.toAudienceAdded(webinar.id, 'webinar.floor.state', { active });
+      this.events.toHosts(webinar.id, 'webinar.floor.state', { active: false, participantId: participant.id });
     }
 
     await this.record(principal.userId, webinar, 'webinar.joined', { webinarId: webinar.id, participantId: participant.id });
     if (joiner.kind === 'attendee') {
       const count = await this.access.scoped(webinar.orgId, (tx) => this.repo.countAttendees(session.id, tx));
       this.events.toModeration(webinar.id, 'webinar.attendance.count', { webinarId: webinar.id, count });
+      // Presenters follow the count without the moderation room's names (WBN-19, T-CW-2.3 hosts room).
+      this.events.toHosts(webinar.id, 'webinar.attendance.count', { webinarId: webinar.id, count });
     }
     this.logger.log(
       { webinarId: webinar.id, sessionId: session.id, participantId: participant.id, operation: 'join', path, latencyMs: Date.now() - started },

@@ -79,7 +79,12 @@ async function setup() {
   const calls = {
     findSessionById: async () => ({ id: 'session_1', status: 'active', providerMeetingId: session.providerMeetingId }),
   } as unknown as CallsRepository;
-  const events = { toParticipant: vi.fn(), toModeration: vi.fn(), toAudienceAdded: vi.fn() } as unknown as WebinarRoomEvents;
+  const events = {
+    toParticipant: vi.fn(),
+    toModeration: vi.fn(),
+    toAudienceAdded: vi.fn(),
+    toHosts: vi.fn(),
+  } as unknown as WebinarRoomEvents;
   const audit = { record: vi.fn(async () => undefined) } as unknown as AuditWriter;
   const service = new WebinarLiveService(repo, access, calls, video, events, audit);
   return { service, video, updates, attendee, session };
