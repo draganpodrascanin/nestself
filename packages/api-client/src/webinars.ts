@@ -21,6 +21,7 @@
 import { z } from 'zod';
 import {
   WEBINAR_EVENT_NAMES,
+  WEBINAR_ROOM_ADDED_EVENT_NAMES,
   WebinarAttendanceResponseSchema,
   WebinarFloorResponseSchema,
   WebinarHandRaiseResponseSchema,
@@ -258,6 +259,9 @@ export const noopWebinarRoomClient: WebinarRoomClient = {
 
 const DeniedSchema = z.object({ room: z.string().nullable().optional(), reason: z.string().optional() });
 
+/** Section 7's webinar events and the public-room additions of T-CW-2.3 (`webinar.message.removed`, `webinar.floor.state`). */
+const FORWARDED_EVENTS: readonly string[] = [...WEBINAR_EVENT_NAMES, ...WEBINAR_ROOM_ADDED_EVENT_NAMES];
+
 /**
  * The webinar rooms over Socket.IO. The server derives the authorisation from
  * the room name (`webinar:` needs `event.register`, `:moderation` needs
@@ -284,7 +288,7 @@ export function createWebinarRoomClient(connect: () => RoomSocket): WebinarRoomC
           handlers.onUnavailable?.(denied.data.reason ?? 'denied');
         }
       }) as (...args: never[]) => void);
-      for (const event of WEBINAR_EVENT_NAMES) {
+      for (const event of FORWARDED_EVENTS) {
         socket.on(event, ((payload: unknown) => {
           if (active) handlers.onEvent(event, payload);
         }) as (...args: never[]) => void);

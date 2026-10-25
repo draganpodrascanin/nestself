@@ -356,14 +356,18 @@ describe('webinar room client', () => {
     const release = createWebinarRoomClient(() => socket).subscribe(['webinar:web_1'], { onEvent });
     socket.fire('webinar.state', { webinarId: 'web_1', status: 'live' });
     socket.fire('webinar.floor.given', { participantId: 'part_1' });
+    socket.fire('webinar.message.removed', { messageId: 'msg_1' });
+    socket.fire('webinar.floor.state', { active: true });
     socket.fire('appointment.remind', { appointmentId: 'a1' });
     expect(onEvent.mock.calls).toEqual([
       ['webinar.state', { webinarId: 'web_1', status: 'live' }],
       ['webinar.floor.given', { participantId: 'part_1' }],
+      ['webinar.message.removed', { messageId: 'msg_1' }],
+      ['webinar.floor.state', { active: true }],
     ]);
     release();
     socket.fire('webinar.state', { webinarId: 'web_1', status: 'ended' });
-    expect(onEvent).toHaveBeenCalledTimes(2);
+    expect(onEvent).toHaveBeenCalledTimes(4);
   });
 
   it('reports a refused subscription or a failed connection', () => {
