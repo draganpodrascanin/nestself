@@ -41,7 +41,7 @@ export function durationMinutesOf(appointment: Pick<AppointmentRecord, 'startsAt
 
 export function toApprovalItem(
   row: Pick<ApprovalRow, 'id' | 'appointmentId' | 'status'>,
-  appointment: Pick<AppointmentRecord, 'startsAt' | 'endsAt'>,
+  appointment: Pick<AppointmentRecord, 'startsAt' | 'endsAt' | 'timeZone'>,
   employeeDisplayName: string,
 ): AppointmentApprovalItem {
   return {
@@ -52,5 +52,6 @@ export function toApprovalItem(
     description: APPROVAL_FOLLOW_UP_DESCRIPTION,
     startsAt: appointment.startsAt.toISOString(),
     durationMinutes: durationMinutesOf(appointment),
+    timeZone: appointment.timeZone,
   };
 }

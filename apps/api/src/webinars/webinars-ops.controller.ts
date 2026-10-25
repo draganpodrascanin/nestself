@@ -10,7 +10,8 @@
  * POST  /ops/webinars/:id/publish               5/60 s  event.manage   webinarOpsResource
  * POST  /ops/webinars/:id/cancel                5/60 s  event.manage   webinarOpsResource
  * GET   /ops/webinars/:id/attendance                    authenticated  event.manage or event.moderate, operations context (service, WBN-33)
- * GET   /ops/orgs                                       authenticated  event.manage, operations context (service): the audience picker
+ * GET   /ops/orgs                                       authenticated  event.manage or bookings.coordinate, operations context (service):
+ *                                                                      the audience picker and the booking form (T-CW-1.5)
  *
  * `GET /ops/webinars` (with `mine`), `GET /ops/webinars/:id`,
  * `GET /ops/webinars/host-candidates` and `GET /ops/orgs` are additions to
@@ -22,6 +23,8 @@
  * the status no longer allows 409 `not_editable`.
  */
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ModuleRef } from '@nestjs/core';
 import { Throttle } from '@nestjs/throttler';
 import {
   ACTIONS,
@@ -44,6 +47,8 @@ import {
   type WebinarUpdateRequest,
 } from '@nestself/contracts';
 import { AppointmentNonDisclosureFilter } from '../appointments/appointment-non-disclosure.filter.js';
+import { AppointmentsService } from '../appointments/appointments.service.js';
+import { ApiHttpException } from '../common/api-error.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { Authenticated } from '../authz/authenticated.decorator.js';
 import { Authorize } from '../authz/authorize.decorator.js';
@@ -55,10 +60,16 @@ import { webinarOpsCreateResource, webinarOpsResource } from './webinar.resolver
 
 const perMinute = (limit: number) => ({ default: { limit, ttl: 60_000 } });
 
+/** Most organisations `GET /ops/orgs` lists (the webinar service's own lookup limit). */
+const ORGANISATION_LOOKUP_LIMIT = 50;
+
 @Controller('ops')
 @UseFilters(AppointmentNonDisclosureFilter)
 export class WebinarsOpsController {
-  constructor(private readonly ops: WebinarOpsService) {}
+  constructor(
+    private readonly ops: WebinarOpsService,
+    private readonly moduleRef: ModuleRef,
+  ) {}
 
   @Get('webinars')
   @Authenticated()
@@ -129,12 +140,40 @@ export class WebinarsOpsController {
     return this.ops.attendance(id, principal);
   }
 
+  /**
+   * The organisations the caller may manage occurrences of (`event.manage`)
+   * or coordinate bookings for (`bookings.coordinate`, T-CW-1.5), by name.
+   * Without either, the webinar service's audited 404 stands.
+   */
   @Get('orgs')
   @Authenticated()
-  organisations(
+  async organisations(
     @Query(new ZodValidationPipe(OpsOrganizationsQuerySchema)) query: OpsOrganizationsQuery,
     @CurrentPrincipal() principal: Principal,
   ): Promise<OpsOrganizationsResponse> {
-    return this.ops.organisations(principal, query);
+    const bookable = await this.appointments().bookableOrganisations(principal, query.q);
+    if (!bookable) return this.ops.organisations(principal, query);
+
+    let managed: OpsOrganizationsResponse['items'] = [];
+    try {
+      managed = (await this.ops.organisations(principal, query)).items;
+    } catch (error) {
+      // A booking coordinator who manages no occurrences still gets the organisations they book for.
+      if (!(error instanceof ApiHttpException) || ![403, 404].includes(error.getStatus())) throw error;
+    }
+    const byId = new Map([...managed, ...bookable].map((org) => [org.id, { id: org.id, name: org.name }]));
+    const items = [...byId.values()]
+      .sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1))
+      .slice(0, ORGANISATION_LOOKUP_LIMIT);
+    return { items };
+  }
+
+  /**
+   * The appointments module's service. `WebinarsModule` does not import
+   * `AppointmentsModule` (it reaches it through `CallsModule` only), so the
+   * lookup is resolved at request time.
+   */
+  private appointments(): AppointmentsService {
+    return this.moduleRef.get(AppointmentsService, { strict: false });
   }
 }

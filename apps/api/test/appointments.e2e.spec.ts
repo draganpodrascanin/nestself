@@ -21,6 +21,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { and, eq, inArray, like } from 'drizzle-orm';
 import {
+  AppointmentExpertCandidatesResponseSchema,
   AppointmentListResponseSchema,
   AppointmentResponseSchema,
   PERMISSION_TEMPLATES,
@@ -31,6 +32,7 @@ import {
   SAMPLE_CALL_SESSIONS,
   SAMPLE_DEV_PASSWORD,
   SAMPLE_EXTERNAL_IDENTITIES,
+  SAMPLE_ORG,
 } from '@nestself/sample-data';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
@@ -689,12 +691,126 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       const asExpert = await read(milica, id);
       expect(asExpert).not.toHaveProperty('approvalOutcome');
       expect(asExpert).not.toHaveProperty('declineReason');
-      expect(asExpert.viewer).toEqual({ hasJoined: false });
+      expect(asExpert.viewer).toEqual({ hasJoined: false, sessionEnded: false });
       // The approver is no participant: the appointment itself is not disclosed.
       expectNotFound(await ivana.agent.get(`${LIST}/${id}`));
     }
     const expertList = (await listPage(milica, '?status=declined')).items;
     expect(JSON.stringify(expertList)).not.toContain(reason);
     expect(JSON.stringify(expertList)).not.toContain('approvalOutcome');
+  });
+
+  // ── Operations read, ordering, viewer end state, booking lookups (T-CW-1.5) ──
+
+  it('operations read an appointment of an assigned organization as an operations row; HR and other organizations get 404', async () => {
+    const res = await nikola.agent.get(`${LIST}/${legalId}`);
+    expect(res.status).toBe(200);
+    const row = AppointmentResponseSchema.parse(res.body);
+    expect(row).toMatchObject({ id: legalId, orgId: ORG, orgName: SAMPLE_ORG.name, status: 'confirmed' });
+    expect(row.expert?.firstName).toEqual(expect.any(String));
+    expect(row).not.toHaveProperty('viewer');
+    expect(row).not.toHaveProperty('approvalOutcome');
+
+    // No CLIENT assignment to the other organization; employer-scoped principals never.
+    expectNotFound(await nikola.agent.get(`${LIST}/${OTHER_ORG_ID}`));
+    expectNotFound(await ivana.agent.get(`${LIST}/${legalId}`));
+    expectNotFound(await stefan.agent.get(`${LIST}/${legalId}`));
+
+    // The operations list rows name the organization and carry no viewer state.
+    const { items } = await listPage(nikola, `?orgId=${ORG}`);
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.orgName).toBe(SAMPLE_ORG.name);
+      expect(item).not.toHaveProperty('viewer');
+    }
+  });
+
+  it('lists latest first with order=desc and pages in both directions', async () => {
+    const ascending = await listIds(jovan);
+    expect(ascending.length).toBeGreaterThanOrEqual(3);
+    expect(await listIds(jovan, '?order=desc')).toEqual([...ascending].reverse());
+
+    for (const order of ['asc', 'desc'] as const) {
+      const ids: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: AppointmentListResponse = await listPage(
+          jovan,
+          `?order=${order}&limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+        );
+        expect(page.items.length).toBeLessThanOrEqual(1);
+        ids.push(...page.items.map((a) => a.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(ids, order).toEqual(order === 'asc' ? ascending : [...ascending].reverse());
+    }
+    expect((await jovan.agent.get(`${LIST}?order=newest`)).status).toBe(400);
+  });
+
+  it('viewer.sessionEnded is true once the expert, cleanup or reconcile closed the room, not after a provider-side end', async () => {
+    const session = (appointmentId: string, endReason: 'EXPERT' | 'PROVIDER', employeeUserId: string) => ({
+      appointmentId,
+      orgId: ORG,
+      format: 'CONSULTATION' as const,
+      status: 'ENDED' as const,
+      startsAt: new Date(LEGAL_SLOT.startsAt),
+      endsAt: new Date(LEGAL_SLOT.endsAt),
+      endedAt: new Date(LEGAL_SLOT.endsAt),
+      endReason,
+      employeeUserId,
+    });
+    const { employeeUserId: _a, ...expertEnded } = session(legalId, 'EXPERT', 'user_ana');
+    const { employeeUserId: _b, ...providerEnded } = session(PROPOSED_ID, 'PROVIDER', 'user_jovan');
+    await testDb.db.insert(callSessions).values([expertEnded, providerEnded]);
+
+    const viewerOf = async (who: SignedIn, id: string) => AppointmentResponseSchema.parse((await who.agent.get(`${LIST}/${id}`)).body).viewer;
+    expect(await viewerOf(ana, legalId)).toEqual({ hasJoined: false, sessionEnded: true });
+    expect(await viewerOf(legalExpert, legalId)).toEqual({ hasJoined: false, sessionEnded: true });
+    expect(await viewerOf(jovan, PROPOSED_ID)).toEqual({ hasJoined: false, sessionEnded: false });
+  });
+
+  it('GET /ops/orgs answers booking coordinators too; HR gets 404', async () => {
+    // Leave nikola with bookings.coordinate only, so the answer comes from the booking path.
+    const held = await testDb.db.select().from(grants).where(eq(grants.subjectUserId, 'user_nikola'));
+    const managing = held.filter((g) => g.actions.includes('event.manage'));
+    expect(managing.length).toBeGreaterThan(0);
+    try {
+      for (const g of managing) {
+        await testDb.db
+          .update(grants)
+          .set({ actions: g.actions.filter((a) => a !== 'event.manage') })
+          .where(eq(grants.id, g.id));
+      }
+      await app.get(PrincipalLoader).invalidateUser('user_nikola', ['platform', ORG, OTHER_ORG]);
+
+      const res = await nikola.agent.get('/api/ops/orgs');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ items: [{ id: ORG, name: SAMPLE_ORG.name }] });
+      const filtered = await nikola.agent.get(`/api/ops/orgs?q=${encodeURIComponent('zzz-none')}`);
+      expect(filtered.body).toEqual({ items: [] });
+    } finally {
+      for (const g of managing) await testDb.db.update(grants).set({ actions: g.actions }).where(eq(grants.id, g.id));
+      await app.get(PrincipalLoader).invalidateUser('user_nikola', ['platform', ORG, OTHER_ORG]);
+    }
+    expectNotFound(await ivana.agent.get('/api/ops/orgs'));
+  });
+
+  it('GET /ops/appointment-experts lists the experts the engine allows for the category; others get 404', async () => {
+    const experts = async (query: string) => {
+      const res = await nikola.agent.get(`/api/ops/appointment-experts?${query}`);
+      expect(res.status).toBe(200);
+      return AppointmentExpertCandidatesResponseSchema.parse(res.body).items;
+    };
+    const psychological = await experts('serviceCategory=psychological');
+    expect(psychological.map((e) => e.userId)).toContain('user_milica');
+    expect(psychological.map((e) => e.userId)).not.toContain(LEGAL_EXPERT);
+    const legal = await experts('serviceCategory=legal');
+    expect(legal.map((e) => e.userId)).toEqual([LEGAL_EXPERT]);
+    expect(legal[0]).toEqual({ userId: LEGAL_EXPERT, displayName: 'Legal Expert (fixture)' });
+    expect(await experts(`serviceCategory=legal&q=${encodeURIComponent('nobody')}`)).toEqual([]);
+
+    expect((await nikola.agent.get('/api/ops/appointment-experts')).status).toBe(400);
+    expectNotFound(await ivana.agent.get('/api/ops/appointment-experts?serviceCategory=legal'));
+    expectNotFound(await milica.agent.get('/api/ops/appointment-experts?serviceCategory=legal'));
   });
 });

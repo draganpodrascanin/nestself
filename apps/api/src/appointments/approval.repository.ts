@@ -33,6 +33,8 @@ export interface ApprovalAppointmentFacts {
   employeeUserId: string;
   startsAt: Date;
   endsAt: Date;
+  /** The approver's screen shows the start in it (T-CW-1.5). */
+  timeZone: string;
 }
 
 export type NewApproval = Omit<typeof appointmentApprovals.$inferInsert, 'status' | 'createdAt' | 'decidedAt' | 'reason'>;
@@ -144,6 +146,7 @@ export class ApprovalRepository {
         employeeUserId: appointments.employeeUserId,
         startsAt: appointments.startsAt,
         endsAt: appointments.endsAt,
+        timeZone: appointments.timeZone,
       })
       .from(appointments)
       .where(inArray(appointments.id, ids));

@@ -62,6 +62,7 @@ export const SAMPLE_APPROVAL_ITEMS: readonly SampleApprovalItem[] = [
     description: APPROVAL_FOLLOW_UP_DESCRIPTION,
     startsAt: awaiting.startsAt,
     durationMinutes: Math.round((Date.parse(awaiting.endsAt) - Date.parse(awaiting.startsAt)) / 60_000),
+    timeZone: awaiting.timeZone,
     sample: true,
   },
 ];

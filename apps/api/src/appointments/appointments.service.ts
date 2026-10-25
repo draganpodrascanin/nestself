@@ -49,6 +49,8 @@ import {
   type Action,
   type ApiErrorCode,
   type AppointmentCreateRequest,
+  type AppointmentExpertCandidatesQuery,
+  type AppointmentExpertCandidatesResponse,
   type AppointmentListQuery,
   type AppointmentListResponse,
   type AppointmentResponse,
@@ -125,6 +127,11 @@ function isCurrentGrantFor(grant: GrantInput, userId: string, action: Action, no
 function byKey(a: AppointmentRecord, b: AppointmentRecord): number {
   return a.startsAt.getTime() - b.startsAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
+
+/** Most organizations or experts a booking lookup returns. */
+const BOOKING_LOOKUP_LIMIT = 50;
+/** Experts read per lookup before the engine check keeps those who may take the category. */
+const EXPERT_CANDIDATE_SCAN = 200;
 
 /** Split `limit + 1` candidate rows into the page window and the cursor of the next page. */
 function paginate(rows: AppointmentRecord[], limit: number): { window: AppointmentRecord[]; nextCursor: string | null } {
@@ -258,15 +265,23 @@ export class AppointmentsService {
    * `categories` condition against the service category; an employee's
    * `own` grant never reaches somebody else's appointment.
    */
-  private async expertCanJoin(
+  private expertCanJoin(
     expertUserId: string,
     planned: Pick<AppointmentRecord, 'id' | 'orgId' | 'employeeUserId' | 'serviceCategory'>,
   ): Promise<boolean> {
+    return this.expertMayConsult(expertUserId, planned, appointmentResourceOf(planned));
+  }
+
+  /**
+   * The engine check behind {@link expertCanJoin}, at any appointment
+   * resource: the booking form's candidates use one with only the category
+   * (T-CW-1.5).
+   */
+  private async expertMayConsult(expertUserId: string, planned: { id: string }, resource: Resource): Promise<boolean> {
     const loaded = await this.principals.load(expertUserId);
     if (!loaded) return false;
     const expert = assemblePrincipal(loaded, { kind: 'expert' });
     const action = ACTIONS['consultation.join'];
-    const resource = appointmentResourceOf(planned);
     const ctx = await this.contextLoader.build(expert, resource, { action, loadedPrincipal: loaded });
     const assignment: AssignmentInput = {
       id: `planned_${planned.id}`,
@@ -281,12 +296,39 @@ export class AppointmentsService {
 
   // ── Read ────────────────────────────────────────────────────────────────
 
-  /** The guard has authorized the caller on this appointment; the response carries the caller's state (T-CW-1.5). */
+  /**
+   * `GET /appointments/:id`, authorized here like the list and cancel
+   * (T-CW-1.5): operations in the operations context through
+   * `bookings.coordinate` on the appointment's organization, answered as an
+   * operations row (first names and the organization's name, no viewer or
+   * approval fields); everyone else through `consultation.join` on the
+   * appointment (the participants), answered with the caller's state. A
+   * denial is audited and answers 404 through the non-disclosure filter.
+   */
   async get(id: string, principal: Principal): Promise<AppointmentResponse> {
     const record = await this.repo.findById(id);
     if (!record) throw notFound();
+    if (principal.context.kind === 'operations') {
+      assertOperationsSession(principal);
+      await this.authz.require(principal, ACTIONS['bookings.coordinate'], { type: 'appointment', orgId: record.orgId });
+      const [row] = await this.operationsRows([record]);
+      return row!;
+    }
+    await this.authz.require(principal, ACTIONS['consultation.join'], appointmentResourceOf(record));
     const [response] = await this.viewers.decorate(principal, [record], [await this.repo.toResponse(record)]);
     return response!;
+  }
+
+  /** Operations rows: the response with the organization's name; the caller's viewer state does not apply. */
+  private async operationsRows(records: AppointmentRecord[]): Promise<AppointmentResponse[]> {
+    const [responses, names] = await Promise.all([
+      this.repo.toResponses(records),
+      this.repo.orgNamesOf(records.map((record) => record.orgId)),
+    ]);
+    return responses.map((response) => {
+      const orgName = names.get(response.orgId);
+      return orgName ? { ...response, orgName } : response;
+    });
   }
 
   async list(principal: Principal, query: AppointmentListQuery): Promise<AppointmentListResponse> {
@@ -299,13 +341,14 @@ export class AppointmentsService {
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
       after,
+      order: query.order,
       // One extra row tells whether there is a next page.
       limit: query.limit + 1,
     };
 
     if (principal.context.kind === 'operations') {
       const { window, nextCursor } = paginate(await this.listForOperations(principal, filter), query.limit);
-      return { items: await this.viewers.decorate(principal, window, await this.repo.toResponses(window)), nextCursor };
+      return { items: await this.operationsRows(window), nextCursor };
     }
 
     // The cursor follows the candidate rows, so a row the engine drops never shifts a page.
@@ -338,7 +381,47 @@ export class AppointmentsService {
     for (const orgId of orgIds) {
       records.push(...(await this.dbs.withOrgScope(orgId, (tx) => this.repo.list({ ...filter, orgId }, tx))));
     }
-    return records.sort(byKey).slice(0, filter.limit);
+    const direction = filter.order === 'desc' ? -1 : 1;
+    return records.sort((a, b) => direction * byKey(a, b)).slice(0, filter.limit);
+  }
+
+  // ── Booking lookups for operations (T-CW-1.5) ─────────────────────────────
+
+  /**
+   * The active organizations the caller may coordinate bookings for, by name
+   * (`GET /ops/orgs` for booking coordinators). Null when the caller
+   * coordinates bookings nowhere; nothing is audited then, so the event
+   * managers' path of the same route can answer.
+   */
+  async bookableOrganisations(principal: Principal, q: string | undefined): Promise<{ id: string; name: string }[] | null> {
+    if (principal.context.kind !== 'operations') return null;
+    const orgIds = await this.coordinatedOrgIdsQuietly(principal, ACTIONS['bookings.coordinate']);
+    if (orgIds !== null && orgIds.length === 0) return null;
+    return this.repo.organisationsNamed(orgIds, q || undefined, BOOKING_LOOKUP_LIMIT);
+  }
+
+  /**
+   * `GET /ops/appointment-experts`: the experts who may take a consultation
+   * of `serviceCategory`, decided by the engine exactly as the creation path
+   * checks the chosen expert (the expert template's `categories` condition).
+   * The caller must coordinate bookings somewhere; otherwise the denial is
+   * audited and answers 404.
+   */
+  async expertCandidates(principal: Principal, query: AppointmentExpertCandidatesQuery): Promise<AppointmentExpertCandidatesResponse> {
+    assertOperationsSession(principal);
+    const action = ACTIONS['bookings.coordinate'];
+    const orgIds = await this.coordinatedOrgIdsQuietly(principal, action);
+    if (orgIds !== null && orgIds.length === 0) await this.authz.require(principal, action, { type: 'appointment' });
+
+    const items: AppointmentExpertCandidatesResponse['items'] = [];
+    for (const candidate of await this.repo.expertCandidates(query.q || undefined, EXPERT_CANDIDATE_SCAN)) {
+      const planned = { id: `candidate_${candidate.userId}`, serviceCategory: query.serviceCategory };
+      if (await this.expertMayConsult(candidate.userId, planned, { type: 'appointment', id: planned.id, category: planned.serviceCategory })) {
+        items.push(candidate);
+        if (items.length === BOOKING_LOOKUP_LIMIT) break;
+      }
+    }
+    return { items };
   }
 
   /**
@@ -348,6 +431,13 @@ export class AppointmentsService {
    * platform-level `require()` audits the denial and throws.
    */
   private async coordinatedOrgIds(principal: Principal, action: Action): Promise<string[] | null> {
+    const allowed = await this.coordinatedOrgIdsQuietly(principal, action);
+    if (allowed !== null && allowed.length === 0) await this.authz.require(principal, action, { type: 'appointment' });
+    return allowed;
+  }
+
+  /** As {@link coordinatedOrgIds}, but an empty list instead of the audited denial. */
+  private async coordinatedOrgIdsQuietly(principal: Principal, action: Action): Promise<string[] | null> {
     const platform: Resource = { type: 'appointment' };
     const platformCtx = await this.contextLoader.build(principal, platform, { action });
     if (authorize(principal, action, platform, platformCtx).allowed) return null;
@@ -359,7 +449,6 @@ export class AppointmentsService {
       const ctx = await this.contextLoader.build(principal, resource, { action });
       if (authorize(principal, action, resource, ctx).allowed) allowed.push(orgId);
     }
-    if (allowed.length === 0) await this.authz.require(principal, action, platform);
     return allowed;
   }
 

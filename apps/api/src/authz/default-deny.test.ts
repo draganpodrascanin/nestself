@@ -101,7 +101,7 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     }
   });
 
-  it('covers the appointments controller: every route is @Authorize() except the @Authenticated() list and cancel (CW-R-87)', async () => {
+  it('covers the appointments controller: every route is @Authorize() except the @Authenticated() list, read, cancel and expert lookup (CW-R-87)', async () => {
     if (!module) {
       module = await Test.createTestingModule({
         imports: [AppModule, DiscoveryModule],
@@ -139,7 +139,8 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
 
     expect(policies).toEqual({
       list: 'authenticated',
-      get: 'consultation.join',
+      get: 'authenticated',
+      expertCandidates: 'authenticated',
       create: 'bookings.coordinate',
       cancel: 'authenticated',
       // Follow-ups (T-CW-1.9, guidelines 7.1).

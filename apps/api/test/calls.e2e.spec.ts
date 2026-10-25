@@ -374,22 +374,22 @@ describe.skipIf(!shouldRun)('Call sessions (e2e)', () => {
       expect(res.status).toBe(200);
       return AppointmentResponseSchema.parse(res.body);
     };
-    expect((await view(jovan)).viewer).toEqual({ hasJoined: false });
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: false, sessionEnded: false });
 
     const late = await post(milica, `/appointments/${APPT_SIGNAL}/signal`, { type: 'running_late', etaMinutes: 10 });
     expect(late.status).toBe(204);
     const pending = { type: 'running_late', etaMinutes: 10, sentAt: expect.any(String) };
-    expect((await view(jovan)).viewer).toEqual({ hasJoined: false, pendingSignal: pending });
-    expect((await view(milica)).viewer).toEqual({ hasJoined: false, pendingSignal: pending });
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: false, sessionEnded: false, pendingSignal: pending });
+    expect((await view(milica)).viewer).toEqual({ hasJoined: false, sessionEnded: false, pendingSignal: pending });
     // The list rows carry it as well.
     const list = await jovan.agent.get('/api/appointments');
     const row = (list.body.items as { id: string; viewer: unknown }[]).find((item) => item.id === APPT_SIGNAL);
-    expect(row?.viewer).toEqual({ hasJoined: false, pendingSignal: pending });
+    expect(row?.viewer).toEqual({ hasJoined: false, sessionEnded: false, pendingSignal: pending });
 
     // The employee joins: joined, and the signal is no longer pending.
     expect((await join(jovan, APPT_SIGNAL)).status).toBe(200);
-    expect((await view(jovan)).viewer).toEqual({ hasJoined: true });
-    expect((await view(milica)).viewer).toEqual({ hasJoined: false });
+    expect((await view(jovan)).viewer).toEqual({ hasJoined: true, sessionEnded: false });
+    expect((await view(milica)).viewer).toEqual({ hasJoined: false, sessionEnded: false });
   });
 
   it('a rejoin returns identical credentials', async () => {

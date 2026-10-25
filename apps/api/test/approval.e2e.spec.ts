@@ -479,6 +479,8 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
         description: APPROVAL_FOLLOW_UP_DESCRIPTION,
         startsAt: (await appointmentRow(followUpId)).startsAt.toISOString(),
         durationMinutes: 50,
+        // The appointment's zone, in which the approver's screen shows the start (T-CW-1.5).
+        timeZone: 'Europe/Belgrade',
       });
       for (const raw of res.body.items as Record<string, unknown>[]) {
         expect(Object.keys(raw).sort()).toEqual([...APPOINTMENT_APPROVAL_ITEM_FIELDS].sort());

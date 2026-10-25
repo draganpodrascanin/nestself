@@ -22,6 +22,8 @@ import {
   AppointmentStatusSchema,
   AppointmentSuggestTimesRequestSchema,
   AppointmentViewerSchema,
+  AppointmentExpertCandidatesQuerySchema,
+  AppointmentExpertCandidatesResponseSchema,
   APPROVAL_OUTCOMES,
   AppointmentRemindPayloadSchema,
   FOLLOW_UP_APPROVAL_CATEGORY,
@@ -233,6 +235,7 @@ describe('AppointmentListQuerySchema followUpOf (T-CW-1.9)', () => {
   it('filters on the consultation a follow-up continues', () => {
     expect(AppointmentListQuerySchema.parse({ followUpOf: 'appt_1' })).toEqual({
       limit: APPOINTMENT_LIST_DEFAULT_LIMIT,
+      order: 'asc',
       followUpOf: 'appt_1',
     });
     expect(issuePaths(AppointmentListQuerySchema.safeParse({ followUpOf: '' }))).toEqual(['followUpOf']);
@@ -241,7 +244,7 @@ describe('AppointmentListQuerySchema followUpOf (T-CW-1.9)', () => {
 
 describe('AppointmentListQuerySchema (GET /appointments, CALL-18, CALL-28)', () => {
   it('defaults the page size and accepts every filter, coercing the query-string limit', () => {
-    expect(AppointmentListQuerySchema.parse({})).toEqual({ limit: APPOINTMENT_LIST_DEFAULT_LIMIT });
+    expect(AppointmentListQuerySchema.parse({})).toEqual({ limit: APPOINTMENT_LIST_DEFAULT_LIMIT, order: 'asc' });
     expect(APPOINTMENT_LIST_DEFAULT_LIMIT).toBe(50);
     expect(APPOINTMENT_LIST_MAX_LIMIT).toBe(100);
     const query = {
@@ -252,7 +255,9 @@ describe('AppointmentListQuerySchema (GET /appointments, CALL-18, CALL-28)', () 
       from: '2026-11-01T00:00:00.000Z',
       to: '2026-12-01T00:00:00.000Z',
     };
-    expect(AppointmentListQuerySchema.parse(query)).toEqual({ ...query, limit: 20 });
+    expect(AppointmentListQuerySchema.parse(query)).toEqual({ ...query, limit: 20, order: 'asc' });
+    expect(AppointmentListQuerySchema.parse({ order: 'desc' }).order).toBe('desc');
+    expect(AppointmentListQuerySchema.safeParse({ order: 'newest' }).success).toBe(false);
   });
 
   it('bounds the page size', () => {
@@ -540,9 +545,10 @@ describe('Follow-up approval items (T-CW-1.10, D-CW-37, CW-R-119)', () => {
     description: APPROVAL_FOLLOW_UP_DESCRIPTION,
     startsAt: '2026-11-20T14:00:00.000Z',
     durationMinutes: 50,
+    timeZone: 'Europe/Belgrade',
   } as const;
 
-  it('the approver sees exactly the four facts, ids and the status', () => {
+  it('the approver sees exactly the four facts, the time zone, ids and the status', () => {
     expect(APPROVAL_FOLLOW_UP_DESCRIPTION).toBe('follow-up session with a NestSelf expert');
     expect(FOLLOW_UP_APPROVAL_CATEGORY).toBe('consultation_follow_up');
     expect(APPOINTMENT_APPROVAL_ITEM_FIELDS).toEqual([
@@ -553,6 +559,7 @@ describe('Follow-up approval items (T-CW-1.10, D-CW-37, CW-R-119)', () => {
       'description',
       'startsAt',
       'durationMinutes',
+      'timeZone',
     ]);
     expect(Object.keys(AppointmentApprovalItemSchema.shape).sort()).toEqual([...APPOINTMENT_APPROVAL_ITEM_FIELDS].sort());
     expect(AppointmentApprovalItemSchema.parse(item)).toEqual(item);
@@ -623,22 +630,27 @@ describe('AppointmentResponseSchema viewer state and approval outcome (T-CW-1.5)
   it('carries the caller’s join state and the expert’s pending running-late signal', () => {
     const viewer = {
       hasJoined: false,
+      sessionEnded: false,
       pendingSignal: { type: 'running_late', etaMinutes: 10, sentAt: '2026-11-10T08:55:00.000Z' },
     };
     expect(AppointmentResponseSchema.parse({ ...seam, viewer })).toEqual({ ...seam, viewer });
-    expect(AppointmentViewerSchema.parse({ hasJoined: true })).toEqual({ hasJoined: true });
-    expect(
-      AppointmentViewerSchema.parse({ hasJoined: false, pendingSignal: { type: 'running_late', sentAt: viewer.pendingSignal.sentAt } }),
-    ).toEqual({ hasJoined: false, pendingSignal: { type: 'running_late', sentAt: viewer.pendingSignal.sentAt } });
+    expect(AppointmentViewerSchema.parse({ hasJoined: true, sessionEnded: true })).toEqual({ hasJoined: true, sessionEnded: true });
+    const pending = { type: 'running_late', sentAt: viewer.pendingSignal.sentAt };
+    expect(AppointmentViewerSchema.parse({ hasJoined: false, sessionEnded: false, pendingSignal: pending })).toEqual({
+      hasJoined: false,
+      sessionEnded: false,
+      pendingSignal: pending,
+    });
   });
 
   it('refuses another signal type, extra viewer fields and a missing join state', () => {
     const sentAt = '2026-11-10T08:55:00.000Z';
-    expect(AppointmentViewerSchema.safeParse({ hasJoined: false, pendingSignal: { type: 'cannot_hear', sentAt } }).success).toBe(
-      false,
-    );
-    expect(AppointmentViewerSchema.safeParse({ hasJoined: false, userId: 'user_x' }).success).toBe(false);
-    expect(issuePaths(AppointmentViewerSchema.safeParse({}))).toEqual(['hasJoined']);
+    expect(
+      AppointmentViewerSchema.safeParse({ hasJoined: false, sessionEnded: false, pendingSignal: { type: 'cannot_hear', sentAt } })
+        .success,
+    ).toBe(false);
+    expect(AppointmentViewerSchema.safeParse({ hasJoined: false, sessionEnded: false, userId: 'user_x' }).success).toBe(false);
+    expect(issuePaths(AppointmentViewerSchema.safeParse({})).sort()).toEqual(['hasJoined', 'sessionEnded']);
   });
 
   it('carries the employee’s approval outcome and safe decline reason', () => {
@@ -651,5 +663,45 @@ describe('AppointmentResponseSchema viewer state and approval outcome (T-CW-1.5)
     expect(
       issuePaths(AppointmentResponseSchema.safeParse({ ...seam, declineReason: 'x'.repeat(APPROVAL_SAFE_REASON_MAX_LENGTH + 1) })),
     ).toEqual(['declineReason']);
+  });
+});
+
+describe('operations rows and expert candidates (T-CW-1.5)', () => {
+  const seam = {
+    id: 'appt_1',
+    orgId: 'org_1',
+    expertUserId: 'user_expert',
+    employeeUserId: 'user_employee',
+    startsAt: '2026-11-10T09:00:00.000Z',
+    endsAt: '2026-11-10T09:50:00.000Z',
+    status: 'confirmed',
+    serviceCategory: 'psychological',
+    timeZone: 'Europe/Belgrade',
+    fundingRef: null,
+    followUpOf: null,
+  };
+
+  it('an operations row names the organization', () => {
+    expect(AppointmentResponseSchema.parse({ ...seam, orgName: 'Sample Company' })).toEqual({ ...seam, orgName: 'Sample Company' });
+    expect(issuePaths(AppointmentResponseSchema.safeParse({ ...seam, orgName: '' }))).toEqual(['orgName']);
+  });
+
+  it('asks for a service category and an optional name filter', () => {
+    expect(AppointmentExpertCandidatesQuerySchema.parse({ serviceCategory: 'legal', q: 'mil' })).toEqual({
+      serviceCategory: 'legal',
+      q: 'mil',
+    });
+    expect(issuePaths(AppointmentExpertCandidatesQuerySchema.safeParse({}))).toEqual(['serviceCategory']);
+    expect(issuePaths(AppointmentExpertCandidatesQuerySchema.safeParse({ serviceCategory: 'legal', q: 'x'.repeat(101) }))).toEqual([
+      'q',
+    ]);
+  });
+
+  it('lists each candidate expert by user id and display name only', () => {
+    const page = { items: [{ userId: 'user_milica', displayName: 'Milica Ristić' }] };
+    expect(AppointmentExpertCandidatesResponseSchema.parse(page)).toEqual(page);
+    expect(
+      AppointmentExpertCandidatesResponseSchema.safeParse({ items: [{ ...page.items[0], email: 'x@example.com' }] }).success,
+    ).toBe(false);
   });
 });

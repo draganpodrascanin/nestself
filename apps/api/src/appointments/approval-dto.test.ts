@@ -47,7 +47,7 @@ const ROW: ApprovalRow = {
 describe('toApprovalItem', () => {
   const item = toApprovalItem(ROW, APPOINTMENT, 'Jovan Petrović');
 
-  it('carries exactly the ids, the status and the four facts', () => {
+  it('carries exactly the ids, the status, the four facts and the appointment time zone', () => {
     expect(item).toEqual({
       id: 'appr_1',
       appointmentId: 'appt_next',
@@ -56,6 +56,7 @@ describe('toApprovalItem', () => {
       description: APPROVAL_FOLLOW_UP_DESCRIPTION,
       startsAt: '2026-11-24T15:00:00.000Z',
       durationMinutes: 50,
+      timeZone: 'Europe/Belgrade',
     });
     expect(Object.keys(item).sort()).toEqual([...APPOINTMENT_APPROVAL_ITEM_FIELDS].sort());
     expect(AppointmentApprovalItemSchema.parse(item)).toEqual(item);
@@ -73,7 +74,7 @@ describe('toApprovalItem', () => {
       'user_jovan',
       'Not this month',
       'appt_done',
-      'Europe/Belgrade',
+      // The time zone is shown since T-CW-1.5 (the approver's screen formats startsAt in it).
     ]) {
       expect(json).not.toContain(secret);
     }

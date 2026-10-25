@@ -3,7 +3,10 @@
  * guidelines 7.1).
  *
  * GET  /appointments                 list: `@Authenticated()`, authorized in the service (see below)
- * GET  /appointments/:id             consultation.join    appointmentResource
+ * GET  /appointments/:id             `@Authenticated()`; participants (consultation.join) or operations
+ *                                    (bookings.coordinate on the organization), checked in the service
+ * GET  /ops/appointment-experts       `@Authenticated()`; bookings.coordinate somewhere, checked in the service:
+ *                                    the experts who may take a category (T-CW-1.5)
  * POST /orgs/:orgId/appointments     bookings.coordinate  operationsOrgResource('appointment')   10/60 s
  * POST /appointments/:id/cancel      `@Authenticated()`; the employee (appointment.cancel) or operations
  *                                    (bookings.coordinate on the organization), checked in the service   10/60 s
@@ -39,6 +42,7 @@ import {
   AppointmentCreateRequestSchema,
   AppointmentFollowUpRequestSchema,
   AppointmentListQuerySchema,
+  AppointmentExpertCandidatesQuerySchema,
   AppointmentSuggestTimesRequestSchema,
   FollowUpConfirmRequestSchema,
   FollowUpDeclineRequestSchema,
@@ -46,6 +50,8 @@ import {
   type AppointmentCreateRequest,
   type AppointmentFollowUpRequest,
   type AppointmentListQuery,
+  type AppointmentExpertCandidatesQuery,
+  type AppointmentExpertCandidatesResponse,
   type AppointmentListResponse,
   type AppointmentResponse,
   type AppointmentSuggestTimesRequest,
@@ -82,10 +88,21 @@ export class AppointmentsController {
     return this.appointments.list(principal, query);
   }
 
+  /** Participants or operations; authorized in the service (`get`). */
   @Get('appointments/:id')
-  @Authorize(ACTIONS['consultation.join'], appointmentResource)
+  @Authenticated()
   get(@Param('id') id: string, @CurrentPrincipal() principal: Principal): Promise<AppointmentResponse> {
     return this.appointments.get(id, principal);
+  }
+
+  /** The booking form's expert picker (T-CW-1.5); authorized in the service (`expertCandidates`). */
+  @Get('ops/appointment-experts')
+  @Authenticated()
+  expertCandidates(
+    @Query(new ZodValidationPipe(AppointmentExpertCandidatesQuerySchema)) query: AppointmentExpertCandidatesQuery,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AppointmentExpertCandidatesResponse> {
+    return this.appointments.expertCandidates(principal, query);
   }
 
   @Post('orgs/:orgId/appointments')

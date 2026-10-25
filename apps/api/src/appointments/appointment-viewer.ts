@@ -4,6 +4,9 @@
  *
  * - `viewer.hasJoined`: the caller has a `call_participants` row on the
  *   appointment's latest call session.
+ * - `viewer.sessionEnded`: that session is ENDED for good, by the expert or
+ *   the cleanup or reconcile job; an end the provider made on its own does
+ *   not count, because a join inside the window reopens the room (T-CW-1.2).
  * - `viewer.pendingSignal`: the expert's running-late signal kept under
  *   `call:{sessionId}:pending_signal` for the latest session (the calls
  *   module writes it while the employee has not joined and deletes it when
@@ -31,6 +34,8 @@ import type { AppointmentRecord } from './appointments.repository.js';
 export interface ViewerFacts {
   /** Appointments on whose latest session the caller has a participant row. */
   joinedAppointmentIds: ReadonlySet<string>;
+  /** Appointments whose latest session ended other than by the provider. */
+  endedAppointmentIds: ReadonlySet<string>;
   pendingSignals: ReadonlyMap<string, AppointmentPendingSignal>;
   approvalOutcomes: ReadonlyMap<string, { outcome: ApprovalOutcome; reason: string | null }>;
 }
@@ -54,6 +59,7 @@ export function withViewerState(
       ...response,
       viewer: {
         hasJoined: facts.joinedAppointmentIds.has(response.id),
+        sessionEnded: facts.endedAppointmentIds.has(response.id),
         ...(pendingSignal ? { pendingSignal } : {}),
       },
       ...(approval ? { approvalOutcome: approval.outcome } : {}),
@@ -81,8 +87,14 @@ export class AppointmentViewerReader {
   }
 
   private async factsFor(userId: string, records: readonly AppointmentRecord[]): Promise<ViewerFacts> {
-    const latest = await this.latestSessions(records.map((record) => record.id));
+    const sessions = await this.latestSessions(records.map((record) => record.id));
+    const latest = new Map([...sessions].map(([appointmentId, session]) => [appointmentId, session.id]));
     const sessionIds = [...latest.values()];
+    const endedAppointmentIds = new Set(
+      [...sessions]
+        .filter(([, session]) => session.status === 'ENDED' && session.endReason !== 'PROVIDER')
+        .map(([appointmentId]) => appointmentId),
+    );
 
     const joined =
       sessionIds.length === 0
@@ -106,17 +118,28 @@ export class AppointmentViewerReader {
     }
 
     const approvalOutcomes = await this.approvalOutcomes(records.filter((record) => record.employeeUserId === userId));
-    return { joinedAppointmentIds, pendingSignals, approvalOutcomes };
+    return { joinedAppointmentIds, endedAppointmentIds, pendingSignals, approvalOutcomes };
   }
 
-  /** Appointment id to its newest call session id. */
-  private async latestSessions(appointmentIds: readonly string[]): Promise<Map<string, string>> {
+  /** Appointment id to its newest call session (id, status and end reason as stored). */
+  private async latestSessions(
+    appointmentIds: readonly string[],
+  ): Promise<Map<string, { id: string; status: string; endReason: string | null }>> {
     const rows = await this.dbs.db
-      .selectDistinctOn([callSessions.appointmentId], { appointmentId: callSessions.appointmentId, id: callSessions.id })
+      .selectDistinctOn([callSessions.appointmentId], {
+        appointmentId: callSessions.appointmentId,
+        id: callSessions.id,
+        status: callSessions.status,
+        endReason: callSessions.endReason,
+      })
       .from(callSessions)
       .where(inArray(callSessions.appointmentId, [...appointmentIds]))
       .orderBy(callSessions.appointmentId, desc(callSessions.createdAt), desc(callSessions.id));
-    return new Map(rows.flatMap((row) => (row.appointmentId ? [[row.appointmentId, row.id] as const] : [])));
+    return new Map(
+      rows.flatMap((row) =>
+        row.appointmentId ? [[row.appointmentId, { id: row.id, status: row.status, endReason: row.endReason }] as const] : [],
+      ),
+    );
   }
 
   /**

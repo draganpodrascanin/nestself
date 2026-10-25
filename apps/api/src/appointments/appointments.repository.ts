@@ -27,7 +27,7 @@ import {
 } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db/db.service.js';
-import { appointments, assignments, users } from '../db/schema/index.js';
+import { appointments, assignments, experts, organizations, users } from '../db/schema/index.js';
 import { firstNameOf, toAppointmentResponse, type AppointmentParticipants } from './appointment-mapper.js';
 
 type AppointmentRow = typeof appointments.$inferSelect;
@@ -98,10 +98,17 @@ export interface AppointmentListFilter {
   from?: Date;
   /** Exclusive upper bound on `startsAt`. */
   to?: Date;
-  /** Rows strictly after this key. */
+  /** Rows strictly after this key in the list's order. */
   after?: AppointmentKey;
+  /** `asc` (default): earliest `startsAt` first; `desc`: latest first (T-CW-1.5). */
+  order?: 'asc' | 'desc';
   /** At most this many rows. */
   limit?: number;
+}
+
+/** `q` as a literal inside an ILIKE pattern. */
+function escapeLike(q: string): string {
+  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function toRecord(row: AppointmentRow): AppointmentRecord {
@@ -238,6 +245,52 @@ export class AppointmentsRepository {
     return response!;
   }
 
+  // ── Operations lookups (T-CW-1.5) ─────────────────────────────────────────
+
+  /** Organization id to name, for the operations rows. */
+  async orgNamesOf(orgIds: readonly string[], tx?: DbExecutor): Promise<Map<string, string>> {
+    if (orgIds.length === 0) return new Map();
+    const rows = await this.exec(tx)
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(inArray(organizations.id, [...new Set(orgIds)]));
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
+  /** Active organizations by name (`null` ids: every one), optionally filtered by `q`, for the booking form. */
+  async organisationsNamed(
+    orgIds: readonly string[] | null,
+    q: string | undefined,
+    limit: number,
+    tx?: DbExecutor,
+  ): Promise<{ id: string; name: string }[]> {
+    const conditions: SQL[] = [eq(organizations.status, 'ACTIVE')];
+    if (orgIds !== null) {
+      if (orgIds.length === 0) return [];
+      conditions.push(inArray(organizations.id, [...orgIds]));
+    }
+    if (q) conditions.push(sql`${organizations.name} ilike ${`%${escapeLike(q)}%`}`);
+    return this.exec(tx)
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(and(...conditions))
+      .orderBy(asc(organizations.name), asc(organizations.id))
+      .limit(limit);
+  }
+
+  /** Experts whose user is neither suspended nor deactivated, by name; the engine decides who may consult. */
+  async expertCandidates(q: string | undefined, limit: number, tx?: DbExecutor): Promise<{ userId: string; displayName: string }[]> {
+    const conditions: SQL[] = [sql`${users.suspendedAt} is null`, sql`${users.deactivatedAt} is null`];
+    if (q) conditions.push(sql`${users.displayName} ilike ${`%${escapeLike(q)}%`}`);
+    return this.exec(tx)
+      .select({ userId: users.id, displayName: users.displayName })
+      .from(experts)
+      .innerJoin(users, eq(users.id, experts.userId))
+      .where(and(...conditions))
+      .orderBy(asc(users.displayName), asc(users.id))
+      .limit(limit);
+  }
+
   /** Matching rows in `(startsAt, id)` order, earliest first. */
   async list(filter: AppointmentListFilter, tx?: DbExecutor): Promise<AppointmentRecord[]> {
     const conditions: SQL[] = [];
@@ -254,19 +307,23 @@ export class AppointmentsRepository {
     if (filter.status) conditions.push(eq(appointments.status, TO_DB_STATUS[filter.status]));
     if (filter.from) conditions.push(gte(appointments.startsAt, filter.from));
     if (filter.to) conditions.push(lt(appointments.startsAt, filter.to));
+    const descending = filter.order === 'desc';
     if (filter.after) {
+      // Strictly after the key in the list's order: later rows ascending, earlier rows descending.
+      const beyond = descending ? lt : gt;
       conditions.push(
         or(
-          gt(appointments.startsAt, filter.after.startsAt),
-          and(eq(appointments.startsAt, filter.after.startsAt), gt(appointments.id, filter.after.id)),
+          beyond(appointments.startsAt, filter.after.startsAt),
+          and(eq(appointments.startsAt, filter.after.startsAt), beyond(appointments.id, filter.after.id)),
         )!,
       );
     }
+    const direction = descending ? desc : asc;
     const query = this.exec(tx)
       .select()
       .from(appointments)
       .where(and(...conditions))
-      .orderBy(asc(appointments.startsAt), asc(appointments.id));
+      .orderBy(direction(appointments.startsAt), direction(appointments.id));
     const rows = filter.limit === undefined ? await query : await query.limit(filter.limit);
     return rows.map(toRecord);
   }

@@ -188,6 +188,10 @@ export type AppointmentExpertDisplay = z.infer<typeof AppointmentExpertDisplaySc
  * `GET /appointments/:id` and the list rows:
  * - `hasJoined`: the caller has joined the latest call session (a
  *   `call_participants` row);
+ * - `sessionEnded`: the latest call session is over for good (the expert
+ *   ended it, or the cleanup or reconcile job closed the room), so the
+ *   clients offer no Join or Rejoin; a provider-side end of an empty meeting
+ *   does not count, because a join inside the window reopens the room;
  * - `pendingSignal`: the expert's latest "running late" signal, sent while
  *   the employee had not joined yet, kept until the employee joins or the
  *   room closes (CALL-05).
@@ -201,6 +205,7 @@ export type AppointmentPendingSignal = z.infer<typeof AppointmentPendingSignalSc
 
 export const AppointmentViewerSchema = z.strictObject({
   hasJoined: z.boolean(),
+  sessionEnded: z.boolean(),
   pendingSignal: AppointmentPendingSignalSchema.optional(),
 });
 export type AppointmentViewer = z.infer<typeof AppointmentViewerSchema>;
@@ -224,8 +229,10 @@ export const AppointmentResponseSchema = AppointmentSchema.extend({
   expert: AppointmentExpertDisplaySchema.optional(),
   employee: AppointmentEmployeeDisplaySchema.optional(),
   suggestedWindows: z.array(FollowUpTimeWindowSchema).min(1).max(FOLLOW_UP_MAX_SUGGESTED_WINDOWS).optional(),
-  /** The caller's state (T-CW-1.5); filled by `GET /appointments/:id` and the list. */
+  /** The caller's state (T-CW-1.5); filled by `GET /appointments/:id` and the list for participants. */
   viewer: AppointmentViewerSchema.optional(),
+  /** Operations rows only (the list and the detail in the operations context): the organization's name. */
+  orgName: z.string().min(1).max(200).optional(),
   /**
    * Employee viewer only: how the latest decided approval of this follow-up
    * ended, and the approver's safe reason when it was rejected. Never sent
@@ -261,6 +268,8 @@ export const AppointmentListQuerySchema = z
     to: isoDateTime.optional(),
     /** Only the follow-ups of this consultation (T-CW-1.9). */
     followUpOf: idField.optional(),
+    /** `asc` (default): earliest first; `desc`: latest first. The cursor follows the order (T-CW-1.5). */
+    order: z.enum(['asc', 'desc']).default('asc'),
   })
   .refine((q) => !q.from || !q.to || Date.parse(q.to) > Date.parse(q.from), {
     path: ['to'],
@@ -453,6 +462,7 @@ export const APPOINTMENT_APPROVAL_ITEM_FIELDS = [
   'description',
   'startsAt',
   'durationMinutes',
+  'timeZone',
 ] as const;
 
 /** One approval item as the approver sees it (`GET /orgs/:orgId/appointment-approvals`, approve, reject). */
@@ -464,6 +474,8 @@ export const AppointmentApprovalItemSchema = z.strictObject({
   description: z.literal(APPROVAL_FOLLOW_UP_DESCRIPTION),
   startsAt: isoDateTime,
   durationMinutes: z.number().int().positive(),
+  /** The appointment's IANA time zone, in which the approver's screen shows `startsAt` (T-CW-1.5). */
+  timeZone: TimeZoneSchema,
 });
 export type AppointmentApprovalItem = z.infer<typeof AppointmentApprovalItemSchema>;
 
@@ -484,3 +496,28 @@ export const FollowUpApprovalPolicyResponseSchema = z.object({
   policy: FollowUpApprovalPolicySchema,
 });
 export type FollowUpApprovalPolicyResponse = z.infer<typeof FollowUpApprovalPolicyResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Booking lookups for operations (T-CW-1.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * `GET /ops/appointment-experts`: the experts who may take a consultation of
+ * `serviceCategory`, for the operations booking form; `q` filters by name.
+ */
+export const AppointmentExpertCandidatesQuerySchema = z.object({
+  serviceCategory: z.string().min(1).max(100),
+  q: z.string().trim().max(100).optional(),
+});
+export type AppointmentExpertCandidatesQuery = z.infer<typeof AppointmentExpertCandidatesQuerySchema>;
+
+export const AppointmentExpertCandidateSchema = z.strictObject({
+  userId: idField,
+  displayName: z.string().min(1).max(200),
+});
+export type AppointmentExpertCandidate = z.infer<typeof AppointmentExpertCandidateSchema>;
+
+export const AppointmentExpertCandidatesResponseSchema = z.strictObject({
+  items: z.array(AppointmentExpertCandidateSchema),
+});
+export type AppointmentExpertCandidatesResponse = z.infer<typeof AppointmentExpertCandidatesResponseSchema>;

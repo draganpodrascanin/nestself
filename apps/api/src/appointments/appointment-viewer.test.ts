@@ -23,6 +23,7 @@ const response = (overrides: Partial<AppointmentResponse> = {}): AppointmentResp
 
 const facts = (overrides: Partial<ViewerFacts> = {}): ViewerFacts => ({
   joinedAppointmentIds: new Set(),
+  endedAppointmentIds: new Set(),
   pendingSignals: new Map(),
   approvalOutcomes: new Map(),
   ...overrides,
@@ -39,7 +40,7 @@ describe('withViewerState', () => {
     }));
     expect(out).toEqual({
       ...response(),
-      viewer: { hasJoined: false, pendingSignal: signal },
+      viewer: { hasJoined: false, sessionEnded: false, pendingSignal: signal },
       approvalOutcome: 'rejected',
       declineReason: 'The budget for this quarter is used.',
     });
@@ -51,7 +52,7 @@ describe('withViewerState', () => {
       pendingSignals: new Map([['appt_1', signal]]),
       approvalOutcomes: new Map([['appt_1', rejected]]),
     }));
-    expect(out).toEqual({ ...response(), viewer: { hasJoined: true, pendingSignal: signal } });
+    expect(out).toEqual({ ...response(), viewer: { hasJoined: true, sessionEnded: false, pendingSignal: signal } });
     expect(out).not.toHaveProperty('approvalOutcome');
     expect(out).not.toHaveProperty('declineReason');
   });
@@ -61,13 +62,25 @@ describe('withViewerState', () => {
       pendingSignals: new Map([['appt_1', signal]]),
       approvalOutcomes: new Map([['appt_1', rejected]]),
     }));
-    expect(out).toEqual({ ...response(), viewer: { hasJoined: false } });
+    expect(out).toEqual({ ...response(), viewer: { hasJoined: false, sessionEnded: false } });
   });
 
   it('shows an expiry without a reason', () => {
     const [out] = withViewerState('user_employee', [response()], facts({
       approvalOutcomes: new Map([['appt_1', { outcome: 'expired' as const, reason: null }]]),
     }));
-    expect(out).toEqual({ ...response(), viewer: { hasJoined: false }, approvalOutcome: 'expired' });
+    expect(out).toEqual({ ...response(), viewer: { hasJoined: false, sessionEnded: false }, approvalOutcome: 'expired' });
+  });
+});
+
+describe('withViewerState sessionEnded (T-CW-1.5)', () => {
+  it('reports a session that is over for good', () => {
+    const [ended] = withViewerState('user_employee', [response({ status: 'confirmed' })], {
+      joinedAppointmentIds: new Set(['appt_1']),
+      endedAppointmentIds: new Set(['appt_1']),
+      pendingSignals: new Map(),
+      approvalOutcomes: new Map(),
+    });
+    expect(ended!.viewer).toEqual({ hasJoined: true, sessionEnded: true });
   });
 });
