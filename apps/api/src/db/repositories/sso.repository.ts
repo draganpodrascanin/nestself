@@ -5,9 +5,11 @@
  * every write the SSO service makes runs in the connection's scope.
  *
  * Deliberately unscoped (system context, no tenant setting) reads:
- * - `findConnectionByProviderName` and `findDomainByName`: uniqueness of the
- *   provider name and of the domain is global, across organizations
- *   (SSO-R-07, Review Focus 3 and 5), so they must see every tenant;
+ * - `findConnectionByProviderName`, `findConnectionsByProviderNames` and
+ *   `findDomainByName`: uniqueness of the provider name, the per-organization
+ *   reservation of a slug and uniqueness of the domain are global, across
+ *   organizations (SSO-R-07, Review Focus 3 and 5), so they must see every
+ *   tenant;
  * - `listConnections` without a tenant transaction: the staff list spans
  *   organizations (`sso.manage` is a platform action);
  * - `findActiveConnectionForDomain`: home-realm discovery runs before any
@@ -16,7 +18,7 @@
  *   nightly certificate-expiry job spans organizations.
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import { ssoConnections, ssoDomains } from '../schema/index.js';
@@ -92,6 +94,12 @@ export class SsoRepository {
       .from(ssoConnections)
       .where(eq(ssoConnections.cognitoProviderName, name));
     return row ?? null;
+  }
+
+  /** Every connection holding one of `names`, whatever its organization (slug reservation). */
+  async findConnectionsByProviderNames(names: string[], tx?: DbExecutor): Promise<SsoConnectionRow[]> {
+    if (names.length === 0) return [];
+    return this.exec(tx).select().from(ssoConnections).where(inArray(ssoConnections.cognitoProviderName, names));
   }
 
   /** Insert a connection; a taken `cognitoProviderName` raises a unique violation. */

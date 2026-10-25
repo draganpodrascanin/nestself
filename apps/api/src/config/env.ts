@@ -161,6 +161,12 @@ export const envSchema = z
           'SESSION_ENCRYPTION_KEY',
           'SESSION_ENCRYPTION_KEY is required when AUTH_MODE=cognito',
         ],
+        // The SSO start URL, the callback registered on the Cognito client and
+        // the post-sign-in redirects are built from these; the localhost
+        // fallbacks only suit stub mode.
+        ['WORKSPACE_URL', 'WORKSPACE_URL is required when AUTH_MODE=cognito'],
+        ['ADMIN_URL', 'ADMIN_URL is required when AUTH_MODE=cognito'],
+        ['API_PUBLIC_URL', 'API_PUBLIC_URL is required when AUTH_MODE=cognito'],
       ];
 
       for (const [key, message] of required) {

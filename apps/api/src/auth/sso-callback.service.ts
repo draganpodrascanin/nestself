@@ -14,7 +14,14 @@
  * finds nothing: Review Focus 1), the code is exchanged with the verifier,
  * and the federated identity is resolved:
  *   1. an existing `external_identities(cognito:<providerName>, sub)` signs
- *      in whatever the connection's status (Review Focus 4);
+ *      in whatever the connection's status (Review Focus 4), provided the
+ *      connection owning that provider name still exists and the identity's
+ *      user has a membership (any status) in that connection's organization:
+ *      a provider name reused by another organization would otherwise hand
+ *      it the first organization's pool users (Cognito keeps them, with
+ *      their `sub`). A mismatch is the neutral `sso_denied`, audited as
+ *      `auth.sign_in.failed { reason: 'sso_provider_mismatch' }`, and the
+ *      pool user is not deleted (it is not an orphan);
  *   2. new bindings need the connection ACTIVE, or TESTING on a staff test
  *      sign-in (`test=<nonce>` from `POST /ops/sso-connections/:id/test`,
  *      single use), and a verified email: the email's domain is a verified
@@ -28,10 +35,14 @@
  *      with the `employee` grant;
  *   5. else denied: the orphan federated pool user is deleted (SSO-R-10),
  *      `identity.denied`, neutral `/sign-in?reason=sso_denied`.
- * An unverified email binds nothing either: the orphan is deleted too (the
- * IdP recreates it on the next sign-in, so nothing is lost and no unbound
- * pool user lingers) and the user lands on `/sign-in?reason=sso_email_unverified`
- * to continue with the email code.
+ * An address outside the connection's verified domains binds nothing: the
+ * orphan is deleted and the user gets the neutral `/sign-in?reason=sso_denied`
+ * (the connection does not vouch for that address at all, so the email-code
+ * prefill would be wrong). An on-domain OIDC address without
+ * `email_verified === true` binds nothing either: the orphan is deleted too
+ * (the IdP recreates it on the next sign-in, so nothing is lost and no
+ * unbound pool user lingers) and the user lands on
+ * `/sign-in?reason=sso_email_unverified` to continue with the email code.
  *
  * Success creates the session (`auth.method = 'sso'`, `secondFactor = true`:
  * MFA is delegated to the IdP, 3.4.9) and redirects to the surface origin
@@ -57,6 +68,7 @@ import { DbService, type DbExecutor } from '../db/db.service.js';
 import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
+import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import {
@@ -163,6 +175,7 @@ export class SsoCallbackService {
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(forwardRef(() => MembershipsRepository)) private readonly memberships: MembershipsRepository,
   ) {}
 
   /** `${API_PUBLIC_URL}/api/auth/sso/callback`, registered on the web client. */
@@ -278,6 +291,13 @@ export class SsoCallbackService {
     // 1. Existing identity: signs in whatever the connection's status.
     const existing = await this.identities.findExternalIdentity(provider, claims.sub);
     if (existing) {
+      // Defence in depth for the per-organization slug reservation: the
+      // identity must belong to the organization of the connection that now
+      // owns this provider name. Not an orphan, so nothing is deleted.
+      if (!connection || !(await this.isMemberOf(existing.userId, connection.orgId))) {
+        this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
+        return deny();
+      }
       return this.signIn(exchanged, email, record, connection, meta, testConnectionId);
     }
 
@@ -295,9 +315,12 @@ export class SsoCallbackService {
     // else's address and take over that user. OIDC must also assert
     // `email_verified`; SAML relies on the domain inference.
     const domainVerified = await this.isDomainVerifiedFor(connection, domainOf(email));
-    const emailVerified =
-      domainVerified && (connection.protocol === 'SAML' || claims.emailVerified === true);
-    if (!emailVerified) {
+    if (!domainVerified) {
+      // Off-domain: the connection vouches for nothing here, a neutral denial.
+      await this.denyBinding(claims, email, connection, meta, 'email_off_domain');
+      return deny();
+    }
+    if (connection.protocol === 'OIDC' && claims.emailVerified !== true) {
       await this.denyBinding(claims, email, connection, meta, 'email_unverified');
       return { location: this.signInUrl(record.surface, 'sso_email_unverified', email) };
     }
@@ -478,6 +501,12 @@ export class SsoCallbackService {
     }
   }
 
+  /** The user has a membership row (any status) in the organization; system-context read. */
+  private async isMemberOf(userId: string, orgId: string): Promise<boolean> {
+    const rows = await this.memberships.findByUserId(userId);
+    return rows.some((m) => m.orgId === orgId);
+  }
+
   /** The email's domain is a verified domain of this connection. */
   private async isDomainVerifiedFor(connection: SsoConnectionRow, domain: string): Promise<boolean> {
     const row = await this.sso.findDomainByName(domain);
@@ -533,7 +562,7 @@ export class SsoCallbackService {
     email: string,
     connection: SsoConnectionRow | null,
     meta: RequestMeta,
-    reason: 'connection_inactive' | 'email_unverified' | 'no_invitation',
+    reason: 'connection_inactive' | 'email_off_domain' | 'email_unverified' | 'no_invitation',
   ): Promise<void> {
     try {
       await this.idp.deleteUser(claims.username);

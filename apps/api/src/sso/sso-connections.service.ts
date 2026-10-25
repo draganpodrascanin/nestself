@@ -6,6 +6,7 @@
  *   POST :id/test      DRAFT|TESTING -> TESTING  (>= 1 verified domain; registers the provider)
  *   POST :id/activate  TESTING -> ACTIVE         (lastTestedAt set by a bound test sign-in)
  *   PATCH status       ACTIVE -> SUSPENDED, SUSPENDED -> ACTIVE, TESTING -> DRAFT (removes the provider)
+ *   PATCH provider fields on ACTIVE -> TESTING (lastTestedAt cleared: re-test, then activate)
  *
  * The provider is registered in the identity provider (Cognito) when the
  * connection is tested. One exception: an OIDC client secret is write-only
@@ -18,8 +19,16 @@
  * security checks them) and share that transaction with their audit
  * events; status changes are conditional on the status read (a concurrent
  * change answers 409). Any reset, re-test or provider change while TESTING
- * clears `lastTestedAt`, so activation always follows a test sign-in
- * against the current configuration (SSO-R-01).
+ * or ACTIVE clears `lastTestedAt` (an ACTIVE connection moves back to
+ * TESTING), so activation always follows a test sign-in against the current
+ * configuration (SSO-R-01).
+ *
+ * A slug belongs to one organization: create and a DRAFT protocol change
+ * refuse with 409 `conflict` (`details.reason: 'provider_name_taken'`) when
+ * a connection of another organization holds `org-<slug>-saml` or
+ * `org-<slug>-oidc`. Cognito keeps federated pool users after their provider
+ * is deleted, so a reused name would hand that organization the other's
+ * users and their `sub`.
  *
  * Every status change audits `sso_connection.changed { from, to }`
  * (SSO-R-02). Audit details never carry the client secret or the domain
@@ -71,7 +80,7 @@ import {
   type ProviderInput,
 } from '../identity/identity-provider.service.js';
 import { DNS_TXT_RESOLVER, type DnsTxtResolver } from './dns-txt-resolver.js';
-import { ProviderNameTooLongError, buildProviderName } from './provider-name.js';
+import { ProviderNameTooLongError, buildProviderName, slugProviderNames } from './provider-name.js';
 
 /** DI token of {@link SsoConfig}. */
 export const SSO_CONFIG = Symbol('SSO_CONFIG');
@@ -112,6 +121,16 @@ function connectionState(message: string): ApiHttpException {
 
 function conflict(message: string): ApiHttpException {
   return new ApiHttpException({ status: 409, code: 'conflict', message });
+}
+
+/** 409 for a provider name whose slug another organization holds. */
+function providerNameTaken(field: 'slug' | 'protocol'): ApiHttpException {
+  return new ApiHttpException({
+    status: 409,
+    code: 'conflict',
+    message: 'Another organization uses this slug for its SSO connection',
+    details: { reason: 'provider_name_taken', field },
+  });
 }
 
 function notFound(message: string): ApiHttpException {
@@ -172,9 +191,7 @@ export class SsoConnectionsService {
 
     if (!(await this.organizations.findById(body.orgId))) throw notFound('Organization not found');
     if (body.defaultOrgUnitId) await this.assertOrgUnit(body.orgId, body.defaultOrgUnitId);
-    if (await this.repo.findConnectionByProviderName(name)) {
-      throw conflict('A connection with this provider name already exists');
-    }
+    await this.assertProviderNameAvailable(name, body.orgId, 'slug');
 
     const values = {
       orgId: body.orgId,
@@ -228,7 +245,7 @@ export class SsoConnectionsService {
     if (body.idpInitiatedAllowed === true) throw idpInitiatedRefused();
     const conn = await this.load(id);
     const from = conn.status;
-    const to = body.status && body.status !== from ? body.status : from;
+    let to = body.status && body.status !== from ? body.status : from;
 
     if (to !== from) this.assertPatchTransition(conn, to);
 
@@ -269,13 +286,21 @@ export class SsoConnectionsService {
     if (protocolChange) {
       setField('protocol', body.protocol);
       name = conn.cognitoProviderName.replace(/-(saml|oidc)$/, `-${body.protocol!.toLowerCase()}`);
-      if (await this.repo.findConnectionByProviderName(name)) {
-        throw conflict('A connection with this provider name already exists');
-      }
+      await this.assertProviderNameAvailable(name, conn.orgId, 'protocol', conn.id);
     }
 
     const merged = { ...conn, ...patch, cognitoProviderName: name };
     const providerChanged = PROVIDER_FIELDS.some((f) => changedFields.includes(f));
+
+    // SSO-R-01: a provider change on an ACTIVE connection takes it back to
+    // TESTING, so it is activated again only after a test sign-in against
+    // the new configuration. Combined with a suspension it is ambiguous.
+    if (from === 'ACTIVE' && providerChanged) {
+      if (to !== from) {
+        throw validation('Change the provider settings and the status in separate requests', { field: 'status' });
+      }
+      to = 'TESTING';
+    }
 
     // Identity provider first: a refused configuration leaves the row unchanged.
     if (to === 'DRAFT') {
@@ -290,8 +315,8 @@ export class SsoConnectionsService {
 
     if (to !== from) patch.status = to;
     if (protocolChange) patch.cognitoProviderName = name;
-    // A reset or a provider change while TESTING invalidates the last test sign-in.
-    if (to === 'DRAFT' || (from === 'TESTING' && providerChanged)) patch.lastTestedAt = null;
+    // A reset or a provider change while TESTING or ACTIVE invalidates the last test sign-in.
+    if (to === 'DRAFT' || ((from === 'TESTING' || from === 'ACTIVE') && providerChanged)) patch.lastTestedAt = null;
 
     let updated: SsoConnectionRow;
     try {
@@ -502,6 +527,26 @@ export class SsoConnectionsService {
         });
       }
       throw err;
+    }
+  }
+
+  /**
+   * The slug reservation: 409 `provider_name_taken` when a connection of
+   * another organization holds either protocol's name of this slug, 409
+   * `conflict` when another connection of the same organization holds the
+   * exact name. Unscoped (system context) read: RLS would hide the other
+   * tenants' rows.
+   */
+  private async assertProviderNameAvailable(
+    name: string,
+    orgId: string,
+    field: 'slug' | 'protocol',
+    selfId?: string,
+  ): Promise<void> {
+    const holders = await this.repo.findConnectionsByProviderNames(slugProviderNames(name));
+    if (holders.some((c) => c.orgId !== orgId)) throw providerNameTaken(field);
+    if (holders.some((c) => c.cognitoProviderName === name && c.id !== selfId)) {
+      throw conflict('A connection with this provider name already exists');
     }
   }
 

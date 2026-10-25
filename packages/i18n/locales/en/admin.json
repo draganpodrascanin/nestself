@@ -639,7 +639,9 @@
       "metadataXmlHint": "Leave empty to keep the current XML.",
       "defaultOrgUnitHint": "Leave empty to clear it.",
       "submit": "Save changes",
-      "success": "Changes saved."
+      "success": "Changes saved.",
+      "activeWarning": "This connection is active. Changing the provider settings (metadata, issuer, client ID or client secret) takes it back to testing: sign-in through this connection stays off for employees until a new test sign-in succeeds and you activate it again.",
+      "backToTesting": "Changes saved. The connection is back in testing: run a test sign-in, then activate it again."
     },
     "detail": {
       "title": "Connection {{provider}}",
@@ -715,6 +717,7 @@
       "connectionStateActivate": "Complete a test sign-in on a verified domain before activating the connection.",
       "conflict": "Someone changed this connection meanwhile. The list has been refreshed.",
       "conflictProviderName": "A connection with this provider name already exists. Choose another slug.",
+      "conflictProviderNameReserved": "Another organisation already uses this slug for its SSO connection. Choose a different slug.",
       "conflictDomain": "This domain is already attached to a connection.",
       "validation": "Check the fields and try again.",
       "idpRefused": "The identity provider refused this configuration. Check the metadata or the issuer and client details.",

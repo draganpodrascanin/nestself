@@ -7,7 +7,8 @@
  * Codes the SSO routes return (`apps/api/src/sso/sso-connections.service.ts`
  * and the controller's body pipe): `domain_blocklisted`, `domain_unverified`,
  * `sso_connection_state`, `conflict` (provider name on create, domain on
- * add), `validation` (422 with `details.field` or `details.fields`, or none
+ * add; `details.reason: 'provider_name_taken'` when another organization
+ * holds the slug, on create or a protocol change), `validation` (422 with `details.field` or `details.fields`, or none
  * when the identity provider refused the configuration; 400 from the body
  * schema), `not_found` (the organization on create, otherwise the
  * connection or domain), `forbidden`, `rate_limited`, `unavailable` (identity
@@ -29,6 +30,7 @@ export type SsoErrorKey =
   | 'connectionStateActivate'
   | 'conflict'
   | 'conflictProviderName'
+  | 'conflictProviderNameReserved'
   | 'conflictDomain'
   | 'validation'
   | 'idpRefused'
@@ -137,6 +139,9 @@ function classify(err: ApiError, op: SsoOperation): { key: SsoErrorKey; field: s
       return { key: 'unavailable', field: null };
   }
   if (err.code === 'conflict' || err.status === 409) {
+    if (err.details?.['reason'] === 'provider_name_taken') {
+      return { key: 'conflictProviderNameReserved', field: op === 'create' ? 'slug' : 'protocol' };
+    }
     if (op === 'create') return { key: 'conflictProviderName', field: 'slug' };
     if (op === 'addDomain') return { key: 'conflictDomain', field: 'domain' };
     return { key: 'conflict', field: null };

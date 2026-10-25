@@ -48,6 +48,10 @@ type FormErrorKey = SsoErrorKey | 'nothingChanged';
  * (`PATCH /ops/sso-connections/:id`, administration step-up). Only changed
  * fields are sent. The OIDC client secret field always starts empty: the
  * secret is write-only, and an empty field keeps the current one.
+ *
+ * On an ACTIVE connection a change to the provider settings (metadata,
+ * issuer, client id or secret) takes it back to TESTING (SSO-R-01): the
+ * dialog warns up front and the success toast says so.
  */
 export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }: EditConnectionDialogProps) {
   const { t } = useTranslation(['admin', 'common']);
@@ -127,10 +131,14 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
       return;
     }
     try {
-      await update.mutateAsync({ id: connection.id, body: patch });
+      const saved = await update.mutateAsync({ id: connection.id, body: patch });
       // Drop the request (and a replaced secret) from the mutation state.
       update.reset();
-      addToast({ title: t('admin:sso.edit.success'), tone: 'success' });
+      const backToTesting = connection.status === 'ACTIVE' && saved.status === 'TESTING';
+      addToast({
+        title: t(backToTesting ? 'admin:sso.edit.backToTesting' : 'admin:sso.edit.success'),
+        tone: backToTesting ? 'warning' : 'success',
+      });
       finish();
     } catch (err) {
       const found = ssoProblem(err, 'update');
@@ -150,6 +158,7 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
         <form id={ID.form} tabIndex={-1} noValidate onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
           {formError ? <Alert tone="danger">{t(`admin:sso.errors.${formError}`)}</Alert> : null}
+          {connection.status === 'ACTIVE' ? <Alert tone="warning">{t('admin:sso.edit.activeWarning')}</Alert> : null}
 
           {saml ? (
             <>

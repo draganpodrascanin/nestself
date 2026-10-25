@@ -3,15 +3,17 @@
  * lifecycle DRAFT -> TESTING -> ACTIVE -> SUSPENDED -> ACTIVE over HTTP,
  * DNS domain verification with the fake resolver, provider registration in
  * the fake identity provider, Review Focus 3 (domain on another connection)
- * and 5 (provider name length and collision).
+ * and 5 (provider name length and collision), the per-organization slug
+ * reservation and the ACTIVE -> TESTING move on a provider change (SSO-R-01).
  *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
+import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { and, eq, like } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
@@ -19,7 +21,7 @@ import { IdentityProviderService } from '../src/identity/identity-provider.servi
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, externalIdentities, grants } from '../src/db/schema/index.js';
+import { auditEvents, externalIdentities, grants, organizations } from '../src/db/schema/index.js';
 import { SsoRepository } from '../src/db/repositories/sso.repository.js';
 import { DNS_TXT_RESOLVER, type FakeDnsTxtResolver } from '../src/sso/dns-txt-resolver.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
@@ -108,6 +110,17 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     await app?.close();
     await testDb?.close();
     delete process.env.API_PUBLIC_URL;
+  });
+
+  beforeEach(() => {
+    // The write routes allow 10 requests a minute per IP and every request
+    // here comes from the same socket address; the suite is longer than that.
+    const storage = app.get(getStorageToken()) as {
+      storage: Map<string, unknown>;
+      hitExpirations?: Map<string, unknown>;
+    };
+    storage.storage.clear();
+    storage.hitExpirations?.clear();
   });
 
   function extractCsrf(res: request.Response): string {
@@ -289,6 +302,56 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     const protocol = await patch(`/${connectionId}`, { protocol: 'OIDC' });
     expect(protocol.status).toBe(422);
     expect(protocol.body.code).toBe('validation');
+  });
+
+  it('a provider change on the ACTIVE connection takes it back to TESTING; activation needs a new test sign-in (SSO-R-01)', async () => {
+    const res = await patch(`/${connectionId}`, { metadataUrl: 'https://idp.acme.example/metadata-v2' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'TESTING', lastTestedAt: null, metadataUrl: 'https://idp.acme.example/metadata-v2' });
+    const changed = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.recordId, connectionId), eq(auditEvents.action, 'sso_connection.changed')));
+    expect(changed.map((e) => e.details)).toContainEqual({ from: 'ACTIVE', to: 'TESTING' });
+    const activate = await post(`/${connectionId}/activate`);
+    expect(activate.status).toBe(409);
+    expect(activate.body.code).toBe('sso_connection_state');
+
+    // Back to ACTIVE through the normal path for the tests below.
+    expect((await post(`/${connectionId}/test`)).status).toBe(200);
+    await app.get(SsoRepository).updateConnection(connectionId, { lastTestedAt: new Date() });
+    expect((await post(`/${connectionId}/activate`)).status).toBe(200);
+  });
+
+  it('a provider name freed by a protocol switch stays reserved for its organization: another org gets 409 provider_name_taken', async () => {
+    const otherOrg = 'org_sso_e2e_other';
+    await testDb.db.insert(organizations).values({ id: otherOrg, name: 'Other SSO e2e Org', slug: 'other-sso-e2e' });
+
+    const created = await post('', { orgId: ORG, slug: 'freed', protocol: 'SAML', metadataUrl: METADATA_URL });
+    expect(created.status).toBe(201);
+    const switched = await patch(`/${created.body.id as string}`, {
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.freed.example',
+      oidcClientId: 'client-freed',
+    });
+    expect(switched.status).toBe(200);
+    expect(switched.body.cognitoProviderName).toBe('org-freed-oidc');
+
+    for (const protocol of ['SAML', 'OIDC'] as const) {
+      const body =
+        protocol === 'SAML'
+          ? { orgId: otherOrg, slug: 'freed', protocol, metadataUrl: METADATA_URL }
+          : { orgId: otherOrg, slug: 'freed', protocol, oidcIssuer: 'https://login.b.example', oidcClientId: 'b' };
+      const taken = await post('', body);
+      expect(taken.status).toBe(409);
+      expect(taken.body.code).toBe('conflict');
+      expect(taken.body.details).toMatchObject({ reason: 'provider_name_taken', field: 'slug' });
+    }
+
+    // The owning organization may take the freed sibling name itself.
+    const own = await post('', { orgId: ORG, slug: 'freed', protocol: 'SAML', metadataUrl: METADATA_URL });
+    expect(own.status).toBe(201);
+    expect(own.body.cognitoProviderName).toBe('org-freed-saml');
   });
 
   it('a reset to DRAFT invalidates the test sign-in: reset -> re-test -> activate is 409 (SSO-R-01)', async () => {

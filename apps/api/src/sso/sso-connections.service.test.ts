@@ -23,6 +23,7 @@ import { SsoConnectionsService } from './sso-connections.service.js';
 
 const ACTOR = { userId: 'user_nikola', sessionId: 'sess_1' } as Principal;
 const ORG = 'org_sample';
+const ORG_B = 'org_other';
 const TX = { tx: 'scoped' };
 const SP = { entityId: 'urn:amazon:cognito:sp:pool', acsUrl: 'https://auth.example/saml2/idpresponse' };
 
@@ -44,6 +45,9 @@ class MemoryRepo {
   });
   findConnectionByProviderName = vi.fn(
     async (name: string) => [...this.connections.values()].find((c) => c.cognitoProviderName === name) ?? null,
+  );
+  findConnectionsByProviderNames = vi.fn(async (names: string[]) =>
+    [...this.connections.values()].filter((c) => names.includes(c.cognitoProviderName)),
   );
   createConnection = vi.fn(async (input: Partial<SsoConnectionRow>) => {
     const row = {
@@ -93,7 +97,7 @@ class MemoryRepo {
 
 function setup() {
   const repo = new MemoryRepo();
-  const organizations = { findById: vi.fn(async (id: string) => (id === ORG ? { id } : null)) };
+  const organizations = { findById: vi.fn(async (id: string) => (id === ORG || id === ORG_B ? { id } : null)) };
   const orgUnits = {
     findByIdAndOrg: vi.fn(async (unitId: string, orgId: string) => (unitId === 'ou_root' && orgId === ORG ? { id: unitId } : null)),
   };
@@ -183,6 +187,27 @@ describe('SsoConnectionsService', () => {
       await ctx.service.create(SAML, ACTOR);
       await expectApiError(ctx.service.create({ ...SAML, metadataUrl: 'https://other.example/m' }, ACTOR), 409, 'conflict');
       expect(ctx.repo.createConnection).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses the sibling provider name of another organization with 409 provider_name_taken', async () => {
+      // Org B once had org-acme-saml and switched to OIDC: the SAML name is
+      // free in Cognito, but its federated pool users (and their sub) remain.
+      await ctx.service.create({ ...SAML, orgId: ORG_B, protocol: 'OIDC', metadataUrl: undefined, oidcIssuer: 'https://login.b.example', oidcClientId: 'c' }, ACTOR);
+      const err = await expectApiError(ctx.service.create(SAML, ACTOR), 409, 'conflict');
+      expect(err.details).toMatchObject({ reason: 'provider_name_taken', field: 'slug' });
+      expect(ctx.repo.findConnectionsByProviderNames).toHaveBeenCalledWith(['org-acme-saml', 'org-acme-oidc']);
+      expect(ctx.repo.createConnection).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses the exact provider name of another organization with 409 provider_name_taken', async () => {
+      await ctx.service.create({ ...SAML, orgId: ORG_B }, ACTOR);
+      const err = await expectApiError(ctx.service.create(SAML, ACTOR), 409, 'conflict');
+      expect(err.details).toMatchObject({ reason: 'provider_name_taken' });
+    });
+
+    it('lets the same organization use the sibling name of its own slug', async () => {
+      await ctx.service.create({ ...SAML, protocol: 'OIDC', metadataUrl: undefined, oidcIssuer: 'https://login.acme.example', oidcClientId: 'c' }, ACTOR);
+      await expect(ctx.service.create(SAML, ACTOR)).resolves.toMatchObject({ cognitoProviderName: 'org-acme-saml' });
     });
 
     it('refuses idpInitiatedAllowed: true with 422', async () => {
@@ -405,6 +430,27 @@ describe('SsoConnectionsService', () => {
       expect(res).toMatchObject({ protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc' });
     });
 
+    it('a DRAFT protocol change onto a name another organization holds answers 409 provider_name_taken', async () => {
+      const conn = await ctx.service.create(SAML, ACTOR);
+      // A row predating the reservation (or written meanwhile) under org B.
+      await ctx.repo.createConnection({ orgId: ORG_B, protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc' });
+      const err = await expectApiError(
+        ctx.service.update(conn.id, { protocol: 'OIDC', oidcIssuer: 'https://login.acme.example', oidcClientId: 'c' }, ACTOR),
+        409,
+        'conflict',
+      );
+      expect(err.details).toMatchObject({ reason: 'provider_name_taken', field: 'protocol' });
+      expect(ctx.repo.connections.get(conn.id)?.cognitoProviderName).toBe('org-acme-saml');
+    });
+
+    it('a DRAFT protocol change is refused when another organization holds the current sibling name', async () => {
+      // Org B holds org-acme-saml (pre-reservation data); org A's DRAFT org-acme-oidc
+      // must not move back and forth over names B's pool users carry.
+      await ctx.repo.createConnection({ orgId: ORG_B, protocol: 'SAML', cognitoProviderName: 'org-acme-saml' });
+      const a = await ctx.repo.createConnection({ orgId: ORG, protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc', oidcIssuer: 'https://i', oidcClientId: 'c' });
+      await expectApiError(ctx.service.update(a.id, { protocol: 'SAML', metadataUrl: 'https://idp.acme.example/m' }, ACTOR), 409, 'conflict');
+    });
+
     it('refuses idpInitiatedAllowed: true with 422', async () => {
       const conn = await ctx.service.create(SAML, ACTOR);
       await expectApiError(ctx.service.update(conn.id, { idpInitiatedAllowed: true }, ACTOR), 422, 'validation');
@@ -415,12 +461,62 @@ describe('SsoConnectionsService', () => {
       await ctx.service.update(draft.id, { metadataUrl: 'https://idp.acme.example/v2' }, ACTOR);
       expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
 
-      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      const conn = await connectionIn(ctx, 'TESTING', new Date());
       await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v3', jitProvisioning: true }, ACTOR);
       expect(ctx.idp.updateProvider).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'org-acme-saml', metadataUrl: 'https://idp.acme.example/v3' }),
       );
       expect(ctx.events.at(-1)).toMatchObject({ action: 'sso_connection.updated', details: { fields: ['metadataUrl', 'jitProvisioning'] } });
+    });
+
+    it('a provider change on an ACTIVE connection takes it back to TESTING and clears lastTestedAt (SSO-R-01)', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      const res = await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v4' }, ACTOR);
+      expect(res).toMatchObject({ status: 'TESTING', lastTestedAt: null });
+      expect(ctx.idp.updateProvider).toHaveBeenCalledWith(expect.objectContaining({ metadataUrl: 'https://idp.acme.example/v4' }));
+      expect(ctx.events.map((e) => [e.action, e.details])).toEqual([
+        ['sso_connection.updated', { fields: ['metadataUrl'] }],
+        ['sso_connection.changed', { from: 'ACTIVE', to: 'TESTING' }],
+      ]);
+      expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(
+        conn.id,
+        { metadataUrl: 'https://idp.acme.example/v4', status: 'TESTING', lastTestedAt: null },
+        TX,
+        { fromStatus: 'ACTIVE' },
+      );
+      // Activation needs a new test sign-in.
+      await expectApiError(ctx.service.activate(conn.id, ACTOR), 409, 'sso_connection_state');
+    });
+
+    it.each([
+      ['oidcClientSecret', { oidcClientSecret: 'rotated' }],
+      ['oidcIssuer', { oidcIssuer: 'https://login2.acme.example' }],
+      ['oidcClientId', { oidcClientId: 'client-2' }],
+    ] as const)('an ACTIVE OIDC connection goes back to TESTING when %s changes', async (_field, patch) => {
+      const conn = await ctx.service.create(
+        { ...SAML, protocol: 'OIDC', metadataUrl: undefined, oidcIssuer: 'https://login.acme.example', oidcClientId: 'client-1', oidcClientSecret: 's' },
+        ACTOR,
+      );
+      await ctx.repo.updateConnection(conn.id, { status: 'ACTIVE', lastTestedAt: new Date() });
+      await expect(ctx.service.update(conn.id, patch, ACTOR)).resolves.toMatchObject({ status: 'TESTING', lastTestedAt: null });
+    });
+
+    it('settings that are not provider fields keep an ACTIVE connection ACTIVE', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      const res = await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR);
+      expect(res.status).toBe('ACTIVE');
+      expect(res.lastTestedAt).not.toBeNull();
+    });
+
+    it('refuses a provider change combined with a suspension with 422', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      await expectApiError(
+        ctx.service.update(conn.id, { status: 'SUSPENDED', metadataUrl: 'https://idp.acme.example/v5' }, ACTOR),
+        422,
+        'validation',
+      );
+      expect(ctx.repo.connections.get(conn.id)?.status).toBe('ACTIVE');
+      expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
     });
 
     it('clearing the metadata of a registered connection is refused with 422 and nothing changes', async () => {

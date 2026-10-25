@@ -639,7 +639,9 @@
       "metadataXmlHint": "Ostavi prazno da zadržiš postojeći XML.",
       "defaultOrgUnitHint": "Ostavi prazno da je ukloniš.",
       "submit": "Sačuvaj izmene",
-      "success": "Izmene su sačuvane."
+      "success": "Izmene su sačuvane.",
+      "activeWarning": "Ova veza je aktivna. Izmena podešavanja provajdera (metapodaci, izdavalac, ID klijenta ili tajna klijenta) vraća je na testiranje: zaposleni ne mogu da se prijave preko ove veze dok nova probna prijava ne uspe i dok je ponovo ne aktiviraš.",
+      "backToTesting": "Izmene su sačuvane. Veza je ponovo na testiranju: uradi probnu prijavu, pa je ponovo aktiviraj."
     },
     "detail": {
       "title": "Veza {{provider}}",
@@ -715,6 +717,7 @@
       "connectionStateActivate": "Pre aktiviranja završi probnu prijavu na potvrđenom domenu.",
       "conflict": "Neko je u međuvremenu promenio ovu vezu. Lista je osvežena.",
       "conflictProviderName": "Veza sa ovim nazivom provajdera već postoji. Izaberi drugu kratku oznaku.",
+      "conflictProviderNameReserved": "Druga organizacija već koristi ovu kratku oznaku za svoju SSO vezu. Izaberi drugu kratku oznaku.",
       "conflictDomain": "Ovaj domen je već povezan sa nekom vezom.",
       "validation": "Proveri polja pa pokušaj ponovo.",
       "idpRefused": "Provajder identiteta je odbio ovu konfiguraciju. Proveri metapodatke ili podatke o izdavaocu i klijentu.",

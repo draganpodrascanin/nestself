@@ -233,6 +233,7 @@ describe('SsoScreen create dialog', () => {
 
   it.each([
     [apiError(409, 'conflict'), 'admin:sso.errors.conflictProviderName'],
+    [apiError(409, 'conflict', { reason: 'provider_name_taken', field: 'slug' }), 'admin:sso.errors.conflictProviderNameReserved'],
     [apiError(422, 'validation', { field: 'slug' }), 'admin:sso.errors.fieldSlug'],
     [apiError(422, 'validation', { field: 'defaultOrgUnitId' }), 'admin:sso.errors.fieldDefaultOrgUnit'],
     [apiError(422, 'validation', { field: 'idpInitiatedAllowed' }), 'admin:sso.errors.fieldIdpInitiated'],
@@ -447,6 +448,33 @@ describe('SsoScreen lifecycle', () => {
     await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
     await waitFor(() => expect(opsApi.updateSsoConnection).toHaveBeenCalledWith(SUSPENDED.id, { oidcClientSecret: 'rotated' }));
     expect(await screen.findByText(t('admin:sso.edit.success'))).toBeInTheDocument();
+  });
+
+  it('warns in the edit dialog of an ACTIVE connection that provider changes take it back to testing', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderScreen({
+      opsApi: ssoApi({ updateSsoConnection: vi.fn().mockResolvedValue({ ...ACTIVE, status: 'TESTING', lastTestedAt: null }) }),
+    });
+    const detail = await openDetail(user, ACTIVE.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    const dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    expect(within(dialog).getByText(t('admin:sso.edit.activeWarning'))).toBeInTheDocument();
+    const url = within(dialog).getByLabelText(t('admin:sso.create.metadataUrl'), { exact: false });
+    await user.clear(url);
+    await user.type(url, 'https://idp.example.test/v3');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
+    await waitFor(() => expect(opsApi.updateSsoConnection).toHaveBeenCalledWith(ACTIVE.id, { metadataUrl: 'https://idp.example.test/v3' }));
+    // A warning toast is also announced in the assertive live region.
+    expect(await screen.findAllByText(t('admin:sso.edit.backToTesting'))).not.toHaveLength(0);
+  });
+
+  it('shows no back-to-testing warning when editing a DRAFT connection', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    const detail = await openDetail(user, DRAFT.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    const dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    expect(within(dialog).queryByText(t('admin:sso.edit.activeWarning'))).not.toBeInTheDocument();
   });
 
   it('sends only the changed fields and warns when JIT is turned on', async () => {

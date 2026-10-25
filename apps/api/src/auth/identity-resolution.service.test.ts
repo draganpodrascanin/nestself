@@ -66,7 +66,7 @@ describe('federated identities (D-04, 3.4.9)', () => {
     const svc = new IdentityResolutionService(
       sessions as never, loader as never, audit as never, identities as never, throttle as never, me as never,
     );
-    return { svc, sessions, identities };
+    return { svc, sessions, identities, throttle };
   }
 
   const tokens = { accessToken: 'a', idToken: idToken({ sub: 'sub-1', username: 'org-acme-saml_x' }), refreshToken: 'r', expiresIn: 3600 };
@@ -84,5 +84,17 @@ describe('federated identities (D-04, 3.4.9)', () => {
     const { svc, identities } = build({ userId: 'u1' });
     await svc.resolveIdentityAndCreateSession(tokens, 'a@example.com', 'workspace', { ip: null, userAgent: null }, false);
     expect(identities.findExternalIdentity).toHaveBeenCalledWith('cognito', 'sub-1');
+  });
+
+  it('a federated sign-in does not reset the email-code throttle of the IdP-asserted address', async () => {
+    const { svc, throttle } = build({ userId: 'u1' });
+    await svc.resolveIdentityAndCreateSession(tokens, 'victim@other.example', 'workspace', { ip: null, userAgent: null }, false, true, 'org-acme-saml');
+    expect(throttle.reset).not.toHaveBeenCalled();
+  });
+
+  it('a native sign-in resets the email-code throttle', async () => {
+    const { svc, throttle } = build({ userId: 'u1' });
+    await svc.resolveIdentityAndCreateSession(tokens, 'a@example.com', 'workspace', { ip: null, userAgent: null }, false);
+    expect(throttle.reset).toHaveBeenCalledWith('a@example.com');
   });
 });

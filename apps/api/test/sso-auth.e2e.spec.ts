@@ -354,6 +354,18 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(rows.filter((r) => r.email === 'jovana@acme.example')).toHaveLength(1);
     });
 
+    it('surface=admin: start -> callback lands on ADMIN_URL with a session', async () => {
+      const { callback, location, start } = await federatedSignIn('jovana@acme.example', { surface: 'admin', returnPath: '/organizations' });
+      expect(start.status).toBe(302);
+      expect(location).toBe(`${ADMIN}/organizations`);
+      expect(sessionCookie(callback)).toBeDefined();
+    });
+
+    it('surface=admin: a denial lands on the admin sign-in page', async () => {
+      const { location } = await federatedSignIn('nobody-admin@acme.example', { surface: 'admin' });
+      expect(location).toBe(`${ADMIN}/sign-in?reason=sso_denied`);
+    });
+
     it('existing identity still signs in while the connection is SUSPENDED (Review Focus 4)', async () => {
       // Start while ACTIVE, suspend mid-flow, then complete.
       const agent = request.agent(app.getHttpServer());
@@ -522,11 +534,19 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   // -------------------------------------------------------------------------
 
   describe('review fixes', () => {
-    it('an OIDC assertion of an off-domain address (email_verified true) with a pending invitation binds nothing', async () => {
+    it('an OIDC assertion of an off-domain address (email_verified true) with a pending invitation binds nothing (neutral sso_denied)', async () => {
       const email = 'invited@othermail.com';
       const invitationId = await invite(email);
       const { callback, location } = await federatedSignIn(email);
-      expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_email_unverified&email=invited%40othermail.com`);
+      expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      const denied = await auditFor('identity.denied');
+      expect(
+        denied.some(
+          (e) =>
+            (e.details as { emailNormalised?: string; reason?: string }).emailNormalised === email &&
+            (e.details as { reason?: string }).reason === 'email_off_domain',
+        ),
+      ).toBe(true);
       expect(sessionCookie(callback)).toBeUndefined();
       const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
       expect(inv!.acceptedAt).toBeNull();

@@ -15,6 +15,8 @@ describe('ssoProblem', () => {
     [apiError(409, 'conflict'), 'create', 'conflictProviderName', 'slug'],
     [apiError(409, 'conflict'), 'addDomain', 'conflictDomain', 'domain'],
     [apiError(409, 'conflict'), 'update', 'conflict', null],
+    [apiError(409, 'conflict', { reason: 'provider_name_taken', field: 'slug' }), 'create', 'conflictProviderNameReserved', 'slug'],
+    [apiError(409, 'conflict', { reason: 'provider_name_taken', field: 'protocol' }), 'update', 'conflictProviderNameReserved', 'protocol'],
     [apiError(409, 'something_new'), 'update', 'conflict', null],
     [apiError(422, 'validation', { field: 'slug' }), 'create', 'fieldSlug', 'slug'],
     [apiError(422, 'validation', { field: 'slug', providerName: 'org-x-saml' }), 'create', 'fieldSlug', 'slug'],

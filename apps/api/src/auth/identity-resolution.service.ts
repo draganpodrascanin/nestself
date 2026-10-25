@@ -166,7 +166,11 @@ export class IdentityResolutionService {
         userAgent: meta.userAgent,
       });
 
-    await this.throttle.reset(email);
+    // Only a native sign-in consumed the email-code throttle. A federated one
+    // never did, and its address is the IdP's assertion, not checked against
+    // the connection's verified domains on this path: it must not reset the
+    // throttle of whatever address the IdP names.
+    if (!federatedProviderName) await this.throttle.reset(email);
 
     const principal: Principal = {
       userId: loaded.userId,

@@ -278,9 +278,11 @@ export class MaintenanceJobsService {
   /**
    * SSO signing-certificate expiry (3.4.10, nightly). For every ACTIVE
    * connection:
-   * - a SAML connection without a known `certificateExpiresAt` (a provider
-   *   registered from a metadata URL, for instance) is looked up with
-   *   `describeProvider`; an expiry the provider reports is stored;
+   * - a SAML connection without a known `certificateExpiresAt` is looked up
+   *   with `describeProvider`; an expiry the provider reports is stored. Only
+   *   a provider registered from metadata XML reports one: for a metadata-URL
+   *   provider Cognito returns the URL, not the file, so its expiry stays
+   *   unknown and it is looked up again every night (implementation.md 22.11);
    * - a certificate that expires within `SSO_CERTIFICATE_WARNING_DAYS`, or has
    *   already expired, is audited as `sso_connection.changed` with reason
    *   `certificate_expiring` (actor JOB, the connection's organization) and

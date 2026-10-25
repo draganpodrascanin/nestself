@@ -635,7 +635,9 @@
       "metadataXmlHint": "Hagyd üresen, ha a jelenlegi XML marad.",
       "defaultOrgUnitHint": "Hagyd üresen a törléséhez.",
       "submit": "Módosítások mentése",
-      "success": "A módosítások elmentve."
+      "success": "A módosítások elmentve.",
+      "activeWarning": "Ez a kapcsolat aktív. A szolgáltatói beállítások (metaadatok, kibocsátó, kliensazonosító vagy klienstitok) módosítása visszaviszi tesztelésre: a munkatársak nem jelentkezhetnek be ezen a kapcsolaton keresztül, amíg egy új tesztbejelentkezés sikeres nem lesz, és újra nem aktiválod.",
+      "backToTesting": "A módosítások elmentve. A kapcsolat újra tesztelés alatt áll: végezz tesztbejelentkezést, majd aktiváld újra."
     },
     "detail": {
       "title": "{{provider}} kapcsolat",
@@ -711,6 +713,7 @@
       "connectionStateActivate": "Aktiválás előtt végezz el egy próbabejelentkezést egy igazolt domainen.",
       "conflict": "Valaki időközben módosította ezt a kapcsolatot. A listát frissítettük.",
       "conflictProviderName": "Már létezik kapcsolat ezzel a szolgáltatónévvel. Válassz másik rövid azonosítót.",
+      "conflictProviderNameReserved": "Egy másik szervezet már használja ezt a rövid azonosítót az SSO-kapcsolatához. Válassz másik rövid azonosítót.",
       "conflictDomain": "Ez a domain már egy kapcsolathoz tartozik.",
       "validation": "Ellenőrizd a mezőket, és próbáld újra.",
       "idpRefused": "Az identitásszolgáltató elutasította ezt a beállítást. Ellenőrizd a metaadatokat vagy a kibocsátó és a kliens adatait.",

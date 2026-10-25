@@ -108,6 +108,13 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
     expect((await repo.updateConnection(acmeId, {}))?.id).toBe(acmeId);
   });
 
+  it('findConnectionsByProviderNames sees every organization in system context (slug reservation)', async () => {
+    const names = ['org-acme-saml', 'org-acme-oidc', 'org-other-oidc'];
+    expect((await repo.findConnectionsByProviderNames(names)).map((c) => c.id).sort()).toEqual([acmeId, otherId].sort());
+    expect(await repo.findConnectionsByProviderNames([])).toEqual([]);
+    expect(await repo.findConnectionsByProviderNames(['org-none-saml'])).toEqual([]);
+  });
+
   it('listActiveConnectionsWithCertificates returns ACTIVE connections with an expiry only', async () => {
     expect(await repo.listActiveConnectionsWithCertificates()).toEqual([]);
     await repo.updateConnection(acmeId, { certificateExpiresAt: new Date('2027-01-01T00:00:00Z') });
