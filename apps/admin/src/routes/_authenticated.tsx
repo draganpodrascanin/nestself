@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
@@ -43,12 +43,15 @@ function AuthenticatedLayout() {
   }
 
   const showAccess = can(principal, 'access.preview', undefined, effectiveActions);
+  // Convenience only: `GET /ops/emergency-access` enforces `audit.read`.
+  const showEmergency = can(principal, 'audit.read', undefined, effectiveActions);
 
   const navItems = [
     { to: '/' as const, icon: House, label: t('nav.overview') },
     { to: '/experts' as const, icon: Users, label: t('nav.experts') },
     { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
     ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
+    ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
     { to: '/content' as const, icon: Article, label: t('nav.content') },
     { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
     { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },

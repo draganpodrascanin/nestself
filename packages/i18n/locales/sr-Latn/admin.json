@@ -6,7 +6,8 @@
     "content": "Sadržaj",
     "eventRequests": "Zahtevi za događaje",
     "settings": "Podešavanja",
-    "access": "Pristup"
+    "access": "Pristup",
+    "emergency": "Hitan pristup"
   },
   "experts": {
     "title": "Stručnjaci",
@@ -455,6 +456,117 @@
       "forbidden": "Tvoj nalog nema dozvolu da suspenduje ili vrati ovog korisnika.",
       "validation": "Unesi razlog dužine od 3 do 500 znakova.",
       "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
+    }
+  },
+  "emergency": {
+    "title": "Hitan pristup",
+    "intro": "Vremenski ograničen pristup jednom slučaju ili zapisima jedne osobe, uz pisanu svrhu i odobrenje drugog člana osoblja.",
+    "sampleNote": "Primer: ovo su primer zapisi, a zahtevanje, odobravanje, odbijanje, opoziv i čitanje su isključeni. Ništa se ne kreira, ne menja i ne čita.",
+    "loading": "Učitavanje zapisa o hitnom pristupu…",
+    "empty": "Hitan pristup nije zatražen.",
+    "noMatch": "Nijedan zapis nema ovaj status.",
+    "filter": "Status",
+    "cancel": "Otkaži",
+    "purpose": "Svrha",
+    "you": "{{userId}} (ti)",
+    "notApproved": "Još nije odobreno",
+    "waiting": "Čeka se odobrenje drugog člana osoblja.",
+    "minutes": "{{minutes}} min",
+    "statuses": {
+      "all": "Svi",
+      "pending": "Na čekanju",
+      "active": "Aktivan",
+      "expired": "Istekao",
+      "revoked": "Opozvan"
+    },
+    "scopeKinds": {
+      "CASE": "Slučaj",
+      "USER_RECORDS": "Zapisi osobe"
+    },
+    "recordTypes": {
+      "conversation": "Razgovor",
+      "intake": "Prijemni upitnik"
+    },
+    "columns": {
+      "status": "Status",
+      "requester": "Zatražio",
+      "approver": "Odobrio",
+      "scope": "Obuhvat",
+      "purpose": "Svrha",
+      "expiry": "Ističe",
+      "actions": "Radnje"
+    },
+    "expiry": {
+      "pending": "{{minutes}} min od odobrenja",
+      "remaining": "Još {{hours}} h {{minutes}} min (do {{time}})",
+      "expired": "Isteklo {{time}}",
+      "revoked": "Opozvano {{time}}"
+    },
+    "request": {
+      "open": "Zatraži pristup",
+      "title": "Zatraži hitan pristup",
+      "description": "Zahtev mora da odobri drugi član osoblja. Period počinje od odobrenja.",
+      "purpose": "Svrha",
+      "purposeHint": "Zašto ti je potreban ovaj pristup, od 10 do 1000 znakova. Beleži se uz zahtev.",
+      "scopeKind": "Obuhvat",
+      "caseId": "ID slučaja",
+      "userId": "ID korisnika",
+      "duration": "Trajanje",
+      "durationHint": "Period se završava posle ovog vremena, najviše četiri sata.",
+      "submit": "Pošalji zahtev",
+      "success": "Hitan pristup je zatražen. Mora da ga odobri drugi član osoblja."
+    },
+    "approve": {
+      "open": "Odobri",
+      "title": "Odobriti ovaj hitan pristup?",
+      "description": "Korisnik {{requester}} dobija pristup ({{scope}} {{scopeId}}) od sada do kraja perioda.",
+      "confirm": "Odobri",
+      "success": "Hitan pristup je odobren."
+    },
+    "deny": {
+      "open": "Odbij",
+      "title": "Odbiti ovaj zahtev?",
+      "description": "Zahtev korisnika {{requester}} ({{scope}} {{scopeId}}) se uklanja.",
+      "confirm": "Odbij zahtev",
+      "success": "Zahtev je odbijen."
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "title": "Opozvati ovaj hitan pristup?",
+      "description": "Korisnik {{requester}} odmah gubi pristup ({{scope}} {{scopeId}}).",
+      "confirm": "Opozovi pristup",
+      "success": "Hitan pristup je opozvan."
+    },
+    "record": {
+      "open": "Otvori zapis",
+      "title": "Čitanje zapisa uz hitan pristup",
+      "description": "U okviru: {{scope}} {{scopeId}}. Jedan po jedan zapis, samo za čitanje.",
+      "auditedTitle": "Ovaj pristup se beleži",
+      "audited": "Svako čitanje ovde se beleži i pripisuje tebi.",
+      "recordType": "Vrsta zapisa",
+      "recordId": "ID zapisa",
+      "submit": "Pročitaj zapis",
+      "contentLabel": "Sadržaj zapisa",
+      "conversationHeading": "Razgovor {{id}}",
+      "intakeHeading": "Prijemni upitnik {{id}}",
+      "caseLine": "Slučaj {{caseId}}",
+      "intakeMeta": "Slučaj {{caseId}}, napisano {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "Ovaj razgovor nema poruka."
+    },
+    "errors": {
+      "loadTitle": "Hitan pristup nije moguće učitati",
+      "selfApprovalDenied": "Ne možeš da odobriš sopstveni zahtev. Zamoli drugog člana osoblja.",
+      "notActive": "Ovaj hitan pristup nije aktivan ili je zapis van njegovog obuhvata.",
+      "conflict": "Ovaj zahtev više nije na čekanju. Lista je osvežena.",
+      "notFound": "Ništa nije pronađeno sa ovim ID-jem.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo.",
+      "validation": "Proveri svrhu, obuhvat i trajanje pa pokušaj ponovo.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "purposeLength": "Napiši svrhu dužine od 10 do 1000 znakova.",
+      "scopeIdRequired": "Unesi ID slučaja ili osobe.",
+      "recordIdRequired": "Unesi ID zapisa.",
       "unknown": "Nešto nije u redu. Pokušaj ponovo."
     }
   }

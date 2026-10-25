@@ -6,7 +6,8 @@
     "content": "Tartalom",
     "eventRequests": "Eseményigények",
     "settings": "Beállítások",
-    "access": "Hozzáférés"
+    "access": "Hozzáférés",
+    "emergency": "Vészhelyzeti hozzáférés"
   },
   "experts": {
     "title": "Szakértők",
@@ -451,6 +452,117 @@
       "forbidden": "A fiókod nem függesztheti fel és nem oldhatja fel ezt a felhasználót.",
       "validation": "Adj meg 3–500 karakter hosszú indoklást.",
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra."
+    }
+  },
+  "emergency": {
+    "title": "Vészhelyzeti hozzáférés",
+    "intro": "Időben korlátozott hozzáférés egy esethez vagy egy személy adataihoz, írásos céllal, egy második munkatárs jóváhagyásával.",
+    "sampleNote": "Mintamód: ezek mintarekordok, a kérés, jóváhagyás, elutasítás, visszavonás és olvasás ki van kapcsolva. Semmi nem jön létre, nem változik, és senki nem olvas semmit.",
+    "loading": "Vészhelyzeti hozzáférések betöltése…",
+    "empty": "Még senki nem kért vészhelyzeti hozzáférést.",
+    "noMatch": "Egyik rekord sem ilyen állapotú.",
+    "filter": "Állapot",
+    "cancel": "Mégse",
+    "purpose": "Cél",
+    "you": "{{userId}} (te)",
+    "notApproved": "Még nincs jóváhagyva",
+    "waiting": "Egy másik munkatárs jóváhagyására vár.",
+    "minutes": "{{minutes}} perc",
+    "statuses": {
+      "all": "Összes",
+      "pending": "Függőben",
+      "active": "Aktív",
+      "expired": "Lejárt",
+      "revoked": "Visszavonva"
+    },
+    "scopeKinds": {
+      "CASE": "Eset",
+      "USER_RECORDS": "Személy adatai"
+    },
+    "recordTypes": {
+      "conversation": "Beszélgetés",
+      "intake": "Felvételi lap"
+    },
+    "columns": {
+      "status": "Állapot",
+      "requester": "Kérte",
+      "approver": "Jóváhagyta",
+      "scope": "Hatókör",
+      "purpose": "Cél",
+      "expiry": "Lejárat",
+      "actions": "Műveletek"
+    },
+    "expiry": {
+      "pending": "{{minutes}} perc a jóváhagyástól",
+      "remaining": "Még {{hours}} óra {{minutes}} perc ({{time}}-ig)",
+      "expired": "Lejárt: {{time}}",
+      "revoked": "Visszavonva: {{time}}"
+    },
+    "request": {
+      "open": "Hozzáférés kérése",
+      "title": "Vészhelyzeti hozzáférés kérése",
+      "description": "A kérést egy második munkatársnak jóvá kell hagynia. Az időszak a jóváhagyással kezdődik.",
+      "purpose": "Cél",
+      "purposeHint": "Miért van szükséged erre a hozzáférésre, 10–1000 karakterben. A kéréssel együtt rögzítjük.",
+      "scopeKind": "Hatókör",
+      "caseId": "Esetazonosító",
+      "userId": "Felhasználóazonosító",
+      "duration": "Időtartam",
+      "durationHint": "Az időszak ennyi idő után véget ér, legfeljebb négy óra.",
+      "submit": "Kérés elküldése",
+      "success": "Vészhelyzeti hozzáférés kérve. Egy másik munkatársnak jóvá kell hagynia."
+    },
+    "approve": {
+      "open": "Jóváhagyás",
+      "title": "Jóváhagyod ezt a vészhelyzeti hozzáférést?",
+      "description": "{{requester}} mostantól az időszak végéig hozzáfér ehhez: {{scope}} {{scopeId}}.",
+      "confirm": "Jóváhagyás",
+      "success": "Vészhelyzeti hozzáférés jóváhagyva."
+    },
+    "deny": {
+      "open": "Elutasítás",
+      "title": "Elutasítod ezt a kérést?",
+      "description": "{{requester}} kérése ({{scope}} {{scopeId}}) törlődik.",
+      "confirm": "Kérés elutasítása",
+      "success": "Kérés elutasítva."
+    },
+    "revoke": {
+      "open": "Visszavonás",
+      "title": "Visszavonod ezt a vészhelyzeti hozzáférést?",
+      "description": "{{requester}} azonnal elveszíti a hozzáférést ehhez: {{scope}} {{scopeId}}.",
+      "confirm": "Hozzáférés visszavonása",
+      "success": "Vészhelyzeti hozzáférés visszavonva."
+    },
+    "record": {
+      "open": "Rekord megnyitása",
+      "title": "Rekord olvasása vészhelyzeti hozzáféréssel",
+      "description": "Hatókör: {{scope}} {{scopeId}}. Egyszerre egy rekord, csak olvasásra.",
+      "auditedTitle": "Ez a hozzáférés naplózott",
+      "audited": "Minden itteni olvasást naplózunk, és a nevedhez rendelünk.",
+      "recordType": "Rekordtípus",
+      "recordId": "Rekordazonosító",
+      "submit": "Rekord olvasása",
+      "contentLabel": "Rekord tartalma",
+      "conversationHeading": "Beszélgetés: {{id}}",
+      "intakeHeading": "Felvételi lap: {{id}}",
+      "caseLine": "Eset: {{caseId}}",
+      "intakeMeta": "Eset: {{caseId}}, írva: {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "Ebben a beszélgetésben nincs üzenet."
+    },
+    "errors": {
+      "loadTitle": "A vészhelyzeti hozzáférések nem tölthetők be",
+      "selfApprovalDenied": "A saját kérésedet nem hagyhatod jóvá. Kérj meg egy másik munkatársat.",
+      "notActive": "Ez a vészhelyzeti hozzáférés nem aktív, vagy a rekord kívül esik a hatókörén.",
+      "conflict": "Ez a kérés már nincs függőben. A listát frissítettük.",
+      "notFound": "Ezzel az azonosítóval nem található semmi.",
+      "forbidden": "A fiókod ezt nem teheti meg.",
+      "validation": "Ellenőrizd a célt, a hatókört és az időtartamot, majd próbáld újra.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "purposeLength": "Adj meg 10–1000 karakter hosszú célt.",
+      "scopeIdRequired": "Add meg az eset vagy a személy azonosítóját.",
+      "recordIdRequired": "Add meg a rekord azonosítóját.",
       "unknown": "Valami hiba történt. Próbáld újra."
     }
   }

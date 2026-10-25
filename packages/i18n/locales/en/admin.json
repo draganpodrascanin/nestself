@@ -6,7 +6,8 @@
     "content": "Content",
     "eventRequests": "Event requests",
     "settings": "Settings",
-    "access": "Access"
+    "access": "Access",
+    "emergency": "Emergency access"
   },
   "experts": {
     "title": "Experts",
@@ -455,6 +456,117 @@
       "forbidden": "Your account is not allowed to suspend or reinstate this user.",
       "validation": "Enter a reason between 3 and 500 characters.",
       "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again."
+    }
+  },
+  "emergency": {
+    "title": "Emergency access",
+    "intro": "Time-limited access to one case or one person's records, requested with a written purpose and approved by a second staff member.",
+    "sampleNote": "Sample mode: these are sample records, and requesting, approving, denying, revoking and reading are turned off. Nothing is created, changed or read.",
+    "loading": "Loading emergency access records…",
+    "empty": "No emergency access has been requested.",
+    "noMatch": "No record has this status.",
+    "filter": "Status",
+    "cancel": "Cancel",
+    "purpose": "Purpose",
+    "you": "{{userId}} (you)",
+    "notApproved": "Not approved yet",
+    "waiting": "Waiting for another staff member to approve.",
+    "minutes": "{{minutes}} min",
+    "statuses": {
+      "all": "All",
+      "pending": "Pending",
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "scopeKinds": {
+      "CASE": "Case",
+      "USER_RECORDS": "Person's records"
+    },
+    "recordTypes": {
+      "conversation": "Conversation",
+      "intake": "Intake"
+    },
+    "columns": {
+      "status": "Status",
+      "requester": "Requested by",
+      "approver": "Approved by",
+      "scope": "Scope",
+      "purpose": "Purpose",
+      "expiry": "Expiry",
+      "actions": "Actions"
+    },
+    "expiry": {
+      "pending": "{{minutes}} min from approval",
+      "remaining": "{{hours}} h {{minutes}} min left (until {{time}})",
+      "expired": "Expired {{time}}",
+      "revoked": "Revoked {{time}}"
+    },
+    "request": {
+      "open": "Request access",
+      "title": "Request emergency access",
+      "description": "A second staff member has to approve the request. The window starts when it is approved.",
+      "purpose": "Purpose",
+      "purposeHint": "Why you need this access, in 10 to 1000 characters. It is recorded with the request.",
+      "scopeKind": "Scope",
+      "caseId": "Case ID",
+      "userId": "User ID",
+      "duration": "Duration",
+      "durationHint": "The window ends after this time, four hours at most.",
+      "submit": "Send request",
+      "success": "Emergency access requested. Another staff member has to approve it."
+    },
+    "approve": {
+      "open": "Approve",
+      "title": "Approve this emergency access?",
+      "description": "{{requester}} gets access to {{scope}} {{scopeId}} from now until the window ends.",
+      "confirm": "Approve",
+      "success": "Emergency access approved."
+    },
+    "deny": {
+      "open": "Deny",
+      "title": "Deny this request?",
+      "description": "The request by {{requester}} for {{scope}} {{scopeId}} is removed.",
+      "confirm": "Deny request",
+      "success": "Request denied."
+    },
+    "revoke": {
+      "open": "Revoke",
+      "title": "Revoke this emergency access?",
+      "description": "{{requester}} loses access to {{scope}} {{scopeId}} now.",
+      "confirm": "Revoke access",
+      "success": "Emergency access revoked."
+    },
+    "record": {
+      "open": "Open record",
+      "title": "Read a record under emergency access",
+      "description": "Within {{scope}} {{scopeId}}. One record at a time, read-only.",
+      "auditedTitle": "This access is audited",
+      "audited": "Every read here is audited and attributed to you.",
+      "recordType": "Record type",
+      "recordId": "Record ID",
+      "submit": "Read record",
+      "contentLabel": "Record content",
+      "conversationHeading": "Conversation {{id}}",
+      "intakeHeading": "Intake {{id}}",
+      "caseLine": "Case {{caseId}}",
+      "intakeMeta": "Case {{caseId}}, written {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "This conversation has no messages."
+    },
+    "errors": {
+      "loadTitle": "Emergency access could not be loaded",
+      "selfApprovalDenied": "You cannot approve your own request. Ask another staff member.",
+      "notActive": "This emergency access is not active, or the record is outside its scope.",
+      "conflict": "This request is no longer pending. The list has been refreshed.",
+      "notFound": "Nothing was found with this ID.",
+      "forbidden": "Your account is not allowed to do this.",
+      "validation": "Check the purpose, scope and duration and try again.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "purposeLength": "Write a purpose between 10 and 1000 characters.",
+      "scopeIdRequired": "Enter the ID of the case or person.",
+      "recordIdRequired": "Enter the record ID.",
       "unknown": "Something went wrong. Try again."
     }
   }

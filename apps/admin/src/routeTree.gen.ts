@@ -18,6 +18,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as AuthenticatedAccessIndexRouteImport } from './routes/_authenticated/access/index'
+import { Route as AuthenticatedEmergencyIndexRouteImport } from './routes/_authenticated/emergency/index'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
@@ -70,6 +71,12 @@ const AuthenticatedAccessIndexRoute =
   AuthenticatedAccessIndexRouteImport.update({
     id: '/access/',
     path: '/access/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedEmergencyIndexRoute =
+  AuthenticatedEmergencyIndexRouteImport.update({
+    id: '/emergency/',
+    path: '/emergency/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedExpertsIndexRoute =
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access/': typeof AuthenticatedAccessIndexRoute
+  '/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access': typeof AuthenticatedAccessIndexRoute
+  '/emergency': typeof AuthenticatedEmergencyIndexRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
@@ -167,6 +176,7 @@ export interface FileRoutesById {
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/access/': typeof AuthenticatedAccessIndexRoute
+  '/_authenticated/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/organizations/$orgId'
     | '/invite/$token'
     | '/access/'
+    | '/emergency/'
     | '/experts/'
     | '/organizations/'
     | '/organizations/$orgId/access'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/experts/$expertId'
     | '/invite/$token'
     | '/access'
+    | '/emergency'
     | '/experts'
     | '/organizations'
     | '/organizations/$orgId/access'
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/organizations/$orgId'
     | '/_public/invite/$token'
     | '/_authenticated/access/'
+    | '/_authenticated/emergency/'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
     | '/_authenticated/organizations/$orgId/access'
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/access'
       fullPath: '/access/'
       preLoaderRoute: typeof AuthenticatedAccessIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/emergency/': {
+      id: '/_authenticated/emergency/'
+      path: '/emergency'
+      fullPath: '/emergency/'
+      preLoaderRoute: typeof AuthenticatedEmergencyIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/experts/': {
@@ -386,6 +406,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
   AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
+  AuthenticatedEmergencyIndexRoute: typeof AuthenticatedEmergencyIndexRoute
   AuthenticatedExpertsIndexRoute: typeof AuthenticatedExpertsIndexRoute
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
 }
@@ -399,6 +420,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOrganizationsOrgIdRoute:
     AuthenticatedOrganizationsOrgIdRouteWithChildren,
   AuthenticatedAccessIndexRoute: AuthenticatedAccessIndexRoute,
+  AuthenticatedEmergencyIndexRoute: AuthenticatedEmergencyIndexRoute,
   AuthenticatedExpertsIndexRoute: AuthenticatedExpertsIndexRoute,
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
 }
