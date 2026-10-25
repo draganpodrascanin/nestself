@@ -9,6 +9,12 @@
  * @see D-12, 3.4 Enterprise SSO
  */
 import type { Jwks } from 'aws-jwt-verify/jwk';
+import {
+  FetchError,
+  JwksNotAvailableInCacheError,
+  JwksValidationError,
+  JwtBaseError,
+} from 'aws-jwt-verify/error';
 import type {
   CognitoIdentityProviderClient,
   UserPoolClientType,
@@ -121,6 +127,35 @@ function attributeMapping(input: ProviderInput): Record<string, string> {
   return { ...defaults, ...input.attributeMapping };
 }
 
+function isNotFound(err: unknown): boolean {
+  return (err as { name?: string } | null)?.name === 'ResourceNotFoundException';
+}
+
+/**
+ * An SDK call on the identity provider itself: `ResourceNotFoundException`
+ * means the provider is missing (`provider_not_found`). Mapped here, not in
+ * the global error map, because elsewhere it means a missing pool or client.
+ */
+async function providerCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (isNotFound(err)) {
+      throw new IdentityProviderError('Identity provider not found', 'provider_not_found');
+    }
+    mapCognitoError(err);
+  }
+}
+
+/** An SDK call on the pool or an app client: a missing client is a deployment fault (`unavailable`). */
+async function poolCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    mapCognitoError(err);
+  }
+}
+
 /**
  * Cognito needs the OIDC client secret on every update. When the caller does
  * not pass a new one (it is write-only and NestSelf does not store it), keep
@@ -131,11 +166,13 @@ async function withExistingOidcSecret(
   input: ProviderInput,
 ): Promise<ProviderInput> {
   if (input.protocol !== 'OIDC' || input.oidcClientSecret) return input;
-  const res = await cfg.client.send(
-    new DescribeIdentityProviderCommand({
-      UserPoolId: cfg.userPoolId,
-      ProviderName: input.name,
-    }),
+  const res = await providerCall(() =>
+    cfg.client.send(
+      new DescribeIdentityProviderCommand({
+        UserPoolId: cfg.userPoolId,
+        ProviderName: input.name,
+      }),
+    ),
   );
   const secret = res.IdentityProvider?.ProviderDetails?.['client_secret'];
   return secret ? { ...input, oidcClientSecret: secret } : input;
@@ -145,58 +182,59 @@ export async function cognitoCreateProvider(
   cfg: CognitoSsoConfig,
   input: ProviderInput,
 ): Promise<void> {
-  try {
-    await cfg.client.send(
+  const details = providerDetails(input);
+  // DuplicateProviderException -> provider_exists (global map).
+  await poolCall(() =>
+    cfg.client.send(
       new CreateIdentityProviderCommand({
         UserPoolId: cfg.userPoolId,
         ProviderName: input.name,
         ProviderType: input.protocol,
-        ProviderDetails: providerDetails(input),
+        ProviderDetails: details,
         AttributeMapping: attributeMapping(input),
       }),
-    );
-    await setProviderOnClients(cfg, input.name, true);
-  } catch (err) {
-    if (err instanceof IdentityProviderError) throw err;
-    mapCognitoError(err);
-  }
+    ),
+  );
+  await setProviderOnClients(cfg, input.name, true);
 }
 
 export async function cognitoUpdateProvider(
   cfg: CognitoSsoConfig,
   input: ProviderInput,
 ): Promise<void> {
-  try {
-    const complete = await withExistingOidcSecret(cfg, input);
-    await cfg.client.send(
+  const complete = await withExistingOidcSecret(cfg, input);
+  const details = providerDetails(complete);
+  await providerCall(() =>
+    cfg.client.send(
       new UpdateIdentityProviderCommand({
         UserPoolId: cfg.userPoolId,
         ProviderName: input.name,
-        ProviderDetails: providerDetails(complete),
+        ProviderDetails: details,
         AttributeMapping: attributeMapping(complete),
       }),
-    );
-    // Idempotent: repairs a client that lost the provider.
-    await setProviderOnClients(cfg, input.name, true);
-  } catch (err) {
-    if (err instanceof IdentityProviderError) throw err;
-    mapCognitoError(err);
-  }
+    ),
+  );
+  // Idempotent: repairs a client that lost the provider.
+  await setProviderOnClients(cfg, input.name, true);
 }
 
 export async function cognitoDeleteProvider(
   cfg: CognitoSsoConfig,
   name: string,
 ): Promise<void> {
+  // Clients first: Cognito refuses to delete a provider a client still lists.
+  // A missing app client fails here (unavailable); it is not swallowed.
+  await setProviderOnClients(cfg, name, false);
   try {
-    // Clients first: Cognito refuses to delete a provider a client still lists.
-    await setProviderOnClients(cfg, name, false);
-    await cfg.client.send(
-      new DeleteIdentityProviderCommand({ UserPoolId: cfg.userPoolId, ProviderName: name }),
+    await providerCall(() =>
+      cfg.client.send(
+        new DeleteIdentityProviderCommand({ UserPoolId: cfg.userPoolId, ProviderName: name }),
+      ),
     );
   } catch (err) {
-    if ((err as { name?: string } | null)?.name === 'ResourceNotFoundException') return;
-    mapCognitoError(err);
+    // Already gone: deleting is idempotent.
+    if (err instanceof IdentityProviderError && err.code === 'provider_not_found') return;
+    throw err;
   }
 }
 
@@ -204,47 +242,48 @@ export async function cognitoDescribeProvider(
   cfg: CognitoSsoConfig,
   name: string,
 ): Promise<ProviderInfo | null> {
+  let res;
   try {
-    const res = await cfg.client.send(
-      new DescribeIdentityProviderCommand({ UserPoolId: cfg.userPoolId, ProviderName: name }),
+    res = await providerCall(() =>
+      cfg.client.send(
+        new DescribeIdentityProviderCommand({ UserPoolId: cfg.userPoolId, ProviderName: name }),
+      ),
     );
-    const idp = res.IdentityProvider;
-    if (!idp) return null;
-    const protocol = idp.ProviderType === 'SAML' ? 'SAML' : 'OIDC';
-    return {
-      name: idp.ProviderName ?? name,
-      protocol,
-      certificateExpiresAt:
-        protocol === 'SAML'
-          ? certificateExpiryFromMetadata(idp.ProviderDetails?.['MetadataFile'])
-          : null,
-    };
   } catch (err) {
-    if ((err as { name?: string } | null)?.name === 'ResourceNotFoundException') return null;
-    mapCognitoError(err);
+    if (err instanceof IdentityProviderError && err.code === 'provider_not_found') return null;
+    throw err;
   }
+  const idp = res.IdentityProvider;
+  if (!idp) return null;
+  const protocol = idp.ProviderType === 'SAML' ? 'SAML' : 'OIDC';
+  return {
+    name: idp.ProviderName ?? name,
+    protocol,
+    certificateExpiresAt:
+      protocol === 'SAML'
+        ? certificateExpiryFromMetadata(idp.ProviderDetails?.['MetadataFile'])
+        : null,
+  };
 }
 
 export async function cognitoListProviders(cfg: CognitoSsoConfig): Promise<string[]> {
   const names: string[] = [];
   let nextToken: string | undefined;
-  try {
-    do {
-      const res = await cfg.client.send(
+  do {
+    const res = await poolCall(() =>
+      cfg.client.send(
         new ListIdentityProvidersCommand({
           UserPoolId: cfg.userPoolId,
           MaxResults: 60,
           NextToken: nextToken,
         }),
-      );
-      for (const p of res.Providers ?? []) {
-        if (p.ProviderName) names.push(p.ProviderName);
-      }
-      nextToken = res.NextToken ?? undefined;
-    } while (nextToken);
-  } catch (err) {
-    mapCognitoError(err);
-  }
+      ),
+    );
+    for (const p of res.Providers ?? []) {
+      if (p.ProviderName) names.push(p.ProviderName);
+    }
+    nextToken = res.NextToken ?? undefined;
+  } while (nextToken);
   return names;
 }
 
@@ -287,8 +326,10 @@ async function setProviderOnClient(
   providerName: string,
   present: boolean,
 ): Promise<void> {
-  const res = await cfg.client.send(
-    new DescribeUserPoolClientCommand({ UserPoolId: cfg.userPoolId, ClientId: clientId }),
+  const res = await poolCall(() =>
+    cfg.client.send(
+      new DescribeUserPoolClientCommand({ UserPoolId: cfg.userPoolId, ClientId: clientId }),
+    ),
   );
   const client = res.UserPoolClient;
   if (!client) {
@@ -301,13 +342,15 @@ async function setProviderOnClient(
     next.length === current.length && next.every((p) => current.includes(p));
   if (unchanged) return;
 
-  await cfg.client.send(
-    new UpdateUserPoolClientCommand({
-      ...updatableClientFields(client),
-      UserPoolId: cfg.userPoolId,
-      ClientId: clientId,
-      SupportedIdentityProviders: next,
-    }),
+  await poolCall(() =>
+    cfg.client.send(
+      new UpdateUserPoolClientCommand({
+        ...updatableClientFields(client),
+        UserPoolId: cfg.userPoolId,
+        ClientId: clientId,
+        SupportedIdentityProviders: next,
+      }),
+    ),
   );
 }
 
@@ -388,6 +431,27 @@ export function toIdTokenClaims(claims: Record<string, unknown>): IdTokenClaims 
   };
 }
 
+/** Abort the token request after this long; the caller sees `unavailable` (retryable). */
+export const TOKEN_ENDPOINT_TIMEOUT_MS = 10_000;
+
+/**
+ * A JWKS that could not be fetched or is not cached is our outage
+ * (`unavailable`, retryable); a token whose signature or claims fail is
+ * the caller's (`not_authorized`). Errors outside aws-jwt-verify (network,
+ * module load) are outages too.
+ */
+export function classifyIdTokenError(err: unknown): IdentityProviderError {
+  if (err instanceof IdentityProviderError) return err;
+  const outage =
+    err instanceof FetchError ||
+    err instanceof JwksNotAvailableInCacheError ||
+    err instanceof JwksValidationError ||
+    !(err instanceof JwtBaseError);
+  return outage
+    ? new IdentityProviderError('Pool signing keys unavailable', 'unavailable', true)
+    : new IdentityProviderError('ID token failed verification', 'not_authorized');
+}
+
 interface TokenEndpointResponse {
   access_token?: string;
   id_token?: string;
@@ -405,6 +469,7 @@ export async function cognitoExchangeAuthorizationCode(
   try {
     res = await cfg.fetch(`${cfg.domain}/oauth2/token`, {
       method: 'POST',
+      signal: AbortSignal.timeout(TOKEN_ENDPOINT_TIMEOUT_MS),
       headers: {
         Authorization: `Basic ${basic}`,
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -419,6 +484,7 @@ export async function cognitoExchangeAuthorizationCode(
       }).toString(),
     });
   } catch {
+    // Network failure, or the timeout aborted the request (AbortError / TimeoutError).
     throw new IdentityProviderError('Token endpoint unreachable', 'unavailable', true);
   }
 
@@ -447,8 +513,8 @@ export async function cognitoExchangeAuthorizationCode(
   try {
     const verifier = await cfg.idTokenVerifier();
     claims = await verifier.verify(body.id_token);
-  } catch {
-    throw new IdentityProviderError('ID token failed verification', 'not_authorized');
+  } catch (err) {
+    throw classifyIdTokenError(err);
   }
 
   return {

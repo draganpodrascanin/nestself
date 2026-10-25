@@ -57,6 +57,8 @@ vi.mock('@aws-sdk/client-cognito-identity-provider', () => {
 });
 
 const { CognitoIdentityProvider } = await import('./cognito-identity-provider.js');
+const { classifyIdTokenError, TOKEN_ENDPOINT_TIMEOUT_MS } = await import('./cognito-sso-ops.js');
+const jwtErrors = await import('aws-jwt-verify/error');
 
 const REGION = 'eu-central-1';
 const POOL_ID = 'eu-central-1_TEST';
@@ -306,6 +308,14 @@ describe('CognitoIdentityProvider: enterprise SSO', () => {
       ).rejects.toMatchObject({ code: 'provider_exists' });
     });
 
+    it('reports a missing app client after creation as unavailable, not provider_not_found', async () => {
+      const err = Object.assign(new Error('client gone'), { name: 'ResourceNotFoundException' });
+      routeSdk({}, { DescribeUserPoolClientCommand: () => Promise.reject(err) });
+      await expect(
+        provider.createProvider({ name: 'p', protocol: 'SAML', metadataUrl: 'https://m.example', attributeMapping: {} }),
+      ).rejects.toMatchObject({ code: 'unavailable' });
+    });
+
     it('refuses an OIDC provider without a client secret before calling Cognito', async () => {
       routeSdk({});
       await expect(
@@ -368,6 +378,13 @@ describe('CognitoIdentityProvider: enterprise SSO', () => {
       expect(names.indexOf('UpdateUserPoolClientCommand')).toBeLessThan(names.indexOf('DeleteIdentityProviderCommand'));
       expect(clients[WEB_CLIENT]).toEqual(['COGNITO']);
       expect(clients[MOBILE_CLIENT]).toEqual(['COGNITO', 'org-other-oidc']);
+    });
+
+    it('does not swallow a missing app client: fails unavailable and deletes nothing', async () => {
+      const err = Object.assign(new Error('client gone'), { name: 'ResourceNotFoundException' });
+      routeSdk({}, { DescribeUserPoolClientCommand: () => Promise.reject(err) });
+      await expect(provider.deleteProvider('org-acme-saml')).rejects.toMatchObject({ code: 'unavailable' });
+      expect(sentCommands().map((c) => c.name)).not.toContain('DeleteIdentityProviderCommand');
     });
 
     it('is idempotent when the provider is already gone', async () => {
@@ -469,6 +486,20 @@ describe('CognitoIdentityProvider: enterprise SSO', () => {
       expect(result.refreshToken).toBeNull();
     });
 
+    it('aborts the token request after the timeout and reports it as retryable unavailable', async () => {
+      fetchMock.mockImplementationOnce(async (_url, init) => {
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        throw new DOMException('The operation timed out.', 'TimeoutError');
+      });
+      await expect(provider.exchangeAuthorizationCode(input)).rejects.toMatchObject({
+        code: 'unavailable',
+        retryable: true,
+      });
+      fetchMock.mockRejectedValueOnce(new DOMException('This operation was aborted', 'AbortError'));
+      await expect(provider.exchangeAuthorizationCode(input)).rejects.toMatchObject({ code: 'unavailable' });
+      expect(TOKEN_ENDPOINT_TIMEOUT_MS).toBe(10_000);
+    });
+
     it('maps invalid_grant to invalid_code', async () => {
       fetchMock.mockResolvedValueOnce(tokenResponse(400, { error: 'invalid_grant' }));
       await expect(provider.exchangeAuthorizationCode(input)).rejects.toMatchObject({ code: 'invalid_code' });
@@ -493,5 +524,25 @@ describe('CognitoIdentityProvider: enterprise SSO', () => {
       fetchMock.mockResolvedValueOnce(tokenResponse(200, { access_token: 'at', id_token: makeToken() }));
       await expect(provider.exchangeAuthorizationCode(input)).rejects.toMatchObject({ code: 'not_authorized' });
     });
+  });
+});
+
+describe('classifyIdTokenError', () => {
+  it.each([
+    ['a JWKS missing from the cache', new jwtErrors.JwksNotAvailableInCacheError('not cached')],
+    ['a JWKS fetch failure', new jwtErrors.FetchError('https://cognito-idp.example/jwks.json', 'ECONNRESET')],
+    ['a non-retryable JWKS fetch failure', new jwtErrors.NonRetryableFetchError('https://cognito-idp.example/jwks.json', '404')],
+    ['a malformed JWKS', new jwtErrors.JwksValidationError('bad jwks')],
+    ['a network error outside the library', new TypeError('fetch failed')],
+  ])('treats %s as a retryable outage', (_label, err) => {
+    expect(classifyIdTokenError(err)).toMatchObject({ code: 'unavailable', retryable: true });
+  });
+
+  it.each([
+    ['an invalid signature', new jwtErrors.JwtInvalidSignatureError('bad sig')],
+    ['an unparsable token', new jwtErrors.JwtParseError('bad jwt')],
+    ['an unknown kid', new jwtErrors.KidNotFoundInJwksError('no kid')],
+  ])('treats %s as not_authorized', (_label, err) => {
+    expect(classifyIdTokenError(err)).toMatchObject({ code: 'not_authorized' });
   });
 });

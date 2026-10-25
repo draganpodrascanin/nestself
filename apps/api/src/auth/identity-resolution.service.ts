@@ -278,6 +278,16 @@ export class IdentityResolutionService {
           status: 409, code: 'totp_already_enrolled',
           message: 'TOTP is already enrolled',
         });
+      case 'provider_exists':
+        return new ApiHttpException({
+          status: 409, code: 'conflict',
+          message: 'An identity provider with this name already exists',
+        });
+      case 'provider_not_found':
+        return new ApiHttpException({
+          status: 404, code: 'not_found',
+          message: 'Identity provider not found',
+        });
       case 'unavailable':
         return new ApiHttpException({
           status: 503, code: 'unavailable',

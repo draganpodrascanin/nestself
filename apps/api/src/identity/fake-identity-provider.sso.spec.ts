@@ -158,6 +158,14 @@ describe('FakeIdentityProvider: enterprise SSO', () => {
       ).rejects.toMatchObject({ code: 'invalid_code' });
     });
 
+    it('refuses to redeem a code whose provider was deleted meanwhile', async () => {
+      const code = idp.issueAuthorizationCode(SAML.name, 'ana-nameid', s256(VERIFIER));
+      await idp.deleteProvider(SAML.name);
+      await expect(
+        idp.exchangeAuthorizationCode({ code, codeVerifier: VERIFIER, redirectUri: REDIRECT }),
+      ).rejects.toMatchObject({ code: 'invalid_code' });
+    });
+
     it('refuses to issue a code for an unregistered provider or an unseeded subject', () => {
       expect(() => idp.issueAuthorizationCode('org-none-saml', 'ana-nameid', 'c')).toThrow(
         expect.objectContaining({ code: 'provider_not_found' }),

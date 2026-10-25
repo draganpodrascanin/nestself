@@ -182,6 +182,8 @@ export class FakeSsoStore {
     this.codes.delete(input.code);
     const invalid = () => new IdentityProviderError('Invalid authorization code', 'invalid_code');
     if (!entry || entry.expiresAt < Date.now()) throw invalid();
+    // Cognito no longer federates through a provider that was deleted meanwhile.
+    if (!this.providers.has(entry.providerName)) throw invalid();
     if (!sameString(s256(input.codeVerifier), entry.codeChallenge)) throw invalid();
     if (entry.redirectUri !== null && entry.redirectUri !== input.redirectUri) throw invalid();
     const user = this.findFederatedUser(entry.providerName, entry.subject);
