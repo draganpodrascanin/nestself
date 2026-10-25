@@ -10,8 +10,9 @@
  * POST   /api/ops/cms/revisions/:revisionId/submit  -- submit for review
  * POST   /api/ops/cms/revisions/:revisionId/approve -- approve
  * POST   /api/ops/cms/publications                  -- publish now
- * GET    /api/ops/cms/media/:assetId                -- media detail
- * GET    /api/ops/cms/media/:assetId/:kind          -- media preview
+ *
+ * Media routes (GET /media/:assetId, GET /media/:assetId/:rendition) live
+ * in MediaOpsController to avoid duplication.
  *
  * Authorization: every route uses @Authorize() with engine-backed resolvers
  * from cms-resolvers.ts. Item routes use denyAs: 'not_found' (ACC-R-22/23).
@@ -27,6 +28,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
 
@@ -46,6 +48,7 @@ import {
   type PublicationCreateRequest,
   ResourceListQuerySchema,
   type ResourceListQuery,
+  ReviewDecisionRequestSchema,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
@@ -72,9 +75,10 @@ const ETAG_RE = /^"(\d+)"$/;
 function parseIfMatch(header: string | undefined): number {
   if (!header) {
     throw new ApiHttpException({
-      status: 428,
-      code: 'content_missing_required',
+      status: 400,
+      code: 'validation',
       message: 'If-Match header is required for revision updates',
+      details: { header: 'If-Match' },
     });
   }
   const m = ETAG_RE.exec(header);
@@ -116,23 +120,30 @@ export class CmsController {
   async listResources(
     @Query(new ZodValidationPipe(ResourceListQuerySchema)) query: ResourceListQuery,
     @CurrentPrincipal() principal: Principal,
+    @Req() req: Record<string, unknown>,
   ) {
     let categoryIds: string[];
     if (query.categoryId) {
       categoryIds = [query.categoryId];
     } else {
-      const allowed = await this.cmsScopeService.allowedCategoryIds(
-        principal,
-        ACTIONS['content.preview'],
-      );
-      if (allowed.length === 0) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'forbidden',
-          message: 'No accessible categories',
-        });
+      // Re-use the allowed set stashed by the cmsList resolver (avoids second DB call)
+      const stashed = req['_cmsAllowedCategoryIds'] as string[] | undefined;
+      if (stashed && stashed.length > 0) {
+        categoryIds = stashed;
+      } else {
+        const allowed = await this.cmsScopeService.allowedCategoryIds(
+          principal,
+          ACTIONS['content.preview'],
+        );
+        if (allowed.length === 0) {
+          throw new ApiHttpException({
+            status: 403,
+            code: 'forbidden',
+            message: 'No accessible categories',
+          });
+        }
+        categoryIds = allowed;
       }
-      categoryIds = allowed;
     }
     return this.cmsService.listResources(categoryIds, query);
   }
@@ -236,18 +247,10 @@ export class CmsController {
   )
   async approveRevision(
     @Param('revisionId') revisionId: string,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodValidationPipe(ReviewDecisionRequestSchema)) _body: unknown,
     @CurrentPrincipal() principal: Principal,
     @Res({ passthrough: true }) res: HttpRes,
   ) {
-    // M1: no comment field; reject if provided
-    if (body && typeof body === 'object' && 'comment' in body) {
-      throw new ApiHttpException({
-        status: 400,
-        code: 'validation',
-        message: 'The comment field is not accepted in M1',
-      });
-    }
     const result = await this.cmsService.approveRevision(revisionId, principal);
     if (result && typeof (result as Record<string, unknown>).lockVersion === 'number') {
       res.setHeader('ETag', `"${(result as { lockVersion: number }).lockVersion}"`);
@@ -268,28 +271,6 @@ export class CmsController {
     return this.cmsService.publishNow(body, principal);
   }
 
-  // ─── Media ──────────────────────────────────────────────────────────
-
-  @Get('media/:assetId')
-  @Authorize(
-    ACTIONS['content.preview'],
-    cmsResource('forAsset', 'assetId'),
-    { denyAs: 'not_found' },
-  )
-  async getMediaDetail(@Param('assetId') assetId: string) {
-    return this.cmsService.getMediaAsset(assetId);
-  }
-
-  @Get('media/:assetId/:kind')
-  @Authorize(
-    ACTIONS['content.preview'],
-    cmsResource('forAsset', 'assetId'),
-    { denyAs: 'not_found' },
-  )
-  async getMediaPreview(
-    @Param('assetId') assetId: string,
-    @Param('kind') _kind: string,
-  ) {
-    return this.cmsService.getMediaAsset(assetId);
-  }
+  // Media routes live in MediaOpsController (media-ops.controller.ts)
+  // to avoid duplication (must-fix 4).
 }

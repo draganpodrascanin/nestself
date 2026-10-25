@@ -61,6 +61,7 @@ import { deliverRendition, type DeliverReq, type DeliverRes } from './deliver-re
 import type { UploadedAsset } from './upload-storage-engine.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CmsResourceLoader } from '../cms/cms-resource-loader.js';
+import { cmsResource } from '../cms/cms-resolvers.js';
 
 /** Minimal request shape (avoids `@types/express`). */
 interface HttpReq {
@@ -172,39 +173,19 @@ export class MediaOpsController {
   }
 
   /**
-   * Asset detail (I4): scoped through CmsResourceLoader.
+   * Asset detail (I4): scoped through cmsResource resolver + denyAs:'not_found'.
    * Missing row → 404.  Out-of-scope → 404 (not 403).
    * In-scope + unready → detail is returned (not 409 — only preview is 409).
    */
   @Get(':assetId')
-  @Authorize(ACTIONS['media.manage'], operationsResource('media_asset', assetIdFromParam))
+  @Authorize(
+    ACTIONS['media.manage'],
+    cmsResource('forAsset', 'assetId'),
+    { denyAs: 'not_found' },
+  )
   async detail(
     @Param('assetId') assetId: string,
-    @CurrentPrincipal() principal: Principal,
   ) {
-    const resource = await this.cmsResourceLoader.forAsset(assetId);
-    if (!resource) {
-      throw new ApiHttpException({
-        status: 404,
-        code: 'not_found',
-        message: 'Media asset not found',
-      });
-    }
-
-    // Scope check: verify the principal has access to this category
-    const allowed = await this.cmsScopeService.allowedCategoryIds(
-      principal,
-      ACTIONS['media.manage'],
-    );
-    if (resource.collectionId && !allowed.includes(resource.collectionId)) {
-      // Out-of-scope → 404 (not 403), per I4
-      throw new ApiHttpException({
-        status: 404,
-        code: 'not_found',
-        message: 'Media asset not found',
-      });
-    }
-
     const detail = await this.mediaService.getDetail(assetId);
     if (!detail) {
       throw new ApiHttpException({
@@ -291,13 +272,19 @@ export class MediaOpsController {
   /**
    * Preview a rendition (I4): missing → 404, out-of-scope → 404 (not 403),
    * in-scope + unready → 409 media_not_ready.
+   *
+   * Authorization uses cmsResource('forAsset') + denyAs:'not_found' so the
+   * guard handles scope; the handler only checks readiness and streams.
    */
   @Get(':assetId/:rendition')
-  @Authorize(ACTIONS['content.preview'], operationsResource('media_asset', assetIdFromParam))
+  @Authorize(
+    ACTIONS['content.preview'],
+    cmsResource('forAsset', 'assetId'),
+    { denyAs: 'not_found' },
+  )
   async preview(
     @Param('assetId') assetId: string,
     @Param('rendition') renditionKind: string,
-    @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,
     @Res() res: HttpRes,
   ) {
@@ -309,31 +296,6 @@ export class MediaOpsController {
         code: 'not_found',
         message: 'Invalid rendition kind',
       });
-    }
-
-    const resource = await this.cmsResourceLoader.forAsset(assetId);
-    if (!resource) {
-      throw new ApiHttpException({
-        status: 404,
-        code: 'not_found',
-        message: 'Media asset not found',
-      });
-    }
-
-    // Scope check: assets with deleted category (collectionId null) are
-    // visible only to media.manage holders.
-    if (resource.collectionId === null) {
-      const manageAllowed = await this.cmsScopeService.allowedCategoryIds(
-        principal,
-        ACTIONS['media.manage'],
-      );
-      if (manageAllowed.length === 0) {
-        throw new ApiHttpException({
-          status: 404,
-          code: 'not_found',
-          message: 'Media asset not found',
-        });
-      }
     }
 
     // Only ready assets can be previewed by staff
@@ -377,7 +339,7 @@ export class MediaOpsController {
   }
 }
 
-/** Route-parameter id extractor for `operationsResource`. */
+/** Route-parameter id extractor for `operationsResource` on update/delete routes. */
 function assetIdFromParam(req: Record<string, unknown>): string | undefined {
   const params = req['params'] as Record<string, string | undefined> | undefined;
   return params?.['assetId'];

@@ -20,6 +20,7 @@ import {
   gt,
   inArray,
   isNull,
+  lt,
   ne,
   sql,
 } from 'drizzle-orm';
@@ -37,7 +38,7 @@ import type {
   ResourceListQuery,
   AuthoredLocale,
 } from '@nestself/contracts';
-import { AUTHORED_LOCALES } from '@nestself/contracts';
+import { ACTIONS, AUTHORED_LOCALES } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService } from '../db/db.service.js';
 import {
@@ -56,47 +57,11 @@ import { AuditWriter } from '../audit/audit-writer.js';
 import { OutboxWriter } from '../notifications/outbox/outbox-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AvailabilityVersionService } from '../library/availability/availability-version.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { AuthorizationService } from '../authz/authorization.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 
-// ---------------------------------------------------------------------------
-// Helpers: extract media ids from a ProseMirror document
-// ---------------------------------------------------------------------------
-
-interface MediaRef {
-  mediaAssetId: string;
-  usageKind: 'inline_image' | 'body_media';
-}
-
-function extractMediaRefs(doc: Record<string, unknown>): MediaRef[] {
-  const refs: MediaRef[] = [];
-  const seen = new Set<string>();
-
-  function walk(node: Record<string, unknown>) {
-    // image node → inline_image role
-    if (node.type === 'image' && node.attrs) {
-      const attrs = node.attrs as Record<string, unknown>;
-      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
-        seen.add(attrs.mediaAssetId);
-        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'inline_image' });
-      }
-    }
-    // approvedMedia node → body_media role
-    if (node.type === 'approvedMedia' && node.attrs) {
-      const attrs = node.attrs as Record<string, unknown>;
-      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
-        seen.add(attrs.mediaAssetId);
-        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'body_media' });
-      }
-    }
-    if (Array.isArray(node.content)) {
-      for (const child of node.content as Record<string, unknown>[]) {
-        walk(child);
-      }
-    }
-  }
-  walk(doc);
-  return refs;
-}
+import { extractMediaRefs } from './cms-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Service
@@ -112,6 +77,7 @@ export class CmsService {
     private readonly auditWriter: AuditWriter,
     private readonly outboxWriter: OutboxWriter,
     private readonly availabilityVersionService: AvailabilityVersionService,
+    private readonly authorizationService: AuthorizationService,
     private readonly configService: ConfigService,
   ) {
     const raw = this.configService.get<string>('CONTENT_LINK_HOST_ALLOWLIST') ?? '';
@@ -351,6 +317,18 @@ export class CmsService {
       });
     });
 
+    // Audit AFTER the transaction commits
+    await this.auditWriter.record({
+      action: 'content.created',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_variant',
+      recordId: variantId,
+      result: 'ALLOWED',
+      details: { locale, resourceId },
+      sessionId: principal.sessionId ?? null,
+    });
+
     return this.getRevision(revisionId);
   }
 
@@ -461,7 +439,15 @@ export class CmsService {
           status: 409,
           code: 'content_edit_conflict',
           message: 'The revision has been modified by another session',
-          details: { currentLockVersion: current[0].lockVersion },
+          details: {
+            lockVersion: current[0].lockVersion,
+            updatedAt: current[0].updatedAt,
+            title: current[0].title,
+            summary: current[0].summary,
+            outcome: current[0].outcome,
+            durationSeconds: current[0].durationSeconds,
+            body: current[0].body,
+          },
         });
       }
 
@@ -558,6 +544,7 @@ export class CmsService {
           durationSeconds: source?.durationSeconds ?? null,
           difficulty: source?.difficulty ?? null,
           sources: source?.sources ?? null,
+          proposedAudience: source?.proposedAudience ?? null,
           cta: source?.cta ?? null,
           relatedResourceIds: source?.relatedResourceIds ?? [],
           authorUserId: principal.userId,
@@ -583,6 +570,18 @@ export class CmsService {
       });
     });
 
+    // Audit AFTER the transaction commits
+    await this.auditWriter.record({
+      action: 'content.created',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_revision',
+      recordId: newRevisionId,
+      result: 'ALLOWED',
+      details: { variantId },
+      sessionId: principal.sessionId ?? null,
+    });
+
     return this.getRevision(newRevisionId);
   }
 
@@ -594,53 +593,89 @@ export class CmsService {
     revisionId: string,
     principal: Principal,
   ) {
-    // Validate document before the state transition
-    const rev = await this.loadRevisionOrThrow(revisionId);
+    // Atomic: lock revision row, validate, transition, outbox -- all in one tx (ARC-R-08)
+    const updated = await this.dbService.db.transaction(async (tx) => {
+      // Lock the revision row to serialize concurrent submits
+      const lockedRows = await tx.execute(
+        sql`SELECT * FROM content_revisions WHERE id = ${revisionId} FOR UPDATE`,
+      );
+      const rev = lockedRows.rows?.[0] as Record<string, unknown> | undefined;
+      if (!rev) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found' });
+      }
 
-    const validationResult = validateContentDocument(rev.body, {
-      linkHostAllowlist: this.linkHostAllowlist,
+      const now = new Date();
+
+      if (rev.state !== 'draft' && rev.state !== 'changes_requested') {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_not_submittable',
+          message: `Cannot submit a revision in state ${rev.state as string}`,
+        });
+      }
+
+      // C-12: proposedAudience is required at submit (fail-closed)
+      if (!rev.proposed_audience || !Array.isArray(rev.proposed_audience) || (rev.proposed_audience as unknown[]).length === 0) {
+        throw new ApiHttpException({
+          status: 400,
+          code: 'content_not_submittable',
+          message: 'proposedAudience is required before submitting for review',
+        });
+      }
+
+      // Validate document
+      const body = rev.body as Record<string, unknown>;
+      const validationResult = validateContentDocument(body, {
+        linkHostAllowlist: this.linkHostAllowlist,
+      });
+      if (!validationResult.ok) {
+        throw new ApiHttpException({
+          status: 400,
+          code: 'content_not_submittable',
+          message: validationResult.errors.map((e) => e.message).join('; '),
+          details: { errors: validationResult.errors },
+        });
+      }
+
+      // Check media readiness inside the transaction
+      await this.checkMediaReadyTx(tx, revisionId);
+
+      // Atomic state transition
+      const result = await tx
+        .update(contentRevisions)
+        .set({
+          state: 'in_review',
+          submittedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(contentRevisions.id, revisionId),
+            inArray(contentRevisions.state, ['draft', 'changes_requested']),
+          ),
+        )
+        .returning();
+
+      if (result.length === 0) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_not_submittable',
+          message: 'The revision state changed concurrently',
+        });
+      }
+
+      // Outbox in same transaction (ARC-R-08)
+      await this.outboxWriter.write(tx, {
+        type: 'content.review_requested',
+        aggregateType: 'content_revision',
+        aggregateId: revisionId,
+        payload: { revisionId },
+      });
+
+      return result[0]!;
     });
-    if (!validationResult.ok) {
-      throw new ApiHttpException({
-        status: 400,
-        code: 'content_not_submittable',
-        message: validationResult.errors.map((e) => e.message).join('; '),
-        details: { errors: validationResult.errors },
-      });
-    }
 
-    // Check media readiness
-    await this.checkMediaReady(revisionId);
-
-    const now = new Date();
-
-    // Atomic state transition
-    const updated = await this.dbService.db
-      .update(contentRevisions)
-      .set({
-        state: 'in_review',
-        submittedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(contentRevisions.id, revisionId),
-          inArray(contentRevisions.state, ['draft', 'changes_requested']),
-        ),
-      )
-      .returning();
-
-    if (updated.length === 0) {
-      // Re-read to give a useful error
-      const current = await this.getRevision(revisionId);
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_not_submittable',
-        message: `Cannot submit a revision in state ${current?.state ?? 'unknown'}`,
-      });
-    }
-
-    // Audit and outbox AFTER the write
+    // Audit AFTER the transaction commits
     await this.auditWriter.record({
       action: 'content.submitted',
       actorUserId: principal.userId,
@@ -651,16 +686,7 @@ export class CmsService {
       sessionId: principal.sessionId ?? null,
     });
 
-    await this.dbService.db.transaction(async (tx) => {
-      await this.outboxWriter.write(tx, {
-        type: 'content.review_requested',
-        aggregateType: 'content_revision',
-        aggregateId: revisionId,
-        payload: { revisionId },
-      });
-    });
-
-    return updated[0]!;
+    return updated;
   }
 
   // =========================================================================
@@ -671,131 +697,165 @@ export class CmsService {
     revisionId: string,
     principal: Principal,
   ) {
-    const rev = await this.loadRevisionOrThrow(revisionId);
+    const updated = await this.dbService.db.transaction(async (tx) => {
+      // Lock order: resource first, then variant (sorted by id in multi-variant cases)
+      // Step 1: load revision + resource context via join
+      const contextRows = await tx
+        .select({
+          revId: contentRevisions.id,
+          revState: contentRevisions.state,
+          revBody: contentRevisions.body,
+          revTitle: contentRevisions.title,
+          revSummary: contentRevisions.summary,
+          revOutcome: contentRevisions.outcome,
+          revDurationSeconds: contentRevisions.durationSeconds,
+          revDifficulty: contentRevisions.difficulty,
+          revSources: contentRevisions.sources,
+          revCta: contentRevisions.cta,
+          revRelatedResourceIds: contentRevisions.relatedResourceIds,
+          revProposedAudience: contentRevisions.proposedAudience,
+          revRevisionNumber: contentRevisions.revisionNumber,
+          revAuthorUserId: contentRevisions.authorUserId,
+          revLastEditorUserId: contentRevisions.lastEditorUserId,
+          variantId: contentVariants.id,
+          locale: contentVariants.locale,
+          resourceId: contentResources.id,
+          reviewDiscipline: contentResources.reviewDiscipline,
+          reviewPolicy: contentResources.reviewPolicy,
+        })
+        .from(contentRevisions)
+        .innerJoin(contentVariants, eq(contentRevisions.contentVariantId, contentVariants.id))
+        .innerJoin(contentResources, eq(contentVariants.contentResourceId, contentResources.id))
+        .where(eq(contentRevisions.id, revisionId))
+        .limit(1);
 
-    if (rev.state !== 'in_review') {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_not_submittable',
-        message: `Cannot approve a revision in state ${rev.state}`,
+      const ctx = contextRows[0];
+      if (!ctx) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found' });
+      }
+
+      if (ctx.revState !== 'in_review') {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_revision_locked',
+          message: `Cannot approve a revision in state ${ctx.revState}`,
+        });
+      }
+
+      // ACC-R-08: Self-review check (5.5)
+      if (ctx.revAuthorUserId === principal.userId || ctx.revLastEditorUserId === principal.userId) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'content_self_review',
+          message: 'A reviewer cannot approve a revision they authored or last edited',
+        });
+      }
+
+      // ACC-R-07 fail-closed: discipline check (defense in depth)
+      if (!ctx.reviewDiscipline) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'content_review_discipline',
+          message: 'The resource has no review discipline configured',
+        });
+      }
+
+      // Lock order: resource row first
+      await tx.execute(
+        sql`SELECT id FROM content_resources WHERE id = ${ctx.resourceId} FOR UPDATE`,
+      );
+
+      // Then variant row (FOR UPDATE on variant serializes concurrent approvals)
+      await tx.execute(
+        sql`SELECT id FROM content_variants WHERE id = ${ctx.variantId} FOR UPDATE`,
+      );
+
+      const now = new Date();
+
+      // Check: if a newer revision of the same variant is already approved → 409
+      const newerApproved = await tx
+        .select({ id: contentRevisions.id })
+        .from(contentRevisions)
+        .where(
+          and(
+            eq(contentRevisions.contentVariantId, ctx.variantId),
+            eq(contentRevisions.state, 'approved'),
+            gt(contentRevisions.revisionNumber, ctx.revRevisionNumber),
+          ),
+        )
+        .limit(1);
+
+      if (newerApproved.length > 0) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_revision_locked',
+          message: 'A newer revision is already approved for this variant',
+        });
+      }
+
+      // Get media asset ids for the hash
+      const mediaRows = await tx
+        .select({ mediaAssetId: contentRevisionMedia.mediaAssetId })
+        .from(contentRevisionMedia)
+        .where(eq(contentRevisionMedia.contentRevisionId, revisionId));
+      const mediaAssetIds = mediaRows.map((r) => r.mediaAssetId);
+
+      // Compute approval hash (FMT-R-08)
+      const hashInput: ApprovalHashInput = {
+        body: ctx.revBody,
+        title: ctx.revTitle,
+        summary: ctx.revSummary,
+        outcome: ctx.revOutcome ?? null,
+        durationSeconds: ctx.revDurationSeconds ?? 0,
+        difficulty: ctx.revDifficulty ?? '',
+        sources: Array.isArray(ctx.revSources) ? (ctx.revSources as string[]) : [],
+        locale: ctx.locale,
+        mediaAssetIds,
+        relatedResourceIds: ctx.revRelatedResourceIds ?? [],
+        cta: ctx.revCta,
+        reviewDiscipline: ctx.reviewDiscipline,
+        proposedAudience: ctx.revProposedAudience,
+      };
+      const hash = await approvalHash(hashInput);
+
+      // Atomic state transition -- no supersession at approve time
+      const result = await tx
+        .update(contentRevisions)
+        .set({
+          state: 'approved',
+          approvedAt: now,
+          approvedByUserId: principal.userId,
+          approvalHash: hash,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(contentRevisions.id, revisionId),
+            eq(contentRevisions.state, 'in_review'),
+          ),
+        )
+        .returning();
+
+      if (result.length === 0) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_revision_locked',
+          message: 'The revision state changed concurrently',
+        });
+      }
+
+      // Outbox in same transaction (ARC-R-08)
+      await this.outboxWriter.write(tx, {
+        type: 'content.approved',
+        aggregateType: 'content_revision',
+        aggregateId: revisionId,
+        payload: { revisionId },
       });
-    }
 
-    // ACC-R-08: Self-review check (5.5)
-    if (rev.authorUserId === principal.userId || rev.lastEditorUserId === principal.userId) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'content_self_review',
-        message: 'A reviewer cannot approve a revision they authored or last edited',
-      });
-    }
+      return result[0]!;
+    });
 
-    // Discipline check is enforced by the authorization guard via the
-    // cmsResource('forRevision', 'revisionId', { review: true }) resolver.
-    // Double-check here for defense in depth (ACC-R-07 fail-closed).
-    const resourceRows = await this.dbService.db
-      .select({
-        reviewDiscipline: contentResources.reviewDiscipline,
-        reviewPolicy: contentResources.reviewPolicy,
-      })
-      .from(contentRevisions)
-      .innerJoin(contentVariants, eq(contentRevisions.contentVariantId, contentVariants.id))
-      .innerJoin(contentResources, eq(contentVariants.contentResourceId, contentResources.id))
-      .where(eq(contentRevisions.id, revisionId))
-      .limit(1);
-
-    const resource = resourceRows[0];
-    if (!resource?.reviewDiscipline) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'content_review_discipline',
-        message: 'The resource has no review discipline configured',
-      });
-    }
-
-    // Check: if a newer revision of the same variant is already approved → 409
-    const newerApproved = await this.dbService.db
-      .select({ id: contentRevisions.id })
-      .from(contentRevisions)
-      .where(
-        and(
-          eq(contentRevisions.contentVariantId, rev.contentVariantId),
-          eq(contentRevisions.state, 'approved'),
-          gt(contentRevisions.revisionNumber, rev.revisionNumber),
-        ),
-      )
-      .limit(1);
-
-    if (newerApproved.length > 0) {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_approval_stale',
-        message: 'A newer revision is already approved for this variant',
-      });
-    }
-
-    // Get variant info for the hash
-    const variantRows = await this.dbService.db
-      .select({ locale: contentVariants.locale })
-      .from(contentVariants)
-      .where(eq(contentVariants.id, rev.contentVariantId))
-      .limit(1);
-    const locale = variantRows[0]?.locale ?? 'en';
-
-    // Get media asset ids for the hash
-    const mediaRows = await this.dbService.db
-      .select({ mediaAssetId: contentRevisionMedia.mediaAssetId })
-      .from(contentRevisionMedia)
-      .where(eq(contentRevisionMedia.contentRevisionId, revisionId));
-    const mediaAssetIds = mediaRows.map((r) => r.mediaAssetId);
-
-    // Compute approval hash (FMT-R-08)
-    const hashInput: ApprovalHashInput = {
-      body: rev.body,
-      title: rev.title,
-      summary: rev.summary,
-      outcome: rev.outcome ?? null,
-      durationSeconds: rev.durationSeconds ?? 0,
-      difficulty: rev.difficulty ?? '',
-      sources: Array.isArray(rev.sources) ? (rev.sources as string[]) : [],
-      locale,
-      mediaAssetIds,
-      relatedResourceIds: rev.relatedResourceIds ?? [],
-      cta: rev.cta,
-      reviewDiscipline: resource.reviewDiscipline,
-      proposedAudience: rev.proposedAudience,
-    };
-    const hash = await approvalHash(hashInput);
-
-    const now = new Date();
-
-    // Atomic state transition -- no supersession at approve time
-    const updated = await this.dbService.db
-      .update(contentRevisions)
-      .set({
-        state: 'approved',
-        approvedAt: now,
-        approvedByUserId: principal.userId,
-        approvalHash: hash,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(contentRevisions.id, revisionId),
-          eq(contentRevisions.state, 'in_review'),
-        ),
-      )
-      .returning();
-
-    if (updated.length === 0) {
-      throw new ApiHttpException({
-        status: 409,
-        code: 'content_not_submittable',
-        message: 'The revision state changed concurrently',
-      });
-    }
-
-    // Audit and outbox AFTER the write
+    // Audit AFTER the transaction commits
     await this.auditWriter.record({
       action: 'content.approved',
       actorUserId: principal.userId,
@@ -806,16 +866,7 @@ export class CmsService {
       sessionId: principal.sessionId ?? null,
     });
 
-    await this.dbService.db.transaction(async (tx) => {
-      await this.outboxWriter.write(tx, {
-        type: 'content.approved',
-        aggregateType: 'content_revision',
-        aggregateId: revisionId,
-        payload: { revisionId },
-      });
-    });
-
-    return updated[0]!;
+    return updated;
   }
 
   // =========================================================================
@@ -826,8 +877,6 @@ export class CmsService {
     input: PublicationCreateRequest,
     principal: Principal,
   ) {
-    const now = new Date();
-
     const publicationIds: string[] = [];
     // Track superseded publications' audience org ids for availability bump
     const supersededOrgIds = new Set<string>();
@@ -840,11 +889,22 @@ export class CmsService {
       );
       const resource = resourceLockRows.rows?.[0] as {
         id: string;
+        primary_category_id: string | null;
         review_discipline: string | null;
       } | undefined;
       if (!resource) {
         throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
       }
+
+      // Compute now AFTER the resource lock so all timestamps are post-lock
+      const now = new Date();
+
+      // WRK-R-32: content.restrict authorization check
+      await this.authorizationService.require(principal, ACTIONS['content.restrict'], {
+        type: 'content_resource',
+        id: resource.id,
+        collectionId: resource.primary_category_id ?? undefined,
+      });
 
       // Get all variants (inside the transaction to see a consistent snapshot)
       const variants = await tx
@@ -1044,6 +1104,7 @@ export class CmsService {
         await this.checkAudienceContainment(tx, input.audience, approvedRev.proposedAudience);
 
         // Supersession: mark older approved revisions as superseded (moved from approve)
+        // Bound: only supersede revisions with revision_number < the one being published
         await tx
           .update(contentRevisions)
           .set({ state: 'superseded', updatedAt: now })
@@ -1052,12 +1113,13 @@ export class CmsService {
               eq(contentRevisions.contentVariantId, variant.id),
               eq(contentRevisions.state, 'approved'),
               ne(contentRevisions.id, approvedRev.id),
+              lt(contentRevisions.revisionNumber, approvedRev.revisionNumber),
             ),
           );
 
-        // Supersession: set ends_at on previous live publication and collect its audience org ids
+        // Supersession: set ends_at on previous live publications that haven't already ended
         const previousPubs = await tx
-          .select({ id: contentPublications.id })
+          .select({ id: contentPublications.id, endsAt: contentPublications.endsAt })
           .from(contentPublications)
           .where(
             and(
@@ -1083,16 +1145,14 @@ export class CmsService {
             }
           }
 
-          await tx
-            .update(contentPublications)
-            .set({ endsAt: now })
-            .where(
-              and(
-                eq(contentPublications.contentVariantId, variant.id),
-                eq(contentPublications.state, 'live'),
-                isNull(contentPublications.withdrawnAt),
-              ),
-            );
+          // Don't overwrite ends_at on publications that already have one
+          const pubsToEnd = previousPubs.filter((p) => !p.endsAt).map((p) => p.id);
+          if (pubsToEnd.length > 0) {
+            await tx
+              .update(contentPublications)
+              .set({ endsAt: now })
+              .where(inArray(contentPublications.id, pubsToEnd));
+          }
         }
 
         // Create the publication
@@ -1163,12 +1223,17 @@ export class CmsService {
       }
     }
 
-    // Return first publication (for API response)
+    // WRK-R-37: return all publications keyed by locale
     if (publicationIds.length === 0) {
       throw new ApiHttpException({ status: 500, code: 'internal', message: 'No publications created' });
     }
 
-    return this.getPublication(publicationIds[0]!);
+    const publications = [];
+    for (const pubId of publicationIds) {
+      const pub = await this.getPublication(pubId);
+      if (pub) publications.push(pub);
+    }
+    return { publications };
   }
 
   // =========================================================================
@@ -1304,15 +1369,25 @@ export class CmsService {
    *   `organization(orgId)` (and unit must belong to that org),
    *   or `org_unit(orgId, unitId)` with matching or wider descendants flag
    *
-   * When `proposedAudience` is null/undefined, any audience is allowed
-   * (approved without a proposed audience constraint).
+   * When `proposedAudience` is null/undefined/empty, every publish entry
+   * is rejected (fail-closed: C-12).
    */
   private async checkAudienceContainment(
     tx: Parameters<Parameters<typeof this.dbService.db.transaction>[0]>[0],
     publishAudience: AudienceEntry[],
     proposedAudience: unknown,
   ): Promise<void> {
-    if (!proposedAudience || !Array.isArray(proposedAudience)) return;
+    // Fail-closed: null/undefined/non-array proposed → reject all
+    if (!proposedAudience || !Array.isArray(proposedAudience) || proposedAudience.length === 0) {
+      if (publishAudience.length > 0) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'content_audience_exceeds_approval',
+          message: 'No proposed audience was approved; cannot publish to any audience',
+        });
+      }
+      return;
+    }
     const proposed = proposedAudience as AudienceEntry[];
 
     const proposedHasAllEligible = proposed.some((a) => a.kind === 'all_eligible');
@@ -1447,6 +1522,18 @@ export class CmsService {
           status: 409,
           code: 'conflict',
           message: 'A conflicting record already exists',
+        });
+      }
+      // Map check_violation (23514) and foreign_key_violation (23503) to 400
+      if (pgCode === '23514' || pgCode === '23503') {
+        this.logger.warn(
+          { constraint: (err as { constraint?: string }).constraint, pgCode },
+          'CMS constraint violation mapped to 400',
+        );
+        throw new ApiHttpException({
+          status: 400,
+          code: 'validation',
+          message: 'A database constraint was violated',
         });
       }
       throw err;

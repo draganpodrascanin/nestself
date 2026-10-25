@@ -170,6 +170,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       .send({
         title: 'Kako upravljati stresom na poslu',
         summary: 'Praktični saveti za upravljanje stresom',
+        proposedAudience: [{ kind: 'all_eligible' }],
         body: {
           type: 'doc',
           schemaVersion: 1,
@@ -192,7 +193,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       .send({ title: 'stale' });
     expect(staleRes.status).toBe(409);
     expect(staleRes.body.code).toBe('content_edit_conflict');
-    expect(staleRes.body.details.currentLockVersion).toBe(2);
+    expect(staleRes.body.details.lockVersion).toBe(2);
 
     // 3. Add hu and en variants
     for (const locale of ['hu', 'en'] as const) {
@@ -221,6 +222,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
         .send({
           title: `Title for ${v.locale}`,
           summary: `Summary for ${v.locale}`,
+          proposedAudience: [{ kind: 'all_eligible' }],
           body: {
             type: 'doc',
             schemaVersion: 1,
@@ -275,7 +277,9 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
         audience: [{ kind: 'all_eligible' }],
       });
     expect(publishRes.status).toBe(201);
-    expect(publishRes.body.state).toBe('live');
+    expect(publishRes.body.publications).toBeDefined();
+    expect(publishRes.body.publications.length).toBeGreaterThan(0);
+    expect(publishRes.body.publications[0].state).toBe('live');
 
     // 8. Publishing with only two approved locales -> 409 content_locale_incomplete
     // Create a new resource with only sr-Latn variant
@@ -371,7 +375,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
     const v = createRes.body.variants[0];
     const rev = v.revisions[0];
 
-    // Save
+    // Save (with proposedAudience so submit works)
     await katarina.agent
       .put(`${OPS_CMS}/variants/${v.id}/revisions/${rev.id}`)
       .set('x-csrf-token', katarina.csrf)
@@ -379,6 +383,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       .send({
         title: 'Updated title',
         summary: 'A summary',
+        proposedAudience: [{ kind: 'all_eligible' }],
         body: {
           type: 'doc',
           schemaVersion: 1,
@@ -387,9 +392,10 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       });
 
     // Submit
-    await katarina.agent
+    const submitRes = await katarina.agent
       .post(`${OPS_CMS}/revisions/${rev.id}/submit`)
       .set('x-csrf-token', katarina.csrf);
+    expect(submitRes.status).toBe(200);
 
     // Try to edit the submitted revision -> 409
     const editRes = await katarina.agent
@@ -429,6 +435,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
       .send({
         title: 'Approved title',
         summary: 'Approved summary',
+        proposedAudience: [{ kind: 'all_eligible' }],
         body: {
           type: 'doc',
           schemaVersion: 1,
@@ -436,9 +443,10 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
         },
       });
 
-    await katarina.agent
+    const submitRes = await katarina.agent
       .post(`${OPS_CMS}/revisions/${rev.id}/submit`)
       .set('x-csrf-token', katarina.csrf);
+    expect(submitRes.status).toBe(200);
 
     await darko.agent
       .post(`${OPS_CMS}/revisions/${rev.id}/approve`)
@@ -500,6 +508,7 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
         .send({
           title: `Dup test ${v.locale}`,
           summary: 'Summary',
+          proposedAudience: [{ kind: 'all_eligible' }],
           body: {
             type: 'doc',
             schemaVersion: 1,

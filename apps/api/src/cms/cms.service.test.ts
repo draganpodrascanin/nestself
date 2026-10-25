@@ -1,128 +1,22 @@
 /**
  * CMS service unit tests (T-C1.10 review fix).
  *
- * Tests the pure functions and logic of the CMS service:
+ * Tests the exported pure functions and logic of the CMS service:
  * - extractMediaRefs from ProseMirror documents
- * - audience containment (entry-by-entry) via the exported helper pattern
+ * - audience containment (entry-by-entry) via checkAudienceContainmentPure
  * - revision state transition preconditions
  * - approval hash input builder
+ * - ETag / If-Match format
+ * - locale completeness
  *
  * Integration tests with a database run in the e2e spec and probes.
  */
 import { describe, it, expect } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// extractMediaRefs (re-implemented here for unit testing since the service
-// function is private; this mirrors the production logic exactly)
-// ---------------------------------------------------------------------------
-
-interface MediaRef {
-  mediaAssetId: string;
-  usageKind: 'inline_image' | 'body_media';
-}
-
-function extractMediaRefs(doc: Record<string, unknown>): MediaRef[] {
-  const refs: MediaRef[] = [];
-  const seen = new Set<string>();
-
-  function walk(node: Record<string, unknown>) {
-    if (node.type === 'image' && node.attrs) {
-      const attrs = node.attrs as Record<string, unknown>;
-      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
-        seen.add(attrs.mediaAssetId);
-        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'inline_image' });
-      }
-    }
-    if (node.type === 'approvedMedia' && node.attrs) {
-      const attrs = node.attrs as Record<string, unknown>;
-      if (typeof attrs.mediaAssetId === 'string' && !seen.has(attrs.mediaAssetId)) {
-        seen.add(attrs.mediaAssetId);
-        refs.push({ mediaAssetId: attrs.mediaAssetId, usageKind: 'body_media' });
-      }
-    }
-    if (Array.isArray(node.content)) {
-      for (const child of node.content as Record<string, unknown>[]) {
-        walk(child);
-      }
-    }
-  }
-  walk(doc);
-  return refs;
-}
-
-// ---------------------------------------------------------------------------
-// Audience containment (mirrors the production logic)
-// ---------------------------------------------------------------------------
-
+// Import the real exported functions from the service module.
+// extractMediaRefs and checkAudienceContainmentPure are re-exported for testing.
+import { extractMediaRefs, checkAudienceContainmentPure } from './cms-helpers.js';
 import { ApiHttpException } from '../common/api-error.js';
-
-type AudienceEntry = {
-  kind: string;
-  orgId?: string;
-  orgUnitId?: string;
-  includeDescendants?: boolean;
-};
-
-/**
- * Standalone audience containment check (no DB lookups for org unit
- * membership — those are tested in e2e/probe).
- */
-function checkAudienceContainmentPure(
-  publishAudience: AudienceEntry[],
-  proposedAudience: unknown,
-): void {
-  if (!proposedAudience || !Array.isArray(proposedAudience)) return;
-  const proposed = proposedAudience as AudienceEntry[];
-  const proposedHasAllEligible = proposed.some((a) => a.kind === 'all_eligible');
-
-  for (const pub of publishAudience) {
-    if (pub.kind === 'all_eligible') {
-      if (!proposedHasAllEligible) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'content_audience_exceeds_approval',
-          message: 'Publication audience exceeds the approved proposed audience',
-        });
-      }
-      continue;
-    }
-    if (pub.kind === 'organization') {
-      if (proposedHasAllEligible) continue;
-      const orgMatch = proposed.some(
-        (p) => p.kind === 'organization' && p.orgId === pub.orgId,
-      );
-      if (!orgMatch) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'content_audience_exceeds_approval',
-          message: `Organization ${pub.orgId} is not in the approved proposed audience`,
-        });
-      }
-      continue;
-    }
-    if (pub.kind === 'org_unit') {
-      if (proposedHasAllEligible) continue;
-      const orgCover = proposed.some(
-        (p) => p.kind === 'organization' && p.orgId === pub.orgId,
-      );
-      if (orgCover) continue;
-      const unitCover = proposed.some(
-        (p) =>
-          p.kind === 'org_unit' &&
-          p.orgId === pub.orgId &&
-          p.orgUnitId === pub.orgUnitId &&
-          ((p.includeDescendants ?? true) || !(pub.includeDescendants ?? true)),
-      );
-      if (!unitCover) {
-        throw new ApiHttpException({
-          status: 403,
-          code: 'content_audience_exceeds_approval',
-          message: `Org unit ${pub.orgUnitId} exceeds the approved proposed audience`,
-        });
-      }
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Media node extraction
@@ -173,6 +67,29 @@ describe('extractMediaRefs', () => {
   it('returns empty for a doc with no media', () => {
     expect(extractMediaRefs(doc())).toHaveLength(0);
   });
+
+  it('handles nested content', () => {
+    const refs = extractMediaRefs({
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          content: [
+            { type: 'image', attrs: { mediaAssetId: 'nested_1' } },
+          ],
+        },
+      ],
+    });
+    expect(refs).toHaveLength(1);
+    expect(refs[0]!.mediaAssetId).toBe('nested_1');
+  });
+
+  it('ignores nodes without mediaAssetId attr', () => {
+    const refs = extractMediaRefs(doc([
+      { type: 'image', attrs: { alt: 'no media ref' } },
+    ]));
+    expect(refs).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -216,12 +133,27 @@ describe('Audience containment (C-12)', () => {
     ).not.toThrow();
   });
 
-  it('allows any audience when proposed is null', () => {
+  it('rejects all publish entries when proposed is null (fail-closed)', () => {
     expect(() =>
       checkAudienceContainmentPure(
         [{ kind: 'all_eligible' }],
         null,
       ),
+    ).toThrow(ApiHttpException);
+  });
+
+  it('rejects all publish entries when proposed is empty array', () => {
+    expect(() =>
+      checkAudienceContainmentPure(
+        [{ kind: 'organization', orgId: 'org_1' }],
+        [],
+      ),
+    ).toThrow(ApiHttpException);
+  });
+
+  it('allows empty publish audience even when proposed is null', () => {
+    expect(() =>
+      checkAudienceContainmentPure([], null),
     ).not.toThrow();
   });
 
@@ -318,7 +250,7 @@ describe('Self-review rule (ACC-R-08)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ETag format
+// ETag / If-Match format
 // ---------------------------------------------------------------------------
 
 describe('ETag / If-Match format', () => {
@@ -344,7 +276,7 @@ describe('ETag / If-Match format', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Locale completeness
+// Locale completeness (WRK-R-36)
 // ---------------------------------------------------------------------------
 
 describe('Locale completeness (WRK-R-36)', () => {

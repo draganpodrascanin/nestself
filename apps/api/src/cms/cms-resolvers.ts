@@ -158,7 +158,11 @@ export function cmsList(type: string, action: Action): ResourceResolver {
       });
     }
 
-    // Return type-only resource; the controller uses the scope service for the full set.
-    return { type };
+    // Stash the allowed set on the request for the controller to re-use
+    // (avoids a second allowedCategoryIds call).
+    (req as Record<string, unknown>)['_cmsAllowedCategoryIds'] = allowed;
+
+    // Return with collectionId so the engine can match (ACC-R-24/WRK-R-31)
+    return { type, collectionId: allowed[0] };
   };
 }
