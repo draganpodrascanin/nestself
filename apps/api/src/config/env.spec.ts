@@ -224,6 +224,17 @@ describe('envSchema: video provider (T-CW-0.2, D-CW-05, D-CW-06)', () => {
     expect(envSchema.safeParse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'yes' }).success).toBe(false);
   });
 
+  it('parses VIDEO_FAKE_EVENTS_IN_API as a boolean flag, on by default with the fake provider only (T-CW-2.5)', () => {
+    expect(resolveAppEnv(envSchema.parse(baseEnv)).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: '' })).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'true' })).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'false' })).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+    expect(envSchema.safeParse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'yes' }).success).toBe(false);
+    // The real provider's events and jobs belong to the worker, whatever the flag says.
+    expect(resolveAppEnv(envSchema.parse(chimeEnv)).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+    expect(resolveAppEnv(envSchema.parse({ ...chimeEnv, VIDEO_FAKE_EVENTS_IN_API: 'true' })).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+  });
+
   it('reads STAGE for the provider tags, defaulting to dev', () => {
     expect(envSchema.parse(baseEnv).STAGE).toBe('dev');
     expect(envSchema.parse({ ...baseEnv, STAGE: '' }).STAGE).toBe('dev');

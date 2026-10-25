@@ -14,7 +14,9 @@
  * end a live webinar whose meeting closed, and the recording pipeline
  * (`WebinarRecordingService`, T-CW-2.5).
  */
-import { Module, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Logger, Module, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { HttpAdapterHost } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module.js';
 import { CallsModule } from '../calls/calls.module.js';
 import { WEBINAR_SESSION_CLOSED_HANDLER } from '../calls/session-lifecycle.js';
@@ -56,11 +58,36 @@ import { WebinarsService } from './webinars.service.js';
   ],
   exports: [WebinarsRepository, WebinarAccess, WebinarJobSchedulerService, WebinarJobsService],
 })
-export class WebinarsModule implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly repo: WebinarsRepository) {}
+export class WebinarsModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(WebinarsModule.name);
+
+  constructor(
+    private readonly repo: WebinarsRepository,
+    private readonly scheduler: WebinarJobSchedulerService,
+    private readonly jobs: WebinarJobsService,
+    private readonly adapterHost: HttpAdapterHost,
+  ) {}
 
   onModuleInit(): void {
     bindWebinarLookup(this.repo);
+  }
+
+  /**
+   * With the fake provider the meetings live in this process's memory, so
+   * the API process consumes the webinar jobs (the recording ones above all,
+   * DEF-5), as `CallsModule` applies the fake provider's events here. The
+   * worker boots the same modules without an HTTP server and leaves the queue
+   * to the API, so its own `start()` (worker/main.ts) is a logged no-op. With
+   * the real provider nothing changes: the worker consumes, the API produces.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    if (!this.scheduler.consumesInApi()) return;
+    if (!this.adapterHost.httpAdapter) {
+      this.scheduler.leaveToApi();
+      return;
+    }
+    const started = await this.scheduler.start(this.jobs);
+    this.logger.log(`Webinar jobs run in this process with the fake video provider (consumer: ${started ? 'started' : 'off'})`);
   }
 
   onModuleDestroy(): void {

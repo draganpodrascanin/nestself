@@ -22,7 +22,9 @@
  *     session (T-CW-2.5).
  *   Retried 3 times with exponential backoff from 30 seconds (the recording
  *   jobs' failure policy, T-CW-2.5).
- * - Consumer (worker only, {@link start}): the `Worker` that hands every job
+ * - Consumer ({@link start}): the worker process's `Worker`, or, with the
+ *   fake provider, the API process's (`WebinarsModule`, {@link consumesInApi},
+ *   DEF-5); either way one process per deployment. It hands every job
  *   to the {@link WebinarJobHandler} (`WebinarJobsService`) with its
  *   {@link WebinarJobContext}. A handler that throws {@link WebinarJobDelay}
  *   (the recording is not ready yet, the concatenation still runs) is moved
@@ -42,6 +44,9 @@ import { Redis } from 'ioredis';
 import { REMINDER_OFFSETS_MINUTES } from '@nestself/contracts';
 
 export const WEBINARS_QUEUE = 'nestself-webinars';
+
+/** Set to `false` (with `VIDEO_PROVIDER=none`) to leave the webinar jobs to the worker; shared with `CallsModule`. */
+const FAKE_EVENTS_IN_API = 'VIDEO_FAKE_EVENTS_IN_API';
 
 export const WEBINAR_JOB_NAMES = ['webinar.remind', 'webinar.recording.start', 'webinar.recording.finalize'] as const;
 export type WebinarJobName = (typeof WEBINAR_JOB_NAMES)[number];
@@ -130,6 +135,8 @@ export class WebinarJobSchedulerService implements OnModuleDestroy {
   private queue: Queue | null = null;
   private worker: Worker | null = null;
   private warnedNoRedis = false;
+  /** Set in the worker process when the API process consumes the queue (the fake provider). */
+  private leftToApi = false;
 
   /** BullMQ key prefix (BullMQ's default). Tests set a run-specific one before first use. */
   prefix = 'bull';
@@ -138,8 +145,40 @@ export class WebinarJobSchedulerService implements OnModuleDestroy {
 
   // ── Consumer (worker process) ─────────────────────────────────────────────
 
-  /** Starts processing with `handler`. False (and logged) without `REDIS_URL`. */
+  /**
+   * Whether this deployment runs the webinar jobs in the API process: with
+   * the fake provider (`VIDEO_PROVIDER=none`) the meetings exist only in the
+   * API process's memory, so a worker's recording job would find none
+   * (DEF-5). `VIDEO_FAKE_EVENTS_IN_API=false` leaves them to the worker, as
+   * it does the fake provider's events (`CallsModule`). A configuration that
+   * names no provider (a test's own) keeps them out of the API.
+   */
+  consumesInApi(): boolean {
+    if (this.config.get<string>('VIDEO_PROVIDER') !== 'none') return false;
+    return String(this.config.get<unknown>(FAKE_EVENTS_IN_API)) !== 'false';
+  }
+
+  /** The worker process, when {@link consumesInApi}: {@link start} then refuses, so the queue has one consumer. */
+  leaveToApi(): void {
+    this.leftToApi = true;
+  }
+
+  /** Whether this process consumes the queue. */
+  isConsuming(): boolean {
+    return this.worker !== null;
+  }
+
+  /**
+   * Starts processing with `handler`, once per process (a second call is a
+   * no-op). False (and logged) without `REDIS_URL`, and in a worker that left
+   * the queue to the API process.
+   */
   async start(handler: WebinarJobHandler): Promise<boolean> {
+    if (this.worker) return true;
+    if (this.leftToApi) {
+      this.logger.log('The API process runs the webinar jobs (VIDEO_PROVIDER=none); this process does not consume them');
+      return false;
+    }
     const redisUrl = this.config.get<string>('REDIS_URL');
     if (!redisUrl) {
       this.logger.warn('REDIS_URL not set; the webinar job scheduler is disabled');

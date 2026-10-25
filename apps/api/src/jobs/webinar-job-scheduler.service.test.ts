@@ -80,6 +80,28 @@ describe('webinar job context (T-CW-2.5)', () => {
   });
 });
 
+describe('the fake provider runs the webinar jobs in the API process (T-CW-2.5, DEF-5)', () => {
+  const configOf = (values: Record<string, unknown>) =>
+    ({ get: (key: string) => values[key] }) as unknown as ConfigService;
+
+  it('consumes in the API with VIDEO_PROVIDER=none unless VIDEO_FAKE_EVENTS_IN_API is false', () => {
+    expect(new WebinarJobSchedulerService(configOf({ VIDEO_PROVIDER: 'none' })).consumesInApi()).toBe(true);
+    expect(new WebinarJobSchedulerService(configOf({ VIDEO_PROVIDER: 'none', VIDEO_FAKE_EVENTS_IN_API: true })).consumesInApi()).toBe(true);
+    expect(new WebinarJobSchedulerService(configOf({ VIDEO_PROVIDER: 'none', VIDEO_FAKE_EVENTS_IN_API: false })).consumesInApi()).toBe(false);
+    expect(new WebinarJobSchedulerService(configOf({ VIDEO_PROVIDER: 'none', VIDEO_FAKE_EVENTS_IN_API: 'false' })).consumesInApi()).toBe(false);
+    expect(new WebinarJobSchedulerService(configOf({ VIDEO_PROVIDER: 'chime' })).consumesInApi()).toBe(false);
+    // A configuration that names no provider (a test's own) keeps the jobs out of the API.
+    expect(new WebinarJobSchedulerService(configOf({ REDIS_URL: REDIS_URL })).consumesInApi()).toBe(false);
+  });
+
+  it('a process that leaves the jobs to the API refuses to consume them', async () => {
+    const scheduler = new WebinarJobSchedulerService(configOf({ REDIS_URL: REDIS_URL, VIDEO_PROVIDER: 'none' }));
+    scheduler.leaveToApi();
+    expect(await scheduler.start({ handle: vi.fn() })).toBe(false);
+    await scheduler.onModuleDestroy();
+  });
+});
+
 describe('WebinarJobSchedulerService without Redis', () => {
   it('schedules nothing and does not start', async () => {
     const scheduler = new WebinarJobSchedulerService(config());
@@ -129,6 +151,20 @@ describe('WebinarJobSchedulerService on Redis', async () => {
     expect(await scheduler.enqueueRecordingStart('w_rt', 'session_rt')).toBe(true);
     await done;
     expect(handled).toEqual([['webinar.recording.start', { webinarId: 'w_rt', sessionId: 'session_rt' }]]);
+  });
+
+  it.skipIf(!redisUp)('starts its consumer once per process, however often start() is called', async () => {
+    const once = new WebinarJobSchedulerService(config(REDIS_URL));
+    once.prefix = `${prefix}-once`;
+    try {
+      expect(await once.start({ handle: vi.fn() })).toBe(true);
+      expect(await once.start({ handle: vi.fn() })).toBe(true);
+      expect(once.isConsuming()).toBe(true);
+    } finally {
+      await once.getQueue()?.obliterate({ force: true }).catch(() => undefined);
+      await once.onModuleDestroy();
+    }
+    expect(once.isConsuming()).toBe(false);
   });
 
   it.skipIf(!redisUp)('runs a delayed job again without spending an attempt (WebinarJobDelay)', async () => {

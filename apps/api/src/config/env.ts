@@ -135,6 +135,15 @@ export const envSchema = z
         .optional()
         .transform((v) => v === 'true'),
     ),
+    // With the fake provider the meetings live in the API process, so their
+    // events and the webinar jobs are handled there (T-CW-1.2, T-CW-2.5).
+    // Unset means on; `resolveAppEnv` turns it off for the real provider.
+    VIDEO_FAKE_EVENTS_IN_API: blankAsUnset(
+      z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => (v === undefined ? undefined : v === 'true')),
+    ),
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -226,11 +235,17 @@ export type Env = z.infer<typeof envSchema>;
  * In stub mode, when `SESSION_ENCRYPTION_KEY` is absent, a deterministic
  * dev key is derived from `JWT_SECRET` with a logged warning.
  */
-export type AppEnv = Env & {
+export type AppEnv = Omit<Env, 'VIDEO_FAKE_EVENTS_IN_API'> & {
   /** Resolved (possibly derived) session encryption key. */
   resolvedSessionEncryptionKey: string | undefined;
   /** Derived Cognito issuer URL. */
   resolvedCognitoIssuer: string | undefined;
+  /**
+   * The fake provider's events and the webinar jobs run in the API process:
+   * true with `VIDEO_PROVIDER=none` unless set to `false`, always false with
+   * `chime` (T-CW-1.2, T-CW-2.5).
+   */
+  VIDEO_FAKE_EVENTS_IN_API: boolean;
 };
 
 export function resolveAppEnv(env: Env): AppEnv {
@@ -257,6 +272,7 @@ export function resolveAppEnv(env: Env): AppEnv {
     ...env,
     resolvedSessionEncryptionKey,
     resolvedCognitoIssuer,
+    VIDEO_FAKE_EVENTS_IN_API: env.VIDEO_PROVIDER === 'none' && env.VIDEO_FAKE_EVENTS_IN_API !== false,
   };
 }
 

@@ -47,7 +47,8 @@ export const VIDEO_FAKE_EVENTS_IN_API = 'VIDEO_FAKE_EVENTS_IN_API';
 /** Whether this process should subscribe the applier to the in-process fake provider. */
 export function shouldApplyFakeEventsInApi(config: Pick<ConfigService, 'get'>): boolean {
   const provider = config.get<string>('VIDEO_PROVIDER') || 'none';
-  return provider === 'none' && config.get<string>(VIDEO_FAKE_EVENTS_IN_API) !== 'false';
+  // The validated environment holds a boolean (T-CW-2.5); a raw string still counts.
+  return provider === 'none' && String(config.get<unknown>(VIDEO_FAKE_EVENTS_IN_API)) !== 'false';
 }
 
 @Module({
