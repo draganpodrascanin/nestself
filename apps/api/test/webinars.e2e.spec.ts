@@ -35,7 +35,7 @@ import { and, eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import {
   OpsOrganizationsResponseSchema,
-  WEBINAR_SINGLE_MEETING_CAPACITY,
+  WEBINAR_REPLICATED_CAPACITY,
   WebinarHostCandidatesResponseSchema,
   WebinarPollListResponseSchema,
   WebinarRecordingStatusResponseSchema,
@@ -330,14 +330,18 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     await testDb?.close();
   });
 
-  // ── Occurrence form (WBN-30, D-CW-34, D-CW-36) ─────────────────────────────
+  // ── Occurrence form (WBN-30, D-CW-14, D-CW-34, T-CW-3.2) ───────────────────
 
-  it('creation with capacity 300 returns 400 capacity_above_limit naming the limit (D-CW-36)', async () => {
-    const res = await post(nikola, '/ops/webinars', occurrence({ capacity: 300 }));
+  it('creation with capacity 1,001 returns 400 capacity_above_limit naming the limit; 300 is accepted (D-CW-14)', async () => {
+    const res = await post(nikola, '/ops/webinars', occurrence({ capacity: WEBINAR_REPLICATED_CAPACITY + 1 }));
     expectCode(res, 400, 'capacity_above_limit');
-    expect(res.body.details).toEqual({ field: 'capacity', limit: WEBINAR_SINGLE_MEETING_CAPACITY });
-    const patched = await patch(nikola, '/ops/webinars/webinar_sample_ended', { capacity: 251 });
+    expect(res.body.details).toEqual({ field: 'capacity', limit: WEBINAR_REPLICATED_CAPACITY });
+    const patched = await patch(nikola, '/ops/webinars/webinar_sample_ended', { capacity: WEBINAR_REPLICATED_CAPACITY + 1 });
     expectCode(patched, 400, 'capacity_above_limit');
+    // Media replication (T-CW-3.2) takes an audience above one meeting.
+    const replicated = await post(nikola, '/ops/webinars', occurrence({ capacity: 300 }));
+    expect(replicated.status, JSON.stringify(replicated.body)).toBe(201);
+    expect(replicated.body.capacity).toBe(300);
   });
 
   it('an edit is audited as webinar.updated with the names of the fields it changed (WBN-30, T-CW-2.5)', async () => {
