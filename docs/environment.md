@@ -64,7 +64,7 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 | `MARKETING_URL` | Origin of the marketing app (CORS) | `http://localhost:3000` |
 | `WORKSPACE_URL` | Origin of the workspace app (CORS, CSRF, WebSocket handshake) | `http://localhost:5173` |
 | `ADMIN_URL` | Origin of the admin app (CORS, CSRF, WebSocket handshake) | `http://localhost:5174` |
-| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links) | unset |
+| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links, mobile and direct SSO callers). Browser SSO redirects use the surface's own origin instead (`docs/auth/implementation.md` §18, §22.3). Required with `AUTH_MODE=cognito` | unset |
 | `SES_FROM_EMAIL` | Enables the SES invitation mailer; without it invitation links are logged | unset |
 
 ### Worker process

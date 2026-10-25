@@ -691,7 +691,7 @@
     "actions": {
       "test": "Próbabejelentkezés",
       "testStarted": "A próbabejelentkezés új lapon nyílt meg",
-      "testNote": "A tesztlink csak egyszer használható, és 15 perc múlva lejár. Jelentkezz be egy igazolt domainhez tartozó fiókkal, majd válaszd az Aktiválás gombot.",
+      "testNote": "A tesztlink csak egyszer használható, és 15 perc múlva lejár. Új lapon megnyitja a munkatér bejelentkezését; fejezd be egy igazolt domainhez tartozó fiókkal (azzal a fiókkal lépsz be a munkatérbe), majd térj vissza ide, és válaszd az Aktiválás gombot.",
       "testLink": "Próbabejelentkezés megnyitása",
       "activate": "Aktiválás",
       "activated": "A kapcsolat aktív.",

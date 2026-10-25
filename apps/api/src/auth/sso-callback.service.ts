@@ -102,6 +102,7 @@ export interface SsoRedirect {
   browserNonce?: string;
 }
 
+/** Stub-mode fallback only; see the note in `apiOriginForSurface` (sso-start-url.ts). */
 const DEFAULT_SURFACE_URLS: Record<Surface, string> = {
   workspace: 'http://localhost:5173',
   admin: 'http://localhost:5174',

@@ -695,7 +695,7 @@
     "actions": {
       "test": "Probna prijava",
       "testStarted": "Probna prijava je otvorena u novoj kartici",
-      "testNote": "Probni link može da se iskoristi samo jednom i ističe za 15 minuta. Završi prijavu nalogom na potvrđenom domenu, pa izaberi Aktiviraj.",
+      "testNote": "Probni link može da se iskoristi samo jednom i ističe za 15 minuta. Otvara prijavu u radni prostor u novoj kartici; završi je nalogom na potvrđenom domenu (ulaziš u radni prostor kao taj nalog), zatim se vrati ovde i izaberi Aktiviraj.",
       "testLink": "Otvori probnu prijavu",
       "activate": "Aktiviraj",
       "activated": "Veza je aktivirana.",

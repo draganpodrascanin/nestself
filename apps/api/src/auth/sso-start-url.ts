@@ -46,6 +46,9 @@ function originOf(url: string): string {
 export function apiOriginForSurface(config: SurfaceUrlConfig, surface: SsoSurface): string {
   const surfaceUrl = config.get(surface === 'admin' ? 'ADMIN_URL' : 'WORKSPACE_URL');
   if (surfaceUrl) return originOf(surfaceUrl);
+  // Stub-mode fallback only (cognito mode requires both surface URLs). The post-callback landing
+  // falls back to localhost:5173/5174 (`DEFAULT_SURFACE_URLS` in sso-callback.service.ts); the two
+  // differ in port only, and localhost cookies ignore ports, so keep them in step if you change one.
   return originOf(apiPublicUrlFrom(config.get('API_PUBLIC_URL')));
 }
 

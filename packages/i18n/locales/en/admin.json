@@ -695,7 +695,7 @@
     "actions": {
       "test": "Test sign-in",
       "testStarted": "Test sign-in opened in a new tab",
-      "testNote": "The test link is single-use and expires in 15 minutes. Complete the sign-in with an account on a verified domain, then select Activate.",
+      "testNote": "The test link is single-use and expires in 15 minutes. It opens the workspace sign-in in a new tab; complete it with an account on a verified domain (you land on the workspace as that account), then come back here and select Activate.",
       "testLink": "Open the test sign-in",
       "activate": "Activate",
       "activated": "Connection activated.",
