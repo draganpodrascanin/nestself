@@ -421,7 +421,7 @@ describe('filterDocumentBody (nested structures)', () => {
     expect(linkNode.marks).toBeUndefined();
   });
 
-  it('filters CTA inside professionalNote by capability', () => {
+  it('removes professionalNote entirely when its only CTA is filtered by capability', () => {
     const noCalls: FilterContext = {
       availableIds: new Set(),
       capabilities: ['library'], // no 'calls'
@@ -431,8 +431,9 @@ describe('filterDocumentBody (nested structures)', () => {
       content: [cta('open_service', 'calls')],
     });
     const filtered = filterDocumentBody(d, noCalls) as Record<string, unknown>;
-    const note = (filtered.content as unknown[])[0] as Record<string, unknown>;
-    expect((note.content as unknown[]).length).toBe(0);
+    // The professionalNote is removed entirely because its content is empty
+    // and the schema requires min(1) content (REQUIRES_NON_EMPTY_CONTENT).
+    expect((filtered.content as unknown[]).length).toBe(0);
   });
 
   it('keeps CTA inside professionalNote when capability is present', () => {

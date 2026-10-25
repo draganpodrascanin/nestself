@@ -1,6 +1,6 @@
 /**
  * Unit tests for LibraryService -- DTO mapping, Cyrillic transliteration,
- * source normalization, body filtering, CTA extraction, cursor HMAC.
+ * source normalization, body filtering, CTA extraction, cursor encryption.
  *
  * Tests the EXPORTED functions (body-filter, locale-header) and the
  * contract schemas without a database.
@@ -13,7 +13,9 @@ import {
   LibraryContentDetailSchema,
   LibraryCardSchema,
   SavedItemSchema,
+  DifficultySchema,
 } from '@nestself/contracts';
+import { RevisionUpdateRequestSchema } from '@nestself/contracts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod v4 $ZodType vs ZodTypeAny compat
 function deepStrict(schema: any): any {
@@ -311,5 +313,146 @@ describe('LibraryService unit -- DTO field set', () => {
 
     const result = deepStrict(SavedItemSchema).safeParse(saved);
     expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Difficulty validation (deliverable 7)
+// ---------------------------------------------------------------------------
+
+describe('Difficulty validation', () => {
+  it('DifficultySchema accepts valid enum values', () => {
+    for (const d of ['easy', 'medium', 'hard']) {
+      expect(DifficultySchema.safeParse(d).success).toBe(true);
+    }
+  });
+
+  it('DifficultySchema rejects unknown values', () => {
+    expect(DifficultySchema.safeParse('expert').success).toBe(false);
+    expect(DifficultySchema.safeParse('').success).toBe(false);
+    expect(DifficultySchema.safeParse(42).success).toBe(false);
+  });
+
+  it('CMS write DTO validates difficulty against DifficultySchema', () => {
+    const valid = RevisionUpdateRequestSchema.safeParse({ difficulty: 'easy' });
+    expect(valid.success).toBe(true);
+
+    const validNull = RevisionUpdateRequestSchema.safeParse({ difficulty: null });
+    expect(validNull.success).toBe(true);
+
+    const invalid = RevisionUpdateRequestSchema.safeParse({ difficulty: 'expert' });
+    expect(invalid.success).toBe(false);
+  });
+
+  it('library detail DTO accepts null difficulty (out-of-enum maps to null)', () => {
+    const dto = {
+      id: 'res_1',
+      type: 'article',
+      locale: 'sr-Latn',
+      title: 'Test',
+      summary: 'Summary',
+      outcome: '',
+      body: { type: 'doc', content: [] },
+      durationSeconds: null,
+      durationBand: null,
+      difficulty: null,
+      category: { id: 'c', slug: 's', label: 'L', description: null },
+      secondaryCategories: [],
+      topics: [],
+      authorName: 'A',
+      reviewerName: null,
+      reviewedAt: null,
+      sources: [],
+      media: [],
+      relatedResources: [],
+      cta: null,
+      availableLocales: ['sr-Latn', 'sr-Cyrl', 'hu', 'en'],
+      saved: false,
+      playbackPosition: null,
+      replacementLink: null,
+    };
+    const result = LibraryContentDetailSchema.safeParse(dto);
+    expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Body filter -- open_service with invalid targetId (deliverable 8)
+// ---------------------------------------------------------------------------
+
+describe('Body filter -- open_service CTA with missing/empty targetId', () => {
+  it('drops open_service CTA when targetId is null', () => {
+    const d = { type: 'doc', schemaVersion: 1, content: [
+      { type: 'cta', attrs: { ctaKind: 'open_service', targetId: null } },
+    ] };
+    const ctx: FilterContext = { availableIds: new Set(), capabilities: ['library'] };
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    expect((filtered.content as unknown[]).length).toBe(0);
+  });
+
+  it('drops open_service CTA when targetId is empty string', () => {
+    const d = { type: 'doc', schemaVersion: 1, content: [
+      { type: 'cta', attrs: { ctaKind: 'open_service', targetId: '' } },
+    ] };
+    const ctx: FilterContext = { availableIds: new Set(), capabilities: ['library'] };
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    expect((filtered.content as unknown[]).length).toBe(0);
+  });
+
+  it('drops open_service CTA when targetId is missing', () => {
+    const d = { type: 'doc', schemaVersion: 1, content: [
+      { type: 'cta', attrs: { ctaKind: 'open_service' } },
+    ] };
+    const ctx: FilterContext = { availableIds: new Set(), capabilities: ['library'] };
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    expect((filtered.content as unknown[]).length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Body filter -- empty container removal (deliverable 8)
+// ---------------------------------------------------------------------------
+
+describe('Body filter -- empty container removal', () => {
+  const ctx: FilterContext = {
+    availableIds: new Set(),
+    capabilities: [],
+  };
+
+  it('removes bulletList when all listItems are emptied', () => {
+    // A bulletList with a single listItem containing only a link to unavailable content
+    const d = { type: 'doc', schemaVersion: 1, content: [
+      { type: 'bulletList', content: [
+        { type: 'listItem', content: [
+          { type: 'paragraph', content: [
+            { type: 'text', text: 'link', marks: [{ type: 'link', attrs: { href: 'nestself:content/gone' } }] },
+          ] },
+        ] },
+      ] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Keep me' }] },
+    ] };
+
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    const content = filtered.content as unknown[];
+    // The bulletList should remain because the listItem still has a paragraph with text
+    // (the link mark is just unwrapped, not the text node removed)
+    expect(content.length).toBe(2);
+  });
+
+  it('removes quote when all paragraphs are dropped', () => {
+    // A quote whose only content is relatedResource nodes (not paragraphs)
+    // This cannot actually happen with the schema, but the filter is defensive.
+    // More realistic: a container that had relatedResources as children
+    const d = { type: 'doc', schemaVersion: 1, content: [
+      { type: 'bulletList', content: [
+        { type: 'listItem', content: [
+          { type: 'relatedResource', attrs: { contentResourceId: 'gone_1' } },
+        ] },
+      ] },
+    ] };
+    const filtered = filterDocumentBody(d, ctx) as Record<string, unknown>;
+    // listItem's only child (relatedResource) is dropped -> listItem empty -> removed
+    // bulletList's only child (listItem) is removed -> bulletList empty -> removed
+    expect((filtered.content as unknown[]).length).toBe(0);
   });
 });

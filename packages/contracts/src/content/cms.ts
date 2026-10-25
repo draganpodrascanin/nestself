@@ -38,6 +38,9 @@ export const ReviewDisciplineSchema = z.enum([
 export const AuthoredLocaleSchema = z.enum(['sr-Latn', 'hu', 'en']);
 export type AuthoredLocale = z.infer<typeof AuthoredLocaleSchema>;
 
+export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
+export type Difficulty = z.infer<typeof DifficultySchema>;
+
 export const ContentAudienceKindSchema = z.enum([
   'all_eligible', 'organization', 'org_unit',
 ]);
@@ -128,7 +131,7 @@ export const RevisionUpdateRequestSchema = z.object({
   summary: z.string().max(500).optional(),
   outcome: z.string().max(300).nullable().optional(),
   durationSeconds: z.number().int().nonnegative().nullable().optional(),
-  difficulty: z.string().nullable().optional(),
+  difficulty: DifficultySchema.nullable().optional(),
   sources: z.array(z.object({
     label: z.string().min(1),
     url: z.string().url().optional(),

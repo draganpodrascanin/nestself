@@ -42,6 +42,7 @@ import { users } from '../db/schema/identity.js';
 import { transliterateText, transliterateDocument, type ContentDocument } from '@nestself/content/schema';
 import { ApiHttpException } from '../common/api-error.js';
 import type { LibraryContentDetail, LibraryCard, SavedItem } from '@nestself/contracts';
+import { DifficultySchema } from '@nestself/contracts';
 import type { PrincipalContext } from './availability/availability-context-loader.js';
 import {
   collectReferencedResourceIds,
@@ -220,7 +221,9 @@ export class LibraryService {
       body,
       durationSeconds: row.durationSeconds,
       durationBand: row.durationBand as LibraryContentDetail['durationBand'],
-      difficulty: row.difficulty as LibraryContentDetail['difficulty'],
+      difficulty: DifficultySchema.safeParse(row.difficulty).success
+        ? (row.difficulty as LibraryContentDetail['difficulty'])
+        : null,
       category: {
         id: row.primaryCategoryId,
         slug: catSlug,
@@ -255,7 +258,7 @@ export class LibraryService {
     const isCyrillic = ctx.readerLocale === 'sr-Cyrl';
     const authored = authoredLocale(ctx.readerLocale);
 
-    // Cursor validation (RTE-R-06: HMAC-signed)
+    // Cursor validation (RTE-R-06: AES-GCM encrypted)
     let cursorCondition: ReturnType<typeof sql> | undefined;
     if (opts.cursor) {
       const k = decodeListCursor(opts.cursor, this.cursorKey);
@@ -352,7 +355,7 @@ export class LibraryService {
     const authored = authoredLocale(ctx.readerLocale);
     const db = this.dbService.db;
 
-    // Cursor validation (RTE-R-06: HMAC-signed)
+    // Cursor validation (RTE-R-06: AES-GCM encrypted)
     let cursorDate: Date | undefined;
     let cursorId: string | undefined;
     if (opts.cursor) {

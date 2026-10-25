@@ -5,7 +5,7 @@
  * experience. Error codes used by library endpoints.
  */
 import { z } from 'zod';
-import { ContentTypeSchema } from './cms.ts';
+import { ContentTypeSchema, DifficultySchema } from './cms.ts';
 import { ContentLocaleSchema, MediaKindSchema, MediaRenditionKindSchema } from './media.ts';
 
 // ---------------------------------------------------------------------------
@@ -17,8 +17,7 @@ export type ContentLocale = z.infer<typeof ContentLocaleSchema>;
 export const DurationBandSchema = z.enum(['under_5', '5_to_15', 'over_15']);
 export type DurationBand = z.infer<typeof DurationBandSchema>;
 
-export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
-export type Difficulty = z.infer<typeof DifficultySchema>;
+export { DifficultySchema, type Difficulty } from './cms.ts';
 
 export const CategorySummarySchema = z.object({
   id: z.string(),

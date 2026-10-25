@@ -30,6 +30,21 @@ const KNOWN_CTA_KINDS = new Set([
 /** CTA kinds whose targetId references a content resource (needs availability). */
 const CONTENT_TARGETING_CTA_KINDS = new Set(['open_content', 'open_collection']);
 
+/**
+ * Node types whose `content` array must be non-empty per ContentDocumentSchema.
+ * When filtering empties one, the container itself is removed.
+ */
+const REQUIRES_NON_EMPTY_CONTENT = new Set([
+  'bulletList',
+  'orderedList',
+  'quote',
+  'professionalNote',
+  'practicalStep',
+  'checklist',
+  'transcript',
+  'listItem',
+]);
+
 // ---------------------------------------------------------------------------
 // Collector: walk the document and gather all referenced resource ids
 // ---------------------------------------------------------------------------
@@ -160,9 +175,13 @@ function filterNode(
     if (!ctaKind || !KNOWN_CTA_KINDS.has(ctaKind)) return null;
 
     // open_service: drop unless the capability matches the reader's org
+    // Also drop when targetId is not a non-empty string (invalid CTA).
     if (ctaKind === 'open_service') {
       const targetId = attrs?.targetId;
-      if (typeof targetId === 'string' && !ctx.capabilities.includes(targetId)) {
+      if (typeof targetId !== 'string' || targetId.length === 0) {
+        return null;
+      }
+      if (!ctx.capabilities.includes(targetId)) {
         return null;
       }
     }
@@ -208,6 +227,17 @@ function filterNode(
     const filteredContent = content
       .map((child) => filterNode(child, ctx))
       .filter((child): child is NonNullable<typeof child> => child !== null);
+
+    // If filtering empties a container that the schema requires to be
+    // non-empty (min(1)), remove the container itself (FMT-R-27).
+    if (
+      filteredContent.length === 0 &&
+      type &&
+      REQUIRES_NON_EMPTY_CONTENT.has(type)
+    ) {
+      return null;
+    }
+
     return { ...n, content: filteredContent };
   }
 

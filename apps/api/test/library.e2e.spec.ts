@@ -99,6 +99,11 @@ function assertNoCyrillicLeak(text: string, field: string) {
   ).toBeNull();
 }
 
+/** Text-bearing attributes in the content document schema (LIB-R-32). */
+const TEXT_BEARING_ATTRS = new Set([
+  'alt', 'caption', 'title', 'attribution', 'label',
+]);
+
 function collectBodyTextNodes(node: unknown): string[] {
   if (!node || typeof node !== 'object') return [];
   const n = node as Record<string, unknown>;
@@ -106,7 +111,7 @@ function collectBodyTextNodes(node: unknown): string[] {
   if (n.type === 'text' && typeof n.text === 'string') results.push(n.text);
   if (n.attrs && typeof n.attrs === 'object') {
     for (const [key, val] of Object.entries(n.attrs as Record<string, unknown>)) {
-      if (typeof val === 'string' && key === 'label') results.push(val);
+      if (typeof val === 'string' && TEXT_BEARING_ATTRS.has(key)) results.push(val);
     }
   }
   const content = n.content as unknown[] | undefined;
@@ -564,6 +569,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get(`/api/library/content?cursor=${bad}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
     });
 
     it('bit-flipped cursor returns 400', async () => {
@@ -583,6 +589,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get(`/api/library/content?cursor=${flipped}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
     });
 
     it('truncated cursor returns 400', async () => {
@@ -601,6 +608,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get(`/api/library/content?cursor=${truncated}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
     });
 
     it('random noise cursor returns 400', async () => {
@@ -611,6 +619,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get(`/api/library/content?cursor=${noise}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
     });
 
     it('limit=0 returns 400 validation', async () => {
@@ -813,6 +822,7 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         .get(`/api/me/saved?cursor=${bad}`)
         .set('accept-language', 'sr-Latn');
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
     });
 
     it('saved list pagination works', async () => {
@@ -855,24 +865,25 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         ['test_crm_expired', revId, assetId],
       );
 
-      const session = await signInPersonal(JOVAN);
-      const res = await session.agent
-        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
-        .set('accept-language', 'sr-Latn');
-      expect(res.status).toBe(404);
-      expect(res.body.code).toBe('content_not_available');
+      try {
+        const session = await signInPersonal(JOVAN);
+        const res = await session.agent
+          .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+          .set('accept-language', 'sr-Latn');
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe('content_not_available');
 
-      // Also not in list
-      const list = await session.agent
-        .get('/api/library/content')
-        .set('accept-language', 'sr-Latn');
-      expect(list.status).toBe(200);
-      const ids = list.body.items.map((i: { resourceId: string }) => i.resourceId);
-      expect(ids).not.toContain(RES_ALL_ELIGIBLE_1);
-
-      // Cleanup
-      await testDb.pool.query(`DELETE FROM content_revision_media WHERE id = 'test_crm_expired'`);
-      await testDb.pool.query(`DELETE FROM media_assets WHERE id = $1`, [assetId]);
+        // Also not in list
+        const list = await session.agent
+          .get('/api/library/content')
+          .set('accept-language', 'sr-Latn');
+        expect(list.status).toBe(200);
+        const ids = list.body.items.map((i: { resourceId: string }) => i.resourceId);
+        expect(ids).not.toContain(RES_ALL_ELIGIBLE_1);
+      } finally {
+        await testDb.pool.query(`DELETE FROM content_revision_media WHERE id = 'test_crm_expired'`);
+        await testDb.pool.query(`DELETE FROM media_assets WHERE id = $1`, [assetId]);
+      }
     });
 
     it('ended membership returns 403 org_context_expired', async () => {
@@ -884,25 +895,26 @@ describe.skipIf(!shouldRun)('Library (e2e)', () => {
         [new Date('2025-06-01T00:00:00Z'), JOVAN],
       );
 
-      // Detail: context loader rejects the expired membership before availability runs
-      const res = await session.agent
-        .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
-        .set('accept-language', 'sr-Latn');
-      expect(res.status).toBe(403);
-      expect(res.body.code).toBe('org_context_expired');
+      try {
+        // Detail: context loader rejects the expired membership before availability runs
+        const res = await session.agent
+          .get(`/api/library/content/${RES_ALL_ELIGIBLE_1}`)
+          .set('accept-language', 'sr-Latn');
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('org_context_expired');
 
-      // List also rejected
-      const list = await session.agent
-        .get('/api/library/content')
-        .set('accept-language', 'sr-Latn');
-      expect(list.status).toBe(403);
-      expect(list.body.code).toBe('org_context_expired');
-
-      // Restore
-      await testDb.pool.query(
-        `UPDATE memberships SET end_date = NULL WHERE user_id = $1 AND org_id = 'org_sample'`,
-        [JOVAN],
-      );
+        // List also rejected
+        const list = await session.agent
+          .get('/api/library/content')
+          .set('accept-language', 'sr-Latn');
+        expect(list.status).toBe(403);
+        expect(list.body.code).toBe('org_context_expired');
+      } finally {
+        await testDb.pool.query(
+          `UPDATE memberships SET end_date = NULL WHERE user_id = $1 AND org_id = 'org_sample'`,
+          [JOVAN],
+        );
+      }
     });
 
     it('superseded publication: newer publication makes the old one still available (latest content)', async () => {

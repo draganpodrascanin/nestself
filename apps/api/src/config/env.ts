@@ -35,6 +35,33 @@ const optionalHexKey64 = z.union([
   hexKey64,
 ]).optional();
 
+/**
+ * A 32-byte key supplied as either hex (64 chars) or base64 (44 chars with
+ * optional trailing '=').  Decoded to a hex string for internal use.
+ * Appendix A: "32 bytes, base64" — hex kept for backward compatibility.
+ */
+const cursorKeyField = z
+  .string()
+  .transform((val, ctx) => {
+    // Try hex first (64 hex chars = 32 bytes)
+    if (/^[0-9a-f]{64}$/i.test(val)) return val.toLowerCase();
+    // Try base64 / base64url
+    try {
+      const buf = Buffer.from(val, 'base64');
+      if (buf.length === 32) return buf.toString('hex');
+    } catch { /* fall through */ }
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'LIBRARY_CURSOR_KEY must decode to exactly 32 bytes (hex or base64)',
+    });
+    return z.NEVER;
+  });
+
+const optionalCursorKey = z.union([
+  z.literal('').transform(() => undefined),
+  cursorKeyField,
+]).optional();
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -119,7 +146,8 @@ export const envSchema = z
 
     // Library cursor encryption key (RTE-R-06). Required in production; in
     // dev/test the key is derived from JWT_SECRET when absent.
-    LIBRARY_CURSOR_KEY: optionalHexKey64,
+    // Accepts 64 hex chars or 44-char base64, both decoding to 32 bytes.
+    LIBRARY_CURSOR_KEY: optionalCursorKey,
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -140,13 +168,21 @@ export const envSchema = z
       });
     }
 
-    // RTE-R-06: cursor key required in production
-    if (data.NODE_ENV === 'production' && !data.LIBRARY_CURSOR_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'LIBRARY_CURSOR_KEY is required when NODE_ENV=production',
-        path: ['LIBRARY_CURSOR_KEY'],
-      });
+    // RTE-R-06: cursor key required in production, must be 32 bytes
+    if (data.NODE_ENV === 'production') {
+      if (!data.LIBRARY_CURSOR_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'LIBRARY_CURSOR_KEY is required when NODE_ENV=production',
+          path: ['LIBRARY_CURSOR_KEY'],
+        });
+      } else if (Buffer.from(data.LIBRARY_CURSOR_KEY, 'hex').length !== 32) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'LIBRARY_CURSOR_KEY must decode to exactly 32 bytes',
+          path: ['LIBRARY_CURSOR_KEY'],
+        });
+      }
     }
 
     // MED-R-01: local driver refused in production
