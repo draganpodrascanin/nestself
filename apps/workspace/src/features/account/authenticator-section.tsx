@@ -7,8 +7,12 @@
  *
  * The session's `secondFactor` flag only changes at the next sign-in, so a
  * successful enrolment is remembered here until then.
+ *
+ * The secret lives only in this component's state while the enrolment step is
+ * open: the enrol mutation is reset on cancel, on success and on unmount, and
+ * a result that arrives after cancel is dropped.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, FormErrorSummary, Heading, OtpInput, Text } from '@nestself/ui';
@@ -38,6 +42,19 @@ export function AuthenticatorSection({ authApi, sampleMode }: AuthenticatorSecti
   const enrol = useTotpEnrolSignedIn(authApi);
   const confirm = useTotpConfirm(authApi);
   const summaryRef = useRef<FormErrorSummaryHandle>(null);
+  /** Bumped on every start, cancel and unmount; a stale enrol result is ignored. */
+  const attempt = useRef(0);
+  const { reset: resetEnrol } = enrol;
+  const { reset: resetConfirm } = confirm;
+
+  useEffect(
+    () => () => {
+      attempt.current += 1;
+      resetEnrol();
+      resetConfirm();
+    },
+    [resetEnrol, resetConfirm],
+  );
 
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [code, setCode] = useState('');
@@ -70,13 +87,28 @@ export function AuthenticatorSection({ authApi, sampleMode }: AuthenticatorSecti
     setCodeError(null);
     setCode('');
     setStep({ kind: 'enrolling', secretUri: null });
+    const id = ++attempt.current;
     try {
       const result = await enrol.mutateAsync();
+      if (attempt.current !== id) {
+        resetEnrol();
+        return;
+      }
       setStep({ kind: 'enrolling', secretUri: result.secretUri });
     } catch (err) {
+      if (attempt.current !== id) return;
       setStep({ kind: 'idle' });
       setStartError(t(accountErrorKey(err)));
     }
+  };
+
+  const cancel = () => {
+    attempt.current += 1;
+    resetEnrol();
+    resetConfirm();
+    setCode('');
+    setCodeError(null);
+    setStep({ kind: 'idle' });
   };
 
   const failCode = (message: string) => {
@@ -91,6 +123,10 @@ export function AuthenticatorSection({ authApi, sampleMode }: AuthenticatorSecti
     setCodeError(null);
     try {
       await confirm.mutateAsync(code);
+      attempt.current += 1;
+      resetEnrol();
+      resetConfirm();
+      setCode('');
       setStep({ kind: 'done' });
     } catch (err) {
       failCode(t(accountErrorKey(err)));
@@ -126,7 +162,7 @@ export function AuthenticatorSection({ authApi, sampleMode }: AuthenticatorSecti
           <Button type="submit" disabled={step.secretUri === null || confirm.isPending}>
             {confirm.isPending ? t('auth:account.authenticator.confirming') : t('auth:account.authenticator.confirm')}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => setStep({ kind: 'idle' })}>
+          <Button type="button" variant="secondary" onClick={cancel}>
             {t('auth:account.authenticator.cancel')}
           </Button>
         </div>

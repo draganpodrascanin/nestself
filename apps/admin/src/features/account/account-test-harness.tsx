@@ -115,5 +115,5 @@ export function renderAccount(
       </I18nextProvider>
     </QueryClientProvider>,
   );
-  return { router };
+  return { router, queryClient };
 }

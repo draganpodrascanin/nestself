@@ -21,13 +21,13 @@ import {
 } from '@nestself/ui';
 import type { FormErrorSummaryHandle } from '@nestself/ui';
 import { locales, localeMeta, isLocale } from '@nestself/i18n';
+import { DISPLAY_NAME_MAX_LENGTH } from '@nestself/contracts';
 import type { Locale } from '@nestself/i18n';
 import { useAuth } from '../../auth';
 import { accountErrorKey } from './account-errors';
 import type { AccountApi } from './use-account';
 import { useUpdateDisplayName, useUpdateLocale } from './use-account';
 
-const NAME_MAX = 120;
 const NAME_ID = 'account-display-name';
 const LOCALE_ID = 'account-locale';
 
@@ -61,7 +61,7 @@ export function AccountSettings({ authApi, sampleMode }: AccountSettingsProps) {
     if (sampleMode || updateName.isPending) return;
     const trimmed = name.trim();
     if (trimmed.length === 0) return failName(t('auth:account.displayName.required'));
-    if (trimmed.length > NAME_MAX) return failName(t('auth:account.displayName.tooLong'));
+    if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) return failName(t('auth:account.displayName.tooLong'));
     setNameError(null);
     try {
       await updateName.mutateAsync(trimmed);
@@ -135,7 +135,6 @@ export function AccountSettings({ authApi, sampleMode }: AccountSettingsProps) {
             disabled={updateLocale.isPending}
           />
         </Field>
-        {localeError ? <Alert tone="danger">{localeError}</Alert> : null}
       </div>
     </div>
   );

@@ -97,8 +97,14 @@ export function useSignOutEverywhere(authApi: AccountApi) {
   });
 }
 
+/**
+ * Starts signed-in enrolment. The result carries the authenticator secret, so
+ * it is never kept in the mutation cache once nothing observes it
+ * (`gcTime: 0`); the screen also resets the mutation on cancel, success and
+ * unmount.
+ */
 export function useTotpEnrolSignedIn(authApi: AccountApi) {
-  return useMutation({ mutationFn: () => authApi.totpEnrolSignedIn() });
+  return useMutation({ mutationFn: () => authApi.totpEnrolSignedIn(), gcTime: 0 });
 }
 
 /** Confirms the authenticator; the principal is reloaded for its second-factor flag. */
@@ -106,6 +112,8 @@ export function useTotpConfirm(authApi: AccountApi) {
   const { refreshPrincipal } = useAuth();
   return useMutation({
     mutationFn: (code: string) => authApi.totpConfirm(code),
+    // The one-time code is the mutation's variables: do not keep it either.
+    gcTime: 0,
     onSuccess: () => refreshPrincipal(),
   });
 }

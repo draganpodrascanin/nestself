@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { DISPLAY_NAME_MAX_LENGTH } from '@nestself/contracts';
 import { AccountSettings } from './account-settings';
 import { apiError, makeAccountApi, makeAuth, renderAccount, t, testI18n } from './account-test-harness';
 
@@ -44,7 +45,7 @@ describe('AccountSettings: display name', () => {
     const input = await screen.findByRole('textbox');
     await user.clear(input);
     await user.click(input);
-    await user.paste('x'.repeat(121));
+    await user.paste('x'.repeat(DISPLAY_NAME_MAX_LENGTH + 1));
     await user.click(saveButton());
     expect((await screen.findAllByText(t('auth:account.displayName.tooLong'))).length).toBeGreaterThan(0);
     expect(authApi.updateDisplayName).not.toHaveBeenCalled();
@@ -96,7 +97,8 @@ describe('AccountSettings: language', () => {
     const authApi = makeAccountApi({ updateLocale: vi.fn().mockRejectedValue(error) });
     renderAccount(<AccountSettings authApi={authApi} sampleMode={false} />);
     await chooseHungarian(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent(t(key));
+    // Rendered once, as the field's error.
+    expect(await screen.findAllByText(t(key))).toHaveLength(1);
     expect(testI18n.language).toBe('en');
   });
 

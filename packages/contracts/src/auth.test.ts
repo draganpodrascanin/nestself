@@ -12,6 +12,8 @@ import {
   EmailOtpStartResponseSchema,
   MeResponseSchema,
   PasswordResetConfirmRequestSchema,
+  ProfileDisplayNameRequestSchema,
+  DISPLAY_NAME_MAX_LENGTH,
 } from './auth.ts';
 
 describe('DiscoverRequestSchema', () => {
@@ -271,5 +273,20 @@ describe('TotpConfirmResponseSchema', () => {
   it('accepts { enrolled: true } only', () => {
     expect(TotpConfirmResponseSchema.parse({ enrolled: true })).toEqual({ enrolled: true });
     expect(TotpConfirmResponseSchema.safeParse({ enrolled: false }).success).toBe(false);
+  });
+});
+
+describe('ProfileDisplayNameRequestSchema', () => {
+  it('accepts a trimmed name up to DISPLAY_NAME_MAX_LENGTH characters', () => {
+    expect(DISPLAY_NAME_MAX_LENGTH).toBe(120);
+    const name = 'x'.repeat(DISPLAY_NAME_MAX_LENGTH);
+    expect(ProfileDisplayNameRequestSchema.parse({ displayName: `  ${name}  ` }).displayName).toBe(name);
+  });
+
+  it('rejects an empty or too long name', () => {
+    expect(() => ProfileDisplayNameRequestSchema.parse({ displayName: '   ' })).toThrow();
+    expect(() =>
+      ProfileDisplayNameRequestSchema.parse({ displayName: 'x'.repeat(DISPLAY_NAME_MAX_LENGTH + 1) }),
+    ).toThrow();
   });
 });

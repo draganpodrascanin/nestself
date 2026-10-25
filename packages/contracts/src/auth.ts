@@ -248,8 +248,11 @@ export const ProfileLocaleRequestSchema = z.object({
 });
 export type ProfileLocaleRequest = z.infer<typeof ProfileLocaleRequestSchema>;
 
+/** Longest display name the profile route accepts (after trimming). */
+export const DISPLAY_NAME_MAX_LENGTH = 120;
+
 export const ProfileDisplayNameRequestSchema = z.object({
-  displayName: z.string().trim().min(1).max(120),
+  displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH),
 });
 export type ProfileDisplayNameRequest = z.infer<typeof ProfileDisplayNameRequestSchema>;
 
