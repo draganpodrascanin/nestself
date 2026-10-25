@@ -12,6 +12,8 @@ export type { SampleTestimonial } from './fixtures/testimonials.ts';
 export { SAMPLE_ORG_UNITS } from './fixtures/org-units.ts';
 export { SAMPLE_EXPERT_CREDENTIALS } from './fixtures/credentials.ts';
 export { SAMPLE_CASE } from './fixtures/case.ts';
+export { SAMPLE_CONVERSATIONS } from './fixtures/conversations.ts';
+export type { SampleConversation } from './fixtures/conversations.ts';
 export { SAMPLE_PRINCIPALS } from './fixtures/principals.ts';
 export { SAMPLE_GRANTS } from './fixtures/grants.ts';
 export type { SampleGrant } from './fixtures/grants.ts';

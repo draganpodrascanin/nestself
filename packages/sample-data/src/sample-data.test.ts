@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { EmergencyAccessResponseSchema, InvitationResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
+import {
+  ConversationResponseSchema,
+  ConversationSummarySchema,
+  EmergencyAccessResponseSchema,
+  IntakeResponseSchema,
+  InvitationResponseSchema,
+  PERMISSION_TEMPLATES,
+} from '@nestself/contracts';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -19,6 +26,7 @@ import {
   SAMPLE_CASE,
   SAMPLE_INVITATIONS,
   SAMPLE_EMERGENCY_ACCESS,
+  SAMPLE_CONVERSATIONS,
   SAMPLE_PRINCIPALS,
   isSampleMode,
   assertNotProduction,
@@ -43,6 +51,7 @@ describe('sample-data fixtures', () => {
     SAMPLE_CASE,
     ...SAMPLE_INVITATIONS,
     ...SAMPLE_EMERGENCY_ACCESS,
+    ...SAMPLE_CONVERSATIONS,
   ];
 
   it('every fixture has sample === true', () => {
@@ -203,6 +212,47 @@ describe('SAMPLE_EMERGENCY_ACCESS', () => {
       const scope = row.scopeKind === 'CASE' ? SAMPLE_CASE.id : SAMPLE_CASE.employeeUserId;
       expect(row.scopeId).toBe(scope);
     }
+  });
+});
+
+describe('SAMPLE_CONVERSATIONS', () => {
+  it('parses as conversation summaries, conversations and intakes', () => {
+    for (const row of SAMPLE_CONVERSATIONS) {
+      const { messages, intake, sample: _sample, ...summary } = row;
+      expect(ConversationSummarySchema.parse(summary)).toEqual(summary);
+      const conversation = { id: row.id, caseId: row.caseId, orgId: row.orgId, messages };
+      expect(ConversationResponseSchema.parse(conversation)).toEqual(conversation);
+      if (intake) {
+        expect(IntakeResponseSchema.parse(intake)).toEqual(intake);
+        expect(intake.caseId).toBe(row.caseId);
+      }
+    }
+  });
+
+  it('counts its messages, keeps them oldest first and uses only bland fixture bodies', () => {
+    for (const row of SAMPLE_CONVERSATIONS) {
+      expect(row.messageCount).toBe(row.messages.length);
+      const times = row.messages.map((m) => m.createdAt);
+      expect([...times].sort()).toEqual(times);
+      for (const m of row.messages) {
+        expect(m.body).toMatch(/^Sample [a-z ]+ \(fixture\)$/);
+        expect([row.employeeUserId, row.expertUserId]).toContain(m.authorUserId);
+      }
+      if (row.intake) expect(row.intake.body).toMatch(/\(fixture\)$/);
+    }
+  });
+
+  it('mirrors the seeded sample case and uses sample people only', () => {
+    const [seeded] = SAMPLE_CONVERSATIONS;
+    expect(seeded?.id).toBe(SAMPLE_CASE.conversation.id);
+    expect(seeded?.caseId).toBe(SAMPLE_CASE.id);
+    expect(seeded?.intake?.id).toBe(SAMPLE_CASE.intake.id);
+    const people = new Set<string>(SAMPLE_PEOPLE.map((p) => p.id));
+    for (const row of SAMPLE_CONVERSATIONS) {
+      expect(people.has(row.employeeUserId)).toBe(true);
+      expect(people.has(row.expertUserId)).toBe(true);
+    }
+    expect(new Set(SAMPLE_CONVERSATIONS.map((c) => c.id)).size).toBe(SAMPLE_CONVERSATIONS.length);
   });
 });
 
