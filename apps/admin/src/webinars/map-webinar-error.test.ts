@@ -8,7 +8,6 @@ import i18next from 'i18next';
 import type { Resource, TFunction } from 'i18next';
 import { resourcesFor } from '@nestself/i18n';
 import { ApiError } from '@nestself/api-client';
-import { WEBINAR_SINGLE_MEETING_CAPACITY } from '@nestself/contracts';
 import { isWebinarNotOpen, mapWebinarError } from './map-webinar-error';
 
 const i18n = i18next.createInstance();
@@ -32,10 +31,10 @@ describe('mapWebinarError', () => {
     expect(mapWebinarError(apiError(code, 409), t)).toBe(t(key));
   });
 
-  it('names the limit and the milestone for capacity_above_limit', () => {
+  it('names a limit for capacity_above_limit, without a milestone', () => {
     const message = mapWebinarError(apiError('capacity_above_limit'), t);
-    expect(message).toContain(String(WEBINAR_SINGLE_MEETING_CAPACITY));
-    expect(message).toContain('M3');
+    expect(message).toMatch(/at most \d/);
+    expect(message).not.toContain('M3');
   });
 
   it('falls back to the unknown copy, never the developer message', () => {

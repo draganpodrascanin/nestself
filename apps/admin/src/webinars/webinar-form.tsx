@@ -1,11 +1,11 @@
 /**
  * The occurrence form (WBN-30, D-CW-34, D-CW-36): title and description per
  * locale, audience (every eligible organisation, or chosen organisations),
- * capacity from 1 to 250 until M3, presenters and the moderator, and the
+ * capacity from 1 to 1,000 (media replication, T-CW-3.2), presenters and the moderator, and the
  * schedule in Europe/Belgrade, shown with the time zone. There is no
  * recording switch: every webinar is recorded, and the form says so.
  *
- * The capacity is checked here (1 to 250, `max` on the input) and on the
+ * The capacity is checked here (1 to 1,000, `max` on the input) and on the
  * server, whose 400 `capacity_above_limit` the form shows at the field and in
  * the summary too, naming the limit and the milestone. Every other failure
  * renders translated copy (error-visibility rule).
@@ -38,6 +38,7 @@ import { ApiError } from '@nestself/api-client';
 import type { WebinarCreateBody } from '@nestself/api-client';
 import {
   WEBINAR_DESCRIPTION_MAX_LENGTH,
+  WEBINAR_REPLICATED_CAPACITY,
   WEBINAR_SINGLE_MEETING_CAPACITY,
   WEBINAR_TITLE_MAX_LENGTH,
 } from '@nestself/contracts';
@@ -97,7 +98,8 @@ export interface WebinarFormProps {
 }
 
 export function WebinarForm({ onCreated }: WebinarFormProps) {
-  const { t } = useTranslation('calls');
+  const { t, i18n } = useTranslation('calls');
+  const formatCount = (value: number) => new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language).format(value);
   const summary = useRef<FormErrorSummaryHandle>(null);
   const [audience, setAudience] = useState<'all_eligible' | 'organization'>('all_eligible');
   const [organizations, setOrganizations] = useState<string[]>([]);
@@ -146,8 +148,8 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     const capacityText = String(data.get('capacity') ?? '').trim();
     const capacity = Number(capacityText);
     if (!/^\d+$/.test(capacityText) || capacity < 1) problems.capacity = t('webinar.form.capacityRange');
-    // D-CW-36: one meeting holds 250 until M3; the server answers 400 `capacity_above_limit` as well.
-    else if (capacity > WEBINAR_SINGLE_MEETING_CAPACITY) problems.capacity = t('webinar.capacityAboveLimit', { limit: WEBINAR_SINGLE_MEETING_CAPACITY });
+    // D-CW-36: up to 1,000 with media replication (T-CW-3.2); the server answers 400 `capacity_above_limit` as well.
+    else if (capacity > WEBINAR_REPLICATED_CAPACITY) problems.capacity = t('webinar.capacityAboveLimit', { limit: formatCount(WEBINAR_REPLICATED_CAPACITY) });
 
     const presenterUserIds = presenterChoices.options ? presenters : splitIds(String(data.get('presenters') ?? ''));
     const moderatorUserId = (moderatorChoices.options ? moderator : String(data.get('moderator') ?? '').trim()) || null;
@@ -194,7 +196,10 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
     try {
       onCreated(await webinarsApi.createOps(body));
     } catch (err) {
-      const message = mapWebinarError(err, t);
+      // The server names its limit in `details.limit`; the copy shows it in the reader's number format.
+      const limit = err instanceof ApiError && typeof err.details?.limit === 'number' ? err.details.limit : WEBINAR_REPLICATED_CAPACITY;
+      const message =
+        err instanceof ApiError && err.code === 'capacity_above_limit' ? t('webinar.capacityAboveLimit', { limit: formatCount(limit) }) : mapWebinarError(err, t);
       const field = err instanceof ApiError ? (err.code === 'capacity_above_limit' ? 'capacity' : API_FIELD[String(err.details?.field ?? '')]) : undefined;
       if (field) show({ [field]: message });
       else setFailure(message);
@@ -269,15 +274,16 @@ export function WebinarForm({ onCreated }: WebinarFormProps) {
         </Reveal>
       </div>
 
-      <Field label={t('webinar.form.capacity')} description={t('webinar.form.capacityHint', { limit: WEBINAR_SINGLE_MEETING_CAPACITY })} error={errors.capacity}>
+      <Field label={t('webinar.form.capacity')} description={t('webinar.form.capacityHint', { limit: formatCount(WEBINAR_REPLICATED_CAPACITY) })} error={errors.capacity}>
         <Input
           id={FIELD.capacity}
           name="capacity"
           type="number"
+          // The contract's default: one meeting's capacity.
           defaultValue={String(WEBINAR_SINGLE_MEETING_CAPACITY)}
           className="max-w-40"
           // `Input` passes these through to the native input; its props do not list them.
-          {...({ min: '1', max: String(WEBINAR_SINGLE_MEETING_CAPACITY) } as Record<string, string>)}
+          {...({ min: '1', max: String(WEBINAR_REPLICATED_CAPACITY) } as Record<string, string>)}
         />
       </Field>
 

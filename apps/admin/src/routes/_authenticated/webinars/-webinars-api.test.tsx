@@ -1,6 +1,6 @@
 /**
  * Admin webinar routes in API mode (WBN-16 to WBN-33, D-CW-36): the form
- * refuses a capacity above 250 itself and maps the server's
+ * refuses a capacity above 1,000 itself and maps the server's
  * `capacity_above_limit`, and posts the occurrence without any recording
  * field; publish asks first, then transitions the draft; an incomplete draft
  * gets the publishing checklist; every failure renders translated copy (list
@@ -163,7 +163,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
     await user.type(within(titles).getByLabelText(en.webinar.form.languages['sr-Latn']), 'San i odmor');
     const field = screen.getByLabelText(en.webinar.form.capacity);
-    expect(field).toHaveAttribute('max', '250');
+    expect(field).toHaveAttribute('max', '1000');
     await user.clear(field);
     await user.type(field, capacity);
     await user.type(screen.getByLabelText(en.webinar.form.presenters), 'user_milica');
@@ -174,7 +174,7 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
   }
 
-  const LIMIT_MESSAGE = 'Capacity can be at most 250 attendees until larger webinars are supported in milestone M3.';
+  const LIMIT_MESSAGE = 'Capacity can be at most 1,000 attendees.';
 
   /** The pickers' lists fail, so the form takes ids (the fallback). */
   const NO_LISTS = {
@@ -182,19 +182,20 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     'GET /api/ops/orgs': coded(404, 'not_found'),
   };
 
-  it('refuses a capacity of 300 before sending, naming the limit and M3', async () => {
+  it('refuses a capacity of 1,200 before sending, naming the limit', async () => {
     const sent = serve(NO_LISTS);
     const user = userEvent.setup();
     renderAt('/webinars/new');
-    await fillForm(user, '300');
+    await fillForm(user, '1200');
 
-    expect(en.webinar.capacityAboveLimit.replace('{{limit}}', '250')).toBe(LIMIT_MESSAGE);
+    expect(en.webinar.capacityAboveLimit.replace('{{limit}}', '1,000')).toBe(LIMIT_MESSAGE);
+    expect(en.webinar.capacityAboveLimit).not.toContain('M3');
     expect((await screen.findAllByText(new RegExp(LIMIT_MESSAGE.replace('.', '\\.')))).length).toBeGreaterThan(0);
     expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(false);
   });
 
   it("posts the occurrence and shows the server's capacity_above_limit at the field", async () => {
-    const sent = serve({ ...NO_LISTS, 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 250 }) });
+    const sent = serve({ ...NO_LISTS, 'POST /api/ops/webinars': coded(400, 'capacity_above_limit', { field: 'capacity', limit: 1000 }) });
     const user = userEvent.setup();
     renderAt('/webinars/new');
     await fillForm(user, '200');

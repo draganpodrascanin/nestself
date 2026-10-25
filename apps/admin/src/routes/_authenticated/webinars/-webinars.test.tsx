@@ -102,7 +102,7 @@ describe('admin webinars (sample mode)', () => {
     // No recording switch: every webinar is recorded (D-CW-34).
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.getByText(calls.webinar.recordingNotice)).toBeInTheDocument();
-    expect(screen.getByText('From 1 to 250 attendees until milestone M3.')).toBeInTheDocument();
+    expect(screen.getByText('From 1 to 1,000 attendees.')).toBeInTheDocument();
     expect(screen.getByText('Times are in Europe/Belgrade.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: calls.webinar.form.submit }));
