@@ -13,6 +13,11 @@
  * with Storybook's `forceRemount` event, so their entry is recorded like any
  * other.
  *
+ * The webinar entries (T-CW-2.6) follow at the end: the stage, lobby, REC
+ * and ended overlays, the chat, polls, the moderation queue, the hand, the
+ * floor dialog and notice, and the stop-recording confirmation. Paths no
+ * story button reaches are driven through the story's fake webinar server.
+ *
  * The expert's outcome dialog has no story: it lives in `apps/admin` and is
  * the `@nestself/ui` Dialog (already covered in `popouts.motion.ts`). Its
  * entry and exit are recorded in the real admin app by the consultation
@@ -459,5 +464,405 @@ test.describe('reduced motion', () => {
     expect(animatedProperties(seen)).toEqual(['opacity']);
     for (const animation of seen) expect(animation.duration).toBeLessThanOrEqual(MOTION.reducedFadeMax);
     expect(frames.at(-1)!.displayed).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Webinar components (T-CW-2.6, guidelines 17.4): the stage and its lobby,
+// REC and ended overlays, the chat, polls, the moderation queue, the hand,
+// the floor dialog and notice, and the stop-recording confirmation.
+// ===========================================================================
+
+const W_STAGE = '[data-testid="webinar-stage"]';
+const W_LOBBY = '[data-testid="webinar-lobby"]';
+const W_REC = '[data-testid="webinar-rec-indicator"]';
+const W_ENDED = '[data-testid="webinar-ended"]';
+const W_CHAT_ITEM = '[data-testid="webinar-chat-panel"] ol > li';
+const W_SENT = '[data-testid="webinar-chat-sent-notice"]';
+const W_ANSWER_FORM = '[data-testid="webinar-answer-form"]';
+const W_POLL_CARD = '[data-testid="webinar-poll-panel"] > div.origin-top';
+const W_VOTED = '[data-testid="webinar-poll-voted"]';
+const W_QUEUE = '[data-testid="webinar-moderator-queue"]';
+const W_HAND_ITEM = `${W_QUEUE} li:has([data-testid="webinar-queue-hand"])`;
+const W_PENDING_ITEM = `${W_QUEUE} li:has([data-testid="webinar-moderation-message"])`;
+const W_SPEAKERS = '[data-testid="webinar-queue-speakers"]';
+const W_HAND_BUTTON = '[data-testid="webinar-hand-raise"]';
+const W_TAKEN = '[data-testid="webinar-floor-taken-notice"]';
+const W_DIALOG = '[role="dialog"]';
+const W_ALERT = '[role="alertdialog"]';
+const TARGET = '[data-motion-target]';
+/** The fake webinar server answers after 300 to 400 ms in these stories, so recordings run a little longer. */
+const SLOW_STORY_MS = 2_500;
+
+/** Marks the first element matching `selector`, so a recording follows that one element even as its siblings move up. */
+async function markTarget(page: Page, selector: string): Promise<void> {
+  await page.evaluate((selector) => document.querySelector(selector)?.setAttribute('data-motion-target', ''), selector);
+}
+
+type FakeServerAction = { kind: 'newPoll' } | { kind: 'dismissTarget' } | { kind: 'end' };
+
+/**
+ * Drives the story's fake webinar server, as the story buttons do, for paths
+ * no story button reaches: the `FakeWebinarClient` is found through React's
+ * fiber on `anchor` (a component that takes it as its `client` prop).
+ * `newPoll` adds a second poll and opens it (the attendee's current poll
+ * changes); `dismissTarget` dismisses the published message whose list item
+ * carries `data-motion-target` (it leaves the attendee's chat); `end` ends
+ * the webinar (`webinar.ended`).
+ */
+async function fakeServer(page: Page, anchor: string, action: FakeServerAction): Promise<void> {
+  await page.evaluate(
+    ({ anchor, action }) => {
+      type Fiber = { key: string | null; return: Fiber | null; memoizedProps?: { client?: FakeClient } };
+      type FakeClient = {
+        server: { webinarId: string; addPoll: (poll: unknown) => void };
+        simulate: { openPoll: (id: string) => void; dismiss: (id: string) => void; end: () => void };
+      };
+      const fiberOf = (element: Element): Fiber => {
+        const key = Object.keys(element).find((name) => name.startsWith('__reactFiber$'))!;
+        return (element as unknown as Record<string, Fiber>)[key]!;
+      };
+      let fiber: Fiber | null = fiberOf(document.querySelector(anchor)!);
+      while (fiber && !fiber.memoizedProps?.client?.simulate) fiber = fiber.return;
+      const client = fiber!.memoizedProps!.client!;
+      if (action.kind === 'end') {
+        client.simulate.end();
+        return;
+      }
+      if (action.kind === 'newPoll') {
+        const id = 'motion-poll-second';
+        client.server.addPoll({
+          id,
+          webinarId: client.server.webinarId,
+          question: 'Which time suits a follow-up session? (sample)',
+          options: [
+            { id: 'motion-option-morning', label: 'Morning', position: 0 },
+            { id: 'motion-option-afternoon', label: 'Afternoon', position: 1 },
+          ],
+          openedAt: null,
+          closedAt: null,
+        });
+        client.simulate.openPoll(id);
+        return;
+      }
+      // The list item's key is the message id.
+      let item: Fiber | null = fiberOf(document.querySelector('[data-motion-target]')!);
+      while (item && item.key === null) item = item.return;
+      client.simulate.dismiss(item!.key!);
+    },
+    { anchor, action },
+  );
+}
+
+test.describe('WebinarStage', () => {
+  test.slow();
+  test('the stage fades in on the standard duration when it mounts', async ({ page }) => {
+    const story = 'video-webinarstage--attendee-live';
+    await gotoStory(page, story);
+    await expect(page.locator(W_STAGE)).toBeVisible();
+    expectEntry(await recordRemount(page, story, W_STAGE), FADE);
+  });
+
+  test('the lobby enters with the dialog preset', async ({ page }) => {
+    const story = 'video-webinarstage--attendee-lobby';
+    await gotoStory(page, story);
+    await expect(page.locator(W_LOBBY)).toBeVisible();
+    expectEntry(await recordRemount(page, story, W_LOBBY), DIALOG_IN);
+  });
+
+  test('"Start webinar" plays the lobby out while it is still visible', async ({ page }) => {
+    await gotoStory(page, 'video-webinarstage--presenter-lobby');
+    await expect(page.locator(W_LOBBY)).toBeVisible();
+    await page.waitForTimeout(500);
+    expectExit(await recordFrames(page, W_LOBBY, () => button(page, 'Start webinar').click(), SLOW_STORY_MS), DIALOG_OUT);
+  });
+
+  test('the REC indicator pops in when the recording starts with the webinar', async ({ page }) => {
+    await gotoStory(page, 'video-webinarstage--presenter-lobby');
+    await expect(page.locator(W_REC)).toHaveCount(0);
+    expectEntry(await recordFrames(page, W_REC, () => button(page, 'Start webinar').click(), SLOW_STORY_MS), POPOVER_IN);
+    await expect(page.locator(W_REC)).toContainText('REC');
+  });
+
+  test('the ended overlay enters with the dialog preset when the webinar ends', async ({ page }) => {
+    await gotoStory(page, 'video-webinarstage--attendee-live');
+    await expect(page.locator(W_STAGE)).toBeVisible();
+    await expect(page.locator(W_ENDED)).toHaveCount(0);
+    await page.waitForTimeout(300);
+    expectEntry(await recordFrames(page, W_ENDED, () => fakeServer(page, W_STAGE, { kind: 'end' }), SLOW_STORY_MS), DIALOG_IN);
+    await expect(page.locator(W_ENDED)).toContainText('The webinar has ended.');
+  });
+});
+
+test.describe('ChatPanel', () => {
+  test.slow();
+  test('a host message enters the feed with the popover preset', async ({ page }) => {
+    await gotoStory(page, 'video-chatpanel--presenter');
+    await page.getByRole('textbox', { name: 'Write to everyone' }).fill('Slides are in the chat after the webinar (sample).');
+    await markMounted(page, W_CHAT_ITEM);
+    const frames = await recordFrames(page, `${W_CHAT_ITEM}:not(${OLD})`, () => button(page, 'Send to everyone').click(), SLOW_STORY_MS);
+    expectEntry(frames, POPOVER_IN);
+  });
+
+  test('a published message the hosts dismiss leaves the attendee feed while visible', async ({ page }) => {
+    await gotoStory(page, 'video-chatpanel--attendee');
+    const thanks = page.locator(W_CHAT_ITEM).filter({ hasText: 'Thank you, the sound and the slides are clear.' });
+    await expect(thanks).toBeVisible();
+    await page.waitForTimeout(300);
+    await thanks.evaluate((element) => element.setAttribute('data-motion-target', ''));
+    expectExit(await recordFrames(page, TARGET, () => fakeServer(page, '[data-testid="webinar-chat-panel"]', { kind: 'dismissTarget' }), SLOW_STORY_MS), POPOVER_OUT);
+  });
+
+  test('the "sent to the hosts" notice pops in, and out when the attendee writes again', async ({ page }) => {
+    await gotoStory(page, 'video-chatpanel--attendee');
+    const text = page.getByRole('textbox', { name: 'Write to the hosts' });
+    await text.fill('Could you repeat the last example? (sample)');
+    // Sent with the keyboard shortcut: in this story the composer overflows the panel's fixed height
+    // and the story's note below it covers the Send button.
+    expectEntry(await recordFrames(page, W_SENT, () => text.press('Control+Enter'), SLOW_STORY_MS), POPOVER_IN);
+    await page.waitForTimeout(300);
+    expectExit(await recordFrames(page, W_SENT, () => text.fill('One more thing (sample)')), POPOVER_OUT);
+  });
+
+  test('the moderator\'s answer form expands frame by frame and collapses out of the layout', async ({ page }) => {
+    await gotoStory(page, 'video-chatpanel--moderator');
+    const toggle = page.getByRole('button', { name: 'Answer', exact: true }).first();
+    const opening = await recordFrames(page, W_ANSWER_FORM, () => toggle.click(), 600);
+    const fadeIn = animationsSeen(opening).filter((animation) => animation.properties.includes('opacity'));
+    expect(fadeIn.length).toBeGreaterThan(0);
+    for (const animation of fadeIn) {
+      expect(animation.duration).toBe(MOTION.standard);
+      expect(animation.easing).toBe(MOTION.easing);
+    }
+    const final = opening.at(-1)!.height;
+    expect(final).toBeGreaterThan(60);
+    const rising = opening.filter((frame) => frame.displayed).map((frame) => frame.height);
+    expect(rising.filter((height) => height > 1 && height < final - 1).length, 'grows, does not jump').toBeGreaterThanOrEqual(MIN_IN_BETWEEN_FRAMES);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await page.waitForTimeout(300);
+    const closing = await recordFrames(page, W_ANSWER_FORM, () => toggle.click(), 600);
+    for (const animation of animationsSeen(closing).filter((item) => item.properties.includes('opacity'))) expect(animation.duration).toBe(MOTION.fast);
+    const falling = closing.filter((frame) => frame.displayed).map((frame) => frame.height);
+    expect(falling.filter((height) => height > 1 && height < final - 1).length, 'shrinks, does not vanish').toBeGreaterThanOrEqual(2);
+    expect(closing.at(-1)!.present, 'unmounted once collapsed').toBe(false);
+  });
+});
+
+test.describe('PollPanel', () => {
+  test.slow();
+  test('a newly opened poll pops in for the attendee', async ({ page }) => {
+    await gotoStory(page, 'video-pollpanel--results');
+    await expect(page.locator(W_POLL_CARD)).toHaveCount(1);
+    await markMounted(page, W_POLL_CARD);
+    const frames = await recordFrames(page, `${W_POLL_CARD}:not(${OLD})`, () => fakeServer(page, '[data-testid="webinar-poll-panel"]', { kind: 'newPoll' }), SLOW_STORY_MS);
+    expectEntry(frames, POPOVER_IN);
+    await expect(page.getByRole('heading', { name: 'Which time suits a follow-up session? (sample)' })).toBeVisible();
+  });
+
+  test('the previous poll plays its exit while still visible when a new one opens', async ({ page }) => {
+    await gotoStory(page, 'video-pollpanel--results');
+    await expect(page.locator(W_POLL_CARD)).toHaveCount(1);
+    await page.waitForTimeout(300);
+    await markTarget(page, W_POLL_CARD);
+    expectExit(await recordFrames(page, TARGET, () => fakeServer(page, '[data-testid="webinar-poll-panel"]', { kind: 'newPoll' }), SLOW_STORY_MS), POPOVER_OUT);
+  });
+
+  test('the "vote counted" notice pops in after voting', async ({ page }) => {
+    await gotoStory(page, 'video-pollpanel--open-poll');
+    await page.getByRole('radio', { name: 'A short walk' }).check();
+    expectEntry(await recordFrames(page, W_VOTED, () => button(page, 'Vote').click(), SLOW_STORY_MS), POPOVER_IN);
+  });
+});
+
+test.describe('ModeratorQueue', () => {
+  test.slow();
+  test('a raised hand enters the queue and leaves it when lowered', async ({ page }) => {
+    await gotoStory(page, 'video-handraisebutton--with-moderator-queue');
+    await expect(page.locator(W_HAND_ITEM)).toHaveCount(0);
+    expectEntry(await recordFrames(page, W_HAND_ITEM, () => button(page, 'Raise hand').click(), SLOW_STORY_MS), POPOVER_IN);
+    await page.waitForTimeout(300);
+    expectExit(await recordFrames(page, W_HAND_ITEM, () => button(page, 'Lower hand').click(), SLOW_STORY_MS), POPOVER_OUT);
+  });
+
+  test('"Speaking now" enters on giving the floor and leaves when it is taken back', async ({ page }) => {
+    await gotoStory(page, 'video-moderatorqueue--moderator');
+    await expect(page.locator(W_SPEAKERS)).toHaveCount(0);
+    const give = page.getByRole('button', { name: 'Give the floor to Ana Kovač (sample)' });
+    expectEntry(await recordFrames(page, W_SPEAKERS, () => give.click(), SLOW_STORY_MS), POPOVER_IN);
+    await page.waitForTimeout(300);
+    const take = page.getByRole('button', { name: 'Take the floor back from Ana Kovač (sample)' });
+    expectExit(await recordFrames(page, W_SPEAKERS, () => take.click(), SLOW_STORY_MS), POPOVER_OUT);
+  });
+
+  test('a dismissed message leaves the review list while still visible', async ({ page }) => {
+    await gotoStory(page, 'video-moderatorqueue--moderator');
+    await expect(page.locator(W_PENDING_ITEM).first()).toBeVisible();
+    await page.waitForTimeout(300);
+    await markTarget(page, W_PENDING_ITEM);
+    const dismiss = page.locator(TARGET).getByRole('button', { name: 'Dismiss' });
+    expectExit(await recordFrames(page, TARGET, () => dismiss.click(), SLOW_STORY_MS), POPOVER_OUT);
+  });
+});
+
+test.describe('HandRaiseButton', () => {
+  test.slow();
+  test('raising changes the colours on the fast token with the standard easing', async ({ page }) => {
+    await gotoStory(page, 'video-handraisebutton--lowered');
+    const frames = await recordFrames(page, W_HAND_BUTTON, () => button(page, 'Raise hand').click(), SLOW_STORY_MS);
+    const seen = animationsSeen(frames);
+    expect(seen.length, 'the state change transitions, it does not jump').toBeGreaterThan(0);
+    for (const animation of seen) {
+      expect(animation.kind).toBe('CSSTransition');
+      // Transitions report longhands: border-top-color and the other three sides.
+      expect(animation.properties[0]).toMatch(/^(background-color|color|border(-(top|right|bottom|left))?-color)$/);
+      expect(animation.duration).toBe(MOTION.fast);
+      expect(animation.easing).toBe(MOTION.easing);
+    }
+    await expect(page.locator(W_HAND_BUTTON)).toHaveAttribute('data-state', 'raised');
+  });
+});
+
+test.describe('FloorGrantedDialog', () => {
+  test.slow();
+  const give = (page: Page) => button(page, 'A host gives the floor (sample)').click();
+
+  test('"You can speak now" enters with the dialog preset', async ({ page }) => {
+    await gotoStory(page, 'video-floorgranteddialog--closed');
+    expectEntry(await recordFrames(page, W_DIALOG, () => give(page)), DIALOG_IN);
+    await expect(page.getByTestId('webinar-floor-dialog')).toContainText('recording');
+  });
+
+  test('closing it plays the exit while still visible, then leaves', async ({ page }) => {
+    await gotoStory(page, 'video-floorgranteddialog--closed');
+    await give(page);
+    await expect(page.locator(W_DIALOG)).toBeVisible();
+    await page.waitForTimeout(500);
+    expectExit(await recordFrames(page, W_DIALOG, () => button(page, 'Not now').click()), DIALOG_OUT);
+  });
+
+  test('its scrim fades out on the standard duration', async ({ page }) => {
+    await gotoStory(page, 'video-floorgranteddialog--closed');
+    await give(page);
+    await expect(page.locator(W_DIALOG)).toBeVisible();
+    await page.waitForTimeout(500);
+    const closing = await recordFrames(page, SCRIM, () => button(page, 'Not now').click());
+    expectTokenTiming(animationsSeen(closing), FADE);
+    expect(closing.filter(isInBetween).length).toBeGreaterThanOrEqual(MIN_IN_BETWEEN_FRAMES);
+    expect(closing.at(-1)!.displayed).toBe(false);
+  });
+
+  test('"The host took the floor back" pops in and out', async ({ page }) => {
+    await gotoStory(page, 'video-floorgranteddialog--closed');
+    await give(page);
+    await button(page, 'Not now').click();
+    await expect(page.locator(W_DIALOG)).toHaveCount(0);
+    expectEntry(await recordFrames(page, W_TAKEN, () => button(page, 'The host takes it back (sample)').click()), POPOVER_IN);
+    await page.waitForTimeout(300);
+    expectExit(await recordFrames(page, W_TAKEN, () => button(page, 'OK').click()), POPOVER_OUT);
+  });
+});
+
+test.describe('Stop-recording confirmation', () => {
+  test.slow();
+  test.beforeEach(async ({ page }) => {
+    await gotoStory(page, 'video-moderatorqueue--moderator');
+  });
+
+  test('enters with the dialog preset', async ({ page }) => {
+    expectEntry(await recordFrames(page, W_ALERT, () => button(page, 'Stop recording').click()), DIALOG_IN);
+    await expect(page.getByRole('alertdialog', { name: 'Stop the recording now?' })).toBeVisible();
+  });
+
+  test('"Keep recording" plays the exit while still visible, then leaves', async ({ page }) => {
+    await button(page, 'Stop recording').click();
+    await expect(page.locator(W_ALERT)).toBeVisible();
+    await page.waitForTimeout(500);
+    expectExit(await recordFrames(page, W_ALERT, () => button(page, 'Keep recording').click()), DIALOG_OUT);
+  });
+});
+
+const webinarReducedCases: ReducedCase[] = [
+  {
+    name: 'WebinarStage REC indicator',
+    story: 'video-webinarstage--presenter-lobby',
+    selector: W_REC,
+    appear: (page) => button(page, 'Start webinar').click(),
+  },
+  {
+    name: 'ChatPanel host message',
+    story: 'video-chatpanel--presenter',
+    selector: `${W_CHAT_ITEM}:not(${OLD})`,
+    prepare: async (page) => {
+      await page.getByRole('textbox', { name: 'Write to everyone' }).fill('Short reduced-motion note (sample).');
+      await markMounted(page, W_CHAT_ITEM);
+    },
+    appear: (page) => button(page, 'Send to everyone').click(),
+  },
+  {
+    name: 'PollPanel new poll',
+    story: 'video-pollpanel--results',
+    selector: `${W_POLL_CARD}:not(${OLD})`,
+    prepare: async (page) => {
+      await expect(page.locator(W_POLL_CARD)).toHaveCount(1);
+      await markMounted(page, W_POLL_CARD);
+    },
+    appear: (page) => fakeServer(page, '[data-testid="webinar-poll-panel"]', { kind: 'newPoll' }),
+  },
+  {
+    name: 'ModeratorQueue raised hand',
+    story: 'video-handraisebutton--with-moderator-queue',
+    selector: W_HAND_ITEM,
+    appear: (page) => button(page, 'Raise hand').click(),
+  },
+  {
+    name: 'FloorGrantedDialog',
+    story: 'video-floorgranteddialog--closed',
+    selector: W_DIALOG,
+    appear: (page) => button(page, 'A host gives the floor (sample)').click(),
+  },
+  {
+    name: 'Stop-recording confirmation',
+    story: 'video-moderatorqueue--moderator',
+    selector: W_ALERT,
+    appear: (page) => button(page, 'Stop recording').click(),
+  },
+];
+
+test.describe('reduced motion (webinar)', () => {
+  test.slow();
+  test.use({ reducedMotion: 'reduce' });
+
+  for (const item of webinarReducedCases) {
+    test(`${item.name}: a short fade with no movement`, async ({ page }) => {
+      await gotoStory(page, item.story);
+      await item.prepare?.(page);
+      const frames = await recordFrames(page, item.selector, () => item.appear(page), SLOW_STORY_MS);
+      const seen = animationsSeen(frames);
+      expect(animatedProperties(seen)).toEqual(['opacity']);
+      for (const animation of seen) expect(animation.duration).toBeLessThanOrEqual(MOTION.reducedFadeMax);
+      for (const frame of frames.filter((f) => f.displayed)) expect(frame.transform).toBe('none');
+      expect(frames.at(-1)!.displayed).toBe(true);
+      expect(frames.at(-1)!.opacity).toBe(1);
+    });
+  }
+
+  test('WebinarStage lobby: leaving is the same short fade', async ({ page }) => {
+    await gotoStory(page, 'video-webinarstage--presenter-lobby');
+    await expect(page.locator(W_LOBBY)).toBeVisible();
+    await page.waitForTimeout(300);
+    const frames = await recordFrames(page, W_LOBBY, () => button(page, 'Start webinar').click(), SLOW_STORY_MS);
+    const seen = animationsSeen(frames);
+    expect(animatedProperties(seen)).toEqual(['opacity']);
+    for (const animation of seen) expect(animation.duration).toBeLessThanOrEqual(MOTION.reducedFadeMax);
+    for (const frame of frames.filter((f) => f.displayed)) expect(frame.transform).toBe('none');
+    expect(frames.at(-1)!.displayed).toBe(false);
+  });
+
+  test('HandRaiseButton: the colour change is instant', async ({ page }) => {
+    await gotoStory(page, 'video-handraisebutton--lowered');
+    const frames = await recordFrames(page, W_HAND_BUTTON, () => button(page, 'Raise hand').click(), SLOW_STORY_MS);
+    for (const animation of animationsSeen(frames)) expect(animation.duration).toBe(0);
+    await expect(page.locator(W_HAND_BUTTON)).toHaveAttribute('data-state', 'raised');
   });
 });

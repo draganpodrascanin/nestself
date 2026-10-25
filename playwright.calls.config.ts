@@ -35,7 +35,8 @@ export default defineConfig({
   testDir: './e2e/calls',
   fullyParallel: false,
   forbidOnly: CI,
-  retries: CI ? 1 : 0,
+  // One retry: a dev server under load can drop a request; a retried pass is reported as flaky.
+  retries: 1,
   // At most two: more starves the three dev servers on a laptop.
   workers: 2,
   reporter: CI ? 'github' : [['list'], ['html', { open: 'never', outputFolder: 'e2e/playwright-report/calls' }]],
@@ -56,13 +57,15 @@ export default defineConfig({
     { name: 'calls-index', testMatch: /manual-index\.teardown\.ts/ },
     {
       name: 'calls-desktop',
-      testMatch: /consultation\.spec\.ts/,
+      testMatch: /\.spec\.ts$/,
+      testIgnore: /video-smoke\.spec\.ts/,
       dependencies: ['calls-setup'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 },
     },
     {
       name: 'calls-mobile',
-      testMatch: /consultation\.spec\.ts/,
+      testMatch: /\.spec\.ts$/,
+      testIgnore: /video-smoke\.spec\.ts/,
       dependencies: ['calls-setup'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
     },
