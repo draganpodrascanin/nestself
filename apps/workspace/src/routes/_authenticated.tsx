@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   SealCheck,
   SlidersHorizontal,
+  Presentation,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -20,6 +21,7 @@ import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { isSampleDataMode } from '../data-source';
 import { UserRoomListener } from '../calls/user-room-listener';
+import { canAttendWebinars } from '../webinars/route-gate';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
@@ -35,7 +37,7 @@ export const Route = createFileRoute('/_authenticated')({
 });
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace']);
+  const { t } = useTranslation(['common', 'workspace', 'calls']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
 
@@ -84,7 +86,12 @@ function AuthenticatedLayout() {
     ? [{ to: '/follow-up-policy' as const, icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
     : [];
 
-  const allNavItems = [...navItems, ...managerNav, ...approvalsNav, ...hrNav, ...accessNav, ...followUpPolicyNav];
+  // Webinars (T-CW-2.4): discovery and registration for holders of `event.register`.
+  const webinarsNav = canAttendWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
+    : [];
+
+  const allNavItems = [...navItems, ...webinarsNav, ...managerNav, ...approvalsNav, ...hrNav, ...accessNav, ...followUpPolicyNav];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [

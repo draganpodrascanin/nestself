@@ -29,6 +29,8 @@ import { Route as AuthenticatedMessagesThreadIdRouteImport } from './routes/_aut
 import { Route as AuthenticatedPollsIndexRouteImport } from './routes/_authenticated/polls/index'
 import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
 import { Route as AuthenticatedSupportAreaRouteImport } from './routes/_authenticated/support/$area'
+import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authenticated/webinars/index'
+import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedHrHrIndexRouteImport } from './routes/_authenticated/_hr/hr/index'
 import { Route as AuthenticatedHrHrAccessRouteImport } from './routes/_authenticated/_hr/hr/access'
@@ -36,6 +38,7 @@ import { Route as AuthenticatedHrHrEligibilityRouteImport } from './routes/_auth
 import { Route as AuthenticatedHrHrEventsRouteImport } from './routes/_authenticated/_hr/hr/events'
 import { Route as AuthenticatedHrHrReportsRouteImport } from './routes/_authenticated/_hr/hr/reports'
 import { Route as AuthenticatedManagerManageIndexRouteImport } from './routes/_authenticated/_manager/manage/index'
+import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
 import { Route as AuthenticatedManagerManageEventsNewRouteImport } from './routes/_authenticated/_manager/manage/events.new'
 import { Route as AuthenticatedManagerManagePollsNewRouteImport } from './routes/_authenticated/_manager/manage/polls.new'
 
@@ -145,6 +148,18 @@ const AuthenticatedSupportAreaRoute =
     path: '/support/$area',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedWebinarsIndexRoute =
+  AuthenticatedWebinarsIndexRouteImport.update({
+    id: '/webinars/',
+    path: '/webinars/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWebinarsWebinarIdRoute =
+  AuthenticatedWebinarsWebinarIdRouteImport.update({
+    id: '/webinars/$webinarId',
+    path: '/webinars/$webinarId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -183,6 +198,12 @@ const AuthenticatedManagerManageIndexRoute =
     path: '/manage/',
     getParentRoute: () => AuthenticatedManagerRoute,
   } as any)
+const AuthenticatedWebinarsWebinarIdLiveRoute =
+  AuthenticatedWebinarsWebinarIdLiveRouteImport.update({
+    id: '/live',
+    path: '/live',
+    getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
+  } as any)
 const AuthenticatedManagerManageEventsNewRoute =
   AuthenticatedManagerManageEventsNewRouteImport.update({
     id: '/manage/events/new',
@@ -207,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
   '/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/approvals/': typeof AuthenticatedApprovalsIndexRoute
@@ -214,10 +236,12 @@ export interface FileRoutesByFullPath {
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/polls/': typeof AuthenticatedPollsIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
+  '/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/hr/': typeof AuthenticatedHrHrIndexRoute
   '/manage/': typeof AuthenticatedManagerManageIndexRoute
   '/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
@@ -234,6 +258,7 @@ export interface FileRoutesByTo {
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
   '/appointments': typeof AuthenticatedAppointmentsIndexRoute
   '/approvals': typeof AuthenticatedApprovalsIndexRoute
@@ -241,10 +266,12 @@ export interface FileRoutesByTo {
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/polls': typeof AuthenticatedPollsIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
+  '/webinars': typeof AuthenticatedWebinarsIndexRoute
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/hr': typeof AuthenticatedHrHrIndexRoute
   '/manage': typeof AuthenticatedManagerManageIndexRoute
   '/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
@@ -266,6 +293,7 @@ export interface FileRoutesById {
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/_authenticated/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute
@@ -273,10 +301,12 @@ export interface FileRoutesById {
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
+  '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/_authenticated/_hr/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/_authenticated/_hr/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/_authenticated/_hr/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/_authenticated/_hr/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/_hr/hr/': typeof AuthenticatedHrHrIndexRoute
   '/_authenticated/_manager/manage/': typeof AuthenticatedManagerManageIndexRoute
   '/_authenticated/_manager/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
@@ -295,6 +325,7 @@ export interface FileRouteTypes {
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
+    | '/webinars/$webinarId'
     | '/invite/$token'
     | '/appointments/'
     | '/approvals/'
@@ -302,10 +333,12 @@ export interface FileRouteTypes {
     | '/messages/'
     | '/polls/'
     | '/support/'
+    | '/webinars/'
     | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/reports'
+    | '/webinars/$webinarId/live'
     | '/hr/'
     | '/manage/'
     | '/manage/events/new'
@@ -322,6 +355,7 @@ export interface FileRouteTypes {
     | '/channels/$channelId'
     | '/messages/$threadId'
     | '/support/$area'
+    | '/webinars/$webinarId'
     | '/invite/$token'
     | '/appointments'
     | '/approvals'
@@ -329,10 +363,12 @@ export interface FileRouteTypes {
     | '/messages'
     | '/polls'
     | '/support'
+    | '/webinars'
     | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/reports'
+    | '/webinars/$webinarId/live'
     | '/hr'
     | '/manage'
     | '/manage/events/new'
@@ -353,6 +389,7 @@ export interface FileRouteTypes {
     | '/_authenticated/channels/$channelId'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
+    | '/_authenticated/webinars/$webinarId'
     | '/_public/invite/$token'
     | '/_authenticated/appointments/'
     | '/_authenticated/approvals/'
@@ -360,10 +397,12 @@ export interface FileRouteTypes {
     | '/_authenticated/messages/'
     | '/_authenticated/polls/'
     | '/_authenticated/support/'
+    | '/_authenticated/webinars/'
     | '/_authenticated/_hr/hr/access'
     | '/_authenticated/_hr/hr/eligibility'
     | '/_authenticated/_hr/hr/events'
     | '/_authenticated/_hr/hr/reports'
+    | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/_hr/hr/'
     | '/_authenticated/_manager/manage/'
     | '/_authenticated/_manager/manage/events/new'
@@ -518,6 +557,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSupportAreaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/webinars/': {
+      id: '/_authenticated/webinars/'
+      path: '/webinars'
+      fullPath: '/webinars/'
+      preLoaderRoute: typeof AuthenticatedWebinarsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/webinars/$webinarId': {
+      id: '/_authenticated/webinars/$webinarId'
+      path: '/webinars/$webinarId'
+      fullPath: '/webinars/$webinarId'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_public/invite/$token': {
       id: '/_public/invite/$token'
       path: '/invite/$token'
@@ -566,6 +619,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/manage/'
       preLoaderRoute: typeof AuthenticatedManagerManageIndexRouteImport
       parentRoute: typeof AuthenticatedManagerRoute
+    }
+    '/_authenticated/webinars/$webinarId/live': {
+      id: '/_authenticated/webinars/$webinarId/live'
+      path: '/live'
+      fullPath: '/webinars/$webinarId/live'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdLiveRouteImport
+      parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
     }
     '/_authenticated/_manager/manage/events/new': {
       id: '/_authenticated/_manager/manage/events/new'
@@ -623,6 +683,21 @@ const AuthenticatedManagerRouteChildren: AuthenticatedManagerRouteChildren = {
 const AuthenticatedManagerRouteWithChildren =
   AuthenticatedManagerRoute._addFileChildren(AuthenticatedManagerRouteChildren)
 
+interface AuthenticatedWebinarsWebinarIdRouteChildren {
+  AuthenticatedWebinarsWebinarIdLiveRoute: typeof AuthenticatedWebinarsWebinarIdLiveRoute
+}
+
+const AuthenticatedWebinarsWebinarIdRouteChildren: AuthenticatedWebinarsWebinarIdRouteChildren =
+  {
+    AuthenticatedWebinarsWebinarIdLiveRoute:
+      AuthenticatedWebinarsWebinarIdLiveRoute,
+  }
+
+const AuthenticatedWebinarsWebinarIdRouteWithChildren =
+  AuthenticatedWebinarsWebinarIdRoute._addFileChildren(
+    AuthenticatedWebinarsWebinarIdRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedHrRoute: typeof AuthenticatedHrRouteWithChildren
   AuthenticatedManagerRoute: typeof AuthenticatedManagerRouteWithChildren
@@ -632,12 +707,14 @@ interface AuthenticatedRouteChildren {
   AuthenticatedChannelsChannelIdRoute: typeof AuthenticatedChannelsChannelIdRoute
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
+  AuthenticatedWebinarsWebinarIdRoute: typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   AuthenticatedAppointmentsIndexRoute: typeof AuthenticatedAppointmentsIndexRoute
   AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPollsIndexRoute: typeof AuthenticatedPollsIndexRoute
   AuthenticatedSupportIndexRoute: typeof AuthenticatedSupportIndexRoute
+  AuthenticatedWebinarsIndexRoute: typeof AuthenticatedWebinarsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -650,12 +727,15 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedChannelsChannelIdRoute: AuthenticatedChannelsChannelIdRoute,
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,
+  AuthenticatedWebinarsWebinarIdRoute:
+    AuthenticatedWebinarsWebinarIdRouteWithChildren,
   AuthenticatedAppointmentsIndexRoute: AuthenticatedAppointmentsIndexRoute,
   AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPollsIndexRoute: AuthenticatedPollsIndexRoute,
   AuthenticatedSupportIndexRoute: AuthenticatedSupportIndexRoute,
+  AuthenticatedWebinarsIndexRoute: AuthenticatedWebinarsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

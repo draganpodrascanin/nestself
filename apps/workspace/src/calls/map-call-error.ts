@@ -42,6 +42,8 @@ const GENERIC_MESSAGES: Readonly<Record<string, (t: CallsT) => string>> = {
   forbidden: (t) => t('errors.forbidden'),
   rate_limited: (t) => t('errors.rateLimited'),
   validation: (t) => t('errors.validation'),
+  // Webinars (T-CW-2.4): a step the occurrence, message or poll does not allow in its current state.
+  conflict: (t) => t('errors.conflict'),
 };
 
 function isCallErrorCode(code: string): code is CallErrorCode {
