@@ -6,6 +6,8 @@ import {
   IntakeResponseSchema,
   InvitationResponseSchema,
   PERMISSION_TEMPLATES,
+  SSO_SLUG_PATTERN,
+  SsoConnectionResponseSchema,
 } from '@nestself/contracts';
 import {
   SAMPLE_ORG,
@@ -26,6 +28,7 @@ import {
   SAMPLE_CASE,
   SAMPLE_INVITATIONS,
   SAMPLE_EMERGENCY_ACCESS,
+  SAMPLE_SSO_CONNECTIONS,
   SAMPLE_CONVERSATIONS,
   SAMPLE_PRINCIPALS,
   isSampleMode,
@@ -51,6 +54,7 @@ describe('sample-data fixtures', () => {
     SAMPLE_CASE,
     ...SAMPLE_INVITATIONS,
     ...SAMPLE_EMERGENCY_ACCESS,
+    ...SAMPLE_SSO_CONNECTIONS,
     ...SAMPLE_CONVERSATIONS,
   ];
 
@@ -176,6 +180,34 @@ describe('SAMPLE_INVITATIONS', () => {
       expect(tpl?.isActive).toBe(true);
       expect(['organization', 'employee']).toContain(tpl?.workspace);
       if (inv.orgUnitId !== null) expect(unitIds.has(inv.orgUnitId)).toBe(true);
+    }
+  });
+});
+
+describe('SAMPLE_SSO_CONNECTIONS', () => {
+  it('has an active SAML connection with a verified domain and a draft OIDC one with a pending domain', () => {
+    expect(SAMPLE_SSO_CONNECTIONS).toHaveLength(2);
+    const [saml, oidc] = SAMPLE_SSO_CONNECTIONS;
+    expect(saml?.protocol).toBe('SAML');
+    expect(saml?.status).toBe('ACTIVE');
+    expect(saml?.domains.every((d) => d.verifiedAt !== null)).toBe(true);
+    expect(oidc?.protocol).toBe('OIDC');
+    expect(oidc?.status).toBe('DRAFT');
+    expect(oidc?.domains.every((d) => d.verifiedAt === null)).toBe(true);
+  });
+
+  it('parses as SSO connection responses of the sample organization, on reserved fictional domains', () => {
+    for (const row of SAMPLE_SSO_CONNECTIONS) {
+      const { sample: _sample, ...rest } = row;
+      expect(SsoConnectionResponseSchema.parse(rest)).toEqual(rest);
+      expect(row.orgId).toBe(SAMPLE_ORG.id);
+      expect(row.idpInitiatedAllowed).toBe(false);
+      const slug = row.cognitoProviderName.replace(/^org-/, '').replace(/-(saml|oidc)$/, '');
+      expect(slug).toMatch(SSO_SLUG_PATTERN);
+      for (const d of row.domains) {
+        expect(d.domain).toMatch(/\.example$/);
+        expect(d.txtRecordName).toBe(`_nestself-verify.${d.domain}`);
+      }
     }
   });
 });

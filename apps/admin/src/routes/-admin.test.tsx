@@ -100,3 +100,24 @@ describe('Admin: Emergency access navigation', () => {
     expect(await screen.findByText(i18n.t('admin:emergency.sampleNote'))).toBeInTheDocument();
   });
 });
+
+describe('Admin: SSO navigation', () => {
+  it('shows the SSO item to a principal holding sso.manage', async () => {
+    renderWithRouter({ path: '/', auth: authFor('admin') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).getByRole('link', { name: i18n.t('admin:nav.sso') })).toBeInTheDocument();
+  });
+
+  it('hides it from operations staff without sso.manage', async () => {
+    expect(SAMPLE_PRINCIPALS.operations.effectiveActions).not.toContain('sso.manage');
+    renderWithRouter({ path: '/', auth: authFor('operations') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).queryByRole('link', { name: i18n.t('admin:nav.sso') })).not.toBeInTheDocument();
+  });
+
+  it('renders the sample connections on /sso in sample mode', async () => {
+    renderWithRouter({ path: '/sso', auth: authFor('admin') });
+    expect(await screen.findByRole('heading', { level: 1, name: i18n.t('admin:sso.title') })).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('admin:sso.sampleNote'))).toBeInTheDocument();
+  });
+});

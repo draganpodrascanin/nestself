@@ -21,5 +21,7 @@ export { SAMPLE_INVITATIONS } from './fixtures/invitations.ts';
 export type { SampleInvitation } from './fixtures/invitations.ts';
 export { SAMPLE_EMERGENCY_ACCESS } from './fixtures/emergency-access.ts';
 export type { SampleEmergencyAccess } from './fixtures/emergency-access.ts';
+export { SAMPLE_SSO_CONNECTIONS } from './fixtures/sso-connections.ts';
+export type { SampleSsoConnection } from './fixtures/sso-connections.ts';
 export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';

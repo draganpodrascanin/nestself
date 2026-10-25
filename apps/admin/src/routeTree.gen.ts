@@ -23,6 +23,7 @@ import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
+import { Route as AuthenticatedSsoIndexRouteImport } from './routes/_authenticated/sso/index'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
@@ -103,6 +104,11 @@ const AuthenticatedOrganizationsOrgIdRoute =
     path: '/organizations/$orgId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSsoIndexRoute = AuthenticatedSsoIndexRouteImport.update({
+  id: '/sso/',
+  path: '/sso/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/sso/': typeof AuthenticatedSsoIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/emergency': typeof AuthenticatedEmergencyIndexRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
+  '/sso': typeof AuthenticatedSsoIndexRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/_authenticated/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/_authenticated/sso/': typeof AuthenticatedSsoIndexRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/_authenticated/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/emergency/'
     | '/experts/'
     | '/organizations/'
+    | '/sso/'
     | '/organizations/$orgId/access'
     | '/organizations/$orgId/people'
     | '/organizations/$orgId/'
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/emergency'
     | '/experts'
     | '/organizations'
+    | '/sso'
     | '/organizations/$orgId/access'
     | '/organizations/$orgId/people'
     | '/organizations/$orgId'
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '/_authenticated/emergency/'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
+    | '/_authenticated/sso/'
     | '/_authenticated/organizations/$orgId/access'
     | '/_authenticated/organizations/$orgId/people'
     | '/_authenticated/organizations/$orgId/'
@@ -346,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/sso/': {
+      id: '/_authenticated/sso/'
+      path: '/sso'
+      fullPath: '/sso/'
+      preLoaderRoute: typeof AuthenticatedSsoIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_public/invite/$token': {
       id: '/_public/invite/$token'
       path: '/invite/$token'
@@ -409,6 +428,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedEmergencyIndexRoute: typeof AuthenticatedEmergencyIndexRoute
   AuthenticatedExpertsIndexRoute: typeof AuthenticatedExpertsIndexRoute
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
+  AuthenticatedSsoIndexRoute: typeof AuthenticatedSsoIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -423,6 +443,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedEmergencyIndexRoute: AuthenticatedEmergencyIndexRoute,
   AuthenticatedExpertsIndexRoute: AuthenticatedExpertsIndexRoute,
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
+  AuthenticatedSsoIndexRoute: AuthenticatedSsoIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
