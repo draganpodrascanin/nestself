@@ -12,6 +12,7 @@ import { ApiError } from '@nestself/api-client';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { AuthContext } from './auth-context';
 import { SampleAuthExtrasContext } from './sample-extras';
+import type { AuthSnapshot } from './types';
 
 type SampleRole = keyof typeof SAMPLE_PRINCIPALS;
 
@@ -49,6 +50,17 @@ function resolveInitialRole(): SampleRole {
     }
   }
   return 'employee';
+}
+
+/**
+ * The session route guards see in sample mode before the provider has synced
+ * the router context: the principal of the `?role=` sample (else employee).
+ * Without it a deep link such as `/hr?role=hr_admin` was decided on a null
+ * principal and redirected away.
+ */
+export function sampleRouteSnapshot(): AuthSnapshot {
+  const sample = SAMPLE_PRINCIPALS[resolveInitialRole()];
+  return { principal: sample.principal, effectiveActions: sample.effectiveActions };
 }
 
 /** The API's rule for `POST /auth/context` (session-endpoints.service.ts). */

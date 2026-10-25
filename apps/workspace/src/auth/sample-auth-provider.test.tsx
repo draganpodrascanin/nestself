@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ApiError } from '@nestself/api-client';
-import { SampleAuthProvider } from './sample-auth-provider';
+import { SampleAuthProvider, sampleRouteSnapshot } from './sample-auth-provider';
+import { can } from '@nestself/contracts';
+import { resolveRouteAuth } from './route-auth';
 import { useAuth } from './auth-context';
 
 afterEach(cleanup);
@@ -44,5 +46,26 @@ describe('SampleAuthProvider context switching', () => {
     expect(result.current.principal?.context).toEqual({ kind: 'personal' });
     await act(() => result.current.switchContext({ kind: 'operations' }));
     expect(result.current.principal?.context).toEqual({ kind: 'operations' });
+  });
+});
+
+describe('sampleRouteSnapshot (guards on the first navigation in sample mode)', () => {
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('gives a deep link the ?role= sample principal, so the HR gate lets the HR admin in', async () => {
+    window.history.replaceState(null, '', '/hr?role=hr_admin');
+    const snapshot = await resolveRouteAuth({
+      principal: null,
+      effectiveActions: [],
+      settled: false,
+      ensure: () => Promise.resolve(sampleRouteSnapshot()),
+    });
+    expect(snapshot.principal?.userId).toBe('user_ivana');
+    expect(can(snapshot.principal!, 'program.overview', undefined, snapshot.effectiveActions)).toBe(true);
+  });
+
+  it('falls back to the employee without a role', () => {
+    window.history.replaceState(null, '', '/hr');
+    expect(sampleRouteSnapshot().principal?.userId).toBe('user_jovan');
   });
 });

@@ -4,7 +4,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { routeTree } from './routeTree.gen';
 import { api } from './api';
-import { initialSnapshot } from './auth';
+import { initialSnapshot, sampleRouteSnapshot } from './auth';
 import { isSampleDataMode } from './data-source';
 import { shouldRetryQuery } from './query-retry';
 import './i18n';
@@ -34,8 +34,9 @@ const router = createRouter({
       principal: null,
       effectiveActions: [],
       settled: false,
-      // Sample mode has no session to wait for; SampleAuthProvider fills the context.
-      ensure: isSampleDataMode ? undefined : () => initialSnapshot(api),
+      // Sample mode has no session to wait for: guards of the first navigation
+      // get the `?role=` sample principal; SampleAuthProvider then fills the context.
+      ensure: isSampleDataMode ? () => Promise.resolve(sampleRouteSnapshot()) : () => initialSnapshot(api),
     },
   },
   defaultPreload: 'intent',
