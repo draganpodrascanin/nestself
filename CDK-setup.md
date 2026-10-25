@@ -159,13 +159,21 @@ Locally the API uses the same profile as you (`AWS_PROFILE`). If you prefer a le
         "cognito-idp:GetTokensFromRefreshToken",
         "cognito-idp:RevokeToken",
         "cognito-idp:ListUsers",
-        "cognito-idp:DescribeUserPoolClient"
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:UpdateUserPoolClient",
+        "cognito-idp:CreateIdentityProvider",
+        "cognito-idp:UpdateIdentityProvider",
+        "cognito-idp:DeleteIdentityProvider",
+        "cognito-idp:DescribeIdentityProvider",
+        "cognito-idp:ListIdentityProviders"
       ],
       "Resource": "arn:aws:cognito-idp:eu-central-1:<ACCOUNT_ID>:userpool/<USER_POOL_ID>"
     }
   ]
 }
 ```
+
+The `*IdentityProvider*` and `UpdateUserPoolClient` actions are for enterprise SSO: registering an employer's SAML or OIDC provider adds it to the web and mobile clients' supported identity providers.
 
 Add `ses:SendEmail` and `ses:SendRawEmail` on your SES identity when you set `SES_FROM_EMAIL`. In AWS the same actions are granted to the ECS task role by `infra/cdk/lib/constructs/ecs-task-roles.ts`.
 

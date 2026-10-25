@@ -68,6 +68,27 @@ describe('NestSelfComputeStack -- staging', () => {
     });
   });
 
+  it('lets the API task role manage SSO identity providers and the app clients that list them', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith([
+              'cognito-idp:DescribeUserPoolClient',
+              'cognito-idp:UpdateUserPoolClient',
+              'cognito-idp:CreateIdentityProvider',
+              'cognito-idp:UpdateIdentityProvider',
+              'cognito-idp:DeleteIdentityProvider',
+              'cognito-idp:DescribeIdentityProvider',
+              'cognito-idp:ListIdentityProviders',
+            ]),
+            Effect: 'Allow',
+          }),
+        ]),
+      },
+    });
+  });
+
   it('creates an ALB', () => {
     template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
   });
