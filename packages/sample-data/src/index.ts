@@ -15,5 +15,7 @@ export { SAMPLE_CASE } from './fixtures/case.ts';
 export { SAMPLE_PRINCIPALS } from './fixtures/principals.ts';
 export { SAMPLE_GRANTS } from './fixtures/grants.ts';
 export type { SampleGrant } from './fixtures/grants.ts';
+export { SAMPLE_INVITATIONS } from './fixtures/invitations.ts';
+export type { SampleInvitation } from './fixtures/invitations.ts';
 export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
 export { isSampleMode, assertNotProduction } from './mode.ts';

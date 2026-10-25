@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { InvitationResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
@@ -16,6 +17,7 @@ import {
   SAMPLE_ORG_UNITS,
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_CASE,
+  SAMPLE_INVITATIONS,
   isSampleMode,
   assertNotProduction,
 } from './index.ts';
@@ -37,6 +39,7 @@ describe('sample-data fixtures', () => {
     ...SAMPLE_ORG_UNITS,
     ...SAMPLE_EXPERT_CREDENTIALS,
     SAMPLE_CASE,
+    ...SAMPLE_INVITATIONS,
   ];
 
   it('every fixture has sample === true', () => {
@@ -132,6 +135,36 @@ describe('SAMPLE_ORG_UNITS', () => {
       .sort();
     const legacyTeamIds = [...SAMPLE_TEAMS].map((t) => t.id).sort();
     expect(teamUnitIds).toEqual(legacyTeamIds);
+  });
+});
+
+describe('SAMPLE_INVITATIONS', () => {
+  it('has two or three pending invitations in the sample organization', () => {
+    expect(SAMPLE_INVITATIONS.length).toBeGreaterThanOrEqual(2);
+    expect(SAMPLE_INVITATIONS.length).toBeLessThanOrEqual(3);
+    for (const inv of SAMPLE_INVITATIONS) {
+      expect(inv.orgId).toBe(SAMPLE_ORG.id);
+      expect(inv.revokedAt).toBeNull();
+      expect(inv.acceptedAt).toBeNull();
+    }
+  });
+
+  it('parses as invitation responses on the reserved example.com domain', () => {
+    for (const inv of SAMPLE_INVITATIONS) {
+      const { sample: _sample, ...rest } = inv;
+      expect(InvitationResponseSchema.parse(rest)).toEqual(rest);
+      expect(inv.email.endsWith('@example.com')).toBe(true);
+    }
+  });
+
+  it('uses only invitable templates and units of the sample tree', () => {
+    const unitIds = new Set<string>(SAMPLE_ORG_UNITS.map((u) => u.id));
+    for (const inv of SAMPLE_INVITATIONS) {
+      const tpl = PERMISSION_TEMPLATES.find((t) => t.key === inv.templateKey);
+      expect(tpl?.isActive).toBe(true);
+      expect(['organization', 'employee']).toContain(tpl?.workspace);
+      if (inv.orgUnitId !== null) expect(unitIds.has(inv.orgUnitId)).toBe(true);
+    }
   });
 });
 
