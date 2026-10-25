@@ -154,10 +154,13 @@ function AuthenticatedLayout() {
   );
 
   const topbar = (
-    <div className="flex w-full items-center justify-between">
-      <p className="type-label text-primary">NestSelf</p>
-      <div className="flex items-center gap-4">
-        <ApiStatus />
+    <div className="flex w-full min-w-0 items-center justify-between gap-2">
+      <p className="shrink-0 type-label text-primary">NestSelf</p>
+      <div className="flex min-w-0 items-center gap-2 @min-[480px]:gap-4">
+        {/* Hidden on narrow screens so the header fits 320px (WCAG reflow); the sample banner still shows. */}
+        <div className="hidden @min-[480px]:block">
+          <ApiStatus />
+        </div>
         <ContextPicker sampleMode={isSampleDataMode} />
         <UserMenu />
       </div>

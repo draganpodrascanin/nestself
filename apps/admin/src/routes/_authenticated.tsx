@@ -84,10 +84,13 @@ function AuthenticatedLayout() {
         </nav>
       }
       topbar={
-        <div className="flex w-full items-center justify-between">
-          <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
-          <div className="flex items-center gap-4">
-            <ApiStatus />
+        <div className="flex w-full min-w-0 items-center justify-between gap-2">
+          <span className="shrink-0 font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
+          <div className="flex min-w-0 items-center gap-2 @min-[480px]:gap-4">
+            {/* Hidden on narrow screens so the header fits 320px (WCAG reflow); the sample banner still shows. */}
+            <div className="hidden @min-[480px]:block">
+              <ApiStatus />
+            </div>
             <ContextPicker sampleMode={isSampleDataMode} />
             <UserMenu />
           </div>

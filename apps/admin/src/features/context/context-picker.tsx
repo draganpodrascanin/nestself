@@ -81,7 +81,7 @@ export function ContextPicker({ sampleMode }: ContextPickerProps) {
       <MenuTrigger variant="quiet">
         <span className="flex items-center gap-1">
           <VisuallyHidden>{triggerLabel}</VisuallyHidden>
-          <span aria-hidden className="type-label text-text max-w-40 truncate">
+          <span aria-hidden className="type-label text-text max-w-24 truncate @min-[480px]:max-w-40">
             {currentLabel}
           </span>
         </span>
