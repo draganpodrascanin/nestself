@@ -24,6 +24,7 @@ import {
   WEBINAR_ROOM_ADDED_EVENT_NAMES,
   WebinarAttendanceResponseSchema,
   OpsOrganizationsResponseSchema,
+  OpsOrgUnitsResponseSchema,
   WebinarFloorResponseSchema,
   WebinarHandRaiseResponseSchema,
   WebinarHostCandidatesResponseSchema,
@@ -264,6 +265,10 @@ export function createWebinarsApi(client: ApiClient) {
     /** GET /ops/webinars/host-candidates: the people who may present or moderate, by first name (the form's pickers). */
     hostCandidates: (params: WebinarHostCandidatesParams) =>
       client.request(`/api/ops/webinars/host-candidates${queryString(params)}`, { method: 'GET', schema: WebinarHostCandidatesResponseSchema }),
+
+    /** GET /ops/orgs/:orgId/units: an organisation's active units, `parentId` for the tree (the form's org-unit audience). */
+    organizationUnits: (orgId: string) =>
+      client.request(`/api/ops/orgs/${id(orgId)}/units`, { method: 'GET', schema: OpsOrgUnitsResponseSchema }),
 
     /** GET /ops/orgs: active client organisations by name (the form's audience picker). */
     organizations: (params: { q?: string } = {}) =>

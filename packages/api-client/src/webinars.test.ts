@@ -328,6 +328,10 @@ describe('webinar operations routes', () => {
     expect(orgs.last()).toMatchObject({ url: 'http://x/api/ops/orgs?q=Ex', method: 'GET' });
     await orgs.api.organizations();
     expect(orgs.last().url).toBe('http://x/api/ops/orgs');
+
+    const units = setup({ items: [{ id: 'ou_sales', name: 'Sales', parentId: 'ou_root' }] });
+    await expect(units.api.organizationUnits('org_sample')).resolves.toEqual({ items: [{ id: 'ou_sales', name: 'Sales', parentId: 'ou_root' }] });
+    expect(units.last()).toMatchObject({ url: 'http://x/api/ops/orgs/org_sample/units', method: 'GET' });
   });
 
   it('publishes and cancels', async () => {

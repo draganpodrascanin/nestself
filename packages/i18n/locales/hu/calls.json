@@ -457,9 +457,10 @@
       "audienceUnits": "Egy szervezet egységei",
       "organization": "Szervezet",
       "units": "Egységek",
-      "unitsUnavailable": "Az egységek listája itt még nem érhető el. Adja meg helyette az azonosítóikat.",
+      "unitsUnavailable": "Az egységek listáját nem sikerült betölteni. Adja meg helyette az azonosítóikat.",
       "organizationRequired": "Válassza ki a szervezetet.",
-      "unitsRequired": "Adjon meg legalább egy egységet."
+      "unitsRequired": "Adjon meg legalább egy egységet.",
+      "unitsChooseOrganization": "Válassza ki a szervezetet az egységei megtekintéséhez."
     },
     "console": {
       "prejoinTitle": "Ellenőrizze a beállításokat",

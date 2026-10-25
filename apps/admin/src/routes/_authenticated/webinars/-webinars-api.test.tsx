@@ -436,6 +436,9 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     expect((await screen.findAllByText(new RegExp(en.webinar.form.unitsRequired.replace('.', '\\.')))).length).toBeGreaterThan(0);
 
     await user.type(screen.getByLabelText(en.webinar.form.organization), 'org_sample');
+    // The unit list cannot be loaded here: the ids field replaces the picker.
+    await waitFor(() => expect(screen.getByLabelText(en.webinar.form.units)).toHaveAttribute('name', 'units'));
+    expect(screen.getByText(new RegExp(en.webinar.form.unitsUnavailable.replace('.', '\\.')))).toBeInTheDocument();
     await user.type(screen.getByLabelText(en.webinar.form.units), 'unit_hr, unit_sales');
     await user.type(screen.getByLabelText(en.webinar.form.date), '2030-12-02');
     await user.type(screen.getByLabelText(en.webinar.form.startTime), '17:00');
@@ -444,6 +447,43 @@ describe('admin webinars (API mode)', { timeout: 30_000 }, () => {
     await waitFor(() => expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(true));
     expect(sent.find((entry) => entry.method === 'POST')?.body).toMatchObject({
       audiencePolicy: { type: 'org_unit', orgId: 'org_sample', orgUnitIds: ['unit_hr', 'unit_sales'] },
+    });
+  });
+
+  it("picks units from the organisation's unit list", async () => {
+    const sent = serve({
+      'GET /api/ops/webinars/host-candidates': coded(404, 'not_found'),
+      'GET /api/ops/orgs': coded(404, 'not_found'),
+      'GET /api/ops/orgs/org_sample/units': () =>
+        json(200, {
+          items: [
+            { id: 'ou_root', name: 'Example d.o.o.', parentId: null },
+            { id: 'ou_commercial', name: 'Commercial', parentId: 'ou_root' },
+            { id: 'team_sales', name: 'Sales', parentId: 'ou_commercial' },
+          ],
+        }),
+      'POST /api/ops/webinars': () => json(201, occurrence()),
+      [`GET /api/ops/webinars/${ID}`]: () => json(200, occurrence()),
+    });
+    const user = userEvent.setup();
+    renderAt('/webinars/new');
+    const titles = await screen.findByRole('group', { name: en.webinar.form.titleLegend }, { timeout: 5000 });
+    await waitFor(() => expect(screen.getByLabelText(en.webinar.form.presenters)).toHaveAttribute('name', 'presenters'));
+    await user.type(within(titles).getByLabelText(en.webinar.form.languages.en), 'Sleep and rest');
+    await user.click(screen.getByRole('radio', { name: en.webinar.form.audienceUnits }));
+    expect(screen.getByText(en.webinar.form.unitsChooseOrganization)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(en.webinar.form.organization), 'org_sample');
+
+    // The tree shows the hierarchy in the labels.
+    await user.click(await screen.findByRole('checkbox', { name: '— — Sales' }, { timeout: 5000 }));
+    expect(screen.getByRole('checkbox', { name: '— Commercial' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(en.webinar.form.date), '2030-12-02');
+    await user.type(screen.getByLabelText(en.webinar.form.startTime), '17:00');
+    await user.type(screen.getByLabelText(en.webinar.form.endTime), '18:00');
+    await user.click(screen.getByRole('button', { name: en.webinar.form.submit }));
+    await waitFor(() => expect(sent.some((entry) => entry.method === 'POST' && entry.path === '/api/ops/webinars')).toBe(true));
+    expect(sent.find((entry) => entry.method === 'POST')?.body).toMatchObject({
+      audiencePolicy: { type: 'org_unit', orgId: 'org_sample', orgUnitIds: ['team_sales'] },
     });
   });
 

@@ -460,9 +460,10 @@
       "audienceUnits": "Jedinice jedne organizacije",
       "organization": "Organizacija",
       "units": "Jedinice",
-      "unitsUnavailable": "Lista jedinica ovde još nije dostupna. Umesto toga unesite njihove identifikatore.",
+      "unitsUnavailable": "Lista jedinica nije mogla da se učita. Umesto toga unesite njihove identifikatore.",
       "organizationRequired": "Izaberite organizaciju.",
-      "unitsRequired": "Unesite bar jednu jedinicu."
+      "unitsRequired": "Unesite bar jednu jedinicu.",
+      "unitsChooseOrganization": "Izaberite organizaciju da biste videli njene jedinice."
     },
     "console": {
       "prejoinTitle": "Proverite opremu",

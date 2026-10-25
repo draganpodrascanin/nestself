@@ -19,6 +19,7 @@ export const webinarKeys = {
   opsDetail: (webinarId: string) => [...webinarKeys.ops(), 'detail', webinarId] as const,
   hostCandidates: (params: WebinarHostCandidatesParams) => [...webinarKeys.ops(), 'host-candidates', params] as const,
   organizations: (q: string) => [...webinarKeys.ops(), 'organizations', q] as const,
+  organizationUnits: (orgId: string) => [...webinarKeys.ops(), 'organization-units', orgId] as const,
   attendance: (webinarId: string) => [...webinarKeys.ops(), 'attendance', webinarId] as const,
 };
 
@@ -71,6 +72,14 @@ export const opsOrganizationsQuery = (api: WebinarsApi, q = '') =>
   queryOptions({
     queryKey: webinarKeys.organizations(q),
     queryFn: () => api.organizations(q ? { q } : {}),
+    retry: retryUnlessClientError,
+  });
+
+/** `GET /ops/orgs/:orgId/units`: the form's unit picker. */
+export const opsOrganizationUnitsQuery = (api: WebinarsApi, orgId: string) =>
+  queryOptions({
+    queryKey: webinarKeys.organizationUnits(orgId),
+    queryFn: () => api.organizationUnits(orgId),
     retry: retryUnlessClientError,
   });
 

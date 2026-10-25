@@ -460,9 +460,10 @@
       "audienceUnits": "Units of one organisation",
       "organization": "Organisation",
       "units": "Units",
-      "unitsUnavailable": "The list of units is not available here yet. Enter their ids instead.",
+      "unitsUnavailable": "The list of units could not be loaded. Enter their ids instead.",
       "organizationRequired": "Choose the organisation.",
-      "unitsRequired": "Enter at least one unit."
+      "unitsRequired": "Enter at least one unit.",
+      "unitsChooseOrganization": "Choose the organisation to see its units."
     },
     "console": {
       "prejoinTitle": "Check your setup",

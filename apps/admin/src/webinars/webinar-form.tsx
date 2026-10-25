@@ -12,8 +12,9 @@
  * the summary too, naming the limit and the milestone. Every other failure
  * renders translated copy (error-visibility rule).
  *
- * Presenters, the moderator and organisations are picked from the API's
- * candidate lists (`GET /ops/webinars/host-candidates`, `GET /ops/orgs`), or
+ * Presenters, the moderator, organisations and units are picked from the
+ * API's lists (`GET /ops/webinars/host-candidates`, `GET /ops/orgs`,
+ * `GET /ops/orgs/:orgId/units`), or
  * from the sample principals and `SAMPLE_ORG` in sample mode; when a list
  * cannot be loaded, the form takes ids instead and says so.
  */
@@ -49,7 +50,7 @@ import { zonedDateTimeToIso } from '@nestself/video';
 import { isSampleDataMode } from '../data-source';
 import { Reveal } from '../calls/reveal';
 import { mapWebinarError } from './map-webinar-error';
-import { useHostOptions, useOrganizationOptions } from './picker-options';
+import { useHostOptions, useOrganizationOptions, useUnitOptions } from './picker-options';
 import type { PickerOption } from './sample';
 import { webinarsApi } from './webinars-api';
 
@@ -131,6 +132,7 @@ export function WebinarForm({ webinar, onSaved }: WebinarFormProps) {
   const [audience, setAudience] = useState<WebinarAudiencePolicyType>(policy?.type ?? 'all_eligible');
   const [organizations, setOrganizations] = useState<string[]>(policy?.type === 'organization' ? [...policy.orgIds] : []);
   const [unitOrganization, setUnitOrganization] = useState(policy?.type === 'org_unit' ? policy.orgId : '');
+  const [units, setUnits] = useState<string[]>(policy?.type === 'org_unit' ? [...policy.orgUnitIds] : []);
   const [presenters, setPresenters] = useState<string[]>(webinar?.hosts.filter((host) => host.role === 'presenter').map((host) => host.userId) ?? []);
   const [moderator, setModerator] = useState(webinar?.hosts.find((host) => host.role === 'moderator')?.userId ?? '');
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -141,6 +143,7 @@ export function WebinarForm({ webinar, onSaved }: WebinarFormProps) {
   const presenterChoices = useHostOptions('presenter');
   const moderatorChoices = useHostOptions('moderator');
   const organizationChoices = useOrganizationOptions();
+  const unitChoices = useUnitOptions(unitOrganization.trim());
   const labels: Record<FieldKey, string> = {
     title: t('webinar.form.titleLegend'),
     description: t('webinar.form.descriptionLegend'),
@@ -176,9 +179,9 @@ export function WebinarForm({ webinar, onSaved }: WebinarFormProps) {
       if (orgIds.length === 0) problems.organizations = t('webinar.form.organizationsRequired');
       audiencePolicy = { type: 'organization', orgIds };
     } else if (audience === 'org_unit') {
-      // Units of one organisation (D-CW-17); the units are entered as ids until a unit list is served for operations.
-      const orgId = (organizationChoices.options ? unitOrganization : String(data.get('unitOrganization') ?? '')).trim();
-      const orgUnitIds = splitIds(String(data.get('units') ?? ''));
+      // Units of one organisation (D-CW-17): picked from `GET /ops/orgs/:orgId/units`, or entered as ids when it cannot be loaded.
+      const orgId = unitOrganization.trim();
+      const orgUnitIds = unitChoices.options ? units.filter((unit) => unitChoices.options?.some((option) => option.value === unit)) : splitIds(String(data.get('units') ?? ''));
       if (!orgId) problems.organizations = t('webinar.form.organizationRequired');
       if (orgUnitIds.length === 0) problems.units = t('webinar.form.unitsRequired');
       audiencePolicy = { type: 'org_unit', orgId, orgUnitIds };
@@ -333,18 +336,32 @@ export function WebinarForm({ webinar, onSaved }: WebinarFormProps) {
                   <Select
                     options={[{ value: '', label: t('webinar.form.organization') }, ...organizationChoices.options]}
                     value={unitOrganization}
-                    onValueChange={(value) => setUnitOrganization(value ?? '')}
+                    onValueChange={(value) => {
+                      setUnitOrganization(value ?? '');
+                      setUnits([]);
+                    }}
                   />
                 </Field>
               </div>
             ) : (
               <Field label={t('webinar.form.organization')} description={`${t('webinar.form.organizationsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.organizations}>
-                <Input id={FIELD.organizations} name="unitOrganization" autoComplete="off" defaultValue={policy?.type === 'org_unit' ? policy.orgId : ''} />
+                <Input id={FIELD.organizations} name="unitOrganization" autoComplete="off" value={unitOrganization} onChange={(event) => setUnitOrganization(event.target.value)} />
               </Field>
             )}
-            <Field label={t('webinar.form.units')} description={`${t('webinar.form.unitsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.units}>
-              <Input id={FIELD.units} name="units" autoComplete="off" defaultValue={policy?.type === 'org_unit' ? policy.orgUnitIds.join(', ') : ''} />
-            </Field>
+            {unitChoices.options ? (
+              <div id={FIELD.units} tabIndex={-1}>
+                <CheckboxGroup legend={t('webinar.form.units')}>
+                  {!unitOrganization.trim() ? <p className="type-metadata text-text-secondary">{t('webinar.form.unitsChooseOrganization')}</p> : null}
+                  {unitChoices.pending ? <p className="type-metadata text-text-secondary">{t('common:state.loading')}</p> : null}
+                  {options(unitChoices.options, units, setUnits)}
+                </CheckboxGroup>
+                {errors.units ? <p className="type-metadata text-danger">{errors.units}</p> : null}
+              </div>
+            ) : (
+              <Field label={t('webinar.form.units')} description={`${t('webinar.form.unitsUnavailable')} ${t('webinar.form.idsHint')}`} error={errors.units}>
+                <Input id={FIELD.units} name="units" autoComplete="off" defaultValue={units.join(', ')} />
+              </Field>
+            )}
           </div>
         </Reveal>
       </div>
