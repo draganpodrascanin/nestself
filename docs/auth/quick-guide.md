@@ -56,10 +56,10 @@ An employer can let its employees sign in through its own identity provider (SAM
 
 **What staff do** (admin `/sso`, platform owners, every change after a recent sign-in or step-up):
 
-1. Create the connection for the organization: a slug (it builds the provider name, for example `org-acme-saml`) and the employer's metadata, or the OIDC issuer, client ID and secret. The secret goes straight to Cognito and is never shown or stored by NestSelf. The connection starts as a draft.
+1. Create the connection for the organization: a slug (it builds the provider name, for example `org-acme-saml`) and the employer's metadata, or the OIDC issuer, client ID and secret. The secret goes straight to Cognito and is never shown or stored by NestSelf. A slug belongs to one organization: another organization cannot take it, for either protocol. The connection starts as a draft.
 2. Add the employer's email domains. Each gets a DNS TXT record (`_nestself-verify.<domain>`) that the employer publishes; then select Verify. Public mail domains such as `gmail.com` are refused.
 3. Hand the employer the entity ID and ACS URL from the detail panel, then select Test sign-in. The link works once and for 15 minutes; an invited test person on a verified domain signs in with it.
-4. Activate. From then on, discovery sends that employer's addresses to their sign-in. Suspend sends them back to the email code.
+4. Activate. From then on, discovery sends that employer's addresses to their sign-in. Suspend sends them back to the email code. Changing the provider settings of an active connection (metadata, issuer, client ID or secret) takes it back to testing: run a new test sign-in and activate it again.
 
 **What an employee sees:** they type their work address on the normal sign-in screen, see "Redirecting to your organisation's sign-in…", sign in at their employer and land in NestSelf. NestSelf binds the account only for a pending invitation of that organization (or automatic accounts, if the employer turned them on), and only for an address on one of the connection's verified domains. Anyone else sees a neutral "Your organisation has not enabled your account yet" message. The employer's sign-in counts as the second factor.
 

@@ -14,8 +14,8 @@
  *   organizations (`sso.manage` is a platform action);
  * - `findActiveConnectionForDomain`: home-realm discovery runs before any
  *   organization is known;
- * - `listActiveConnections` / `listActiveConnectionsWithCertificates`: the
- *   nightly certificate-expiry job spans organizations.
+ * - `listActiveConnections`: the nightly certificate-expiry job spans
+ *   organizations.
  */
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
@@ -197,15 +197,6 @@ export class SsoRepository {
       .select()
       .from(ssoConnections)
       .where(eq(ssoConnections.status, 'ACTIVE'))
-      .orderBy(asc(ssoConnections.certificateExpiresAt), asc(ssoConnections.id));
-  }
-
-  /** ACTIVE connections with a known signing-certificate expiry (certificate-expiry job). */
-  async listActiveConnectionsWithCertificates(tx?: DbExecutor): Promise<SsoConnectionRow[]> {
-    return this.exec(tx)
-      .select()
-      .from(ssoConnections)
-      .where(and(eq(ssoConnections.status, 'ACTIVE'), isNotNull(ssoConnections.certificateExpiresAt)))
       .orderBy(asc(ssoConnections.certificateExpiresAt), asc(ssoConnections.id));
   }
 

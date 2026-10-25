@@ -115,11 +115,10 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
     expect(await repo.findConnectionsByProviderNames(['org-none-saml'])).toEqual([]);
   });
 
-  it('listActiveConnectionsWithCertificates returns ACTIVE connections with an expiry only', async () => {
-    expect(await repo.listActiveConnectionsWithCertificates()).toEqual([]);
+  it('listActiveConnections orders by certificate expiry', async () => {
     await repo.updateConnection(acmeId, { certificateExpiresAt: new Date('2027-01-01T00:00:00Z') });
     await repo.updateConnection(otherId, { certificateExpiresAt: new Date('2027-01-01T00:00:00Z') });
-    expect((await repo.listActiveConnectionsWithCertificates()).map((c) => c.id)).toEqual([acmeId]);
+    expect((await repo.listActiveConnections()).map((c) => c.id)).toEqual([acmeId]);
   });
 
   it('listActiveConnections returns every ACTIVE connection, with or without an expiry', async () => {
