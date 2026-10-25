@@ -86,8 +86,13 @@ import { ProviderNameTooLongError, buildProviderName, slugProviderNames } from '
 export const SSO_CONFIG = Symbol('SSO_CONFIG');
 
 export interface SsoConfig {
-  /** Absolute origin of the API (`API_PUBLIC_URL`), no trailing slash. */
-  apiPublicUrl: string;
+  /**
+   * Origin of the test sign-in link: `apiOriginForSurface('workspace')`. The
+   * test flow is a workspace flow (the tester lands on the workspace), and a
+   * flow must start on the origin its callback runs on, or the
+   * browser-binding cookie set at start never reaches the callback.
+   */
+  testStartOrigin: string;
   /** Values for the client's IdP administrator; null when the stage has no Cognito domain. */
   spMetadata: SsoSpMetadata | null;
 }
@@ -487,7 +492,7 @@ export class SsoConnectionsService {
     const testNonce = randomBytes(32).toString('base64url');
     await this.store.set(ssoTestKey(testNonce), JSON.stringify({ connectionId: conn.id }), { ttlSeconds: SSO_TEST_TTL });
     return {
-      startUrl: buildSsoStartUrl(this.config.apiPublicUrl, {
+      startUrl: buildSsoStartUrl(this.config.testStartOrigin, {
         connection: conn.cognitoProviderName,
         surface: 'workspace',
         testNonce,
@@ -620,7 +625,11 @@ export class SsoConnectionsService {
   ): Promise<void> {
     await this.audit.record(this.event('sso_connection.changed', row, actor, { from, to }));
     if (to === 'ACTIVE') await this.audit.record(this.event('sso_connection.activated', row, actor, { from }));
-    if (to === 'SUSPENDED') await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }));
+    // Leaving ACTIVE (suspension, or a provider change back to TESTING) stops
+    // discovery from routing to the connection: both are a deactivation.
+    if (from === 'ACTIVE' && to !== 'ACTIVE') {
+      await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }));
+    }
   }
 
   private event(

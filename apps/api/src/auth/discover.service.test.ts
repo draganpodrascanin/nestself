@@ -14,14 +14,20 @@ const { DiscoverService } = await import('./discover.service.js');
 
 const NEUTRAL = { method: 'email_otp', ssoStartUrl: null, connection: null };
 
-const config = { get: (key: string) => (key === 'API_PUBLIC_URL' ? 'http://api.test/' : undefined) };
+const URLS: Record<string, string> = {
+  API_PUBLIC_URL: 'http://api.test/',
+  WORKSPACE_URL: 'http://ws.test/',
+  ADMIN_URL: 'http://admin.test',
+};
+const config = { get: (key: string) => URLS[key] };
 
 function setup(
   findUserByEmail: ReturnType<typeof vi.fn>,
   findActiveConnectionForDomain: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(null),
+  cfg: { get: (key: string) => string | undefined } = config,
 ) {
   const identity = Object.create(IdentityResolutionService.prototype) as IdentityResolutionService;
-  return new DiscoverService({ findUserByEmail } as never, identity, { findActiveConnectionForDomain } as never, config as never);
+  return new DiscoverService({ findUserByEmail } as never, identity, { findActiveConnectionForDomain } as never, cfg as never);
 }
 
 const ACME = { cognitoProviderName: 'org-acme-saml', orgId: 'org_sample', status: 'ACTIVE' };
@@ -67,17 +73,25 @@ describe('DiscoverService', () => {
       const service = setup(findUser, lookup);
       await expect(service.discover(' Someone@ACME.example ', 'admin')).resolves.toEqual({
         method: 'sso',
-        ssoStartUrl: 'http://api.test/api/auth/sso/start?connection=org-acme-saml&surface=admin',
+        // On the admin origin: the flow's cookies must land on the admin host.
+        ssoStartUrl: 'http://admin.test/api/auth/sso/start?connection=org-acme-saml&surface=admin',
         connection: 'org-acme-saml',
       });
       expect(lookup).toHaveBeenCalledWith('acme.example');
       expect(neutralDelay).toHaveBeenCalledTimes(1);
     });
 
-    it('defaults the surface to workspace', async () => {
+    it('defaults the surface to workspace, on the workspace origin', async () => {
       const service = setup(vi.fn(), vi.fn().mockResolvedValue(ACME));
       const res = await service.discover('someone@acme.example');
-      expect(res.ssoStartUrl).toContain('surface=workspace');
+      expect(res.ssoStartUrl).toBe('http://ws.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace');
+    });
+
+    it('falls back to API_PUBLIC_URL when the surface URL is unset (stub mode)', async () => {
+      const apiOnly = { get: (key: string) => (key === 'API_PUBLIC_URL' ? 'http://api.test/' : undefined) };
+      const service = setup(vi.fn(), vi.fn().mockResolvedValue(ACME), apiOnly);
+      const res = await service.discover('someone@acme.example', 'admin');
+      expect(res.ssoStartUrl).toBe('http://api.test/api/auth/sso/start?connection=org-acme-saml&surface=admin');
     });
 
     it('never looks up a public email domain (SSO-R-05)', async () => {

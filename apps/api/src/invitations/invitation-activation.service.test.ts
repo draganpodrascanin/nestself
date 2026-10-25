@@ -147,7 +147,12 @@ function buildService(overrides: Record<string, unknown> = {}) {
     signIn,
     principalLoader,
     sso: { findActiveConnectionForDomain: vi.fn().mockResolvedValue(null) },
-    config: { get: vi.fn((key: string) => (key === 'API_PUBLIC_URL' ? 'http://api.test' : undefined)) },
+    config: {
+      get: vi.fn(
+        (key: string) =>
+          ({ API_PUBLIC_URL: 'http://api.test', WORKSPACE_URL: 'http://ws.test', ADMIN_URL: 'http://admin.test' })[key],
+      ),
+    },
     ...overrides,
   };
 
@@ -238,7 +243,8 @@ describe('InvitationActivationService', () => {
 
       expect(result).toEqual({
         method: 'sso',
-        ssoStartUrl: 'http://api.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace',
+        // The surface's own origin (its SPA proxies /api): the cookies land there.
+        ssoStartUrl: 'http://ws.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace',
         challengeToken: null,
         step: null,
       });

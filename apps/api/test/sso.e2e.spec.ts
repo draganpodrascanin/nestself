@@ -13,7 +13,6 @@ import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
-import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { and, eq, like } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
@@ -24,6 +23,7 @@ import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, externalIdentities, grants, organizations } from '../src/db/schema/index.js';
 import { SsoRepository } from '../src/db/repositories/sso.repository.js';
 import { DNS_TXT_RESOLVER, type FakeDnsTxtResolver } from '../src/sso/dns-txt-resolver.js';
+import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 
@@ -53,6 +53,9 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
     process.env.NODE_ENV = 'test';
     process.env.API_PUBLIC_URL = 'http://api.sso.test';
+    // Explicit, so apps/api/.env (dotenv) cannot decide the test link's origin.
+    process.env.WORKSPACE_URL = 'http://workspace.sso.test';
+    process.env.ADMIN_URL = 'http://admin.sso.test';
     process.env.COGNITO_USER_POOL_ID = 'eu-central-1_ssotest';
     process.env.COGNITO_DOMAIN = 'https://auth.sso.test';
     delete process.env.REDIS_URL;
@@ -109,18 +112,13 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
   afterAll(async () => {
     await app?.close();
     await testDb?.close();
-    delete process.env.API_PUBLIC_URL;
+    for (const k of ['API_PUBLIC_URL', 'WORKSPACE_URL', 'ADMIN_URL']) delete process.env[k];
   });
 
   beforeEach(() => {
     // The write routes allow 10 requests a minute per IP and every request
     // here comes from the same socket address; the suite is longer than that.
-    const storage = app.get(getStorageToken()) as {
-      storage: Map<string, unknown>;
-      hitExpirations?: Map<string, unknown>;
-    };
-    storage.storage.clear();
-    storage.hitExpirations?.clear();
+    resetThrottlerStorage(app);
   });
 
   function extractCsrf(res: request.Response): string {
@@ -240,7 +238,8 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       startUrl: expect.stringMatching(
-        /^http:\/\/api\.sso\.test\/api\/auth\/sso\/start\?connection=org-acme-saml&surface=workspace&test=[A-Za-z0-9_-]{43}$/,
+        // A workspace flow: it starts on the workspace origin, where its callback runs.
+        /^http:\/\/workspace\.sso\.test\/api\/auth\/sso\/start\?connection=org-acme-saml&surface=workspace&test=[A-Za-z0-9_-]{43}$/,
       ),
     });
     // The single-use test nonce is bound to this connection.
@@ -305,6 +304,12 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
   });
 
   it('a provider change on the ACTIVE connection takes it back to TESTING; activation needs a new test sign-in (SSO-R-01)', async () => {
+    const deactivations = async () =>
+      testDb.db
+        .select()
+        .from(auditEvents)
+        .where(and(eq(auditEvents.recordId, connectionId), eq(auditEvents.action, 'sso_connection.deactivated')));
+    const before = (await deactivations()).length;
     const res = await patch(`/${connectionId}`, { metadataUrl: 'https://idp.acme.example/metadata-v2' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: 'TESTING', lastTestedAt: null, metadataUrl: 'https://idp.acme.example/metadata-v2' });
@@ -313,6 +318,10 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
       .from(auditEvents)
       .where(and(eq(auditEvents.recordId, connectionId), eq(auditEvents.action, 'sso_connection.changed')));
     expect(changed.map((e) => e.details)).toContainEqual({ from: 'ACTIVE', to: 'TESTING' });
+    // Discovery stops routing to it, as after a suspension.
+    const after = await deactivations();
+    expect(after).toHaveLength(before + 1);
+    for (const row of after) expect(row.details).toEqual({ from: 'ACTIVE' });
     const activate = await post(`/${connectionId}/activate`);
     expect(activate.status).toBe(409);
     expect(activate.body.code).toBe('sso_connection_state');

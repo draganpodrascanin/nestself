@@ -121,7 +121,7 @@ function setup() {
     identity,
     audit as never,
     dns,
-    { apiPublicUrl: 'http://api.test', spMetadata: SP },
+    { testStartOrigin: 'http://ws.test', spMetadata: SP },
     store,
   );
   return { repo, idp, events, dns, db, service, store };
@@ -313,7 +313,9 @@ describe('SsoConnectionsService', () => {
       const conn = await connectionIn(ctx, 'DRAFT');
       const res = await ctx.service.test(conn.id, ACTOR);
       const url = new URL(res.startUrl);
-      expect(url.origin + url.pathname).toBe('http://api.test/api/auth/sso/start');
+      // The test sign-in runs as a workspace flow, so its start lives on the
+      // workspace origin, where its callback sets the cookies.
+      expect(url.origin + url.pathname).toBe('http://ws.test/api/auth/sso/start');
       expect(url.searchParams.get('connection')).toBe('org-acme-saml');
       expect(url.searchParams.get('surface')).toBe('workspace');
       // A single-use nonce bound to this connection, 15 minutes.
@@ -394,7 +396,9 @@ describe('SsoConnectionsService', () => {
         { from: 'ACTIVE', to: 'SUSPENDED' },
         { from: 'SUSPENDED', to: 'ACTIVE' },
       ]);
-      expect(ctx.events.map((e) => e.action)).toContain('sso_connection.deactivated');
+      expect(ctx.events.filter((e) => e.action === 'sso_connection.deactivated').map((e) => e.details)).toEqual([
+        { from: 'ACTIVE' },
+      ]);
       expect(ctx.idp.deleteProvider).not.toHaveBeenCalled();
     });
 
@@ -474,9 +478,11 @@ describe('SsoConnectionsService', () => {
       const res = await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v4' }, ACTOR);
       expect(res).toMatchObject({ status: 'TESTING', lastTestedAt: null });
       expect(ctx.idp.updateProvider).toHaveBeenCalledWith(expect.objectContaining({ metadataUrl: 'https://idp.acme.example/v4' }));
+      // Discovery stops routing to it, as after a suspension: also `.deactivated`.
       expect(ctx.events.map((e) => [e.action, e.details])).toEqual([
         ['sso_connection.updated', { fields: ['metadataUrl'] }],
         ['sso_connection.changed', { from: 'ACTIVE', to: 'TESTING' }],
+        ['sso_connection.deactivated', { from: 'ACTIVE' }],
       ]);
       expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(
         conn.id,
@@ -506,6 +512,7 @@ describe('SsoConnectionsService', () => {
       const res = await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR);
       expect(res.status).toBe('ACTIVE');
       expect(res.lastTestedAt).not.toBeNull();
+      expect(ctx.events.map((e) => e.action)).not.toContain('sso_connection.deactivated');
     });
 
     it('refuses a provider change combined with a suspension with 422', async () => {

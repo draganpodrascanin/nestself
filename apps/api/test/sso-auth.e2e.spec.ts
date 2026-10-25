@@ -16,7 +16,6 @@ import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
-import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
@@ -36,6 +35,7 @@ import { SsoRepository, type SsoConnectionPatch } from '../src/db/repositories/s
 import { NEUTRAL_DELAY_MS } from '../src/auth/neutral-delay.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { ssoTestKey } from '../src/redis/redis-keys.js';
+import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
@@ -47,7 +47,11 @@ const PROVIDER = 'org-acme-oidc';
 const API = 'http://api.ssoauth.test';
 const WORKSPACE = 'http://workspace.ssoauth.test';
 const ADMIN = 'http://admin.ssoauth.test';
-const CALLBACK = `${API}/api/auth/sso/callback`;
+/** Each surface's flow runs on that surface's origin (its SPA proxies /api). */
+const CALLBACK = `${WORKSPACE}/api/auth/sso/callback`;
+const ADMIN_CALLBACK = `${ADMIN}/api/auth/sso/callback`;
+const callbackFor = (surface: string) => (surface === 'admin' ? ADMIN_CALLBACK : CALLBACK);
+const originFor = (surface: string) => (surface === 'admin' ? ADMIN : WORKSPACE);
 
 describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   let app: INestApplication;
@@ -123,12 +127,7 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   beforeEach(() => {
     // The redirect routes allow 10 requests a minute per IP; every test here
     // comes from the same socket address.
-    const storage = app.get(getStorageToken()) as {
-      storage: Map<string, unknown>;
-      hitExpirations?: Map<string, unknown>;
-    };
-    storage.storage.clear();
-    storage.hitExpirations?.clear();
+    resetThrottlerStorage(app);
   });
 
   const setConnection = (patch: SsoConnectionPatch) => repo.updateConnection(connectionId, patch);
@@ -166,17 +165,20 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
    */
   async function federatedSignIn(email: string, query: Record<string, string> = {}) {
     const agent = request.agent(app.getHttpServer());
+    const surface = query.surface ?? 'workspace';
     const start = await agent
       .get('/api/auth/sso/start')
       .query({ connection: PROVIDER, surface: 'workspace', ...query });
     expect(start.status).toBe(302);
     const authorizeUrl = new URL(start.headers.location as string);
-    expect(authorizeUrl.origin).toBe(API);
+    // The whole flow stays on the surface's own origin, never API_PUBLIC_URL.
+    expect(authorizeUrl.origin).toBe(originFor(surface));
+    expect(authorizeUrl.searchParams.get('redirect_uri')).toBe(callbackFor(surface));
     authorizeUrl.searchParams.set('as', email);
     const authorize = await agent.get(authorizeUrl.pathname + authorizeUrl.search);
     expect(authorize.status).toBe(302);
     const callbackUrl = new URL(authorize.headers.location as string);
-    expect(callbackUrl.origin + callbackUrl.pathname).toBe(CALLBACK);
+    expect(callbackUrl.origin + callbackUrl.pathname).toBe(callbackFor(surface));
     const callback = await agent.get(callbackUrl.pathname + callbackUrl.search);
     expect(callback.status).toBe(302);
     return { agent, start, authorizeUrl, callbackUrl, callback, location: callback.headers.location as string };
@@ -207,14 +209,14 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         method: 'sso',
-        ssoStartUrl: `${API}/api/auth/sso/start?connection=${PROVIDER}&surface=workspace`,
+        ssoStartUrl: `${WORKSPACE}/api/auth/sso/start?connection=${PROVIDER}&surface=workspace`,
         connection: PROVIDER,
       });
     });
 
-    it('carries the admin surface when the request comes from the admin app', async () => {
+    it('carries the admin surface, on the admin origin, when the request comes from the admin app', async () => {
       const res = await discover('someone@acme.example', ADMIN);
-      expect(res.body.ssoStartUrl).toBe(`${API}/api/auth/sso/start?connection=${PROVIDER}&surface=admin`);
+      expect(res.body.ssoStartUrl).toBe(`${ADMIN}/api/auth/sso/start?connection=${PROVIDER}&surface=admin`);
     });
 
     it('answers a public email domain natively', async () => {
@@ -265,7 +267,7 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(res.status).toBe(302);
       expect(res.headers['cache-control']).toBe('no-store');
       const url = new URL(res.headers.location as string);
-      expect(url.origin + url.pathname).toBe(`${API}/api/auth/sso/_fake/authorize`);
+      expect(url.origin + url.pathname).toBe(`${WORKSPACE}/api/auth/sso/_fake/authorize`);
       expect(url.searchParams.get('connection')).toBe(PROVIDER);
       expect(url.searchParams.get('redirect_uri')).toBe(CALLBACK);
       expect(url.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -298,10 +300,24 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(res.headers.location).toBe(`${ADMIN}/sign-in?reason=sso_denied`);
     });
 
-    it('the fake authorize hop refuses a foreign redirect_uri', async () => {
+    it('surface=admin: the authorize Location carries the admin-origin redirect_uri', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/auth/sso/start')
+        .query({ connection: PROVIDER, surface: 'admin' });
+      expect(res.status).toBe(302);
+      const url = new URL(res.headers.location as string);
+      expect(url.origin + url.pathname).toBe(`${ADMIN}/api/auth/sso/_fake/authorize`);
+      expect(url.searchParams.get('redirect_uri')).toBe(ADMIN_CALLBACK);
+    });
+
+    it.each([
+      'https://evil.example/cb',
+      'https://evil.example/api/auth/sso/callback',
+      `${ADMIN}/api/auth/sso/callback/x`,
+    ])('the fake authorize hop refuses the foreign redirect_uri %s', async (redirectUri) => {
       const res = await request(app.getHttpServer())
         .get('/api/auth/sso/_fake/authorize')
-        .query({ connection: PROVIDER, state: 's', code_challenge: 'c', redirect_uri: 'https://evil.example/cb' });
+        .query({ connection: PROVIDER, state: 's', code_challenge: 'c', redirect_uri: redirectUri });
       expect(res.status).toBe(400);
     });
   });
@@ -354,11 +370,22 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(rows.filter((r) => r.email === 'jovana@acme.example')).toHaveLength(1);
     });
 
-    it('surface=admin: start -> callback lands on ADMIN_URL with a session', async () => {
-      const { callback, location, start } = await federatedSignIn('jovana@acme.example', { surface: 'admin', returnPath: '/organizations' });
+    it('surface=admin: start -> callback lands on ADMIN_URL with a session that /auth/me accepts', async () => {
+      const { agent, callback, location, start, callbackUrl } = await federatedSignIn('jovana@acme.example', {
+        surface: 'admin',
+        returnPath: '/organizations',
+      });
       expect(start.status).toBe(302);
+      expect(callbackUrl.origin).toBe(ADMIN);
       expect(location).toBe(`${ADMIN}/organizations`);
-      expect(sessionCookie(callback)).toBeDefined();
+      const cookie = sessionCookie(callback);
+      expect(cookie).toBeDefined();
+      // Host-only (no Domain) and Path=/: it binds to the host that ran the callback.
+      expect(cookie).not.toMatch(/;\s*Domain=/i);
+      expect(cookie).toMatch(/;\s*Path=\//i);
+      const me = await agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
     });
 
     it('surface=admin: a denial lands on the admin sign-in page', async () => {

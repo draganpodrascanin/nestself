@@ -9,6 +9,10 @@
  * the identity provider is not the fake, so a mis-registration cannot mint
  * codes against Cognito.
  *
+ * `redirect_uri` must be one of the registered callbacks
+ * (`registeredSsoCallbackUrls`: the workspace, admin and `API_PUBLIC_URL`
+ * origins plus `/api/auth/sso/callback`), exactly; anything else is a 400.
+ *
  * Query: `connection, state, code_challenge, redirect_uri` (what the fake's
  * `buildAuthorizeUrl` sends) and optionally `as=<email>` to choose among the
  * seeded federated users. Without `as` the first seeded user of the provider
@@ -25,7 +29,7 @@ import { Public } from '../authz/public.decorator.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { IdentityProviderService } from '../identity/identity-provider.service.js';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
-import { apiPublicUrlFrom } from './sso-start-url.js';
+import { registeredSsoCallbackUrls } from './sso-start-url.js';
 
 const FakeAuthorizeQuerySchema = z.object({
   connection: z.string().min(1).max(64),
@@ -63,9 +67,9 @@ export class FakeSsoAuthorizeController {
       throw new ApiHttpException({ status: 400, code: 'validation', message: 'Invalid authorize request' });
     }
     const q = parsed.data;
-    // Only our own callback: the stub must not become an open redirect.
-    const callback = `${apiPublicUrlFrom(this.config.get<string>('API_PUBLIC_URL'))}/api/auth/sso/callback`;
-    if (q.redirect_uri !== callback) {
+    // Only a registered callback (workspace, admin or API_PUBLIC_URL origin,
+    // exact match like Cognito's CallbackURLs): never an open redirect.
+    if (!registeredSsoCallbackUrls(this.config).includes(q.redirect_uri)) {
       throw new ApiHttpException({ status: 400, code: 'validation', message: 'Unexpected redirect_uri' });
     }
 

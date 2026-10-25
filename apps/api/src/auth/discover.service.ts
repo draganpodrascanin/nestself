@@ -5,7 +5,8 @@
  * 1. normalise the address and take its domain;
  * 2. a public email domain (`PUBLIC_EMAIL_DOMAINS`) never routes to SSO;
  * 3-4. a verified domain of an ACTIVE connection answers `sso` with the
- *    absolute start URL and the connection's `cognitoProviderName`;
+ *    absolute start URL (on the surface's origin, `apiOriginForSurface`) and
+ *    the connection's `cognitoProviderName`;
  * 6. otherwise the native method: `password` for a user with a password,
  *    `email_otp` for everyone else, unknown addresses included.
  *
@@ -30,7 +31,7 @@ import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.rep
 import { IdentityResolutionService } from './identity-resolution.service.js';
 import { isPublicEmailDomain } from './constants.js';
 import { neutralDelay } from './neutral-delay.js';
-import { apiPublicUrlFrom, buildSsoStartUrl } from './sso-start-url.js';
+import { apiOriginForSurface, buildSsoStartUrl } from './sso-start-url.js';
 import type { DiscoverResponse } from '@nestself/contracts';
 
 const NEUTRAL: DiscoverResponse = { method: 'email_otp', ssoStartUrl: null, connection: null };
@@ -56,7 +57,8 @@ export class DiscoverService {
       await neutralDelay(start);
       return {
         method: 'sso',
-        ssoStartUrl: buildSsoStartUrl(apiPublicUrlFrom(this.config.get<string>('API_PUBLIC_URL')), {
+        // On the surface's own origin: the flow's cookies must land on that host.
+        ssoStartUrl: buildSsoStartUrl(apiOriginForSurface(this.config, surface), {
           connection: connection.cognitoProviderName,
           surface,
         }),

@@ -10,10 +10,18 @@ import { IdentityProviderService } from '../identity/identity-provider.service.j
 import { ApiHttpException } from '../common/api-error.js';
 
 const API = 'http://api.test';
+const WORKSPACE = 'http://ws.test';
+const ADMIN = 'http://admin.test';
 const CALLBACK = `${API}/api/auth/sso/callback`;
 
 function config(authMode?: string) {
-  return { get: (key: string, fallback?: string) => ({ API_PUBLIC_URL: API, AUTH_MODE: authMode })[key] ?? fallback };
+  const values: Record<string, string | undefined> = {
+    API_PUBLIC_URL: API,
+    WORKSPACE_URL: `${WORKSPACE}/`,
+    ADMIN_URL: ADMIN,
+    AUTH_MODE: authMode,
+  };
+  return { get: (key: string, fallback?: string) => values[key] ?? fallback };
 }
 
 function res() {
@@ -53,9 +61,30 @@ describe('FakeSsoAuthorizeController', () => {
     expect(status(() => controller.authorize(QUERY, res()))).toBe(404);
   });
 
-  it('refuses a redirect_uri other than our callback', () => {
+  it.each([
+    'https://evil.example/cb',
+    'https://evil.example/api/auth/sso/callback',
+    `${ADMIN}/api/auth/sso/callback/extra`,
+    `${ADMIN}/api/auth/sso/callback?x=1`,
+    `${ADMIN}:8443/api/auth/sso/callback`,
+    `${WORKSPACE}/sign-in`,
+  ])('refuses %s: only the registered callbacks', (redirectUri) => {
     const controller = new FakeSsoAuthorizeController(new FakeIdentityProvider({ apiPublicUrl: API }), config('stub') as never);
-    expect(status(() => controller.authorize({ ...QUERY, redirect_uri: 'https://evil.example/cb' }, res()))).toBe(400);
+    expect(status(() => controller.authorize({ ...QUERY, redirect_uri: redirectUri }, res()))).toBe(400);
+  });
+
+  it.each([
+    `${WORKSPACE}/api/auth/sso/callback`,
+    `${ADMIN}/api/auth/sso/callback`,
+    `${API}/api/auth/sso/callback`,
+  ])('accepts the registered callback %s and redirects there', async (redirectUri) => {
+    const idp = new FakeIdentityProvider({ apiPublicUrl: API });
+    await idp.createProvider({ name: 'org-acme-oidc', protocol: 'OIDC', oidcIssuer: 'https://i', oidcClientId: 'c', attributeMapping: {} });
+    const controller = new FakeSsoAuthorizeController(idp, config('stub') as never);
+    const r = res();
+    controller.authorize({ ...QUERY, redirect_uri: redirectUri, as: 'a@acme.example' }, r);
+    const url = new URL(r.redirect.mock.calls[0]![1] as string);
+    expect(url.origin + url.pathname).toBe(redirectUri);
   });
 
   it('redirects to the callback with a code and the state for the user chosen with as=', async () => {

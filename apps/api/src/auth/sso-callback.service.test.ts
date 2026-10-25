@@ -12,7 +12,9 @@ import { InvitationMembershipActivator } from '../invitations/invitation-members
 
 const PROVIDER = 'org-acme-saml';
 const API = 'http://api.test';
-const CALLBACK = `${API}/api/auth/sso/callback`;
+/** Each surface's flow runs on that surface's origin (apiOriginForSurface). */
+const CALLBACK = 'http://ws.test/api/auth/sso/callback';
+const ADMIN_CALLBACK = 'http://admin.test/api/auth/sso/callback';
 const META = { ip: '127.0.0.1', userAgent: 'vitest' };
 
 type Conn = {
@@ -128,7 +130,10 @@ async function startAndAuthorize(
   );
   const url = new URL(started.location);
   const state = url.searchParams.get('state')!;
-  const code = ctx.idp.issueAuthorizationCode(PROVIDER, subject, url.searchParams.get('code_challenge')!, CALLBACK);
+  // As the fake authorize hop does: bound to the redirect URI the flow sent.
+  const code = ctx.idp.issueAuthorizationCode(
+    PROVIDER, subject, url.searchParams.get('code_challenge')!, url.searchParams.get('redirect_uri')!,
+  );
   return { state, code, url, nonce: started.browserNonce! };
 }
 
@@ -156,9 +161,9 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       const res = await ctx.service.start({ connection: PROVIDER, surface: 'admin', returnPath: '/people' }, META);
       const url = new URL(res.location);
-      expect(url.origin + url.pathname).toBe(`${API}/api/auth/sso/_fake/authorize`);
+      expect(url.origin + url.pathname).toBe('http://admin.test/api/auth/sso/_fake/authorize');
       expect(url.searchParams.get('connection')).toBe(PROVIDER);
-      expect(url.searchParams.get('redirect_uri')).toBe(CALLBACK);
+      expect(url.searchParams.get('redirect_uri')).toBe(ADMIN_CALLBACK);
       const state = url.searchParams.get('state')!;
       expect(Buffer.from(state, 'base64url')).toHaveLength(32);
       const raw = await ctx.store.get(pkceKey(state));
@@ -166,6 +171,32 @@ describe('SsoCallbackService', () => {
       expect(record).toMatchObject({ surface: 'admin', returnPath: '/people', connection: PROVIDER, testNonce: null });
       expect(url.searchParams.get('code_challenge')).toBe(pkceChallenge(record.verifier));
       expect(await ctx.store.ttl(pkceKey(state))).toBeGreaterThan(590);
+    });
+
+    it.each([
+      ['workspace', CALLBACK],
+      ['admin', ADMIN_CALLBACK],
+    ] as const)('sends the %s origin callback as redirect_uri (the session cookie lands on that host)', async (surface, callback) => {
+      const ctx = setup();
+      const res = await ctx.service.start({ connection: PROVIDER, surface }, META);
+      const url = new URL(res.location);
+      expect(url.searchParams.get('redirect_uri')).toBe(callback);
+      expect(url.searchParams.get('redirect_uri')).not.toContain(API);
+    });
+
+    it.each([
+      ['workspace', CALLBACK, 'http://ws.test/'],
+      ['admin', ADMIN_CALLBACK, 'http://admin.test/'],
+    ] as const)('exchanges a %s code with the same redirect_uri it sent (Cognito validates it)', async (surface, callback, landing) => {
+      const ctx = setup();
+      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      const exchange = vi.spyOn(ctx.idp, 'exchangeAuthorizationCode');
+      const { state, code, url, nonce } = await startAndAuthorize(ctx, {}, { surface });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(exchange).toHaveBeenCalledWith(expect.objectContaining({ redirectUri: callback }));
+      expect(exchange.mock.calls[0]![0].redirectUri).toBe(url.searchParams.get('redirect_uri'));
+      expect(res.location).toBe(landing);
+      expect(res.session).toBeDefined();
     });
 
     it.each([
@@ -314,6 +345,22 @@ describe('SsoCallbackService', () => {
         }),
       );
     });
+
+    it.each(['INVITED', 'ENDED'])(
+      'denies an existing identity whose membership in the connection organization is %s (path 1 needs ACTIVE)',
+      async (status) => {
+        const ctx = setup();
+        ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+        ctx.memberships.findByUserId.mockResolvedValue([{ userId: 'user_known', orgId: 'org_sample', status }] as never);
+        const { state, code, nonce } = await startAndAuthorize(ctx);
+        const res = await ctx.service.callback({ code, state }, META, nonce);
+        expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+        expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+        expect(ctx.audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({ action: 'auth.sign_in.failed', details: { reason: 'sso_provider_mismatch' } }),
+        );
+      },
+    );
 
     it('denies an existing identity when no connection owns the provider name any more', async () => {
       const ctx = setup();

@@ -9,6 +9,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module.js';
+import { apiOriginForSurface } from '../auth/sso-start-url.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { SsoRepository } from '../db/repositories/sso.repository.js';
 import {
@@ -27,8 +28,6 @@ import {
   type SsoConfig,
 } from './sso-connections.service.js';
 
-export const DEFAULT_API_PUBLIC_URL = 'http://localhost:4000';
-
 @Module({
   imports: [AuthModule, IdentityModule],
   controllers: [SsoConnectionsController],
@@ -38,7 +37,7 @@ export const DEFAULT_API_PUBLIC_URL = 'http://localhost:4000';
       provide: SSO_CONFIG,
       inject: [ConfigService],
       useFactory: (config: ConfigService): SsoConfig => ({
-        apiPublicUrl: (config.get<string>('API_PUBLIC_URL') ?? DEFAULT_API_PUBLIC_URL).replace(/\/+$/, ''),
+        testStartOrigin: apiOriginForSurface(config, 'workspace'),
         spMetadata: spMetadataFor(config.get<string>('COGNITO_USER_POOL_ID'), config.get<string>('COGNITO_DOMAIN')),
       }),
     },

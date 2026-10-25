@@ -80,7 +80,7 @@ pnpm db:up && pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/
 pnpm --filter @nestself/api dev
 ```
 
-The web apps keep running locally against `http://localhost:4000`; the dev pool's callback URLs already list the localhost origins.
+The web apps keep running locally against `http://localhost:4000`; the dev pool's callback URLs already list the localhost origins. The API sends each surface's own origin as the SSO `redirect_uri` (`apiOriginForSurface`), so the registered `webCallbackUrls` for both SPA origins in every stage are all in use, none is spare (`docs/auth/implementation.md` 22.3).
 
 ## Commands
 

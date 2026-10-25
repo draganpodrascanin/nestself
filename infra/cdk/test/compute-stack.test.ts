@@ -55,12 +55,16 @@ describe('NestSelfComputeStack -- staging', () => {
     template.resourceCountIs('AWS::ECR::Repository', 2);
   });
 
-  it('passes the surface and API origins the API requires in cognito mode', () => {
+  // The worker validates the same env schema (AUTH_MODE=cognito requires all three).
+  it.each([
+    ['nestself-staging-api', 'api'],
+    ['nestself-staging-worker', 'worker'],
+  ])('passes the surface and API origins cognito mode requires to %s', (family, container) => {
     template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-      Family: 'nestself-staging-api',
+      Family: family,
       ContainerDefinitions: Match.arrayWith([
         Match.objectLike({
-          Name: 'api',
+          Name: container,
           Environment: Match.arrayWith([
             { Name: 'AUTH_MODE', Value: 'cognito' },
             { Name: 'WORKSPACE_URL', Value: 'https://app.staging.nestself.rs' },

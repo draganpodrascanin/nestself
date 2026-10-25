@@ -480,7 +480,12 @@ export class FakeIdentityProvider extends IdentityProviderService {
     return [...this.sso.providers.keys()];
   }
 
-  /** Points at the stub-only `GET /api/auth/sso/_fake/authorize` route. */
+  /**
+   * Points at the stub-only `GET /api/auth/sso/_fake/authorize` route on the
+   * origin of the redirect URI, i.e. the surface's own origin (its SPA proxies
+   * `/api`), like Cognito's hop stays in the flow's browser. Falls back to
+   * the configured API origin when the redirect URI does not parse.
+   */
   buildAuthorizeUrl(input: {
     providerName: string;
     state: string;
@@ -494,7 +499,13 @@ export class FakeIdentityProvider extends IdentityProviderService {
       code_challenge: input.codeChallenge,
       redirect_uri: input.redirectUri,
     });
-    return `${this.apiPublicUrl}/api/auth/sso/_fake/authorize?${params.toString()}`;
+    let origin = this.apiPublicUrl;
+    try {
+      origin = new URL(input.redirectUri).origin;
+    } catch {
+      // keep the API origin
+    }
+    return `${origin}/api/auth/sso/_fake/authorize?${params.toString()}`;
   }
 
   /**

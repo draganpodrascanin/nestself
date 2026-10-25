@@ -78,10 +78,23 @@ describe('FakeIdentityProvider: enterprise SSO', () => {
       );
     });
 
-    it('uses API_PUBLIC_URL when given', () => {
+    it('stays on the origin of the redirect URI (the surface origin), whatever API_PUBLIC_URL says', () => {
       const other = new FakeIdentityProvider({ apiPublicUrl: 'https://api.nestself.example/' });
       const url = new URL(
-        other.buildAuthorizeUrl({ providerName: 'p', state: 's', codeChallenge: 'c', redirectUri: REDIRECT }),
+        other.buildAuthorizeUrl({
+          providerName: 'p',
+          state: 's',
+          codeChallenge: 'c',
+          redirectUri: 'https://admin.nestself.example/api/auth/sso/callback',
+        }),
+      );
+      expect(url.origin + url.pathname).toBe('https://admin.nestself.example/api/auth/sso/_fake/authorize');
+    });
+
+    it('uses API_PUBLIC_URL when the redirect URI does not parse', () => {
+      const other = new FakeIdentityProvider({ apiPublicUrl: 'https://api.nestself.example/' });
+      const url = new URL(
+        other.buildAuthorizeUrl({ providerName: 'p', state: 's', codeChallenge: 'c', redirectUri: 'not a url' }),
       );
       expect(url.origin + url.pathname).toBe('https://api.nestself.example/api/auth/sso/_fake/authorize');
     });

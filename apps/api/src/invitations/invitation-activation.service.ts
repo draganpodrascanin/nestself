@@ -29,7 +29,7 @@ import { eq } from 'drizzle-orm';
 import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
 import { InvitationMembershipActivator, invitableTemplateFor } from './invitation-membership-activator.js';
-import { apiPublicUrlFrom, buildSsoStartUrl } from '../auth/sso-start-url.js';
+import { apiOriginForSurface, buildSsoStartUrl } from '../auth/sso-start-url.js';
 
 @Injectable()
 export class InvitationActivationService {
@@ -322,7 +322,7 @@ export class InvitationActivationService {
     if (!connection || connection.orgId !== invitation.orgId) return null;
     return {
       method: 'sso',
-      ssoStartUrl: buildSsoStartUrl(apiPublicUrlFrom(this.config.get<string>('API_PUBLIC_URL')), {
+      ssoStartUrl: buildSsoStartUrl(apiOriginForSurface(this.config, surface), {
         connection: connection.cognitoProviderName,
         surface,
       }),

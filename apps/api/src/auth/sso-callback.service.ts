@@ -16,7 +16,7 @@
  *   1. an existing `external_identities(cognito:<providerName>, sub)` signs
  *      in whatever the connection's status (Review Focus 4), provided the
  *      connection owning that provider name still exists and the identity's
- *      user has a membership (any status) in that connection's organization:
+ *      user has an ACTIVE membership in that connection's organization:
  *      a provider name reused by another organization would otherwise hand
  *      it the first organization's pool users (Cognito keeps them, with
  *      their `sub`). A mismatch is the neutral `sso_denied`, audited as
@@ -77,7 +77,7 @@ import {
   invitableTemplateFor,
 } from '../invitations/invitation-membership-activator.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
-import { apiPublicUrlFrom } from './sso-start-url.js';
+import { ssoCallbackUrl } from './sso-start-url.js';
 
 export type Surface = 'workspace' | 'admin';
 export type RequestMeta = { ip: string | null; userAgent: string | null };
@@ -178,9 +178,14 @@ export class SsoCallbackService {
     @Inject(forwardRef(() => MembershipsRepository)) private readonly memberships: MembershipsRepository,
   ) {}
 
-  /** `${API_PUBLIC_URL}/api/auth/sso/callback`, registered on the web client. */
-  callbackUrl(): string {
-    return `${apiPublicUrlFrom(this.config.get<string>('API_PUBLIC_URL'))}/api/auth/sso/callback`;
+  /**
+   * `${apiOriginForSurface(surface)}/api/auth/sso/callback`: the surface's own
+   * origin (its SPA proxies `/api`), so the host-only session cookie is set on
+   * the host whose `/api/auth/me` reads it. Registered on the web client
+   * (`webCallbackUrls`). Start sends it and the exchange repeats it.
+   */
+  callbackUrl(surface: Surface): string {
+    return ssoCallbackUrl(this.config, surface);
   }
 
   surfaceOrigin(surface: Surface): string {
@@ -225,7 +230,7 @@ export class SsoCallbackService {
         providerName: connection.cognitoProviderName,
         state,
         codeChallenge: pkceChallenge(verifier),
-        redirectUri: this.callbackUrl(),
+        redirectUri: this.callbackUrl(query.surface),
       }),
     };
   }
@@ -267,7 +272,8 @@ export class SsoCallbackService {
       exchanged = await this.idp.exchangeAuthorizationCode({
         code: query.code,
         codeVerifier: record.verifier,
-        redirectUri: this.callbackUrl(),
+        // The same redirect URI `start` sent for this surface (Cognito checks it).
+        redirectUri: this.callbackUrl(record.surface),
       });
     } catch (err) {
       if (!(err instanceof IdentityProviderError)) throw err;
@@ -501,10 +507,16 @@ export class SsoCallbackService {
     }
   }
 
-  /** The user has a membership row (any status) in the organization; system-context read. */
+  /**
+   * The user has an ACTIVE membership in the organization; system-context
+   * read. An invited (not yet bound) or ended membership does not vouch for a
+   * federated sign-in. See 22.14: the binding organization is not recorded on
+   * `external_identities`, so this is the only link between the identity and
+   * the connection's organization.
+   */
   private async isMemberOf(userId: string, orgId: string): Promise<boolean> {
     const rows = await this.memberships.findByUserId(userId);
-    return rows.some((m) => m.orgId === orgId);
+    return rows.some((m) => m.orgId === orgId && m.status === 'ACTIVE');
   }
 
   /** The email's domain is a verified domain of this connection. */
