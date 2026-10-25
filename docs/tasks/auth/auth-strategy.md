@@ -5378,6 +5378,18 @@ This section defines repeatable procedures for identity and access operations. E
 8. Set a reminder for `certificateExpiresAt` minus 30 days.
 9. Monitor `auth.sign_in.succeeded` and `auth.sign_in.failed` rates for the organization for the first 48 hours. Investigate if the failure rate exceeds 5 percent.
 
+**Amendment 2026-10-25** (auth phase 3, `docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`; the steps above are kept as written, this note wins where they differ). The steps as built, all in the admin `/sso` page or through the API with `sso.manage` (platform owner, step-up class `administration`):
+
+1. `POST /ops/sso-connections` creates the connection in `DRAFT` (`slug` builds `org-<slug>-saml|oidc`; a slug that would exceed 20 characters is refused with 422, never truncated). An OIDC client secret is write-only: it goes to Cognito at once and is never stored or returned.
+2. `POST /ops/sso-connections/:id/domains` returns the TXT record: name `_nestself-verify.<domain>`, value `nestself-domain-verification=<token>`. After the client publishes it, `POST /ops/sso-connections/:id/domains/:domainId/verify` queries the domain's authoritative name server; public email domains are refused with 422 `domain_blocklisted`, a failed lookup is 422 `domain_unverified`.
+3. Step 3 happens inside `POST /ops/sso-connections/:id/test`: it needs at least one verified domain, registers (or updates) the Cognito provider and adds it to the web and mobile clients, moves the connection to `TESTING` and returns `{ startUrl }`. The start URL carries a **single-use test nonce** (`test=<nonce>`, valid 15 minutes, spent by the first callback whatever its outcome); every test needs a new link.
+4. The invited test user opens that link. The callback binds only an address on a verified domain of this connection (for OIDC also `email_verified`), accepts the invitation of this connection's organization and activates the membership; it sets `lastTestedAt`. JIT never runs on a `TESTING` connection.
+5. As written (`identity.linked`, `invitation.accepted`; the provider string is `cognito:<providerName>`).
+6. `POST /ops/sso-connections/:id/activate` needs `TESTING` and `lastTestedAt`; any later change of the provider configuration while `TESTING` clears `lastTestedAt` again (RUN-R-01).
+8. `certificateExpiresAt` is watched by the nightly `sso.certificate-expiry` job (audit `sso_connection.changed`, reason `certificate_expiring`, from 30 days before); the alert email is a follow-up.
+
+Rollback is `PATCH /ops/sso-connections/:id` with `status: SUSPENDED` (back with `ACTIVE`); `TESTING` can return to `DRAFT`, which removes the Cognito provider. The sign-in routes are `GET /auth/sso/start?connection&surface[&returnPath][&test]` and `GET /auth/sso/callback`. The NestSelf SP values are shown in the connection's detail panel: entity ID `urn:amazon:cognito:sp:<COGNITO_USER_POOL_ID>`, ACS URL `<COGNITO_DOMAIN>/saml2/idpresponse` (the custom `auth.<domain>` is a CDK follow-up). Details: `docs/auth/implementation.md` section 22.
+
 **RUN-R-02** Domain verification must use DNS TXT records [DR-07]. **RUN-R-03** IdP-initiated sign-in stays disabled unless the client provides written risk acceptance, with signed and encrypted assertions, five-minute validity and replay-cache checks (`saml_assertion:{id}`, 10 min, GETDEL) [D-12, DR-06].
 
 **Rollback:** Suspend the connection (`status: SUSPENDED`). Do not delete `ExternalIdentity` rows for users who already signed in; suspend their memberships instead.

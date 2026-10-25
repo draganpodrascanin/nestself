@@ -129,6 +129,8 @@ The compute stack creates an ECS cluster with three Fargate services and a migra
 
 The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `pnpm --filter @nestself/api db:migrate` as a one-off ECS `run-task` before each API deployment and exits when the migration completes.
 
+The API task role (`lib/constructs/ecs-task-roles.ts`) holds the Cognito admin actions of the user pool and, for enterprise SSO, `cognito-idp:CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `DescribeIdentityProvider`, `ListIdentityProviders`, `DescribeUserPoolClient` and `UpdateUserPoolClient`: registering an employer's SAML or OIDC provider adds it to the web and mobile clients' supported identity providers (`compute-stack.test.ts` asserts them; `docs/auth/implementation.md` section 22.6). The auth stack already registers `<API origin>/api/auth/sso/callback` as a web client callback URL; the API needs `API_PUBLIC_URL` set to that origin.
+
 ECR repositories (`nestself-{stage}-api`, `nestself-{stage}-marketing`) have scan-on-push enabled. Critical findings block deployment via the CI/CD pipeline.
 
 Autoscaling targets: API scales on CPU (70%) and memory (80%). Marketing scales on CPU (70%).

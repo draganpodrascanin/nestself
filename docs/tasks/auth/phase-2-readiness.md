@@ -21,7 +21,7 @@ Phase 2 was carried out on `feat/auth-foundation` following `docs/superpowers/pl
 | T-2.9, T-2.11 File delivery and export authorization | Deferred | No files or exports exist to authorize | |
 | T-2.12 Weekly Cognito user export | Deferred | Needs the S3 archive bucket (staging) | |
 | Compliance track (T-C.x) | Owner decision | Unchanged; must land before the first real employee signs in | |
-| Phase 3 SSO | Not started | Separate plan | |
+| Phase 3 SSO | Done locally; live IdP test pending | See "Phase 3 status" below | |
 
 ### UI coverage (2026-10-25)
 
@@ -51,7 +51,21 @@ The UI-completeness plan (`docs/superpowers/plans/2026-10-25-auth-ui-completenes
 | Participant conversations (`/professional/me/conversations`) | Workspace `/conversations`, `/conversations/:id` | Covered |
 | Step-up (`/auth/step-up/*`) | Step-up dialog, both web apps | Covered (phase 2); mobile deferred |
 | Any of the above on mobile | None | Out of scope |
-| Enterprise SSO (`/auth/sso/*`) | None | Phase 3 |
+| Enterprise SSO (`/ops/sso-connections/*`, `/auth/sso/*`) | Admin `/sso`; workspace and admin `/sign-in` | Covered (phase 3); journey `sso-sign-in.spec.ts` |
+
+### Phase 3 status (2026-10-25)
+
+Enterprise SSO (`docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`, branch `feat/auth-sso`). Everything runs against the fake identity provider; details in `docs/auth/implementation.md` section 22.
+
+| Task | Status | What shipped | Commits |
+| --- | --- | --- | --- |
+| T1 Contracts, schema, constants, audit actions | Done | SSO request and response schemas, error codes, `PUBLIC_EMAIL_DOMAINS`, `sso_domains` RLS (migration `0006`), SSO audit actions (plan: `97460b0`) | `1c633ba` |
+| T2 Identity provider SSO methods | Done | Cognito provider CRUD, app-client updates preserving fields, token exchange with timeout, ID-token verification; the fake provider's SSO store; CDK task-role IAM actions | `6e2732b`, `707ed45`, `11ac4e8` |
+| T3 SSO connections module | Done | `/ops/sso-connections` lifecycle, DNS TXT verification, tenant-scoped writes, `lastTestedAt` reset on any change | `604aff0`, `b5ec811`, `7815717` |
+| T4 Discovery, start and callback | Done | Home-realm discovery, PKCE start and callback, the four resolution paths, verified-domain rule for new bindings, browser-bound state, single-use test links, stub-only fake authorize, web `reason` messages | `6c3cc15`, `f35226a`, `bb41e40` |
+| T5 Admin SSO page | Done | `/sso` list, detail, create, edit, domains, test, activate, suspend; sample fixture; four locales | `4aa0293`, `d19573a`, `c76349a` |
+| T6 Certificate-expiry job, docs | Done | `sso.certificate-expiry` (03:00), screenshots, guides, runbook amendment | `f4d7e06` and the `docs(auth): enterprise SSO` commit |
+| T-3.4 Live IdP test | Pending pilot | Needs a pilot employer's IdP, domains and a test account (`implementation.md` section 22.13) | |
 
 New owner decisions raised by phase 2 are in section 4 below. The rest of this document is the work list as it stood on 2026-10-23 and is kept for its reasoning.
 

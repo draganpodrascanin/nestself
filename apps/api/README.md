@@ -45,6 +45,7 @@ The server listens on port 4000 by default. Copy `.env.example` to `.env` and ad
 | `grants.reconcile` | 02:15 | Closes expired grants, orphaned delegations and grants of ended memberships; invalidates subjects and delegatees |
 | `mobile.prune-stale-families` | 02:30 | Denylists mobile token families unseen for 30 days |
 | `sessions.reconcile-ttl` | 02:45 | Destroys session records past their absolute expiry and revokes their refresh tokens |
+| `sso.certificate-expiry` | 03:00 | Fills a missing SAML certificate expiry from the identity provider; audits `sso_connection.changed` (reason `certificate_expiring`) and warns for certificates that expire within 30 days |
 | `emergency.sweep-expired` | every 15 minutes | Closes approved emergency access whose window has passed |
 
 The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it needs the API's configuration (identity provider, session encryption key, database) plus `REDIS_URL`; without Redis it exits with an error.
@@ -53,7 +54,7 @@ The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it n
 
 ### Tests
 
-Unit tests sit next to the code. The integration suites in `test/` boot the application against a disposable database per suite (`TEST_DATABASE_URL`): `auth`, `ops-clients`, `grants`, `ops-grants`, `professional`, `emergency`, `members`, `invitations`, `org-admin`, `ws`, `health`, `jobs` (`*.e2e.spec.ts`), and `db/schema.spec.ts`, `db/authorization-repository.spec.ts`, `db/backfill-grants.spec.ts`. `src/authz/default-deny.test.ts` fails on any undecorated route; `src/authz/golden-table.test.ts` pins the decision engine. `docs/auth/implementation.md` section 19 says what each suite covers.
+Unit tests sit next to the code. The integration suites in `test/` boot the application against a disposable database per suite (`TEST_DATABASE_URL`): `auth`, `ops-clients`, `grants`, `ops-grants`, `professional`, `emergency`, `members`, `invitations`, `org-admin`, `ws`, `health`, `jobs`, `sso`, `sso-auth` (`*.e2e.spec.ts`), and `db/schema.spec.ts`, `db/authorization-repository.spec.ts`, `db/backfill-grants.spec.ts`, `db/sso-repository.spec.ts`. `src/authz/default-deny.test.ts` fails on any undecorated route; `src/authz/golden-table.test.ts` pins the decision engine. `docs/auth/implementation.md` section 19 says what each suite covers.
 
 Each suite's database is `<base>_<prefix>_<suffix>`, where `<base>` is the database in `TEST_DATABASE_URL`, `<suffix>` names the suite and `<prefix>` is `TEST_DATABASE_PREFIX` or, when that is unset, the first eight hex characters of the SHA-1 of the repository root path (`test/db/test-database-name.ts`). Git worktrees of the repository therefore get separate databases on the same server and can run the same suite at the same time. Set `TEST_DATABASE_PREFIX` in CI or when you want a readable name; old databases are not removed automatically.
 
@@ -145,10 +146,16 @@ Routes use `@Public()`, `@Authenticated()` or `@Authorize(action, resolver)` dec
 
 Step-up is enforced by `AuthorizationGuard` and by `AuthorizationService.require()` for every action with a step-up class; clients complete it through `POST /auth/step-up/start` and `/verify`.
 
+## Enterprise SSO
+
+`src/sso/` manages employer SAML and OIDC connections under `/ops/sso-connections` (`sso.manage`): create (`DRAFT`), add and DNS-verify domains, test (registers the Cognito provider, `TESTING`, returns a single-use test link), activate, suspend. `src/auth/discover.service.ts` routes a verified domain of an `ACTIVE` connection to `GET /auth/sso/start`; `src/auth/sso-callback.service.ts` runs the PKCE start and callback and binds new identities only through an invitation of the connection's organization or JIT, and only for an address on a verified domain of that connection. Sign-in is SP-initiated only, the OIDC client secret is never stored, and audit details never carry tokens, codes, nonces or the verification token. In stub mode the fake identity provider stands in for Cognito and the employer IdP (`GET /auth/sso/_fake/authorize`, registered only with `AUTH_MODE=stub`).
+
+Environment: `API_PUBLIC_URL` (public API origin for the start and callback URLs; defaults to `http://localhost:4000`, so set it in every deployed stage), `COGNITO_MOBILE_CLIENT_ID` and `COGNITO_DOMAIN` (cognito mode), `FAKE_DNS_TXT_AUTOVERIFY=true` (stub mode: every pending domain verifies). Full description: `docs/auth/implementation.md` section 22.
+
 ## What is still missing
 
-- SSO/SAML integration (routes stubbed as `ssoStartUrl: null`; phase 3)
-- Remaining nightly jobs: weekly Cognito user export, retention sweeper, audit export to S3
+- Enterprise SSO follow-ups: the live IdP test with a pilot employer (T-3.4), federated users on mobile bearer lookups, federated step-up, binding after the email code that follows `sso_email_unverified` (`docs/auth/implementation.md` section 22.14)
+- Remaining nightly jobs: weekly Cognito user export, retention sweeper, audit export to S3 (the SSO certificate-expiry job exists)
 - File delivery and export authorization (T-2.9, T-2.11)
 - Write routes for the confidential domain (they need a `cases` table first) and professional notes
 - Push notifications

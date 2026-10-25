@@ -215,6 +215,16 @@ All routes under the global `/api` prefix.
 | GET | /professional/conversations/:id | @Authenticated; `require(conversation.read.assigned)` | default |
 | GET | /professional/me/conversations/:id | @Authenticated; `require(conversation.participate)` | default |
 | GET | /professional/intake/:id | @Authenticated; `require(conversation.read.assigned)` | default |
+| GET | /auth/sso/start | @Public (302 to the identity provider) | 10/min |
+| GET | /auth/sso/callback | @Public (always 302) | 10/min |
+| GET | /auth/sso/_fake/authorize | @Public; registered only with `AUTH_MODE=stub` | default |
+| GET | /ops/sso-connections | @Authorize(sso.manage), operationsResource | default |
+| POST | /ops/sso-connections | @Authorize(sso.manage), operationsResource | 10/min |
+| PATCH | /ops/sso-connections/:id | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/domains | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/domains/:domainId/verify | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/test | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/activate | @Authorize(sso.manage), operationsResource | 10/min |
 | GET | /invitations/:token/preview | @Public | 10/min |
 | POST | /invitations/accept | @Public | 10/min |
 | POST | /leads/* (3 routes) | @Public | default |
@@ -413,6 +423,6 @@ On each message with a `userId`:
 
 ### Not yet implemented
 
-- SSO / SAML (routes stubbed as `ssoStartUrl: null`)
+- IdP-initiated SSO, SCIM, federated step-up and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
 - Push notifications
 - A step-up screen in the mobile app (the API accepts bearer step-up)

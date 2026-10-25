@@ -95,6 +95,11 @@ export default defineConfig({
         FAKE_IDP_FIXED_OTP: '123456',
         // The federated sign-in journey verifies acme.example through the API.
         FAKE_DNS_TXT_AUTOVERIFY: 'true',
+        // Fictional service-provider values for the SSO detail panel (the stub
+        // API would otherwise show the dev pool's from apps/api/.env). Stub
+        // mode reads these two keys for nothing else.
+        COGNITO_USER_POOL_ID: 'eu-central-1_EXAMPLE',
+        COGNITO_DOMAIN: 'https://auth.nestself.example',
         SESSION_COOKIE_INSECURE_DEV: 'true',
         NODE_ENV: 'development',
       },

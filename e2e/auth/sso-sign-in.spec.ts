@@ -27,60 +27,19 @@
  * test step handles (it updates an existing provider).
  */
 import { test, expect } from '@playwright/test';
-import type { BrowserContext, Page } from '@playwright/test';
-import { ADMIN_URL, WORKSPACE_URL, signInWithEmailCode, signInWithPassword, stagePlatformGrant } from './support';
+import {
+  ADMIN_URL,
+  WORKSPACE_URL,
+  pageApi as api,
+  signInAtIdpAs,
+  signInWithEmailCode,
+  signInWithPassword,
+  stagePlatformGrant,
+} from './support';
 
 const ORG = 'org_sample';
 const TESTER = 'it.tester@acme.example';
 const INVITED = 'invited@acme.example';
-
-/** The fields this journey reads from the API's JSON answers. */
-interface ApiBody {
-  id?: string;
-  startUrl?: string;
-  status?: string;
-  lastTestedAt?: string | null;
-  [key: string]: unknown;
-}
-
-/** Same-origin JSON call from the page (cookies + CSRF header like the app's client). */
-async function api(page: Page, method: string, path: string, body?: unknown): Promise<{ status: number; body: ApiBody }> {
-  return page.evaluate(
-    async ({ method, path, body }) => {
-      const csrf = document.cookie.split('; ').find((c) => c.startsWith('nestself_csrf='))?.split('=')[1] ?? '';
-      const res = await fetch(path, {
-        method,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      const text = await res.text();
-      return { status: res.status, body: (text ? JSON.parse(text) : {}) as Record<string, unknown> };
-    },
-    { method, path, body },
-  );
-}
-
-/**
- * The employer IdP "signs in" `email`: the 302 from `/api/auth/sso/start` to
- * the fake authorize hop gets `as=<email>` appended. Playwright does not
- * route redirected requests, so the start request is fetched here without
- * following the redirect and answered with the amended Location.
- */
-async function signInAtIdpAs(context: BrowserContext, email: string): Promise<void> {
-  await context.route((url) => url.pathname === '/api/auth/sso/start', async (route) => {
-    const response = await route.fetch({ maxRedirects: 0 });
-    const location = response.headers()['location'];
-    if (response.status() !== 302 || !location) {
-      await route.fulfill({ response });
-      return;
-    }
-    const target = new URL(location);
-    if (target.pathname === '/api/auth/sso/_fake/authorize') target.searchParams.set('as', email);
-    // Keep the API's headers: the browser-binding cookie must reach the browser.
-    await route.fulfill({ response, headers: { ...response.headers(), location: target.toString() } });
-  });
-}
 
 test.describe('Federated sign-in through the identity provider', () => {
   test.beforeAll(async () => {

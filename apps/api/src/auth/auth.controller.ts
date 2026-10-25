@@ -148,7 +148,7 @@ export class AuthController {
   // -----------------------------------------------------------------------
 
   /**
-   * `?connection=<cognitoProviderName>&surface=workspace|admin[&returnPath=/x][&test=1]`
+   * `?connection=<cognitoProviderName>&surface=workspace|admin[&returnPath=/x][&test=<nonce>]`
    * -> 302 to the identity provider. 400 `validation` for a malformed query,
    * including an absolute or protocol-relative `returnPath`.
    */
