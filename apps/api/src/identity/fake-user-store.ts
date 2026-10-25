@@ -79,9 +79,9 @@ export class FakeUserStore {
     return undefined;
   }
 
-  issueTokens(user: FakeUser): TokenSet {
+  issueTokens(user: FakeUser, idClaims?: Record<string, unknown>): TokenSet {
     const familyId = randomUUID();
-    const ts = createFakeTokenSet(user.sub, user.username, familyId);
+    const ts = createFakeTokenSet(user.sub, user.username, familyId, idClaims);
     this.refreshTokens.set(ts.refreshToken!, {
       username: user.username,
       familyId,
@@ -97,6 +97,42 @@ export class FakeUserStore {
     if (this.sentCodes.length > MAX_SENT_CODES) this.sentCodes.shift();
     this.logger.log(`Fake identity provider: OTP for ${email} is ${code}`);
     return code;
+  }
+
+  /**
+   * The pool user Cognito creates on a federated user's first sign-in
+   * (status EXTERNAL_PROVIDER, username `<providerName>_<subject>`). Kept
+   * under a `federated:` key so native email lookups never find it, exactly
+   * as a native user and a federated user with the same email are separate
+   * Cognito users.
+   */
+  upsertFederatedUser(input: {
+    username: string;
+    email: string;
+    emailVerified: boolean;
+  }): FakeUser {
+    const key = `federated:${input.username}`;
+    const existing = this.users.get(key);
+    if (existing) {
+      existing.email = input.email.toLowerCase();
+      existing.emailVerified = input.emailVerified;
+      return existing;
+    }
+    const user: FakeUser = {
+      username: input.username,
+      sub: randomUUID(),
+      email: input.email.toLowerCase(),
+      password: null,
+      temporaryPassword: null,
+      totpSecret: null,
+      totpEnrolled: false,
+      enabled: true,
+      emailVerified: input.emailVerified,
+      locale: 'en',
+      status: 'EXTERNAL_PROVIDER',
+    };
+    this.users.set(key, user);
+    return user;
   }
 
   // -- User management (public API) ----------------------------------------

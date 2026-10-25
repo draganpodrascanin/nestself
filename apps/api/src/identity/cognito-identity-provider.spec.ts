@@ -81,6 +81,8 @@ describe('CognitoIdentityProvider', () => {
       POOL_ID,
       CLIENT_ID,
       CLIENT_SECRET,
+      'test-mobile-client-id',
+      'https://test.auth.eu-central-1.amazoncognito.com',
     );
   });
 
@@ -372,7 +374,14 @@ describe('CognitoIdentityProvider', () => {
 describe('CognitoIdentityProvider.setTotpPreferred', () => {
   it('uses the user-level SetUserMFAPreference call with the access token', async () => {
     const { CognitoIdentityProvider } = await import('./cognito-identity-provider.js');
-    const provider = new CognitoIdentityProvider('eu-central-1', 'eu-central-1_test', 'web', 'secret');
+    const provider = new CognitoIdentityProvider(
+      'eu-central-1',
+      'eu-central-1_test',
+      'web',
+      'secret',
+      'mobile',
+      'https://test.auth.eu-central-1.amazoncognito.com',
+    );
     const sent: unknown[] = [];
     (provider as unknown as { client: { send: (c: unknown) => Promise<unknown> } }).client = {
       send: async (command: unknown) => {
