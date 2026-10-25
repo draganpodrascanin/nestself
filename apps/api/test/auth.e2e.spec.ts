@@ -304,6 +304,14 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(verifyRes.status).toBe(200);
 
     const hrCsrf = extractCsrf(verifyRes);
+
+    // /auth/me names the organization of each membership (context picker).
+    const meRes = await hrAgent.get('/api/auth/me');
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.principal.memberships).toEqual([
+      expect.objectContaining({ orgId: 'org_sample', orgName: 'Example d.o.o.', status: 'ACTIVE' }),
+    ]);
+
     const progRes = await hrAgent
       .get('/api/orgs/org_sample/programme')
       .set('X-CSRF-Token', hrCsrf);

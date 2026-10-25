@@ -131,6 +131,8 @@ export type ActiveContext = z.infer<typeof ActiveContextSchema>;
 export const PrincipalMembershipSchema = z.object({
   membershipId: z.string().min(1),
   orgId: z.string().min(1),
+  /** Display name of the organization, for the context picker. */
+  orgName: z.string().min(1),
   orgUnitId: z.string().min(1).nullable(),
   status: z.enum(['INVITED', 'ACTIVE']),
   startDate: z.string().datetime(),

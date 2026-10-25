@@ -88,6 +88,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
       {
         membershipId: 'm1',
         orgId: 'org-A',
+        orgName: 'Org org-A',
         orgUnitId: 'ou1',
         status: 'ACTIVE',
         startDate: '2020-01-01T00:00:00.000Z',

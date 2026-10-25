@@ -58,6 +58,7 @@ describe('PrincipalSchema', () => {
       {
         membershipId: 'm1',
         orgId: 'o1',
+        orgName: 'Org One',
         orgUnitId: 'ou1',
         status: 'ACTIVE',
         startDate: '2026-01-01T00:00:00Z',
@@ -103,6 +104,20 @@ describe('PrincipalSchema', () => {
   it('rejects missing userId', () => {
     expect(() =>
       PrincipalSchema.parse({ ...validPrincipal, userId: '' }),
+    ).toThrow();
+  });
+
+  it('carries the organization name on a membership and requires it', () => {
+    expect(PrincipalSchema.parse(validPrincipal).memberships[0]?.orgName).toBe('Org One');
+    const { orgName: _omit, ...withoutName } = validPrincipal.memberships[0]!;
+    expect(() =>
+      PrincipalSchema.parse({ ...validPrincipal, memberships: [withoutName] }),
+    ).toThrow();
+    expect(() =>
+      PrincipalSchema.parse({
+        ...validPrincipal,
+        memberships: [{ ...validPrincipal.memberships[0], orgName: '' }],
+      }),
     ).toThrow();
   });
 });
