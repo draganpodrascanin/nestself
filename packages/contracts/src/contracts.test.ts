@@ -311,6 +311,21 @@ describe('SSO connection schemas (D-12, 5.4)', () => {
     expect(parsed.jitProvisioning).toBe(true);
   });
 
+  it('SsoConnectionCreateRequestSchema and SsoConnectionUpdateRequestSchema accept a write-only OIDC client secret', () => {
+    const create = SsoConnectionCreateRequestSchema.parse({
+      orgId: 'org_sample',
+      slug: 'acme',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.acme.example',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'shh',
+    });
+    expect(create.oidcClientSecret).toBe('shh');
+    expect(SsoConnectionUpdateRequestSchema.parse({ oidcClientSecret: 'rotated' })).toEqual({ oidcClientSecret: 'rotated' });
+    expect(SsoConnectionUpdateRequestSchema.safeParse({ oidcClientSecret: '' }).success).toBe(false);
+    expect(SsoConnectionUpdateRequestSchema.safeParse({ oidcClientSecret: null }).success).toBe(false);
+  });
+
   it('SsoConnectionCreateRequestSchema enforces the slug pattern', () => {
     const base = { orgId: 'org_sample', protocol: 'SAML' };
     for (const slug of ['a', 'abcdefghijklm', 'Acme', 'acme_co', 'acme.co', '']) {

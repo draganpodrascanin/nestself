@@ -172,6 +172,11 @@ export const SsoConnectionCreateRequestSchema = z
     metadataXml: z.string().optional(),
     oidcIssuer: z.string().url().optional(),
     oidcClientId: z.string().min(1).optional(),
+    /**
+     * Write-only: passed to the identity provider registration and never
+     * stored by NestSelf nor returned in a response (3.4.2).
+     */
+    oidcClientSecret: z.string().min(1).max(1024).optional(),
     attributeMapping: z.record(z.string(), z.string()).optional(),
     idpInitiatedAllowed: z.boolean().default(false),
     jitProvisioning: z.boolean().default(false),
@@ -193,6 +198,8 @@ export const SsoConnectionUpdateRequestSchema = z
     metadataXml: z.string().nullable().optional(),
     oidcIssuer: z.string().url().nullable().optional(),
     oidcClientId: z.string().min(1).nullable().optional(),
+    /** Write-only, as on create: replaces the secret held by the identity provider. */
+    oidcClientSecret: z.string().min(1).max(1024).optional(),
     attributeMapping: z.record(z.string(), z.string()).nullable().optional(),
     idpInitiatedAllowed: z.boolean().optional(),
     jitProvisioning: z.boolean().optional(),
