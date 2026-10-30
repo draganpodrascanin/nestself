@@ -306,7 +306,8 @@ test.describe('@editor Editor journey', () => {
 
     // Dragging the grip moves the block below the next one.
     const step = editor.locator('[data-type="practicalStep"]');
-    const checklist = editor.locator('[data-type="checklist"]');
+    // .first() disambiguates: test 4's [] shortcut added a second checklist.
+    const checklist = editor.locator('[data-type="checklist"]').first();
     await step.hover();
     const grip = page.getByRole('button', { name: 'Drag or open menu' });
     const from = (await grip.boundingBox())!;
