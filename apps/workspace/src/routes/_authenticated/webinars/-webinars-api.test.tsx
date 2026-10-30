@@ -217,6 +217,20 @@ describe('webinar discovery and registration (API mode)', { timeout: 30_000 }, (
     expect(sent).toContainEqual({ method: 'DELETE', path: `/api/webinars/${ID}/register`, body: undefined });
   });
 
+  it('shows a canceled webinar as canceled: no registration status and no Join, even for a registered employee', async () => {
+    serve({ [`GET /api/webinars/${ID}`]: () => json(200, webinar({ status: 'canceled', registered: true })) });
+    renderAt(`/webinars/${ID}`);
+    const canceled = await screen.findByTestId('webinar-detail-canceled', {}, { timeout: 5000 });
+    expect(within(canceled).getByText(en.webinar.detail.canceled)).toBeInTheDocument();
+    expect(within(canceled).getByText(en.webinar.detail.canceledBody)).toBeInTheDocument();
+    expect(screen.queryByText(en.webinar.detail.registered)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('webinar-registration-status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: en.webinar.detail.registrationTitle })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.webinar.join })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.webinar.unregister })).not.toBeInTheDocument();
+    expect(screen.queryByText(en.webinar.recordingNotice)).not.toBeInTheDocument();
+  });
+
   it('explains a failed list load', async () => {
     serve({ 'GET /api/webinars': coded(503, 'video_provider_unavailable') });
     renderAt('/webinars');
@@ -447,6 +461,7 @@ describe('the live webinar (API mode)', { timeout: 30_000 }, () => {
 
     emit('webinar.ended', { webinarId: ID, endedAt: new Date().toISOString() });
     expect(await screen.findByRole('heading', { name: en.webinar.liveView.thanksTitle }, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByText(en.webinar.liveView.replayLater)).toBeInTheDocument();
+    // WBN-13: every webinar is recorded (D-CW-34), so the replay is stated, not hedged.
+    expect(screen.getByText('A replay will be available after review.')).toBeInTheDocument();
   });
 });

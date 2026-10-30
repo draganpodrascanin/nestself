@@ -1086,9 +1086,27 @@ export type WebinarRoomAddedEventPayloads = {
 // The hosts' room `webinar:{webinarId}:hosts` (T-CW-2.3)
 // ---------------------------------------------------------------------------
 
-/** `webinar.hand.count`, hosts room: how many hands are raised; a number, never names (WBN-10, WBN-19). */
+/**
+ * A raised hand as the hosts' room carries it: the participant id and when,
+ * never a name (D-CW-15). A presenter gives the floor by it (WBN-25.1) and
+ * still sees only "a participant asked to speak" (WBN-10.3).
+ */
+export const WebinarHostsHandSchema = z.strictObject({
+  /** The `call_participants.id` of the attendee whose hand is raised. */
+  participantId: idField,
+  raisedAt: isoDateTime,
+});
+export type WebinarHostsHand = z.infer<typeof WebinarHostsHandSchema>;
+
+/**
+ * `webinar.hand.count`, hosts room: how many hands are raised, and which
+ * participants raised them (oldest first), never names (WBN-10, WBN-19,
+ * WBN-25.1). `hands` is optional so a client tolerates an API that sends
+ * the count alone.
+ */
 export const WebinarHandCountPayloadSchema = z.strictObject({
   count,
+  hands: z.array(WebinarHostsHandSchema).max(WEBINAR_REPLICATED_CAPACITY).optional(),
 });
 export type WebinarHandCountPayload = z.infer<typeof WebinarHandCountPayloadSchema>;
 

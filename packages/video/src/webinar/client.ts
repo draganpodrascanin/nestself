@@ -322,9 +322,14 @@ export class WebinarClient implements WebinarClientApi {
       case 'webinar.attendance.count':
         this.update({ attendanceCount: (parsed.data as WebinarHostsRoomEventPayloads['webinar.attendance.count']).count });
         return;
-      case 'webinar.hand.count':
-        this.update({ handCount: (parsed.data as WebinarHostsRoomEventPayloads['webinar.hand.count']).count });
+      case 'webinar.hand.count': {
+        const { count, hands } = parsed.data as WebinarHostsRoomEventPayloads['webinar.hand.count'];
+        // A presenter's raised hands: participant ids without names, to give the floor (WBN-25.1). The moderator's
+        // come with names from the moderation room and are left alone.
+        const nameless = !this.isModerator && hands ? hands.map((hand): WebinarHand => ({ participantId: hand.participantId, name: null, raisedAt: hand.raisedAt })) : null;
+        this.update({ handCount: count, ...(nameless ? { hands: nameless } : {}) });
         return;
+      }
       case 'webinar.floor.state':
         this.applyFloorHolder(parsed.data as WebinarHostsRoomEventPayloads['webinar.floor.state']);
         return;
@@ -537,8 +542,10 @@ export class WebinarClient implements WebinarClientApi {
     this.upsertModeration({ ...existing, ...patch });
   }
 
-  private upsertHand(hand: WebinarHand): void {
-    if (!this.isModerator) return;
+  /** The moderator's hand with its name; a presenter's without one (WBN-25.1, D-CW-15); never an attendee's. */
+  private upsertHand(input: WebinarHand): void {
+    if (!this.isHost) return;
+    const hand = this.isModerator ? input : { ...input, name: null };
     this.rememberName(hand.participantId, hand.name);
     const rest = this.snapshot.hands.filter((entry) => entry.participantId !== hand.participantId);
     this.update({ hands: [...rest, hand].sort((a, b) => a.raisedAt.localeCompare(b.raisedAt)) });
@@ -593,7 +600,8 @@ export class WebinarClient implements WebinarClientApi {
       this.update({ polls: { ...this.snapshot.polls, results } });
     }
     if (isHost) {
-      if (this.isModerator) for (const hand of initial.hands ?? []) this.upsertHand(hand);
+      // A presenter keeps the participant ids to give the floor (WBN-25.1), never a name (D-CW-15).
+      for (const hand of initial.hands ?? []) this.upsertHand(hand);
       if (initial.speakers) this.update({ speakers: initial.speakers.map((s) => ({ ...s, name: this.isModerator ? s.name : null })) });
     } else if (initial.myHand) {
       this.update({ myHand: initial.myHand });

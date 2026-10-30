@@ -77,7 +77,11 @@ describe('WebinarRoomEvents', () => {
       ['webinar:w1:hosts', 'webinar.floor.state', { active: true, participantId: 'part_1' }],
     ]);
     expect(events.toHosts('w1', 'webinar.hand.count', { count: 1, participantName: 'Jovan' } as never)).toBe(false);
+    const hand = { participantId: 'part_1', raisedAt: '2030-01-20T09:00:00.000Z' };
+    expect(events.toHosts('w1', 'webinar.hand.count', { count: 1, hands: [{ ...hand, participantName: 'Jovan' }] } as never)).toBe(false);
     expect(emit).toHaveBeenCalledTimes(3);
+    expect(events.toHosts('w1', 'webinar.hand.count', { count: 1, hands: [hand] })).toBe(true);
+    expect(emit).toHaveBeenLastCalledWith('webinar:w1:hosts', 'webinar.hand.count', { count: 1, hands: [hand] });
   });
 
   it('tells the moderators that the recording failed, with a machine reason (CW-R-121)', () => {

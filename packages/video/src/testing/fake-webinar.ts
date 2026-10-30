@@ -207,7 +207,8 @@ export class FakeWebinarServer {
               muted: speaker.muted,
               unmuteRequested: false,
             })),
-            ...(moderator ? { hands: [...this.hands].map(([participantId, hand]) => ({ participantId, name: hand.name, raisedAt: hand.raisedAt })) } : {}),
+            // A presenter gets the raised hands without names (WBN-25.1, D-CW-15).
+            hands: [...this.hands].map(([participantId, hand]) => ({ participantId, name: moderator ? hand.name : null, raisedAt: hand.raisedAt })),
           }
         : identity.participantId && this.hands.has(identity.participantId)
           ? { myHand: { raised: true, raisedAt: this.hands.get(identity.participantId)?.raisedAt ?? null } }
@@ -270,8 +271,12 @@ export class FakeWebinarServer {
     return ROOM_EVENT_PAYLOAD_SCHEMAS[event as WebinarEventName];
   }
 
+  /** As the API: the count and the participant ids, oldest first, never names (WBN-25.1). */
   private handCount(): void {
-    this.emit(this.hostsRoom, 'webinar.hand.count', { count: this.hands.size });
+    const hands = [...this.hands]
+      .map(([participantId, hand]) => ({ participantId, raisedAt: hand.raisedAt }))
+      .sort((a, b) => a.raisedAt.localeCompare(b.raisedAt));
+    this.emit(this.hostsRoom, 'webinar.hand.count', { count: this.hands.size, hands });
   }
 
   private results(pollId: string): WebinarPollResults {

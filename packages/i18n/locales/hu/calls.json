@@ -325,6 +325,7 @@
       "joinOpensAt": "Csatlakozás ettől: {{time}}.",
       "registerToJoin": "Regisztráljon, hogy csatlakozhasson ehhez a webináriumhoz.",
       "canceled": "Ezt a webináriumot lemondták.",
+      "canceledBody": "Nincs mihez csatlakozni, és jelentkezni sem lehet rá.",
       "closed": "Ehhez a webináriumhoz már nem lehet csatlakozni.",
       "sampleDemo": "A minta webinárium megnyitása (bemutató)"
     },
@@ -337,7 +338,7 @@
       "panelsLabel": "Csevegés és szavazások",
       "realtimeUnavailable": "Az élő frissítések most nem érhetők el. A videót ez nem érinti.",
       "thanksTitle": "Köszönjük, hogy csatlakozott",
-      "replayLater": "Ha a házigazdák megosztják a felvételt, később megnézheti.",
+      "replayLater": "A felvétel ellenőrzés után lesz elérhető.",
       "backToWebinars": "Vissza a webináriumokhoz"
     },
     "admin": {

@@ -113,6 +113,44 @@ describe('WebinarClient rooms (D-CW-16, guidelines 8)', () => {
     expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
   });
 
+  it("gives a presenter the hosts room's raised hands by participant id, never a name, so a presenter can give the floor (WBN-25.1)", () => {
+    const { transport, rooms } = recordingTransport();
+    const presenter = new WebinarClient({
+      webinarId: 'w1',
+      role: 'presenter',
+      transport,
+      // Names in a hydration are dropped for a presenter too.
+      initial: { hands: [{ participantId: 'p1', name: 'Jovan Petrović', raisedAt: '2026-10-25T09:59:00.000Z' }] },
+    });
+    presenter.connect();
+    expect(presenter.getSnapshot().hands).toEqual([{ participantId: 'p1', name: null, raisedAt: '2026-10-25T09:59:00.000Z' }]);
+    const hosts = rooms.get('webinar:w1:hosts')!;
+    // A hand carrying a name is refused whole.
+    hosts('webinar.hand.count', { count: 1, hands: [{ participantId: 'p2', participantName: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' }] });
+    expect(presenter.getSnapshot().handCount).toBeNull();
+    hosts('webinar.hand.count', { count: 2, hands: [{ participantId: 'p2', raisedAt: '2026-10-25T10:00:00.000Z' }, { participantId: 'p3', raisedAt: '2026-10-25T10:01:00.000Z' }] });
+    expect(presenter.getSnapshot()).toMatchObject({
+      handCount: 2,
+      hands: [
+        { participantId: 'p2', name: null, raisedAt: '2026-10-25T10:00:00.000Z' },
+        { participantId: 'p3', name: null, raisedAt: '2026-10-25T10:01:00.000Z' },
+      ],
+    });
+    // An API that sends the count alone leaves the list as it was.
+    hosts('webinar.hand.count', { count: 3 });
+    expect(presenter.getSnapshot()).toMatchObject({ handCount: 3, hands: [{ participantId: 'p2' }, { participantId: 'p3' }] });
+    expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
+    expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Jovan');
+
+    // The moderator's list keeps its names: the hosts room's ids do not replace it.
+    const moderatorRooms = recordingTransport();
+    const moderator = new WebinarClient({ webinarId: 'w1', role: 'moderator', transport: moderatorRooms.transport });
+    moderator.connect();
+    moderatorRooms.rooms.get('webinar:w1:moderation')!('webinar.hand.raised', { participantId: 'p2', participantName: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' });
+    moderatorRooms.rooms.get('webinar:w1:hosts')!('webinar.hand.count', { count: 1, hands: [{ participantId: 'p2', raisedAt: '2026-10-25T10:00:00.000Z' }] });
+    expect(moderator.getSnapshot().hands).toEqual([{ participantId: 'p2', name: 'Ana Kovač', raisedAt: '2026-10-25T10:00:00.000Z' }]);
+  });
+
   it('gives every host the floor holder from the hosts room, so any moderator can take the floor back after a reload (WBN-25)', () => {
     const { transport, rooms } = recordingTransport();
     const moderator = new WebinarClient({
@@ -211,7 +249,11 @@ describe('WebinarClient hand and floor (WBN-10, WBN-25, D-CW-35)', () => {
     expect(attendee.getSnapshot().myHand.raised).toBe(true);
     expect(server.emitted.slice(-2)).toEqual([
       expect.objectContaining({ room: 'webinar:sample-webinar:moderation', event: 'webinar.hand.raised' }),
-      expect.objectContaining({ room: 'webinar:sample-webinar:hosts', event: 'webinar.hand.count', payload: { count: 1 } }),
+      expect.objectContaining({
+        room: 'webinar:sample-webinar:hosts',
+        event: 'webinar.hand.count',
+        payload: { count: 1, hands: [{ participantId: attendee.getSnapshot().participantId, raisedAt: expect.any(String) }] },
+      }),
     ]);
     expect(moderator.getSnapshot().hands).toEqual([expect.objectContaining({ participantId: attendee.getSnapshot().participantId, name: 'Ana Kovač (sample)' })]);
 

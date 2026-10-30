@@ -72,7 +72,7 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     expect(server.requests.at(-1)).toMatchObject({ action: 'message.publish', input: { body: { text: 'The slides are clear' } } });
   });
 
-  it('shows the registration name of a raised hand to the moderator, and only an anonymous count to a presenter', async () => {
+  it('shows the registration name of a raised hand to the moderator, and a presenter the hand without a name (WBN-10.3)', async () => {
     const { server, attendee, moderator } = await setup();
     const presenter = new FakeWebinarClient({ server, role: 'presenter', name: 'Marko' });
     renderWithI18n(
@@ -91,10 +91,11 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     expect(moderatorHand).toHaveTextContent('Ana Kovač (sample)');
     expect(within(moderatorHand).getByRole('button', { name: t('webinar.moderation.giveFloorTo', { name: 'Ana Kovač (sample)' }) })).toBeInTheDocument();
     const presenterView = screen.getByTestId('presenter');
-    const presenterHand = await within(presenterView).findByTestId('webinar-queue-hand-count');
+    const presenterHand = await within(presenterView).findByTestId('webinar-queue-hand');
     expect(presenterHand).toHaveTextContent(t('webinar.handRaisedPresenter'));
-    expect(presenterHand).toHaveTextContent(t('webinar.handCount', { count: 1 }));
-    expect(within(presenterView).queryByRole('button', { name: t('webinar.moderation.giveFloor') })).toBeNull();
+    // WBN-25.1: a presenter gives the floor too; the button is described by the anonymous line, never a name.
+    const give = within(presenterHand).getByRole('button', { name: t('webinar.moderation.giveFloor') });
+    expect(give).toHaveAccessibleDescription(new RegExp(t('webinar.handRaisedPresenter')));
     expect(presenterView).not.toHaveTextContent('Ana');
     expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
     expect(within(presenterView).queryByText(t('webinar.moderation.pendingTitle'))).toBeNull();
@@ -164,6 +165,37 @@ describe('ModeratorQueue (WBN-10, WBN-19, WBN-23 to WBN-25, WBN-28)', () => {
     await act(() => attendee.consentToUnmute());
     await waitFor(() => expect(speaker).not.toHaveAttribute('data-muted'));
     expect(controller.getSnapshot().media.muted).toBe(false);
+  });
+
+  it('lets a presenter give the floor to a raised hand, anonymously, and take it back (WBN-25.1)', async () => {
+    const user = userEvent.setup();
+    const { server, controller, attendee, participantId } = await setup();
+    const presenter = new FakeWebinarClient({ server, role: 'presenter', name: 'Marko' });
+    renderWithI18n(<ModeratorQueue client={presenter} />);
+    await act(() => attendee.raiseHand());
+
+    const hand = await screen.findByTestId('webinar-queue-hand');
+    await user.click(within(hand).getByRole('button', { name: t('webinar.moderation.giveFloor') }));
+    await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(true));
+    expect(server.requests.find((request) => request.action === 'floor.give')).toMatchObject({ input: { participantId } });
+    expect(attendee.getSnapshot().myFloor.status).toBe('given');
+    // The hand is down and the speaker row names nobody; the presenter who gave the floor can take it back.
+    await waitFor(() => expect(screen.queryByTestId('webinar-queue-hand')).toBeNull());
+    const speaker = await screen.findByTestId('webinar-queue-speaker');
+    expect(speaker).not.toHaveTextContent('Ana');
+    await user.click(within(speaker).getByRole('button', { name: t('webinar.moderation.takeFloorFrom', { name: t('webinar.chat.participant') }) }));
+    await waitFor(() => expect(controller.getSnapshot().devices.canSendAudio).toBe(false));
+    expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Ana');
+  });
+
+  it('a presenter who arrives after hands were raised can give the floor to them (WBN-25.1)', async () => {
+    const { server, attendee } = await setup();
+    await attendee.raiseHand();
+    const presenter = new FakeWebinarClient({ server, role: 'presenter', name: 'Marko' });
+    renderWithI18n(<ModeratorQueue client={presenter} />);
+    const hand = await screen.findByTestId('webinar-queue-hand');
+    expect(within(hand).getByRole('button', { name: t('webinar.moderation.giveFloor') })).toBeEnabled();
+    expect(hand).not.toHaveTextContent('Ana');
   });
 
   it('lets a presenter take the floor back from the floor holder the hosts room names, anonymously (WBN-25)', async () => {

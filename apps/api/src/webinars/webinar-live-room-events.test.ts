@@ -10,8 +10,8 @@
  *   never a participant id or a name (D-CW-15).
  * - The hosts' room `webinar:{id}:hosts`: `webinar.floor.state { active,
  *   participantId }` for the attendee whose floor changed, and
- *   `webinar.hand.count { count }` on every raise and lower (and when the
- *   floor lowers a hand).
+ *   `webinar.hand.count { count, hands }` (participant ids, never names) on
+ *   every raise and lower (and when the floor lowers a hand).
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Principal } from '@nestself/contracts';
@@ -53,7 +53,7 @@ function registration(id: string, floorGivenAt: Date | null, handRaisedAt: Date 
     id,
     webinarId: 'w1',
     orgId: 'org_sample',
-    userId: id === 'reg_1' ? 'user_jovan' : 'user_ana',
+    userId: id === 'reg_1' ? 'user_jovan' : `user_${id}`,
     registeredAt: new Date(),
     canceledAt: null,
     handRaisedAt,
@@ -81,7 +81,7 @@ async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?
   const floors = new Map<string, Date | null>([['reg_1', null]]);
   for (let i = 0; i < (options.othersWithFloor ?? 0); i += 1) floors.set(`reg_other_${i}`, new Date());
   const hands = new Map<string, Date | null>([['reg_1', null]]);
-  for (let i = 0; i < (options.othersWithHand ?? 0); i += 1) hands.set(`reg_hand_${i}`, new Date());
+  for (let i = 0; i < (options.othersWithHand ?? 0); i += 1) hands.set(`reg_hand_${i}`, new Date(Date.UTC(2020, 0, 20, 9, i)));
   const current = options.message ?? message('published');
 
   const access = {
@@ -114,9 +114,15 @@ async function setup(options: { message?: WebinarMessageRecord; othersWithFloor?
     },
     listActiveRegistrations: async () =>
       [...new Set([...floors.keys(), ...hands.keys()])].map((id) => registration(id, floors.get(id) ?? null, hands.get(id) ?? null)),
+    findOpenSession: async () => ({ id: 'session_1' }),
   } as unknown as WebinarsRepository;
   const calls = {
     findSessionById: async () => ({ id: 'session_1', status: 'active', providerMeetingId: session.providerMeetingId }),
+    // Every registrant is an attendee in the open session; `user_reg_hand_0` is `part_reg_hand_0`.
+    findParticipant: async (_sessionId: string, userId: string) => ({
+      id: userId === 'user_jovan' ? 'part_attendee' : `part_${userId.slice('user_'.length)}`,
+      role: 'attendee',
+    }),
   } as unknown as CallsRepository;
   const toAudienceAdded = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
   const toHosts = vi.fn((_webinarId: string, _event: string, _payload: unknown) => true);
@@ -192,11 +198,15 @@ describe('the hosts room (webinar:{id}:hosts)', () => {
     await service.lowerHand('w1', jovan);
     await service.raiseHand('w1', jovan);
     await service.giveFloor('w1', 'part_attendee', moderator);
-    expect(toHosts.mock.calls.filter((call) => call[1] === 'webinar.hand.count').map((call) => call[2])).toEqual([
-      { count: 3 },
-      { count: 2 },
-      { count: 3 },
-      { count: 2 },
+    const counts = toHosts.mock.calls.filter((call) => call[1] === 'webinar.hand.count').map((call) => call[2] as { count: number; hands: { participantId: string }[] });
+    expect(counts.map((payload) => payload.count)).toEqual([3, 2, 3, 2]);
+    // The participant ids, oldest hand first, so a presenter can give the floor (WBN-25.1); never a name.
+    expect(counts.map((payload) => payload.hands.map((hand) => hand.participantId))).toEqual([
+      ['part_reg_hand_0', 'part_reg_hand_1', 'part_attendee'],
+      ['part_reg_hand_0', 'part_reg_hand_1'],
+      ['part_reg_hand_0', 'part_reg_hand_1', 'part_attendee'],
+      ['part_reg_hand_0', 'part_reg_hand_1'],
     ]);
+    expect(JSON.stringify(counts)).not.toMatch(/Jovan|user_/);
   });
 });

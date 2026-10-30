@@ -164,6 +164,28 @@ describe('admin webinars (sample mode)', () => {
     expect(screen.queryByRole('heading', { name: calls.webinar.console.pollTitle })).not.toBeInTheDocument();
   });
 
+  it('lets the presenter give the floor to a raised hand without seeing a name, and take it back (WBN-25.1)', async () => {
+    const user = userEvent.setup();
+    renderAt(`/webinars/${UPCOMING}/live`, 'expert');
+    await joinFromPrejoin(user);
+    const lobby = await screen.findByTestId('webinar-lobby', {}, { timeout: 5000 });
+    await user.click(within(lobby).getByRole('button', { name: calls.webinar.start }));
+
+    const queue = await screen.findByTestId('webinar-moderator-queue');
+    // The two sample hands, anonymous: "a participant asked to speak", each with Give the floor.
+    const hands = await within(queue).findAllByTestId('webinar-queue-hand');
+    expect(hands).toHaveLength(2);
+    expect(hands[0]).toHaveTextContent(calls.webinar.handRaisedPresenter);
+    expect(queue).not.toHaveTextContent('Ana Nikolić');
+    await user.click(within(hands[0]!).getByRole('button', { name: calls.webinar.moderation.giveFloor }));
+
+    const speaker = await within(queue).findByTestId('webinar-queue-speaker');
+    expect(speaker).not.toHaveTextContent('Ana Nikolić');
+    await waitFor(() => expect(within(queue).getAllByTestId('webinar-queue-hand')).toHaveLength(1));
+    await user.click(within(speaker).getByRole('button', { name: calls.webinar.moderation.takeFloorFrom.replace('{{name}}', calls.webinar.chat.participant) }));
+    await waitFor(() => expect(within(queue).queryByTestId('webinar-queue-speaker')).not.toBeInTheDocument());
+  });
+
   it('shows the ended sample webinar\'s recording state and anonymous attendance rows', async () => {
     renderAt('/webinars/webinar_sample_ended', 'operations');
     expect(await screen.findByTestId('webinar-recording-state')).toHaveTextContent(calls.webinar.admin.recordingStatus.ready);

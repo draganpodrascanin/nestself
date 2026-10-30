@@ -28,7 +28,7 @@ describe('FakeWebinarServer', () => {
     await moderator.giveFloor(participantId);
     expect(server.emitted.slice(before).map(({ room, event, payload }) => ({ room, event, payload }))).toEqual([
       { room: MODERATION, event: 'webinar.hand.lowered', payload: { participantId } },
-      { room: HOSTS, event: 'webinar.hand.count', payload: { count: 0 } },
+      { room: HOSTS, event: 'webinar.hand.count', payload: { count: 0, hands: [] } },
       { room: ROOM, event: 'webinar.floor.given', payload: expect.objectContaining({ participantId }) },
       { room: ROOM, event: 'webinar.floor.state', payload: { active: true } },
       { room: HOSTS, event: 'webinar.floor.state', payload: { active: true, participantId } },
@@ -56,7 +56,8 @@ describe('FakeWebinarServer', () => {
     server.simulate.handRaised('p9', 'Jovan (sample)');
     server.simulate.attendance(3);
     expect(moderator.getSnapshot()).toMatchObject({ hands: [expect.objectContaining({ name: 'Jovan (sample)' })], attendanceCount: 3, handCount: 1 });
-    expect(presenter.getSnapshot()).toMatchObject({ hands: [], attendanceCount: 3, handCount: 1 });
+    // The presenter learns the hand from the hosts room: a participant id to give the floor by, never the name (WBN-25.1).
+    expect(presenter.getSnapshot()).toMatchObject({ hands: [{ participantId: 'p9', name: null }], attendanceCount: 3, handCount: 1 });
     expect(attendee.getSnapshot()).toMatchObject({ hands: [], attendanceCount: null, handCount: null });
     expect(JSON.stringify(presenter.getSnapshot())).not.toContain('Jovan');
   });

@@ -5,7 +5,9 @@
  * registration status with register and cancel, and
  * the lobby: the camera sentence (D-CW-35, UX-28), a countdown, and "Join
  * webinar", enabled from 15 minutes before the start for a registered
- * employee. No attendee list or name appears here (D-CW-15).
+ * employee. A canceled webinar shows that it was canceled instead, with no
+ * registration status and no Join. No attendee list or name appears here
+ * (D-CW-15).
  *
  * The live view (`$webinarId.live.tsx`) is this route's child: when it
  * matches, this route renders only the outlet.
@@ -62,7 +64,6 @@ function Lobby({ webinar }: { webinar: WebinarResponse }) {
   const windowOpen = now >= opensAt.getTime() && now <= closesAt.getTime();
   const canJoin = upcoming && webinar.registered && windowOpen;
 
-  if (webinar.status === 'canceled') return <Alert tone="warning">{t('webinar.detail.canceled')}</Alert>;
   if (webinar.status === 'ended') return <Alert tone="info">{t('webinar.ended')}</Alert>;
 
   let hint: string | null = null;
@@ -159,23 +160,34 @@ function WebinarDetail() {
         {names ? <p className="type-body">{t('calls:webinar.presenters', { names })}</p> : null}
       </header>
       {description ? <p className="type-body max-w-2xl">{description}</p> : null}
-      <RecordingNotice />
-      {/* WBN-15, D-CW-23: the captions status, beside the recording notice. */}
-      <p className="type-body text-text-secondary" data-testid="webinar-captions-statement">
-        {t('calls:webinar.captionsStatement')}
-      </p>
+      {webinar.status === 'canceled' ? (
+        // Canceled: the canceled state only, no registration status, recording notice or Join.
+        <div data-testid="webinar-detail-canceled">
+          <Alert tone="warning" title={t('calls:webinar.detail.canceled')}>
+            {t('calls:webinar.detail.canceledBody')}
+          </Alert>
+        </div>
+      ) : (
+        <>
+          <RecordingNotice />
+          {/* WBN-15, D-CW-23: the captions status, beside the recording notice. */}
+          <p className="type-body text-text-secondary" data-testid="webinar-captions-statement">
+            {t('calls:webinar.captionsStatement')}
+          </p>
 
-      <section aria-labelledby="webinar-registration-title" className="gap-3 flex flex-col">
-        <Heading level={2} typeRole="sectionTitle" id="webinar-registration-title">
-          {t('calls:webinar.detail.registrationTitle')}
-        </Heading>
-        <p className="type-body" data-testid="webinar-registration-status">
-          {webinar.registered ? t('calls:webinar.detail.registered') : t('calls:webinar.detail.notRegistered')}
-        </p>
-        <RegistrationAction webinar={webinar} allowUnregister />
-      </section>
+          <section aria-labelledby="webinar-registration-title" className="gap-3 flex flex-col">
+            <Heading level={2} typeRole="sectionTitle" id="webinar-registration-title">
+              {t('calls:webinar.detail.registrationTitle')}
+            </Heading>
+            <p className="type-body" data-testid="webinar-registration-status">
+              {webinar.registered ? t('calls:webinar.detail.registered') : t('calls:webinar.detail.notRegistered')}
+            </p>
+            <RegistrationAction webinar={webinar} allowUnregister />
+          </section>
 
-      <Lobby webinar={webinar} />
+          <Lobby webinar={webinar} />
+        </>
+      )}
     </div>
   );
 }

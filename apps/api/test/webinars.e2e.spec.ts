@@ -925,12 +925,13 @@ describe.skipIf(!shouldRun)('Webinars (e2e)', () => {
     ]);
   });
 
-  it('the hosts room counts raised hands and attendance, never names (T-CW-2.3 hosts room, WBN-19)', async () => {
+  it('the hosts room counts raised hands with their participant ids and attendance, never names (T-CW-2.3 hosts room, WBN-19, WBN-25.1)', async () => {
     expect((await post(jovan, `/webinars/${liveId}/hand`)).status).toBe(200);
     expect((await del(jovan, `/webinars/${liveId}/hand`)).status).toBe(200);
+    // The participant id lets a presenter give the floor; the name stays in the moderation room.
     expect(emitted('webinar.hand.count')).toEqual([
-      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 1 }],
-      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 0 }],
+      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 1, hands: [{ participantId: attendeeJoin.participantId, raisedAt: expect.any(String) }] }],
+      [`webinar:${liveId}:hosts`, 'webinar.hand.count', { count: 0, hands: [] }],
     ]);
     expect((await post(jovan, `/webinars/${liveId}/join`)).status).toBe(200);
     const counts = emitted('webinar.attendance.count').map((call) => call[0]);

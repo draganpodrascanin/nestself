@@ -328,6 +328,7 @@
       "joinOpensAt": "You can join from {{time}}.",
       "registerToJoin": "Register to join this webinar.",
       "canceled": "This webinar was canceled.",
+      "canceledBody": "There is nothing to join or register for.",
       "closed": "Joining has closed for this webinar.",
       "sampleDemo": "Open the sample webinar (demonstration)"
     },
@@ -340,7 +341,7 @@
       "panelsLabel": "Chat and polls",
       "realtimeUnavailable": "Live updates are not available right now. The video is not affected.",
       "thanksTitle": "Thank you for joining",
-      "replayLater": "If the hosts share a replay, you can watch it later.",
+      "replayLater": "A replay will be available after review.",
       "backToWebinars": "Back to webinars"
     },
     "admin": {

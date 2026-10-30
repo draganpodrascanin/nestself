@@ -11,8 +11,9 @@
  * Joining before a host started answers 409 `webinar_not_open`: the stage
  * shows the lobby (countdown, recording notice, the camera sentence) and
  * joins as soon as the room reports `live`. When the webinar ends the screen
- * leaves the meeting and thanks the attendee; a replay is a sentence only
- * (M2). The join response starts the controller once and is not kept
+ * leaves the meeting, thanks the attendee and says a replay will be
+ * available after review (WBN-13); the replay itself is M2. The join
+ * response starts the controller once and is not kept
  * (CW-R-59). Sample mode runs on `FakeWebinarClient` and
  * `FakeCallSessionController`: nothing joins a meeting and nothing is sent.
  */

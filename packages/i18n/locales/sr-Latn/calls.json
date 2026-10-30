@@ -328,6 +328,7 @@
       "joinOpensAt": "Možete se pridružiti od {{time}}.",
       "registerToJoin": "Prijavite se da biste se pridružili ovom vebinaru.",
       "canceled": "Ovaj vebinar je otkazan.",
+      "canceledBody": "Nema čemu da se pridružite niti da se prijavite.",
       "closed": "Pridruživanje ovom vebinaru je zatvoreno.",
       "sampleDemo": "Otvorite primer vebinara (demonstracija)"
     },
@@ -340,7 +341,7 @@
       "panelsLabel": "Ćaskanje i ankete",
       "realtimeUnavailable": "Ažuriranja uživo trenutno nisu dostupna. To ne utiče na video.",
       "thanksTitle": "Hvala što ste se pridružili",
-      "replayLater": "Ako domaćini podele snimak, moći ćete kasnije da ga pogledate.",
+      "replayLater": "Snimak će biti dostupan nakon provere.",
       "backToWebinars": "Nazad na vebinare"
     },
     "admin": {

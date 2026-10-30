@@ -16,7 +16,9 @@
  *   every message with its author's registration name.
  * - Hand-raise (WBN-10): an attendee who joined raises or lowers their hand;
  *   the moderation room gets the registration name and the hosts' room the
- *   number of raised hands (`webinar.hand.count`), nobody else anything.
+ *   number of raised hands with their participant ids, never a name
+ *   (`webinar.hand.count`, so a presenter can give the floor, WBN-25.1),
+ *   nobody else anything.
  * - Floor (WBN-25, WBN-26, D-CW-35, CW-R-108): a host gives an attendee the
  *   floor with `UpdateAttendeeCapabilities` audio `SendReceive` and video and
  *   content `Receive`, and takes it back to receive-only. An attendee seated
@@ -50,7 +52,7 @@
  *   for the hosts once a poll is closed.
  *
  * No route here returns a roster (WBN-08): a participant id appears only in
- * the moderation views.
+ * the moderation views and, without a name, in the hosts' room.
  */
 import { Inject, Injectable } from '@nestjs/common';
 import {
@@ -379,12 +381,26 @@ export class WebinarLiveService {
     return { raised: false, raisedAt: null };
   }
 
-  /** `webinar.hand.count` to the hosts' room: a number, never names (WBN-10, WBN-19). */
+  /**
+   * `webinar.hand.count` to the hosts' room: the number of raised hands and,
+   * oldest first, the participant ids that raised them, never names (WBN-10,
+   * WBN-19), so a presenter can give the floor too (WBN-25.1). A raised hand
+   * whose owner has no attendee in the open session is counted only.
+   */
   private async announceHandCount(webinar: Pick<WebinarRecord, 'id' | 'orgId'>): Promise<void> {
-    const registrations = await this.access.scoped(webinar.orgId, (tx) => this.repo.listActiveRegistrations(webinar.id, tx));
-    this.events.toHosts(webinar.id, 'webinar.hand.count', {
-      count: registrations.filter((registration) => registration.handRaisedAt !== null).length,
+    const payload = await this.access.scoped(webinar.orgId, async (tx) => {
+      const raised = (await this.repo.listActiveRegistrations(webinar.id, tx))
+        .flatMap((registration) => (registration.handRaisedAt ? [{ userId: registration.userId, raisedAt: registration.handRaisedAt }] : []))
+        .sort((a, b) => a.raisedAt.getTime() - b.raisedAt.getTime());
+      const session = raised.length > 0 ? await this.repo.findOpenSession(webinar.id, tx) : null;
+      const hands: { participantId: string; raisedAt: string }[] = [];
+      for (const hand of raised) {
+        const participant = session ? await this.calls.findParticipant(session.id, hand.userId, tx) : null;
+        if (participant?.role === 'attendee') hands.push({ participantId: participant.id, raisedAt: hand.raisedAt.toISOString() });
+      }
+      return { count: raised.length, hands };
     });
+    this.events.toHosts(webinar.id, 'webinar.hand.count', payload);
   }
 
   // ── Floor (WBN-25, WBN-26, D-CW-35) ───────────────────────────────────────

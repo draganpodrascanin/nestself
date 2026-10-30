@@ -214,7 +214,11 @@ export interface WebinarSnapshot {
   moderationMessages: readonly WebinarModerationMessage[];
   /** Ids of messages this viewer sent, to tell them when a host publishes one. */
   ownMessageIds: readonly string[];
-  /** The moderator only (moderation room, names). */
+  /**
+   * Raised hands, oldest first: the moderator's with the registration names
+   * (moderation room); a presenter's with participant ids only (the hosts'
+   * room), so a presenter can give the floor too (WBN-25.1).
+   */
   hands: readonly WebinarHand[];
   /** Hosts only: raised hands as a number (`webinar.hand.count` on the hosts' room); null until the first count. */
   handCount: number | null;
