@@ -17,7 +17,7 @@
  * - DragHandle (block-level drag & drop)
  * - DisableItalicInput (swallows Mod-I)
  */
-import { type Extensions, Extension, Mark, Node } from '@tiptap/core';
+import { type Extensions, Extension, InputRule, Mark, Node, textblockTypeInputRule, wrappingInputRule } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
@@ -83,6 +83,21 @@ const SectionHeading = Node.create({
         this.editor.commands.toggleNode('sectionHeading', 'paragraph', { level: 3 }),
     };
   },
+
+  addInputRules() {
+    return [
+      textblockTypeInputRule({
+        find: /^##\s$/,
+        type: this.type,
+        getAttributes: () => ({ level: 2 }),
+      }),
+      textblockTypeInputRule({
+        find: /^###\s$/,
+        type: this.type,
+        getAttributes: () => ({ level: 3 }),
+      }),
+    ];
+  },
 });
 
 const Quote = Node.create({
@@ -114,6 +129,15 @@ const Quote = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return ['blockquote', { 'data-type': 'quote', ...HTMLAttributes }, 0];
+  },
+
+  addInputRules() {
+    return [
+      wrappingInputRule({
+        find: /^>\s$/,
+        type: this.type,
+      }),
+    ];
   },
 });
 
@@ -280,6 +304,29 @@ const Checklist = Node.create({
 
   addNodeView() {
     return ReactNodeViewRenderer(ChecklistView);
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^\[\]\s$/,
+        handler: ({ state, range, chain }) => {
+          chain()
+            .deleteRange(range)
+            .insertContent({
+              type: 'checklist',
+              content: [
+                {
+                  type: 'checklistItem',
+                  attrs: { label: '' },
+                  content: [{ type: 'text', text: ' ' }],
+                },
+              ],
+            })
+            .run();
+        },
+      }),
+    ];
   },
 });
 
@@ -517,6 +564,19 @@ const Link = Mark.create({
   renderHTML({ HTMLAttributes }) {
     return ['a', { href: HTMLAttributes.href as string, rel: 'noopener noreferrer nofollow' }, 0];
   },
+
+  addKeyboardShortcuts() {
+    return {
+      'Mod-k': () => {
+        // Dispatch a custom event that the Toolbar can listen for.
+        // The toolbar owns the link popover state; this shortcut just signals it.
+        this.editor.view.dom.dispatchEvent(
+          new CustomEvent('nestself:toggle-link', { bubbles: true }),
+        );
+        return true;
+      },
+    };
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -577,6 +637,13 @@ const BlockKeyboardShortcuts = Extension.create({
 
   addKeyboardShortcuts() {
     return {
+      'Mod-/': () => {
+        // Dispatch a custom event that the BlockHandle listens for
+        this.editor.view.dom.dispatchEvent(
+          new CustomEvent('nestself:toggle-block-menu', { bubbles: true }),
+        );
+        return true;
+      },
       'Alt-Shift-ArrowUp': () => {
         const { state, dispatch } = this.editor.view;
         const { $from } = state.selection;

@@ -456,6 +456,15 @@ export function Toolbar({ editor, labels, onInsertImage }: ToolbarProps) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [linkPopoverOpen]);
 
+  // Listen for Mod-K custom event from the Link extension
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const handleToggle = () => setLinkPopoverOpen((prev) => !prev);
+    dom.addEventListener('nestself:toggle-link', handleToggle);
+    return () => dom.removeEventListener('nestself:toggle-link', handleToggle);
+  }, [editor]);
+
   if (!editor) return null;
 
   return (

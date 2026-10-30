@@ -126,6 +126,15 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open, onClose]);
 
+  // Focus first button when menu opens
+  useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => {
+      const firstButton = menuRef.current?.querySelector<HTMLButtonElement>('button');
+      firstButton?.focus();
+    });
+  }, [open]);
+
   const handleTurnInto = useCallback(
     (nodeType: string, attrs?: Record<string, unknown>) => {
       if (!node) return;
@@ -249,6 +258,22 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
                 e.stopPropagation();
                 onClose();
               }
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const buttons = Array.from(
+                  menuRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+                );
+                if (buttons.length === 0) return;
+                const current = document.activeElement as HTMLElement;
+                const idx = buttons.indexOf(current as HTMLButtonElement);
+                let next: number;
+                if (e.key === 'ArrowDown') {
+                  next = idx < buttons.length - 1 ? idx + 1 : 0;
+                } else {
+                  next = idx > 0 ? idx - 1 : buttons.length - 1;
+                }
+                buttons[next]?.focus();
+              }
             }}
           >
             {/* Turn into submenu */}
@@ -361,6 +386,26 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
     [],
   );
 
+  // Listen for Mod-/ custom event from BlockKeyboardShortcuts extension
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const handleToggle = () => {
+      // Resolve the block node at the current cursor position
+      const { $from } = editor.state.selection;
+      if ($from.depth >= 1) {
+        const pos = $from.before(1);
+        const node = editor.state.doc.nodeAt(pos);
+        if (node) {
+          setCurrentNode(node);
+          setCurrentPos(pos);
+          setMenuOpen((prev) => !prev);
+        }
+      }
+    };
+    dom.addEventListener('nestself:toggle-block-menu', handleToggle);
+    return () => dom.removeEventListener('nestself:toggle-block-menu', handleToggle);
+  }, [editor]);
+
   const handleAddBlock = useCallback(() => {
     if (!currentNode) return;
     const end = currentPos + currentNode.nodeSize;
@@ -376,6 +421,16 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
       editor.commands.insertContent('/');
     });
   }, [editor, currentNode, currentPos]);
+
+  // Lock the drag handle in place while the menu is open so it doesn't
+  // vanish when the pointer leaves the block.
+  useEffect(() => {
+    if (menuOpen) {
+      editor.commands.lockDragHandle();
+    } else {
+      editor.commands.unlockDragHandle();
+    }
+  }, [menuOpen, editor]);
 
   return (
     <DragHandle
