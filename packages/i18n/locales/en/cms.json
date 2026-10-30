@@ -139,6 +139,7 @@
     "autosaveError": "Save failed",
     "loading": "Loading editor...",
     "notFound": "Variant not found.",
+    "createVariant": "Create {{locale}} variant",
     "loadError": "Could not load the variant. Please try again.",
     "unsavedPrompt": "You have unsaved changes. Leave without saving?",
     "dismiss": "Dismiss",
@@ -177,7 +178,7 @@
       "linkInvalid": "Only https:// links and internal references are allowed.",
       "undo": "Undo",
       "redo": "Redo",
-      "toolbar": "Editor toolbar"
+      "toolbar": "Content editor"
     },
     "slash": {
       "placeholder": "Filter blocks...",
@@ -241,7 +242,12 @@
       "imageAlt": "Alt text (required)",
       "imageCaption": "Caption (optional)",
       "imagePlaceholder": "Drop or paste an image, or click to upload"
-    }
+    },
+    "returnedForChanges": "Returned for changes",
+    "returnComment": "Comment",
+    "returnCommentPlaceholder": "Explain what needs to change...",
+    "publishDialog": "Publish resource",
+    "publishConfirm": "This will make the resource available to the selected audience."
   },
   "sample": {
     "saveNotice": "Sample mode: nothing was saved.",

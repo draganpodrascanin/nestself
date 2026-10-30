@@ -171,7 +171,7 @@
       "cta": "Call to action",
       "related": "Related resource",
       "linkInvalid": "Only https:// links and internal references are allowed.",
-      "toolbar": "Szerkeszto eszközsor"
+      "toolbar": "Tartalomszerkeszto"
     },
     "slash": {
       "placeholder": "Blokkok szurése...",
@@ -239,9 +239,15 @@
     "audiencePlaceholder": "Select target audience",
     "loading": "Loading editor...",
     "notFound": "Variant not found.",
+    "createVariant": "{{locale}} valtozat letrehozasa",
     "loadError": "Could not load the variant. Please try again.",
     "unsavedPrompt": "You have unsaved changes. Leave without saving?",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "returnedForChanges": "Visszakuldve modositasra",
+    "returnComment": "Megjegyzes",
+    "returnCommentPlaceholder": "Magyarazza el, mit kell valtoztatni...",
+    "publishDialog": "Eroforras kozzetetele",
+    "publishConfirm": "Ez a kivalasztott kozonseg szamara elerhetove teszi az eroforrast."
   },
   "sample": {
     "saveNotice": "Próba mód: semmi nem lett mentve.",

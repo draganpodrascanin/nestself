@@ -171,7 +171,7 @@
       "cta": "Poziv na akciju",
       "related": "Povezani resurs",
       "linkInvalid": "Dozvoljene su samo https:// veze i interne reference.",
-      "toolbar": "Alatke za uređivanje"
+      "toolbar": "Uredjivac sadrzaja"
     },
     "slash": {
       "placeholder": "Filtriraj blokove...",
@@ -239,9 +239,15 @@
     "audiencePlaceholder": "Izaberite ciljnu publiku",
     "loading": "Učitavanje editora...",
     "notFound": "Varijanta nije pronađena.",
+    "createVariant": "Kreiraj {{locale}} varijantu",
     "loadError": "Nije moguće učitati varijantu. Pokušajte ponovo.",
     "unsavedPrompt": "Imate nesačuvane izmene. Napustiti bez čuvanja?",
-    "dismiss": "Odbaci"
+    "dismiss": "Odbaci",
+    "returnedForChanges": "Vraceno na izmene",
+    "returnComment": "Komentar",
+    "returnCommentPlaceholder": "Objasnite sta treba izmeniti...",
+    "publishDialog": "Objavi resurs",
+    "publishConfirm": "Ovo ce uciniti resurs dostupnim odabranoj publici."
   },
   "sample": {
     "saveNotice": "Probni režim: ništa nije sačuvano.",
