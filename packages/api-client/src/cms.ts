@@ -115,6 +115,7 @@ const ResourceSummarySchema = z.object({
   ownerUserId: z.string(),
   reviewPolicy: ContentReviewPolicySchema,
   reviewDiscipline: ReviewDisciplineSchema.nullable(),
+  title: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -237,11 +238,12 @@ export function createCmsApi(client: ApiClient) {
         schema: ResourceDetailResponseSchema,
       }),
 
-    /** GET /api/ops/cms/resources — list (category-scoped). */
+    /** GET /api/ops/cms/resources — list (category-scoped, title-searchable). */
     listResources: (params: {
       state?: string;
       categoryId?: string;
       locale?: string;
+      q?: string;
       cursor?: string;
       limit?: number;
     } = {}) =>

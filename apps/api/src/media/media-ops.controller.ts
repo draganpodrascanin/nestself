@@ -60,6 +60,8 @@ import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage.js';
 import { deliverRendition, type DeliverReq, type DeliverRes } from './deliver-rendition.js';
 import type { UploadedAsset } from './upload-storage-engine.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { MediaJobProcessor } from './media-job.processor.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CmsResourceLoader } from '../cms/cms-resource-loader.js';
 import { cmsResource } from '../cms/cms-resolvers.js';
 
@@ -85,6 +87,7 @@ export class MediaOpsController {
     private readonly cmsScopeService: CmsScopeService,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
     private readonly cmsResourceLoader: CmsResourceLoader,
+    private readonly mediaJobProcessor: MediaJobProcessor,
   ) {}
 
   /**
@@ -126,9 +129,17 @@ export class MediaOpsController {
     assertOperationsSession(principal);
 
     if (uploadedFile && uploadedFile.assetId) {
+      // Enqueue processing (synchronous in dev/test without Redis,
+      // async via BullMQ worker with Redis).
+      await this.mediaJobProcessor.enqueue(uploadedFile.assetId);
+
+      // Re-read the state: synchronous processing may have already
+      // moved it to 'ready', and the caller can skip polling.
+      const asset = await this.mediaService.getAsset(uploadedFile.assetId);
+
       return {
         assetId: uploadedFile.assetId,
-        state: uploadedFile.state,
+        state: asset?.state ?? uploadedFile.state,
       };
     }
 

@@ -4,6 +4,51 @@
  * editor-extensions.ts and node-views.tsx.
  */
 
+// ---------------------------------------------------------------------------
+// Image upload handler — injected from the host app
+// ---------------------------------------------------------------------------
+
+/** Result from a completed image upload. */
+export interface ImageUploadResult {
+  assetId: string;
+  /** URL the editor can use to display the image (e.g. /api/ops/cms/media/:id/original). */
+  previewUrl: string;
+}
+
+/**
+ * Upload handler that the host app provides to the content editor.
+ *
+ * The handler receives the selected File and an `onStatus` callback for
+ * intermediate status text (e.g. "Uploading", "Processing").  It resolves
+ * with the assetId and a preview URL once the image is ready.
+ */
+export type ImageUploadHandler = (
+  file: File,
+  onStatus: (status: string) => void,
+) => Promise<ImageUploadResult>;
+
+// ---------------------------------------------------------------------------
+// Resource search handler — injected from the host app
+// ---------------------------------------------------------------------------
+
+/** A resource search result item shown in the CTA / related resource combobox. */
+export interface ResourceSearchResult {
+  id: string;
+  title: string;
+}
+
+/**
+ * Handler that the host app provides for searching CMS resources by title.
+ * Used by the CTA and RelatedResource node views.
+ */
+export type ResourceSearchHandler = (
+  query: string,
+) => Promise<ResourceSearchResult[]>;
+
+// ---------------------------------------------------------------------------
+// Labels
+// ---------------------------------------------------------------------------
+
 /** Labels consumed by React node views. Defaults are English fallbacks. */
 export interface NodeViewLabels {
   noteKinds: Record<string, string>;

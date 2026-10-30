@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DragHandle } from '@tiptap/extension-drag-handle-react';
 import type { Editor } from '@tiptap/core';
 import type { Node as PmNode } from '@tiptap/pm/model';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import {
   m,
   AnimatePresence,
@@ -193,15 +194,14 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
     try {
       const $pos = editor.state.doc.resolve(pos);
       const depth = $pos.depth;
-      // At the top level (depth 0 or 1), check index
       const parentDepth = depth >= 1 ? depth : 0;
       if ($pos.index(parentDepth) <= 0) return;
-      // Find the start of the previous sibling
       const prevStart = $pos.posAtIndex($pos.index(parentDepth) - 1, parentDepth);
       const { tr } = editor.state;
       const nodeSlice = editor.state.doc.slice(pos, pos + node.nodeSize);
       tr.delete(pos, pos + node.nodeSize);
       tr.insert(prevStart, nodeSlice.content);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(prevStart + 1)));
       editor.view.dispatch(tr);
     } catch {
       // At boundary; ignore
@@ -218,7 +218,9 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
     const { tr } = editor.state;
     const nodeSlice = editor.state.doc.slice(pos, end);
     tr.delete(pos, end);
-    tr.insert(pos + nextNode.nodeSize, nodeSlice.content);
+    const insertPos = pos + nextNode.nodeSize;
+    tr.insert(insertPos, nodeSlice.content);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos + 1)));
     editor.view.dispatch(tr);
     onClose();
   }, [editor, pos, node, onClose]);
@@ -369,6 +371,109 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
 }
 
 // ---------------------------------------------------------------------------
+// Synthetic drag — works with Playwright's CDP mouse events where HTML5 DnD
+// does not fire dragstart/drop in headless Chromium.  It also works with real
+// mouse input, so we use it as the primary drag mechanism.  The native DnD on
+// the DragHandle wrapper is kept as a fallback for users who drag fast from
+// the overall handle area, but this handler is on the grip button specifically.
+// ---------------------------------------------------------------------------
+
+function useSyntheticDrag(
+  editor: Editor,
+  nodeRef: React.RefObject<PmNode | null>,
+  posRef: React.RefObject<number>,
+) {
+  const draggingRef = useRef(false);
+
+  const onGripMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Only left button
+      if (e.button !== 0) return;
+      const node = nodeRef.current;
+      const pos = posRef.current;
+      if (!node || pos == null || pos < 0) return;
+
+      // Prevent native DnD from starting — otherwise the browser captures
+      // the gesture and suppresses regular mousemove/mouseup.
+      e.preventDefault();
+
+      // Also block any dragstart that fires on the parent draggable wrapper
+      const blockDrag = (de: Event) => { de.preventDefault(); };
+      document.addEventListener('dragstart', blockDrag, { capture: true });
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let committed = false;
+      const startPos = pos;
+
+      const onMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (!committed && Math.sqrt(dx * dx + dy * dy) < 5) return;
+        committed = true;
+        draggingRef.current = true;
+      };
+
+      const onUp = (ev: MouseEvent) => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('dragstart', blockDrag, { capture: true } as EventListenerOptions);
+        if (!committed) return; // was a click, not a drag
+        draggingRef.current = false;
+
+        // Find the block at the drop position
+        const view = editor.view;
+        const dropCoords = { left: ev.clientX, top: ev.clientY };
+        const dropPos = view.posAtCoords(dropCoords);
+        if (!dropPos) return;
+
+        // Resolve the drop target to a top-level block boundary
+        const $drop = view.state.doc.resolve(dropPos.pos);
+        const dropBlockIndex = $drop.index(0);
+        const $startNode = view.state.doc.resolve(startPos);
+        const startBlockIndex = $startNode.index(0);
+
+        if (dropBlockIndex === startBlockIndex) return; // no move needed
+
+        // Determine if we're dropping ABOVE or BELOW the target block
+        const dropBlockStart = $drop.posAtIndex(dropBlockIndex, 0);
+        const dropBlockNode = view.state.doc.nodeAt(dropBlockStart);
+        if (!dropBlockNode) return;
+
+        const { tr } = view.state;
+        const sourceNode = view.state.doc.nodeAt(startPos);
+        if (!sourceNode) return;
+        const sourceEnd = startPos + sourceNode.nodeSize;
+        const slice = view.state.doc.slice(startPos, sourceEnd);
+
+        if (dropBlockIndex > startBlockIndex) {
+          // Moving down: insert after the target block, then delete source
+          const targetEnd = dropBlockStart + dropBlockNode.nodeSize;
+          tr.insert(targetEnd, slice.content);
+          tr.delete(
+            tr.mapping.map(startPos),
+            tr.mapping.map(sourceEnd),
+          );
+        } else {
+          // Moving up: delete source, then insert before the target block
+          tr.delete(startPos, sourceEnd);
+          const mappedDropStart = tr.mapping.map(dropBlockStart);
+          tr.insert(mappedDropStart, slice.content);
+        }
+        tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(startPos))));
+        view.dispatch(tr);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [editor, nodeRef, posRef],
+  );
+
+  return { onGripMouseDown, isDragging: draggingRef };
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -426,6 +531,14 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
     });
   }, [editor, currentNode, currentPos]);
 
+  // Refs that the synthetic drag hook reads (avoids stale closures)
+  const nodeRef = useRef<PmNode | null>(currentNode);
+  const posRef = useRef(currentPos);
+  nodeRef.current = currentNode;
+  posRef.current = currentPos;
+
+  const { onGripMouseDown, isDragging } = useSyntheticDrag(editor, nodeRef, posRef);
+
   // Lock the drag handle in place while the menu is open so it doesn't
   // vanish when the pointer leaves the block.
   // The React <DragHandle> registers only the plugin, not the extension's
@@ -453,11 +566,16 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
           <IconPlus />
         </button>
 
-        {/* Drag grip / menu trigger */}
+        {/* Drag grip / menu trigger — mousedown starts a synthetic drag,
+            a quick click (< 5 px travel) still opens the block menu. */}
         <button
           type="button"
           aria-label={labels.dragBlock}
-          onClick={() => setMenuOpen((o) => !o)}
+          onClick={() => {
+            // Only open the menu if we weren't dragging
+            if (!isDragging.current) setMenuOpen((o) => !o);
+          }}
+          onMouseDown={onGripMouseDown}
           className="flex h-6 w-6 cursor-grab items-center justify-center rounded-control text-text-secondary hover:bg-tint hover:text-text transition-colors duration-[var(--motion-fast)] ease-standard focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
           <IconDragGrip />

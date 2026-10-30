@@ -94,6 +94,7 @@ function BubbleButton({
       type="button"
       aria-label={label}
       aria-pressed={active}
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={[
         'inline-flex items-center justify-center min-w-8 h-8 px-1.5 rounded-control',
@@ -281,7 +282,7 @@ function TurnIntoDropdown({
           <m.div
             {...popoverMotion}
             className="absolute top-full right-0 z-10 mt-1 w-40 rounded-control border border-border-subtle bg-surface py-1 shadow-menu"
-            role="listbox"
+            role="menu"
             aria-label={labels.turnInto}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -294,8 +295,9 @@ function TurnIntoDropdown({
               <button
                 key={opt.label}
                 type="button"
-                role="option"
-                aria-selected={opt.active}
+                role="menuitem"
+                aria-current={opt.active || undefined}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   opt.command();
                   onClose();
@@ -371,8 +373,11 @@ export function EditorBubbleMenu({ editor, labels }: EditorBubbleMenuProps) {
       editor={editor}
       pluginKey={bubbleMenuPluginKey}
       className="relative flex items-center gap-0.5 rounded-control border border-border-subtle bg-surface px-1 py-0.5 shadow-menu"
+      options={{
+        element: undefined,
+      }}
     >
-      <div ref={menuRef} className="flex items-center gap-0.5">
+      <div ref={menuRef} role="toolbar" aria-label="Format" className="flex items-center gap-0.5">
         {/* Bold */}
         <BubbleButton
           label={labels.bold}

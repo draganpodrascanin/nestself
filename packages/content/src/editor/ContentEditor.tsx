@@ -18,12 +18,12 @@
  */
 'use client';
 
-import { useCallback, useRef, useEffect, useImperativeHandle, useMemo } from 'react';
+import { useCallback, useRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import type { ContentDocument } from '../schema/document.ts';
 import { createEditorExtensions } from './editor-extensions.ts';
-import type { NodeViewLabels } from './node-view-labels.ts';
+import type { NodeViewLabels, ImageUploadHandler, ResourceSearchHandler } from './node-view-labels.ts';
 import { PasteNormalization } from './paste-handler.ts';
 import { toContentDocument, fromContentDocument } from './converters.ts';
 import { useSlashMenu, createSlashMenuItems } from './SlashMenu.tsx';
@@ -65,8 +65,14 @@ export interface ContentEditorProps {
   className?: string;
   /** All translated labels for menus and accessibility. */
   labels?: ContentEditorLabels;
-  /** Callback when the image slash command is used. */
+  /** Callback when the image slash command is used (legacy; prefer imageUploadHandler). */
   onInsertImage?: () => void;
+  /** Image upload handler. When provided, the ImageView node view handles
+   *  file selection and upload internally (showing status inside the figure). */
+  imageUploadHandler?: ImageUploadHandler;
+  /** Resource search handler. When provided, the CTA and RelatedResource
+   *  node views show a search combobox instead of a plain text input. */
+  resourceSearchHandler?: ResourceSearchHandler;
   /**
    * Imperative handle ref -- exposes methods for the parent to control
    * the editor (insert nodes, replace content for conflict resolution).
@@ -165,6 +171,8 @@ export function ContentEditor({
   className,
   labels = DEFAULT_EDITOR_LABELS,
   onInsertImage,
+  imageUploadHandler,
+  resourceSearchHandler,
   editorRef,
 }: ContentEditorProps) {
   const onChangeRef = useRef(onChange);
@@ -192,21 +200,42 @@ export function ContentEditor({
     labels: labels.slashMenu,
   });
 
-  const editor = useEditor({
-    extensions: [
+  // Stable initial content — computed once so Tiptap's useEditor never
+  // re-applies it via setOptions on subsequent React renders.
+  const [stableContent] = useState(() =>
+    initialDocument ? fromContentDocument(initialDocument) : undefined,
+  );
+
+  // Stable extensions — recreating them triggers refreshEditorInstance()
+  // which destroys and re-creates the editor. Memoize them so the array
+  // identity stays the same across renders.
+  const extensions = useMemo(
+    () => [
       ...createEditorExtensions({
         placeholder,
         blockPlaceholder,
         headingPlaceholder,
         suggestionConfig,
         nodeViewLabels: labels.nodeView,
+        imageUploadHandler,
+        resourceSearchHandler,
       }),
       PasteNormalization,
     ],
-    content: initialDocument ? fromContentDocument(initialDocument) : undefined,
-    editable,
-    onUpdate: handleUpdate,
-    editorProps: {
+    // Slash menu config is the only runtime dependency; placeholder strings
+    // and labels are stable for the lifetime of this locale/editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [suggestionConfig],
+  );
+
+  // Stable editorProps — a new object each render makes Tiptap's
+  // EditorInstanceManager.compareOptions() return false, triggering
+  // setOptions → view.updateState() on every React render. When this
+  // interleaves with fast keyboard sequences (ProseMirror processing
+  // a keypress while updateState re-applies the view), content can
+  // be corrupted (link text disappearing, cursor jumping).
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: [
           'min-h-[200px] py-4 px-2 focus:outline-none',
@@ -229,7 +258,16 @@ export function ContentEditor({
         'aria-multiline': 'true',
         'aria-label': labels.editorLabel,
       },
-    },
+    }),
+    [labels.editorLabel],
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: stableContent,
+    editable,
+    onUpdate: handleUpdate,
+    editorProps,
   });
 
   // Expose imperative handle

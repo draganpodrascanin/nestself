@@ -79,8 +79,13 @@ export class MediaJobProcessor implements OnModuleDestroy {
   async enqueue(assetId: string): Promise<void> {
     const redisUrl = this.config.get<string>('REDIS_URL');
     if (!redisUrl) {
-      // No Redis available — skip enqueue. The asset stays in 'uploaded'.
-      this.logger.debug(`No Redis; skipping enqueue for asset ${assetId}`);
+      // No Redis available — process synchronously (development / e2e).
+      this.logger.debug(`No Redis; processing asset ${assetId} synchronously`);
+      try {
+        await this.mediaService.processAsset(assetId);
+      } catch (err) {
+        this.logger.warn(`Synchronous processing failed for ${assetId}: ${err}`);
+      }
       return;
     }
 

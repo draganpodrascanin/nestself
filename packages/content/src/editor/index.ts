@@ -38,8 +38,9 @@ export {
   CtaView,
   RelatedResourceView,
   ImageView,
+  openImagePicker,
 } from './node-views.tsx';
-export type { NodeViewLabels } from './node-view-labels.ts';
+export type { NodeViewLabels, ImageUploadHandler, ImageUploadResult, ResourceSearchHandler, ResourceSearchResult } from './node-view-labels.ts';
 
 // Legacy toolbar (kept for backward compatibility)
 export { Toolbar, DEFAULT_TOOLBAR_LABELS } from './Toolbar.tsx';

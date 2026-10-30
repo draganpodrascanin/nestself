@@ -358,6 +358,8 @@ export const RelatedResourceSchema = z.strictObject({
   type: z.literal('relatedResource'),
   attrs: z.strictObject({
     contentResourceId: ContentIdSchema,
+    /** Display title resolved when the author picks the resource. */
+    contentResourceTitle: z.string().max(200).nullable().optional(),
   }),
 });
 export type RelatedResource = z.infer<typeof RelatedResourceSchema>;

@@ -18,6 +18,7 @@ import {
   desc,
   eq,
   gt,
+  ilike,
   inArray,
   isNull,
   lt,
@@ -102,7 +103,7 @@ export class CmsService {
     const emptyDoc = {
       type: 'doc',
       schemaVersion: 1,
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
+      content: [{ type: 'paragraph' }],
     };
 
     await this.withPgErrorMapping(async () => {
@@ -167,6 +168,16 @@ export class CmsService {
       conditions.push(eq(contentResources.state, query.state));
     }
 
+    if (query.q) {
+      // Title search: match resources that have a revision title containing q
+      const titleSearch = this.dbService.db
+        .select({ resourceId: contentVariants.contentResourceId })
+        .from(contentVariants)
+        .innerJoin(contentRevisions, eq(contentRevisions.contentVariantId, contentVariants.id))
+        .where(ilike(contentRevisions.title, `%${query.q}%`));
+      conditions.push(inArray(contentResources.id, titleSearch));
+    }
+
     if (query.cursor) {
       conditions.push(gt(contentResources.id, query.cursor));
     }
@@ -192,7 +203,33 @@ export class CmsService {
     const items = rows.slice(0, limit);
     const nextCursor = rows.length > limit ? rows[limit]!.id : null;
 
-    return { items, nextCursor };
+    // Enrich items with titles from revisions (sr-Latn preferred).
+    const resourceIds = items.map((r) => r.id);
+    if (resourceIds.length > 0) {
+      const titleRows = await this.dbService.db
+        .select({
+          resourceId: contentVariants.contentResourceId,
+          title: contentRevisions.title,
+          locale: contentVariants.locale,
+        })
+        .from(contentVariants)
+        .innerJoin(contentRevisions, eq(contentRevisions.contentVariantId, contentVariants.id))
+        .where(inArray(contentVariants.contentResourceId, resourceIds));
+
+      const titleMap = new Map<string, string>();
+      for (const t of titleRows) {
+        if (!titleMap.has(t.resourceId) || t.locale === 'sr-Latn') {
+          titleMap.set(t.resourceId, t.title);
+        }
+      }
+
+      return {
+        items: items.map((r) => ({ ...r, title: titleMap.get(r.id) ?? null })),
+        nextCursor,
+      };
+    }
+
+    return { items: items.map((r) => ({ ...r, title: null as string | null })), nextCursor };
   }
 
   // =========================================================================
@@ -293,7 +330,7 @@ export class CmsService {
     const emptyDoc = {
       type: 'doc',
       schemaVersion: 1,
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
+      content: [{ type: 'paragraph' }],
     };
 
     // Honour fromLocale: copy the latest revision from the source variant
@@ -616,7 +653,7 @@ export class CmsService {
           contentVariantId: variantId,
           revisionNumber: nextRevisionNumber,
           state: 'draft',
-          body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] },
+          body: source?.body ?? { type: 'doc', schemaVersion: 1, content: [{ type: 'paragraph' }] },
           title: source?.title ?? '',
           summary: source?.summary ?? '',
           outcome: source?.outcome ?? null,
