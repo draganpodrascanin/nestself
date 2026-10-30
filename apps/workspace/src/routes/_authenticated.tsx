@@ -20,6 +20,9 @@ import {
   TreeStructure,
   Briefcase,
   ChatsCircle,
+  SealCheck,
+  SlidersHorizontal,
+  Presentation,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -28,6 +31,8 @@ import { ApiStatus } from '../components/ApiStatus';
 import { UserMenu } from '../features/account/user-menu';
 import { ContextPicker } from '../features/context/context-picker';
 import { isSampleDataMode } from '../data-source';
+import { UserRoomListener } from '../calls/user-room-listener';
+import { canAttendWebinars } from '../webinars/route-gate';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
@@ -50,7 +55,7 @@ interface NavEntry {
 }
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace', 'library']);
+  const { t } = useTranslation(['common', 'workspace', 'library', 'calls']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -65,6 +70,10 @@ function AuthenticatedLayout() {
   const canBookmark = principal
     ? can(principal, 'content.bookmark', undefined, effectiveActions)
     : false;
+
+  // Appointments only for someone who can hold consultations (an HR-only principal has none).
+  const showAppointments = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
+
   const showManager = principal
     ? can(principal, 'events.request', undefined, effectiveActions)
     : false;
@@ -91,7 +100,9 @@ function AuthenticatedLayout() {
   const prototypeItems: NavEntry[] = isSampleDataMode
     ? [
         { to: '/support', icon: Heart, label: t('common:nav.support'), group: t('library:prototype.group') },
-        { to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments'), group: t('library:prototype.group') },
+        ...(showAppointments
+          ? [{ to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments'), group: t('library:prototype.group') }]
+          : []),
         { to: '/messages', icon: ChatCircleText, label: t('common:nav.messages'), group: t('library:prototype.group') },
         { to: '/channels', icon: Megaphone, label: t('common:nav.channels'), group: t('library:prototype.group') },
         { to: '/polls', icon: ChartBar, label: t('common:nav.polls'), group: t('library:prototype.group') },
@@ -138,16 +149,33 @@ function AuthenticatedLayout() {
     ? [{ to: '/conversations', icon: ChatsCircle, label: t('workspace:conversations.nav') }]
     : [];
 
+  // Follow-up approvals (T-CW-1.10): the approver's items, and HR's policy under the `_hr` gate.
+  const showApprovals = principal ? can(principal, 'approval.decide', undefined, effectiveActions) : false;
+  const approvalsNav: NavEntry[] = showApprovals
+    ? [{ to: '/approvals', icon: SealCheck, label: t('nav.approvals') }]
+    : [];
+  const followUpPolicyNav: NavEntry[] = showHr
+    ? [{ to: '/follow-up-policy', icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
+    : [];
+
+  // Webinars (T-CW-2.4): discovery and registration for holders of `event.register`.
+  const webinarsNav: NavEntry[] = canAttendWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars', icon: Presentation, label: t('calls:webinar.nav') }]
+    : [];
+
   const allNavItems = [
     ...coreNavItems,
     ...prototypeItems,
+    ...webinarsNav,
     ...conversationsNav,
     ...casesNav,
     ...managerNav,
+    ...approvalsNav,
     ...hrNav,
     ...peopleNav,
     ...orgUnitsNav,
     ...accessNav,
+    ...followUpPolicyNav,
   ];
 
   /**
@@ -319,6 +347,8 @@ function AuthenticatedLayout() {
 
   return (
     <AppShell sidebar={sidebar} topbar={topbar} bottomBar={bottomBar}>
+      {/* Follow-up proposals and reminders on the user's own room, on every page (CALL-42, CALL-01). */}
+      <UserRoomListener />
       <Outlet />
     </AppShell>
   );

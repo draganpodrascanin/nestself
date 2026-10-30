@@ -239,6 +239,23 @@ e2e/content/
 
 Reports and results are written to `e2e/content-report/` and `e2e/content-results/` (both git-ignored).
 
+## Consultation journeys (`e2e/calls/`)
+
+`playwright.calls.config.ts` follows the employee and the expert through a consultation (T-CW-1.7): appointment pages and join window states, the real pre-join device check, joining, the call, "End for everyone", the outcome dialog, the post-call feedback and problem report, the follow-up proposal, the five-minute cue, degraded connection quality and a join the API refuses.
+
+```bash
+pnpm exec playwright test -c playwright.calls.config.ts
+```
+
+- **Servers, on their own ports** (`e2e/calls/servers.mjs`; overridable with `E2E_CALLS_*`): the API on 4117 (`e2e/calls/start-api.mjs` creates, migrates and seeds `nestself_test_e2e17`, builds the API and starts it with stub auth, fixed email code `123456` and `VIDEO_PROVIDER=none`, on Redis index 7), the workspace on 5187 and the admin app on 5188 in API mode with `VITE_API_URL` set to their own origin, so the header probes `/api/health` (`vite-*.config.mjs` wrap each app's own Vite config and point `/api`, WebSocket included, at that API). A dev server of another checkout on 4000 or 5173 is never reused.
+- **Media**: Chromium runs with `--use-fake-device-for-media-stream` and `--use-fake-ui-for-media-stream`, camera and microphone granted (OPS-32). The pre-join check is the real Chime SDK readiness checker. Joined meetings are `FakeVideoProvider` meetings that no media service answers, so `fake-chime.ts` serves the app a wrapped SDK whose sessions for `fake-meeting-*` connect in the page; the test drives the other participant's video, a reconnect and quality samples through it.
+- **Data**: each journey creates its own `appt_e2e_*` appointments with `psql` and invalidates the expert's cached principal with `redis-cli` (`database.ts`); the setup project deletes the previous run's rows and signs both sample people in once (`e2e/.auth-state/calls-*`).
+- **Projects**: `calls-desktop` (1280 x 800) and `calls-mobile` (390 x 844), both at device scale factor 2, two workers. Both run every journey and capture the user manual's screenshots into `docs/tasks/calls-webinars/manual/screenshots/`; the `calls-index` teardown rewrites its `INDEX.md`.
+- **Motion in the app**: the outcome dialog has no story, so its entry and exit are recorded in the journey with `e2e/motion/motion-helpers.ts`.
+- **Nightly smoke** (`video-smoke.spec.ts`, `.github/workflows/video-smoke.yml`): joins a real Chime meeting from two contexts and checks inbound audio energy and video frames on both sides. The project only exists with `VIDEO_SMOKE_ENABLED=true`; locally it is skipped.
+
+Prerequisites: PostgreSQL on 54329 (role `nestself`), Redis on 6379, `psql` and `redis-cli` on the PATH, Chromium installed for Playwright. Reports go to `e2e/playwright-report/calls/` and `e2e/test-results/calls/` (git-ignored).
+
 ## Motion suite (`e2e/motion/`)
 
 Checks that everything which pops out, slides or expands is animated (the Motion rule in `CLAUDE.md`). It runs in Chromium against the `@nestself/ui` Storybook on port 6106, separate from `pnpm e2e`, which forces reduced motion and disables animations for stable screenshots.
@@ -252,6 +269,7 @@ pnpm e2e:motion
 - **popouts.motion.ts**: dialog, alert dialog, bottom sheet, left and right drawers, menu, select and toast enter and exit through the Web Animations API on `opacity` / `transform` only, with token durations (120 / 200 / 280 ms) and `cubic-bezier(0.2, 0, 0, 1)`; entry and exit both show in-between frames; opacity never flickers; the popup stays visible while it exits and then leaves; scrims fade both ways; a menu closed mid-entry turns around from where it was.
 - **disclosures.motion.ts**: accordion panels transition the measured height; the tabs indicator slides and lands on the tab; the compact site navigation expands frame by frame, collapses out of the layout, and leaves the desktop navigation alone.
 - **reduced.motion.ts**: with `prefers-reduced-motion: reduce`, popouts only fade (at most 50 ms, no transform) and accordion panels open instantly.
+- **video-components.motion.ts**: the call client's panels (T-CW-1.7): the PreJoinCheck panel, the CallStage (stage, failure and ended overlays, self-view), the ControlBar "More" menu at 390 px, the SessionTimer five-minute cue, the crisis resources sheet and drawer, the FollowUpCard and its "Suggest other times" disclosure and the ConnectionBadge banner, each with token timing, compositor-only properties, in-between frames on entry and exit, no flicker and the reduced-motion fade. The outcome dialog lives in the admin app and is recorded in the consultation journey instead.
 
 When you add a component that moves, add its story and a case to the matching spec.
 

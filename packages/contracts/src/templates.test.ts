@@ -94,6 +94,22 @@ describe('templates', () => {
     expect(expert.stepUpActions).toContain('conversation.read.assigned');
   });
 
+  it('event actions follow the NS-CALLS-01 templates table (decision record section 7)', () => {
+    const actionsOf = (k: string) => [...PERMISSION_TEMPLATES.find((t) => t.key === k)!.actions];
+    const holders = (action: string) =>
+      PERMISSION_TEMPLATES.filter((t) => (t.actions as readonly string[]).includes(action)).map((t) => t.key);
+    expect(holders('event.present')).toEqual(['expert']);
+    expect(holders('event.manage').sort()).toEqual(['client_operations', 'content_publisher', 'platform_owner']);
+    expect(holders('event.moderate').sort()).toEqual(['client_operations', 'platform_owner', 'service_coordinator']);
+    expect(actionsOf('expert')).toEqual(
+      expect.arrayContaining(['consultation.join', 'delivery.record', 'appointment.propose', 'event.present']),
+    );
+    expect(actionsOf('employee')).toEqual(
+      expect.arrayContaining(['consultation.join', 'event.register', 'appointment.cancel']),
+    );
+    expect(actionsOf('support_operator')).toContain('support.troubleshoot');
+  });
+
   it('employer_owner holds access.grant and access.revoke behind step-up (owner model, 2026-10-24)', () => {
     const owner = PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner')!;
     expect(owner.scopeType).toBe('organization');

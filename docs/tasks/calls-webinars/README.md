@@ -2,7 +2,9 @@
 
 Planning package for the real-time layer of NestSelf: private expert and employee video consultations, webinars for employees of client companies, and small group workshops, all on Amazon Chime SDK in eu-central-1. Written 24 October 2026 on branch `feat/calls-webinars`; revised the same day with the founder's answers (decision record v1.1, D-CW-34 to D-CW-38).
 
-Status: ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 of `02-decisions.md`): every webinar is recorded and consultations are not, attendees never have cameras and the floor is audio given by a host, no product ceiling on audiences (250 per meeting in M2, 1,000 with replication in M3), a follow-up is scheduled on the post-call screens with manager approval where the client's policy requires it, the launch is Serbia only, and the DPIA never blocks development.
+Status (25 October 2026): implemented from M0 to M2, plus the media replication of M3 (T-CW-3.2), on branch `feat/calls-p0`, one commit series per task, each task reviewed and the review findings fixed in its later commits. The consultation journeys run in a real browser against the API with the fake video provider (`pnpm e2e:calls`), and their screenshots are under `manual/`; the follow-up approval and webinar journeys (T-CW-2.6) and their screenshots were written but not yet committed when this status was written. Not built yet: certificates and the load test (T-CW-3.3, T-CW-3.4, P1) and M4 (mobile ticket route, workshops, replay captions). No spike has run against AWS yet. The planning files were amended on 25 October 2026 to match the code; `07-implementation-notes.md` records what changed and why.
+
+Planning status (24 October 2026): ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 of `02-decisions.md`): every webinar is recorded and consultations are not, attendees never have cameras and the floor is audio given by a host, no product ceiling on audiences (250 per meeting in M2, 1,000 with replication in M3), a follow-up is scheduled on the post-call screens with manager approval where the client's policy requires it, the launch is Serbia only, and the DPIA never blocks development.
 
 ## Reading order
 
@@ -14,8 +16,10 @@ Status: ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 o
 | `04-user-stories.md` | The story catalog (`CALL-`, `WBN-`, `WKS-`, `PLT-`) with testable acceptance criteria and traceability to the product flows | Writing tests, scoping a sprint |
 | `05-tasks.md` | The development backlog: tasks `T-CW-<milestone>.<n>` with files, steps, tests, gates and estimates, grouped in lanes | Starting an engineering session |
 | `06-implementation-guidelines.md` | The technical reference with requirements `CW-R-nn`: adapter contract, Chime calls, lifecycle, schema and RLS, contracts, routes, real-time, worker, notifications, client package, mobile, infrastructure, security, observability, testing | Before touching the code |
+| `07-implementation-notes.md` | What the implementation added to the plan: the defects only the real-browser run found and their fixes, the frontend-coverage audits and gap closures, how to run the stack and the journeys, the spikes still to run and what each binds, and the follow-ups | Before continuing the implementation or reviewing it |
+| `manual/` | The user manual's material: the screenshots of every journey step for desktop and mobile (`manual/screenshots/`, listed in `manual/screenshots/INDEX.md`), recaptured by `pnpm e2e:calls`; the user manual PDF will be `user-manual.pdf` in this directory | Learning the screens; writing support material |
 | `research/01` to `06` | The research grounding with fact ids (`CORE-`, `WEB-`, `LAW-`, `COST-`, `UX-`, `OPS-`) and the codebase survey; each fact has a source and a date | When a decision's evidence is questioned |
-| `research/07-spikes.md` | Written during M0 by the spike tasks | After the spikes run |
+| `research/07-spikes.md` | The eight spikes (SPIKE-CW-01 to SPIKE-CW-08) with method, prerequisites, result tables and the binding change per outcome; scripts written in T-CW-0.4; results pending the founder's run against the dev account | Before running a spike; after the spikes run |
 | `sources/` | The product flows and user stories v0.1 and the CMS epic v1.0 this package builds on | For context |
 
 ## How this package relates to the rest of the repository
@@ -26,8 +30,8 @@ Status: ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 o
 
 ## What happens next
 
-1. M0 runs the spikes and writes `research/07-spikes.md`; any decision marked "spike" binds after that.
-2. Engineering sessions take tasks from `05-tasks.md` one at a time, each in its own commit, gated by `pnpm verify`.
+1. The founder runs the spikes against the dev account and records the results in `research/07-spikes.md`; any decision marked "spike" binds after that (SPIKE-CW-06 also confirms the replica floor of T-CW-3.2).
+2. Engineering sessions take the remaining tasks from `05-tasks.md` (T-CW-3.3, T-CW-3.4, then M4) and the follow-ups of `07-implementation-notes.md` one at a time, each in its own commit, gated by `pnpm verify`.
 3. The DPIA and the legal checklist in section 10 of the decision record run alongside development and gate only the production launch (Serbian law, D-CW-38).
 
 ## Rebuilding the review PDF
@@ -37,6 +41,15 @@ Status: ready to implement. The founder answered F-CW-01 to F-CW-10 (section 9 o
 ```
 python3 docs/tasks/calls-webinars/pdf/make-review-html.py docs/tasks/calls-webinars
 node docs/tasks/calls-webinars/pdf/build-pdf.mjs docs/tasks/calls-webinars/pdf/calls-webinars-review.html docs/tasks/calls-webinars/calls-webinars-review.pdf
+```
+
+## Rebuilding the user manual
+
+`manual/make-manual-html.py` generates `manual/user-manual.html` from the screenshots and `manual/screenshots/INDEX.md`, with every on-screen word read by key from the English catalog (`packages/i18n/locales/en/calls.json` and `common.json`), so a renamed button fails the build. A screen the text does not place is added to a closing chapter, and a planned screen without files shows as pending. `pdf/build-pdf.mjs` renders it after the in-page paginator has packed the steps into fixed A4 sheets, and refuses to write when a sheet overflows. Run both from a checkout that has `node_modules`:
+
+```
+python3 docs/tasks/calls-webinars/manual/make-manual-html.py docs/tasks/calls-webinars
+node docs/tasks/calls-webinars/pdf/build-pdf.mjs docs/tasks/calls-webinars/manual/user-manual.html docs/tasks/calls-webinars/user-manual.pdf
 ```
 
 ## Conventions used in this package

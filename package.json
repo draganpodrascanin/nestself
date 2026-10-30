@@ -19,6 +19,7 @@
     "docs:auth:pdf": "node docs/auth/pdf/build.mjs docs/auth/implementation.md docs/auth/implementation.pdf && node docs/auth/pdf/build.mjs docs/auth/quick-guide.md docs/auth/quick-guide.pdf",
     "e2e:content": "playwright test -c playwright.content.config.ts",
     "e2e:motion": "playwright test -c playwright.motion.config.ts",
+    "e2e:calls": "playwright test -c playwright.calls.config.ts",
     "e2e:update": "playwright test --update-snapshots",
     "storybook": "pnpm --filter @nestself/ui dev",
     "images:build": "pnpm --filter @nestself/assets build",
@@ -28,7 +29,7 @@
     "db:up": "docker compose -f docker/docker-compose.yml up -d postgres redis",
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "docker:api": "docker compose -f docker/docker-compose.yml --profile api up --build",
-    "lint:root": "eslint e2e playwright.config.ts playwright.auth.config.ts playwright.content.config.ts playwright.motion.config.ts eslint.config.js"
+    "lint:root": "eslint e2e playwright.config.ts playwright.auth.config.ts playwright.content.config.ts playwright.motion.config.ts playwright.calls.config.ts eslint.config.js"
   },
   "devDependencies": {
     "@axe-core/playwright": "catalog:",

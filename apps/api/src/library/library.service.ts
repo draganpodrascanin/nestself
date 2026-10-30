@@ -230,8 +230,8 @@ export class LibraryService {
         label: isCyrillic ? transliterateText(catName) : catName,
         description: catDesc ? (isCyrillic ? transliterateText(catDesc) : catDesc) : null,
       },
-      secondaryCategories: [], // M2: tables arrive in migration 0007
-      topics: [],              // M2: tables arrive in migration 0007
+      secondaryCategories: [], // M2: tables arrive in migration 0016
+      topics: [],              // M2: tables arrive in migration 0016
       authorName,
       reviewerName,
       reviewedAt: row.approvedAt,

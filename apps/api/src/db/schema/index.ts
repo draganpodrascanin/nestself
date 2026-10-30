@@ -16,4 +16,8 @@ export * from './cms.js';
 export * from './media.js';
 export * from './library.js';
 export * from './notifications.js';
+export * from './appointments.js';
+export * from './calls.js';
+export * from './appointment-approvals.js';
+export * from './webinars.js';
 export * from './relations.js';

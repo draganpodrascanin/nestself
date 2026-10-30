@@ -143,6 +143,8 @@ describe('Check 3: no raw hex colour literals in component/app code', () => {
     join(REPO_ROOT, 'packages/ui/src'),
     join(REPO_ROOT, 'packages/ui-native/src'),
     join(REPO_ROOT, 'packages/content/src'),
+    // The call client (CW-R-50).
+    join(REPO_ROOT, 'packages/video/src'),
   ];
   // Also scan apps/*/src
   const appsDir = join(REPO_ROOT, 'apps');

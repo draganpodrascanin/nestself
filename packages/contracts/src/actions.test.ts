@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ACTIONS, ACTION_LIST, isAction, CONFIDENTIAL_ACTIONS, APPROVAL_ACTIONS } from './actions.ts';
 
 describe('actions', () => {
-  it('has exactly 111 actions in the catalogue', () => {
-    expect(Object.keys(ACTIONS)).toHaveLength(111);
+  it('has exactly 113 actions in the catalogue', () => {
+    expect(Object.keys(ACTIONS)).toHaveLength(113);
   });
 
   it('contains the sixteen CMS actions (ACC-R-01)', () => {
@@ -25,6 +25,12 @@ describe('actions', () => {
       expect(CONFIDENTIAL_ACTIONS).not.toContain(a);
     }
     expect(CONFIDENTIAL_ACTIONS).toHaveLength(6);
+  });
+
+  it('includes the event actions of NS-CALLS-01 (decision record section 7)', () => {
+    expect(isAction('event.present')).toBe(true);
+    expect(isAction('event.manage')).toBe(true);
+    expect(isAction('event.moderate')).toBe(true);
   });
 
   it('ACTION_LIST length matches ACTIONS keys', () => {

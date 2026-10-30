@@ -2,3 +2,4 @@
 @import "../src/styles.css";
 @source "../src";
 @source "../../content/src/render";
+@source "../../video/src";

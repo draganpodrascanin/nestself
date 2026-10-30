@@ -11,33 +11,29 @@ import { InvitationActivationController } from './invitation-activation.controll
 import { OpsInvitationsController } from './ops-invitations.controller.js';
 import { InvitationsService } from './invitations.service.js';
 import { InvitationActivationService } from './invitation-activation.service.js';
+import { Mailer } from '../mailer/mailer.js';
+import { MailerModule, sesMailerOptions } from '../mailer/mailer.module.js';
 import {
   InvitationMailer,
   LoggingInvitationMailer,
+  MailerInvitationMailer,
 } from './invitation-mailer.js';
-import { SesInvitationMailer } from './ses-invitation-mailer.js';
 
 @Module({
-  imports: [AuthModule, IdentityModule],
+  imports: [AuthModule, IdentityModule, MailerModule],
   controllers: [InvitationsController, InvitationActivationController, OpsInvitationsController],
   providers: [
     InvitationsService,
     InvitationActivationService,
     {
-      // SES when a verified sender is configured (D-29); otherwise log the link.
+      // SES through the generalised mailer when a verified sender is
+      // configured (D-29, T-CW-1.3); otherwise log the link for development.
       provide: InvitationMailer,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): InvitationMailer => {
-        const fromEmail = config.get<string>('SES_FROM_EMAIL');
-        if (fromEmail && config.get<string>('NODE_ENV') !== 'test') {
-          return new SesInvitationMailer({
-            fromEmail,
-            region: config.get<string>('COGNITO_REGION') ?? 'eu-central-1',
-            workspaceUrl: config.get<string>('WORKSPACE_URL') ?? 'http://localhost:5173',
-          });
-        }
-        return new LoggingInvitationMailer(config);
-      },
+      inject: [ConfigService, Mailer],
+      useFactory: (config: ConfigService, mailer: Mailer): InvitationMailer =>
+        sesMailerOptions(config)
+          ? new MailerInvitationMailer(mailer, config.get<string>('WORKSPACE_URL') ?? 'http://localhost:5173')
+          : new LoggingInvitationMailer(config),
     },
   ],
 })

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Reads CloudFormation outputs from the NestSelf auth stack and prints
- * .env lines to stdout. Does NOT write to files; pipe or append manually.
+ * Reads CloudFormation outputs from the NestSelf auth stack (and, for the API,
+ * the video stack when it is deployed) and prints .env lines to stdout.
+ * Does NOT write to files; pipe or append manually. Notes go to stderr.
  *
  * Usage:
  *   node infra/cdk/scripts/env-from-outputs.mjs <stage>
@@ -20,6 +21,15 @@ if (!stage || !['dev', 'staging', 'production'].includes(stage)) {
 }
 
 const stackName = `NestSelf-${stage}-Auth`;
+const videoStackName = `NestSelf-${stage}-Video`;
+
+// Video stack outputs (D-CW-31) mapped to the API env names.
+const VIDEO_ENV = [
+  ['CHIME_EVENTS_QUEUE_URL', 'ChimeEventsQueueUrl'],
+  ['CHIME_EVENTS_QUEUE_ARN', 'ChimeEventsQueueArn'],
+  ['RECORDINGS_BUCKET', 'RecordingsBucketName'],
+];
+const VIDEO_POLICY_OUTPUTS = ['VideoApiPolicyArn', 'VideoWorkerPolicyArn'];
 
 function cfnOutput(key) {
   const raw = execSync(
@@ -31,6 +41,28 @@ function cfnOutput(key) {
     return '';
   }
   return raw;
+}
+
+/**
+ * All outputs of the video stack as { OutputKey: OutputValue }, or null when the
+ * stack does not exist in the ambient region (not deployed yet). Any other
+ * failure (credentials, permissions) stops the script.
+ */
+function videoStackOutputs() {
+  let raw;
+  try {
+    raw = execSync(
+      `aws cloudformation describe-stacks --stack-name ${videoStackName} --query "Stacks[0].Outputs" --output json`,
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (error) {
+    const stderr = String(error.stderr ?? '').trim();
+    if (stderr.includes('does not exist')) return null;
+    console.error(stderr || error.message);
+    process.exit(1);
+  }
+  const outputs = JSON.parse(raw) ?? [];
+  return Object.fromEntries(outputs.map((o) => [o.OutputKey, o.OutputValue]));
 }
 
 function secretValue(secretId) {
@@ -61,6 +93,7 @@ if (isMobile) {
   // API .env (includes secrets)
   const webSecret = secretValue(webSecretArn);
   const sessionKey = secretValue(sessionKeyArn);
+  const video = videoStackOutputs();
 
   console.log(`COGNITO_REGION=${cognitoRegion}`);
   console.log(`COGNITO_USER_POOL_ID=${poolId}`);
@@ -70,4 +103,24 @@ if (isMobile) {
   console.log(`COGNITO_DOMAIN=${cognitoDomain}`);
   console.log(`COGNITO_ISSUER=${cognitoIssuer}`);
   console.log(`SESSION_ENCRYPTION_KEY=${sessionKey}`);
+
+  // The video stack is optional: never print an empty variable for it.
+  const videoNames = VIDEO_ENV.map(([name]) => name).join(', ');
+  if (!video) {
+    const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'the profile region';
+    console.error(`Note: stack ${videoStackName} is not deployed in ${region}; skipping ${videoNames}.`);
+  } else {
+    for (const [name, key] of VIDEO_ENV) {
+      if (video[key]) {
+        console.log(`${name}=${video[key]}`);
+      } else {
+        console.error(`Warning: output ${key} not found in stack ${videoStackName}; skipping ${name}`);
+      }
+    }
+    // Not env variables: the managed policies the API and worker identities need.
+    for (const key of VIDEO_POLICY_OUTPUTS) {
+      if (video[key]) console.error(`${key}: ${video[key]}`);
+      else console.error(`Warning: output ${key} not found in stack ${videoStackName}`);
+    }
+  }
 }

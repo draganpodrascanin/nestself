@@ -1,6 +1,6 @@
 # Implementation guidelines: consultations and webinars on Amazon Chime SDK
 
-Epic `NS-CALLS-01`. Implementation guidelines v1.0, 24 October 2026. This document is the technical reference an engineer reads before touching code for this epic. It is binding alongside the decision record (`02-decisions.md`), the epic (`03-epic.md`), the stories (`04-user-stories.md`) and the backlog (`05-tasks.md`). The decision record's canonical names (section 7) are the only valid identifiers for tables, enums, routes, actions, jobs, events, error codes, Redis keys, Socket.IO rooms and client exports; any mismatch between this document and section 7 is a bug in this document.
+Epic `NS-CALLS-01`. Implementation guidelines v1.1, 24 October 2026, amended on 25 October 2026 to match the implementation on branch `feat/calls-p0` (sections 4.3, 4.5, 4.9, 5.1, 7.1, 7.2, 8, 9, 9.1, 10.1, 10.2, 10.5, 11.3, 11.5, 14.2 and 16.2; each amended paragraph is dated, and `07-implementation-notes.md` gives the reasons). This document is the technical reference an engineer reads before touching code for this epic. It is binding alongside the decision record (`02-decisions.md`), the epic (`03-epic.md`), the stories (`04-user-stories.md`) and the backlog (`05-tasks.md`). The decision record's canonical names (section 7) are the only valid identifiers for tables, enums, routes, actions, jobs, events, error codes, Redis keys, Socket.IO rooms and client exports; any mismatch between this document and section 7 is a bug in this document.
 
 Requirements are numbered `CW-R-01` through `CW-R-nn` and placed at the end of the paragraph they belong to. Each requirement that follows from a decision cites it: `[D-CW-nn]`. Where this document makes a choice that is not forced by the decision record or the codebase, the paragraph ends with `(guideline choice)`.
 
@@ -132,7 +132,7 @@ After `createParticipant` returns meeting and attendee credentials, the adapter 
 
 ### 4.3 Join window
 
-Consultations: the window opens at `startsAt - CALL_JOIN_WINDOW_BEFORE_MINUTES` (15 minutes) and closes at `endsAt + CALL_JOIN_WINDOW_AFTER_MINUTES` (10 minutes). A non-participant gets 404. A participant outside the window gets 403 with code `join_window_closed`. A participant on a canceled or completed appointment gets 409 with code `appointment_not_joinable` [D-CW-02, D-CW-07].
+Consultations: the window opens at `startsAt - CALL_JOIN_WINDOW_BEFORE_MINUTES` (15 minutes). A first join closes at `startsAt + CALL_JOIN_WINDOW_AFTER_MINUTES` (10 minutes after the start, CALL-06, CALL-07); a participant who already joined the appointment's latest session may rejoin until the room closes at `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES` (15 minutes after the end), which is also the credentials' TTL (`isWithinJoinWindow` with `first` or `rejoin` in `apps/api/src/calls/call-mapper.ts`; amended 2026-10-25). A non-participant gets 404. A participant outside the window gets 403 with code `join_window_closed`. A participant on a canceled or completed appointment gets 409 with code `appointment_not_joinable` [D-CW-02, D-CW-07].
 
 Webinars: presenters and the moderator (hosts) may join from `startsAt - WEBINAR_HOST_JOIN_BEFORE_MINUTES` (30 minutes before the scheduled start); attendees may join from `startsAt - CALL_JOIN_WINDOW_BEFORE_MINUTES` (15 minutes before). The room closes at `endsAt + CALL_ROOM_CLOSE_AFTER_MINUTES` (15 minutes after the scheduled end) unless the moderator ends the webinar earlier [D-CW-17]. **CW-R-15**: the join-window constants are imported from `@nestself/contracts`, never hard-coded in the service.
 
@@ -159,11 +159,11 @@ The follow-up state machine:
 3. `awaiting_approval` -- waiting for the approver's decision.
    - `approved` by the approver: the appointment transitions to `confirmed`, both parties are notified, reminders are scheduled.
    - `rejected` by the approver: the appointment transitions to `declined` with the approver's safe reason shown to the employee.
-   - No decision within 5 working days (in `Europe/Belgrade`, weekends skipped; Serbian public holidays are not modelled in this epic): the `appointment.approval.remind` job fires, sending a reminder to the approver and the alternate. If the approval expires (configurable, default 10 working days), the approval status becomes `expired` and the appointment returns to `proposed` so the employee can act again.
+   - No decision within 5 working days (in `Europe/Belgrade`, weekends skipped; Serbian public holidays are not modelled in this epic): the `appointment.approval.remind` job fires, sending a reminder to the approver and the alternate. The approval lapses at the earlier of the proposed start and 10 working days after the request (the `appointment.approval.expire` job; no reminder is scheduled when it would not come before the lapse): the approval status becomes `expired`, the appointment becomes `declined`, its jobs are removed and the employee is told (`appointment.approval.decided`, expired). Because jobs are best effort, a decision or a reminder after the start runs the same lapse first; the decision answers 409 `approval_not_pending` (amended 2026-10-25, T-CW-1.10).
 4. `declined` -- the employee declined the proposal, or the approver rejected it.
-5. Either party can cancel a confirmed follow-up through `POST /appointments/:id/cancel`.
+5. A confirmed follow-up is canceled like any appointment through `POST /appointments/:id/cancel`: by the employee (`appointment.cancel`) or by client operations (`bookings.coordinate` on the organisation, operations context). The expert cannot cancel; the expert gets 404 (amended 2026-10-25, CALL-27).
 
-**CW-R-106**: the follow-up state transitions are enforced in a `CASE` expression on the appointment row. The only valid transitions are `proposed -> confirmed`, `proposed -> awaiting_approval`, `proposed -> declined`, `awaiting_approval -> confirmed`, `awaiting_approval -> declined`, `awaiting_approval -> proposed` (on expiry with reminder), `confirmed -> canceled`, `confirmed -> completed`, `confirmed -> no_show` [D-CW-37].
+**CW-R-106**: the follow-up state transitions are enforced in a `CASE` expression on the appointment row. The only valid transitions are `proposed -> confirmed`, `proposed -> awaiting_approval`, `proposed -> declined`, `awaiting_approval -> confirmed`, `awaiting_approval -> declined` (rejection or lapse), `confirmed -> canceled`, `confirmed -> completed`, `confirmed -> no_show` [D-CW-37]. There is no `awaiting_approval -> proposed`: a lapsed approval declines the follow-up and the expert proposes a new one if needed (`APPOINTMENT_STATUS_TRANSITIONS` in `packages/contracts/src/appointments.ts`; amended 2026-10-25).
 
 ### 4.6 Webinar recording lifecycle
 
@@ -189,7 +189,7 @@ When the moderator ends the webinar, the end handler stops the recording pipelin
 
 ### 4.9 Session status transitions
 
-The `call_session_status` enum: `pending` (row created) -> `creating` (lock acquired, `CreateMeeting` in flight) -> `active` (provider meeting id written) -> `ended` (meeting deleted or `MeetingEnded` event received) -> `failed` (creation threw an unrecoverable error). Transitions are written in a `CASE` expression that rejects out-of-order updates. **CW-R-18**: the only valid transitions are `pending -> creating`, `creating -> active`, `creating -> failed`, `active -> ended`.
+The `call_session_status` enum: `pending` (row created) -> `creating` (lock acquired, `CreateMeeting` in flight) -> `active` (provider meeting id written) -> `ended` (meeting deleted or `MeetingEnded` event received) -> `failed` (creation threw an unrecoverable error). Transitions are written in a `CASE` expression that rejects out-of-order updates. **CW-R-18**: the only valid transitions are `pending -> creating`, `creating -> active`, `creating -> failed`, `active -> ended`. Amended 2026-10-25, as implemented: `creating -> creating` is also valid, the takeover of a stale `creating` row by the next joiner after the holder of `call:{sessionId}:create` died and the lock's 30-second TTL expired (the `ClientRequestToken`, the session id, keeps a second `CreateMeeting` from creating a second meeting, and a creator that loses the race deletes the meeting it made); and a host ending a webinar before its meeting exists closes the session with `pending -> ended` or `creating -> ended`, so a creator that finishes afterwards finds it ended. A `MeetingEnded` event for a session still `creating` is not applied but retried through the queue's redelivery.
 
 ---
 
@@ -335,7 +335,7 @@ export const callEvents = pgTable('call_events', {
 ]).enableRLS();
 ```
 
-**CW-R-22a**: the deduplication index on `(provider_meeting_id, event_type, provider_attendee_id, occurred_at)` is a unique index, not a unique constraint, because `provider_attendee_id` is nullable for meeting-level events [D-CW-12].
+**CW-R-22a**: the deduplication key on `(provider_meeting_id, event_type, provider_attendee_id, occurred_at)` is a unique constraint with `NULLS NOT DISTINCT` (`call_events_dedup_idx`, migration `0007_calls.sql`; in Drizzle `unique(...).on(...).nullsNotDistinct()`), because `provider_attendee_id` is null for meeting-level events and PostgreSQL treats nulls as distinct by default: a plain unique index would let a second copy of `MeetingStarted` or `MeetingEnded` through, so meeting-level events would never be deduplicated [D-CW-12] (amended 2026-10-25; the first draft above asked for a plain unique index).
 
 `call_client_events` stores client-reported telemetry with 90-day retention:
 
@@ -598,6 +598,7 @@ export const CALL_ERROR_CODES = [
   'recording_not_allowed',
   'capacity_above_limit',
   'invalid_ticket',
+  'not_editable',
 ] as const;
 export type CallErrorCode = (typeof CALL_ERROR_CODES)[number];
 ```
@@ -644,13 +645,15 @@ When the row is missing, returning an orgId that no grant can match makes the gu
 
 | Route | Action | Resolver | Throttle |
 | --- | --- | --- | --- |
-| `GET /appointments` | `consultation.join` | `appointmentResource('consultation.join')` | none |
-| `GET /appointments/:id` | `consultation.join` | `appointmentResource('consultation.join')` | none |
-| `POST /orgs/:orgId/appointments` | `appointment.propose` | `orgResourceFromContext('appointment')` | 10/60s |
-| `POST /appointments/:id/cancel` | `appointment.cancel` | `appointmentResource('appointment.cancel')` | 10/60s |
+| `GET /appointments` | `@Authenticated()` | in the service: rows where the caller is a participant and `consultation.join` allows them; in the operations context the organisations the caller holds `bookings.coordinate` for; `order=asc\|desc`, `orgId`, `status` and date filters | none |
+| `GET /appointments/:id` | `@Authenticated()` | in the service: participants through `consultation.join`, operations through `bookings.coordinate` on the organisation; every denial an audited 404 | none |
+| `GET /ops/appointment-experts` | `@Authenticated()` | in the service: `bookings.coordinate` somewhere; the experts the engine allows for the service category | none |
+| `POST /orgs/:orgId/appointments` | `bookings.coordinate` | `operationsOrgResource('appointment')` | 10/60s |
+| `POST /appointments/:id/cancel` | `@Authenticated()` | in the service: the employee through `appointment.cancel` on `appointmentResource`, or operations through `bookings.coordinate` on the organisation | 10/60s |
 | `POST /appointments/:id/join` | `consultation.join` | `appointmentResource('consultation.join')` | 20/60s |
 | `POST /appointments/:id/call-ticket` | `consultation.join` | `appointmentResource('consultation.join')` | 10/60s |
-| `POST /appointments/:id/end` | `consultation.join` | participant check in service | 10/60s |
+| `POST /appointments/:id/end` | `consultation.join` | `appointmentResource`, then the expert check in the service | 10/60s |
+| `GET /appointments/:id/location` | `consultation.join` | `appointmentResource`, then the assigned expert while the session is live (CALL-34) | none |
 | `POST /appointments/:id/outcome` | `delivery.record` | `appointmentResource('delivery.record')` | 10/60s |
 | `POST /appointments/:id/feedback` | `consultation.join` | `appointmentResource('consultation.join')` | 5/60s |
 | `POST /appointments/:id/signal` | `consultation.join` | `appointmentResource('consultation.join')` | 30/60s |
@@ -659,10 +662,13 @@ When the row is missing, returning an orgId that no grant can match makes the gu
 | `POST /appointments/:id/decline` | `consultation.join` | `appointmentResource('consultation.join')` | 10/60s |
 | `POST /appointments/:id/suggest-times` | `consultation.join` | `appointmentResource('consultation.join')` | 10/60s |
 | `POST /appointments/:id/schedule` | `appointment.propose` | `appointmentResource('appointment.propose')` | 10/60s |
-| `GET /orgs/:orgId/appointment-approvals` | `approval.decide` | `orgResourceFromContext('appointment')` | none |
+| `GET /orgs/:orgId/appointment-approvals` | `approval.decide` | `orgResourceFromContext('appointment_approval')` | none |
 | `POST /appointment-approvals/:id/approve` | `approval.decide` | `approvalResource('approval.decide')` | 10/60s |
 | `POST /appointment-approvals/:id/reject` | `approval.decide` | `approvalResource('approval.decide')` | 10/60s |
-| `PATCH /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('org')` | 5/60s |
+| `GET /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('organization')` | none |
+| `PATCH /orgs/:orgId/settings/follow-up-approval` | `program.overview` | `orgResourceFromContext('organization')` | 5/60s |
+
+As implemented (amended 2026-10-25): `appointmentResource` and `approvalResource` are resolver constants, not factories taking an action. Creation belongs to `bookings.coordinate` holders in the operations context through `operationsOrgResource('appointment')`, which in practice is `client_operations` on the organisations of its CLIENT assignments: no template reaches `appointment.propose` on an organisation from an organisation context, a queue-scoped `service_coordinator` never matches an appointment, and `platform_owner` does not hold `bookings.coordinate` (decision record section 11). Experts create appointments only as follow-ups. The follow-up routes are exactly the five rows above (`follow-up` and `schedule` with `appointment.propose`; `confirm`, `suggest-times` and `decline` with `consultation.join` and the employee check in `FollowUpService`). `GET /orgs/:orgId/settings/follow-up-approval` lets HR read the policy before changing it. `POST /appointments/:id/call-ticket` is not built yet (M4).
 
 `POST /appointments/:id/follow-up` is the expert's proposal. The request body is validated against `AppointmentFollowUpRequestSchema`. The service verifies the linked appointment's outcome is `COMPLETED` (error: 409 `follow_up_not_allowed`), creates a new appointment with status `proposed` and `followUpOf` set, and emits `appointment.follow_up.proposed` on the `call:{sessionId}` room. Audit: `appointment.follow_up.proposed`. **CW-R-111** [D-CW-37].
 
@@ -684,8 +690,12 @@ The expert's access to appointments in organisations they are assigned to uses t
 
 | Route | Action | Resolver | Throttle |
 | --- | --- | --- | --- |
-| `POST /calls/:sessionId/client-events` | `consultation.join` | participant from session | 60/60s |
+| `POST /calls/:sessionId/client-events` | `consultation.join` | `callSessionResource` (the session's appointment) | 60/60s |
+| `POST /calls/:sessionId/problem-report` (addition, T-CW-1.1) | `consultation.join` | `callSessionResource`; audited `call.problem.reported` | 5/60s |
+| `GET /ops/calls/problem-reports` (addition, T-CW-1.5) | `diagnostic.read` | `operationsResource('call')`, platform level; each page audited as `call.diagnostics.viewed` | none |
 | `GET /ops/calls/:sessionId/diagnostics` | `diagnostic.read` | `operationsResource('call', idFn)` | none |
+
+The client-event and problem-report routes are keyed by the session id, not the appointment id, so a client posts for the session it joined (amended 2026-10-25).
 
 **CW-R-30**: viewing diagnostics is audited as `call.diagnostics.viewed` with `{ sessionId }` in details. The diagnostic DTO is tested by a serialisation test that asserts no field beyond the 4.7.5 set is present [D-CW-28].
 
@@ -720,6 +730,18 @@ The expert's access to appointments in organisations they are assigned to uses t
 | `POST /ops/webinars/:id/cancel` | `event.manage` | `operationsResource('webinar', idFn)` | 5/60s |
 | `GET /ops/webinars/:id/attendance` | `event.manage` | `operationsResource('webinar', idFn)` | none |
 | `GET /webinars/:id/certificate` | `event.register` | registered participant | 10/60s |
+| `GET /webinars/:id/polls` (addition, T-CW-2.1) | `@Authenticated()` | registrants and presenters: opened polls; moderating: all; results once closed (service) | none |
+| `GET /webinars/:id/polls/:pollId/results` (addition, T-CW-2.1) | `@Authenticated()` | a host or moderating principal, after the close (service) | none |
+| `GET /ops/webinars` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage` or `event.moderate`, operations context; `mine=true`: the caller's hosted occurrences, any context (service) | none |
+| `GET /ops/webinars/:id` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage` or `event.moderate` on the occurrence, operations context (service) | none |
+| `GET /ops/webinars/host-candidates` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage`, operations context (service) | none |
+| `GET /ops/orgs` (addition, T-CW-2.1) | `@Authenticated()` | `event.manage`, operations context: the organisations the caller may manage (service) | none |
+| `POST /webinars/:id/participants/:participantId/mute` (addition, 647f904, WBN-26) | `@Authenticated()` | a host or a moderating principal (service): the floor holder's audio back to `Receive` (a replica attendee is demoted), the floor kept | 10/60s |
+| `POST /webinars/:id/participants/:participantId/unmute-request` (addition, 647f904, WBN-26) | `@Authenticated()` | a host or a moderating principal (service): asks the floor holder to unmute | 10/60s |
+| `POST /webinars/:id/participants/:participantId/unmute` (addition, 647f904, WBN-26) | `event.register` | the attendee, on their own participant, while holding the floor (service) | 10/60s |
+| `GET /ops/orgs/:orgId/units` (addition, 647f904) | `event.manage` | `operationsOrgResource('webinar')`: the organisation's active units for an `org_unit` audience | none |
+
+**CW-R-31b** (T-CW-2.1 review): publishing an occurrence, and editing a published one, checks through `authorize()` that the moderator holds `event.moderate` and each presenter `event.present` on the occurrence (the presenter with the CASE assignment the occurrence form gives) and answers 400 `validation` naming the field. A published occurrence also keeps the other publish checks (a moderator, at least one presenter, a start in the future); its capacity is compared with the registrations under the row lock; an audience change that moves it to another organisation answers 409 `not_editable`, as does any edit once it is live, ended or canceled. Cancel and end close the presenters' CASE assignments on the occurrence. The media capture pipeline takes one meeting seat (SPIKE-CW-03 assumption), so the session is created for the capacity plus one.
 
 `POST /webinars/:id/start` and `POST /webinars/:id/end` use `@Authenticated()` on the route (not `@Authorize()`), because the check requires loading the webinar occurrence to determine whether the caller is its presenter (`event.present`) or its moderator (`event.moderate`). The service loads the occurrence, checks the caller against `webinar_hosts`, and verifies the caller holds either `event.present` (a presenter of this occurrence) or `event.moderate` (its moderator) through `authorize()` called inside the service; if neither matches, the service throws 404. The default-deny CI test accepts `@Authenticated()` on these routes, and the authorisation golden cases prove the service-level check rejects non-hosts. **CW-R-31a**: `POST /webinars/:id/start` and `POST /webinars/:id/end` accept `event.present` or `event.moderate`; a caller who holds neither gets 404 [D-CW-17].
 
@@ -737,7 +759,7 @@ When a follow-up appointment enters `awaiting_approval`, the service selects an 
 2. Find approval authorities of the same organisation whose unit covers the employee's unit: `orgUnitId` equals the employee's unit or, with `includeDescendants = true`, is an ancestor of the employee's unit through the `org_unit_closure` table.
 3. Filter to authorities whose `categories` array is empty (covers all categories) or includes `consultation_follow_up`.
 4. Filter to authorities whose validity window covers today (`validFrom <= now` and `validUntil` is null or `>= now`).
-5. Exclude authorities with `isConfidentialApprover = true` only (these are reserved for confidential items; follow-up approval items carry no service category per LAW-14).
+5. `isConfidentialApprover` does not exclude an authority: the flag is an extra capability (its holder may also decide confidential items), not a reservation, and follow-up approval items carry no service category (LAW-14). When the employee is the authority's own holder and the organisation does not allow self-approval, the authority is used only if it names a different alternate; the employee then gets no request email, does not see the item and may not decide it. At decision time the guard's `authorize()` call checks `approval.decide` on the item's organisation, and the approval service runs `authorize()` a second time with the employee as `requesterId` so the engine's self-approval step applies (403 `self_approval_denied`); the decider's authority must also still cover the employee's unit, otherwise 404 (amended 2026-10-25, T-CW-1.10).
 6. Pick the first by unit depth (closest to the employee's unit in the closure table), with ties broken by `createdAt` ascending.
 7. The selected authority's `userId` becomes the approver; `alternateUserId` (if present) becomes the alternate.
 8. If no authority matches, the proposal fails visibly with error code `approver_missing` (409). The audit event `appointment.approval.missing_approver` is recorded with `{ appointmentId, orgId, orgUnitId }`.
@@ -794,6 +816,9 @@ Every mutation in this epic records an audit event through `AuditWriter.record(i
 | `webinar.recording.ready` | CONTENT_ACCESS | `{ webinarId, recordingId }` |
 | `webinar.recording.handed_off` | CONTENT_ACCESS | `{ webinarId, recordingId }` |
 | `webinar.certificate.issued` | ADMIN | `{ webinarId, certificateId, userId }` |
+| `webinar.updated` (addition) | ADMIN | `{ webinarId, changedFields }` |
+| `webinar.attendance.viewed` (addition, WBN-33) | CONTENT_ACCESS | `{ webinarId }`, recorded after the read is allowed |
+| `webinar.recording.failed` (addition, T-CW-2.5) | CONTENT_ACCESS | `{ webinarId, sessionId, recordingId, reason }` |
 
 **CW-R-33a**: audit event details never include `token`, `JoinToken`, `credentials`, `email`, `body`, `notes` or any key in the `FORBIDDEN_KEYS` set. A colocated test scans every `audit.record()` call site in the calls and webinars modules and asserts that no forbidden key appears in the details argument [D-CW-08].
 
@@ -803,7 +828,9 @@ Every mutation in this epic records an audit event through `AuditWriter.record(i
 
 ## 8. Real-time layer (Socket.IO)
 
-New rooms and events are added to the existing `EventsGateway`. Each room subscription is authorised by `SubscriptionAuthorizer.authorizeSubscription(principal, action, resource)`.
+New rooms and events are added to the existing `EventsGateway`. A client sends `subscribe { room }`; `action` and `resource` are optional and ignored. The served room names are the table at the top of `apps/api/src/ws/ws-messages.ts`, and `SubscriptionAuthorizer.authorizeRoom` derives the action and the resource below from the room on the server (the owning module's resolver in `RoomAccessRegistry`) before it calls `authorize()`.
+
+A call room stays subscribable for its participants after the session ends, so the post-call screens receive the follow-up events (D-CW-37); there is no time bound for now.
 
 | Room | Action | Events |
 | --- | --- | --- |
@@ -811,7 +838,19 @@ New rooms and events are added to the existing `EventsGateway`. Each room subscr
 | `webinar:{webinarId}` | `event.register` | `webinar.state`, `webinar.message.published`, `webinar.message.answered`, `webinar.poll.opened`, `webinar.poll.closed`, `webinar.poll.results`, `webinar.recording` (started, stopped), `webinar.ended` |
 | `webinar:{webinarId}:moderation` | `event.moderate` | `webinar.message.submitted`, `webinar.hand.raised`, `webinar.hand.lowered`, `webinar.attendance.count` |
 
-**CW-R-34**: `webinar.floor.given` and `webinar.floor.taken` are emitted only to the given participant's socket, not to the room. The floor events carry `{ participantId }` and are scoped to one connection [D-CW-15, D-CW-35].
+As implemented (amended 2026-10-25; the served table is the header of `apps/api/src/ws/ws-messages.ts`, and `ROOM_EVENTS` there checks every emit):
+
+| Room | Who may subscribe | Events added or changed |
+| --- | --- | --- |
+| `call:{sessionId}` | participants (`consultation.join` on the session's appointment), also after the session ended | adds `call.location.shared` (no location text, CALL-34) |
+| `webinar:{webinarId}` | active registrants (`event.register` on their registration) and hosts | adds `webinar.message.removed` (a published message dismissed) and `webinar.floor.state` (anonymous `{ active }`, WBN-25 criterion 8) |
+| `webinar:{webinarId}:moderation` | `event.moderate` | adds `webinar.recording.failed` (CW-R-121) and `webinar.ended` |
+| `webinar:{webinarId}:hosts` (new) | presenters (`event.present`) and moderators | `webinar.attendance.count`, `webinar.hand.count`, `webinar.floor.state` with the holder's participant id, and `webinar.floor.muted` and `webinar.floor.unmuted` with the participant id (WBN-26): numbers and ids only, no names (WBN-19) |
+| `user:{userId}` (new) | that user only, by identity, no engine decision | `appointment.follow_up.proposed` (CALL-42), `appointment.follow_up.declined`, `appointment.times_suggested`, `appointment.remind` (the in-app reminder toast, 10.4), `webinar.floor.given`, `webinar.floor.taken`, and for the floor holder `webinar.floor.muted` and `webinar.floor.unmute_requested` (WBN-26, empty payloads) |
+
+Every process publishes `{ room, event, payload }` on the Redis channel `room_events` (`RoomEmitter`, also in the worker); each API task's `RoomEventRelay` checks the message again and emits it to its own sockets, so a subscriber receives an event once whichever task it is connected to.
+
+**CW-R-34**: `webinar.floor.given` and `webinar.floor.taken` are emitted only to the given participant, not to the webinar rooms. As implemented they go to the attendee's own room `user:{userId}`, which reaches every socket of that user and no one else; `webinar.floor.given` carries the participant id and, for an attendee seated in a replica, the `primaryAttendee` credentials for the promotion (T-CW-3.2) [D-CW-15, D-CW-35] (amended 2026-10-25).
 
 **CW-R-34a**: attendees subscribed to `webinar:{webinarId}` receive only messages with status `PUBLISHED` or `ANSWERED`. Pending and dismissed messages are visible only in the `webinar:{webinarId}:moderation` room [D-CW-35].
 
@@ -898,7 +937,7 @@ Call-specific jobs run on a separate service, `CallsJobSchedulerService` (`apps/
 
 `CallsJobSchedulerService` provides two scheduling modes:
 
-- **Per-entity delayed jobs**: `queue.add(name, data, { delay, jobId })` for reminder, cleanup and follow-up jobs. The `jobId` is deterministic (for example `appointment.remind:{appointmentId}:{offset}`) so that re-scheduling the same job is idempotent and cancellation can remove it by id.
+- **Per-entity delayed jobs**: `queue.add(name, data, { delay, jobId })` for reminder, cleanup and follow-up jobs. The `jobId` is deterministic so that re-scheduling the same job is idempotent and cancellation can remove it by id. As implemented it is the job name and the entity ids joined with `/` (for example `appointment.remind/{appointmentId}/{offsetMinutes}`; `callsJobId` and `webinarJobId`), because BullMQ refuses a custom job id that contains `:` (amended 2026-10-25).
 - **Recurring jobs**: `queue.upsertJobScheduler('calls.reconcile', { pattern, tz })` for the 5-minute reconcile sweep.
 
 The service is started in the worker process alongside `JobSchedulerService.start()` in `apps/api/src/worker/main.ts`. It follows the same `start()` / `onModuleDestroy()` lifecycle.
@@ -906,29 +945,32 @@ The service is started in the worker process alongside `JobSchedulerService.star
 | Job name | Trigger | Queue | Schedule |
 | --- | --- | --- | --- |
 | `appointment.remind` | Delayed, scheduled at appointment creation for each offset | `nestself-calls` | at `startsAt - 1440 min` and `startsAt - 60 min` |
-| `webinar.remind` | Delayed, scheduled at registration for each offset | `nestself-calls` | at `startsAt - 1440 min` and `startsAt - 60 min` |
+| `webinar.remind` | Delayed, scheduled at registration for each offset | `nestself-webinars` | at `startsAt - 1440 min` and `startsAt - 60 min` |
 | `calls.cleanup` | Delayed, scheduled at session creation | `nestself-calls` | at `endsAt + 15 min` |
 | `calls.reconcile` | Recurring | `nestself-calls` | every 5 minutes, `Europe/Belgrade` |
 | `calls.no_show_followup` | Delayed | `nestself-calls` | 48 hours after `endsAt` |
-| `webinar.recording.start` | Enqueued when the moderator starts the webinar | `nestself-calls` | immediate |
-| `webinar.recording.finalize` | Triggered when all segments arrive | `nestself-calls` | immediate |
-| `webinar.certificates.issue` | Triggered after webinar ends | `nestself-calls` | immediate |
+| `webinar.recording.start` | Enqueued when a host starts the webinar | `nestself-webinars` | immediate; re-enqueued without spending an attempt while no host has joined |
+| `webinar.recording.finalize` | Enqueued when the recording stops (the moderator's early stop or the end of the webinar) | `nestself-webinars` | immediate; polls the concatenation pipeline |
+| `webinar.certificates.issue` | Triggered after webinar ends | `nestself-webinars` | not built yet (T-CW-3.3) |
 | `appointment.approval.remind` | Delayed 5 working days after approval creation | `nestself-calls` | see below |
+| `appointment.approval.expire` (addition, T-CW-1.10) | Delayed to the earlier of the proposed start and 10 working days after the request | `nestself-calls` | the lapse of D-CW-37 |
 | `chime.events.consume` | Long-running poller in the worker | n/a (custom loop) | continuous |
 
 **CW-R-37a**: `CallsJobSchedulerService` owns all delayed and recurring jobs for this epic. Delayed jobs use a deterministic `jobId` so that re-scheduling is idempotent and cancellation removes the correct job. When an appointment or webinar is canceled, the service removes all pending jobs for that entity by id.
 
-**CW-R-37**: every delayed job carries the appointment or webinar id and the session id. When the job fires, it re-reads the current state; if the appointment has been canceled in the meantime, the job exits without action [D-CW-09].
+**CW-R-37**: every delayed job carries the appointment or webinar id and the session id. When the job fires, it re-reads the current state; if the appointment has been canceled in the meantime, the job exits without action [D-CW-09]. Exception (amended 2026-10-25): `calls.cleanup` and `calls.reconcile` delete a meeting that still exists even when its appointment was canceled, because deleting a meeting is always safe and a cancellation does not end a live meeting itself (decision record section 11).
 
 **CW-R-38**: `calls.reconcile` is idempotent and crash-safe. It queries `call_sessions` where `status = 'active'` and `endsAt + interval '15 minutes' < now()` and calls `endSession` for each. Duplicates with the cleanup job are harmless [D-CW-09].
 
 **CW-R-121**: `webinar.recording.start` is enqueued by the webinar start handler. It creates the media capture pipeline with `SelectedVideoStreams` and `CompositedVideo PresenterOnly` at HD. If the pipeline fails, the job logs the error and sets `webinar_recordings.status` to `FAILED`; the webinar continues without recording and the moderator is notified via the moderation room [D-CW-18, D-CW-34].
 
-**CW-R-122**: `appointment.approval.remind` is a delayed job scheduled 5 working days after the approval item is created. Working days are Monday through Friday in `Europe/Belgrade`; Serbian public holidays are not modelled in this epic (a holiday table is a future enhancement). The job sends a reminder notification to the approver and the alternate (if present). When a follow-up is confirmed, the reminder job is removed by its deterministic id (`appointment.approval.remind:{approvalId}`). When a follow-up is declined or canceled, the reminder job is also removed [D-CW-37].
+**CW-R-122**: `appointment.approval.remind` is a delayed job scheduled 5 working days after the approval item is created. Working days are Monday through Friday in `Europe/Belgrade`; Serbian public holidays are not modelled in this epic (a holiday table is a future enhancement). The job sends a reminder notification to the approver and the alternate (if present). When a follow-up is confirmed, the reminder job is removed by its deterministic id (`appointment.approval.remind/{approvalId}`, with `appointment.approval.expire/{approvalId}`). When a follow-up is declined or canceled, the reminder job is also removed [D-CW-37].
 
 ### 9.1 Chime event consumption
 
-The Chime event consumer is a standalone `ChimeEventsConsumer` class (`apps/api/src/calls/chime-events-consumer.ts`) with its own `ReceiveMessage` polling loop, not a BullMQ job. It is started alongside `JobSchedulerService.start()` and `CallsJobSchedulerService.start()` in `apps/api/src/worker/main.ts` and registers a `SIGTERM` handler for graceful shutdown (finish processing the current batch, then stop polling). The consumer polls the SQS queue using `ReceiveMessage` with `WaitTimeSeconds: 20` (long polling) and `VisibilityTimeout: 60` [D-CW-12]. Each message is parsed, deduplicated against `call_events` using the composite unique key `(provider_meeting_id, event_type, provider_attendee_id, occurred_at)` and applied to the session and participant state.
+The Chime event consumer is a standalone `ChimeEventsConsumer` class (`apps/api/src/calls/chime-event-consumer.ts`) with its own `ReceiveMessage` polling loop, not a BullMQ job. It is started alongside `JobSchedulerService.start()` and `CallsJobSchedulerService.start()` in `apps/api/src/worker/main.ts` and registers a `SIGTERM` handler for graceful shutdown (finish processing the current batch, then stop polling). The consumer polls the SQS queue using `ReceiveMessage` with `WaitTimeSeconds: 20` (long polling) and `VisibilityTimeout: 60` [D-CW-12]. Each message is parsed, deduplicated against `call_events` using the composite unique key `(provider_meeting_id, event_type, provider_attendee_id, occurred_at)` and applied to the session and participant state.
+
+As implemented (amended 2026-10-25): the queue holds two shapes of the same event, the direct `CreateMeeting` notification (the event at the top level) and the EventBridge envelope (`detail-type: Chime Meeting State Change`, the event under `detail`); `normaliseChimeEvent` turns both into one `CallProviderEvent`, and the dedup key drops the second copy when both carry the same timestamp (SPIKE-CW-07 checks that they do). A message is deleted only after the applier committed (applied, duplicate, or a meeting no session knows). A thrown error, including a `MeetingEnded` for a session still `creating`, leaves it for redelivery after the visibility timeout. A body that is not a Chime meeting event (malformed JSON, another source) is not deleted either: after 5 receives it moves to the dead-letter queue, where it raises the DLQ alarm. With `VIDEO_PROVIDER=none` the consumer subscribes the applier to `FakeVideoProvider`'s in-process events and never creates an SQS client, and with `VIDEO_FAKE_EVENTS_IN_API` (the default with the fake provider) that happens in the API process, where the fake meetings live; the `nestself-webinars` jobs run there too (DEF-5 in `07-implementation-notes.md`).
 
 **CW-R-39**: events are applied out of order safely. `AttendeeJoined` sets `first_joined_at` only if currently null. `AttendeeLeft` and `AttendeeDropped` set `last_left_at` to `GREATEST(last_left_at, event_timestamp)`. `MeetingEnded` transitions the session to `ended` exactly once [D-CW-12, OPS-12, OPS-15].
 
@@ -942,36 +984,44 @@ The Chime event consumer is a standalone `ChimeEventsConsumer` class (`apps/api/
 
 ### 10.1 Mailer generalisation
 
-The existing `InvitationMailer` is specific to invitations (one abstract class with `send(input: InvitationMailInput)`, one logging implementation, English only). This epic generalises mailer infrastructure into `apps/api/src/mailer/` [D-CW-26]:
+The existing `InvitationMailer` is specific to invitations (one abstract class with `send(input: InvitationMailInput)`, one logging implementation, English only). This epic generalises mailer infrastructure into `apps/api/src/mailer/` [D-CW-26]. As implemented (amended 2026-10-25; the first draft resolved `subjectKey` and `bodyKey` against the i18n package):
 
-- `Mailer` (abstract class): `send(input: MailInput)` where `MailInput` is `{ to: string; locale: string; subjectKey: string; bodyKey: string; vars: Record<string, string> }`. The input-object pattern matches the existing `InvitationMailer.send(input)` convention.
-- `SesMailer`: the production implementation using `SESClient` and `SendEmailCommand`. It resolves `subjectKey` and `bodyKey` against the i18n package's `calls.email.*` namespace for the given locale, interpolates `vars`, and sends the email.
-- `LoggingMailer`: logs the subject key, locale and recipient in development (redacts the body).
-- `InvitationMailer` becomes a thin wrapper around `Mailer`: its `send(input: InvitationMailInput)` maps to `Mailer.send({ to: input.email, locale, subjectKey: 'invitation.subject', bodyKey: 'invitation.body', vars: { ... } })`. No parallel implementation.
+- `Mailer` (abstract class, `mailer.ts`): `send(input: MailInput)`, where `MailInput` is `{ to, locale, template, data }`: `template` is a name from the registry in `templates/index.ts` and `data` that template's own typed data, so a wrong pairing is a compile error.
+- Templates are TypeScript modules under `apps/api/src/mailer/templates/`, one per email, with the four locales inline (`en`, `sr-Latn`, `sr-Cyrl`, `hu`), because `apps/api` does not depend on `@nestself/i18n`. Wording that exists in `calls.json` is copied verbatim; the `sr-Cyrl` strings are the output of the i18n package's transliterator on the `sr-Latn` strings, never typed by hand, and a test asserts they contain no Latin letters apart from "NestSelf" and placeholders. Dates use `Intl.DateTimeFormat` in the appointment's or occurrence's own time zone.
+- `SesMailer` (`ses-mailer.ts`): the production implementation with `SendRawEmailCommand`. `mime.ts` builds the raw MIME message by hand: `multipart/mixed` holding a `multipart/alternative` (text, HTML and, for a calendar email, the `text/calendar; method=REQUEST` or `CANCEL` part inline, which Outlook and Gmail render as an invitation) plus the same `.ics` again as a named attachment for clients that only offer attachments. The `Message-ID` is a random UUID on the sender's domain; every line ends with CRLF and stays within 78 characters.
+- `LoggingMailer` (`logging-mailer.ts`): renders the email and logs the template, locale, recipient domain and subject when SES is not configured; nothing is sent.
+- `InvitationMailer` becomes a thin wrapper around `Mailer` (template `invitation`). No parallel implementation.
 
-**CW-R-42**: every email template exists in all four locales (`en`, `sr-Latn`, `sr-Cyrl`, `hu`). Email subjects and bodies come from the `calls.email.*` i18n keys in `packages/i18n/locales/{locale}/calls.json`, rendered server-side with the i18n package (not inline strings). The Cyrillic translations are generated from Latin by `pnpm --filter @nestself/i18n build:cyrillic` and therefore require no manual maintenance [D-CW-26].
+**CW-R-42**: every email template exists in all four locales (`en`, `sr-Latn`, `sr-Cyrl`, `hu`). As implemented, subjects and bodies live in the template modules (see above), not in the `calls.email.*` i18n keys; the Cyrillic copy is generated from the Latin by the i18n package's transliterator and checked by a test. Calendar invitations carry exactly one `ORGANIZER` (the sending address, named "NestSelf") and one `ATTENDEE` (the recipient, without a name) [D-CW-26] (amended 2026-10-25).
 
 **CW-R-43**: email subjects are neutral. Consultation reminders use "Your NestSelf session"; webinar reminders use "Your NestSelf webinar". No service category, no expert name, no employer name in the subject [D-CW-26, UX-24].
 
 ### 10.5 Follow-up and approval email templates
 
-New email template keys in `calls.email.*` [D-CW-37]:
+The follow-up, approval and webinar emails, as implemented (amended 2026-10-25; the template name is the registry key in `apps/api/src/mailer/templates/index.ts`, and the subject is the English one) [D-CW-37]:
 
-| Template key | Recipient | Subject (neutral) |
+| Template | Recipient | Subject (neutral) |
 | --- | --- | --- |
-| `followUp.proposed` | Employee | "A follow-up session was proposed" |
-| `followUp.confirmed` | Expert and employee | "Your follow-up session is confirmed" |
-| `followUp.declined` | Expert | "The follow-up session was declined" |
-| `approval.requested` | Approver | "A session approval is waiting for your decision" |
-| `approval.reminder` | Approver and alternate | "A session approval is still waiting" |
-| `approval.decided` | Employee | "Your session approval has a decision" |
-| `webinar.recorded_notice` | Presenters | "Your webinar recording is ready for review" |
+| `appointment.follow_up.proposed` | Employee | "A follow-up was proposed" |
+| `appointment.follow_up.confirmed` | Expert and employee | "Your follow-up session is confirmed" (with the calendar file) |
+| `appointment.follow_up.declined` | Expert | "The follow-up session was declined" |
+| `appointment.approval.requested` | Approver and alternate | "A session approval is waiting for your decision" |
+| `appointment.approval.reminder` | Approver and alternate | "A session approval is still waiting" |
+| `appointment.approval.decided` | Employee (approved, rejected with the safe reason, or lapsed) | "Your session approval has a decision" |
+| `appointment.reminder` | Employee and expert | "Your NestSelf session" |
+| `appointment.no_show_followup` | Employee | "About your NestSelf session" |
+| `appointment.canceled` | Expert and employee | "Your NestSelf session was canceled" (template only; not sent yet, decision record section 11) |
+| `webinar.registration`, `webinar.reminder` | Registrant | "Your NestSelf webinar" |
+| `webinar.canceled` | Registrant | "Your NestSelf webinar was canceled" |
+| `webinar.recorded_notice` | Presenters | "Your webinar recording is ready for review" (template only; not sent yet) |
+
+The webinar emails carry no title or topic: the date, the time, the recording notice and the join link only (D-CW-26, LAW-14).
 
 **CW-R-123**: all follow-up and approval templates exist in all four locales. Subjects are neutral and reveal no service category, expert specialty or clinical detail. The approval notification to the approver includes only the employee's display name, the label "follow-up session with a NestSelf expert", the date and the duration [D-CW-37, LAW-14].
 
 ### 10.2 ICS attachments
 
-`apps/api/src/calendar/ics.ts` generates RFC 5545 ICS files. It handles line folding (75-octet rule), escaping of special characters, UTC timestamps, and VTIMEZONE components. No external dependency.
+`apps/api/src/calendar/ics-generator.ts` generates RFC 5545 ICS files (the file name as implemented; amended 2026-10-25). `METHOD:REQUEST` and `METHOD:CANCEL` events carry one `ORGANIZER` (the sending address, named "NestSelf") and one `ATTENDEE` (the recipient), so calendar clients treat them as invitations from NestSelf; the UID is per appointment or per webinar registration, so a later `CANCEL` matches it. It handles line folding (75-octet rule), escaping of special characters, UTC timestamps, and VTIMEZONE components. No external dependency.
 
 ```ts
 export function generateIcs(event: IcsEvent): string;
@@ -1055,7 +1105,7 @@ A framework-agnostic controller (plain TypeScript class, not a React hook) that 
 
 **CW-R-51**: every panel, sheet, banner and disclosure in the client package follows the Motion rule. Panels that appear and disappear use `AnimatePresence` with a motion preset; controls that change state use CSS transitions on the tokens. Reduced motion switches to an opacity fade of at most 50 ms [CLAUDE.md Motion rule].
 
-**CW-R-52**: the `CrisisBlock` component is the same one the wellbeing check-ins use. It shows Serbian hotlines only (Hungarian hotlines are added only with a Hungarian launch, D-CW-38), the platform disclaimer, and for the expert the emergency guidance. It is reachable in one tap at all times during a call [D-CW-22, D-CW-38, UX-17].
+**CW-R-52**: the `CrisisBlock` component is the same one the wellbeing check-ins use. It shows Serbian hotlines only (Hungarian hotlines are added only with a Hungarian launch, D-CW-38), the platform disclaimer, and for the expert the emergency guidance. It is reachable in one tap at all times during a call [D-CW-22, D-CW-38, UX-17]. As implemented, no wellbeing check-in `CrisisBlock` exists yet, so the one block lives in `@nestself/video` (`packages/video/src/components/CrisisBlock.tsx`, the numbers in `crisis-lines.ts`); it moves to `@nestself/ui` or a shared package when the check-ins need it, and both then import the same component (amended 2026-10-25).
 
 **CW-R-53**: at 390 px viewport width, the remote video fills the screen, the self-view floats, the control bar has 44 px tap targets and secondary controls collapse into an overflow menu [D-CW-22, UX-20].
 
@@ -1072,7 +1122,7 @@ The `PreJoinCheck` component is mandatory before any join [D-CW-21]. It runs the
 1. Camera preview (self-view) with permission state and browser-specific help if blocked.
 2. Microphone level meter with permission state.
 3. Speaker test (plays a short tone, asks the user to confirm they heard it).
-4. Network check: the readiness checker probes the Chime meeting endpoint; the result is shown as "connection: good / fair / poor".
+4. Network check (amended 2026-10-25, as implemented): a timed HTTP round-trip, not the readiness checker's network tests. The consultation screens pass a probe that times an uncached, authenticated `GET /appointments/:id` through the API (`callsApi.networkProbe`); a screen that passes none (the webinar screens) times a `HEAD` request to the page's own origin. The round-trip time is classified with the thresholds of 18.3 and shown as good, fair, poor or offline, with a hint for poor and offline and a "Check again" button. It does not test UDP 3478, TURN fallback or bandwidth; the client-company network note covers the ports (D-CW-20).
 5. Device selection dropdowns for camera, microphone and speaker.
 6. "Join with camera off" toggle. After the pre-join preview, camera and microphone are on by default for consultation and workshop participants of every role; the employee's "join with camera off" choice is remembered per device; webinar attendees have no camera or microphone by construction [D-CW-21].
 7. Background blur toggle (opt-in, the state is persisted per device in `localStorage` with a `try/catch` wrapper).
@@ -1081,7 +1131,7 @@ For consultations, the waiting state after the pre-join shows the expert's first
 
 **CW-R-55a**: the pre-join check completes before the `join` endpoint is called. The join button is disabled until the readiness check has completed [D-CW-21].
 
-**CW-R-55b**: background blur requires `*.sdkassets.chime.aws` for the WASM module. If the CSP blocks it, background blur is silently unavailable and the toggle is hidden; the component does not fail [CORE-30] (guideline choice).
+**CW-R-55b**: background blur requires `*.sdkassets.chime.aws` for the WASM module. If the browser does not support it or the CSP blocks it, the component does not fail: as implemented, the blur toggle stays visible but disabled, with the explanation "Background blur is not available in this browser." (`calls.prejoin.blurUnavailable`), and while the processor loads it shows `calls.prejoin.blurLoading` [CORE-30] (guideline choice; amended 2026-10-25, the first draft hid the toggle).
 
 ### 11.6 Connection quality and degraded mode
 
@@ -1183,7 +1233,7 @@ Resources:
 
 1. **SQS queue** `chime-events`: server-side encryption with the platform KMS key, dead-letter queue after 5 receives, a resource policy allowing `meetings.chime.amazonaws.com` to send messages with `aws:SourceAccount` condition [D-CW-12, OPS-16].
 2. **EventBridge rule**: `source: aws.chime`, `detail-type: Chime Meeting State Change`, target is the SQS queue. This is the backstop; direct SQS notification from `CreateMeeting` is the primary path [D-CW-12, OPS-09].
-3. **S3 bucket** `recordings`: SSE-KMS on the platform key, block-public-access, bucket policy for `mediapipelines.chime.amazonaws.com` with `aws:SourceAccount` and `aws:SourceArn` conditions, lifecycle rule expiring raw segments after 30 days [D-CW-18, WEB-27].
+3. **S3 bucket** `recordings`: SSE-KMS on the platform key, block-public-access, bucket policy for `mediapipelines.chime.amazonaws.com` with `aws:SourceAccount` and `aws:SourceArn` conditions, lifecycle rule expiring the raw segments under `raw/` after 30 days. Layout: capture segments under `raw/{webinarId}/`, the concatenated MP4 under `final/{webinarId}/` (a lifecycle filter is a literal prefix, so the segments lead the key) [D-CW-18, WEB-27, T-CW-2.5].
 4. **IAM managed policy** `VideoApiPolicy`: `chime:CreateMeeting`, `chime:CreateMeetingWithAttendees`, `chime:CreateAttendee`, `chime:UpdateAttendeeCapabilities`, `chime:DeleteAttendee`, `chime:DeleteMeeting`, `chime:GetMeeting` on `Resource: *` with a cdk-nag `AwsSolutions-IAM5` suppression (meeting actions carry no resource-level permissions, OPS-21, OPS-22) [D-CW-31].
 5. **IAM managed policy** `VideoWorkerPolicy`: SQS receive and delete on the queue, media pipeline actions on `Resource: *` with cdk-nag suppression, S3 put, get and list on the recordings bucket [D-CW-31].
 
@@ -1211,6 +1261,8 @@ VIDEO_SMOKE_ENABLED: z.coerce.boolean().default(false),
 A `superRefine` block requires `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` when `VIDEO_PROVIDER` is `'chime'`, following the same pattern as the existing Cognito refinement [D-CW-06].
 
 **CW-R-68**: `CHIME_REGION` must be `eu-central-1` and nothing else. The Zod schema uses `z.literal('eu-central-1')`, not `z.string()` [D-CW-06].
+
+As implemented (amended 2026-10-25): every video variable is wrapped in `blankAsUnset`, so an empty value in an `.env` file counts as unset. `VIDEO_SMOKE_ENABLED` is parsed as `true` or `false` (an enum), not with `z.coerce.boolean()`, which would turn the string "false" into `true`. Two further variables: `STAGE` (default `dev`; set by the compute stack, tags the provider resources and is the `Stage` dimension of the `NestSelf/Video` metrics) and `VIDEO_FAKE_EVENTS_IN_API` (`true` or `false`; `resolveAppEnv` makes it `true` with `VIDEO_PROVIDER=none` unless it is set to `false`, and always `false` with `chime`: the fake provider's events and the `nestself-webinars` jobs are then handled in the API process, where the fake meetings live, and the worker leaves that queue alone). The web apps read `VITE_SUPPORT_EMAIL`, the technical support address on the call screens (a launch checklist item in `docs/environment.md`).
 
 ---
 
@@ -1252,7 +1304,7 @@ This section enumerates security constraints that apply across the epic. Each is
 
 **CW-R-79c**: webinar recording uses `SelectedVideoStreams` set to the presenter participants' attendee ids and `CompositedVideo` layout `PresenterOnly` at HD. Attendees are receive-only, so no attendee video can appear in the capture. An attendee given the floor has audio `SendReceive` only; their voice may be captured. The floor dialog warns the attendee that their voice is part of the recording before they unmute [D-CW-18, D-CW-35, WEB-23 to WEB-26].
 
-**CW-R-79d**: when a moderator stops recording, the `webinar.recording.finalize` job runs a concatenation pipeline: it lists the raw segments in the recordings bucket under the session prefix, concatenates them into a single MP4, writes the result back to the bucket under the `concatenated/` prefix, and updates `webinar_recordings.status` to `ready` [D-CW-18, WEB-29]. The raw segments expire after 30 days via the bucket lifecycle rule.
+**CW-R-79d**: when the recording stops (the moderator's early stop or the end of the webinar), the `webinar.recording.finalize` job deletes the capture pipeline and runs a concatenation pipeline from it: the segments under `raw/{webinarId}/` become a single MP4 under `final/{webinarId}/`, and `webinar_recordings.status` moves to `ready` [D-CW-18, WEB-29]. The raw segments expire after 30 days via the bucket's `raw/` lifecycle rule.
 
 **CW-R-79e**: the CMS handoff creates a draft content item through the CMS media module interface (NS-CONTENT-01). Until that interface exists, the handoff writes the S3 key and metadata to `webinar_recordings` with `handoff_status = 'pending'` [D-CW-03].
 
@@ -1272,7 +1324,9 @@ Every Chime SDK call is logged at `info` level on success and `error` on failure
 | p95 `meetingStartDurationMs` | `call_client_events` where `meetingStartSucceeded` | above 5 seconds [D-CW-13] |
 | `meetingFailed` burst | `call_client_events` | more than 3 in 5 minutes (planning assumption) |
 | SQS DLQ depth | CloudWatch metric on the DLQ | above 0 [D-CW-12] |
-| Active sessions exceeding `endsAt + 20 min` | `calls.reconcile` output | any (the reconcile job handles it, but the alarm flags persistent failures) |
+| Active sessions exceeding `endsAt + 20 min` | `calls.reconcile` output | any (the reconcile job handles it, but the alarm flags persistent failures); not implemented as a metric yet: `calls.reconcile` counts these sessions and logs a warning "Active sessions past their end", and a `SessionsPastEnd` metric with its alarm is a follow-up |
+
+As implemented (amended 2026-10-25): the join alarms read metrics the API emits itself, not `call_client_events`. `VideoMetrics` (`apps/api/src/calls/video-metrics.ts`) writes CloudWatch embedded metric format lines in the namespace `NestSelf/Video` with a `Stage` dimension: `JoinAttempts`, `JoinFailures`, `MeetingStartDurationMs` (the provider's create latency) and `MeetingFailed`; the video stack's alarms `nestself-<stage>-video-join-failure-rate`, `-video-meeting-start-p95`, `-video-meeting-failed-burst` and `nestself-<stage>-chime-events-dlq-depth` read them, with the thresholds above as planning assumptions (`VIDEO_ALARM_THRESHOLDS` in `infra/cdk/lib/video-stack.ts`). The client events stay in `call_client_events` for support diagnostics.
 
 **CW-R-80**: client events go to `POST /calls/:sessionId/client-events` and are stored in `call_client_events` with 90-day retention. They carry metrics, device error names, browser and OS only; never device labels, names or content [D-CW-13, D-CW-29].
 

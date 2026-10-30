@@ -16,6 +16,7 @@ import type { LibraryCard } from '@nestself/contracts';
 import { LibraryContentListSchema, can } from '@nestself/contracts';
 import { libraryKeys } from '@nestself/api-client';
 import { useAuth } from '../../auth';
+import { NextAppointment } from '../../calls/next-appointment';
 import { isSampleDataMode } from '../../data-source';
 import { api } from '../../api';
 import { sampleContentCards } from '../../library/sample-library-data';
@@ -76,6 +77,24 @@ function HomePage() {
   return <ApiHomePage locale={locale} denied={denied} />;
 }
 
+/** Next appointment section (CALL-02): for users who can hold consultations. */
+function UpcomingAppointmentSection() {
+  const { t } = useTranslation(['workspace']);
+  const { principal, effectiveActions } = useAuth();
+  const showUpcoming = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
+
+  if (!showUpcoming) return null;
+
+  return (
+    <section>
+      <Heading level={2} typeRole="sectionTitle" className="mb-4">
+        {t('workspace:home.upcoming')}
+      </Heading>
+      <NextAppointment />
+    </section>
+  );
+}
+
 // No per-route SampleDataBanner — root __root.tsx renders it (Minor: duplicate banner)
 
 function SampleHomePage({ locale, denied }: { locale: string; denied?: string }) {
@@ -96,6 +115,8 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
       <Heading level={1} typeRole="screenTitle">
         {t('library:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
+
+      <UpcomingAppointmentSection />
 
       <section>
         <Heading level={2} typeRole="sectionTitle" className="mb-4">
@@ -205,6 +226,8 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
       <Heading level={1} typeRole="screenTitle">
         {t('library:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
+
+      <UpcomingAppointmentSection />
 
       {isError ? (
         <Alert tone="danger">
