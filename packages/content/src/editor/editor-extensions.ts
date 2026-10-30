@@ -18,11 +18,21 @@
  * - DisableItalicInput (swallows Mod-I)
  */
 import { type Extensions, Extension, Mark, Node } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder, TrailingNode, Dropcursor } from '@tiptap/extensions';
 import { DragHandle } from '@tiptap/extension-drag-handle';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 import { createSlashMenuExtension } from './SlashMenu.tsx';
+import {
+  ProfessionalNoteView,
+  PracticalStepView,
+  ChecklistView,
+  ChecklistItemView,
+  CtaView,
+  RelatedResourceView,
+  ImageView,
+} from './node-views.tsx';
 
 // ---------------------------------------------------------------------------
 // Document (overrides StarterKit's doc)
@@ -164,6 +174,10 @@ const Image = Node.create({
       ['div', { class: 'image-placeholder' }, alt || assetId || 'Image'],
     ];
   },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageView);
+  },
 });
 
 const ProfessionalNote = Node.create({
@@ -195,6 +209,10 @@ const ProfessionalNote = Node.create({
       { 'data-type': 'professionalNote', 'data-note-kind': node.attrs.noteKind as string },
       0,
     ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ProfessionalNoteView);
   },
 });
 
@@ -242,6 +260,10 @@ const PracticalStep = Node.create({
       0,
     ];
   },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(PracticalStepView);
+  },
 });
 
 const Checklist = Node.create({
@@ -255,6 +277,10 @@ const Checklist = Node.create({
 
   renderHTML() {
     return ['ul', { 'data-type': 'checklist' }, 0];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ChecklistView);
   },
 });
 
@@ -281,6 +307,10 @@ const ChecklistItem = Node.create({
 
   renderHTML({ node }) {
     return ['li', { 'data-type': 'checklistItem', 'data-label': node.attrs.label as string }, 0];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ChecklistItemView);
   },
 });
 
@@ -403,6 +433,10 @@ const RelatedResource = Node.create({
       `[Related: ${(node.attrs.contentResourceId as string | null) ?? 'none'}]`,
     ];
   },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(RelatedResourceView);
+  },
 });
 
 const Cta = Node.create({
@@ -456,6 +490,10 @@ const Cta = Node.create({
       },
       `[CTA: ${(node.attrs.label as string | null) ?? (node.attrs.ctaKind as string)}]`,
     ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(CtaView);
   },
 });
 

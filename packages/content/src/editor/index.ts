@@ -29,6 +29,18 @@ export type { BubbleMenuLabels, EditorBubbleMenuProps } from './EditorBubbleMenu
 export { BlockHandleComponent } from './BlockHandle.tsx';
 export type { BlockHandleLabels, BlockHandleProps } from './BlockHandle.tsx';
 
+// Node views
+export {
+  ProfessionalNoteView,
+  PracticalStepView,
+  ChecklistView,
+  ChecklistItemView,
+  CtaView,
+  RelatedResourceView,
+  ImageView,
+} from './node-views.tsx';
+export type { NodeViewLabels } from './node-views.tsx';
+
 // Legacy toolbar (kept for backward compatibility)
 export { Toolbar, DEFAULT_TOOLBAR_LABELS } from './Toolbar.tsx';
 export type { ToolbarProps, ToolbarLabels } from './Toolbar.tsx';
