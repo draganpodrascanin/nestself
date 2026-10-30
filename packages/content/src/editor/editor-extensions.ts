@@ -23,6 +23,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 import { createSlashMenuExtension } from './SlashMenu.tsx';
+import { type NodeViewLabels, DEFAULT_NODE_VIEW_LABELS } from './node-view-labels.ts';
 import {
   ProfessionalNoteView,
   PracticalStepView,
@@ -32,6 +33,8 @@ import {
   RelatedResourceView,
   ImageView,
 } from './node-views.tsx';
+
+export type { NodeViewLabels } from './node-view-labels.ts';
 
 // ---------------------------------------------------------------------------
 // Document (overrides StarterKit's doc)
@@ -687,11 +690,28 @@ const BlockKeyboardShortcuts = Extension.create({
 // Export
 // ---------------------------------------------------------------------------
 
+/**
+ * Storage-only extension that makes translated labels available to React
+ * node views via `editor.storage.nodeViewLabels`.
+ */
+const NodeViewLabelsExtension = Extension.create<{ labels: NodeViewLabels }>({
+  name: 'nodeViewLabels',
+
+  addOptions() {
+    return { labels: DEFAULT_NODE_VIEW_LABELS };
+  },
+
+  addStorage() {
+    return { labels: this.options.labels };
+  },
+});
+
 export interface EditorExtensionsOptions {
   placeholder?: string;
   blockPlaceholder?: string;
   headingPlaceholder?: string;
   suggestionConfig?: Partial<SuggestionOptions>;
+  nodeViewLabels?: NodeViewLabels;
 }
 
 /**
@@ -711,6 +731,9 @@ export function createEditorExtensions(
   options: EditorExtensionsOptions = {},
 ): Extensions {
   const extensions: Extensions = [
+    NodeViewLabelsExtension.configure({
+      labels: options.nodeViewLabels ?? DEFAULT_NODE_VIEW_LABELS,
+    }),
     Doc,
     StarterKit.configure({
       document: false,     // we provide our own Doc

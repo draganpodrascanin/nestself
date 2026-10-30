@@ -220,6 +220,22 @@
       "altRequired": "Alt text is required before inserting the image.",
       "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
     },
+    "nodeView": {
+      "noteKindTip": "Tipp",
+      "noteKindWarning": "Figyelmeztetés",
+      "noteKindDisclaimer": "Jogi nyilatkozat",
+      "stepTitle": "Lépés címe",
+      "ctaKindSuggestTopic": "Téma javaslása",
+      "ctaKindOpenContent": "Tartalom megnyitása",
+      "ctaKindOpenCollection": "Gyűjtemény megnyitása",
+      "ctaKindOpenService": "Szolgáltatás megnyitása",
+      "ctaLabelPlaceholder": "Gomb felirata (opcionális, max 100)",
+      "relatedSearch": "Erőforrás-azonosító",
+      "relatedEmpty": "(nincs)",
+      "imageAlt": "Alternatív szöveg (kötelező)",
+      "imageCaption": "Képaláírás (opcionális)",
+      "imagePlaceholder": "Húzza ide vagy illessze be a képet, vagy kattintson a feltöltéshez"
+    },
     "audiencePlaceholder": "Select target audience",
     "loading": "Loading editor...",
     "notFound": "Variant not found.",

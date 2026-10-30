@@ -8,50 +8,64 @@
  *
  * All styling uses semantic tokens from `@nestself/ui` and `packages/tokens`.
  * No hex literals.
+ *
+ * Labels come from `editor.storage.nodeViewLabels.labels`
+ * (the `NodeViewLabelsExtension` in editor-extensions.ts). English fallbacks
+ * are provided when the storage is missing so the views render stand-alone.
  */
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
 import { cn } from '@nestself/ui';
+import type { NodeViewLabels } from './node-view-labels.ts';
 
 // ---------------------------------------------------------------------------
-// Types shared across node views
+// Helpers
 // ---------------------------------------------------------------------------
 
-/** Labels passed from the editor for translatable strings. */
-export interface NodeViewLabels {
-  noteKinds: Record<string, string>;
-  stepTitle: string;
-  checklistLabel: string;
-  ctaKinds: Record<string, string>;
-  ctaLabelPlaceholder: string;
-  relatedSearch: string;
-  relatedEmpty: string;
-  imageAlt: string;
-  imageCaption: string;
-  imagePlaceholder: string;
+/** Read translated labels from editor storage, falling back to English. */
+function getLabels(editor: ReactNodeViewProps['editor']): NodeViewLabels {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage is untyped
+  const stored = (editor.storage as any)?.nodeViewLabels?.labels as NodeViewLabels | undefined;
+  if (stored) return stored;
+  // English fallback so views still render in isolation (tests, storybook)
+  return {
+    noteKinds: { tip: 'Tip', warning: 'Warning', disclaimer: 'Disclaimer' },
+    stepTitle: 'Step title',
+    checklistLabel: '',
+    ctaKinds: { suggest_topic: 'Suggest topic', open_content: 'Open content', open_collection: 'Open collection', open_service: 'Open service' },
+    ctaLabelPlaceholder: 'Button label (optional, max 100)',
+    relatedSearch: 'Resource ID',
+    relatedEmpty: '(none)',
+    imageAlt: 'Alt text (required)',
+    imageCaption: 'Caption (optional)',
+    imagePlaceholder: 'Drop or paste an image, or click to upload',
+  };
 }
 
 // ---------------------------------------------------------------------------
 // ProfessionalNote node view
 // ---------------------------------------------------------------------------
 
+/**
+ * Valid note kinds per schema (blocks.ts:307): 'warning' | 'tip' | 'disclaimer'.
+ * 'info' is NOT in the schema and must not appear.
+ */
 const NOTE_KIND_ICONS: Record<string, string> = {
-  tip: '✨',     // sparkles
-  warning: '⚠', // warning sign
-  info: 'ℹ',    // info
-  disclaimer: '⚖', // scales
+  tip: '✨',         // sparkles
+  warning: '⚠',     // warning sign
+  disclaimer: '⚖',  // scales
 };
 
 const NOTE_KIND_STYLES: Record<string, string> = {
   tip: 'border-l-primary bg-primary/5',
   warning: 'border-l-warning bg-warning/5',
-  info: 'border-l-info bg-info/5',
   disclaimer: 'border-l-text-secondary bg-surface-raised',
 };
 
 export function ProfessionalNoteView({ node, updateAttributes, editor }: ReactNodeViewProps) {
   const kind = (node.attrs.noteKind as string) ?? 'tip';
   const editable = editor.isEditable;
+  const labels = getLabels(editor);
 
   return (
     <NodeViewWrapper
@@ -73,14 +87,13 @@ export function ProfessionalNoteView({ node, updateAttributes, editor }: ReactNo
             onChange={(e) => updateAttributes({ noteKind: e.target.value })}
             className="type-label rounded-control border border-border-control bg-surface px-2 py-0.5 text-text-secondary"
           >
-            <option value="tip">Tip</option>
-            <option value="warning">Warning</option>
-            <option value="info">Info</option>
-            <option value="disclaimer">Disclaimer</option>
+            {Object.entries(labels.noteKinds).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </select>
         ) : (
           <span className="type-label text-text-secondary">
-            {kind.charAt(0).toUpperCase() + kind.slice(1)}
+            {labels.noteKinds[kind] ?? kind}
           </span>
         )}
       </div>
@@ -97,6 +110,7 @@ export function PracticalStepView({ node, updateAttributes, editor }: ReactNodeV
   const stepNumber = (node.attrs.stepNumber as number) ?? 1;
   const stepTitle = (node.attrs.title as string) ?? '';
   const editable = editor.isEditable;
+  const labels = getLabels(editor);
 
   return (
     <NodeViewWrapper
@@ -115,7 +129,7 @@ export function PracticalStepView({ node, updateAttributes, editor }: ReactNodeV
             type="text"
             value={stepTitle}
             onChange={(e) => updateAttributes({ title: e.target.value })}
-            placeholder="Step title"
+            placeholder={labels.stepTitle}
             className="mb-2 block w-full border-0 bg-transparent p-0 type-label text-text placeholder:text-text-secondary focus:outline-none"
           />
         ) : stepTitle ? (
@@ -189,6 +203,7 @@ export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) 
   const ctaKind = (node.attrs.ctaKind as string) ?? 'suggest_topic';
   const label = (node.attrs.label as string) ?? null;
   const editable = editor.isEditable;
+  const labels = getLabels(editor);
 
   return (
     <NodeViewWrapper
@@ -198,7 +213,7 @@ export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) 
     >
       <div className="flex items-center gap-3">
         <div className="flex h-10 items-center justify-center rounded-control bg-primary px-4 text-on-primary type-label">
-          {label || ctaKind.replace(/_/g, ' ')}
+          {label || labels.ctaKinds[ctaKind] || ctaKind.replace(/_/g, ' ')}
         </div>
         {editable ? (
           <div className="flex flex-col gap-2">
@@ -209,7 +224,7 @@ export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) 
             >
               {CTA_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {k.replace(/_/g, ' ')}
+                  {labels.ctaKinds[k] || k.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
@@ -217,7 +232,7 @@ export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) 
               type="text"
               value={label ?? ''}
               onChange={(e) => updateAttributes({ label: e.target.value || null })}
-              placeholder="Button label (optional, max 100)"
+              placeholder={labels.ctaLabelPlaceholder}
               maxLength={100}
               className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
             />
@@ -235,6 +250,7 @@ export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) 
 export function RelatedResourceView({ node, updateAttributes, editor }: ReactNodeViewProps) {
   const resourceId = (node.attrs.contentResourceId as string) ?? null;
   const editable = editor.isEditable;
+  const labels = getLabels(editor);
 
   return (
     <NodeViewWrapper
@@ -243,17 +259,17 @@ export function RelatedResourceView({ node, updateAttributes, editor }: ReactNod
       className="my-3 rounded-control border border-border-subtle bg-surface p-4"
     >
       <div className="flex items-center gap-3">
-        <span className="type-label text-text-secondary">Related resource:</span>
+        <span className="type-label text-text-secondary">{labels.relatedSearch}:</span>
         {editable ? (
           <input
             type="text"
             value={resourceId ?? ''}
             onChange={(e) => updateAttributes({ contentResourceId: e.target.value || null })}
-            placeholder="Resource ID"
+            placeholder={labels.relatedSearch}
             className="flex-1 type-body rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
           />
         ) : (
-          <span className="type-body text-text">{resourceId || '(none)'}</span>
+          <span className="type-body text-text">{resourceId || labels.relatedEmpty}</span>
         )}
       </div>
     </NodeViewWrapper>
@@ -269,6 +285,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
   const alt = (node.attrs.alt as string) ?? '';
   const caption = (node.attrs.caption as string) ?? '';
   const editable = editor.isEditable;
+  const labels = getLabels(editor);
 
   return (
     <NodeViewWrapper
@@ -286,7 +303,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
         </div>
       ) : (
         <div className="flex min-h-[120px] items-center justify-center rounded-control border-2 border-dashed border-border-control bg-surface text-text-secondary">
-          <span className="type-body">Drop or paste an image, or click to upload</span>
+          <span className="type-body">{labels.imagePlaceholder}</span>
         </div>
       )}
       {editable ? (
@@ -295,7 +312,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
             type="text"
             value={alt}
             onChange={(e) => updateAttributes({ alt: e.target.value })}
-            placeholder="Alt text (required)"
+            placeholder={labels.imageAlt}
             required
             className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
           />
@@ -303,7 +320,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
             type="text"
             value={caption}
             onChange={(e) => updateAttributes({ caption: e.target.value || null })}
-            placeholder="Caption (optional)"
+            placeholder={labels.imageCaption}
             className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
           />
         </div>

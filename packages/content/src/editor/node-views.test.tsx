@@ -166,7 +166,7 @@ describe('CtaView', () => {
     const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, false);
     render(<CtaView {...props} />);
     // When not editable, only the button preview shows the kind label (no select)
-    expect(screen.getByText('suggest topic')).toBeInTheDocument();
+    expect(screen.getByText('Suggest topic')).toBeInTheDocument();
   });
 
   it('shows custom label in the button when set', () => {

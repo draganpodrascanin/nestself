@@ -220,6 +220,22 @@
       "altRequired": "Alternativni tekst je obavezan pre umetanja slike.",
       "tooLarge": "Ovaj fajl premašuje {{max}} MB. Izaberite manju sliku."
     },
+    "nodeView": {
+      "noteKindTip": "Savet",
+      "noteKindWarning": "Upozorenje",
+      "noteKindDisclaimer": "Odricanje odgovornosti",
+      "stepTitle": "Naslov koraka",
+      "ctaKindSuggestTopic": "Predloži temu",
+      "ctaKindOpenContent": "Otvori sadržaj",
+      "ctaKindOpenCollection": "Otvori kolekciju",
+      "ctaKindOpenService": "Otvori uslugu",
+      "ctaLabelPlaceholder": "Oznaka dugmeta (opciono, maks 100)",
+      "relatedSearch": "ID resursa",
+      "relatedEmpty": "(nema)",
+      "imageAlt": "Alternativni tekst (obavezno)",
+      "imageCaption": "Opis (opciono)",
+      "imagePlaceholder": "Prevucite ili nalepite sliku, ili kliknite za otpremanje"
+    },
     "audiencePlaceholder": "Izaberite ciljnu publiku",
     "loading": "Učitavanje editora...",
     "notFound": "Varijanta nije pronađena.",

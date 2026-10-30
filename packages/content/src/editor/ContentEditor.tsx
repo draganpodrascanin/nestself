@@ -23,6 +23,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import type { ContentDocument } from '../schema/document.ts';
 import { createEditorExtensions } from './editor-extensions.ts';
+import type { NodeViewLabels } from './node-view-labels.ts';
 import { PasteNormalization } from './paste-handler.ts';
 import { toContentDocument, fromContentDocument } from './converters.ts';
 import { useSlashMenu, createSlashMenuItems } from './SlashMenu.tsx';
@@ -41,6 +42,8 @@ export interface ContentEditorLabels {
   slashItems: SlashMenuItemLabels;
   bubbleMenu: BubbleMenuLabels;
   blockHandle: BlockHandleLabels;
+  /** Translated labels for React node views (note kinds, step title, etc.). */
+  nodeView?: NodeViewLabels;
   /** Accessible label for the editor region. */
   editorLabel: string;
 }
@@ -196,6 +199,7 @@ export function ContentEditor({
         blockPlaceholder,
         headingPlaceholder,
         suggestionConfig,
+        nodeViewLabels: labels.nodeView,
       }),
       PasteNormalization,
     ],

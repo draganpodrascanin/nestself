@@ -39,7 +39,7 @@ export {
   RelatedResourceView,
   ImageView,
 } from './node-views.tsx';
-export type { NodeViewLabels } from './node-views.tsx';
+export type { NodeViewLabels } from './node-view-labels.ts';
 
 // Legacy toolbar (kept for backward compatibility)
 export { Toolbar, DEFAULT_TOOLBAR_LABELS } from './Toolbar.tsx';

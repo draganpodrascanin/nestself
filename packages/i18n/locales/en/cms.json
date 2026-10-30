@@ -225,6 +225,22 @@
       "licenseStock": "Stock",
       "licenseGenerated": "Generated",
       "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
+    },
+    "nodeView": {
+      "noteKindTip": "Tip",
+      "noteKindWarning": "Warning",
+      "noteKindDisclaimer": "Disclaimer",
+      "stepTitle": "Step title",
+      "ctaKindSuggestTopic": "Suggest topic",
+      "ctaKindOpenContent": "Open content",
+      "ctaKindOpenCollection": "Open collection",
+      "ctaKindOpenService": "Open service",
+      "ctaLabelPlaceholder": "Button label (optional, max 100)",
+      "relatedSearch": "Resource ID",
+      "relatedEmpty": "(none)",
+      "imageAlt": "Alt text (required)",
+      "imageCaption": "Caption (optional)",
+      "imagePlaceholder": "Drop or paste an image, or click to upload"
     }
   },
   "sample": {
