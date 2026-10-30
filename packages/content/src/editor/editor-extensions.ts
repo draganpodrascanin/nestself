@@ -313,7 +313,7 @@ const Checklist = Node.create({
     return [
       new InputRule({
         find: /^\[\]\s$/,
-        handler: ({ state, range, chain }) => {
+        handler: ({ range, chain }) => {
           chain()
             .deleteRange(range)
             .insertContent({

@@ -832,14 +832,9 @@ describe('markdown shortcut input rules (shipped extensions)', () => {
 
   it('test editor input rules match shipped patterns', () => {
     // The test editor's lightweight extensions mirror the shipped input rules.
-    // Verify the patterns are correct by checking the test editor's registered
-    // input rules (these are the same regex patterns used in the shipped code).
-    const editor = getEditor();
-    // SectionHeading: ## and ###
+    // Verify the extensions define addInputRules (same regex patterns as shipped).
     expect(SectionHeading.config.addInputRules).toBeDefined();
-    // Quote: >
     expect(Quote.config.addInputRules).toBeDefined();
-    // Checklist: []
     expect(Checklist.config.addInputRules).toBeDefined();
   });
 });
