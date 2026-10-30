@@ -954,9 +954,14 @@ export class CmsService {
   // Return for changes (POST revisions/:id/return)
   // =========================================================================
 
+  /**
+   * WRK-R-06: moves an in-review revision to `changes_requested` under the
+   * same reviewer rules as approve. The comment travels in the outbox payload
+   * until T-C2.01 adds `content_revision_reviews` and shows it to the author.
+   */
   async returnForChanges(
     revisionId: string,
-    comment: string | null,
+    comment: string,
     principal: Principal,
   ) {
     const updated = await this.withPgErrorMapping(() => this.dbService.db.transaction(async (tx) => {
@@ -969,6 +974,7 @@ export class CmsService {
           revLastEditorUserId: contentRevisions.lastEditorUserId,
           variantId: contentVariants.id,
           resourceId: contentResources.id,
+          reviewDiscipline: contentResources.reviewDiscipline,
         })
         .from(contentRevisions)
         .innerJoin(contentVariants, eq(contentRevisions.contentVariantId, contentVariants.id))
@@ -989,12 +995,21 @@ export class CmsService {
         });
       }
 
-      // Self-review guard
+      // ACC-R-08: self-review check
       if (ctx.revAuthorUserId === principal.userId || ctx.revLastEditorUserId === principal.userId) {
         throw new ApiHttpException({
           status: 403,
           code: 'content_self_review',
           message: 'A reviewer cannot return a revision they authored or last edited',
+        });
+      }
+
+      // ACC-R-07 fail-closed: discipline check (defense in depth)
+      if (!ctx.reviewDiscipline) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'content_review_discipline',
+          message: 'The resource has no review discipline configured',
         });
       }
 
@@ -1030,9 +1045,9 @@ export class CmsService {
         });
       }
 
-      // Outbox
+      // Outbox in same transaction (ARC-R-08)
       await this.outboxWriter.write(tx, {
-        type: 'content.returned',
+        type: 'content.changes_requested',
         aggregateType: 'content_revision',
         aggregateId: revisionId,
         payload: { revisionId, comment },
@@ -1041,9 +1056,9 @@ export class CmsService {
       return result[0]!;
     }));
 
-    // Audit
+    // Audit AFTER the transaction commits
     await this.auditWriter.record({
-      action: 'content.returned',
+      action: 'content.changes_requested',
       actorUserId: principal.userId,
       actorKind: 'USER',
       recordType: 'content_revision',

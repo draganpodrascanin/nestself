@@ -329,11 +329,11 @@ export function createCmsApi(client: ApiClient) {
       ),
 
     /** POST /api/ops/cms/revisions/:revisionId/return — return for changes. */
-    returnForChanges: (revisionId: string, comment?: string) =>
+    returnForChanges: (revisionId: string, comment: string) =>
       client.request(
         `${base}/revisions/${encodeURIComponent(revisionId)}/return`,
         {
-          ...send('POST', { comment: comment ?? null }),
+          ...send('POST', { comment }),
           schema: RevisionResponseSchema,
         },
       ),

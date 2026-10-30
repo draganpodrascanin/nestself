@@ -200,6 +200,18 @@ describe.skipIf(!shouldRun)('CMS workflow (e2e)', () => {
       .send(body);
   }
 
+  async function returnForChanges(
+    revisionId: string,
+    who = D,
+    body: Record<string, unknown> = { comment: 'Please cite a source for the second step.' },
+  ) {
+    const a = S[who]!;
+    return a.agent
+      .post(`${OPS}/revisions/${revisionId}/return`)
+      .set('x-csrf-token', a.csrf)
+      .send(body);
+  }
+
   async function publish(
     body: Record<string, unknown>,
     who = T,
@@ -455,6 +467,86 @@ describe.skipIf(!shouldRun)('CMS workflow (e2e)', () => {
     const r = await approve(c.revisionId);
     expect(r.status).toBe(403);
     expect(r.body.code).toBe('content_self_review');
+  });
+
+  // ─── return for changes (WRK-R-06) ────────────────────────────────
+
+  async function inReview(discipline = 'psychological') {
+    const c = await create('sr-Latn', discipline);
+    expect((await save(c.variantId, c.revisionId, 1, {
+      title: 'Return',
+      summary: 'S',
+      body: doc('return me'),
+      proposedAudience: [{ kind: 'all_eligible' }],
+    })).status).toBe(200);
+    expect((await submit(c.revisionId)).status).toBe(200);
+    return c;
+  }
+
+  it('returns an in-review revision to the author with a comment', async () => {
+    const c = await inReview();
+    const r = await returnForChanges(c.revisionId);
+    expect(r.status).toBe(200);
+    expect(r.body.state).toBe('changes_requested');
+
+    const events = await testDb.db
+      .select()
+      .from(outboxEvents)
+      .where(eq(outboxEvents.aggregateId, c.revisionId));
+    const returned = events.find((e) => e.type === 'content.changes_requested');
+    expect(returned?.payload).toMatchObject({
+      revisionId: c.revisionId,
+      comment: 'Please cite a source for the second step.',
+    });
+
+    // The author can edit and resubmit the returned revision.
+    const det = await S[K]!.agent.get(`${OPS}/resources/${c.resourceId}`);
+    const lock = det.body.variants[0].revisions[0].lockVersion as number;
+    expect((await save(c.variantId, c.revisionId, lock, {
+      title: 'Return, fixed',
+      summary: 'S',
+      body: doc('fixed'),
+      proposedAudience: [{ kind: 'all_eligible' }],
+    })).status).toBe(200);
+    expect((await submit(c.revisionId)).status).toBe(200);
+    expect((await approve(c.revisionId)).status).toBe(200);
+  });
+
+  it('requires a comment to return a revision', async () => {
+    const c = await inReview();
+    expect((await returnForChanges(c.revisionId, D, {})).status).toBe(400);
+    expect((await returnForChanges(c.revisionId, D, { comment: '   ' })).status).toBe(400);
+  });
+
+  it('refuses to return a revision that is not in review', async () => {
+    const c = await inReview();
+    expect((await returnForChanges(c.revisionId)).status).toBe(200);
+    const again = await returnForChanges(c.revisionId);
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('content_revision_locked');
+  });
+
+  it('refuses return when the reviewer is the last editor (ACC-R-08)', async () => {
+    const c = await inReview();
+    await testDb.pool.query(
+      'UPDATE content_revisions SET last_editor_user_id = $2 WHERE id = $1',
+      [c.revisionId, D],
+    );
+    const r = await returnForChanges(c.revisionId);
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('content_self_review');
+  });
+
+  it('refuses return from a reviewer outside the discipline (WRK-R-39)', async () => {
+    const c = await inReview('legal');
+    const r = await returnForChanges(c.revisionId);
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('content_review_discipline');
+  });
+
+  it('publisher cannot return (guard denyAs:not_found -> 404)', async () => {
+    const c = await inReview();
+    expect((await returnForChanges(c.revisionId, T)).status).toBe(404);
   });
 
   // ─── category-scoped list ─────────────────────────────────────────

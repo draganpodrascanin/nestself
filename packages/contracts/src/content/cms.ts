@@ -157,6 +157,12 @@ export const ReviewDecisionRequestSchema = z.object({
 });
 export type ReviewDecisionRequest = z.infer<typeof ReviewDecisionRequestSchema>;
 
+/** Body of `POST revisions/:revisionId/return`: the comment is required on return (WRK-R-06). */
+export const ReturnDecisionRequestSchema = z.object({
+  comment: z.string().trim().min(1).max(2000),
+});
+export type ReturnDecisionRequest = z.infer<typeof ReturnDecisionRequestSchema>;
+
 export const PublicationCreateRequestSchema = z.object({
   resourceId: z.string().min(1),
   audience: z.array(AudienceEntrySchema).min(1),

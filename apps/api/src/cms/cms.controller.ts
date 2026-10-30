@@ -49,6 +49,8 @@ import {
   type PublicationCreateRequest,
   ResourceListQuerySchema,
   type ResourceListQuery,
+  ReturnDecisionRequestSchema,
+  type ReturnDecisionRequest,
   ReviewDecisionRequestSchema,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
@@ -268,11 +270,11 @@ export class CmsController {
   )
   async returnForChanges(
     @Param('revisionId') revisionId: string,
-    @Body(new ZodValidationPipe(ReviewDecisionRequestSchema)) body: { comment?: string },
+    @Body(new ZodValidationPipe(ReturnDecisionRequestSchema)) body: ReturnDecisionRequest,
     @CurrentPrincipal() principal: Principal,
     @Res({ passthrough: true }) res: HttpRes,
   ) {
-    const result = await this.cmsService.returnForChanges(revisionId, body.comment ?? null, principal);
+    const result = await this.cmsService.returnForChanges(revisionId, body.comment, principal);
     if (result && typeof (result as Record<string, unknown>).lockVersion === 'number') {
       res.setHeader('ETag', `"${(result as { lockVersion: number }).lockVersion}"`);
     }
