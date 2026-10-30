@@ -9,16 +9,30 @@
     "./render": "./src/render/index.ts",
     "./search": "./src/search/index.ts"
   },
-  "scripts": { "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
   "dependencies": {
+    "@floating-ui/dom": "catalog:",
     "@nestself/contracts": "workspace:*",
     "@nestself/i18n": "workspace:*",
     "@nestself/ui": "workspace:*",
     "@tiptap/core": "catalog:",
+    "@tiptap/extension-collaboration": "catalog:",
+    "@tiptap/extension-drag-handle": "catalog:",
+    "@tiptap/extension-drag-handle-react": "catalog:",
+    "@tiptap/extension-node-range": "catalog:",
     "@tiptap/extension-placeholder": "catalog:",
+    "@tiptap/extensions": "catalog:",
     "@tiptap/pm": "catalog:",
     "@tiptap/react": "catalog:",
     "@tiptap/starter-kit": "catalog:",
+    "@tiptap/suggestion": "catalog:",
+    "@tiptap/y-tiptap": "catalog:",
+    "y-protocols": "catalog:",
+    "yjs": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
