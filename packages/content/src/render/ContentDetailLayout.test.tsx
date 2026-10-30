@@ -180,6 +180,6 @@ describe('ContentDetailLayout', () => {
     const { container } = render(
       <ContentDetailLayout {...BASE_PROPS} title="T" />,
     );
-    expect(container.querySelector('article')?.className).toContain('max-w-[720px]');
+    expect(container.querySelector('article')?.className).toContain('reading-width');
   });
 });

@@ -87,7 +87,7 @@ export function ContentDetailLayout({
   outcomeLabel,
   metaExtra,
   afterBody,
-  className = 'mx-auto max-w-[720px] px-4',
+  className = 'mx-auto reading-width px-4',
   ...rendererProps
 }: ContentDetailLayoutProps) {
   const duration =
@@ -97,8 +97,8 @@ export function ContentDetailLayout({
     <article className={className}>
       {beforeTitle}
 
-      {/* Title — h1, always the page heading */}
-      <h1 className="type-heading-lg text-text">{title}</h1>
+      {/* Title -- h1, using type-screen-title (the largest available heading utility) */}
+      <h1 className="type-screen-title text-text">{title}</h1>
 
       {/* Summary — secondary text below the title */}
       {summary && (
@@ -120,10 +120,10 @@ export function ContentDetailLayout({
         </div>
       )}
 
-      {/* Outcome — section with heading when outcomeLabel is set, paragraph otherwise */}
+      {/* Outcome -- section with h2 when outcomeLabel is set, paragraph otherwise */}
       {outcomeLabel && outcome ? (
-        <section className="mt-3">
-          <h2 className="type-heading-sm text-text mb-1">{outcomeLabel}</h2>
+        <section className="mt-4">
+          <h2 className="type-section-title text-text mb-1">{outcomeLabel}</h2>
           <p className="type-body text-text-secondary">{outcome}</p>
         </section>
       ) : outcome ? (
@@ -135,8 +135,8 @@ export function ContentDetailLayout({
       {/* Separator */}
       <hr className="my-6 border-border" />
 
-      {/* Body — headingOffset 0: sectionHeading level 2 renders as h2 */}
-      <div className="prose-content">
+      {/* Body -- headingOffset 0: sectionHeading level 2 renders as h2 */}
+      <div>
         <ContentRenderer {...rendererProps} headingOffset={0} />
       </div>
 
