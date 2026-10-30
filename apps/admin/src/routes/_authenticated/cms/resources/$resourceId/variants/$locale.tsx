@@ -37,7 +37,10 @@ import {
   Field,
   Input,
   Select,
+  Textarea,
   Alert,
+  AlertDialog,
+  AlertDialogContent,
   FormErrorSummary,
   Accordion,
   AccordionItem,
@@ -52,6 +55,7 @@ import {
   MotionFeatures,
   useMotionPreset,
 } from '@nestself/ui';
+import type { FormError } from '@nestself/ui';
 import {
   SAMPLE_CONTENT_RESOURCES,
 } from '@nestself/sample-data';
@@ -80,11 +84,22 @@ type PreviewWidthKey = (typeof PREVIEW_WIDTHS)[number]['key'];
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'offline' | 'conflict' | 'error';
 
 // ---------------------------------------------------------------------------
-// Audience kinds (proposedAudience is required on submit)
+// Proposed audience (required on submit)
+//
+// The editor offers "all eligible organisations". An organisation or unit
+// audience already stored on the revision is kept exactly as saved; picking
+// organisations and units arrives with T-C2.02.
 // ---------------------------------------------------------------------------
 
-const AUDIENCE_KINDS = ['all_eligible', 'organization', 'org_unit'] as const;
-type AudienceKind = (typeof AUDIENCE_KINDS)[number];
+const RETURN_COMMENT_ID = 'return-comment';
+
+type AudienceEntries = NonNullable<RevisionUpdateRequest['proposedAudience']>;
+type AudienceChoice = 'all_eligible' | 'saved';
+const ALL_ELIGIBLE: AudienceEntries = [{ kind: 'all_eligible', includeDescendants: true }];
+
+function isAllEligible(entries: AudienceEntries): boolean {
+  return entries.length > 0 && entries.every((e) => e.kind === 'all_eligible');
+}
 
 // ---------------------------------------------------------------------------
 // Locale configuration
@@ -494,14 +509,13 @@ function VariantEditorReady({
   const [duration, setDuration] = useState<string>(
     initialRevision.durationSeconds != null ? String(Math.round(initialRevision.durationSeconds / 60)) : '',
   );
-  const [proposedAudience, setProposedAudience] = useState<AudienceKind | ''>(() => {
-    const pa = initialRevision.proposedAudience as Array<{ kind: string }> | null;
-    const firstKind = pa?.[0]?.kind;
-    if (firstKind && AUDIENCE_KINDS.includes(firstKind as AudienceKind)) {
-      return firstKind as AudienceKind;
-    }
-    return ''; // Empty so required check fires
-  });
+  // The audience stored on the revision, kept so a save never rewrites it.
+  const savedAudience = useMemo<AudienceEntries | null>(() => {
+    const pa = initialRevision.proposedAudience as AudienceEntries | null;
+    return pa && pa.length > 0 ? pa : null;
+  }, [initialRevision.proposedAudience]);
+  // Null until chosen, so the required check fires on submit.
+  const [proposedAudience, setProposedAudience] = useState<AudienceEntries | null>(savedAudience);
   const [sources, setSources] = useState<Array<{ label: string; url: string }>>(() => {
     const raw = initialRevision.sources as Array<{ label: string; url?: string }> | null;
     return raw?.map((s) => ({ label: s.label, url: s.url ?? '' })) ?? [];
@@ -652,7 +666,7 @@ function VariantEditorReady({
         summary,
         outcome: outcome || null,
         durationSeconds: duration ? parseInt(duration, 10) * 60 : null,
-        proposedAudience: proposedAudience ? [{ kind: proposedAudience as AudienceKind, includeDescendants: true }] : [],
+        proposedAudience: proposedAudience ?? [],
         sources: sources.filter((s) => s.label.trim()),
         body: bodyDoc as unknown as Record<string, unknown>,
       } as RevisionUpdateRequest, lockVersionRef.current);
@@ -874,49 +888,92 @@ function VariantEditorReady({
 
   // ─── Return for changes ──────────────────────────────────────────
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [returnComment, setReturnComment] = useState('');
+  const [returnErrors, setReturnErrors] = useState<FormError[]>([]);
+  const [returnPending, setReturnPending] = useState(false);
+  const returnFormRef = useRef<HTMLFormElement>(null);
+  // The confirm button of AlertDialogContent also closes the dialog; while a
+  // confirm is handled that close is ignored, so a failure stays on screen.
+  const confirmingRef = useRef(false);
+
+  const holdDialogOpen = () => {
+    confirmingRef.current = true;
+    queueMicrotask(() => {
+      confirmingRef.current = false;
+    });
+  };
+
+  const closeReturnDialog = () => {
+    setReturnErrors([]);
+    setReturnDialogOpen(false);
+  };
+
+  const failReturn = (message: string) =>
+    setReturnErrors([{ id: RETURN_COMMENT_ID, label: t('cms:editor.returnComment'), message }]);
 
   const handleReturnForChanges = async () => {
     if (isSampleDataMode) {
       toast.add({ title: t('cms:sample.saveNotice'), tone: 'info' });
-      setReturnDialogOpen(false);
+      closeReturnDialog();
       return;
     }
 
-    setActionError(null);
+    const comment = String(
+      new FormData(returnFormRef.current ?? undefined).get('comment') ?? '',
+    ).trim();
+    if (!comment) {
+      failReturn(t('cms:editor.returnCommentRequired'));
+      return;
+    }
+
+    setReturnErrors([]);
+    setReturnPending(true);
     try {
-      const updated = await cmsApi.returnForChanges(revisionId, returnComment || undefined);
+      const updated = await cmsApi.returnForChanges(revisionId, comment);
       setRevisionState(updated.state);
       toast.add({ title: t('cms:editor.returnedForChanges'), tone: 'success' });
-      setReturnDialogOpen(false);
-      setReturnComment('');
+      closeReturnDialog();
     } catch (err) {
       const code = (err as { code?: string }).code ?? 'unknown';
-      setActionError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+      failReturn(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+    } finally {
+      setReturnPending(false);
     }
   };
 
   // ─── Publish dialog ──────────────────────────────────────────────
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishPending, setPublishPending] = useState(false);
+
+  const closePublishDialog = () => {
+    setPublishError(null);
+    setPublishDialogOpen(false);
+  };
 
   const handlePublish = async () => {
     if (isSampleDataMode) {
       toast.add({ title: t('cms:sample.publishNotice'), tone: 'info' });
-      setPublishDialogOpen(false);
+      closePublishDialog();
       return;
     }
 
-    setActionError(null);
+    // The approved revision's proposed audience is the widest the API accepts (C-12).
+    if (!proposedAudience) {
+      setPublishError(t('cms:editor.validation.audienceRequired'));
+      return;
+    }
+
+    setPublishError(null);
+    setPublishPending(true);
     try {
-      await cmsApi.publishNow({
-        resourceId,
-        audience: proposedAudience ? [{ kind: proposedAudience as AudienceKind, includeDescendants: true }] : [],
-      } as import('@nestself/contracts').PublicationCreateRequest);
-      setPublishDialogOpen(false);
+      await cmsApi.publishNow({ resourceId, audience: proposedAudience });
       toast.add({ title: t('cms:detail.publishSuccess'), tone: 'success' });
+      closePublishDialog();
     } catch (err) {
       const code = (err as { code?: string }).code ?? 'unknown';
-      setActionError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+      setPublishError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+    } finally {
+      setPublishPending(false);
     }
   };
 
@@ -986,7 +1043,6 @@ function VariantEditorReady({
   };
 
   // ─── Dialog / preview motion ──────────────────────────────────────
-  const dialogMotion = useMotionPreset('dialog');
   const previewMotion = useMotionPreset('disclosure');
   const currentPreviewWidth = PREVIEW_WIDTHS.find((p) => p.key === previewWidth)?.width ?? 390;
 
@@ -1008,12 +1064,20 @@ function VariantEditorReady({
         : 'text-text-secondary';
 
   // ─── Audience options ─────────────────────────────────────────────
-  const audienceOptions = AUDIENCE_KINDS.map((kind) => ({
-    value: kind,
-    label: t(
-      `cms:editor.audience${kind === 'all_eligible' ? 'All' : kind === 'organization' ? 'Org' : 'OrgUnit'}`,
-    ),
-  }));
+  const audienceChoice: AudienceChoice | '' =
+    proposedAudience == null ? '' : isAllEligible(proposedAudience) ? 'all_eligible' : 'saved';
+  const audienceLabel = (entries: AudienceEntries | null) =>
+    entries == null
+      ? t('cms:editor.audienceNone')
+      : isAllEligible(entries)
+        ? t('cms:editor.audienceAll')
+        : t('cms:editor.audienceSaved', { count: entries.length });
+  const audienceOptions = [
+    { value: 'all_eligible', label: t('cms:editor.audienceAll') },
+    ...(savedAudience && !isAllEligible(savedAudience)
+      ? [{ value: 'saved', label: audienceLabel(savedAudience) }]
+      : []),
+  ];
 
   // ─── Revision state badge ─────────────────────────────────────────
   const revisionStateBadge = revisionState
@@ -1190,8 +1254,11 @@ function VariantEditorReady({
                       <Field label={t('cms:editor.proposedAudience')} id="proposedAudience">
                         <Select
                           options={audienceOptions}
-                          value={proposedAudience}
-                          onValueChange={(v) => { setProposedAudience((v as AudienceKind) ?? 'all_eligible'); handleFieldChange(); }}
+                          value={audienceChoice}
+                          onValueChange={(v) => {
+                            setProposedAudience(v === 'saved' ? savedAudience : ALL_ELIGIBLE);
+                            handleFieldChange();
+                          }}
                           disabled={!editable}
                         />
                       </Field>
@@ -1406,87 +1473,74 @@ function VariantEditorReady({
         </TabPanel>
       </Tabs>
 
-      {/* Return for changes dialog */}
-      <MotionFeatures>
-        <AnimatePresence>
-          {returnDialogOpen ? (
-            <m.div
-              {...dialogMotion}
-              className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/40"
-              role="presentation"
-              onClick={(e) => { if (e.target === e.currentTarget) setReturnDialogOpen(false); }}
+      <AlertDialog
+        open={returnDialogOpen}
+        onOpenChange={(next) => {
+          if (next || confirmingRef.current || returnPending) return;
+          closeReturnDialog();
+        }}
+      >
+        <AlertDialogContent
+          title={t('cms:editor.returnChanges')}
+          description={t('cms:editor.returnDescription')}
+          confirmLabel={t('cms:editor.returnChanges')}
+          cancelLabel={t('common:action.cancel')}
+          onConfirm={() => {
+            holdDialogOpen();
+            void handleReturnForChanges();
+          }}
+          confirmPending={returnPending}
+        >
+          <form
+            ref={returnFormRef}
+            noValidate
+            onSubmit={(e) => e.preventDefault()}
+            className="space-y-4"
+          >
+            <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={returnErrors} />
+            <Field
+              id={RETURN_COMMENT_ID}
+              label={t('cms:editor.returnComment')}
+              error={returnErrors[0]?.message}
+              required
             >
-              <div
-                className="w-full max-w-md rounded-control border border-border-subtle bg-surface p-6 shadow-menu"
-                role="dialog"
-                aria-label={t('cms:editor.returnChanges')}
-              >
-                <Heading level={2}>{t('cms:editor.returnChanges')}</Heading>
-                <div className="mt-4">
-                  <Field label={t('cms:editor.returnComment')} id="return-comment">
-                    <textarea
-                      value={returnComment}
-                      onInput={(e) => setReturnComment((e.target as HTMLTextAreaElement).value)}
-                      placeholder={t('cms:editor.returnCommentPlaceholder')}
-                      rows={3}
-                      className="w-full min-h-20 px-3 py-2 resize-y rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
-                    />
-                  </Field>
-                </div>
-                <div className="mt-4 flex justify-end gap-3">
-                  <Button variant="secondary" onClick={() => setReturnDialogOpen(false)}>
-                    {t('common:action.cancel')}
-                  </Button>
-                  <Button variant="primary" onClick={handleReturnForChanges}>
-                    {t('cms:editor.returnChanges')}
-                  </Button>
-                </div>
-              </div>
-            </m.div>
-          ) : null}
-        </AnimatePresence>
-      </MotionFeatures>
+              <Textarea
+                name="comment"
+                rows={4}
+                placeholder={t('cms:editor.returnCommentPlaceholder')}
+              />
+            </Field>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {/* Publish confirmation dialog */}
-      <MotionFeatures>
-        <AnimatePresence>
-          {publishDialogOpen ? (
-            <m.div
-              {...dialogMotion}
-              className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/40"
-              role="presentation"
-              onClick={(e) => { if (e.target === e.currentTarget) setPublishDialogOpen(false); }}
-            >
-              <div
-                className="w-full max-w-md rounded-control border border-border-subtle bg-surface p-6 shadow-menu"
-                role="dialog"
-                aria-label={t('cms:editor.publishDialog')}
-              >
-                <Heading level={2}>{t('cms:editor.publishDialog')}</Heading>
-                <p className="mt-2 type-body text-text-secondary">
-                  {t('cms:editor.publishConfirm')}
-                </p>
-                <div className="mt-3 flex flex-col gap-2">
-                  <p className="type-label text-text">{t('cms:editor.proposedAudience')}</p>
-                  <p className="type-body text-text-secondary">
-                    {proposedAudience
-                      ? t(`cms:editor.audience${proposedAudience === 'all_eligible' ? 'All' : proposedAudience === 'organization' ? 'Org' : 'OrgUnit'}`)
-                      : t('cms:editor.audienceAll')}
-                  </p>
-                </div>
-                <div className="mt-4 flex justify-end gap-3">
-                  <Button variant="secondary" onClick={() => setPublishDialogOpen(false)}>
-                    {t('common:action.cancel')}
-                  </Button>
-                  <Button variant="primary" onClick={handlePublish}>
-                    {t('cms:detail.publishNow')}
-                  </Button>
-                </div>
-              </div>
-            </m.div>
-          ) : null}
-        </AnimatePresence>
-      </MotionFeatures>
+      <AlertDialog
+        open={publishDialogOpen}
+        onOpenChange={(next) => {
+          if (next || confirmingRef.current || publishPending) return;
+          closePublishDialog();
+        }}
+      >
+        <AlertDialogContent
+          title={t('cms:editor.publishDialog')}
+          description={t('cms:editor.publishConfirm')}
+          confirmLabel={t('cms:detail.publishNow')}
+          cancelLabel={t('common:action.cancel')}
+          onConfirm={() => {
+            holdDialogOpen();
+            void handlePublish();
+          }}
+          confirmPending={publishPending}
+        >
+          <div className="space-y-4">
+            {publishError ? <Alert tone="danger">{publishError}</Alert> : null}
+            <dl className="space-y-1">
+              <dt className="type-label text-text">{t('cms:editor.proposedAudience')}</dt>
+              <dd className="text-text-secondary">{audienceLabel(proposedAudience)}</dd>
+            </dl>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

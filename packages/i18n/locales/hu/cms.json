@@ -144,7 +144,7 @@
       "outcomeTooLong": "Az eredmény legfeljebb 300 karakter lehet",
       "bodyEmpty": "A szövegtörzs megadása kötelező",
       "bodyInvalid": "A szövegtörzs hibákat tartalmaz",
-      "audienceRequired": "A proposed audience is required before submitting.",
+      "audienceRequired": "Beküldés előtt meg kell adni a javasolt közönséget.",
       "content_invalid_block": "A content block is invalid. Check the highlighted section.",
       "content_invalid_link": "A link in the content is not allowed. Only https:// links and internal references are permitted.",
       "content_too_large": "The content exceeds the maximum size (200 KB).",
@@ -171,7 +171,7 @@
       "cta": "Call to action",
       "related": "Related resource",
       "linkInvalid": "Only https:// links and internal references are allowed.",
-      "toolbar": "Tartalomszerkeszto"
+      "toolbar": "Tartalomszerkesztő"
     },
     "slash": {
       "placeholder": "Blokkok szurése...",
@@ -239,15 +239,20 @@
     "audiencePlaceholder": "Select target audience",
     "loading": "Loading editor...",
     "notFound": "Variant not found.",
-    "createVariant": "{{locale}} valtozat letrehozasa",
+    "createVariant": "{{locale}} változat létrehozása",
     "loadError": "Could not load the variant. Please try again.",
     "unsavedPrompt": "You have unsaved changes. Leave without saving?",
     "dismiss": "Dismiss",
-    "returnedForChanges": "Visszakuldve modositasra",
-    "returnComment": "Megjegyzes",
-    "returnCommentPlaceholder": "Magyarazza el, mit kell valtoztatni...",
-    "publishDialog": "Eroforras kozzetetele",
-    "publishConfirm": "Ez a kivalasztott kozonseg szamara elerhetove teszi az eroforrast."
+    "returnedForChanges": "Visszaküldve módosításra",
+    "returnComment": "Megjegyzés",
+    "returnCommentPlaceholder": "Írja le, mit kell módosítani…",
+    "publishDialog": "Erőforrás közzététele",
+    "publishConfirm": "Az erőforrás elérhetővé válik a kiválasztott közönség számára.",
+    "returnDescription": "A változat visszakerül a szerzőhöz, aki szerkesztheti és újra beküldheti.",
+    "returnCommentRequired": "Írja le, mit kell módosítani.",
+    "audienceNone": "Még nincs kiválasztott közönség",
+    "audienceSaved_one": "Mentett közönség: {{count}} szervezet vagy egység",
+    "audienceSaved_other": "Mentett közönség: {{count}} szervezet vagy egység"
   },
   "sample": {
     "saveNotice": "Próba mód: semmi nem lett mentve.",

@@ -245,9 +245,14 @@
     },
     "returnedForChanges": "Returned for changes",
     "returnComment": "Comment",
-    "returnCommentPlaceholder": "Explain what needs to change...",
+    "returnCommentPlaceholder": "Explain what needs to change…",
     "publishDialog": "Publish resource",
-    "publishConfirm": "This will make the resource available to the selected audience."
+    "publishConfirm": "This will make the resource available to the selected audience.",
+    "returnDescription": "The revision goes back to the author, who can edit it and submit it again.",
+    "returnCommentRequired": "Write what needs to change.",
+    "audienceNone": "No audience chosen yet",
+    "audienceSaved_one": "Saved audience: {{count}} organisation or unit",
+    "audienceSaved_other": "Saved audience: {{count}} organisations or units"
   },
   "sample": {
     "saveNotice": "Sample mode: nothing was saved.",
