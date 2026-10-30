@@ -5,6 +5,8 @@
     "empty": "No resources yet",
     "emptyFiltered": "No resources match this filter",
     "create": "Create resource",
+    "loading": "Loading resources...",
+    "loadError": "Could not load resources. Please try again.",
     "filter": {
       "category": "Category",
       "allCategories": "All categories"
@@ -28,12 +30,14 @@
       "practical": "Practical",
       "qa": "Q&A",
       "collection": "Collection"
-    }
+    },
+    "loadMore": "Load more"
   },
   "newResource": {
     "title": "Create article",
     "category": "Primary category",
     "categoryPlaceholder": "Select a category",
+    "categoryRequired": "A primary category is required.",
     "contentType": "Content type",
     "audience": "Audience",
     "audienceAll": "All eligible organisations",
@@ -67,6 +71,9 @@
     "publishNow": "Publish now",
     "publishSuccess": "Published",
     "publishRequiresApproval": "All three authored locales must be approved before publishing.",
+    "loading": "Loading resource...",
+    "notFound": "Resource not found.",
+    "loadError": "Could not load resource. Please try again.",
     "locale": {
       "sr-Latn": "Serbian (Latin)",
       "hu": "Hungarian",
@@ -103,6 +110,7 @@
     "addSource": "Add source",
     "removeSource": "Remove source",
     "proposedAudience": "Proposed audience",
+    "audiencePlaceholder": "Select target audience",
     "audienceAll": "All eligible",
     "audienceOrg": "Organisation",
     "audienceOrgUnit": "Organisational unit",
@@ -125,40 +133,94 @@
     "saved": "Saved",
     "unsaved": "Unsaved changes",
     "autosaveError": "Save failed",
+    "loading": "Loading editor...",
+    "notFound": "Variant not found.",
+    "loadError": "Could not load the variant. Please try again.",
+    "unsavedPrompt": "You have unsaved changes. Leave without saving?",
+    "dismiss": "Dismiss",
     "validation": {
       "title": "Validation errors",
       "titleRequired": "Title is required",
       "titleTooLong": "Title must be at most 200 characters",
       "summaryTooLong": "Summary must be at most 500 characters",
       "outcomeTooLong": "Outcome must be at most 300 characters",
+      "audienceRequired": "A proposed audience is required before submitting.",
       "bodyEmpty": "Body content is required",
-      "bodyInvalid": "Body content has errors"
+      "bodyInvalid": "Body content has errors",
+      "content_invalid_block": "A content block is invalid. Check the highlighted section.",
+      "content_invalid_link": "A link in the content is not allowed. Only https:// links and internal references are permitted.",
+      "content_too_large": "The content exceeds the maximum size (200 KB).",
+      "content_missing_required": "A required field is missing.",
+      "content_schema_version": "The document format is outdated. Please reload the page."
     },
     "toolbar": {
       "bold": "Bold",
+      "heading": "Heading 2",
+      "heading3": "Heading 3",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "quote": "Quote",
+      "note": "Professional note",
+      "step": "Practical step",
+      "checklist": "Checklist",
+      "cta": "Call to action",
+      "related": "Related resource",
+      "image": "Image",
       "link": "Link",
       "linkUrl": "Link URL",
       "linkInsert": "Insert link",
       "linkRemove": "Remove link",
-      "heading": "Heading",
-      "bulletList": "Bullet list",
-      "orderedList": "Numbered list",
-      "quote": "Quote",
-      "image": "Image",
+      "linkInvalid": "Only https:// links and internal references are allowed.",
       "undo": "Undo",
-      "redo": "Redo"
+      "redo": "Redo",
+      "toolbar": "Editor toolbar"
+    },
+    "slash": {
+      "placeholder": "Filter blocks...",
+      "empty": "No matching blocks",
+      "groupText": "Text",
+      "groupLists": "Lists",
+      "groupBlocks": "Blocks",
+      "groupMedia": "Media",
+      "paragraph": "Paragraph",
+      "paragraphHint": "Plain text",
+      "heading2Hint": "Section heading",
+      "heading3Hint": "Subsection",
+      "bulletListHint": "Unordered list",
+      "numberedListHint": "Ordered list",
+      "checklistHint": "Checkable items",
+      "quoteHint": "Blockquote",
+      "noteHint": "Tip, warning or info",
+      "stepHint": "Numbered instruction",
+      "ctaHint": "Action button",
+      "relatedHint": "Link to another article",
+      "imageHint": "Upload or paste"
+    },
+    "bubble": {
+      "turnInto": "Turn into"
+    },
+    "block": {
+      "add": "Add block",
+      "drag": "Drag or open menu",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
     },
     "image": {
       "upload": "Upload image",
       "uploading": "Uploading...",
       "processing": "Processing...",
+      "ready": "Image ready",
       "altText": "Alt text",
+      "altRequired": "Alt text is required before inserting the image.",
       "caption": "Caption (optional)",
       "license": "Licence",
       "licenseOwned": "Owned",
       "licenseLicensed": "Licensed",
       "licenseStock": "Stock",
-      "licenseGenerated": "Generated"
+      "licenseGenerated": "Generated",
+      "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
     }
   },
   "sample": {

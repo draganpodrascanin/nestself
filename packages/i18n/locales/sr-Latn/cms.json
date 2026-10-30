@@ -28,7 +28,10 @@
       "practical": "Praktično",
       "qa": "Pitanja i odgovori",
       "collection": "Kolekcija"
-    }
+    },
+    "loading": "Učitavanje resursa...",
+    "loadError": "Nije moguće učitati resurse. Pokušajte ponovo.",
+    "loadMore": "Učitaj još"
   },
   "newResource": {
     "title": "Kreiraj članak",
@@ -55,7 +58,8 @@
       "general": "Opšta"
     },
     "submit": "Kreiraj članak",
-    "success": "Članak je kreiran"
+    "success": "Članak je kreiran",
+    "categoryRequired": "Primarna kategorija je obavezna."
   },
   "detail": {
     "title": "Detalji resursa",
@@ -85,7 +89,10 @@
       "live": "Aktivno",
       "expired": "Isteklo",
       "withdrawn": "Povučeno"
-    }
+    },
+    "loading": "Učitavanje resursa...",
+    "notFound": "Resurs nije pronađen.",
+    "loadError": "Nije moguće učitati resurs. Pokušajte ponovo."
   },
   "editor": {
     "title": "Izmena varijante",
@@ -132,7 +139,13 @@
       "summaryTooLong": "Opis mora imati najviše 500 znakova",
       "outcomeTooLong": "Ishod mora imati najviše 300 znakova",
       "bodyEmpty": "Sadržaj teksta je obavezan",
-      "bodyInvalid": "Sadržaj teksta ima greške"
+      "bodyInvalid": "Sadržaj teksta ima greške",
+      "audienceRequired": "Predložena publika je obavezna pre slanja.",
+      "content_invalid_block": "Blok sadržaja je nevažeći. Proverite označeni deo.",
+      "content_invalid_link": "Veza u sadržaju nije dozvoljena. Dozvoljene su samo https:// veze i interne reference.",
+      "content_too_large": "Sadržaj premašuje maksimalnu veličinu (200 KB).",
+      "content_missing_required": "Nedostaje obavezno polje.",
+      "content_schema_version": "Format dokumenta je zastareo. Ponovo učitajte stranicu."
     },
     "toolbar": {
       "bold": "Podebljan",
@@ -146,7 +159,47 @@
       "quote": "Citat",
       "image": "Slika",
       "undo": "Poništi",
-      "redo": "Ponovi"
+      "redo": "Ponovi",
+      "heading3": "Naslov 3",
+      "note": "Stručna napomena",
+      "step": "Praktični korak",
+      "checklist": "Kontrolna lista",
+      "cta": "Poziv na akciju",
+      "related": "Povezani resurs",
+      "linkInvalid": "Dozvoljene su samo https:// veze i interne reference.",
+      "toolbar": "Alatke za uređivanje"
+    },
+    "slash": {
+      "placeholder": "Filtriraj blokove...",
+      "empty": "Nema odgovarajućih blokova",
+      "groupText": "Tekst",
+      "groupLists": "Liste",
+      "groupBlocks": "Blokovi",
+      "groupMedia": "Mediji",
+      "paragraph": "Paragraf",
+      "paragraphHint": "Običan tekst",
+      "heading2Hint": "Naslov sekcije",
+      "heading3Hint": "Podnaslov",
+      "bulletListHint": "Neuređena lista",
+      "numberedListHint": "Numerisana lista",
+      "checklistHint": "Lista za proveru",
+      "quoteHint": "Blok citat",
+      "noteHint": "Savet, upozorenje ili informacija",
+      "stepHint": "Numerisano uputstvo",
+      "ctaHint": "Dugme za akciju",
+      "relatedHint": "Link ka drugom članku",
+      "imageHint": "Otpremi ili nalepi"
+    },
+    "bubble": {
+      "turnInto": "Pretvori u"
+    },
+    "block": {
+      "add": "Dodaj blok",
+      "drag": "Prevuci ili otvori meni",
+      "duplicate": "Dupliraj",
+      "delete": "Obriši",
+      "moveUp": "Pomeri gore",
+      "moveDown": "Pomeri dole"
     },
     "image": {
       "upload": "Otpremi sliku",
@@ -158,8 +211,17 @@
       "licenseOwned": "Sopstvena",
       "licenseLicensed": "Licencirana",
       "licenseStock": "Stock",
-      "licenseGenerated": "Generisana"
-    }
+      "licenseGenerated": "Generisana",
+      "ready": "Slika je spremna",
+      "altRequired": "Alternativni tekst je obavezan pre umetanja slike.",
+      "tooLarge": "Ovaj fajl premašuje {{max}} MB. Izaberite manju sliku."
+    },
+    "audiencePlaceholder": "Izaberite ciljnu publiku",
+    "loading": "Učitavanje editora...",
+    "notFound": "Varijanta nije pronađena.",
+    "loadError": "Nije moguće učitati varijantu. Pokušajte ponovo.",
+    "unsavedPrompt": "Imate nesačuvane izmene. Napustiti bez čuvanja?",
+    "dismiss": "Odbaci"
   },
   "sample": {
     "saveNotice": "Probni režim: ništa nije sačuvano.",

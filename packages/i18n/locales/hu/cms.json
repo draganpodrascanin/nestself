@@ -28,7 +28,10 @@
       "practical": "Gyakorlati",
       "qa": "Kérdés és válasz",
       "collection": "Gyűjtemény"
-    }
+    },
+    "loading": "Loading resources...",
+    "loadError": "Could not load resources. Please try again.",
+    "loadMore": "Load more"
   },
   "newResource": {
     "title": "Cikk létrehozása",
@@ -55,7 +58,8 @@
       "general": "Általános"
     },
     "submit": "Cikk létrehozása",
-    "success": "Cikk létrehozva"
+    "success": "Cikk létrehozva",
+    "categoryRequired": "A primary category is required."
   },
   "detail": {
     "title": "Erőforrás részletei",
@@ -85,7 +89,10 @@
       "live": "Aktív",
       "expired": "Lejárt",
       "withdrawn": "Visszavont"
-    }
+    },
+    "loading": "Loading resource...",
+    "notFound": "Resource not found.",
+    "loadError": "Could not load resource. Please try again."
   },
   "editor": {
     "title": "Változat szerkesztése",
@@ -132,7 +139,13 @@
       "summaryTooLong": "Az összefoglaló legfeljebb 500 karakter lehet",
       "outcomeTooLong": "Az eredmény legfeljebb 300 karakter lehet",
       "bodyEmpty": "A szövegtörzs megadása kötelező",
-      "bodyInvalid": "A szövegtörzs hibákat tartalmaz"
+      "bodyInvalid": "A szövegtörzs hibákat tartalmaz",
+      "audienceRequired": "A proposed audience is required before submitting.",
+      "content_invalid_block": "A content block is invalid. Check the highlighted section.",
+      "content_invalid_link": "A link in the content is not allowed. Only https:// links and internal references are permitted.",
+      "content_too_large": "The content exceeds the maximum size (200 KB).",
+      "content_missing_required": "A required field is missing.",
+      "content_schema_version": "The document format is outdated. Please reload the page."
     },
     "toolbar": {
       "bold": "Félkövér",
@@ -146,7 +159,47 @@
       "quote": "Idézet",
       "image": "Kép",
       "undo": "Visszavonás",
-      "redo": "Újra"
+      "redo": "Újra",
+      "heading3": "Heading 3",
+      "note": "Professional note",
+      "step": "Practical step",
+      "checklist": "Checklist",
+      "cta": "Call to action",
+      "related": "Related resource",
+      "linkInvalid": "Only https:// links and internal references are allowed.",
+      "toolbar": "Szerkeszto eszközsor"
+    },
+    "slash": {
+      "placeholder": "Blokkok szurése...",
+      "empty": "Nincs találat",
+      "groupText": "Szöveg",
+      "groupLists": "Listák",
+      "groupBlocks": "Blokkok",
+      "groupMedia": "Média",
+      "paragraph": "Bekezdés",
+      "paragraphHint": "Sima szöveg",
+      "heading2Hint": "Szekciócím",
+      "heading3Hint": "Alszekció",
+      "bulletListHint": "Felsorolás",
+      "numberedListHint": "Számozott lista",
+      "checklistHint": "Jelölonégyzetek",
+      "quoteHint": "Idézet",
+      "noteHint": "Tipp, figyelmeztetés vagy információ",
+      "stepHint": "Számozott utasítás",
+      "ctaHint": "Cselekvésre ösztönzés",
+      "relatedHint": "Hivatkozás egy másik cikkre",
+      "imageHint": "Feltöltés vagy beillesztés"
+    },
+    "bubble": {
+      "turnInto": "Átalakítás"
+    },
+    "block": {
+      "add": "Blokk hozzáadása",
+      "drag": "Húzás vagy menü megnyitása",
+      "duplicate": "Duplikálás",
+      "delete": "Törlés",
+      "moveUp": "Felfelé",
+      "moveDown": "Lefelé"
     },
     "image": {
       "upload": "Kép feltöltése",
@@ -158,8 +211,17 @@
       "licenseOwned": "Saját",
       "licenseLicensed": "Licencelt",
       "licenseStock": "Stock",
-      "licenseGenerated": "Generált"
-    }
+      "licenseGenerated": "Generált",
+      "ready": "Image ready",
+      "altRequired": "Alt text is required before inserting the image.",
+      "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
+    },
+    "audiencePlaceholder": "Select target audience",
+    "loading": "Loading editor...",
+    "notFound": "Variant not found.",
+    "loadError": "Could not load the variant. Please try again.",
+    "unsavedPrompt": "You have unsaved changes. Leave without saving?",
+    "dismiss": "Dismiss"
   },
   "sample": {
     "saveNotice": "Próba mód: semmi nem lett mentve.",
