@@ -14,7 +14,7 @@
  * `saveRevision` (If-Match ETag), and routes submit/approve/publish
  * through the CMS API. Sample mode falls back to fixture data.
  */
-import { createFileRoute, redirect, useBlocker } from '@tanstack/react-router';
+import { createFileRoute, redirect, useBlocker, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { can } from '@nestself/contracts';
@@ -30,6 +30,7 @@ import { ContentRenderer } from '@nestself/content/render';
 import type { ContentRendererLabels } from '@nestself/content/render';
 import { createCmsApi, ApiError } from '@nestself/api-client';
 import type { RevisionResponse, VariantResponse, ResourceDetailResponse } from '@nestself/api-client';
+import type { RevisionUpdateRequest } from '@nestself/contracts';
 import {
   Heading,
   Button,
@@ -185,6 +186,7 @@ function VariantEditorPage() {
   const { resourceId, locale: routeLocale } = params;
   const { principal, effectiveActions } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const canWrite = principal ? can(principal, 'content.write', undefined, effectiveActions) : false;
   const canReview = principal ? can(principal, 'content.review', undefined, effectiveActions) : false;
@@ -382,6 +384,7 @@ function VariantEditorPage() {
       canPublish={canPublish}
       t={t}
       toast={toast}
+      navigate={navigate}
     />
   );
 }
@@ -402,6 +405,7 @@ interface VariantEditorReadyProps {
   canPublish: boolean;
   t: ReturnType<typeof useTranslation<['cms', 'common', 'library']>>['t'];
   toast: ReturnType<typeof useToast>;
+  navigate: ReturnType<typeof useNavigate>;
 }
 
 function VariantEditorReady({
@@ -416,6 +420,7 @@ function VariantEditorReady({
   canPublish,
   t,
   toast,
+  navigate,
 }: VariantEditorReadyProps) {
   const editorHandleRef = useRef<ContentEditorHandle>(null);
 
@@ -440,15 +445,15 @@ function VariantEditorReady({
   const [summary, setSummary] = useState(initialRevision.summary ?? '');
   const [outcome, setOutcome] = useState(initialRevision.outcome ?? '');
   const [duration, setDuration] = useState<string>(
-    initialRevision.durationSeconds != null ? String(initialRevision.durationSeconds) : '',
+    initialRevision.durationSeconds != null ? String(Math.round(initialRevision.durationSeconds / 60)) : '',
   );
-  const [proposedAudience, setProposedAudience] = useState<AudienceKind>(() => {
+  const [proposedAudience, setProposedAudience] = useState<AudienceKind | ''>(() => {
     const pa = initialRevision.proposedAudience as Array<{ kind: string }> | null;
     const firstKind = pa?.[0]?.kind;
     if (firstKind && AUDIENCE_KINDS.includes(firstKind as AudienceKind)) {
       return firstKind as AudienceKind;
     }
-    return 'all_eligible';
+    return ''; // Empty so required check fires
   });
   const [sources, setSources] = useState<Array<{ label: string; url: string }>>(() => {
     const raw = initialRevision.sources as Array<{ label: string; url?: string }> | null;
@@ -595,22 +600,23 @@ function VariantEditorReady({
     setActionError(null);
 
     try {
-      const cta = extractCtaFromBody(bodyDoc);
       const resp = await cmsApi.saveRevision(variantId, revisionId, {
         title,
         summary,
         outcome: outcome || null,
-        durationSeconds: duration ? parseInt(duration, 10) : null,
-        proposedAudience: [{ kind: proposedAudience, includeDescendants: true }],
+        durationSeconds: duration ? parseInt(duration, 10) * 60 : null,
+        proposedAudience: proposedAudience ? [{ kind: proposedAudience as AudienceKind, includeDescendants: true }] : [],
         sources: sources.filter((s) => s.label.trim()),
         body: bodyDoc as unknown as Record<string, unknown>,
-        cta: cta ?? null,
-      }, lockVersionRef.current);
+      } as RevisionUpdateRequest, lockVersionRef.current);
 
       lockVersionRef.current = resp.lockVersion;
       setSaveStatus('saved');
-      dirtyRef.current = false;
-      setIsDirty(false);
+      // Only clear dirty if no typing happened during the save
+      if (!trailingRef.current) {
+        dirtyRef.current = false;
+        setIsDirty(false);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'content_edit_conflict') {
         const details = (err as ApiError & { details?: Record<string, unknown> }).details;
@@ -633,11 +639,11 @@ function VariantEditorReady({
     } finally {
       inflightRef.current = false;
 
-      // If a trailing save was queued, fire it now
+      // If a trailing save was queued, fire it now (use the ref for fresh state)
       if (trailingRef.current) {
         trailingRef.current = false;
         // Next tick to avoid recursion
-        setTimeout(() => { void doSave(); }, 0);
+        setTimeout(() => { void doSaveRef.current(); }, 0);
       }
     }
   }, [bodyDoc, conflict.active, duration, outcome, proposedAudience, revisionId, sources, summary, t, title, toast, variantId]);
@@ -830,8 +836,8 @@ function VariantEditorReady({
     try {
       await cmsApi.publishNow({
         resourceId,
-        audience: [{ kind: proposedAudience, includeDescendants: true }],
-      });
+        audience: proposedAudience ? [{ kind: proposedAudience as AudienceKind, includeDescendants: true }] : [],
+      } as import('@nestself/contracts').PublicationCreateRequest);
       toast.add({ title: t('cms:detail.publishSuccess'), tone: 'success' });
     } catch (err) {
       const code = (err as { code?: string }).code ?? 'unknown';
@@ -970,7 +976,17 @@ function VariantEditorReady({
       </div>
 
       {/* Locale tabs */}
-      <Tabs value={routeLocale}>
+      <Tabs
+        value={routeLocale}
+        onValueChange={(value) => {
+          if (value && value !== routeLocale) {
+            void navigate({
+              to: '/cms/resources/$resourceId/variants/$locale',
+              params: { resourceId, locale: value },
+            });
+          }
+        }}
+      >
         <TabList label={t('cms:detail.variants')}>
           {availableLocales.map(({ locale, exists, revisionState: revState }) => (
             <Tab
@@ -1328,8 +1344,9 @@ void (0 as unknown as AuthoredLocale);
 export const Route = createFileRoute(
   '/_authenticated/cms/resources/$resourceId/variants/$locale',
 )({
-  beforeLoad: ({ context }) => {
-    const { principal, effectiveActions } = context.auth;
+  beforeLoad: async ({ context }) => {
+    const { resolveRouteAuth } = await import('../../../../../../auth');
+    const { principal, effectiveActions } = await resolveRouteAuth(context.auth);
     const hasAccess =
       principal &&
       (can(principal, 'content.write', undefined, effectiveActions) ||

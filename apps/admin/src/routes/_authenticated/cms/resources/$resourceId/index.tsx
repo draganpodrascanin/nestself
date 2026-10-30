@@ -251,8 +251,9 @@ function ResourceDetailPage() {
 export const Route = createFileRoute(
   '/_authenticated/cms/resources/$resourceId/',
 )({
-  beforeLoad: ({ context }) => {
-    const { principal, effectiveActions } = context.auth;
+  beforeLoad: async ({ context }) => {
+    const { resolveRouteAuth } = await import('../../../../../auth');
+    const { principal, effectiveActions } = await resolveRouteAuth(context.auth);
     if (!principal || !can(principal, 'content.preview', undefined, effectiveActions)) {
       throw redirect({ to: '/cms/resources' });
     }

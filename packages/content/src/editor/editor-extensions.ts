@@ -20,8 +20,7 @@
 import { type Extensions, Extension, Mark, Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Placeholder, TrailingNode, Dropcursor } from '@tiptap/extensions';
-import { DragHandle } from '@tiptap/extension-drag-handle';
+import { Placeholder } from '@tiptap/extensions';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 import { createSlashMenuExtension } from './SlashMenu.tsx';
 import {
@@ -42,7 +41,7 @@ const Doc = Node.create({
   name: 'doc',
   topNode: true,
   content:
-    '(sectionHeading | paragraph | bulletList | orderedList | quote | image | professionalNote | practicalStep | checklist | approvedMedia | transcript | relatedResource | cta)+',
+    '(paragraph | sectionHeading | bulletList | orderedList | quote | image | professionalNote | practicalStep | checklist | approvedMedia | transcript | relatedResource | cta)+',
 });
 
 // ---------------------------------------------------------------------------
@@ -528,18 +527,43 @@ const Link = Mark.create({
 // it via Mod-I or the Markdown *text* input rule either.
 // ---------------------------------------------------------------------------
 
-const DisableItalicInput = Extension.create({
-  name: 'disableItalicInput',
-  priority: 200, // run after StarterKit
+/**
+ * Schema-only italic mark (no input rules, paste rules or shortcuts).
+ *
+ * Stored documents may contain italic text; this mark lets the editor parse
+ * and render it, but offers no way to create new italic. The Mod-I shortcut
+ * is swallowed so it doesn't toggle anything.
+ */
+const ItalicMark = Mark.create({
+  name: 'italic',
 
+  parseHTML() {
+    return [
+      { tag: 'em' },
+      { tag: 'i', getAttrs: (node) => (node as HTMLElement).style.fontStyle !== 'normal' && null },
+      { style: 'font-style=italic' },
+    ];
+  },
+
+  renderHTML() {
+    return ['em', 0];
+  },
+
+  // Swallow the keyboard shortcut
   addKeyboardShortcuts() {
     return {
-      'Mod-i': () => true,  // swallow the shortcut
+      'Mod-i': () => true,
       'Mod-I': () => true,
     };
   },
 
+  // No input rules (blocks *text* → italic)
   addInputRules() {
+    return [];
+  },
+
+  // No paste rules (blocks pasted *text* → italic)
+  addPasteRules() {
     return [];
   },
 });
@@ -631,8 +655,17 @@ export function createEditorExtensions(
       strike: false,
       link: false,         // replaced by our own Link mark
       underline: false,    // not in the schema
+      italic: false, // replaced by our schema-only ItalicMark (no shortcuts/rules)
+      // StarterKit 3 includes TrailingNode and Dropcursor; configure them here
+      trailingNode: {
+        node: 'paragraph',
+      },
+      dropcursor: {
+        color: 'var(--color-primary)',
+        width: 2,
+      },
     }),
-    DisableItalicInput,
+    ItalicMark,
     BlockKeyboardShortcuts,
     Link,
     SectionHeading,
@@ -660,20 +693,6 @@ export function createEditorExtensions(
           return options.blockPlaceholder ?? "Type '/' for blocks";
         }
         return '';
-      },
-    }),
-    TrailingNode.configure({
-      node: 'paragraph',
-    }),
-    Dropcursor.configure({
-      color: 'var(--color-primary)',
-      width: 2,
-    }),
-    DragHandle.configure({
-      render: () => {
-        const el = document.createElement('div');
-        el.className = 'drag-handle';
-        return el;
       },
     }),
   ];

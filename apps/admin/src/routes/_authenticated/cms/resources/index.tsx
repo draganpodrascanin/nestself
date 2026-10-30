@@ -5,18 +5,21 @@
  * Sample mode uses SAMPLE_CONTENT_RESOURCES; API mode calls the CMS list endpoint.
  */
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus } from '@phosphor-icons/react';
 import { can } from '@nestself/contracts';
-import { Heading, Table, Th, Td, Badge, Button, Select, StatusBlock } from '@nestself/ui';
+import { Heading, Table, Th, Td, Badge, Button, Select, StatusBlock, Alert } from '@nestself/ui';
 import {
   SAMPLE_CONTENT_RESOURCES,
   SAMPLE_CATEGORIES,
   SAMPLE_CATEGORY_LABELS,
 } from '@nestself/sample-data';
+import { createCmsApi } from '@nestself/api-client';
+import type { ResourceSummary } from '@nestself/api-client';
 import { isSampleDataMode } from '../../../../data-source';
 import { useAuth } from '../../../../auth';
+import { api } from '../../../../api';
 
 type RevisionState = 'draft' | 'in_review' | 'changes_requested' | 'approved' | 'superseded';
 
@@ -33,6 +36,36 @@ function ResourceListPage() {
   const { principal, effectiveActions } = useAuth();
   const canWrite = principal ? can(principal, 'content.write', undefined, effectiveActions) : false;
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [apiResources, setApiResources] = useState<ResourceSummary[]>([]);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiLoading, setApiLoading] = useState(!isSampleDataMode);
+
+  // Fetch resources from API in API mode
+  useEffect(() => {
+    if (isSampleDataMode) return;
+    let cancelled = false;
+    const cmsApi = createCmsApi(api);
+
+    async function load() {
+      try {
+        const resp = await cmsApi.listResources({ categoryId: categoryFilter ?? undefined });
+        if (!cancelled) {
+          setApiResources(resp.items);
+          setApiLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const code = (err as { code?: string }).code ?? 'unknown';
+          setApiError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+          setApiLoading(false);
+        }
+      }
+    }
+
+    setApiLoading(true);
+    void load();
+    return () => { cancelled = true; };
+  }, [categoryFilter, t]);
 
   // In sample mode, build the category options from SAMPLE_CATEGORY_LABELS
   const locale = i18n.language;
@@ -49,9 +82,10 @@ function ResourceListPage() {
   ];
 
   // Filter resources
-  const resources = isSampleDataMode ? SAMPLE_CONTENT_RESOURCES : [];
-  const filtered = categoryFilter
-    ? resources.filter((r) => r.primaryCategoryId === categoryFilter)
+  const sampleResources = isSampleDataMode ? SAMPLE_CONTENT_RESOURCES : [];
+  const resources = isSampleDataMode ? sampleResources : apiResources;
+  const filtered = isSampleDataMode && categoryFilter
+    ? sampleResources.filter((r) => r.primaryCategoryId === categoryFilter)
     : resources;
 
   // Find category name
@@ -90,8 +124,17 @@ function ResourceListPage() {
         />
       </div>
 
+      {apiError ? (
+        <Alert tone="danger" className="mt-4">{apiError}</Alert>
+      ) : null}
+
       <div className="mt-6">
-        {filtered.length === 0 ? (
+        {apiLoading ? (
+          <div className="flex items-center gap-2 py-8">
+            <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-border-control border-t-primary" />
+            <span className="type-body text-text-secondary">{t('common:loading')}</span>
+          </div>
+        ) : filtered.length === 0 ? (
           <StatusBlock
             state="empty"
             title={categoryFilter ? t('cms:resources.emptyFiltered') : t('cms:resources.empty')}
@@ -109,7 +152,10 @@ function ResourceListPage() {
             </thead>
             <tbody>
               {filtered.map((resource) => {
-                const displayVariant = resource.variants[0];
+                const isSample = 'variants' in resource;
+                const displayTitle = isSample
+                  ? (resource as unknown as { variants: Array<{ title: string }> }).variants[0]?.title ?? resource.id
+                  : resource.id;
                 const state = latestState(resource);
                 return (
                   <tr key={resource.id}>
@@ -120,7 +166,7 @@ function ResourceListPage() {
                         className="no-underline text-primary"
                       >
                         <span className="font-[var(--font-weight-label)]">
-                          {displayVariant?.title ?? resource.id}
+                          {displayTitle}
                         </span>
                       </Link>
                     </Td>
@@ -147,8 +193,9 @@ function ResourceListPage() {
 }
 
 export const Route = createFileRoute('/_authenticated/cms/resources/')({
-  beforeLoad: ({ context }) => {
-    const { principal, effectiveActions } = context.auth;
+  beforeLoad: async ({ context }) => {
+    const { resolveRouteAuth } = await import('../../../../auth');
+    const { principal, effectiveActions } = await resolveRouteAuth(context.auth);
     if (!principal || !can(principal, 'content.preview', undefined, effectiveActions)) {
       throw redirect({ to: '/' });
     }

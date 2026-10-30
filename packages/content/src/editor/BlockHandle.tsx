@@ -130,13 +130,27 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
     (nodeType: string, attrs?: Record<string, unknown>) => {
       if (!node) return;
       try {
-        editor.chain().focus().setNodeSelection(pos).setNode(nodeType, attrs).run();
+        // For wrapper node types like quote, use wrapIn
+        if (nodeType === 'quote') {
+          // First, if the node is already inside a quote, lift it out
+          if (node.type.name === 'quote') {
+            editor.chain().focus().setNodeSelection(pos).lift('quote').run();
+          } else {
+            // Set cursor inside the node, then wrap
+            editor.chain().focus().setTextSelection(pos + 1).wrapIn(nodeType, attrs).run();
+          }
+        } else if (node.type.name === 'quote') {
+          // Turning a quote into something else: lift content and set node type
+          editor.chain().focus().setTextSelection(pos + 1).lift('quote').setNode(nodeType, attrs).run();
+        } else {
+          editor.chain().focus().setNodeSelection(pos).setNode(nodeType, attrs).run();
+        }
       } catch {
-        // Some conversions require wrapping instead
+        // Fallback: try setNode on text selection
         try {
-          editor.chain().focus().setNodeSelection(pos).wrapIn(nodeType, attrs).run();
+          editor.chain().focus().setTextSelection(pos + 1).setNode(nodeType, attrs).run();
         } catch {
-          // Silently fail for incompatible conversions
+          // Incompatible conversion
         }
       }
       onClose();
@@ -167,16 +181,22 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
 
   const handleMoveUp = useCallback(() => {
     if (!node || pos <= 0) return;
-    const $pos = editor.state.doc.resolve(pos);
-    if ($pos.index($pos.depth) <= 0) return;
-    const before = $pos.before($pos.depth);
-    const prevNode = editor.state.doc.nodeAt(before);
-    if (!prevNode) return;
-    const { tr } = editor.state;
-    const nodeSlice = editor.state.doc.slice(pos, pos + node.nodeSize);
-    tr.delete(pos, pos + node.nodeSize);
-    tr.insert(before, nodeSlice.content);
-    editor.view.dispatch(tr);
+    try {
+      const $pos = editor.state.doc.resolve(pos);
+      const depth = $pos.depth;
+      // At the top level (depth 0 or 1), check index
+      const parentDepth = depth >= 1 ? depth : 0;
+      if ($pos.index(parentDepth) <= 0) return;
+      // Find the start of the previous sibling
+      const prevStart = $pos.posAtIndex($pos.index(parentDepth) - 1, parentDepth);
+      const { tr } = editor.state;
+      const nodeSlice = editor.state.doc.slice(pos, pos + node.nodeSize);
+      tr.delete(pos, pos + node.nodeSize);
+      tr.insert(prevStart, nodeSlice.content);
+      editor.view.dispatch(tr);
+    } catch {
+      // At boundary; ignore
+    }
     onClose();
   }, [editor, pos, node, onClose]);
 

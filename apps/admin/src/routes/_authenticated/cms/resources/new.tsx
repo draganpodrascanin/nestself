@@ -8,6 +8,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { can, AUTHORED_LOCALES } from '@nestself/contracts';
+import type { ResourceCreateRequest } from '@nestself/contracts';
 import {
   Heading,
   Button,
@@ -21,7 +22,9 @@ import {
   SAMPLE_CATEGORIES,
   SAMPLE_CATEGORY_LABELS,
 } from '@nestself/sample-data';
+import { createCmsApi } from '@nestself/api-client';
 import { isSampleDataMode } from '../../../../data-source';
+import { api } from '../../../../api';
 
 const REVIEW_DISCIPLINES = [
   'psychological',
@@ -102,11 +105,20 @@ function NewResourcePage() {
 
     setSubmitting(true);
     try {
-      // API mode: createCmsApi(api).createResource(...)
-      // For now, the API client is being implemented by a parallel fork.
-      // This will be wired when the API client is available.
+      const cmsApi = createCmsApi(api);
+      const resource = await cmsApi.createResource({
+        type: 'article',
+        primaryCategoryId: categoryId,
+        reviewPolicy: 'editorial',
+        reviewDiscipline: discipline,
+        locale: initialLocale,
+        title: title.trim(),
+      } as ResourceCreateRequest);
       toast.add({ title: t('cms:newResource.success'), tone: 'success' });
-      void navigate({ to: '/cms/resources' });
+      void navigate({
+        to: '/cms/resources/$resourceId/variants/$locale',
+        params: { resourceId: resource.id, locale: initialLocale },
+      });
     } catch (err) {
       const code = (err as { code?: string }).code ?? 'unknown';
       const message = t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') });
@@ -178,8 +190,9 @@ function NewResourcePage() {
 }
 
 export const Route = createFileRoute('/_authenticated/cms/resources/new')({
-  beforeLoad: ({ context }) => {
-    const { principal, effectiveActions } = context.auth;
+  beforeLoad: async ({ context }) => {
+    const { resolveRouteAuth } = await import('../../../../auth');
+    const { principal, effectiveActions } = await resolveRouteAuth(context.auth);
     if (!principal || !can(principal, 'content.write', undefined, effectiveActions)) {
       throw redirect({ to: '/cms/resources' });
     }

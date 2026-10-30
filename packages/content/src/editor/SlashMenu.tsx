@@ -1,9 +1,9 @@
 /**
  * Slash command menu for the Notion-style content editor (T-C1.12).
  *
- * Opened by typing '/' at the start of an empty paragraph. Provides a
- * filtered list of block types grouped by category. Positioned with
- * Floating UI via Tiptap Suggestion's `mount` API.
+ * Opened by typing '/' in an empty paragraph. Provides a filtered list of
+ * block types grouped by category. Positioned via Tiptap Suggestion's
+ * `mount` API with Floating UI.
  *
  * Keyboard: Arrow keys navigate, Enter inserts, Escape closes, typing filters.
  * Accessibility: listbox with aria-activedescendant.
@@ -18,7 +18,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
@@ -55,7 +54,8 @@ export interface SlashMenuLabels {
 }
 
 // ---------------------------------------------------------------------------
-// Slash menu popup (rendered via portal)
+// Slash menu popup (rendered via portal, receives native keyboard events
+// forwarded from the Suggestion plugin's onKeyDown handler)
 // ---------------------------------------------------------------------------
 
 interface SlashMenuPopupProps {
@@ -65,6 +65,8 @@ interface SlashMenuPopupProps {
   onSelect: (item: SlashMenuItem) => void;
   onClose: () => void;
   position: { x: number; y: number } | null;
+  /** Ref for forwarding native keyboard events from the Suggestion plugin. */
+  keydownHandlerRef: React.MutableRefObject<((event: KeyboardEvent) => boolean) | null>;
 }
 
 function SlashMenuPopup({
@@ -74,6 +76,7 @@ function SlashMenuPopup({
   onSelect,
   onClose,
   position,
+  keydownHandlerRef,
 }: SlashMenuPopupProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -110,8 +113,58 @@ function SlashMenuPopup({
     return result;
   }, [groups]);
 
+  // Reset active index when items change (e.g. filter narrows the list)
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
   // Derive a clamped index from the raw state (no setState during render)
   const safeIndex = flatItems.length > 0 ? Math.min(activeIndex, flatItems.length - 1) : 0;
+
+  // Keep refs up to date so the native keyboard handler uses fresh values
+  const flatItemsRef = useRef(flatItems);
+  flatItemsRef.current = flatItems;
+  const safeIndexRef = useRef(safeIndex);
+  safeIndexRef.current = safeIndex;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Register the native keyboard handler so Suggestion's onKeyDown can forward events
+  useEffect(() => {
+    keydownHandlerRef.current = (event: KeyboardEvent): boolean => {
+      const flat = flatItemsRef.current;
+      const idx = safeIndexRef.current;
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setActiveIndex((i) => (flat.length > 0 ? (i + 1) % flat.length : 0));
+        return true;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveIndex((i) => (flat.length > 0 ? (i - 1 + flat.length) % flat.length : 0));
+        return true;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const item = flat[idx];
+        if (item) onSelectRef.current(item);
+        return true;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return true;
+      }
+      return false;
+    };
+
+    return () => {
+      keydownHandlerRef.current = null;
+    };
+  }, [keydownHandlerRef]);
 
   // Scroll active into view
   useEffect(() => {
@@ -138,26 +191,6 @@ function SlashMenuPopup({
     [labels],
   );
 
-  const handleKeyDown = useCallback(
-    (e: ReactKeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIndex((i) => (i + 1) % flatItems.length);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => (i - 1 + flatItems.length) % flatItems.length);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const item = flatItems[safeIndex];
-        if (item) onSelect(item);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    },
-    [flatItems, safeIndex, onSelect, onClose],
-  );
-
   if (!position) return null;
 
   return createPortal(
@@ -169,7 +202,6 @@ function SlashMenuPopup({
           aria-label={labels.placeholder}
           aria-activedescendant={flatItems[safeIndex]?.id}
           ref={listRef}
-          onKeyDown={handleKeyDown}
           className="fixed z-[var(--z-dropdown)] w-72 max-h-80 overflow-y-auto rounded-control border border-border-subtle bg-surface shadow-menu"
           style={{
             left: `${position.x}px`,
@@ -204,6 +236,7 @@ function SlashMenuPopup({
                         isActive ? 'bg-tint' : '',
                       ].join(' ')}
                       onMouseEnter={() => setActiveIndex(flatIdx)}
+                      onMouseDown={(e) => e.preventDefault()} // Prevent focus steal
                       onClick={() => onSelect(item)}
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface text-text-secondary">
@@ -256,7 +289,7 @@ export interface SlashMenuExtensionOptions {
 
 /**
  * Creates the slash menu Tiptap extension. This is a low-level extension;
- * the React component `SlashMenuProvider` handles the UI lifecycle.
+ * the React hook `useSlashMenu` handles the UI lifecycle.
  */
 export function createSlashMenuExtension(
   suggestionConfig: Partial<SuggestionOptions>,
@@ -303,6 +336,9 @@ export interface SlashMenuState {
 /**
  * React hook that manages the slash menu lifecycle. Returns both the
  * Tiptap Suggestion config and the popup component to render.
+ *
+ * Keyboard events are forwarded from the Suggestion plugin's onKeyDown
+ * through `keydownHandlerRef` to the popup component.
  */
 export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
   const [state, setState] = useState<SlashMenuState>({
@@ -314,6 +350,9 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
   });
 
   const unmountRef = useRef<(() => void) | null>(null);
+
+  // Ref for forwarding native keyboard events to the popup
+  const keydownHandlerRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
 
   const suggestionConfig: Partial<SuggestionOptions> = useMemo(
     () => ({
@@ -328,15 +367,11 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
       },
 
       render: () => {
-        let popup: HTMLDivElement | null = null;
-
         return {
           onStart: (props: SuggestionProps) => {
-            popup = document.createElement('div');
-            popup.style.position = 'fixed';
-            popup.style.zIndex = 'var(--z-dropdown, 20)';
-
-            const unmount = props.mount?.(popup, {
+            // Use Suggestion's mount API for Floating UI positioning
+            const el = document.createElement('div');
+            const unmount = props.mount?.(el, {
               onPosition: (data) => {
                 setState((prev) => ({
                   ...prev,
@@ -366,10 +401,6 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
           onExit: () => {
             unmountRef.current?.();
             unmountRef.current = null;
-            if (popup) {
-              popup.remove();
-              popup = null;
-            }
             setState({
               isOpen: false,
               query: '',
@@ -379,17 +410,19 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
             });
           },
 
+          // Forward keyboard events to the popup component via the ref
           onKeyDown: (props: { event: globalThis.KeyboardEvent }) => {
-            if (props.event.key === 'Escape') {
-              setState((prev) => ({ ...prev, isOpen: false }));
-              return true;
+            const handler = keydownHandlerRef.current;
+            if (handler) {
+              return handler(props.event);
             }
+            // Fallback: swallow navigation keys to prevent ProseMirror from handling them
             if (
               props.event.key === 'ArrowDown' ||
               props.event.key === 'ArrowUp' ||
-              props.event.key === 'Enter'
+              props.event.key === 'Enter' ||
+              props.event.key === 'Escape'
             ) {
-              // Handled by the popup component
               return true;
             }
             return false;
@@ -440,6 +473,7 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
       onSelect={handleSelect}
       onClose={handleClose}
       position={state.position}
+      keydownHandlerRef={keydownHandlerRef}
     />
   ) : null;
 
