@@ -375,7 +375,13 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   // ── Confidential professional domain: one case (T-2.4) ──
-  // The expert reaches the case through a CASE assignment targeting its id.
+  // The case row comes first: conversations and intake records reference it
+  // together with their organization. The expert reaches the case through a
+  // CASE assignment targeting its id.
+  await db
+    .insert(t.cases)
+    .values({ id: SAMPLE_CASE.id, orgId: SAMPLE_CASE.orgId })
+    .onConflictDoNothing({ target: t.cases.id });
   await db
     .insert(t.assignments)
     .values({
@@ -499,6 +505,7 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     permissionTemplates: t.permissionTemplates,
     grants: t.grants,
     assignments: t.assignments,
+    cases: t.cases,
     conversations: t.conversations,
     conversationMessages: t.conversationMessages,
     intakeRecords: t.intakeRecords,

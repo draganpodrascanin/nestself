@@ -32,6 +32,7 @@ function connection(id: string, overrides: Partial<SsoConnectionResponse> = {}):
     oidcClientId: null,
     idpInitiatedAllowed: false,
     jitProvisioning: false,
+    oidcEmailVerifiedClaimRequired: true,
     defaultOrgUnitId: null,
     certificateExpiresAt: null,
     lastTestedAt: null,

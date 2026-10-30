@@ -28,13 +28,13 @@ function databaseNameOf(url: string): string {
 }
 
 /**
- * Drop and recreate the test database, apply every migration, and connect.
- * Each suite passes its own `suffix` so that vitest workers running in
- * parallel never share (and drop) one another's database; the name also
- * carries a per-worktree prefix (`testDatabaseName`) so two worktrees
- * running the same suite never collide either.
+ * Drop and recreate an empty test database and return its URL. Each suite
+ * passes its own `suffix` so that vitest workers running in parallel never
+ * share (and drop) one another's database; the name also carries a
+ * per-worktree prefix (`testDatabaseName`) so two worktrees running the same
+ * suite never collide either.
  */
-export async function resetTestDatabase(baseUrl: string, suffix: string): Promise<TestDatabase> {
+export async function recreateTestDatabase(baseUrl: string, suffix: string): Promise<string> {
   const parsed = new URL(baseUrl);
   parsed.pathname = `/${testDatabaseName(databaseNameOf(baseUrl), suffix)}`;
   const url = parsed.toString();
@@ -50,6 +50,12 @@ export async function resetTestDatabase(baseUrl: string, suffix: string): Promis
   } finally {
     await admin.end();
   }
+  return url;
+}
+
+/** {@link recreateTestDatabase}, apply every migration, and connect. */
+export async function resetTestDatabase(baseUrl: string, suffix: string): Promise<TestDatabase> {
+  const url = await recreateTestDatabase(baseUrl, suffix);
 
   await runMigrations(url);
 

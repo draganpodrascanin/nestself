@@ -50,6 +50,34 @@
       "when": 1792912393798,
       "tag": "0006_sso_domains_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793403817819,
+      "tag": "0007_cases",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793403884296,
+      "tag": "0008_external_identities_sso_connection",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793403909352,
+      "tag": "0009_sso_connections_oidc_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793403929381,
+      "tag": "0010_organizations_status_check",
+      "breakpoints": true
     }
   ]
 }

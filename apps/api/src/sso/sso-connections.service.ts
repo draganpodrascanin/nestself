@@ -664,6 +664,7 @@ export class SsoConnectionsService {
       oidcClientId: row.oidcClientId,
       idpInitiatedAllowed: row.idpInitiatedAllowed,
       jitProvisioning: row.jitProvisioning,
+      oidcEmailVerifiedClaimRequired: row.oidcEmailVerifiedClaimRequired,
       defaultOrgUnitId: row.defaultOrgUnitId,
       certificateExpiresAt: row.certificateExpiresAt?.toISOString() ?? null,
       lastTestedAt: row.lastTestedAt?.toISOString() ?? null,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INVITATION_IMPORT_ROW_REASONS,
   InvitationCreateResponseSchema,
+  InvitationImportResponseSchema,
+  InvitationImportRowReasonSchema,
   InvitationListQuerySchema,
   InvitationListResponseSchema,
   OrgUnitListResponseSchema,
@@ -47,5 +50,32 @@ describe('org-admin invitation schemas', () => {
   it('OrgUnitListResponseSchema accepts the flat org-unit list', () => {
     const unit = { id: 'u', orgId: 'org_1', parentId: null, kind: 'COMPANY', name: 'A', costCenterCode: null, archivedAt: null };
     expect(OrgUnitListResponseSchema.parse({ items: [unit] })).toEqual({ items: [unit] });
+  });
+
+  it('import row reasons are the enum', () => {
+    expect(
+      InvitationImportResponseSchema.safeParse({ created: 0, skipped: 0, errors: [{ email: 'a@b.c', reason: 'Invalid template key: x' }] }).success,
+    ).toBe(false);
+    expect(
+      InvitationImportResponseSchema.safeParse({ created: 0, skipped: 0, errors: [{ email: 'a@b.c', reason: 'invalid_template' }] }).success,
+    ).toBe(true);
+  });
+
+  it('INVITATION_IMPORT_ROW_REASONS are the seven row codes, each accepted by the schema', () => {
+    expect(INVITATION_IMPORT_ROW_REASONS).toEqual([
+      'invalid_template',
+      'duplicate_in_batch',
+      'org_unit_outside_org',
+      'sso_domain_claimed',
+      'owner_exists',
+      'duplicate_invitation',
+      'already_member',
+    ]);
+    for (const reason of INVITATION_IMPORT_ROW_REASONS) {
+      expect(InvitationImportRowReasonSchema.parse(reason)).toBe(reason);
+    }
+    for (const legacy of ['Duplicate within batch', 'Org unit ou_x does not belong to this organization']) {
+      expect(InvitationImportRowReasonSchema.safeParse(legacy).success, legacy).toBe(false);
+    }
   });
 });

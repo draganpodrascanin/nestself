@@ -91,7 +91,7 @@ describe('StepUpService', () => {
     it('sends an email code to the first cognito identity and binds the challenge to the user', async () => {
       const result = await service.start(SESSION_PRINCIPAL, META, 'workspace');
 
-      expect(result).toEqual({ method: 'email_otp', challengeToken: 'challenge-token', ssoStartUrl: null });
+      expect(result).toEqual({ method: 'email_otp', challengeToken: 'challenge-token', ssoStartUrl: null, emailMasked: null });
       expect(mocks.idp.startEmailOtp).toHaveBeenCalledWith({ email: 'user-1@example.com' });
       expect(mocks.challenges.create).toHaveBeenCalledWith(
         expect.objectContaining({

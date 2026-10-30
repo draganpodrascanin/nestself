@@ -102,7 +102,8 @@ export class StepUpService {
       surface,
       stepUp: { userId: principal.userId },
     });
-    return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null };
+    // The masked address arrives with the federated step-up (phase 4, Task 6).
+    return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked: null };
   }
 
   async verify(

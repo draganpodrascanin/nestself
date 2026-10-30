@@ -81,9 +81,58 @@ export const SsoCallbackQuerySchema = z.object({
 });
 export type SsoCallbackQuery = z.infer<typeof SsoCallbackQuerySchema>;
 
-/** `?reason=` values the SSO callback puts on the surface's `/sign-in` URL. */
-export const SSO_SIGN_IN_REASONS = ['sso_denied', 'sso_email_unverified'] as const;
+/**
+ * `?reason=` values the SSO routes put on the surface's `/sign-in` URL.
+ * `sso_rate_limited`: the start or callback throttle refused the request.
+ */
+export const SSO_SIGN_IN_REASONS = ['sso_denied', 'sso_email_unverified', 'sso_rate_limited'] as const;
 export type SsoSignInReason = (typeof SSO_SIGN_IN_REASONS)[number];
+
+// ---------------------------------------------------------------------------
+// Pending federated binding (SSO-R-08) and mobile binding
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /auth/sso/bind/start`: an OIDC sign-in whose address the identity
+ * provider did not mark verified. `handle` is the opaque value the callback
+ * put on `/sign-in?reason=sso_email_unverified&bind=<handle>`; NestSelf mails
+ * a code to the asserted address.
+ */
+export const SsoBindStartRequestSchema = z.object({
+  handle: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/),
+  /** Language of the code email. */
+  locale: LocaleSchema.optional(),
+});
+export type SsoBindStartRequest = z.infer<typeof SsoBindStartRequestSchema>;
+
+export const SsoBindStartResponseSchema = z.object({
+  challengeToken: z.string().min(1),
+  /** The address the code was sent to, masked, for example `d***@intesa.example`. */
+  emailMasked: z.string().min(1),
+});
+export type SsoBindStartResponse = z.infer<typeof SsoBindStartResponseSchema>;
+
+/** `POST /auth/sso/bind/verify`: the mailed code; success binds the identity and signs in. */
+export const SsoBindVerifyRequestSchema = z.object({
+  challengeToken: z.string().min(1),
+  code: z.string().min(EMAIL_OTP_MIN_LENGTH).max(EMAIL_OTP_MAX_LENGTH),
+});
+export type SsoBindVerifyRequest = z.infer<typeof SsoBindVerifyRequestSchema>;
+
+export const SsoBindVerifyResponseSchema = z.object({
+  /** Where the surface continues: the return path of the original sign-in. */
+  returnPath: z.string(),
+});
+export type SsoBindVerifyResponse = z.infer<typeof SsoBindVerifyResponseSchema>;
+
+/**
+ * `POST /auth/sso/bind-token`: the mobile app's Cognito ID token after its
+ * own PKCE exchange; the API applies the binding rules of the web callback.
+ */
+export const SsoBindTokenRequestSchema = z.object({
+  idToken: z.string().min(1).max(8192),
+});
+export type SsoBindTokenRequest = z.infer<typeof SsoBindTokenRequestSchema>;
 
 export const EmailOtpStartRequestSchema = z.object({
   email: emailField,
@@ -129,6 +178,8 @@ export type InvitationPreviewResponse = z.infer<typeof InvitationPreviewResponse
 
 export const InvitationAcceptRequestSchema = z.object({
   token: z.string().min(1),
+  /** Language of the code email the activation sends. Pool default when absent. */
+  locale: LocaleSchema.optional(),
 });
 export type InvitationAcceptRequest = z.infer<typeof InvitationAcceptRequestSchema>;
 
@@ -239,12 +290,21 @@ export const ContextSwitchRequestSchema = z.object({
 });
 export type ContextSwitchRequest = z.infer<typeof ContextSwitchRequestSchema>;
 
+/** `POST /auth/step-up/start`, and `POST /auth/step-up/resend` with a new code. */
 export const StepUpStartResponseSchema = z.object({
   method: z.enum(['totp', 'email_otp', 'sso']),
   challengeToken: z.string().min(1),
   ssoStartUrl: z.string().url().nullable(),
+  /** The address the code was sent to, masked (`d***@intesa.example`); null when no email was sent. */
+  emailMasked: z.string().nullable(),
 });
 export type StepUpStartResponse = z.infer<typeof StepUpStartResponseSchema>;
+
+/** `POST /auth/step-up/resend`: a new code for the challenge of a previous start. */
+export const StepUpResendRequestSchema = z.object({
+  challengeToken: z.string().min(1),
+});
+export type StepUpResendRequest = z.infer<typeof StepUpResendRequestSchema>;
 
 export const StepUpVerifyRequestSchema = z.object({
   challengeToken: z.string().min(1),
@@ -373,6 +433,10 @@ export const AUTH_ERROR_CODES = [
   'domain_unverified',
   /** The IdP did not assert a verified email (SSO-R-08); the user continues with the email code. */
   'sso_email_unverified',
+  /** Step-up is impossible: the account has no identity a code can be sent to (403). */
+  'step_up_unavailable',
+  /** A federated binding was refused, for example on the bind routes (403). The reason stays in the audit log. */
+  'sso_denied',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

@@ -20,7 +20,7 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, conversations, grants } from '../src/db/schema/index.js';
+import { auditEvents, cases, conversations, grants } from '../src/db/schema/index.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
@@ -352,6 +352,7 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     });
 
     it('pages the participant list by cursor, newest first, through exactly the full list', async () => {
+      await testDb.db.insert(cases).values([1, 2, 3].map((n) => ({ id: `case_test_page_${n}`, orgId: ORG })));
       await testDb.db.insert(conversations).values(
         [1, 2, 3].map((n) => ({
           id: `conv_test_page_${n}`,

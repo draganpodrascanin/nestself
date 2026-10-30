@@ -60,6 +60,6 @@ describe('SsoCallbackQuerySchema', () => {
   });
 });
 
-it('lists the sign-in reasons the callback can send', () => {
-  expect(SSO_SIGN_IN_REASONS).toEqual(['sso_denied', 'sso_email_unverified']);
+it('lists the sign-in reasons the SSO routes can send', () => {
+  expect(SSO_SIGN_IN_REASONS).toEqual(['sso_denied', 'sso_email_unverified', 'sso_rate_limited']);
 });

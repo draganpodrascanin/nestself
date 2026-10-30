@@ -54,7 +54,13 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
       metadataUrl: 'https://idp.acme.example/metadata',
     });
     acmeId = created.id;
-    expect(created).toMatchObject({ status: 'DRAFT', idpInitiatedAllowed: false, jitProvisioning: false, lastTestedAt: null });
+    expect(created).toMatchObject({
+      status: 'DRAFT',
+      idpInitiatedAllowed: false,
+      jitProvisioning: false,
+      oidcEmailVerifiedClaimRequired: true,
+      lastTestedAt: null,
+    });
     const found = await repo.findConnection(acmeId);
     expect(found?.cognitoProviderName).toBe('org-acme-saml');
     expect(found?.domains).toEqual([]);
@@ -104,6 +110,9 @@ describe.skipIf(!shouldRun)('SsoRepository (db)', () => {
   it('updateConnection returns the row, or null for an unknown id', async () => {
     const updated = await repo.updateConnection(acmeId, { jitProvisioning: true, metadataXml: '<x/>' });
     expect(updated).toMatchObject({ jitProvisioning: true, metadataXml: '<x/>' });
+    expect(await repo.updateConnection(otherId, { oidcEmailVerifiedClaimRequired: false })).toMatchObject({
+      oidcEmailVerifiedClaimRequired: false,
+    });
     expect(await repo.updateConnection('missing', { jitProvisioning: true })).toBeNull();
     expect((await repo.updateConnection(acmeId, {}))?.id).toBe(acmeId);
   });

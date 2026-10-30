@@ -91,6 +91,7 @@ export class IdentityRepository {
     });
   }
 
+  /** `ssoConnectionId` binds a federated identity to its connection; it defaults to null. */
   async createExternalIdentity(
     input: NewExternalIdentity,
     tx?: DbExecutor,

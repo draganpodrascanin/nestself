@@ -94,6 +94,12 @@ export const ssoConnections = pgTable(
     idpInitiatedAllowed: boolean().notNull().default(false),
     /** Auto-create ACTIVE memberships for verified-domain sign-ins [D-03]. */
     jitProvisioning: boolean().notNull().default(false),
+    /**
+     * OIDC only (SSO-R-08): an ID token without `email_verified: true` binds
+     * only after the user confirms the address with a mailed code. Staff may
+     * turn it off for a provider that never sends the claim.
+     */
+    oidcEmailVerifiedClaimRequired: boolean().notNull().default(true),
     defaultOrgUnitId: text().references(() => orgUnits.id, {
       onDelete: 'set null',
       onUpdate: 'cascade',

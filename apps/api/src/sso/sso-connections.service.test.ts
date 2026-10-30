@@ -134,6 +134,7 @@ const SAML: SsoConnectionCreateRequest = {
   metadataUrl: 'https://idp.acme.example/metadata',
   idpInitiatedAllowed: false,
   jitProvisioning: false,
+  oidcEmailVerifiedClaimRequired: true,
 };
 
 async function expectApiError(promise: Promise<unknown>, status: number, code: string): Promise<ApiHttpException> {

@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
+  check,
   index,
   integer,
   pgPolicy,
@@ -49,12 +50,15 @@ export const organizations = pgTable(
     financialStepUpThresholdMinor: integer(),
     /** Per-organization reporting cohort threshold; null falls back to the platform default (F-03). */
     cohortThreshold: integer(),
-    /** Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED. */
+    /** Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED (`organizations_status_check`). */
     status: text().notNull().default('ACTIVE'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex('organizations_slug_key').on(t.slug)],
+  (t) => [
+    uniqueIndex('organizations_slug_key').on(t.slug),
+    check('organizations_status_check', sql`${t.status} in ('ONBOARDING','ACTIVE','SUSPENDED','ENDED')`),
+  ],
 );
 
 /**
