@@ -424,12 +424,11 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
 
   // Lock the drag handle in place while the menu is open so it doesn't
   // vanish when the pointer leaves the block.
+  // The React <DragHandle> registers only the plugin, not the extension's
+  // lockDragHandle/unlockDragHandle commands, so set the plugin's meta key
+  // directly (the commands do exactly this).
   useEffect(() => {
-    if (menuOpen) {
-      editor.commands.lockDragHandle();
-    } else {
-      editor.commands.unlockDragHandle();
-    }
+    editor.commands.setMeta('lockDragHandle', menuOpen);
   }, [menuOpen, editor]);
 
   return (
