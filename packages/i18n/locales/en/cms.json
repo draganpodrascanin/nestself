@@ -252,6 +252,7 @@
     "returnCommentRequired": "Write what needs to change.",
     "audienceNone": "No audience chosen yet",
     "audienceSaved_one": "Saved audience: {{count}} organisation or unit",
+    "audienceSaved_few": "Saved audience: {{count}} organisations or units",
     "audienceSaved_other": "Saved audience: {{count}} organisations or units"
   },
   "sample": {

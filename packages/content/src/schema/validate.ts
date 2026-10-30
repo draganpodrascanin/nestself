@@ -67,6 +67,8 @@ export interface ValidationOptions {
    * Allowed hosts for `https:` links (FMT-R-06).
    * Entries are normalized to lowercase punycode via `new URL()`.
    * An empty list means no external links are permitted.
+   * When omitted (`undefined`), the link-host check is skipped entirely —
+   * the server applies its own list; the client cannot know it.
    */
   linkHostAllowlist?: string[];
 }
@@ -309,15 +311,18 @@ function validateDocumentRules(
   }
 
   // --- Link host allowlist validation (FMT-R-06, R4) ---
-  const rawAllowlist = options.linkHostAllowlist ?? [];
-  // Normalize allowlist entries to lowercase punycode via URL
-  const allowlist = rawAllowlist.map((host) => {
-    try {
-      return new URL(`https://${host}`).hostname;
-    } catch {
-      return host.toLowerCase();
-    }
-  });
+  // When `linkHostAllowlist` is omitted the caller cannot know the server's
+  // list, so the host-level check is skipped (protocol is still enforced).
+  const rawAllowlist = options.linkHostAllowlist;
+  const allowlist: string[] | null = rawAllowlist
+    ? rawAllowlist.map((host) => {
+        try {
+          return new URL(`https://${host}`).hostname;
+        } catch {
+          return host.toLowerCase();
+        }
+      })
+    : null;
 
   walkRawNodes(doc as unknown as RawNode, (node, path) => {
     if (node.marks) {
@@ -337,7 +342,7 @@ function validateDocumentRules(
               });
               continue;
             }
-            if (!allowlist.includes(url.hostname)) {
+            if (allowlist && !allowlist.includes(url.hostname)) {
               errors.push({
                 code: 'content_invalid_link',
                 message: `Link host "${url.hostname}" not on allowlist at ${path}.`,

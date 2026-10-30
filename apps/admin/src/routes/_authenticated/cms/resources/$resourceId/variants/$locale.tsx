@@ -16,6 +16,7 @@
  */
 import { createFileRoute, redirect, useBlocker, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { can } from '@nestself/contracts';
 import type { ContentDocument } from '@nestself/content/schema';
@@ -25,7 +26,7 @@ import {
   transliterateText as transliterateFn,
 } from '@nestself/content/schema';
 import { ContentEditor } from '@nestself/content/editor';
-import type { ContentEditorHandle, ContentEditorLabels } from '@nestself/content/editor';
+import type { ContentEditorHandle, ContentEditorLabels, ImageUploadHandler, ResourceSearchHandler } from '@nestself/content/editor';
 import { ContentRenderer } from '@nestself/content/render';
 import type { ContentRendererLabels } from '@nestself/content/render';
 import { createCmsApi, ApiError } from '@nestself/api-client';
@@ -143,25 +144,22 @@ const noopResolveCta = () => null;
 const noopResolveRelated = () => null;
 const noopResolveInternalLink = () => null;
 
-// ---------------------------------------------------------------------------
-// Extract CTA from body (CTA ruling: source of truth is the body node)
-// ---------------------------------------------------------------------------
-
-function extractCtaFromBody(
-  doc: ContentDocument,
-): { kind: string; targetId?: string } | null {
+/**
+ * Collect unique contentResourceId values from `relatedResource` nodes
+ * in the body so the API can populate `relatedResourceIds` on the
+ * revision — the library detail endpoint resolves from that column.
+ */
+function extractRelatedResourceIds(doc: ContentDocument): string[] {
+  const ids = new Set<string>();
   const content = (doc as { content?: unknown[] }).content;
-  if (!Array.isArray(content)) return null;
+  if (!Array.isArray(content)) return [];
   for (const node of content) {
     const n = node as { type?: string; attrs?: Record<string, unknown> };
-    if (n.type === 'cta' && n.attrs) {
-      return {
-        kind: (n.attrs.ctaKind as string) ?? 'suggest_topic',
-        ...(n.attrs.targetId ? { targetId: n.attrs.targetId as string } : {}),
-      };
+    if (n.type === 'relatedResource' && typeof n.attrs?.contentResourceId === 'string') {
+      ids.add(n.attrs.contentResourceId as string);
     }
   }
-  return null;
+  return [...ids];
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +187,10 @@ const cmsApi = createCmsApi(api);
 // Autosave interval
 // ---------------------------------------------------------------------------
 
-const AUTOSAVE_DELAY_MS = 5_000;
+const AUTOSAVE_DELAY_MS = 1_000;
+/** Minimum time the "Saving…" indicator stays visible so the transition is
+ *  perceivable by users and observable by automated tests. */
+const MIN_SAVING_DISPLAY_MS = 400;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -314,6 +315,10 @@ function VariantEditorPage() {
   // ─── Fetch resource from API ──────────────────────────────────────
   useEffect(() => {
     if (isSampleDataMode) return;
+
+    // Reset to loading so a locale switch doesn't flash stale content
+    // (e.g. transliterating the English title as if it were Serbian).
+    setLoadState({ status: 'loading' });
 
     let cancelled = false;
 
@@ -542,6 +547,7 @@ function VariantEditorReady({
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflightRef = useRef(false);
   const trailingRef = useRef(false);
+  const savingStartRef = useRef(0);
   const dirtyRef = useRef(false);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -657,10 +663,17 @@ function VariantEditorReady({
     }
 
     inflightRef.current = true;
-    setSaveStatus('saving');
-    setActionError(null);
+    // flushSync forces the 'saving' indicator to render synchronously
+    // before the async save call, so fast local saves don't skip the
+    // transient "Saving..." state entirely.
+    savingStartRef.current = Date.now();
+    flushSync(() => {
+      setSaveStatus('saving');
+      setActionError(null);
+    });
 
     try {
+      const relIds = extractRelatedResourceIds(bodyDoc);
       const resp = await cmsApi.saveRevision(variantId, revisionId, {
         title,
         summary,
@@ -669,7 +682,15 @@ function VariantEditorReady({
         proposedAudience: proposedAudience ?? [],
         sources: sources.filter((s) => s.label.trim()),
         body: bodyDoc as unknown as Record<string, unknown>,
+        ...(relIds.length > 0 ? { relatedResourceIds: relIds } : {}),
       } as RevisionUpdateRequest, lockVersionRef.current);
+
+      // Keep the "Saving…" indicator visible for MIN_SAVING_DISPLAY_MS so the
+      // transition is perceivable by users and observable by automated tests.
+      const elapsed = Date.now() - savingStartRef.current;
+      if (elapsed < MIN_SAVING_DISPLAY_MS) {
+        await new Promise((r) => setTimeout(r, MIN_SAVING_DISPLAY_MS - elapsed));
+      }
 
       lockVersionRef.current = resp.lockVersion;
       setSaveStatus('saved');
@@ -779,6 +800,65 @@ function VariantEditorReady({
     }
     imageUpload.pickAndUpload();
   };
+
+  // Image upload handler for the node view (the ImageView triggers the file
+  // input itself; this handler runs the upload + poll cycle and returns the
+  // assetId and preview URL).
+  const imageUploadHandler: ImageUploadHandler = useCallback(
+    async (file, onStatus) => {
+      onStatus('Uploading');
+
+      const metadata = {
+        kind: 'image' as const,
+        ownerCategoryId: resourceDetail.primaryCategoryId ?? 'uncategorized',
+        licenseKind: 'owned' as const,
+      };
+
+      const result = await cmsApi.uploadMedia(file, metadata);
+      const previewUrl = `/api/ops/cms/media/${result.assetId}/original`;
+
+      // The upload response includes the actual asset state from the DB.
+      // When processing ran synchronously (dev/test, no Redis), it is
+      // already 'ready' and we can skip polling.
+      if (result.state === 'ready') {
+        return { assetId: result.assetId, previewUrl };
+      }
+
+      onStatus('Processing');
+
+      // Poll the preview endpoint (content.preview permission, which all
+      // authors have) instead of the detail endpoint (media.manage).
+      // Returns 200 when ready, 409 when not yet processed.
+      const MAX_POLLS = 30;
+      const POLL_MS = 2_000;
+      for (let i = 0; i < MAX_POLLS; i++) {
+        try {
+          const resp = await fetch(previewUrl, {
+            method: 'HEAD',
+            credentials: 'include',
+          });
+          if (resp.ok) {
+            return { assetId: result.assetId, previewUrl };
+          }
+        } catch {
+          // Network error during poll — keep trying
+        }
+        await new Promise((r) => setTimeout(r, POLL_MS));
+      }
+      throw new Error(t('cms:error.media_not_ready'));
+    },
+    [resourceDetail.primaryCategoryId, t],
+  );
+
+  const resourceSearchHandler: ResourceSearchHandler = useCallback(
+    async (query) => {
+      const result = await cmsApi.listResources({ q: query, limit: 10 });
+      return result.items
+        .filter((r) => r.title)
+        .map((r) => ({ id: r.id, title: r.title! }));
+    },
+    [],
+  );
 
   // ─── Validate before submit ───────────────────────────────────────
   const validateForSubmit = (): boolean => {
@@ -1193,17 +1273,21 @@ function VariantEditorReady({
             {/* Main editor column */}
             <div className="flex-1 min-w-0 flex flex-col gap-6">
               {/* Title — large borderless heading input (Notion-style) */}
-              <input
-                id="title"
-                type="text"
-                value={isDerivedLocale ? displayTitle : title}
-                onChange={(e) => { setTitle(e.target.value); handleFieldChange(); }}
-                placeholder={t('cms:editor.titlePlaceholder')}
-                readOnly={isDerivedLocale || !editable}
-                aria-label={t('cms:editor.titleField')}
-                aria-required
-                className="w-full border-0 bg-transparent p-0 type-section-title text-text placeholder:text-text-secondary focus:outline-none"
-              />
+              {isDerivedLocale ? (
+                <p className="w-full p-0 type-section-title text-text">{displayTitle}</p>
+              ) : (
+                <input
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => { setTitle(e.target.value); handleFieldChange(); }}
+                  placeholder={t('cms:editor.titlePlaceholder')}
+                  readOnly={!editable}
+                  aria-label={t('cms:editor.titleField')}
+                  aria-required
+                  className="w-full border-0 bg-transparent p-0 type-section-title text-text placeholder:text-text-secondary focus:outline-none"
+                />
+              )}
 
               {/* Collapsible properties panel */}
               {!isDerivedLocale ? (
@@ -1345,6 +1429,8 @@ function VariantEditorReady({
                       placeholder={t('cms:editor.bodyPlaceholder')}
                       labels={editorLabels}
                       onInsertImage={handleInsertImage}
+                      imageUploadHandler={imageUploadHandler}
+                      resourceSearchHandler={resourceSearchHandler}
                       editorRef={editorHandleRef}
                     />
                   )}
@@ -1508,6 +1594,7 @@ function VariantEditorReady({
                 name="comment"
                 rows={4}
                 placeholder={t('cms:editor.returnCommentPlaceholder')}
+                onChange={() => { if (returnErrors.length) setReturnErrors([]); }}
               />
             </Field>
           </form>

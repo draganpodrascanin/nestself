@@ -469,14 +469,12 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
       media={mediaMeta}
       mediaUrl={mediaUrl as MediaUrlResolver}
       resolveCta={resolveCta}
-      resolveRelated={(id) => {
-        const rel = detail.relatedResources.find((r) => r.resourceId === id);
-        if (!rel) return null;
-        return {
-          title: rel.title,
-          href: `/content/${rel.resourceId}`,
-          description: rel.summary,
-        };
+      resolveRelated={() => {
+        // Inline relatedResource nodes are suppressed: the dedicated
+        // "Related resources" section below the body already renders them
+        // (from detail.relatedResources), so rendering them twice would
+        // duplicate links and break accessibility landmarks.
+        return null;
       }}
       resolveInternalLink={(id) => `/content/${id}`}
       linkComponent={RendererLinkComponent}

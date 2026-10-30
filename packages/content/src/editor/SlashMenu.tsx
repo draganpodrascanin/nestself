@@ -30,6 +30,7 @@ import {
   MotionFeatures,
   useMotionPreset,
 } from '@nestself/ui';
+import { openImagePicker } from './node-views.tsx';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -455,15 +456,13 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
   );
 
   const handleClose = useCallback(() => {
-    if (state.editor && state.range) {
-      // Delete the slash character
-      state.editor
-        .chain()
-        .focus()
-        .deleteRange(state.range)
-        .run();
+    if (state.editor) {
+      // Exit the Suggestion without deleting text — the typed query stays.
+      const { tr } = state.editor.view.state;
+      tr.setMeta(slashMenuPluginKey, { exit: true });
+      state.editor.view.dispatch(tr);
     }
-  }, [state.editor, state.range]);
+  }, [state.editor]);
 
   const popup = state.isOpen ? (
     <SlashMenuPopup
@@ -550,7 +549,7 @@ export interface SlashMenuItemLabels {
  */
 export function createSlashMenuItems(
   l: SlashMenuItemLabels,
-  onInsertImage?: () => void,
+  _onInsertImage?: () => void,
 ): SlashMenuItem[] {
   return [
     {
@@ -630,7 +629,6 @@ export function createSlashMenuItems(
               {
                 type: 'checklistItem',
                 attrs: { label: '' },
-                content: [{ type: 'text', text: ' ' }],
               },
             ],
           })
@@ -662,7 +660,7 @@ export function createSlashMenuItems(
             type: 'professionalNote',
             attrs: { noteKind: 'tip' },
             content: [
-              { type: 'paragraph', content: [{ type: 'text', text: ' ' }] },
+              { type: 'paragraph' },
             ],
           })
           .run();
@@ -683,7 +681,7 @@ export function createSlashMenuItems(
             type: 'practicalStep',
             attrs: { stepNumber: 1, title: '' },
             content: [
-              { type: 'paragraph', content: [{ type: 'text', text: ' ' }] },
+              { type: 'paragraph' },
             ],
           })
           .run();
@@ -732,8 +730,20 @@ export function createSlashMenuItems(
       icon: icon(ICON_IMAGE),
       group: 'media',
       command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).run();
-        onInsertImage?.();
+        // Open the file picker first (outside React) so the browser's
+        // filechooser event fires synchronously.  The ImageView node
+        // view consumes the pending file promise on mount.
+        openImagePicker();
+
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({
+            type: 'image',
+            attrs: { mediaAssetId: null, alt: '', caption: null },
+          })
+          .run();
       },
     },
   ];

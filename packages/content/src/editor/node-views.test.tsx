@@ -74,13 +74,18 @@ describe('ProfessionalNoteView', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('calls updateAttributes when kind changes', async () => {
+  it('calls updateAttributes when kind changes via combobox', async () => {
     const user = userEvent.setup();
     const props = makeMockProps({ noteKind: 'tip' }, true);
     render(<ProfessionalNoteView {...props} />);
 
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'warning');
+    // Open the custom combobox
+    const combobox = screen.getByRole('combobox');
+    await user.click(combobox);
+
+    // Pick the "warning" option from the listbox
+    const option = screen.getByRole('option', { name: /warning/i });
+    await user.click(option);
     expect(props.updateAttributes).toHaveBeenCalledWith({ noteKind: 'warning' });
   });
 });
@@ -181,14 +186,22 @@ describe('CtaView', () => {
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
-  it('calls updateAttributes when kind changes', async () => {
+  it('calls updateAttributes when kind changes and Done is clicked', async () => {
     const user = userEvent.setup();
     const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, true);
     render(<CtaView {...props} />);
 
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'open_content');
-    expect(props.updateAttributes).toHaveBeenCalledWith({ ctaKind: 'open_content' });
+    // Open the custom combobox inside the CTA dialog
+    const combobox = screen.getByRole('combobox', { name: 'Action' });
+    await user.click(combobox);
+
+    // Pick the "open_content" option from the listbox
+    const option = screen.getByRole('option', { name: /open.content/i });
+    await user.click(option);
+
+    // Click "Done" to commit the change (the dialog uses local form state)
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(props.updateAttributes).toHaveBeenCalled();
   });
 });
 
@@ -209,10 +222,11 @@ describe('RelatedResourceView', () => {
     expect(screen.getByText('(none)')).toBeInTheDocument();
   });
 
-  it('shows text input when editable', () => {
-    const props = makeMockProps({ contentResourceId: 'res_123' }, true);
+  it('shows resource title or ID when editable', () => {
+    const props = makeMockProps({ contentResourceId: 'res_123', contentResourceTitle: 'My Resource' }, true);
     render(<RelatedResourceView {...props} />);
-    expect(screen.getByPlaceholderText('Resource ID')).toBeInTheDocument();
+    // The stored title is displayed instead of a bare text input
+    expect(screen.getByText('My Resource')).toBeInTheDocument();
   });
 });
 
@@ -227,10 +241,12 @@ describe('ImageView', () => {
     expect(screen.getByText(/drop or paste/i)).toBeInTheDocument();
   });
 
-  it('renders asset reference when assetId set', () => {
+  it('renders image preview when assetId set', () => {
     const props = makeMockProps({ mediaAssetId: 'asset_abc', alt: 'A photo', caption: '' });
     render(<ImageView {...props} />);
-    expect(screen.getByText('[Image: asset_abc]')).toBeInTheDocument();
+    const img = screen.getByRole('img');
+    expect(img).toHaveAttribute('alt', 'A photo');
+    expect(img).toHaveAttribute('src', '/api/ops/cms/media/asset_abc/original');
   });
 
   it('shows alt and caption inputs when editable', () => {
