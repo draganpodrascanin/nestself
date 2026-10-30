@@ -57,6 +57,8 @@ function totpSecretFile(userId: string): string {
 }
 
 function readPersistedSecret(userId: string): string | null {
+  // Genuinely optional: the file does not exist on the first run (TOTP
+  // enrolment creates it); ENOENT is not a test failure.
   try {
     return fs.readFileSync(totpSecretFile(userId), 'utf-8').trim() || null;
   } catch {
@@ -625,33 +627,94 @@ export async function waitForContent(page: Page): Promise<void> {
   await page.locator('h1, h2, [role="heading"]').first().waitFor({ timeout: 15_000 });
 }
 
-/**
- * Sign out from the workspace app.
- */
-export async function signOutWorkspace(page: Page): Promise<void> {
-  // Try the sign-out button or link, fall back to API call
-  const signOutButton = page.getByRole('button', { name: 'Sign out' });
-  const signOutLink = page.getByRole('link', { name: 'Sign out' });
+// ---------------------------------------------------------------------------
+// Cyrillic assertion helpers (LIB-R-32)
+// ---------------------------------------------------------------------------
 
-  if (await signOutButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await signOutButton.click();
-  } else if (await signOutLink.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await signOutLink.click();
-  } else {
-    // Navigate to settings where sign-out usually lives
-    await page.goto(`${WORKSPACE_URL}/settings`);
-    await page.waitForLoadState('domcontentloaded');
-    const settingsSignOut = page.getByRole('button', { name: 'Sign out' });
-    if (await settingsSignOut.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await settingsSignOut.click();
-    } else {
-      // API fallback
-      await page.evaluate(() =>
-        fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }),
-      );
-      await page.goto(`${WORKSPACE_URL}/sign-in`);
-    }
+/** Brand names and loanwords kept in Latin inside Cyrillic text. */
+const CYRILLIC_PROTECTED_TERMS = [
+  'NestSelf', 'Pexels', 'Phosphor', 'Onest', 'Europe/Belgrade',
+  'English', 'Enterprise',
+  'Lelki Elsősegély Telefonszolgálat', 'Lelki Elsősegély',
+];
+
+/** Strip URLs, interpolation tokens and protected terms from a string. */
+export function stripProtectedContent(text: string): string {
+  let result = text;
+  result = result.replace(/https?:\/\/\S+/g, '');
+  result = result.replace(/\{\{[^}]+\}\}/g, '');
+  for (const term of CYRILLIC_PROTECTED_TERMS) {
+    result = result.replaceAll(term, '');
   }
+  return result;
+}
 
-  await page.getByRole('heading', { name: 'Sign in' }).waitFor({ timeout: 10_000 });
+// ---------------------------------------------------------------------------
+// Context switcher helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Switch the workspace context to the organization whose name matches
+ * `targetOrgName` using the context picker in the UI header.
+ * Asserts the switcher is visible and the target org is in the menu.
+ *
+ * The flow: click trigger -> menu opens -> click target org -> POST /auth/context
+ * -> React Query cache clears -> principal updates -> trigger label changes to
+ * the new org name. We wait for the trigger label to contain `targetOrgName` to
+ * confirm the switch completed end-to-end.
+ */
+export async function switchContext(page: Page, targetOrgName: string): Promise<void> {
+  // The context picker trigger shows the current org name; click it to open.
+  const trigger = page.locator('button').filter({ hasText: /Example|Personal|Lični/i }).first();
+  await expect(trigger).toBeVisible({ timeout: 10_000 });
+  await trigger.click();
+
+  // Wait for the menu popup and click the target org.
+  const targetItem = page.getByRole('menuitem', { name: new RegExp(targetOrgName, 'i') });
+  await expect(targetItem).toBeVisible({ timeout: 5_000 });
+  await targetItem.click();
+
+  // Wait for the context switch to complete: the trigger label must update
+  // to show the target org name. This confirms the POST /auth/context
+  // succeeded and the principal was refreshed.
+  await expect(
+    page.locator('button').filter({ hasText: new RegExp(targetOrgName, 'i') }).first(),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Let the navigation settle (context switch navigates to / or /cases).
+  await page.locator('h1, h2, [role="heading"]').first().waitFor({ timeout: 15_000 });
+}
+
+// ---------------------------------------------------------------------------
+// Language switch helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Switch the workspace language through the settings UI.
+ * The language Select is inside the Account section, labelled by the i18n
+ * key `auth:account.locale.label` which is "Jezik" (sr-Latn) or "Language" (en).
+ *
+ * Base UI Select uses combobox role on the trigger; clicking it opens a
+ * listbox with option roles.
+ */
+export async function switchLanguage(page: Page, targetNativeName: string): Promise<void> {
+  await page.goto(`${WORKSPACE_URL}/settings`);
+  await page.waitForLoadState('domcontentloaded');
+  await page.getByRole('heading', { level: 1 }).waitFor({ timeout: 10_000 });
+
+  // Find the locale field's Select trigger (combobox).
+  // The Field wraps the Select with a label; find via the combobox inside the Field.
+  const localeTrigger = page.locator('#account-locale').or(
+    page.getByRole('combobox', { name: /jezik|language/i }),
+  );
+  await expect(localeTrigger.first()).toBeVisible({ timeout: 5_000 });
+  await localeTrigger.first().click();
+
+  // Select the target language from the listbox.
+  const option = page.getByRole('option', { name: targetNativeName });
+  await expect(option).toBeVisible({ timeout: 5_000 });
+  await option.click();
+
+  // Wait for the language change to take effect (the page re-renders).
+  await page.waitForTimeout(500);
 }

@@ -42,7 +42,7 @@ const ORG_ME: MeResponse = {
   availableContexts: [...HR.availableContexts],
 };
 const PERSONAL_ME: MeResponse = {
-  principal: { ...HR.principal, context: { kind: 'personal' } },
+  principal: { ...HR.principal, context: { kind: 'personal', orgId: 'org_sample' } },
   effectiveActions: ['content.read', 'conversation.participate', 'preferences.manage'],
   availableContexts: [...HR.availableContexts],
 };
@@ -137,6 +137,10 @@ describe('a context that is no longer valid', () => {
     const withSecond: MeResponse = {
       ...ORG_ME,
       principal: { ...ORG_ME.principal, memberships: [...ORG_ME.principal.memberships, second] },
+      availableContexts: [
+        ...ORG_ME.availableContexts,
+        { kind: 'organization' as const, orgId: 'org_second', orgName: 'Second Org d.o.o.' },
+      ],
     };
     let current = withSecond;
     const request = vi.fn(async (path: string, init: RequestInit) => {

@@ -81,8 +81,11 @@ export default defineConfig({
   webServer: [
     {
       // Fresh database on every run; never reuse an API bound to stale data.
+      // `nest start` (no --watch) prevents the file watcher from restarting
+      // the API when another agent edits files in the same worktree, which
+      // was causing transient ECONNREFUSED (1 run in 3).
       command:
-        'pnpm --filter @nestself/api exec tsx ../../e2e/content/database.ts && pnpm --filter @nestself/api dev',
+        'pnpm --filter @nestself/api exec tsx ../../e2e/content/database.ts && pnpm --filter @nestself/api exec nest start',
       url: `${API_URL}/api/health`,
       reuseExistingServer: false,
       timeout: 180_000,
