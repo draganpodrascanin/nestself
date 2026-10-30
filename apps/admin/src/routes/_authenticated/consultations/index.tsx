@@ -20,6 +20,7 @@ import { canListConsultations, isConsultingExpert, requireConsultationList } fro
 import { sampleFirstName } from '../../../calls/sample';
 import { useConsultationList } from '../../../calls/use-consultations';
 import { useCanBook, useOpsOrganizations } from '../../../calls/use-ops-organizations';
+import { PHONE_QUERY, useMediaQuery } from '../../../calls/use-media-query';
 import type { ConsultationListParams, ConsultationListState } from '../../../calls/use-consultations';
 
 export const Route = createFileRoute('/_authenticated/consultations/')({
@@ -55,39 +56,87 @@ interface RowProps {
   orgNames: ReadonlyMap<string, string>;
 }
 
-function ConsultationRow({ appointment, now, operations, orgNames }: RowProps) {
+/** What a row or a card shows of one consultation, rendered once for both layouts. */
+function useConsultationCells({ appointment, now, operations, orgNames }: RowProps) {
   const { t } = useTranslation('calls');
   const format = useZonedFormat();
   const categoryLabel = useCategoryLabel();
   const employee = firstName(appointment, 'employee') ?? t('consultations.employeeFallback');
   const outcome = outcomeColumn(appointment, now);
-  const link = (
-    <Link to="/consultations/$appointmentId" params={{ appointmentId: appointment.id }} className="text-primary underline underline-offset-[0.2em]">
-      {operations ? t('consultations.view') : employee}
-    </Link>
-  );
+  return {
+    employee,
+    link: (
+      <Link to="/consultations/$appointmentId" params={{ appointmentId: appointment.id }} className="text-primary underline underline-offset-[0.2em]">
+        {operations ? t('consultations.view') : employee}
+      </Link>
+    ),
+    expert: firstName(appointment, 'expert') ?? t('appointments.yourExpert'),
+    organisation: appointment.orgName ?? organisationLabel(appointment.orgId, orgNames),
+    service: categoryLabel(appointment.serviceCategory),
+    time: <time dateTime={appointment.startsAt}>{format.short(appointment.startsAt, appointment.timeZone)}</time>,
+    status: <Badge tone={STATUS_TONE[appointment.status]}>{t(`appointments.status.${appointment.status}`)}</Badge>,
+    outcome: outcome === 'toRecord' ? <Badge tone="warning">{t('consultations.outcomeColumn.toRecord')}</Badge> : t(`consultations.outcomeColumn.${outcome}`),
+  };
+}
+
+function ConsultationRow(props: RowProps) {
+  const { operations } = props;
+  const cells = useConsultationCells(props);
   return (
     <tr>
-      <Td>{operations ? employee : link}</Td>
-      {operations ? <Td>{firstName(appointment, 'expert') ?? t('appointments.yourExpert')}</Td> : null}
-      {operations ? <Td>{appointment.orgName ?? organisationLabel(appointment.orgId, orgNames)}</Td> : null}
-      <Td>{categoryLabel(appointment.serviceCategory)}</Td>
-      <Td>
-        <time dateTime={appointment.startsAt}>{format.short(appointment.startsAt, appointment.timeZone)}</time>
-      </Td>
-      <Td>
-        <Badge tone={STATUS_TONE[appointment.status]}>{t(`appointments.status.${appointment.status}`)}</Badge>
-      </Td>
-      <Td>
-        {outcome === 'toRecord' ? <Badge tone="warning">{t('consultations.outcomeColumn.toRecord')}</Badge> : t(`consultations.outcomeColumn.${outcome}`)}
-      </Td>
-      {operations ? <Td>{link}</Td> : null}
+      <Td>{operations ? cells.employee : cells.link}</Td>
+      {operations ? <Td>{cells.expert}</Td> : null}
+      {operations ? <Td>{cells.organisation}</Td> : null}
+      <Td>{cells.service}</Td>
+      <Td>{cells.time}</Td>
+      <Td>{cells.status}</Td>
+      <Td>{cells.outcome}</Td>
+      {operations ? <Td>{cells.link}</Td> : null}
     </tr>
+  );
+}
+
+/**
+ * One consultation at phone widths: the employee and the status on top, then
+ * the time and the outcome, so nothing sits behind a sideways scroll.
+ */
+function ConsultationCard(props: RowProps) {
+  const { t } = useTranslation('calls');
+  const { operations } = props;
+  const cells = useConsultationCells(props);
+  const facts = [
+    { term: t('consultations.columns.time'), description: cells.time },
+    { term: t('consultations.columns.outcome'), description: cells.outcome },
+    { term: t('consultations.columns.service'), description: cells.service },
+    ...(operations
+      ? [
+          { term: t('consultations.columns.expert'), description: cells.expert },
+          { term: t('consultations.columns.organisation'), description: cells.organisation },
+        ]
+      : []),
+  ];
+  return (
+    <li className="gap-3 p-4 flex flex-col rounded-card border border-border-subtle bg-surface">
+      <div className="gap-x-3 gap-y-2 flex flex-wrap items-center justify-between">
+        <span className="type-label text-text">{operations ? cells.employee : cells.link}</span>
+        {cells.status}
+      </div>
+      <dl className="gap-x-4 gap-y-1.5 m-0 grid grid-cols-[max-content_minmax(0,1fr)] type-metadata">
+        {facts.map((fact) => (
+          <div key={fact.term} className="contents">
+            <dt className="text-text-secondary">{fact.term}</dt>
+            <dd className="m-0 text-text">{fact.description}</dd>
+          </div>
+        ))}
+      </dl>
+      {operations ? <span className="type-metadata">{cells.link}</span> : null}
+    </li>
   );
 }
 
 const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
+/** A table from `sm` up; at phone widths a list of cards, so nothing is cut off at the edge (reflow). */
 function ConsultationTable({
   caption,
   items,
@@ -102,6 +151,16 @@ function ConsultationTable({
   orgNames?: ReadonlyMap<string, string>;
 }) {
   const { t } = useTranslation('calls');
+  const phone = useMediaQuery(PHONE_QUERY);
+  if (phone) {
+    return (
+      <ul aria-label={caption} data-layout="cards" className="gap-3 m-0 p-0 flex list-none flex-col">
+        {items.map((appointment) => (
+          <ConsultationCard key={appointment.id} appointment={appointment} now={now} operations={operations} orgNames={orgNames} />
+        ))}
+      </ul>
+    );
+  }
   return (
     <Table caption={caption}>
       <thead>

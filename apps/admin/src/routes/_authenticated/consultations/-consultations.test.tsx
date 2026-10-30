@@ -13,6 +13,7 @@ import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import calls from '@nestself/i18n/locales/en/calls.json';
 import common from '@nestself/i18n/locales/en/common.json';
 import { routeTree } from '../../../routeTree.gen';
+import { PHONE_QUERY } from '../../../calls/use-media-query';
 import i18n from '../../../i18n';
 
 /** 25 October 2026, 10:00 in Belgrade: before every upcoming sample appointment. */
@@ -57,6 +58,31 @@ describe('admin consultations (sample mode)', { timeout: 20_000 }, () => {
     expect(within(past[1]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_completed');
     expect(within(past[1]!).getByText(calls.consultations.outcomeColumn.completed)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: calls.consultations.nav }).length).toBeGreaterThan(0);
+  });
+
+  it('at 390 px lists each consultation as a card with the employee, status and time first, and no table to scroll', async () => {
+    const original = window.matchMedia;
+    // A 390 px viewport: only the phone query matches.
+    window.matchMedia = ((query: string) => ({ ...original(query), matches: query === PHONE_QUERY })) as typeof window.matchMedia;
+    try {
+      renderAt('/consultations', 'expert');
+      const upcoming = await screen.findByRole('list', { name: calls.consultations.upcoming });
+      expect(upcoming).toHaveAttribute('data-layout', 'cards');
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      const cards = within(upcoming).getAllByRole('listitem');
+      expect(cards).toHaveLength(3);
+      expect(within(cards[0]!).getByRole('link', { name: 'Jovan' })).toHaveAttribute('href', '/consultations/appt_sample_follow_up_proposed');
+      expect(within(cards[0]!).getByText(calls.appointments.status.proposed)).toBeInTheDocument();
+      expect(within(cards[0]!).getAllByRole('term').map((term) => term.textContent)).toEqual([
+        calls.consultations.columns.time,
+        calls.consultations.columns.outcome,
+        calls.consultations.columns.service,
+      ]);
+      const past = within(screen.getByRole('list', { name: calls.consultations.past })).getAllByRole('listitem');
+      expect(within(past[1]!).getByText(calls.consultations.outcomeColumn.completed)).toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it('shows operations every consultation with expert and organisation, filters and a read-only view (CALL-28)', async () => {

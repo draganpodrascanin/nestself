@@ -197,6 +197,29 @@ describe('the approvals dashboard (API mode)', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   }, 20_000);
 
+  it('clears "write a short reason" as soon as the approver types one, and checks again on the next decline', async () => {
+    const sent = serve({ [`GET ${LIST}`]: () => json(200, { items: [item()] }) });
+    renderAt('/approvals');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: en.approval.reject }, { timeout: 5000 }));
+    const dialog = await screen.findByRole('alertdialog', { name: en.approval.rejectTitle });
+    const confirm = within(dialog).getByRole('button', { name: en.approval.reject });
+
+    await user.click(confirm);
+    expect((await within(dialog).findAllByText(en.approval.reasonRequired)).length).toBeGreaterThan(0);
+    const reason = within(dialog).getByRole('textbox', { name: new RegExp(en.approval.reasonLabel) });
+    await user.type(reason, 'N');
+    // The field message goes at once; the summary animates out, then unmounts.
+    await waitFor(() => expect(within(dialog).queryByText(en.approval.reasonRequired)).not.toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).queryByText(common.form.errorSummaryTitle)).not.toBeInTheDocument());
+
+    await user.clear(reason);
+    await user.type(reason, '   ');
+    await user.click(confirm);
+    expect((await within(dialog).findAllByText(en.approval.reasonRequired)).length).toBeGreaterThan(0);
+    expect(sent.some((s) => s.path.endsWith('/reject'))).toBe(false);
+  });
+
   it('keeps the name in the decline dialog while it closes (exit animation)', async () => {
     serve({ [`GET ${LIST}`]: () => json(200, { items: [item()] }) });
     renderAt('/approvals');

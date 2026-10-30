@@ -37,6 +37,14 @@ export interface CallStageProps {
   supportHref?: string;
   /** A failed rejoin, already translated (for example a closed join window). */
   error?: string | null;
+  /**
+   * What the stage says while the other participant has not joined. By
+   * default the employee reads "Your expert will join shortly"
+   * (`consultation.waiting`, CALL-05) and the expert a neutral sentence
+   * (`consultation.waitingExpert`); `null` keeps the icon only, for a screen
+   * that states the waiting status in its own panel.
+   */
+  waitingMessage?: string | null;
   /** The stage element. */
   ref?: Ref<HTMLElement>;
   /**
@@ -92,6 +100,7 @@ export function CallStage({
   rejoinPending = false,
   supportHref,
   error,
+  waitingMessage,
   ref,
   fullscreen = false,
   className,
@@ -118,6 +127,7 @@ export function CallStage({
 
   const { status, failure, endReason } = call;
   const live = status === 'connected' || status === 'reconnecting';
+  const waitingCopy = waitingMessage === undefined ? (call.role === 'employee' ? t('consultation.waiting') : t('consultation.waitingExpert')) : waitingMessage;
   const primaryLabel =
     tiles.contentTileId !== null
       ? t('stage.sharedScreen')
@@ -184,7 +194,11 @@ export function CallStage({
         ) : live ? (
           <div className="gap-3 p-6 absolute inset-0 flex flex-col items-center justify-center text-center text-text-secondary">
             {remotePresent ? <VideoCameraSlash size={48} aria-hidden /> : <UserCircle size={48} aria-hidden />}
-            <p className="type-body-large">{remotePresent ? t('stage.remoteCameraOff') : t('consultation.waiting')}</p>
+            {remotePresent ? (
+              <p className="type-body-large">{t('stage.remoteCameraOff')}</p>
+            ) : waitingCopy ? (
+              <p className="type-body-large">{waitingCopy}</p>
+            ) : null}
           </div>
         ) : null}
 

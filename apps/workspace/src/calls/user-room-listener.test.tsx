@@ -58,7 +58,10 @@ function renderListener() {
 }
 
 describe('UserRoomListener', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState(null, '', '/');
+  });
 
   it('subscribes to the signed-in user’s room', () => {
     renderListener();
@@ -78,6 +81,33 @@ describe('UserRoomListener', () => {
     expect(await screen.findByText(testI18n.t('calls:followUp.employeeTitle'))).toBeInTheDocument();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.lists() });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.detail('appt_2') });
+  });
+
+  it.each(['/webinars', '/webinars/web_1', '/webinars/web_1/live'])('refreshes the queries but shows no follow-up toast on %s', async (path) => {
+    window.history.replaceState(null, '', path);
+    const { invalidate } = renderListener();
+    act(() =>
+      room.handlers?.onFollowUpProposed?.({
+        appointmentId: 'appt_1',
+        followUpId: 'appt_2',
+        startsAt: '2030-01-20T09:00:00.000Z',
+        durationMinutes: 50,
+      }),
+    );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.lists() });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: appointmentKeys.detail('appt_2') });
+    // A toast would render on the next frame; give it the chance before asserting none came.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.queryByText(testI18n.t('calls:followUp.employeeTitle'))).not.toBeInTheDocument();
+  });
+
+  it('shows the follow-up toast again on a page whose path only starts like a webinar route', async () => {
+    window.history.replaceState(null, '', '/webinars-archive');
+    renderListener();
+    act(() =>
+      room.handlers?.onFollowUpProposed?.({ appointmentId: 'appt_1', followUpId: 'appt_2', startsAt: '2030-01-20T09:00:00.000Z', durationMinutes: 50 }),
+    );
+    expect(await screen.findByText(testI18n.t('calls:followUp.employeeTitle'))).toBeInTheDocument();
   });
 
   it('shows a reminder with the start in the appointment’s time zone', async () => {

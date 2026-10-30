@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button, Dialog, DialogActions, DialogContent, FormErrorSummary, RadioGroup, RadioItem } from '@nestself/ui';
 import type { FormError, FormErrorSummaryHandle } from '@nestself/ui';
 import { appointmentKeys } from '@nestself/api-client';
+import type { AppointmentView } from '@nestself/api-client';
 import { CALL_OUTCOME_STATUSES, CallOutcomeStatusSchema } from '@nestself/contracts';
 import type { Appointment, CallOutcomeStatus } from '@nestself/contracts';
 import { isSampleDataMode } from '../data-source';
@@ -57,7 +58,10 @@ export function OutcomeDialog({ appointmentId, open, onOpenChange, onRecorded }:
     setPending(true);
     try {
       const updated = await callsApi.recordOutcome(appointmentId, { status: parsed.data });
-      queryClient.setQueryData(appointmentKeys.detail(appointmentId), updated);
+      // The outcome answers the seam only, without the participants' names: keep what the page
+      // loaded (names, viewer) and refetch the detail, never replace it with the bare payload.
+      queryClient.setQueryData<AppointmentView>(appointmentKeys.detail(appointmentId), (current) => (current ? { ...current, ...updated } : current));
+      void queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
       void queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       onRecorded(parsed.data, updated);
       onOpenChange(false);

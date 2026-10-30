@@ -95,7 +95,7 @@ interface Sent {
   body: unknown;
 }
 
-function serve(routes: Record<string, () => Response>): Sent[] {
+function serve(routes: Record<string, () => Response | Promise<Response>>): Sent[] {
   const sent: Sent[] = [];
   fetchMock.mockImplementation((input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
@@ -302,6 +302,39 @@ describe("the expert's follow-ups (API mode)", { timeout: 20_000 }, () => {
     expect(screen.queryByRole('button', { name: en.join.button, hidden: true })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: en.join.rejoin, hidden: true })).not.toBeInTheDocument();
   }, 20_000);
+
+  it('keeps the employee name after the outcome is recorded, and reads the consultation again', async () => {
+    const startsAt = Date.now() - 5 * 60_000;
+    const consultation = appointment({
+      status: 'confirmed',
+      startsAt: new Date(startsAt).toISOString(),
+      endsAt: new Date(startsAt + 50 * 60_000).toISOString(),
+    });
+    // The outcome answers the appointment without the participants' names.
+    const { expert: _expert, employee: _employee, ...bare } = consultation;
+    let detailReads = 0;
+    const sent = serve({
+      // The refetch never answers here: what the page shows meanwhile is the merged detail.
+      'GET /api/appointments/appt_1': () => (++detailReads === 1 ? json(200, consultation) : new Promise<Response>(() => undefined)),
+      'POST /api/appointments/appt_1/outcome': () => json(200, { ...bare, status: 'completed' }),
+    });
+    renderAt('/consultations/appt_1');
+    const user = userEvent.setup();
+    const employeeName = () => screen.getByText(en.consultations.columns.employee, { selector: 'dt' }).nextElementSibling;
+
+    await user.click(await screen.findByRole('button', { name: en.consultations.recordOutcome }, { timeout: 5000 }));
+    expect(employeeName()).toHaveTextContent('Jovan');
+    const dialog = await screen.findByRole('dialog', { name: en.outcome.title });
+    await user.click(within(dialog).getByRole('radio', { name: en.outcome.status.completed }));
+    await user.click(within(dialog).getByRole('button', { name: en.outcome.submit }));
+
+    expect(await screen.findByText(en.consultations.outcomeRecorded.replace('{{status}}', en.outcome.status.completed))).toBeInTheDocument();
+    expect(sent.some((s) => s.method === 'POST' && s.path === '/api/appointments/appt_1/outcome')).toBe(true);
+    // Not "Employee: Employee": the name the page loaded stays, with the new status.
+    expect(employeeName()).toHaveTextContent(/^Jovan$/);
+    expect(screen.getByText(en.appointments.details.status, { selector: 'dt' }).nextElementSibling).toHaveTextContent(en.appointments.status.completed);
+    await waitFor(() => expect(detailReads).toBe(2));
+  });
 
   it('says a scheduled follow-up waiting for approval is waiting', async () => {
     serve({ 'GET /api/appointments/appt_2': () => json(200, followUp({ status: 'awaiting_approval' })) });

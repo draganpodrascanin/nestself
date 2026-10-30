@@ -177,8 +177,19 @@ function RejectApprovalDialog({ item, open, api, onClose, onRejected }: RejectDi
         onConfirm={handleConfirm}
         confirmPending={reject.isPending}
       >
-        <form ref={formRef} noValidate onSubmit={(e) => e.preventDefault()} className="space-y-4">
-          <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
+        {/* Typing a reason clears the "write a short reason" message; the next confirm checks again. */}
+        <form
+          ref={formRef}
+          noValidate
+          onSubmit={(e) => e.preventDefault()}
+          onInput={() => {
+            if (errors.length > 0) setErrors([]);
+          }}
+          className="space-y-4"
+        >
+          <Reveal show={errors.length > 0}>
+            <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
+          </Reveal>
           <Field
             id={REASON_ID}
             label={t('calls:approval.reasonLabel')}

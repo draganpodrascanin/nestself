@@ -269,7 +269,10 @@ describe('call route (API mode)', { timeout: 20_000 }, () => {
     const user = userEvent.setup();
     await user.click(await readyToJoin());
 
-    expect(await screen.findByText(en.waiting.expertSoon, {}, { timeout: 5000 })).toBeInTheDocument();
+    // CALL-05 criterion 3: the waiting status, once (the stage leaves it to the waiting panel).
+    expect(await screen.findByRole('heading', { name: 'Your expert will join shortly' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getAllByText(en.consultation.waiting)).toHaveLength(1);
+    expect(screen.queryByText(en.consultation.waitingExpert)).not.toBeInTheDocument();
     await waitFor(() => expect(room.sessionId).toBe('sess_1'));
 
     act(() => room.handlers?.onSignal?.({ type: 'running_late', etaMinutes: 5, fromRole: 'expert' }));

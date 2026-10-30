@@ -38,6 +38,26 @@ describe('CallStage (UX-10, UX-20, CALL-08)', () => {
     expect(screen.getByTestId('self-view')).toHaveAttribute('data-corner', 'bottom-right');
   });
 
+  it('tells the employee their expert will join shortly, and the expert a neutral sentence (CALL-05)', async () => {
+    const employee = await connected('employee');
+    const { unmount } = renderWithI18n(<CallStage controller={employee} />);
+    expect(screen.getByText('Your expert will join shortly')).toBeInTheDocument();
+    expect(screen.queryByText(t('consultation.waitingExpert'))).toBeNull();
+    unmount();
+
+    const expert = await connected('expert');
+    renderWithI18n(<CallStage controller={expert} />);
+    expect(screen.getByText('Waiting for the other participant to join.')).toBeInTheDocument();
+    expect(screen.queryByText(t('consultation.waiting'))).toBeNull();
+  });
+
+  it('leaves the waiting sentence to a screen that states it in its own panel', async () => {
+    const controller = await connected('employee');
+    renderWithI18n(<CallStage controller={controller} waitingMessage={null} />);
+    expect(screen.queryByText(t('consultation.waiting'))).toBeNull();
+    expect(screen.queryByText(t('consultation.waitingExpert'))).toBeNull();
+  });
+
   it('hides and shows the self-view; hiding animates out (UX-10)', async () => {
     const user = userEvent.setup();
     const controller = await connected();

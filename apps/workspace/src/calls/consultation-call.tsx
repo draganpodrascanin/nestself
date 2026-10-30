@@ -115,7 +115,8 @@ function WaitingPanel({
         {expertName ? <Avatar initials={expertName.slice(0, 1)} name={expertName} size="md" src={appointment.expert?.photoUrl} /> : null}
         <div className="gap-0.5 min-w-0 flex flex-col">
           <h2 id="waiting-title" className="type-label text-text">
-            {expertName ? t('waiting.expertSoonNamed', { name: expertName }) : t('waiting.expertSoon')}
+            {/* CALL-05 criterion 3: "Your expert will join shortly", with the first name when it is known (criterion 1). */}
+            {expertName ? t('waiting.expertSoonNamed', { name: expertName }) : t('consultation.waiting')}
           </h2>
           {appointment.expert?.credentials ? <p className="type-metadata text-text-secondary">{appointment.expert.credentials}</p> : null}
         </div>
@@ -502,6 +503,8 @@ export function ConsultationCall({ appointment, expertName }: ConsultationCallPr
           rejoinPending={joining}
           supportHref={supportMailto()}
           error={rejoinError}
+          // The waiting panel below states the status and the expert's name; the stage does not repeat it.
+          waitingMessage={null}
           header={
             <>
               <div className="gap-2 flex flex-wrap items-center">
