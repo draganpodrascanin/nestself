@@ -1,6 +1,6 @@
 # Implementation notes: consultations and webinars on Amazon Chime SDK
 
-Epic `NS-CALLS-01`. Implementation notes v1.0, 25 October 2026. These notes record what the implementation on branch `feat/calls-p0` (M0 to M2 and the replication of M3) taught that the planning files did not say: the defects only a real browser found, the frontend-coverage audits and what closed their gaps, how to run the stack and the journeys, the spikes still to run, where the code disagreed with the amendment brief for this pass, and the follow-ups. The planning files (`02-decisions.md`, `04-user-stories.md`, `05-tasks.md`, `06-implementation-guidelines.md`) were amended the same day to describe the code; each amendment is dated there. Where the code and a planning file disagree, the code is the reference until a decision says otherwise.
+Epic `NS-CALLS-01`. Implementation notes v1.1, 25 October 2026, updated on 30 October 2026 after `main` was merged into the branch (section 7). These notes record what the implementation on branch `feat/calls-p0` (M0 to M2 and the replication of M3) taught that the planning files did not say: the defects only a real browser found, the frontend-coverage audits and what closed their gaps, how to run the stack and the journeys, the spikes still to run, where the code disagreed with the amendment brief for this pass, and the follow-ups. The planning files (`02-decisions.md`, `04-user-stories.md`, `05-tasks.md`, `06-implementation-guidelines.md`) were amended the same day to describe the code; each amendment is dated there. Where the code and a planning file disagree, the code is the reference until a decision says otherwise.
 
 ## 1. Defects found only by the real-browser run
 
@@ -95,3 +95,25 @@ The brief for this pass listed verified findings from the implementation reviews
 | Expert photo and credentials | A data source for `photoUrl` and `credentials` in the appointment response | Expert profile epic |
 | Certificates and the load test (P1) | T-CW-3.3 and T-CW-3.4 are not started | `05-tasks.md` |
 | Mobile ticket route (M4) | T-CW-4.1 is not started; SPIKE-CW-05 runs with it | `05-tasks.md` |
+
+## 7. Merge with `main` (30 October 2026)
+
+`main` was merged into `feat/calls-p0` on 30 October 2026 (`c358e1b`), bringing auth phase 3: enterprise SSO, the organization owner model, the operations routes and the UI-completeness screens. Its migration `0006_sso_domains_rls.sql` (row-level security, an index and a tenant policy on `sso_domains`) took the number the branch's first migration had, so the branch's migrations moved up by one:
+
+| Before the merge | After the merge |
+| --- | --- |
+| `0006_appointments.sql` | `0007_appointments.sql` |
+| `0007_calls.sql` | `0008_calls.sql` |
+| `0008_call_session_end_reason.sql` | `0009_call_session_end_reason.sql` |
+| `0009_follow_up.sql` | `0010_follow_up.sql` |
+| `0010_appointment_approvals.sql` | `0011_appointment_approvals.sql` |
+| `0011_webinars.sql` | `0012_webinars.sql` |
+| `0012_webinar_recording_pipeline.sql` | `0013_webinar_recording_pipeline.sql` |
+| `0013_webinar_registrations_org.sql` | `0014_webinar_registrations_org.sql` |
+| `0014_call_replicas.sql` | `0015_call_replicas.sql` |
+
+- **Snapshots and journal.** `meta/0007_snapshot.json` to `0015_snapshot.json` follow the files; the first one's `prevId` is the id of main's `0006_snapshot.json`, and every one of them carries main's `sso_domains` change, so `drizzle-kit generate` against the merged schema reports no changes. The journal entries are `idx` 7 to 15 with `when` values after main's 0006, because the migrator applies only entries newer than the last one a database recorded. The hand-written `FORCE ROW LEVEL SECURITY` lines are unchanged.
+- **Existing databases.** A database migrated with the old numbering cannot move to the new one: the migrator would try main's 0006 and then re-create the appointment tables. Drop and recreate it, then run `db:migrate` and `db:seed`. The development database `nestself` was rebuilt that way on 30 October 2026; `e2e/calls/start-api.mjs` drops and recreates `nestself_test_e2e17` on every run, and the API suites create their own databases.
+- **Counts.** `apps/api/test/db/schema.spec.ts` expects 16 migrations and 34 tenant tables with forced row-level security (the branch's 33 and `sso_domains`).
+- **Auth guide.** In `docs/auth/implementation.md`, main's Enterprise SSO keeps section 22 (the repository's `CLAUDE.md` cites it), and consultation calls and video moved to section 23.
+- **Planning documents.** `05-tasks.md` and `06-implementation-guidelines.md` still name the migrations by their numbers before the merge; the table above maps them.
