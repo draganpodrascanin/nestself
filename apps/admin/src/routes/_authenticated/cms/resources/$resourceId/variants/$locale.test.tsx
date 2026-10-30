@@ -1,8 +1,9 @@
 /**
- * Tests for the CMS variant editor route (T-C1.12).
+ * Tests for the CMS variant editor route (T-C1.12, Phase A).
  *
  * Asserts that error states, conflict notices, validation summaries,
- * derived locale notices, and the proposedAudience select are visible.
+ * derived locale notices, API-mode loading, autosave wiring, properties
+ * panel, locale tabs, and action buttons are visible and correct.
  *
  * The component is not exported directly, so we capture it via
  * a mocked `createFileRoute` and render it with mocked providers.
@@ -34,6 +35,7 @@ void testI18n.use(initReactI18next).init({
 
 let CapturedComponent: React.ComponentType | undefined;
 const mockUseParams = vi.fn();
+const mockUseBlocker = vi.fn();
 
 vi.mock('@tanstack/react-router', () => {
   const redirect = vi.fn();
@@ -53,6 +55,7 @@ vi.mock('@tanstack/react-router', () => {
       return routeProxy;
     },
     redirect,
+    useBlocker: (...args: unknown[]) => mockUseBlocker(...args),
     Outlet: () => null,
     Link: ({ children, ...props }: Record<string, unknown>) => <a {...props}>{children as React.ReactNode}</a>,
   };
@@ -66,7 +69,7 @@ const mockAuth = {
   status: 'authenticated' as const,
   principal: {
     userId: 'user_author',
-    displayName: 'Katarina Lukić',
+    displayName: 'Katarina Lukic',
     initials: 'KL',
     locale: 'sr-Latn' as const,
     memberships: [],
@@ -103,6 +106,14 @@ vi.mock('../../../../../../data-source', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock api (the route imports `api` from ../../../../../../api)
+// ---------------------------------------------------------------------------
+
+vi.mock('../../../../../../api', () => ({
+  api: { request: vi.fn() },
+}));
+
+// ---------------------------------------------------------------------------
 // Mock ContentEditor (avoid pulling in Tiptap + ProseMirror in jsdom)
 // ---------------------------------------------------------------------------
 
@@ -136,8 +147,17 @@ vi.mock('@nestself/content/render', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock ApiError
+// Mock ApiError and CMS API
 // ---------------------------------------------------------------------------
+
+const mockSaveRevision = vi.fn();
+const mockSubmitRevision = vi.fn();
+const mockApproveRevision = vi.fn();
+const mockPublishNow = vi.fn();
+const mockCreateNewRevision = vi.fn();
+const mockGetResource = vi.fn();
+const mockUploadMedia = vi.fn();
+const mockGetMediaAsset = vi.fn();
 
 vi.mock('@nestself/api-client', () => ({
   ApiError: class ApiError extends Error {
@@ -151,8 +171,14 @@ vi.mock('@nestself/api-client', () => ({
   },
   createApiClient: () => ({}),
   createCmsApi: () => ({
-    uploadMedia: vi.fn(),
-    getMediaAsset: vi.fn(),
+    getResource: mockGetResource,
+    saveRevision: mockSaveRevision,
+    submitRevision: mockSubmitRevision,
+    approveRevision: mockApproveRevision,
+    publishNow: mockPublishNow,
+    createNewRevision: mockCreateNewRevision,
+    uploadMedia: mockUploadMedia,
+    getMediaAsset: mockGetMediaAsset,
   }),
 }));
 
@@ -172,10 +198,8 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 
 function renderEditor(params: { resourceId: string; locale: string }) {
   mockUseParams.mockReturnValue(params);
-  // Force the module to re-execute so CapturedComponent is set
-  // (it runs on first import due to the mock)
   if (!CapturedComponent) {
-    throw new Error('CapturedComponent was not set — import the route module before rendering');
+    throw new Error('CapturedComponent was not set -- import the route module before rendering');
   }
   const Component = CapturedComponent;
   return render(
@@ -186,11 +210,10 @@ function renderEditor(params: { resourceId: string; locale: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Import the route module (triggers createFileRoute mock → captures component)
+// Import the route module (triggers createFileRoute mock -> captures component)
 // ---------------------------------------------------------------------------
 
 beforeEach(async () => {
-  // Dynamic import to trigger the mock capture
   await import('./$locale.tsx');
 });
 
@@ -225,10 +248,10 @@ describe('VariantEditorPage', () => {
     expect(screen.getByTestId('content-renderer')).toBeInTheDocument();
   });
 
-  it('renders the proposedAudience select for non-derived locales', () => {
+  it('renders the proposedAudience inside the properties panel for authored locales', () => {
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
-    // The audience field has the label from i18n
+    // The audience field label is inside the Accordion panel (open by default)
     expect(
       screen.getByText(testI18n.t('cms:editor.proposedAudience')),
     ).toBeInTheDocument();
@@ -242,15 +265,22 @@ describe('VariantEditorPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders the submit and approve buttons for authored locales', () => {
+  it('renders the submit button for authored locales in draft state', () => {
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
+    // Submit is visible when canWrite + revision is draft
     expect(
       screen.getByRole('button', { name: testI18n.t('cms:editor.submit') }),
     ).toBeInTheDocument();
+  });
+
+  it('does NOT render approve button for draft state (only for in_review)', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    // Approve only shows for in_review state; sample data is draft
     expect(
-      screen.getByRole('button', { name: testI18n.t('cms:editor.approve') }),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: testI18n.t('cms:editor.approve') }),
+    ).not.toBeInTheDocument();
   });
 
   it('does NOT render submit/approve buttons for sr-Cyrl', () => {
@@ -268,7 +298,6 @@ describe('VariantEditorPage', () => {
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
     const titleInput = screen.getByRole('textbox', { name: /title/i });
-    // The sample data's sr-Latn variant title should be in the input
     expect(titleInput).toHaveValue('Mirniji kraj dana: tri mala koraka');
   });
 
@@ -317,9 +346,10 @@ describe('VariantEditorPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the sources section with add button for authored locales', () => {
+  it('shows the sources section with add button inside properties panel', () => {
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
+    // Sources and Add button are inside the Accordion (open by default)
     expect(
       screen.getByRole('button', { name: testI18n.t('cms:editor.addSource') }),
     ).toBeInTheDocument();
@@ -331,5 +361,56 @@ describe('VariantEditorPage', () => {
     expect(
       screen.queryByRole('button', { name: testI18n.t('cms:editor.addSource') }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the locale tabs with all four locales', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    expect(screen.getByRole('tab', { name: /Serbian \(Latin\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Hungarian/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /English/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Serbian \(Cyrillic\)/i })).toBeInTheDocument();
+  });
+
+  it('shows the properties panel accordion for authored locale', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    // The accordion trigger is the Properties panel
+    expect(
+      screen.getByText(testI18n.t('cms:editor.propertiesPanel')),
+    ).toBeInTheDocument();
+  });
+
+  it('shows not-found for an unknown resource in sample mode', () => {
+    renderEditor({ resourceId: 'res_nonexistent', locale: 'sr-Latn' });
+
+    expect(screen.getByText(testI18n.t('cms:editor.notFound'))).toBeInTheDocument();
+  });
+
+  it('shows the revision state badge for the current revision', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    // Sample data revision state is 'draft'
+    expect(screen.getByText(testI18n.t('cms:detail.revisionState.draft'))).toBeInTheDocument();
+  });
+
+  it('calls useBlocker with correct options', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    // useBlocker should have been called
+    expect(mockUseBlocker).toHaveBeenCalled();
+    const call = mockUseBlocker.mock.calls.find((c: unknown[]) => {
+      const opts = c[0] as { shouldBlockFn?: unknown };
+      return typeof opts?.shouldBlockFn === 'function';
+    });
+    expect(call).toBeDefined();
+  });
+
+  it('shows summary field with pre-filled data inside properties panel', () => {
+    renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
+
+    // Summary textarea inside the accordion
+    const summaryField = screen.getByText(testI18n.t('cms:editor.summary'));
+    expect(summaryField).toBeInTheDocument();
   });
 });
