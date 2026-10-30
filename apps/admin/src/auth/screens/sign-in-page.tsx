@@ -10,6 +10,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { createAuthApi, ApiError } from '@nestself/api-client';
+import type { SsoSignInReason } from '@nestself/contracts';
 import { negotiateLocale } from '@nestself/i18n';
 import { useAuth } from '../auth-context';
 import { isSampleDataMode } from '../../data-source';
@@ -47,9 +48,20 @@ function resolveInitialScreen(): Screen {
 
 interface Props {
   returnPath?: string;
+  /** `?reason=` from the SSO callback (API-R-07). */
+  reason?: SsoSignInReason;
+  /** `?email=` with `reason=sso_email_unverified`. */
+  email?: string;
 }
 
-export function SignInPage({ returnPath }: Props) {
+/** Translated copy for the reason the SSO callback sent the user back. */
+function reasonMessage(reason: SsoSignInReason | undefined, t: (key: string) => string): string | null {
+  if (reason === 'sso_denied') return t('error.ssoDenied');
+  if (reason === 'sso_email_unverified') return t('error.ssoEmailUnverified');
+  return null;
+}
+
+export function SignInPage({ returnPath, reason, email: reasonEmail }: Props) {
   const { t, i18n } = useTranslation('auth');
   const navigate = useNavigate();
   const { refreshPrincipal, switchContext } = useAuth();
@@ -59,7 +71,10 @@ export function SignInPage({ returnPath }: Props) {
   );
 
   const [screen, setScreen] = useState<Screen>(resolveInitialScreen);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => reasonMessage(reason, t));
+  // SSO-R-08: the IdP did not confirm the address, so prove the mailbox with
+  // the email code instead of discovering (which would route to SSO again).
+  const emailCodeOnly = reason === 'sso_email_unverified';
 
   const handleSuccess = useCallback(async () => {
     await refreshPrincipal();
@@ -121,6 +136,12 @@ export function SignInPage({ returnPath }: Props) {
       setError(null);
 
       try {
+        if (emailCodeOnly) {
+          const locale = negotiateLocale([i18n.resolvedLanguage ?? i18n.language]);
+          const otp = await authApi.emailOtpStart(email, locale);
+          setScreen({ kind: 'email_otp', email, challengeToken: otp.challengeToken });
+          return;
+        }
         const result = await authApi.discover(email);
         switch (result.method) {
           case 'email_otp': {
@@ -147,13 +168,13 @@ export function SignInPage({ returnPath }: Props) {
         handleApiError(err);
       }
     },
-    [authApi, handleApiError, i18n],
+    [authApi, handleApiError, i18n, emailCodeOnly],
   );
 
   switch (screen.kind) {
     case 'identifier':
       return (
-        <IdentifierScreen onSubmit={handleIdentifier} error={error} />
+        <IdentifierScreen onSubmit={handleIdentifier} error={error} initialEmail={reasonEmail} />
       );
 
     case 'email_otp':

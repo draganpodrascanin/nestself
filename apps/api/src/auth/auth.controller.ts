@@ -3,10 +3,12 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -28,6 +30,7 @@ interface HttpRes {
   status(code: number): HttpRes;
   json(body: unknown): void;
   send(): void;
+  redirect(status: number, url: string): void;
 }
 import { Public } from '../authz/public.decorator.js';
 import { Authenticated } from '../authz/authenticated.decorator.js';
@@ -50,7 +53,10 @@ import { SessionCookies } from '../session/session-cookie.js';
 import { ProfileService } from './profile.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { StepUpService } from './step-up.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
   EmailOtpStartRequestSchema,
@@ -65,7 +71,12 @@ import {
   ProfileLocaleRequestSchema,
   ProfileDisplayNameRequestSchema,
   StepUpVerifyRequestSchema,
+  SsoStartQuerySchema,
+  SsoCallbackQuerySchema,
 } from '@nestself/contracts';
+
+/** API-R-06/07: the redirect endpoints share a tight per-IP limit. */
+const SSO_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,6 +127,7 @@ export class AuthController {
     private readonly cookies: SessionCookies,
     private readonly profile: ProfileService,
     private readonly stepUp: StepUpService,
+    private readonly ssoCallback: SsoCallbackService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -125,9 +137,52 @@ export class AuthController {
   @Public()
   @Post('discover')
   @HttpCode(200)
-  async discoverRoute(@Body() body: unknown) {
+  async discoverRoute(@Req() req: HttpReq, @Body() body: unknown) {
     const { email } = validate(DiscoverRequestSchema, body);
-    return this.discover.discover(email);
+    return this.discover.discover(email, extractSurface(req));
+  }
+
+  // -----------------------------------------------------------------------
+  // GET /api/auth/sso/start -- API-R-06
+  // -----------------------------------------------------------------------
+
+  /**
+   * `?connection=<cognitoProviderName>&surface=workspace|admin[&returnPath=/x][&test=<nonce>]`
+   * -> 302 to the identity provider. 400 `validation` for a malformed query,
+   * including an absolute or protocol-relative `returnPath`.
+   */
+  @Public()
+  @Get('sso/start')
+  @Throttle(SSO_THROTTLE)
+  async ssoStart(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
+    const parsed = validate(SsoStartQuerySchema, query);
+    const result = await this.ssoCallback.start(parsed, extractMeta(req));
+    if (result.browserNonce) {
+      res.setHeader('Set-Cookie', [this.cookies.serializeSsoNonce(result.browserNonce, PKCE_TTL)]);
+    }
+    this.sendRedirect(res, result);
+  }
+
+  // -----------------------------------------------------------------------
+  // GET /api/auth/sso/callback -- API-R-07
+  // -----------------------------------------------------------------------
+
+  /**
+   * Cognito's redirect target. Always a 302: to the surface with the session
+   * cookies on success, else to the surface's `/sign-in?reason=...`.
+   */
+  @Public()
+  @Get('sso/callback')
+  @Throttle(SSO_THROTTLE)
+  async ssoCallbackRoute(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
+    const parsed = SsoCallbackQuerySchema.safeParse(query);
+    const result = await this.ssoCallback.callback(
+      parsed.success ? parsed.data : {},
+      extractMeta(req),
+      this.cookies.parseSsoNonce(req.headers),
+    );
+    // The browser-binding cookie is spent on every outcome.
+    this.sendRedirect(res, result, [this.cookies.clearSsoNonce()]);
   }
 
   // -----------------------------------------------------------------------
@@ -229,16 +284,28 @@ export class AuthController {
   @Public()
   @Post('totp/enrol')
   @HttpCode(200)
-  async totpEnrol(
-    @Req() req: HttpReq,
-    @Body() body: unknown,
-  ) {
-    const parsed = validate(TotpEnrolRequestSchema, body);
-    // Public route: req.session is only present when the AuthenticationGuard ran
-    // (it does not for @Public), so the signed-in path is served by the
-    // challengeToken-less call from an authenticated client in a later phase.
-    const accessToken = req.session?.cognito?.accessToken;
-    return this.totp.totpEnrol(parsed.challengeToken, accessToken);
+  @Header('Cache-Control', 'no-store')
+  async totpEnrol(@Body() body: unknown) {
+    const { challengeToken } = validate(TotpEnrolRequestSchema, body);
+    return this.totp.totpEnrol(challengeToken);
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/me/totp/enrol — authenticator enrolment for a signed-in user
+  // -----------------------------------------------------------------------
+
+  /**
+   * Starts enrolment with the session's identity-provider access token and
+   * returns `{ secretUri, challengeToken: null }`; the caller confirms with
+   * POST /auth/totp/confirm. 409 `totp_already_enrolled` when the user
+   * already has an authenticator. The secret is never cached.
+   */
+  @Authenticated()
+  @Post('me/totp/enrol')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  async totpEnrolSignedIn(@CurrentPrincipal() principal: Principal, @Req() req: HttpReq) {
+    return this.totp.totpEnrolSignedIn(principal, req.session?.cognito?.accessToken);
   }
 
   // -----------------------------------------------------------------------
@@ -495,6 +562,20 @@ export class AuthController {
   // -----------------------------------------------------------------------
   // Cookie helpers
   // -----------------------------------------------------------------------
+
+  private sendRedirect(res: HttpRes, result: SsoRedirect, extraCookies: string[] = []): void {
+    const cookies = [...extraCookies];
+    if (result.session) {
+      const { sessionId, csrfToken, absoluteExpiresAt } = result.session;
+      cookies.push(
+        this.cookies.serializeSession(sessionId, absoluteExpiresAt),
+        this.cookies.serializeCsrf(csrfToken, absoluteExpiresAt),
+      );
+    }
+    if (cookies.length > 0) res.setHeader('Set-Cookie', cookies);
+    res.setHeader('Cache-Control', 'no-store');
+    res.redirect(302, result.location);
+  }
 
   private setSessionCookies(
     res: HttpRes,

@@ -10,7 +10,8 @@ import {
   userSessionsKey,
 } from '../redis/redis-keys.js';
 import { SessionService } from '../session/session.service.js';
-import { MaintenanceJobsService } from './maintenance-jobs.service.js';
+import { MAINTENANCE_SCHEDULES } from './job-scheduler.service.js';
+import { MAINTENANCE_JOB_NAMES, MaintenanceJobsService } from './maintenance-jobs.service.js';
 
 const NOW = new Date('2026-10-23T02:15:00.000Z');
 
@@ -51,9 +52,10 @@ describe('MaintenanceJobsService', () => {
   };
   let auditRepo: { ensurePartitions: ReturnType<typeof vi.fn> };
   let audit: { record: ReturnType<typeof vi.fn> };
-  let principals: { invalidateUser: ReturnType<typeof vi.fn> };
+  let principals: { invalidateUser: ReturnType<typeof vi.fn>; invalidateDelegatees: ReturnType<typeof vi.fn> };
   let store: MemoryKeyValueStore;
-  let idp: { revokeRefreshToken: ReturnType<typeof vi.fn> };
+  let idp: { revokeRefreshToken: ReturnType<typeof vi.fn>; describeProvider: ReturnType<typeof vi.fn> };
+  let ssoRepo: { listActiveConnections: ReturnType<typeof vi.fn>; updateConnection: ReturnType<typeof vi.fn> };
   let service: MaintenanceJobsService;
 
   beforeEach(() => {
@@ -67,9 +69,13 @@ describe('MaintenanceJobsService', () => {
     };
     auditRepo = { ensurePartitions: vi.fn().mockResolvedValue(['audit_events_y2026m10', 'audit_events_y2026m11']) };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
-    principals = { invalidateUser: vi.fn().mockResolvedValue(undefined) };
+    principals = { invalidateUser: vi.fn().mockResolvedValue(undefined), invalidateDelegatees: vi.fn().mockResolvedValue([]) };
     store = new MemoryKeyValueStore();
-    idp = { revokeRefreshToken: vi.fn().mockResolvedValue(undefined) };
+    idp = { revokeRefreshToken: vi.fn().mockResolvedValue(undefined), describeProvider: vi.fn().mockResolvedValue(null) };
+    ssoRepo = {
+      listActiveConnections: vi.fn().mockResolvedValue([]),
+      updateConnection: vi.fn().mockImplementation((id: string) => Promise.resolve({ id })),
+    };
     const cipher = {
       encrypt: (v: string) => `enc:${v}`,
       decrypt: (v: string) => ({ plaintext: v.replace(/^enc:/, ''), usedPreviousKey: false }),
@@ -82,6 +88,8 @@ describe('MaintenanceJobsService', () => {
       principals as never,
       store,
       sessions,
+      ssoRepo as never,
+      idp as never,
     );
   });
 
@@ -136,6 +144,9 @@ describe('MaintenanceJobsService', () => {
       expect(actions).toEqual(['grant.delegation_revoked', 'grant.revoked']);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_b', ['org_1']);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_c', ['org_2']);
+      // g_left is closed without its tree: its delegatees hold cached copies.
+      expect(principals.invalidateDelegatees).toHaveBeenCalledWith(['g_child']);
+      expect(principals.invalidateDelegatees).toHaveBeenCalledWith(['g_left']);
     });
 
     it('invalidates each subject once with every affected organization', async () => {
@@ -330,6 +341,142 @@ describe('MaintenanceJobsService', () => {
 
     it('reports zero work when no session exists', async () => {
       expect(await service.reconcileSessionTtl(NOW)).toEqual({ job: 'sessions.reconcile-ttl', scanned: 0, destroyed: [], failed: 0 });
+    });
+  });
+
+  describe('sso.certificate-expiry', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    function connection(overrides: Partial<Record<string, unknown>>) {
+      return {
+        id: 'sso_1',
+        orgId: 'org_1',
+        protocol: 'SAML',
+        cognitoProviderName: 'org-acme-saml',
+        status: 'ACTIVE',
+        metadataUrl: 'https://idp.acme.example/metadata',
+        metadataXml: '<EntityDescriptor>secret-free but never logged</EntityDescriptor>',
+        certificateExpiresAt: null,
+        ...overrides,
+      } as never;
+    }
+
+    it('is a maintenance job scheduled nightly at 03:00', () => {
+      expect(MAINTENANCE_JOB_NAMES).toContain('sso.certificate-expiry');
+      expect(MAINTENANCE_SCHEDULES['sso.certificate-expiry']).toBe('0 3 * * *');
+    });
+
+    it('audits and warns about a certificate that expires within 30 days, as a job', async () => {
+      const expiresAt = new Date(NOW.getTime() + 12 * DAY + 3_600_000);
+      ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: expiresAt })]);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.run('sso.certificate-expiry', NOW);
+
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, failed: 0 });
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith({
+        action: 'sso_connection.changed',
+        actorUserId: null,
+        actorKind: 'JOB',
+        orgId: 'org_1',
+        recordType: 'sso_connection',
+        recordId: 'sso_1',
+        result: 'ALLOWED',
+        details: {
+          reason: 'certificate_expiring',
+          expiresAt: expiresAt.toISOString(),
+          connectionId: 'sso_1',
+          daysLeft: 12,
+          job: 'sso.certificate-expiry',
+        },
+        occurredAt: NOW,
+      });
+      expect(idp.describeProvider).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain('org-acme-saml');
+      expect(warn.mock.calls[0]![0]).not.toContain('EntityDescriptor');
+      warn.mockRestore();
+    });
+
+    it('treats an already expired certificate as expiring with negative days left', async () => {
+      const expiresAt = new Date(NOW.getTime() - 2 * DAY);
+      ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: expiresAt })]);
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      const report = await service.checkSsoCertificates(NOW);
+      expect(report.expiring).toBe(1);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ details: expect.objectContaining({ daysLeft: -2 }) }),
+      );
+      vi.restoreAllMocks();
+    });
+
+    it('does not audit a certificate that expires in more than 30 days', async () => {
+      ssoRepo.listActiveConnections.mockResolvedValue([
+        connection({ certificateExpiresAt: new Date(NOW.getTime() + 31 * DAY) }),
+        connection({ id: 'sso_2', certificateExpiresAt: new Date(NOW.getTime() + 365 * DAY) }),
+      ]);
+      const report = await service.checkSsoCertificates(NOW);
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, failed: 0 });
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('refreshes a missing SAML expiry from the identity provider, then checks it', async () => {
+      const expiresAt = new Date(NOW.getTime() + 5 * DAY);
+      ssoRepo.listActiveConnections.mockResolvedValue([connection({})]);
+      idp.describeProvider.mockResolvedValue({ name: 'org-acme-saml', protocol: 'SAML', certificateExpiresAt: expiresAt });
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.checkSsoCertificates(NOW);
+
+      expect(idp.describeProvider).toHaveBeenCalledWith('org-acme-saml');
+      expect(ssoRepo.updateConnection).toHaveBeenCalledWith('sso_1', { certificateExpiresAt: expiresAt });
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 1, expiring: 1, failed: 0 });
+      vi.restoreAllMocks();
+    });
+
+    it('leaves the expiry unset when the provider reports none, and never asks for OIDC connections', async () => {
+      ssoRepo.listActiveConnections.mockResolvedValue([
+        connection({}),
+        connection({ id: 'sso_oidc', protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc' }),
+      ]);
+      idp.describeProvider.mockResolvedValue({ name: 'org-acme-saml', protocol: 'SAML', certificateExpiresAt: null });
+
+      const report = await service.checkSsoCertificates(NOW);
+
+      expect(idp.describeProvider).toHaveBeenCalledTimes(1);
+      expect(idp.describeProvider).toHaveBeenCalledWith('org-acme-saml');
+      expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, failed: 0 });
+    });
+
+    it('counts a provider failure, warns, and continues with the next connection', async () => {
+      const expiresAt = new Date(NOW.getTime() + 3 * DAY);
+      ssoRepo.listActiveConnections.mockResolvedValue([
+        connection({}),
+        connection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: expiresAt }),
+      ]);
+      idp.describeProvider.mockRejectedValue(new Error('Cognito unavailable'));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.checkSsoCertificates(NOW);
+
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, failed: 1 });
+      expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }));
+      expect(warn.mock.calls.map((c) => String(c[0])).some((m) => m.includes('org-acme-saml'))).toBe(true);
+      warn.mockRestore();
+    });
+
+    it('reports zero work when no connection is active', async () => {
+      expect(await service.checkSsoCertificates(NOW)).toEqual({
+        job: 'sso.certificate-expiry',
+        scanned: 0,
+        refreshed: 0,
+        expiring: 0,
+        failed: 0,
+      });
     });
   });
 });

@@ -223,6 +223,82 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
       expect(meRes.body.principal.userId).toBe('user_jovan');
     });
 
+    let stefanAgent: ReturnType<typeof request.agent>;
+    let stefanCsrf: string;
+
+    function stefanInvites(email: string) {
+      return stefanAgent
+        .post('/api/orgs/org_sample/invitations')
+        .set('X-CSRF-Token', stefanCsrf)
+        .send({ email, templateKey: 'employee' });
+    }
+
+    it('stefan holds people.invite delegated from a grant of jovan (cache warmed)', async () => {
+      // Jovan is the member whose membership ends below; give him a root
+      // grant with people.invite and delegate it to stefan.
+      const base = {
+        actions: ['people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org_sample',
+        includeDescendants: false,
+        grantedByUserId: 'user_ivana',
+        grantedAt: new Date('2026-01-01'),
+        validFrom: new Date('2026-01-01'),
+      };
+      await testDb.db.insert(grants).values([
+        { ...base, id: 'grant_test_jovan_invite', subjectUserId: 'user_jovan', templateKey: null },
+        {
+          ...base,
+          id: 'grant_test_stefan_from_jovan',
+          subjectUserId: 'user_stefan',
+          templateKey: null,
+          parentGrantId: 'grant_test_jovan_invite',
+        },
+      ]);
+
+      const stefan = await signInEmailOtp('user_stefan@example.com');
+      stefanAgent = stefan.agent;
+      stefanCsrf = stefan.csrf;
+      await stefanAgent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', stefanCsrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+
+      const me = await stefanAgent.get('/api/auth/me');
+      expect(me.body.effectiveActions).toContain('people.invite');
+      expect((await stefanInvites('before.end@example.com')).status).toBe(201);
+    });
+
+    it('ivana cannot end her own membership: 409, membership still ACTIVE, session intact', async () => {
+      await ivanaAgent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+
+      const [own] = await testDb.db
+        .select()
+        .from(memberships)
+        .where(eq(memberships.userId, 'user_ivana'));
+      expect(own).toBeDefined();
+
+      const res = await ivanaAgent
+        .post(`/api/orgs/org_sample/members/${own!.id}/end`)
+        .set('X-CSRF-Token', ivanaCsrf)
+        .send({ reason: 'LEFT' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('cannot_end_self');
+
+      const [after] = await testDb.db
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, own!.id));
+      expect(after!.status).toBe('ACTIVE');
+      expect(after!.endDate).toBeNull();
+
+      const me = await ivanaAgent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+    });
+
     it('ends jovan membership as ivana: 200 with status ENDED', async () => {
       // Find jovan's membership id from the DB.
       const [membership] = await testDb.db
@@ -252,6 +328,14 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
 
       // DR-15: under 1000 ms.
       expect(elapsed).toBeLessThan(1000);
+    });
+
+    it("ending jovan's membership invalidates stefan: the delegated people.invite is gone", async () => {
+      const me = await stefanAgent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).not.toContain('people.invite');
+      const res = await stefanInvites('after.end@example.com');
+      expect(res.status).toBe(403);
     });
 
     it('jovan GET /auth/me now returns 401 (session destroyed)', async () => {
@@ -321,6 +405,20 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
         .send({ context: { kind: 'operations' } });
       expect(res.status).toBe(200);
       expect(res.body.principal.context).toEqual({ kind: 'operations' });
+    });
+
+    it('nikola cannot suspend his own account: 409, nothing revoked', async () => {
+      const res = await nikolaAgent
+        .post('/api/ops/users/user_nikola/suspend')
+        .set('X-CSRF-Token', nikolaCsrf)
+        .send({ reason: 'Suspending myself by mistake' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('cannot_suspend_self');
+
+      const [self] = await testDb.db.select().from(users).where(eq(users.id, 'user_nikola'));
+      expect(self!.suspendedAt).toBeNull();
+      const me = await nikolaAgent.get('/api/auth/me');
+      expect(me.status).toBe(200);
     });
 
     it('suspends stefan', async () => {

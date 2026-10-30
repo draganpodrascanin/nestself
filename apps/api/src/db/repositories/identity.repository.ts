@@ -23,6 +23,7 @@ export type UserForPrincipal = UserRow & {
     status: 'INVITED' | 'ACTIVE' | 'ENDED';
     startDate: Date;
     endDate: Date | null;
+    org: { name: string };
   }>;
   expert: { id: string } | null;
 };
@@ -49,6 +50,7 @@ export class IdentityRepository {
             startDate: true,
             endDate: true,
           },
+          with: { org: { columns: { name: true } } },
         },
         expert: { columns: { id: true } },
       },

@@ -7,7 +7,8 @@
  */
 import { useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { ActiveContext, Principal, AvailableContextEntry } from '@nestself/contracts';
+import type { ActiveContext, Principal } from '@nestself/contracts';
+import { ApiError } from '@nestself/api-client';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { AuthContext } from './auth-context';
 import { SampleAuthExtrasContext } from './sample-extras';
@@ -50,6 +51,20 @@ function resolveInitialRole(): SampleRole {
   return 'admin';
 }
 
+/** The API's rule for `POST /auth/context` (session-endpoints.service.ts). */
+function sampleContextAllowed(principal: Principal, context: ActiveContext): boolean {
+  switch (context.kind) {
+    case 'personal':
+      return true;
+    case 'organization':
+      return principal.memberships.some((m) => m.orgId === context.orgId && m.status === 'ACTIVE');
+    case 'expert':
+      return principal.expert !== null;
+    case 'operations':
+      return principal.staffTemplates.length > 0;
+  }
+}
+
 interface Props {
   children: ReactNode;
   initialRole?: SampleRole;
@@ -81,17 +96,20 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
     setContextOverride(null);
   }, []);
 
+  // Context switching is local: the label and `principal.context` change,
+  // the precomputed sample actions do not. Contexts the sample principal
+  // could not hold are refused the way the API refuses them.
   const switchContext = useCallback(async (context: ActiveContext) => {
-    const available = baseSample.availableContexts;
-    const matches = available.some((entry: AvailableContextEntry) => {
-      if (entry.kind !== context.kind) return false;
-      if (entry.kind === 'personal' && context.kind === 'personal') return entry.orgId === context.orgId;
-      if (entry.kind === 'organization' && context.kind === 'organization') return entry.orgId === context.orgId;
-      return true;
-    });
-    if (!matches) throw new Error('Context not available in sample mode');
+    if (!sampleContextAllowed(baseSample.principal, context)) {
+      throw new ApiError({
+        status: 403,
+        code: 'invalid_context',
+        message: 'The requested context is not available to this user',
+        requestId: null,
+      });
+    }
     setContextOverride(context);
-  }, [baseSample.availableContexts]);
+  }, [baseSample]);
 
   const stepUp = useCallback(async () => {
     // Sample mode has no session to re-authenticate; treat it as verified.

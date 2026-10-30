@@ -12,6 +12,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
       {
         membershipId: 'mem-1',
         orgId: 'org_a',
+        orgName: 'Org org_a',
         orgUnitId: null,
         status: 'ACTIVE',
         startDate: '2024-01-01T00:00:00Z',
@@ -61,6 +62,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'INVITED',
           startDate: '2024-01-01T00:00:00Z',
@@ -78,6 +80,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'ACTIVE',
           startDate: '2024-01-01T00:00:00Z',
@@ -100,6 +103,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'ACTIVE',
           startDate: '2024-01-01T00:00:00Z',
@@ -125,6 +129,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'ACTIVE',
           startDate: '2099-01-01T00:00:00Z',
@@ -142,6 +147,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'ACTIVE',
           startDate: '2099-01-01T00:00:00Z',
@@ -159,6 +165,7 @@ describe('isContextValid – personal context with orgId (ACC-R-15)', () => {
         {
           membershipId: 'mem-1',
           orgId: 'org_a',
+          orgName: 'Org org_a',
           orgUnitId: null,
           status: 'INVITED',
           startDate: '2024-01-01T00:00:00Z',

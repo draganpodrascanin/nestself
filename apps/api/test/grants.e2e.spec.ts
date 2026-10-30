@@ -24,8 +24,8 @@ const shouldRun = !!TEST_DB_URL;
 const ORG = 'org_sample';
 const BASE = `/api/orgs/${ORG}/grants`;
 const IVANA_HR_ADMIN = 'grant_user_ivana_hr_admin';
-const IVANA_EMPLOYER_OWNER = 'grant_test_ivana_employer_owner';
-const IVANA_ACCESS_ADMIN = 'grant_test_ivana_access_admin';
+/** Seeded (`EXTRA_SAMPLE_TEMPLATES`): ivana is the single owner of org_sample. */
+const IVANA_EMPLOYER_OWNER = 'grant_user_ivana_employer_owner';
 const CEILING = { type: 'spending_ceiling', amountMinor: 50_000, currency: 'EUR' };
 
 describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
@@ -55,7 +55,7 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     await app.init();
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
-    const people = ['user_ivana', 'user_jovan'];
+    const people = ['user_ivana', 'user_jovan', 'user_stefan', 'user_ana'];
     idp.seedUsers(people.map((id) => ({ email: `${id}@example.com` })));
     for (const id of people) {
       const email = `${id}@example.com`;
@@ -71,25 +71,9 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       });
     }
 
-    // Strategy 4.4: no organization template holds access.grant/revoke, and
-    // hr_admin holds none of the access.* actions. Give ivana an
-    // employer_owner grant (delegate, preview) and an ad hoc grant for
-    // access.grant/revoke so she can exercise every route.
-    const employerOwner = PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner')!;
-    const base = {
-      subjectUserId: 'user_ivana',
-      scopeType: 'organization',
-      scopeOrgId: ORG,
-      scopeOrgUnitId: null,
-      includeDescendants: false,
-      grantedByUserId: 'user_ivana',
-      grantedAt: new Date('2026-01-01'),
-      validFrom: new Date('2026-01-01'),
-    };
-    await testDb.db.insert(grants).values([
-      { ...base, id: IVANA_EMPLOYER_OWNER, templateKey: employerOwner.key, actions: [...employerOwner.actions] },
-      { ...base, id: IVANA_ACCESS_ADMIN, templateKey: null, actions: ['access.grant', 'access.revoke'] },
-    ]);
+    // Owner model (2026-10-24): ivana's seeded employer_owner grant carries
+    // access.grant/revoke/delegate/preview, so no test-inserted grant is
+    // needed to exercise every route.
   }, 180_000);
 
   afterAll(async () => {
@@ -142,6 +126,11 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
 
   it('signs in ivana in the organization context', async () => {
     ivana = await signIn('user_ivana');
+  });
+
+  it('creates a team_manager grant for ana with the seeded owner grant alone (no test-inserted grant)', async () => {
+    const extra = await testDb.db.select({ id: grants.id }).from(grants).where(eq(grants.subjectUserId, 'user_ivana'));
+    expect(extra.map((g) => g.id).filter((id) => id.startsWith('grant_test_'))).toEqual([]);
   });
 
   it('creates a team_manager grant for ana scoped to team_product and lists it', async () => {
@@ -217,6 +206,35 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
       templateKey: null,
     });
     delegatedId = res.body.id as string;
+  });
+
+  let stefan: Awaited<ReturnType<typeof signIn>>;
+
+  function stefanInvites(email: string) {
+    return stefan.agent
+      .post(`/api/orgs/${ORG}/invitations`)
+      .set('X-CSRF-Token', stefan.csrf)
+      .send({ email, templateKey: 'employee' });
+  }
+
+  it('the delegated people.invite applies to stefan: invitation 201 and listed in /auth/me', async () => {
+    stefan = await signIn('user_stefan');
+    const invited = await stefanInvites('delegated.invite@example.com');
+    expect(invited.status).toBe(201);
+
+    const me = await stefan.agent.get('/api/auth/me');
+    expect(me.status).toBe(200);
+    expect(me.body.effectiveActions).toContain('people.invite');
+    expect(me.body.effectiveActions).not.toContain('people.move');
+  });
+
+  it('an hr_admin action ivana did not delegate stays denied for stefan: people.move 403', async () => {
+    const res = await stefan.agent
+      .patch(`/api/orgs/${ORG}/members/mem_stefan`)
+      .set('X-CSRF-Token', stefan.csrf)
+      .send({ orgUnitId: 'team_product' });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('forbidden');
   });
 
   it('rejects delegating an action the employer_owner grant does not contain: 403', async () => {
@@ -390,6 +408,18 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     });
   });
 
+  it("revoking ivana's root hr_admin grant ends stefan's delegated people.invite: 403", async () => {
+    const revoked = await ivana.agent
+      .post(`${BASE}/${IVANA_HR_ADMIN}/revoke`)
+      .set('X-CSRF-Token', ivana.csrf)
+      .send({ reason: 'delegation test teardown' });
+    expect(revoked.status).toBe(200);
+
+    const res = await stefanInvites('after.revoke@example.com');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('forbidden');
+  });
+
   it('the 11th write within a minute returns 429 rate_limited', async () => {
     const statuses: number[] = [];
     while (patchCalls < 11) {
@@ -399,5 +429,135 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     }
     expect(statuses.slice(0, -1).every((s) => s === 200)).toBe(true);
     expect(statuses.at(-1)).toBe(429);
+  });
+
+  // ── Owner model (2026-10-24) ────────────────────────────────────────
+
+  describe('organization owner', () => {
+    const TRANSFER = `${BASE}/transfer-ownership`;
+    let ana: Awaited<ReturnType<typeof signIn>>;
+
+    it('rejects a second employer_owner grant for stefan: 409 owner_exists', async () => {
+      const res = await ivana.agent
+        .post(BASE)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ templateKey: 'employer_owner', subjectUserId: 'user_stefan', scopeType: 'organization' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('owner_exists');
+      expect(res.body.details).toEqual({ currentOwnerUserId: 'user_ivana' });
+      const owners = await testDb.db
+        .select({ id: grants.id })
+        .from(grants)
+        .where(eq(grants.templateKey, 'employer_owner'));
+      expect(owners.map((g) => g.id)).toEqual([IVANA_EMPLOYER_OWNER]);
+    });
+
+    it('rejects a transfer by a member who is not the owner: 403', async () => {
+      const res = await stefan.agent
+        .post(TRANSFER)
+        .set('X-CSRF-Token', stefan.csrf)
+        .send({ newOwnerUserId: 'user_stefan' });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('forbidden');
+    });
+
+    it('rejects a transfer to a user outside the organization: 409 subject_not_member', async () => {
+      const res = await ivana.agent
+        .post(TRANSFER)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ newOwnerUserId: 'user_milica' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('subject_not_member');
+    });
+
+    let anaPreviewGrantId: string;
+
+    it("ivana delegates access.preview from her owner grant to ana: ana can list grants", async () => {
+      const res = await ivana.agent
+        .post(`${BASE}/delegate`)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ parentGrantId: IVANA_EMPLOYER_OWNER, subjectUserId: 'user_ana', actions: ['access.preview'] });
+      expect(res.status).toBe(201);
+      expect(res.body.parentGrantId).toBe(IVANA_EMPLOYER_OWNER);
+      anaPreviewGrantId = res.body.id as string;
+
+      ana = await signIn('user_ana');
+      const list = await ana.agent.get(BASE);
+      expect(list.status).toBe(200);
+    });
+
+    it('ivana transfers ownership to stefan: 200, her grant revoked, audited, access moves', async () => {
+      const res = await ivana.agent
+        .post(TRANSFER)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ newOwnerUserId: 'user_stefan' });
+      expect(res.status).toBe(200);
+      expect(res.body.revokedGrantId).toBe(IVANA_EMPLOYER_OWNER);
+      expect(res.body.createdGrant).toMatchObject({
+        subjectUserId: 'user_stefan',
+        templateKey: 'employer_owner',
+        scopeType: 'organization',
+        scopeOrgId: ORG,
+        grantedByUserId: 'user_ivana',
+        revokedAt: null,
+      });
+      expect(res.body.createdGrant.actions).toEqual([...PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner')!.actions]);
+      const newOwnerGrantId = res.body.createdGrant.id as string;
+
+      const [old] = await testDb.db.select().from(grants).where(eq(grants.id, IVANA_EMPLOYER_OWNER));
+      expect(old!.revokedAt).not.toBeNull();
+      expect(old!.revokedReason).toBe('ownership_transferred');
+      expect(old!.revokedByUserId).toBe('user_ivana');
+
+      const events = await testDb.db
+        .select({ action: auditEvents.action, recordId: auditEvents.recordId, details: auditEvents.details })
+        .from(auditEvents)
+        .where(inArray(auditEvents.recordId, [IVANA_EMPLOYER_OWNER, newOwnerGrantId]));
+      const revokedEvent = events.find((e) => e.action === 'grant.revoked' && e.recordId === IVANA_EMPLOYER_OWNER);
+      const createdEvent = events.find((e) => e.action === 'grant.created' && e.recordId === newOwnerGrantId);
+      expect(revokedEvent!.details).toMatchObject({ reason: 'ownership_transferred', transfer: true, newOwnerUserId: 'user_stefan' });
+      expect(createdEvent!.details).toMatchObject({ transfer: true, previousOwnerUserId: 'user_ivana', templateKey: 'employer_owner' });
+      expect(createdEvent!.details).not.toHaveProperty('byStaff');
+
+      const stefanMe = await stefan.agent.get('/api/auth/me');
+      expect(stefanMe.status).toBe(200);
+      expect(stefanMe.body.effectiveActions).toContain('access.grant');
+      const ivanaMe = await ivana.agent.get('/api/auth/me');
+      expect(ivanaMe.status).toBe(200);
+      expect(ivanaMe.body.effectiveActions).not.toContain('access.grant');
+
+      // Ana's delegation from the old owner grant now hangs below stefan's.
+      const [child] = await testDb.db.select().from(grants).where(eq(grants.id, anaPreviewGrantId));
+      expect(child!.revokedAt).toBeNull();
+      expect(child!.parentGrantId).toBe(newOwnerGrantId);
+      const adjusted = await testDb.db
+        .select({ action: auditEvents.action, details: auditEvents.details })
+        .from(auditEvents)
+        .where(eq(auditEvents.recordId, anaPreviewGrantId));
+      expect(adjusted.find((e) => e.action === 'grant.adjusted')!.details).toMatchObject({
+        reparented: true,
+        fromGrantId: IVANA_EMPLOYER_OWNER,
+      });
+      const anaList = await ana.agent.get(BASE);
+      expect(anaList.status).toBe(200);
+    });
+
+    it('ivana, no longer the owner, cannot transfer again: 403', async () => {
+      const res = await ivana.agent
+        .post(TRANSFER)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ newOwnerUserId: 'user_ivana' });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('forbidden');
+    });
+
+    it("stefan, the new owner, revokes ana's team_manager grant: 200", async () => {
+      const res = await stefan.agent
+        .post(`${BASE}/${createdId}/revoke`)
+        .set('X-CSRF-Token', stefan.csrf)
+        .send({ reason: 'new owner tidy-up' });
+      expect(res.status).toBe(200);
+      expect(res.body.revokedAt).not.toBeNull();
+    });
   });
 });

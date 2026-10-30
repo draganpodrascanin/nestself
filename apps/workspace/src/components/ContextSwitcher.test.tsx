@@ -48,6 +48,7 @@ function makePrincipal(
       {
         membershipId: 'mem-1',
         orgId: 'org_a',
+        orgName: 'Test Org',
         orgUnitId: null,
         status: 'ACTIVE',
         startDate: '2024-01-01T00:00:00Z',

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
@@ -31,6 +31,9 @@ import { EmergencyModule } from './emergency/emergency.module.js';
 import { MediaModule } from './media/media.module.js';
 import { CmsModule } from './cms/cms.module.js';
 import { LibraryModule } from './library/library.module.js';
+import { OrganizationsModule } from './organizations/organizations.module.js';
+import { SsoModule } from './sso/sso.module.js';
+import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
 
 @Module({
   imports: [
@@ -82,6 +85,10 @@ import { LibraryModule } from './library/library.module.js';
     GrantsModule,
     ProfessionalModule,
     EmergencyModule,
+    OrganizationsModule,
+    SsoModule,
+    // Stub-only fake IdP authorize route (D-12); absent with AUTH_MODE=cognito.
+    ConditionalModule.registerWhen(FakeSsoModule, isStubAuthMode),
     WsModule,
     MediaModule.register(),
     CmsModule,

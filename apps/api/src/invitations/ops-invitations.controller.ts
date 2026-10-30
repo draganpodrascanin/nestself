@@ -2,20 +2,24 @@
  * OpsInvitationsController — invitations for assigned clients, reached from
  * the operations workspace (T-2.0).
  *
+ * GET    /ops/orgs/:orgId/invitations                — list pending (people.onboard)
  * POST   /ops/orgs/:orgId/invitations                — create (people.onboard)
  * POST   /ops/orgs/:orgId/invitations/import         — import (people.import)
  * DELETE /ops/orgs/:orgId/invitations/:invitationId  — revoke (people.onboard)
  *
  * `client_operations` holds `people.onboard` rather than `people.invite`
- * (strategy 4.4, golden case OPS-05), so create and revoke are guarded by it.
+ * (strategy 4.4, golden case OPS-05), so list, create and revoke are guarded by it.
  */
-import { Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ACTIONS,
   InvitationCreateRequestSchema,
   InvitationImportRequestSchema,
+  InvitationListQuerySchema,
   type InvitationCreateRequest,
   type InvitationImportRequest,
+  type InvitationListQuery,
+  type InvitationListResponse,
   type Principal,
 } from '@nestself/contracts';
 import { Authorize } from '../authz/authorize.decorator.js';
@@ -36,6 +40,15 @@ export class OpsInvitationsController {
     config: ConfigService,
   ) {
     this.isProduction = config.get<string>('NODE_ENV') === 'production';
+  }
+
+  @Authorize(ACTIONS['people.onboard'], operationsOrgResource('invitation'))
+  @Get()
+  async list(
+    @Param('orgId') orgId: string,
+    @Query(new ZodValidationPipe(InvitationListQuerySchema)) query: InvitationListQuery,
+  ): Promise<InvitationListResponse> {
+    return this.invitations.listPending(orgId, query);
   }
 
   @Authorize(ACTIONS['people.onboard'], operationsOrgResource('invitation'))

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InvitationActivationService } from './invitation-activation.service.js';
+import { InvitationMembershipActivator } from './invitation-membership-activator.js';
 import { hashToken } from './invitation-token.js';
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,7 @@ function createMockMemberships() {
 function createMockAuthz() {
   return {
     createGrant: vi.fn().mockResolvedValue(undefined),
+    findActiveOwnerGrants: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -144,19 +146,33 @@ function buildService(overrides: Record<string, unknown> = {}) {
     idp,
     signIn,
     principalLoader,
+    sso: { findActiveConnectionForDomain: vi.fn().mockResolvedValue(null) },
+    config: {
+      get: vi.fn(
+        (key: string) =>
+          ({ API_PUBLIC_URL: 'http://api.test', WORKSPACE_URL: 'http://ws.test', ADMIN_URL: 'http://admin.test' })[key],
+      ),
+    },
     ...overrides,
   };
 
+  const activator = new InvitationMembershipActivator(
+    deps.invitations as never,
+    deps.membershipRepo as never,
+    deps.authzRepo as never,
+    deps.audit as never,
+  );
   const service = new InvitationActivationService(
     deps.dbs as never,
     deps.invitations as never,
     deps.identities as never,
-    deps.membershipRepo as never,
-    deps.authzRepo as never,
     deps.audit as never,
     deps.idp as never,
     deps.signIn as never,
     deps.principalLoader as never,
+    activator,
+    deps.sso as never,
+    deps.config as never,
   );
 
   return { service, ...deps };
@@ -216,6 +232,42 @@ describe('InvitationActivationService', () => {
     const surface = 'workspace' as const;
     const meta = { ip: '127.0.0.1', userAgent: 'vitest' };
 
+    it('answers sso with the start URL and writes nothing when the domain belongs to an ACTIVE connection of the org', async () => {
+      const inv = validInvitation({ email: 'invitee@acme.example' });
+      const { service, invitations, identities, dbs, idp, sso, signIn } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      invitations.hasSsoForEmailDomain.mockResolvedValue(true);
+      sso.findActiveConnectionForDomain.mockResolvedValue({ orgId: 'org_sample', cognitoProviderName: 'org-acme-saml' });
+
+      const result = await service.accept(token, surface, meta);
+
+      expect(result).toEqual({
+        method: 'sso',
+        // The surface's own origin (its SPA proxies /api): the cookies land there.
+        ssoStartUrl: 'http://ws.test/api/auth/sso/start?connection=org-acme-saml&surface=workspace',
+        challengeToken: null,
+        step: null,
+      });
+      expect(dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(identities.createUser).not.toHaveBeenCalled();
+      expect(idp.createUser).not.toHaveBeenCalled();
+      expect(invitations.accept).not.toHaveBeenCalled();
+      expect(signIn.emailOtpStart).not.toHaveBeenCalled();
+    });
+
+    it('ignores an ACTIVE connection of another organization for the domain', async () => {
+      const inv = validInvitation({ email: 'invitee@acme.example' });
+      const { service, invitations, sso } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      invitations.hasSsoForEmailDomain.mockResolvedValue(true);
+      sso.findActiveConnectionForDomain.mockResolvedValue({ orgId: 'org_other', cognitoProviderName: 'org-x-saml' });
+
+      const result = await service.accept(token, surface, meta);
+
+      expect(result).toHaveProperty('method', 'email_otp');
+      expect(invitations.accept).toHaveBeenCalled();
+    });
+
     it('creates user, membership, grants and returns email_otp for employee', async () => {
       const inv = validInvitation();
       const { service, invitations, identities, audit, signIn, principalLoader } = buildService();
@@ -236,8 +288,8 @@ describe('InvitationActivationService', () => {
       expect(principalLoader.invalidateUser).toHaveBeenCalled();
     });
 
-    it('returns password/new_password challenge for staff template', async () => {
-      const inv = validInvitation({ templateKey: 'client_operations' });
+    it('returns password/new_password challenge for an employer admin template', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();
       invitations.findByTokenHash.mockResolvedValue(inv);
 
@@ -252,6 +304,70 @@ describe('InvitationActivationService', () => {
         'workspace',
         expect.any(Object),
       );
+    });
+
+    it.each(['platform_owner', 'client_operations', 'expert'])(
+      'refuses a stored invitation with the non-organization template %s and creates nothing',
+      async (templateKey) => {
+        const inv = validInvitation({ templateKey });
+        const { service, invitations, identities, authzRepo } = buildService();
+        invitations.findByTokenHash.mockResolvedValue(inv);
+
+        await expect(service.accept(token, surface, meta)).rejects.toThrow(
+          expect.objectContaining({ code: 'invalid_invitation' }),
+        );
+        expect(identities.createUser).not.toHaveBeenCalled();
+        expect(authzRepo.createGrant).not.toHaveBeenCalled();
+      },
+    );
+
+    it('creates an organization-scoped default grant for an organization template', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+
+      await service.accept(token, surface, meta);
+
+      expect(authzRepo.createGrant).toHaveBeenCalledWith(
+        expect.objectContaining({ templateKey: 'hr_admin', scopeType: 'organization', scopeOrgId: 'org_sample' }),
+        expect.anything(),
+      );
+    });
+
+    it('refuses an employer_owner invitation with 409 owner_exists while the organization has an owner', async () => {
+      const inv = validInvitation({ templateKey: 'employer_owner' });
+      const { service, invitations, authzRepo, idp } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([{ id: 'grant_owner', subjectUserId: 'user_ivana' }]);
+
+      await expect(service.accept(token, surface, meta)).rejects.toThrow(
+        expect.objectContaining({ code: 'owner_exists', details: { currentOwnerUserId: 'user_ivana' } }),
+      );
+      expect(authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith('org_sample', expect.any(Date), expect.anything());
+      expect(authzRepo.createGrant).not.toHaveBeenCalled();
+      expect(idp.createUser).not.toHaveBeenCalled();
+      expect(invitations.accept).not.toHaveBeenCalled();
+    });
+
+    it('accepts an employer_owner invitation for an organization without an owner', async () => {
+      const inv = validInvitation({ templateKey: 'employer_owner' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+
+      await service.accept(token, surface, meta);
+
+      expect(authzRepo.createGrant).toHaveBeenCalledWith(
+        expect.objectContaining({ templateKey: 'employer_owner', scopeOrgId: 'org_sample' }),
+        expect.anything(),
+      );
+    });
+
+    it('does not look up owners for other templates', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
+      const { service, invitations, authzRepo } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      await service.accept(token, surface, meta);
+      expect(authzRepo.findActiveOwnerGrants).not.toHaveBeenCalled();
     });
 
     it('rejects a revoked invitation with 401', async () => {
@@ -298,8 +414,8 @@ describe('InvitationActivationService', () => {
       expect(signIn.emailOtpStart).toHaveBeenCalled();
     });
 
-    it('falls back to email OTP when password flow fails for staff', async () => {
-      const inv = validInvitation({ templateKey: 'client_operations' });
+    it('falls back to email OTP when password flow fails for an employer admin', async () => {
+      const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();
       invitations.findByTokenHash.mockResolvedValue(inv);
       signIn.passwordSignIn.mockRejectedValue(new Error('IdP error'));

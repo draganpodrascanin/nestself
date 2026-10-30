@@ -84,6 +84,7 @@ function makePrincipal(
 const ACTIVE_MEMBERSHIP: PrincipalMembership = {
   membershipId: 'mem-1',
   orgId: 'org_a',
+  orgName: 'Test Org A',
   orgUnitId: null,
   status: 'ACTIVE',
   startDate: '2024-01-15T00:00:00Z',
@@ -93,6 +94,7 @@ const ACTIVE_MEMBERSHIP: PrincipalMembership = {
 const EARLIER_MEMBERSHIP: PrincipalMembership = {
   membershipId: 'mem-2',
   orgId: 'org_b',
+  orgName: 'Test Org B',
   orgUnitId: null,
   status: 'ACTIVE',
   startDate: '2023-06-01T00:00:00Z',

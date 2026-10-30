@@ -135,6 +135,39 @@ describe.skipIf(!shouldRun)('AuthorizationRepository (db)', () => {
     expect(again).toEqual({ roots: [], children: [] });
   });
 
+  it('findDelegationAncestors returns every ancestor of delegated grants, revoked ones included', async () => {
+    // Runs after revokeGrantTree: the whole tree is revoked, and the walk
+    // still returns it (the engine decides what a revoked ancestor means).
+    const scoped = await dbs.withOrgScope(ORG, (tx) => repo.findDelegationAncestors(['tree_grandchild'], tx));
+    expect(scoped.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_root']);
+    expect(scoped.every((r) => r.revokedAt != null)).toBe(true);
+
+    // The system context (no tenant setting) sees the same chain.
+    const system = await repo.findDelegationAncestors(['tree_grandchild', 'tree_child']);
+    expect(system.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_root']);
+
+    expect(await repo.findDelegationAncestors(['tree_root'])).toEqual([]);
+    expect(await repo.findDelegationAncestors([])).toEqual([]);
+    expect(await dbs.withOrgScope('org_other', (tx) => repo.findDelegationAncestors(['tree_grandchild'], tx))).toEqual([]);
+  });
+
+  it('findDelegationDescendants returns every descendant, revoked ones included', async () => {
+    // The tree was revoked by revokeGrantTree above; the walk still names it.
+    const system = await repo.findDelegationDescendants(['tree_root']);
+    expect(system.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_grandchild']);
+    expect(system.map((r) => r.subjectUserId).sort()).toEqual(['user_ana', 'user_stefan']);
+
+    const scoped = await dbs.withOrgScope(ORG, (tx) => repo.findDelegationDescendants(['tree_child'], tx));
+    expect(scoped.map((r) => r.id)).toEqual(['tree_grandchild']);
+
+    // A whole tree passed in (as MembersService does) still names every delegatee.
+    const whole = await repo.findDelegationDescendants(['tree_root', 'tree_child', 'tree_grandchild']);
+    expect(whole.map((r) => r.id).sort()).toEqual(['tree_child', 'tree_grandchild']);
+    expect(await repo.findDelegationDescendants(['tree_grandchild'])).toEqual([]);
+    expect(await repo.findDelegationDescendants([])).toEqual([]);
+    expect(await dbs.withOrgScope('org_other', (tx) => repo.findDelegationDescendants(['tree_root'], tx))).toEqual([]);
+  });
+
   it('listGrantsForOrg excludes revoked rows unless includeRevoked, newest first', async () => {
     const active = await dbs.withOrgScope(ORG, (tx) => repo.listGrantsForOrg(ORG, {}, tx));
     expect(active.length).toBeGreaterThan(0);

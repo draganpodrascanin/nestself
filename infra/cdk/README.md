@@ -80,7 +80,7 @@ pnpm db:up && pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/
 pnpm --filter @nestself/api dev
 ```
 
-The web apps keep running locally against `http://localhost:4000`; the dev pool's callback URLs already list the localhost origins.
+The web apps keep running locally against `http://localhost:4000`; the dev pool's callback URLs already list the localhost origins. The API sends each surface's own origin as the SSO `redirect_uri` (`apiOriginForSurface`), so the registered `webCallbackUrls` for both SPA origins in every stage are all in use, none is spare (`docs/auth/implementation.md` 22.3).
 
 ## Commands
 
@@ -129,6 +129,8 @@ The compute stack creates an ECS cluster with three Fargate services and a migra
 
 The `migrate` task definition (0.25 vCPU, 0.5 GB) runs `pnpm --filter @nestself/api db:migrate` as a one-off ECS `run-task` before each API deployment and exits when the migration completes.
 
+The API task role (`lib/constructs/ecs-task-roles.ts`) holds the Cognito admin actions of the user pool and, for enterprise SSO, `cognito-idp:CreateIdentityProvider`, `UpdateIdentityProvider`, `DeleteIdentityProvider`, `DescribeIdentityProvider`, `ListIdentityProviders`, `DescribeUserPoolClient` and `UpdateUserPoolClient`: registering an employer's SAML or OIDC provider adds it to the web and mobile clients' supported identity providers (`compute-stack.test.ts` asserts them; `docs/auth/implementation.md` section 22.6). The auth stack already registers `<API origin>/api/auth/sso/callback` as a web client callback URL; the compute stack passes `API_PUBLIC_URL`, `WORKSPACE_URL` and `ADMIN_URL` to the API and worker tasks from the stage config (`apiPublicUrl`, `workspaceUrl`, `adminUrl` in `lib/config.ts`).
+
 ECR repositories (`nestself-{stage}-api`, `nestself-{stage}-marketing`) have scan-on-push enabled. Critical findings block deployment via the CI/CD pipeline.
 
 Autoscaling targets: API scales on CPU (70%) and memory (80%). Marketing scales on CPU (70%).
@@ -153,7 +155,7 @@ Creates CloudWatch metric filters and alarms on the API log group:
 |---|---|---|
 | Failed sign-ins | `FailedSignIns` (metric filter) | > 50/min |
 | Principal cache hit rate | `PrincipalCacheHits / (Hits + Misses)` | < 90% |
-| Emergency access activated | `EmergencyAccessActivations` | > 0 (fires on every activation) |
+| Emergency access activated | `EmergencyAccessActivations` (metric filter `{ $.action = "emergency_access.approved" }` on the one log line the API writes per approval) | > 0 (fires on every activation) |
 | ALB 5xx rate | `HTTPCode_Target_5XX_Count / RequestCount` | > 1% |
 | RDS CPU | `CPUUtilization` | > 80% |
 | API task count | `RunningTaskCount` | < min tasks |

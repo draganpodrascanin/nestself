@@ -1,7 +1,8 @@
 /**
- * Typed wrappers for organization administration: members, org units, grants
- * and approval authorities (auth-strategy.md section 5.3) and their
- * operations mirrors (section 5.4).
+ * Typed wrappers for organization administration: invitations, members, org
+ * units, grants and approval authorities (auth-strategy.md section 5.3) and
+ * their operations mirrors (section 5.4), plus the operations-only client
+ * list, user suspension, emergency access and SSO connection routes.
  *
  * One factory serves both workspaces. `{ kind: 'org' }` targets
  * `/api/orgs/:orgId/...` and returns the full `OrgAdminApi`; `{ kind: 'ops' }`
@@ -13,22 +14,55 @@ import { z } from 'zod';
 import {
   ApprovalAuthorityListResponseSchema,
   ApprovalAuthorityResponseSchema,
+  EmergencyAccessListResponseSchema,
+  EmergencyAccessResponseSchema,
+  EmergencyRecordResponseSchema,
   GrantListResponseSchema,
   GrantPreviewResponseSchema,
   GrantResponseSchema,
+  InvitationCreateResponseSchema,
+  InvitationImportResponseSchema,
+  InvitationListResponseSchema,
+  InvitationResponseSchema,
+  MemberEndResponseSchema,
+  MemberItemSchema,
   MemberListResponseSchema,
+  OrganizationListResponseSchema,
+  OrganizationResponseSchema,
+  OrgUnitListResponseSchema,
   OrgUnitResponseSchema,
+  OwnershipTransferResponseSchema,
+  SsoConnectionListResponseSchema,
+  SsoConnectionResponseSchema,
+  SsoDomainResponseSchema,
+  SsoTestResponseSchema,
   UserAccessResponseSchema,
+  UserReinstateResponseSchema,
+  UserSuspendResponseSchema,
 } from '@nestself/contracts';
 import type {
   ApprovalAuthorityCreateRequest,
   ApprovalAuthorityUpdateRequest,
+  EmergencyAccessCreateRequestSchema,
+  EmergencyRecordType,
   GrantCreateRequest,
   GrantDelegateRequest,
   GrantRevokeRequest,
   GrantUpdateRequest,
+  InvitationCreateRequest,
+  InvitationImportRequest,
+  MemberEndRequestSchema,
   MemberListQuery,
+  MemberUpdateRequest,
+  OrgUnitCreateRequest,
+  OrgUnitMoveRequest,
+  OrgUnitUpdateRequest,
+  OwnershipTransferRequest,
   PlatformGrantCreateRequest,
+  SsoConnectionCreateRequestSchema,
+  SsoConnectionDomainRequestSchema,
+  SsoConnectionUpdateRequest,
+  UserSuspendRequest,
 } from '@nestself/contracts';
 import type { ApiClient } from './client';
 
@@ -40,7 +74,40 @@ export interface GrantListParams {
   includeRevoked?: boolean;
 }
 
-const OrgUnitListSchema = z.object({ items: z.array(OrgUnitResponseSchema) });
+/** Query of the pending invitation lists (`InvitationListQuerySchema`). */
+export interface InvitationListParams {
+  cursor?: string;
+  limit?: number;
+}
+
+/** Query of `GET /ops/organizations` (`OrganizationListQuerySchema`). */
+export interface OrganizationListParams {
+  cursor?: string;
+  limit?: number;
+  search?: string;
+}
+
+/** Query of `GET /ops/emergency-access`. */
+export interface EmergencyAccessListParams {
+  userId?: string;
+}
+
+/** Query of `GET /ops/sso-connections` (`SsoConnectionListQuerySchema` in the API). */
+export interface SsoConnectionListParams {
+  orgId?: string;
+}
+
+/** Body of `POST /ops/sso-connections`; `jitProvisioning` and `idpInitiatedAllowed` default to `false`. */
+export type SsoConnectionCreateBody = z.input<typeof SsoConnectionCreateRequestSchema>;
+
+/** Body of `POST /ops/sso-connections/:id/domains`; the server trims and lowercases the domain. */
+export type SsoDomainBody = z.input<typeof SsoConnectionDomainRequestSchema>;
+
+/** Body of `POST .../members/:membershipId/end`; `reason` defaults to `DEACTIVATED_BY_HR` on the server. */
+export type MemberEndBody = z.input<typeof MemberEndRequestSchema>;
+
+/** Body of `POST /ops/emergency-access`; `durationMinutes` defaults to the four-hour ceiling. */
+export type EmergencyAccessRequestBody = z.input<typeof EmergencyAccessCreateRequestSchema>;
 
 function send(method: 'POST' | 'PATCH', body: unknown): RequestInit {
   return {
@@ -50,19 +117,56 @@ function send(method: 'POST' | 'PATCH', body: unknown): RequestInit {
   };
 }
 
-/** `?a=1&b=2` from the defined entries; empty string when none are defined. */
+/** `?a=1&b=2` from the defined, non-empty entries; empty string when none remain. */
 function queryString(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) search.set(key, String(value));
+    if (value !== undefined && value !== '') search.set(key, String(value));
   }
   const text = search.toString();
   return text ? `?${text}` : '';
 }
 
+const seg = encodeURIComponent;
+
 function buildCommon(client: ApiClient, prefix: (orgId: string) => string) {
   const orgPath = prefix;
   return {
+    /** GET .../invitations — pending invitations, newest first, paged by cursor. */
+    listInvitations: (orgId: string, query: InvitationListParams = {}) =>
+      client.request(`${orgPath(orgId)}/invitations${queryString({ ...query })}`, {
+        method: 'GET',
+        schema: InvitationListResponseSchema,
+      }),
+
+    /** POST .../invitations — invite one person (outside production the response carries `devToken`). */
+    createInvitation: (orgId: string, body: InvitationCreateRequest) =>
+      client.request(`${orgPath(orgId)}/invitations`, {
+        ...send('POST', body),
+        schema: InvitationCreateResponseSchema,
+      }),
+
+    /** POST .../invitations/import — invite up to 500 people; reports created, skipped and errors. */
+    importInvitations: (orgId: string, body: InvitationImportRequest) =>
+      client.request(`${orgPath(orgId)}/invitations/import`, {
+        ...send('POST', body),
+        schema: InvitationImportResponseSchema,
+      }),
+
+    /** DELETE .../invitations/:invitationId — revoke (idempotent). */
+    revokeInvitation: (orgId: string, invitationId: string) =>
+      client.request(`${orgPath(orgId)}/invitations/${seg(invitationId)}`, {
+        method: 'DELETE',
+        schema: InvitationResponseSchema,
+      }),
+
+    /** POST .../members/:membershipId/end — end a membership (step-up class administration). */
+    endMember: (orgId: string, membershipId: string, body: MemberEndBody = {}) =>
+      client.request(`${orgPath(orgId)}/members/${seg(membershipId)}/end`, {
+        ...send('POST', body),
+        schema: MemberEndResponseSchema,
+      }),
+
     /** GET .../members — paged member list. */
     listMembers: (orgId: string, query: Partial<MemberListQuery> = {}) =>
       client.request(`${orgPath(orgId)}/members${queryString({ ...query })}`, {
@@ -97,6 +201,17 @@ function buildCommon(client: ApiClient, prefix: (orgId: string) => string) {
         method: 'GET',
         schema: GrantPreviewResponseSchema,
       }),
+
+    /**
+     * POST .../grants/transfer-ownership — hand `employer_owner` to another
+     * active member. The org route requires the caller to be the current
+     * owner; the ops route lets staff set the owner (and the first one).
+     */
+    transferOwnership: (orgId: string, body: OwnershipTransferRequest) =>
+      client.request(`${orgPath(orgId)}/grants/transfer-ownership`, {
+        ...send('POST', body),
+        schema: OwnershipTransferResponseSchema,
+      }),
   };
 }
 
@@ -106,10 +221,38 @@ function buildOrgOnly(client: ApiClient, prefix: (orgId: string) => string) {
     listOrgUnits: async (orgId: string) => {
       const res = await client.request(`${prefix(orgId)}/org-units`, {
         method: 'GET',
-        schema: OrgUnitListSchema,
+        schema: OrgUnitListResponseSchema,
       });
       return res.items;
     },
+
+    /** POST /orgs/:orgId/org-units — create a department or team under a parent. */
+    createOrgUnit: (orgId: string, body: OrgUnitCreateRequest) =>
+      client.request(`${prefix(orgId)}/org-units`, {
+        ...send('POST', body),
+        schema: OrgUnitResponseSchema,
+      }),
+
+    /** PATCH /orgs/:orgId/org-units/:unitId — rename or change the cost-center code. */
+    updateOrgUnit: (orgId: string, unitId: string, body: OrgUnitUpdateRequest) =>
+      client.request(`${prefix(orgId)}/org-units/${seg(unitId)}`, {
+        ...send('PATCH', body),
+        schema: OrgUnitResponseSchema,
+      }),
+
+    /** POST /orgs/:orgId/org-units/:unitId/move — move under another parent. */
+    moveOrgUnit: (orgId: string, unitId: string, body: OrgUnitMoveRequest) =>
+      client.request(`${prefix(orgId)}/org-units/${seg(unitId)}/move`, {
+        ...send('POST', body),
+        schema: OrgUnitResponseSchema,
+      }),
+
+    /** PATCH /orgs/:orgId/members/:membershipId — move to an org unit, cost center or line manager. */
+    updateMember: (orgId: string, membershipId: string, body: MemberUpdateRequest) =>
+      client.request(`${prefix(orgId)}/members/${seg(membershipId)}`, {
+        ...send('PATCH', body),
+        schema: MemberItemSchema,
+      }),
 
     /** PATCH /orgs/:orgId/grants/:grantId — change conditions or validity. */
     updateGrant: (orgId: string, grantId: string, body: GrantUpdateRequest) =>
@@ -164,11 +307,138 @@ function buildOpsOnly(client: ApiClient) {
         schema: GrantResponseSchema,
       }),
 
+    /** POST /ops/grants/:grantId/revoke — revoke a platform-level grant with a reason. */
+    revokePlatformGrant: (grantId: string, body: GrantRevokeRequest) =>
+      client.request(`/api/ops/grants/${encodeURIComponent(grantId)}/revoke`, {
+        ...send('POST', body),
+        schema: GrantResponseSchema,
+      }),
+
     /** GET /ops/users/:userId/access — evaluated access of a user in every context. */
     userAccess: (userId: string) =>
       client.request(`/api/ops/users/${encodeURIComponent(userId)}/access`, {
         method: 'GET',
         schema: UserAccessResponseSchema,
+      }),
+
+    /** GET /ops/organizations — employer clients by name, with search and cursor. */
+    listOrganizations: (query: OrganizationListParams = {}) =>
+      client.request(`/api/ops/organizations${queryString({ ...query })}`, {
+        method: 'GET',
+        schema: OrganizationListResponseSchema,
+      }),
+
+    /** GET /ops/organizations/:orgId — one employer client. */
+    getOrganization: (orgId: string) =>
+      client.request(`/api/ops/organizations/${seg(orgId)}`, {
+        method: 'GET',
+        schema: OrganizationResponseSchema,
+      }),
+
+    /** POST /ops/users/:userId/suspend — suspend a user with a reason (step-up class administration). */
+    suspendUser: (userId: string, body: UserSuspendRequest) =>
+      client.request(`/api/ops/users/${seg(userId)}/suspend`, {
+        ...send('POST', body),
+        schema: UserSuspendResponseSchema,
+      }),
+
+    /** POST /ops/users/:userId/reinstate — lift a suspension. */
+    reinstateUser: (userId: string) =>
+      client.request(`/api/ops/users/${seg(userId)}/reinstate`, {
+        method: 'POST',
+        schema: UserReinstateResponseSchema,
+      }),
+
+    /** GET /ops/emergency-access — requests and grants, optionally for one requester. */
+    listEmergencyAccess: (query: EmergencyAccessListParams = {}) =>
+      client.request(`/api/ops/emergency-access${queryString({ ...query })}`, {
+        method: 'GET',
+        schema: EmergencyAccessListResponseSchema,
+      }),
+
+    /** POST /ops/emergency-access — request access to one case or one user's records. */
+    requestEmergencyAccess: (body: EmergencyAccessRequestBody) =>
+      client.request('/api/ops/emergency-access', {
+        ...send('POST', body),
+        schema: EmergencyAccessResponseSchema,
+      }),
+
+    /** POST /ops/emergency-access/:id/approve — a second staff member approves; the window starts now. */
+    approveEmergencyAccess: (id: string) =>
+      client.request(`/api/ops/emergency-access/${seg(id)}/approve`, {
+        method: 'POST',
+        schema: EmergencyAccessResponseSchema,
+      }),
+
+    /** POST /ops/emergency-access/:id/deny — deny a pending request (204). */
+    denyEmergencyAccess: (id: string) =>
+      client.request(`/api/ops/emergency-access/${seg(id)}/deny`, {
+        method: 'POST',
+        schema: z.undefined(),
+        expectBody: false,
+      }),
+
+    /** POST /ops/emergency-access/:id/revoke — end an approved window early. */
+    revokeEmergencyAccess: (id: string) =>
+      client.request(`/api/ops/emergency-access/${seg(id)}/revoke`, {
+        method: 'POST',
+        schema: EmergencyAccessResponseSchema,
+      }),
+
+    /** GET /ops/emergency-access/:id/records/:recordType/:recordId — one audited record read. */
+    readEmergencyRecord: (id: string, recordType: EmergencyRecordType, recordId: string) =>
+      client.request(
+        `/api/ops/emergency-access/${seg(id)}/records/${seg(recordType)}/${seg(recordId)}`,
+        { method: 'GET', schema: EmergencyRecordResponseSchema },
+      ),
+
+    /** GET /ops/sso-connections — connections with their domains, optionally for one organization. */
+    listSsoConnections: (query: SsoConnectionListParams = {}) =>
+      client.request(`/api/ops/sso-connections${queryString({ ...query })}`, {
+        method: 'GET',
+        schema: SsoConnectionListResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections — a new connection in DRAFT (step-up class administration). */
+    createSsoConnection: (body: SsoConnectionCreateBody) =>
+      client.request('/api/ops/sso-connections', {
+        ...send('POST', body),
+        schema: SsoConnectionResponseSchema,
+      }),
+
+    /** PATCH /ops/sso-connections/:id — metadata, JIT, default org unit, write-only secret, or a status change. */
+    updateSsoConnection: (id: string, body: SsoConnectionUpdateRequest) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}`, {
+        ...send('PATCH', body),
+        schema: SsoConnectionResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/domains — add a domain; the response carries the DNS TXT record to publish. */
+    addSsoDomain: (id: string, body: SsoDomainBody) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/domains`, {
+        ...send('POST', body),
+        schema: SsoDomainResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/domains/:domainId/verify — check the DNS TXT record. */
+    verifySsoDomain: (id: string, domainId: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/domains/${seg(domainId)}/verify`, {
+        method: 'POST',
+        schema: SsoDomainResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/test — register the provider, move to TESTING, return a single-use start URL. */
+    testSsoConnection: (id: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/test`, {
+        method: 'POST',
+        schema: SsoTestResponseSchema,
+      }),
+
+    /** POST /ops/sso-connections/:id/activate — TESTING to ACTIVE after a test sign-in. */
+    activateSsoConnection: (id: string) =>
+      client.request(`/api/ops/sso-connections/${seg(id)}/activate`, {
+        method: 'POST',
+        schema: SsoConnectionResponseSchema,
       }),
   };
 }

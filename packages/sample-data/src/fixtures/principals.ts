@@ -46,6 +46,7 @@ const employeePrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_jovan',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: 'team_product',
       status: 'ACTIVE',
       startDate: '2024-01-15T00:00:00Z',
@@ -69,6 +70,7 @@ const managerPrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_stefan',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: 'team_product',
       status: 'ACTIVE',
       startDate: '2024-03-01T00:00:00Z',
@@ -92,6 +94,7 @@ const hrAdminPrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_ivana',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: null,
       status: 'ACTIVE',
       startDate: '2023-11-01T00:00:00Z',
@@ -221,7 +224,7 @@ function acceptancePrincipal(
   userId: string,
   displayName: string,
   initials: string,
-  memberships: { id: string; orgId: string; orgUnitId: string }[],
+  memberships: { id: string; orgId: string; orgName: string; orgUnitId: string }[],
 ) {
   return PrincipalSchema.parse({
     userId,
@@ -231,6 +234,7 @@ function acceptancePrincipal(
     memberships: memberships.map((m) => ({
       membershipId: m.id,
       orgId: m.orgId,
+      orgName: m.orgName,
       orgUnitId: m.orgUnitId,
       status: 'ACTIVE',
       startDate: '2026-01-01T00:00:00Z',
@@ -262,15 +266,15 @@ export const SAMPLE_ACCEPTANCE_PRINCIPALS: Record<
 > = {
   employeeB: {
     principal: acceptancePrincipal('user_emilija', 'Emilija', 'E', [
-      { id: 'mem_emilija', orgId: SAMPLE_ORG_B.id, orgUnitId: 'ou_b_team_support' },
+      { id: 'mem_emilija', orgId: SAMPLE_ORG_B.id, orgName: SAMPLE_ORG_B.name, orgUnitId: 'ou_b_team_support' },
     ]),
     effectiveActions: actionsForTemplates('employee'),
     availableContexts: [ORG_B_PERSONAL],
   },
   multiOrgEmployee: {
     principal: acceptancePrincipal('user_mirjam', 'Mirjam', 'M', [
-      { id: 'mem_mirjam_a', orgId: 'org_sample', orgUnitId: 'team_product' },
-      { id: 'mem_mirjam_b', orgId: SAMPLE_ORG_B.id, orgUnitId: 'ou_b_team_support' },
+      { id: 'mem_mirjam_a', orgId: 'org_sample', orgName: SAMPLE_ORG.name, orgUnitId: 'team_product' },
+      { id: 'mem_mirjam_b', orgId: SAMPLE_ORG_B.id, orgName: SAMPLE_ORG_B.name, orgUnitId: 'ou_b_team_support' },
     ]),
     effectiveActions: actionsForTemplates('employee'),
     availableContexts: [ORG_A_PERSONAL, ORG_B_PERSONAL],

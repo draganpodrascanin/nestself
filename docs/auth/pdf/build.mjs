@@ -5,10 +5,10 @@
 // Usage:
 //   node docs/auth/pdf/build.mjs docs/auth/implementation.md docs/auth/implementation.pdf
 //   node docs/auth/pdf/build.mjs docs/auth/quick-guide.md docs/auth/quick-guide.pdf --html out.html
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readdirSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
 const argv = process.argv.slice(2);
@@ -47,6 +47,25 @@ body = body.replace(/<h([1-4])>([^<]+)<\/h\1>/g, (_, level, text) => {
   return `<h${level} id="${id}">${text}</h${level}>`;
 });
 
+// Relative images (`![caption](screenshots/x.png)`) resolve against the
+// Markdown file's directory. The page is loaded from a file:// URL below, so
+// absolute file:// sources load; a missing image fails the build instead of
+// printing an empty frame.
+const sourceDir = dirname(resolve(input));
+const images = [];
+body = body.replace(/<img src="([^"]+)"/g, (tag, src) => {
+  if (/^(?:[a-z]+:|\/\/|#)/i.test(src)) return tag;
+  const file = resolve(sourceDir, decodeURI(src));
+  if (!existsSync(file)) throw new Error(`image not found: ${src} (looked for ${file})`);
+  images.push(file);
+  return `<img src="${pathToFileURL(file).href}"`;
+});
+// A paragraph holding only an image followed by an emphasised line becomes a figure with a caption.
+body = body.replace(
+  /<p>(<img [^>]+>)\s*<em>([\s\S]*?)<\/em><\/p>/g,
+  '<figure>$1<figcaption>$2</figcaption></figure>',
+);
+
 const css = readFileSync(resolve(repoRoot, 'docs/auth/pdf/styles.css'), 'utf8');
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${title}</title>
@@ -58,8 +77,22 @@ if (htmlOut) writeFileSync(resolve(htmlOut), html);
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'load' });
+  // A file:// page may load file:// images; setContent's about:blank may not.
+  const tmp = mkdtempSync(join(tmpdir(), 'nestself-pdf-'));
+  const tmpHtml = join(tmp, 'guide.html');
+  writeFileSync(tmpHtml, html);
+  try {
+    await page.goto(pathToFileURL(tmpHtml).href, { waitUntil: 'load' });
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
   await page.evaluate(() => document.fonts.ready);
+  const broken = await page.evaluate(() =>
+    Array.from(document.images)
+      .filter((img) => !img.complete || img.naturalWidth === 0)
+      .map((img) => img.getAttribute('src')),
+  );
+  if (broken.length) throw new Error(`images failed to load: ${broken.join(', ')}`);
   await page.emulateMedia({ media: 'print' });
   await page.pdf({
     path: resolve(output),
@@ -71,7 +104,7 @@ try {
     footerTemplate: `<div style="width:100%;font-family:Onest,system-ui,sans-serif;font-size:8pt;color:#4E655A;padding:0 16mm;display:flex;justify-content:space-between;">
       <span>NestSelf · ${title.replace(/"/g, '&quot;')}</span><span class="pageNumber"></span></div>`,
   });
-  console.log(`wrote ${output}`);
+  console.log(`wrote ${output} (${images.length} image${images.length === 1 ? '' : 's'})`);
 } finally {
   await browser.close();
 }

@@ -55,6 +55,61 @@ describe('NestSelfComputeStack -- staging', () => {
     template.resourceCountIs('AWS::ECR::Repository', 2);
   });
 
+  // The worker validates the same env schema (AUTH_MODE=cognito requires all three).
+  it.each([
+    ['nestself-staging-api', 'api'],
+    ['nestself-staging-worker', 'worker'],
+  ])('passes the surface and API origins cognito mode requires to %s', (family, container) => {
+    template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+      Family: family,
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: container,
+          Environment: Match.arrayWith([
+            { Name: 'AUTH_MODE', Value: 'cognito' },
+            { Name: 'WORKSPACE_URL', Value: 'https://app.staging.nestself.rs' },
+            { Name: 'ADMIN_URL', Value: 'https://admin.staging.nestself.rs' },
+            { Name: 'API_PUBLIC_URL', Value: 'https://app.staging.nestself.rs' },
+          ]),
+        }),
+      ]),
+    });
+  });
+
+  it('lets the API task role list users and read one with AdminGetUser (MFA enrolment lookup)', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['cognito-idp:AdminGetUser', 'cognito-idp:ListUsers']),
+            Effect: 'Allow',
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('lets the API task role manage SSO identity providers and the app clients that list them', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith([
+              'cognito-idp:DescribeUserPoolClient',
+              'cognito-idp:UpdateUserPoolClient',
+              'cognito-idp:CreateIdentityProvider',
+              'cognito-idp:UpdateIdentityProvider',
+              'cognito-idp:DeleteIdentityProvider',
+              'cognito-idp:DescribeIdentityProvider',
+              'cognito-idp:ListIdentityProviders',
+            ]),
+            Effect: 'Allow',
+          }),
+        ]),
+      },
+    });
+  });
+
   it('creates an ALB', () => {
     template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
   });

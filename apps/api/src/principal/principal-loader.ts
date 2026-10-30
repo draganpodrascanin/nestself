@@ -2,7 +2,12 @@
  * PrincipalLoader — resolves a userId to a LoadedPrincipal.
  *
  * Caches at `principal:{userId}` for 30 s +/- 5 s jitter.
- * Grants at `grants:{userId}:{orgId}` for 60 s +/- 10 s jitter.
+ * Grants at `grants:{userId}:{orgId}` for 60 s +/- 10 s jitter. The entry
+ * holds the subject's grants plus the delegation ancestors of its delegated
+ * grants, so a change to an ancestor (held by another user) reaches it only
+ * through the delegatee's own `invalidateUser` call: every path that revokes
+ * or adjusts a grant calls `invalidateDelegatees` (GrantsService revoke and
+ * update, MembersService.endMembership, the grants reconciliation job).
  * Assignments at `assignments:{userId}` for 60 s +/- 10 s jitter.
  * Org tree at `org_tree:{orgId}` for 5 min +/- 30 s jitter.
  *
@@ -86,6 +91,14 @@ function computeInitials(displayName: string): string {
   return letters.join('') || '?';
 }
 
+/** True when a cached principal has the fields the current code reads. */
+function hasCurrentShape(p: LoadedPrincipal): boolean {
+  return (
+    Array.isArray(p.memberships) &&
+    p.memberships.every((m) => typeof m.orgName === 'string' && m.orgName.length > 0)
+  );
+}
+
 /** Adapts DB-level membership to the shared currency check from personal-context. */
 function isMembershipActive(
   status: string,
@@ -126,7 +139,10 @@ export class PrincipalLoader {
     const cached = await this.cache.get(cacheKey);
     if (cached) {
       try {
-        return JSON.parse(cached) as LoadedPrincipal;
+        const parsed = JSON.parse(cached) as LoadedPrincipal;
+        // Entries written before memberships carried orgName are a miss, so
+        // a rolling deploy never serves the older shape.
+        if (hasCurrentShape(parsed)) return parsed;
       } catch {
         // Corrupted cache entry — fall through
       }
@@ -148,6 +164,7 @@ export class PrincipalLoader {
         memberships.push({
           membershipId: m.id,
           orgId: m.orgId,
+          orgName: m.org.name,
           orgUnitId: m.orgUnitId,
           status: active ? 'ACTIVE' : 'INVITED',
           startDate: m.startDate.toISOString(),
@@ -269,7 +286,18 @@ export class PrincipalLoader {
     // Platform/own-scoped grants (scopeOrgId null) plus org-specific grants.
     const grants = await this.authzRepo.findGrantsForOrg(userId, orgId);
 
-    const result: GrantInput[] = grants.map((g) => ({
+    // The engine validates a delegated grant against its parent chain in
+    // ctx.grants, so the chain's grants (held by other users, possibly
+    // revoked) travel in the same cached entry. authorize() matches only the
+    // subject's own grants; the ancestors serve delegation validation alone.
+    const delegatedIds = grants.filter((g) => g.parentGrantId != null).map((g) => g.id);
+    const ownIds = new Set(grants.map((g) => g.id));
+    const ancestors =
+      delegatedIds.length > 0
+        ? (await this.authzRepo.findDelegationAncestors(delegatedIds)).filter((g) => !ownIds.has(g.id))
+        : [];
+
+    const result: GrantInput[] = [...grants, ...ancestors].map((g) => ({
       id: g.id,
       subjectUserId: g.subjectUserId,
       templateKey: g.templateKey ?? '',
@@ -348,6 +376,29 @@ export class PrincipalLoader {
     const ttl = jitter(ORG_TREE_TTL, 30);
     await this.cache.set(cacheKey, JSON.stringify(entry), ttl);
     return entry;
+  }
+
+  /**
+   * Invalidate every delegatee below the given grants: the subjects of all
+   * grants delegated from them, directly or not, once each, for the
+   * organization of their grants (`platform` for grants without one).
+   * Their cached grants entry holds copies of these grants as delegation
+   * ancestors, so any revocation or adjustment of a grant with delegations
+   * calls this after its transaction commits. Reads in the system context.
+   * Returns the invalidated user ids.
+   */
+  async invalidateDelegatees(grantIds: string[]): Promise<string[]> {
+    const descendants = await this.authzRepo.findDelegationDescendants(grantIds);
+    const orgsBySubject = new Map<string, Set<string>>();
+    for (const g of descendants) {
+      const orgs = orgsBySubject.get(g.subjectUserId) ?? new Set<string>();
+      orgs.add(g.scopeOrgId ?? 'platform');
+      orgsBySubject.set(g.subjectUserId, orgs);
+    }
+    for (const [userId, orgs] of orgsBySubject) {
+      await this.invalidateUser(userId, [...orgs]);
+    }
+    return [...orgsBySubject.keys()];
   }
 
   /**

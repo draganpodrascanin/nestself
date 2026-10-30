@@ -51,7 +51,8 @@ function toPrincipal(raw: GoldenTuple['principal']): Principal {
     displayName: raw.displayName,
     initials: raw.initials,
     locale: raw.locale,
-    memberships: raw.memberships,
+    // The golden fixtures predate orgName; the engine never reads it.
+    memberships: raw.memberships.map((m) => ({ ...m, orgName: m.orgId })),
     staffTemplates: raw.staffTemplates,
     expert: raw.expert,
     context: raw.context,

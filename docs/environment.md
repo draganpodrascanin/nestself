@@ -12,7 +12,9 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `PORT` | HTTP port the API listens on | `4000` |
 | `DATABASE_URL` | PostgreSQL connection string. In Docker and AWS use the `nestself_api` login (a member of `nestself_app`) so row-level security applies; migrations run as the owner | `postgresql://nestself:nestself_dev@localhost:5432/nestself` |
 | `DATABASE_POOL_MAX` | Maximum connections in the pg Pool | `10` |
-| `TEST_DATABASE_URL` | Integration tests only: a database the suites may drop and recreate (`<name>_schema`, `<name>_auth`, `<name>_jobs` ...) | unset (suites skip) |
+| `TEST_DATABASE_URL` | Integration tests only: a server and base name the suites may drop and recreate databases under (`<name>_<prefix>_schema`, `<name>_<prefix>_auth` ...) | unset (suites skip) |
+| `TEST_DATABASE_PREFIX` | Integration tests only: the `<prefix>` in test database names (letters, digits, underscores) | first 8 hex characters of the SHA-1 of the repository root path |
+| `E2E_DATABASE_URL` | `pnpm e2e:auth` only: the database the stub API uses; dropped, recreated, migrated and seeded on every run, so it must name a `nestself_e2e_*` or `nestself_test_*` database (others are refused) | `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server |
 | `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction (set to 1 or more behind a load balancer) | `0` |
 
 ### Authentication mode
@@ -62,14 +64,14 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 | `MARKETING_URL` | Origin of the marketing app (CORS) | `http://localhost:3000` |
 | `WORKSPACE_URL` | Origin of the workspace app (CORS, CSRF, WebSocket handshake) | `http://localhost:5173` |
 | `ADMIN_URL` | Origin of the admin app (CORS, CSRF, WebSocket handshake) | `http://localhost:5174` |
-| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links) | unset |
+| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links, mobile and direct SSO callers). Browser SSO redirects use the surface's own origin instead (`docs/auth/implementation.md` §18, §22.3). Required with `AUTH_MODE=cognito` | unset |
 | `SES_FROM_EMAIL` | Enables the SES invitation mailer; without it invitation links are logged | unset |
 
 ### Worker process
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `JOBS_TIMEZONE` | IANA timezone for the nightly maintenance schedules (`pnpm --filter @nestself/api worker:dev`, ECS `worker` service). The worker shares every other variable with the API and exits without `REDIS_URL` | `Europe/Belgrade` |
+| `JOBS_TIMEZONE` | IANA timezone for the maintenance schedules (`pnpm --filter @nestself/api worker:dev`, ECS `worker` service). The worker boots the same application module as the API, so it needs every API variable too (`DATABASE_URL`, `AUTH_MODE` and the `COGNITO_*` values, `SESSION_ENCRYPTION_KEY`: the `sessions.reconcile-ttl` job revokes refresh tokens through the session service) and exits without `REDIS_URL` | `Europe/Belgrade` |
 
 ## Workspace and Admin (`apps/workspace/.env.local`, `apps/admin/.env.local`)
 
@@ -113,8 +115,9 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - `VITE_DATA_SOURCE` and `EXPO_PUBLIC_DATA_SOURCE` default to `sample` in development. In sample mode, apps import fixtures from `@nestself/sample-data` and display a banner on every screen.
 - The `DATABASE_URL` default matches the Docker Compose service in `docker/docker-compose.yml` (user `nestself`, password `nestself_dev`, database `nestself` on port 5432). For Docker deployments, `DATABASE_URL` should use the `nestself_api` login role (created by `docker/initdb/01-app-role.sql`). Migrations run as the database owner, not as `nestself_api`.
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
-- The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`.
-- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
+- The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
+- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables.
+- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run. Each database is named `<base>_<prefix>_<suffix>` (`testDatabaseName` in `apps/api/test/db/test-database-name.ts`): the prefix is `TEST_DATABASE_PREFIX` or a hash of the repository root, so two git worktrees running the same suite against one server never drop each other's database. Names longer than PostgreSQL's 63-byte limit shorten the base. `pnpm e2e:auth` uses the same prefix for its own database, `nestself_e2e_<prefix>` (or `E2E_DATABASE_URL`), and never the `DATABASE_URL` in `.env`; see `e2e/README.md`.
 
 ## Running a second worktree
 

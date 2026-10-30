@@ -123,10 +123,11 @@
     "nav": "Access",
     "title": "Access management",
     "lead": "Who holds which permission template in your organization, and what each template lets them do.",
-    "sampleNote": "Sample mode: assigning, delegating and revoking are turned off. Nothing is created, changed or revoked.",
+    "sampleNote": "Sample mode: assigning, delegating, revoking and transferring ownership are turned off. Nothing is created, changed or revoked.",
     "loading": "Loading access",
     "empty": "No grants in this organization yet.",
     "noOrganization": "Access management needs exactly one active organization membership on your account.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
     "tableCaption": "Grants in your organization",
     "columns": {
       "template": "Template",
@@ -224,6 +225,16 @@
       "cancel": "Cancel",
       "success": "Access delegated."
     },
+    "transfer": {
+      "open": "Transfer ownership",
+      "title": "Transfer ownership",
+      "description": "Choose the active member who becomes the owner of the organization.",
+      "member": "New owner",
+      "confirmation": "You lose your owner rights as soon as the transfer completes. Grants you delegated from your owner grant move to the new owner.",
+      "submit": "Transfer ownership",
+      "cancel": "Cancel",
+      "success": "Ownership transferred."
+    },
     "preview": {
       "title": "Effective access",
       "lead": "Choose a member to see every action their grants give them in this organization.",
@@ -246,8 +257,310 @@
       "templateRequired": "Choose a template.",
       "orgUnitRequired": "Choose an org unit.",
       "reasonLength": "Enter a reason between 3 and 500 characters.",
-      "actionsRequired": "Choose at least one action."
+      "actionsRequired": "Choose at least one action.",
+      "notOwner": "Only the current owner of the organization can transfer ownership.",
+      "alreadyOwner": "This person is already the owner of the organization.",
+      "ownerExists": "The organization already has an owner. Ownership can only be transferred."
     }
+  },
+  "people": {
+    "nav": "People",
+    "title": "People",
+    "lead": "Members of your organization and the invitations still waiting to be accepted.",
+    "sampleNote": "Sample mode: moving people, ending memberships, inviting, importing and revoking are turned off. Nothing is created, changed or sent.",
+    "noOrganization": "People management needs exactly one active organization membership.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
+    "loading": "Loading",
+    "choose": "Choose",
+    "cancel": "Cancel",
+    "tabs": {
+      "label": "People sections",
+      "members": "Members",
+      "invitations": "Invitations"
+    },
+    "filters": {
+      "orgUnit": "Org unit",
+      "allUnits": "All org units",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "search": "Search",
+      "searchHint": "Name or email address"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "INVITED": "Invited",
+      "ENDED": "Ended"
+    },
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "orgUnit": "Org unit",
+      "lineManager": "Line manager",
+      "status": "Status",
+      "startDate": "Start date",
+      "actions": "Actions",
+      "template": "Template",
+      "expires": "Expires"
+    },
+    "members": {
+      "caption": "Members",
+      "empty": "No members match these filters.",
+      "noUnit": "No org unit",
+      "unknownUnit": "Unknown org unit",
+      "noLineManager": "None",
+      "unknownPerson": "Former member"
+    },
+    "paging": {
+      "showing_one": "Showing {{count}} row",
+      "showing_few": "Showing {{count}} rows",
+      "showing_other": "Showing {{count}} rows",
+      "showingMore_one": "Showing {{count}} row, more are available",
+      "showingMore_few": "Showing {{count}} rows, more are available",
+      "showingMore_other": "Showing {{count}} rows, more are available",
+      "loadMore": "Load more",
+      "loadMoreFailed": "More rows could not be loaded"
+    },
+    "move": {
+      "open": "Move",
+      "openFor": "Move {{name}}",
+      "title": "Move member",
+      "description": "Change the org unit or line manager of {{name}}.",
+      "orgUnit": "Org unit",
+      "lineManager": "Line manager",
+      "noLineManager": "No line manager",
+      "submit": "Save changes",
+      "success": "{{name}} was moved."
+    },
+    "end": {
+      "open": "End membership",
+      "openFor": "End the membership of {{name}}",
+      "title": "End membership",
+      "description": "End the membership of {{name}}? Their organization permissions are revoked and they lose access to this organization. This cannot be undone from this page.",
+      "reason": "Reason",
+      "confirm": "End membership",
+      "success": "The membership of {{name}} has ended.",
+      "reasons": {
+        "LEFT": "Left the organization",
+        "CONTRACT_ENDED": "Contract ended",
+        "DEACTIVATED_BY_HR": "Deactivated by HR",
+        "MERGED": "Merged into another account"
+      }
+    },
+    "invitations": {
+      "caption": "Pending invitations",
+      "empty": "There are no pending invitations."
+    },
+    "invite": {
+      "open": "Invite",
+      "title": "Invite a person",
+      "email": "Email address",
+      "template": "Permission template",
+      "orgUnit": "Org unit",
+      "noOrgUnit": "No org unit",
+      "submit": "Send invitation",
+      "success": "An invitation was created for {{email}}."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import invitations",
+      "description": "Paste one person per line as email,template[,org unit]. The org unit can be its id or its exact name.",
+      "rows": "Rows",
+      "rowsHint": "Example: ana@example.com,employee,Product",
+      "preview_one": "{{count}} row ready to import",
+      "preview_few": "{{count}} rows ready to import",
+      "preview_other": "{{count}} rows ready to import",
+      "problemsLabel": "Rows to fix",
+      "problems": {
+        "columns": "Line {{line}}: expected email,template and an optional org unit.",
+        "email": "Line {{line}}: \"{{value}}\" is not a valid email address.",
+        "template": "Line {{line}}: \"{{value}}\" is not a template people can be invited with.",
+        "orgUnit": "Line {{line}}: there is no org unit \"{{value}}\".",
+        "orgUnitAmbiguous": "Line {{line}}: more than one org unit is called \"{{value}}\". Use the org unit id instead.",
+        "tooMany": "{{rows}} rows: one import takes at most {{max}}."
+      },
+      "fixProblems": "Fix the rows listed below, then import again.",
+      "noRows": "Paste at least one row.",
+      "submit": "Import",
+      "success_one": "{{count}} invitation was created.",
+      "success_few": "{{count}} invitations were created.",
+      "success_other": "{{count}} invitations were created.",
+      "resultTitle": "Import finished",
+      "resultSummary": "Created: {{created}}. Skipped: {{skipped}}. Not imported: {{failed}}.",
+      "errorsCaption": "Rows that were not imported",
+      "reason": "Reason",
+      "done": "Done",
+      "reasons": {
+        "invalidTemplate": "This template cannot be used for invitations.",
+        "duplicateInBatch": "This email address appears more than once in the import.",
+        "invalidOrgUnit": "The org unit does not belong to this organization.",
+        "ownerExists": "The organization already has an owner.",
+        "duplicateInvitation": "A pending invitation already exists for this email address.",
+        "alreadyMember": "This person is already an active member.",
+        "unknown": "This row could not be imported."
+      }
+    },
+    "revoke": {
+      "open": "Revoke",
+      "openFor": "Revoke the invitation for {{email}}",
+      "title": "Revoke invitation",
+      "description": "Revoke the invitation for {{email}}? The invitation link stops working.",
+      "confirm": "Revoke invitation",
+      "success": "The invitation for {{email}} was revoked."
+    },
+    "errors": {
+      "loadTitle": "People could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "directoryLoadTitle": "Line managers could not be loaded",
+      "invitationsLoadTitle": "Invitations could not be loaded",
+      "orgUnitsLoadTitle": "Org units could not be loaded",
+      "validation": "Some of the details are not valid. Check them and try again.",
+      "conflict": "This has already changed. Refresh the list and try again.",
+      "ownerExists": "The organization already has an owner. Ownership can only be transferred.",
+      "subjectNotMember": "This person is not an active member of the organization.",
+      "notFound": "This person, org unit or line manager no longer exists. Refresh the list and try again.",
+      "duplicateInvitation": "A pending invitation already exists for this email address.",
+      "alreadyMember": "This person is already an active member of the organization.",
+      "cannotEndSelf": "You cannot end your own membership. Ask another administrator.",
+      "forbidden": "Your account is not allowed to do this for this organization.",
+      "contextMismatch": "Your session is in a different context. Choose this organization in the context menu at the top and try again.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "noChange": "Choose a different org unit or line manager.",
+      "emailInvalid": "Enter a valid email address.",
+      "templateRequired": "Choose a template.",
+      "templateInvalid": "This template cannot be used for invitations.",
+      "orgUnitInvalid": "This org unit does not belong to the organization."
+    }
+  },
+  "orgUnits": {
+    "nav": "Org units",
+    "title": "Org units",
+    "lead": "The structure of your organization: departments and teams under the company.",
+    "sampleNote": "Sample mode: renaming, adding and moving org units are turned off. Nothing is created or changed.",
+    "noOrganization": "Org units need exactly one active organization membership.",
+    "chooseOrganization": "Your account belongs to more than one organization. Choose the one to manage in the context menu at the top.",
+    "loading": "Loading",
+    "empty": "This organization has no org units yet.",
+    "treeLabel": "Org unit tree",
+    "choose": "Choose",
+    "cancel": "Cancel",
+    "kinds": {
+      "COMPANY": "Company",
+      "DEPARTMENT": "Department",
+      "TEAM": "Team"
+    },
+    "fields": {
+      "name": "Name",
+      "kind": "Kind",
+      "parent": "New parent"
+    },
+    "rename": {
+      "open": "Rename",
+      "openFor": "Rename {{name}}",
+      "title": "Rename org unit",
+      "description": "Give {{name}} a new name.",
+      "submit": "Save name",
+      "success": "The org unit is now called {{name}}."
+    },
+    "addChild": {
+      "open": "Add child",
+      "openFor": "Add a unit under {{name}}",
+      "title": "Add org unit",
+      "description": "The new unit is created under {{name}}.",
+      "submit": "Add unit",
+      "success": "{{name}} was added."
+    },
+    "move": {
+      "open": "Move",
+      "openFor": "Move {{name}}",
+      "title": "Move org unit",
+      "description": "Choose the unit {{name}} moves under. Its own units move with it.",
+      "submit": "Move unit",
+      "success": "{{name}} now sits under {{parent}}."
+    },
+    "errors": {
+      "loadTitle": "Org units could not be loaded",
+      "validation": "Some of the details are not valid. Check them and try again.",
+      "notFound": "This org unit no longer exists or is archived. Refresh the page and try again.",
+      "rootImmovable": "The company unit at the top of the tree cannot be moved.",
+      "cycle": "A unit cannot move under itself or one of its own units.",
+      "invalidKind": "Only departments and teams can be added.",
+      "conflict": "This org unit has already changed. Refresh the page and try again.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "nameLength": "Enter a name between 1 and 200 characters.",
+      "noChange": "Enter a different name.",
+      "parentRequired": "Choose the new parent unit."
+    }
+  },
+  "cases": {
+    "nav": "Cases",
+    "title": "Assigned cases",
+    "lead": "Conversations of the cases assigned to you. The list shows details only; open a case to read its messages.",
+    "caption": "Conversations of your assigned cases",
+    "empty": "No cases are assigned to you.",
+    "loading": "Loading",
+    "sampleNote": "Sample data: these conversations are fixtures. Nobody wrote them and nothing is read from a server.",
+    "columns": {
+      "case": "Case",
+      "employee": "Employee",
+      "expert": "Expert",
+      "started": "Started",
+      "messages": "Messages",
+      "open": "Conversation"
+    },
+    "open": "Open",
+    "openFor": "Open the conversation of case {{id}}",
+    "paging": {
+      "showing": "Showing {{shown}}",
+      "showingMore": "Showing {{shown}}. More are available.",
+      "loadMore": "Load more",
+      "loadMoreFailed": "More conversations could not be loaded"
+    },
+    "back": "Back to assigned cases",
+    "detailTitle": "Case {{id}}",
+    "detailTitleLoading": "Case conversation",
+    "conversationId": "Conversation {{id}}",
+    "retry": "Try again",
+    "messages": {
+      "heading": "Messages",
+      "label": "Messages, oldest first",
+      "readOnly": "Read only. Replies are not sent from this page.",
+      "empty": "This conversation has no messages yet.",
+      "you": "You",
+      "participant": "Participant {{id}}"
+    },
+    "intake": {
+      "heading": "Intake record",
+      "lead": "Enter the intake record ID of this case to read it. You may be asked to confirm it is you.",
+      "idLabel": "Intake record ID",
+      "required": "Enter the intake record ID.",
+      "open": "Open intake",
+      "errorTitle": "The intake record could not be opened",
+      "recorded": "Recorded {{when}}"
+    },
+    "errors": {
+      "listTitle": "The conversations could not be loaded",
+      "readTitle": "The conversation could not be opened",
+      "contextTitle": "The expert area could not be opened",
+      "context": "Your session could not be moved to the expert context. Choose Expert in the context menu at the top, or try again later.",
+      "stepUpCancelledTitle": "Verification cancelled",
+      "stepUpCancelled": "This content is shown only after you confirm it is you. Nothing was opened.",
+      "forbidden": "You do not have access to this record.",
+      "notFound": "This record does not exist or is no longer available.",
+      "rateLimited": "Too many requests in a short time. Wait a moment and try again.",
+      "unknown": "Something went wrong. Please try again."
+    }
+  },
+  "conversations": {
+    "nav": "Conversations",
+    "title": "My conversations",
+    "lead": "Your conversations with experts. Open one to read its messages.",
+    "caption": "Your conversations with experts",
+    "empty": "You have no conversations with an expert yet.",
+    "back": "Back to my conversations",
+    "detailTitle": "Conversation about case {{id}}",
+    "detailTitleLoading": "Conversation"
   },
   "contextSwitcher": {
     "label": "Switch workspace",

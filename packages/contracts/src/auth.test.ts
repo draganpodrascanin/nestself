@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TotpConfirmResponseSchema,
+  TotpEnrolRequestSchema,
   DiscoverRequestSchema,
   PrincipalSchema,
   ActiveContextSchema,
@@ -10,6 +12,8 @@ import {
   EmailOtpStartResponseSchema,
   MeResponseSchema,
   PasswordResetConfirmRequestSchema,
+  ProfileDisplayNameRequestSchema,
+  DISPLAY_NAME_MAX_LENGTH,
 } from './auth.ts';
 
 describe('DiscoverRequestSchema', () => {
@@ -54,6 +58,7 @@ describe('PrincipalSchema', () => {
       {
         membershipId: 'm1',
         orgId: 'o1',
+        orgName: 'Org One',
         orgUnitId: 'ou1',
         status: 'ACTIVE',
         startDate: '2026-01-01T00:00:00Z',
@@ -99,6 +104,20 @@ describe('PrincipalSchema', () => {
   it('rejects missing userId', () => {
     expect(() =>
       PrincipalSchema.parse({ ...validPrincipal, userId: '' }),
+    ).toThrow();
+  });
+
+  it('carries the organization name on a membership and requires it', () => {
+    expect(PrincipalSchema.parse(validPrincipal).memberships[0]?.orgName).toBe('Org One');
+    const { orgName: _omit, ...withoutName } = validPrincipal.memberships[0]!;
+    expect(() =>
+      PrincipalSchema.parse({ ...validPrincipal, memberships: [withoutName] }),
+    ).toThrow();
+    expect(() =>
+      PrincipalSchema.parse({
+        ...validPrincipal,
+        memberships: [{ ...validPrincipal.memberships[0], orgName: '' }],
+      }),
     ).toThrow();
   });
 });
@@ -149,6 +168,9 @@ describe('AUTH_ERROR_CODES', () => {
     'rate_limited',
     'csrf_rejected',
     'session_expired',
+    'unavailable',
+    'cannot_suspend_self',
+    'cannot_end_self',
   ];
 
   it('contains all required error codes', () => {
@@ -255,5 +277,35 @@ describe('MeResponseSchema', () => {
     });
     expect(result.effectiveActions).toHaveLength(2);
     expect(result.availableContexts).toHaveLength(2);
+  });
+});
+
+describe('TotpEnrolRequestSchema', () => {
+  it('requires the sign-in challengeToken', () => {
+    expect(TotpEnrolRequestSchema.parse({ challengeToken: 'tok' })).toEqual({ challengeToken: 'tok' });
+    expect(TotpEnrolRequestSchema.safeParse({}).success).toBe(false);
+    expect(TotpEnrolRequestSchema.safeParse({ challengeToken: '' }).success).toBe(false);
+  });
+});
+
+describe('TotpConfirmResponseSchema', () => {
+  it('accepts { enrolled: true } only', () => {
+    expect(TotpConfirmResponseSchema.parse({ enrolled: true })).toEqual({ enrolled: true });
+    expect(TotpConfirmResponseSchema.safeParse({ enrolled: false }).success).toBe(false);
+  });
+});
+
+describe('ProfileDisplayNameRequestSchema', () => {
+  it('accepts a trimmed name up to DISPLAY_NAME_MAX_LENGTH characters', () => {
+    expect(DISPLAY_NAME_MAX_LENGTH).toBe(120);
+    const name = 'x'.repeat(DISPLAY_NAME_MAX_LENGTH);
+    expect(ProfileDisplayNameRequestSchema.parse({ displayName: `  ${name}  ` }).displayName).toBe(name);
+  });
+
+  it('rejects an empty or too long name', () => {
+    expect(() => ProfileDisplayNameRequestSchema.parse({ displayName: '   ' })).toThrow();
+    expect(() =>
+      ProfileDisplayNameRequestSchema.parse({ displayName: 'x'.repeat(DISPLAY_NAME_MAX_LENGTH + 1) }),
+    ).toThrow();
   });
 });

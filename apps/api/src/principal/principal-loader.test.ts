@@ -15,6 +15,8 @@ function createMockAuthz() {
   return {
     findActiveGrantTemplateKeys: vi.fn().mockResolvedValue([]),
     findGrantsForOrg: vi.fn().mockResolvedValue([]),
+    findDelegationAncestors: vi.fn().mockResolvedValue([]),
+    findDelegationDescendants: vi.fn().mockResolvedValue([]),
     findActiveAssignments: vi.fn().mockResolvedValue([]),
     findOrgSettings: vi.fn(),
     findClosureForOrg: vi.fn().mockResolvedValue([]),
@@ -49,10 +51,12 @@ const DB_USER = {
     {
       id: 'm-1',
       orgId: 'org-1',
+      orgName: 'Org org-1',
       orgUnitId: null,
       status: 'ACTIVE',
       startDate: new Date('2025-01-01'),
       endDate: null,
+      org: { name: 'Org One' },
     },
   ],
   expert: null,
@@ -122,6 +126,49 @@ describe('PrincipalLoader', () => {
       expect(identities.findUserForPrincipal).not.toHaveBeenCalled();
     });
 
+    it('carries the organization name on each membership', async () => {
+      identities.findUserForPrincipal.mockResolvedValue(DB_USER);
+
+      const result = await loader.load('user-1');
+
+      expect(result!.memberships[0]!.orgName).toBe('Org One');
+      const [, value] = cache.set.mock.calls[0]!;
+      expect(JSON.parse(value as string).memberships[0].orgName).toBe('Org One');
+    });
+
+    it('treats a cached entry without membership orgName as a miss', async () => {
+      const olderShape = {
+        userId: 'user-1',
+        displayName: 'Cached',
+        initials: 'C',
+        locale: 'sr-Latn',
+        memberships: [
+          {
+            membershipId: 'm-1',
+            orgId: 'org-1',
+            // orgName intentionally missing: this is the "older shape" the
+            // test verifies is treated as a cache miss.
+            orgUnitId: null,
+            status: 'ACTIVE',
+            startDate: '2025-01-01T00:00:00.000Z',
+            endDate: null,
+          },
+        ],
+        staffTemplates: [],
+        expert: null,
+        isSuspended: false,
+        isDeactivated: false,
+        populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
+      };
+      cache.get.mockResolvedValue(JSON.stringify(olderShape));
+      identities.findUserForPrincipal.mockResolvedValue(DB_USER);
+
+      const result = await loader.load('user-1');
+
+      expect(identities.findUserForPrincipal).toHaveBeenCalledOnce();
+      expect(result!.memberships[0]!.orgName).toBe('Org One');
+    });
+
     it('returns null for unknown user', async () => {
       identities.findUserForPrincipal.mockResolvedValue(null);
       const result = await loader.load('no-such-user');
@@ -188,6 +235,63 @@ describe('PrincipalLoader', () => {
       expect(result).toEqual(cached);
       expect(authz.findGrantsForOrg).not.toHaveBeenCalled();
     });
+
+    it('appends the delegation ancestors of delegated grants to the same cached entry', async () => {
+      const row = (id: string, subjectUserId: string, parentGrantId: string | null) => ({
+        id,
+        subjectUserId,
+        templateKey: null,
+        actions: ['people.invite'],
+        scopeType: 'organization',
+        scopeOrgId: 'org-1',
+        scopeOrgUnitId: null,
+        includeDescendants: false,
+        scopeRefKind: null,
+        scopeRefId: null,
+        conditions: [],
+        validFrom: new Date('2026-01-01'),
+        validUntil: null,
+        delegationEnvelope: null,
+        parentGrantId,
+        revokedAt: null,
+      });
+      authz.findGrantsForOrg.mockResolvedValue([row('g-own', 'user-1', null), row('g-child', 'user-1', 'g-mid')]);
+      authz.findDelegationAncestors.mockResolvedValue([row('g-mid', 'user-2', 'g-root'), row('g-root', 'user-3', null)]);
+
+      const result = await loader.loadGrants('user-1', 'org-1');
+
+      expect(authz.findDelegationAncestors).toHaveBeenCalledWith(['g-child']);
+      expect(result.map((g) => [g.id, g.subjectUserId])).toEqual([
+        ['g-own', 'user-1'],
+        ['g-child', 'user-1'],
+        ['g-mid', 'user-2'],
+        ['g-root', 'user-3'],
+      ]);
+      expect(cache.set).toHaveBeenCalledOnce();
+      const [key, json] = cache.set.mock.calls[0]!;
+      expect(key).toBe('grants:user-1:org-1');
+      expect((JSON.parse(json as string) as Array<{ id: string }>).map((g) => g.id)).toEqual([
+        'g-own',
+        'g-child',
+        'g-mid',
+        'g-root',
+      ]);
+    });
+
+    it('does not duplicate an ancestor that is also one of the subject\'s own grants', async () => {
+      const own = { id: 'g-root', subjectUserId: 'user-1', templateKey: null, actions: [], scopeType: 'organization', scopeOrgId: 'org-1', scopeOrgUnitId: null, includeDescendants: false, scopeRefKind: null, scopeRefId: null, conditions: [], validFrom: new Date(), validUntil: null, delegationEnvelope: null, parentGrantId: null, revokedAt: null };
+      const child = { ...own, id: 'g-child', parentGrantId: 'g-root' };
+      authz.findGrantsForOrg.mockResolvedValue([own, child]);
+      authz.findDelegationAncestors.mockResolvedValue([own]);
+
+      const result = await loader.loadGrants('user-1', 'org-1');
+      expect(result.map((g) => g.id)).toEqual(['g-root', 'g-child']);
+    });
+
+    it('skips the ancestor query when no grant is delegated', async () => {
+      await loader.loadGrants('user-1', 'org-1');
+      expect(authz.findDelegationAncestors).not.toHaveBeenCalled();
+    });
   });
 
   // ── loadAssignments() ───────────────────────────────────────────────────
@@ -252,6 +356,7 @@ describe('PrincipalLoader', () => {
         {
           membershipId: 'm-1',
           orgId: 'org-1',
+          orgName: 'Org org-1',
           orgUnitId: null,
           status: 'ACTIVE' as const,
           startDate: '2026-01-01T00:00:00Z',
@@ -293,6 +398,31 @@ describe('PrincipalLoader', () => {
   });
 
   // ── invalidateUser() ───────────────────────────────────────────────────
+
+  describe('invalidateDelegatees()', () => {
+    it('invalidates every descendant subject once, per organization of their grants', async () => {
+      authz.findDelegationDescendants.mockResolvedValue([
+        { id: 'g-child', subjectUserId: 'user-2', scopeOrgId: 'org-1' },
+        { id: 'g-grandchild', subjectUserId: 'user-3', scopeOrgId: 'org-1' },
+        { id: 'g-other', subjectUserId: 'user-2', scopeOrgId: null },
+      ]);
+      const spy = vi.spyOn(loader, 'invalidateUser');
+
+      const invalidated = await loader.invalidateDelegatees(['g-root']);
+
+      expect(authz.findDelegationDescendants).toHaveBeenCalledWith(['g-root']);
+      expect(invalidated).toEqual(['user-2', 'user-3']);
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledWith('user-2', ['org-1', 'platform']);
+      expect(spy).toHaveBeenCalledWith('user-3', ['org-1']);
+    });
+
+    it('does nothing without delegations', async () => {
+      const spy = vi.spyOn(loader, 'invalidateUser');
+      expect(await loader.invalidateDelegatees(['g-root'])).toEqual([]);
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
 
   describe('invalidateUser()', () => {
     it('deletes cache keys and publishes invalidation', async () => {

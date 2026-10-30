@@ -120,10 +120,16 @@ function makeOpsApi(overrides: Partial<Record<keyof OpsAdminApi, unknown>> = {})
     createGrant: vi.fn().mockResolvedValue(GRANTS[0]),
     revokeGrant: vi.fn().mockResolvedValue(GRANTS[1]),
     previewAccess: vi.fn(),
+    transferOwnership: vi.fn().mockResolvedValue({
+      revokedGrantId: 'g_owner',
+      createdGrant: grant({ id: 'g_owner_new', subjectUserId: 'user_stefan', templateKey: 'employer_owner' }),
+    }),
     listPlatformGrants: vi.fn().mockResolvedValue({ items: PLATFORM_GRANTS }),
     createPlatformGrant: vi.fn().mockResolvedValue(NEW_PLATFORM_GRANT),
+    revokePlatformGrant: vi.fn().mockResolvedValue(PLATFORM_GRANTS[0]),
     userAccess: vi.fn().mockResolvedValue({
       userId: 'user_stefan',
+      suspended: false,
       contexts: [
         { orgId: null, actions: ['support.troubleshoot', 'account.help'], grantIds: ['pg_x'], assignmentIds: [] },
         {
@@ -401,6 +407,7 @@ describe('OrgAccessScreen: assign dialog', () => {
     ['forbidden', 403, 'admin:access.errors.forbidden'],
     ['rate_limited', 429, 'admin:access.errors.rateLimited'],
     ['conflict', 409, 'admin:access.errors.conflict'],
+    ['owner_exists', 409, 'admin:access.errors.ownerExists'],
     ['internal_error', 500, 'admin:access.errors.unknown'],
   ])('maps the API error %s to its message', async (code, status, key) => {
     const user = userEvent.setup();
@@ -519,6 +526,143 @@ describe('OrgAccessScreen: revoke dialog', () => {
 // User access lookup
 // ---------------------------------------------------------------------------
 
+describe('OrgAccessScreen: transfer ownership', () => {
+  const OPEN = () => t('admin:access.transfer.open');
+  const TITLE = () => t('admin:access.transfer.title');
+
+  async function openTransfer(user: UserEvent) {
+    await user.click(await screen.findByRole('button', { name: OPEN() }));
+    return screen.findByRole('dialog', { name: TITLE() });
+  }
+
+  async function submitTransfer(user: UserEvent, dialog: HTMLElement, memberName = 'Stefan Marković') {
+    await choose(user, t('admin:access.transfer.member'), memberName);
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.transfer.submit') }));
+  }
+
+  it('is hidden without access.grant', async () => {
+    renderOrg({ auth: makeAuth({ effectiveActions: ['access.preview'] }) });
+    await screen.findByText('Stefan Marković');
+    expect(screen.queryByRole('button', { name: OPEN() })).not.toBeInTheDocument();
+  });
+
+  it('names the current owner, who is not offered as the new owner', async () => {
+    const user = userEvent.setup();
+    renderOrg();
+    const dialog = await openTransfer(user);
+
+    expect(within(dialog).getByText(t('admin:access.transfer.currentOwner', { name: 'Ivana Jovanović' }))).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: t('admin:access.transfer.member') }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Stefan Marković', 'Ana Nikolić']);
+  });
+
+  it('says that the chosen member becomes the first owner when there is none', async () => {
+    const user = userEvent.setup();
+    const withoutOwner = GRANTS.filter((g) => g.id !== 'g_owner');
+    renderOrg({ opsApi: makeOpsApi({ listGrants: vi.fn().mockResolvedValue({ items: withoutOwner }) }) });
+    const dialog = await openTransfer(user);
+
+    expect(within(dialog).getByText(t('admin:access.transfer.noOwner'))).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: t('admin:access.transfer.member') }));
+    expect(await screen.findAllByRole('option')).toHaveLength(3);
+  });
+
+  it('requires a member', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderOrg();
+    const dialog = await openTransfer(user);
+
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.transfer.submit') }));
+
+    expect(await within(dialog).findAllByText(t('admin:access.errors.memberRequired'))).not.toHaveLength(0);
+    expect(opsApi.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('transfers through the ops route, refetches the grants and closes', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderOrg();
+    const dialog = await openTransfer(user);
+    await waitFor(() => expect(opsApi.listGrants).toHaveBeenCalledTimes(1));
+
+    await submitTransfer(user, dialog);
+
+    await waitFor(() => expect(opsApi.transferOwnership).toHaveBeenCalledWith(ORG_ID, { newOwnerUserId: 'user_stefan' }));
+    await waitFor(() => expect(opsApi.listGrants).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: TITLE() })).not.toBeInTheDocument());
+    expect(await screen.findByText(t('admin:access.transfer.success'))).toBeInTheDocument();
+  });
+
+  it('names the new owner after a transfer, from the refetched grants', async () => {
+    const user = userEvent.setup();
+    const afterTransfer: GrantResponse[] = [
+      ...GRANTS.map((g) => (g.id === 'g_owner' ? { ...g, revokedAt: '2026-10-25T00:00:00.000Z' } : g)),
+      grant({ id: 'g_owner_new', subjectUserId: 'user_stefan', templateKey: 'employer_owner' }),
+    ];
+    const listGrants = vi.fn().mockResolvedValueOnce({ items: GRANTS }).mockResolvedValue({ items: afterTransfer });
+    renderOrg({ opsApi: makeOpsApi({ listGrants }) });
+    await submitTransfer(user, await openTransfer(user));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: TITLE() })).not.toBeInTheDocument());
+    await waitFor(() => expect(listGrants).toHaveBeenCalledTimes(2));
+
+    const dialog = await openTransfer(user);
+    expect(within(dialog).getByText(t('admin:access.transfer.currentOwner', { name: 'Stefan Marković' }))).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: t('admin:access.transfer.member') }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Ivana Jovanović', 'Ana Nikolić']);
+  });
+
+  it.each([
+    ['forbidden', 403, 'forbidden'],
+    ['subject_not_member', 409, 'subjectNotMember'],
+    ['conflict', 409, 'alreadyOwner'],
+    ['owner_exists', 409, 'ownerExists'],
+    ['rate_limited', 429, 'rateLimited'],
+    ['internal_error', 500, 'unknown'],
+  ] as const)('shows the %s failure (%i) as access.errors.%s', async (code, status, key) => {
+    const user = userEvent.setup();
+    renderOrg({ opsApi: makeOpsApi({ transferOwnership: vi.fn().mockRejectedValue(apiError(status, code)) }) });
+    const dialog = await openTransfer(user);
+
+    await submitTransfer(user, dialog);
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(t(`admin:access.errors.${key}`));
+    expect(screen.getByRole('dialog', { name: TITLE() })).toBeInTheDocument();
+  });
+
+  it('retries once after a verified step-up', async () => {
+    const user = userEvent.setup();
+    const transferOwnership = vi
+      .fn()
+      .mockRejectedValueOnce(apiError(403, 'step_up_required'))
+      .mockResolvedValueOnce({ revokedGrantId: 'g_owner', createdGrant: GRANTS[0] });
+    const auth = makeAuth();
+    renderOrg({ auth, opsApi: makeOpsApi({ transferOwnership }) });
+    const dialog = await openTransfer(user);
+
+    await submitTransfer(user, dialog);
+
+    await waitFor(() => expect(transferOwnership).toHaveBeenCalledTimes(2));
+    expect(auth.stepUp).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: TITLE() })).not.toBeInTheDocument());
+  });
+
+  it('closes quietly when the user cancels step-up', async () => {
+    const user = userEvent.setup();
+    const auth = makeAuth({ stepUp: vi.fn().mockResolvedValue(false) });
+    renderOrg({
+      auth,
+      opsApi: makeOpsApi({ transferOwnership: vi.fn().mockRejectedValue(apiError(403, 'step_up_required')) }),
+    });
+    const dialog = await openTransfer(user);
+
+    await submitTransfer(user, dialog);
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: TITLE() })).not.toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('UserAccessLookup', () => {
   async function lookUp(user: UserEvent, userId: string) {
     const region = await screen.findByRole('region', { name: t('admin:access.lookup.title') });
@@ -550,7 +694,7 @@ describe('UserAccessLookup', () => {
   it('says so when the user has no access in any context', async () => {
     const user = userEvent.setup();
     renderPlatform({
-      opsApi: makeOpsApi({ userAccess: vi.fn().mockResolvedValue({ userId: 'user_x', contexts: [] }) }),
+      opsApi: makeOpsApi({ userAccess: vi.fn().mockResolvedValue({ userId: 'user_x', suspended: false, contexts: [] }) }),
     });
     const region = await lookUp(user, 'user_x');
     expect(await within(region).findByText(t('admin:access.lookup.empty'))).toBeInTheDocument();
@@ -585,16 +729,48 @@ describe('UserAccessLookup', () => {
 // ---------------------------------------------------------------------------
 
 describe('PlatformAccessScreen', () => {
-  it('lists platform grants read-only and explains why revoke is missing', async () => {
+  it('lists platform grants with a revoke action per active grant', async () => {
     const { opsApi } = renderPlatform();
 
     const row = (await screen.findByText('user_nikola')).closest('tr')!;
     expect(within(row).getByText(t('admin:access.templates.client_operations'))).toBeInTheDocument();
     expect(within(row).getByText(t('admin:access.scope.assigned_clients'))).toBeInTheDocument();
     expect(within(row).getByText(t('admin:access.status.active'))).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Revoke/ })).not.toBeInTheDocument();
-    expect(screen.getByText(t('admin:access.platform.readOnlyNote'))).toBeInTheDocument();
+    expect(
+      within(row).getByRole('button', {
+        name: t('admin:access.revoke.openFor', { template: t('admin:access.templates.client_operations'), subject: 'user_nikola' }),
+      }),
+    ).toBeInTheDocument();
     expect(opsApi.listPlatformGrants).toHaveBeenCalledWith({ includeRevoked: true });
+  });
+
+  it('revokes a platform grant through the operations route and closes', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderPlatform({
+      opsApi: makeOpsApi({ revokePlatformGrant: vi.fn().mockResolvedValue({ ...PLATFORM_GRANTS[0], revokedAt: '2026-10-24T00:00:00.000Z' }) }),
+    });
+    const dialog = await openRevoke(user, t('admin:access.templates.client_operations'), 'user_nikola');
+
+    await user.type(within(dialog).getByLabelText(new RegExp(`^${t('admin:access.reason.label')}`)), 'Left NestSelf');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.revoke.confirm') }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(opsApi.revokePlatformGrant).toHaveBeenCalledWith('pg_ops', { reason: 'Left NestSelf' });
+    expect(opsApi.revokeGrant).not.toHaveBeenCalled();
+  });
+
+  it('shows the conflict message when the platform grant is already revoked (409)', async () => {
+    const user = userEvent.setup();
+    renderPlatform({
+      opsApi: makeOpsApi({ revokePlatformGrant: vi.fn().mockRejectedValue(apiError(409, 'conflict')) }),
+    });
+    const dialog = await openRevoke(user, t('admin:access.templates.client_operations'), 'user_nikola');
+
+    await user.type(within(dialog).getByLabelText(new RegExp(`^${t('admin:access.reason.label')}`)), 'Left NestSelf');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:access.revoke.confirm') }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(t('admin:access.errors.conflict'));
+    expect(screen.queryByText('English conflict')).not.toBeInTheDocument();
   });
 
   it('shows the mapped message when the platform grants cannot be loaded', async () => {
@@ -735,6 +911,7 @@ describe('Access screens: sample mode', () => {
     renderOrg({ sampleMode: true });
     expect(await screen.findByText(t('admin:access.sampleNote'))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t('admin:access.assign.open') })).toBeDisabled();
+    expect(screen.getByRole('button', { name: t('admin:access.transfer.open') })).toBeDisabled();
     const revokeButtons = screen.getAllByRole('button', { name: /^Revoke/ });
     expect(revokeButtons.length).toBeGreaterThan(0);
     for (const button of revokeButtons) expect(button).toBeDisabled();
@@ -807,5 +984,28 @@ describe('access routes and navigation', () => {
     await user.click(within(sections).getByRole('link', { name: t('admin:organizations.tabs.access') }));
     expect(await screen.findByRole('heading', { name: t('admin:access.org.title') })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: t('admin:organizations.detail') })).toBeInTheDocument();
+  });
+
+  it('the organization detail shows the sample overview and links to its people page', async () => {
+    const user = userEvent.setup();
+    renderRoute(`/organizations/${ORG_ID}`, 'admin');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Example d.o.o.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: t('admin:organizations.owner.title') })).toBeInTheDocument();
+    const sections = screen.getByRole('navigation', { name: t('admin:organizations.tabsLabel') });
+    await user.click(within(sections).getByRole('link', { name: t('admin:organizations.tabs.people') }));
+    expect(await screen.findByRole('heading', { name: t('admin:people.title') })).toBeInTheDocument();
+    expect(screen.getByText(t('admin:people.sampleNote'))).toBeInTheDocument();
+  });
+
+  it('the organizations page lists the sample organization', async () => {
+    renderRoute('/organizations', 'operations');
+    expect(await screen.findByRole('link', { name: 'Example d.o.o.' })).toBeInTheDocument();
+  });
+
+  it('an operations user sees the people tab but not the access tab', async () => {
+    renderRoute(`/organizations/${ORG_ID}`, 'operations');
+    const sections = await screen.findByRole('navigation', { name: t('admin:organizations.tabsLabel') });
+    expect(within(sections).getByRole('link', { name: t('admin:organizations.tabs.people') })).toBeInTheDocument();
+    expect(within(sections).queryByRole('link', { name: t('admin:organizations.tabs.access') })).not.toBeInTheDocument();
   });
 });

@@ -70,6 +70,7 @@ describe('UsersService', () => {
   let idp: ReturnType<typeof createMockIdp>;
   let audit: ReturnType<typeof createMockAudit>;
   let revocation: ReturnType<typeof createMockRevocation>;
+  let principalLoader: { invalidateUser: ReturnType<typeof vi.fn> };
   let service: UsersService;
 
   beforeEach(() => {
@@ -77,17 +78,32 @@ describe('UsersService', () => {
     idp = createMockIdp();
     audit = createMockAudit();
     revocation = createMockRevocation();
+    principalLoader = { invalidateUser: vi.fn().mockResolvedValue(undefined) };
     service = new UsersService(
       identities as never,
       idp as never,
       audit as never,
       revocation as never,
+      principalLoader as never,
     );
   });
 
   // ── suspend ─────────────────────────────────────────────────────────────
 
   describe('suspendUser()', () => {
+    it('refuses to suspend the caller\'s own account and changes nothing', async () => {
+      identities.findUserById.mockResolvedValue(ACTIVE_USER);
+
+      const err = await service.suspendUser('user-1', { reason: 'Testing myself' }, 'user-1').catch((e: unknown) => e);
+
+      expect(err).toEqual(expect.objectContaining({ code: 'cannot_suspend_self' }));
+      expect((err as { getStatus(): number }).getStatus()).toBe(409);
+      expect(identities.setSuspended).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(idp.disableUser).not.toHaveBeenCalled();
+      expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    });
+
     it('throws 404 when user does not exist', async () => {
       identities.findUserById.mockResolvedValue(null);
 
@@ -186,6 +202,7 @@ describe('UsersService', () => {
       expect(result.userId).toBe('user-1');
       expect(result.reinstatedAt).toBeTruthy();
       expect(identities.setSuspended).toHaveBeenCalledWith('user-1', null);
+      expect(principalLoader.invalidateUser).toHaveBeenCalledWith('user-1');
       expect(idp.enableUser).toHaveBeenCalledWith('cog-1');
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'user.reactivated' }),
@@ -200,6 +217,7 @@ describe('UsersService', () => {
       expect(result.userId).toBe('user-1');
       expect(identities.setSuspended).not.toHaveBeenCalled();
       expect(audit.record).not.toHaveBeenCalled();
+      expect(principalLoader.invalidateUser).not.toHaveBeenCalled();
     });
   });
 });

@@ -32,6 +32,7 @@ function createMockInvitations() {
     findOrganizationName: vi.fn().mockResolvedValue('Example d.o.o.'),
     findByIdAndOrg: vi.fn(),
     revoke: vi.fn(),
+    listPending: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -51,6 +52,12 @@ function createMockIdentities() {
 function createMockAudit() {
   return {
     record: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createMockAuthz() {
+  return {
+    findActiveOwnerGrants: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -76,6 +83,8 @@ describe('InvitationsService', () => {
   let identities: ReturnType<typeof createMockIdentities>;
   let audit: ReturnType<typeof createMockAudit>;
   let mailer: ReturnType<typeof createMockMailer>;
+  let authzRepo: ReturnType<typeof createMockAuthz>;
+  let sso: { findActiveConnectionForDomain: ReturnType<typeof vi.fn> };
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -85,6 +94,8 @@ describe('InvitationsService', () => {
     identities = createMockIdentities();
     audit = createMockAudit();
     mailer = createMockMailer();
+    authzRepo = createMockAuthz();
+    sso = { findActiveConnectionForDomain: vi.fn().mockResolvedValue(null) };
 
     service = new InvitationsService(
       dbs as never,
@@ -93,7 +104,56 @@ describe('InvitationsService', () => {
       identities as never,
       audit as never,
       mailer as never,
+      authzRepo as never,
+      sso as never,
     );
+  });
+
+  // -- SSO domains of another organization ----------------------------------
+
+  describe('SSO domain claimed by another organization', () => {
+    const OTHER = { orgId: 'org_other', cognitoProviderName: 'org-other-saml' };
+
+    it('create refuses with 409 conflict, details.reason sso_domain_claimed, before any write', async () => {
+      sso.findActiveConnectionForDomain.mockResolvedValue(OTHER);
+      const err = await service
+        .create('org_sample', { email: 'person@other.example', templateKey: 'employee' }, 'user_ivana', false)
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: 'conflict', details: { reason: 'sso_domain_claimed' } });
+      expect((err as { getStatus(): number }).getStatus()).toBe(409);
+      expect(sso.findActiveConnectionForDomain).toHaveBeenCalledWith('other.example');
+      expect(dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(invitations.create).not.toHaveBeenCalled();
+    });
+
+    it('create accepts a domain of the inviting organization\'s own connection', async () => {
+      sso.findActiveConnectionForDomain.mockResolvedValue({ ...OTHER, orgId: 'org_sample' });
+      await service.create('org_sample', { email: 'person@acme.example', templateKey: 'employee' }, 'user_ivana', false);
+      expect(invitations.create).toHaveBeenCalledOnce();
+    });
+
+    it('import puts the claimed rows in errors and creates the rest', async () => {
+      sso.findActiveConnectionForDomain.mockImplementation(async (d: string) => (d === 'other.example' ? OTHER : null));
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'a@other.example', templateKey: 'employee' },
+            { email: 'b@other.example', templateKey: 'employee' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([
+        { email: 'a@other.example', reason: 'sso_domain_claimed' },
+        { email: 'b@other.example', reason: 'sso_domain_claimed' },
+      ]);
+      // One lookup per domain.
+      expect(sso.findActiveConnectionForDomain).toHaveBeenCalledTimes(2);
+    });
   });
 
   // -- create ---------------------------------------------------------------
@@ -149,6 +209,29 @@ describe('InvitationsService', () => {
       ).rejects.toThrow(expect.objectContaining({ code: 'validation' }));
     });
 
+    it.each(['platform_owner', 'client_operations', 'nestself_finance', 'expert', 'expert_lead'])(
+      'rejects the staff or platform template %s with 400 validation (details.templateKey)',
+      async (templateKey) => {
+        await expect(
+          service.create('org_sample', { email: 'new@example.com', templateKey }, 'user_ivana', false),
+        ).rejects.toThrow(
+          expect.objectContaining({ code: 'validation', details: { templateKey } }),
+        );
+        expect(invitations.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['hr_admin', 'employer_owner', 'team_manager', 'employee'])(
+      'accepts the organization template %s',
+      async (templateKey) => {
+        await service.create('org_sample', { email: 'new@example.com', templateKey }, 'user_ivana', false);
+        expect(invitations.create).toHaveBeenCalledWith(
+          expect.objectContaining({ templateKey }),
+          expect.anything(),
+        );
+      },
+    );
+
     it('rejects duplicate pending invitation with 409', async () => {
       invitations.findPendingByEmailAndOrg.mockResolvedValue({
         id: 'existing',
@@ -178,6 +261,95 @@ describe('InvitationsService', () => {
           false,
         ),
       ).rejects.toThrow(expect.objectContaining({ code: 'already_member' }));
+    });
+  });
+
+  // -- owner model (2026-10-24) -----------------------------------------------
+
+  describe('employer_owner invitations', () => {
+    const OWNER = { id: 'grant_user_ivana_employer_owner', subjectUserId: 'user_ivana' };
+
+    it('create refuses employer_owner with 409 owner_exists while the organization has an owner', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([OWNER]);
+      await expect(
+        service.create('org_sample', { email: 'owner2@example.com', templateKey: 'employer_owner' }, 'user_ivana', false),
+      ).rejects.toThrow(
+        expect.objectContaining({ code: 'owner_exists', details: { currentOwnerUserId: 'user_ivana' } }),
+      );
+      expect(authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith('org_sample', expect.any(Date), expect.anything());
+      expect(invitations.create).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it('create does not look up owners for other templates', async () => {
+      await service.create('org_sample', { email: 'new@example.com', templateKey: 'hr_admin' }, 'user_ivana', false);
+      expect(authzRepo.findActiveOwnerGrants).not.toHaveBeenCalled();
+    });
+
+    it('import puts an employer_owner row in errors (owner_exists) and creates the other rows', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue([OWNER]);
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'owner2@example.com', templateKey: 'employer_owner' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([{ email: 'owner2@example.com', reason: 'owner_exists' }]);
+      expect(invitations.create).toHaveBeenCalledOnce();
+      expect(invitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'ok@example.com' }),
+        expect.anything(),
+      );
+    });
+
+    it('import accepts an employer_owner row when the organization has no owner', async () => {
+      const result = await service.import(
+        'org_sample',
+        { invitations: [{ email: 'owner@example.com', templateKey: 'employer_owner' }] },
+        'user_ivana',
+        false,
+      );
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([]);
+    });
+  });
+
+  // -- import ---------------------------------------------------------------
+
+  describe('import()', () => {
+    it('reports a platform template row in errors and creates only the valid rows', async () => {
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'ok@example.com', templateKey: 'employee' },
+            { email: 'owner@example.com', templateKey: 'platform_owner' },
+            { email: 'ops@example.com', templateKey: 'client_operations' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ email: 'owner@example.com' }),
+          expect.objectContaining({ email: 'ops@example.com' }),
+        ]),
+      );
+      expect(invitations.create).toHaveBeenCalledOnce();
+      expect(invitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'ok@example.com', templateKey: 'employee' }),
+        expect.anything(),
+      );
     });
   });
 
@@ -242,6 +414,58 @@ describe('InvitationsService', () => {
       await expect(
         service.revoke('org_sample', 'inv_nonexistent', 'user_ivana'),
       ).rejects.toThrow(expect.objectContaining({ code: 'not_found' }));
+    });
+  });
+
+  describe('listPending', () => {
+    const pending = (id: string) => ({
+      id,
+      email: `${id}@example.com`,
+      orgId: 'org_sample',
+      orgUnitId: null,
+      templateKey: 'employee',
+      tokenHash: 'hash',
+      expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      revokedAt: null,
+      acceptedAt: null,
+      invitedByUserId: 'user_ivana',
+      importBatchId: null,
+      createdAt: new Date('2026-10-25T00:00:00.000Z'),
+    });
+
+    it('reads inside the organization scope and returns nextCursor when a further row exists', async () => {
+      invitations.listPending.mockResolvedValue([pending('inv_3'), pending('inv_2'), pending('inv_1')]);
+
+      const res = await service.listPending('org_sample', { limit: 2, cursor: 'inv_4', status: 'pending' });
+
+      expect(dbs.withOrgScope).toHaveBeenCalledWith('org_sample', expect.any(Function));
+      expect(invitations.listPending).toHaveBeenCalledWith(
+        'org_sample',
+        { limit: 2, cursor: 'inv_4', now: expect.any(Date) },
+        {},
+      );
+      expect(res.items.map((i) => i.id)).toEqual(['inv_3', 'inv_2']);
+      expect(res.nextCursor).toBe('inv_2');
+    });
+
+    it('never returns the token hash or a devToken, and ends with nextCursor null', async () => {
+      invitations.listPending.mockResolvedValue([pending('inv_1')]);
+
+      const res = await service.listPending('org_sample', { limit: 25, status: 'pending' });
+
+      expect(res.nextCursor).toBeNull();
+      expect(res.items[0]).toEqual({
+        id: 'inv_1',
+        email: 'inv_1@example.com',
+        orgId: 'org_sample',
+        orgUnitId: null,
+        templateKey: 'employee',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        revokedAt: null,
+        acceptedAt: null,
+        invitedByUserId: 'user_ivana',
+        createdAt: '2026-10-25T00:00:00.000Z',
+      });
     });
   });
 });

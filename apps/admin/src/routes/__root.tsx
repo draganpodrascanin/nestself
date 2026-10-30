@@ -19,14 +19,14 @@ import { healthQueryOptions } from '@nestself/api-client';
 import i18n from '../i18n';
 import { isSampleDataMode } from '../data-source';
 import { useAuth, AuthProvider, SampleAuthProvider, SAMPLE_ROLE_ORDER, useSampleAuth } from '../auth';
-import type { AuthSnapshot } from '../auth';
+import type { RouterAuth } from '../auth';
 import { api } from '../api';
-import { globalErrorDepsRef } from '../main';
+import { globalErrorDepsRef } from '../auth/global-error-deps';
 import '../app.css';
 
 interface RouterContext {
   queryClient: QueryClient;
-  auth: AuthSnapshot;
+  auth: RouterAuth;
 }
 
 function ApiStatus() {
@@ -34,8 +34,9 @@ function ApiStatus() {
   const { data } = useQuery({
     ...healthQueryOptions(api),
     retry: false,
-    // Only probe when an API URL is configured; sample mode must not depend on a backend.
-    enabled: Boolean(import.meta.env.VITE_API_URL),
+    // Probe in API mode (the dev server proxies /api without VITE_API_URL) or
+    // when an API URL is configured; sample mode must not depend on a backend.
+    enabled: !isSampleDataMode || Boolean(import.meta.env.VITE_API_URL),
   });
 
   const connected = data?.status === 'ok';
@@ -88,28 +89,31 @@ function AuthWrapper({ children }: { children: ReactNode }) {
  * Also wires the global error handler deps for QueryCache (ruling 6).
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions, availableContexts, switchContext, stepUp, refreshPrincipal } = useAuth();
+  const { principal, effectiveActions, availableContexts, status, switchContext, stepUp, refreshPrincipal } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { t } = useTranslation('admin');
+  const settled = status !== 'loading';
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
     if (
       currentAuth.principal !== principal ||
       currentAuth.effectiveActions !== effectiveActions ||
-      currentAuth.availableContexts !== availableContexts
+      currentAuth.availableContexts !== availableContexts ||
+      currentAuth.settled !== settled
     ) {
       router.update({
         context: {
           ...router.options.context,
-          auth: { principal, effectiveActions, availableContexts },
+          // Keep `ensure`: guards still use it while the provider is loading.
+          auth: { ...currentAuth, principal, effectiveActions, availableContexts, settled },
         },
       });
       void router.invalidate();
     }
-  }, [principal, effectiveActions, availableContexts, router]);
+  }, [principal, effectiveActions, availableContexts, settled, router]);
 
   // Keep the global error handler deps up to date (ruling 6, T-C1.02).
   useEffect(() => {

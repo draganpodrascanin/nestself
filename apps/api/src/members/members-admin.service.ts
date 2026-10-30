@@ -151,15 +151,13 @@ export class MembersAdminService {
         updates.lineManagerUserId = body.lineManagerUserId;
       }
 
-      if (Object.keys(updates).length === 0) return membership;
-
-      const updated = await this.memberships.updateMembership(
-        membershipId,
-        orgId,
-        updates as never,
-        tx,
-      );
-      return updated ?? membership;
+      const updated =
+        Object.keys(updates).length === 0
+          ? membership
+          : ((await this.memberships.updateMembership(membershipId, orgId, updates as never, tx)) ?? membership);
+      // The response is a full MemberItem: the client validates name and email.
+      const contact = await this.memberships.findMemberContact(updated.userId, tx);
+      return { ...updated, displayName: contact?.displayName ?? '', email: contact?.email ?? '' };
     });
 
     // 3.7 row 5: an org-unit change is a team move; other fields are an update.
@@ -180,8 +178,8 @@ export class MembersAdminService {
     return toMemberItem({
       membershipId: result.id,
       userId: result.userId,
-      displayName: '', // not available from this code path
-      email: '', // not available from this code path
+      displayName: result.displayName,
+      email: result.email,
       orgUnitId: result.orgUnitId,
       costCenterUnitId: result.costCenterUnitId,
       lineManagerUserId: result.lineManagerUserId,

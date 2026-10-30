@@ -17,14 +17,14 @@ import {
 import i18n from '../i18n';
 import { isSampleDataMode } from '../data-source';
 import { useAuth, SampleAuthProvider, AuthProvider } from '../auth';
-import type { AuthSnapshot } from '../auth';
+import type { RouterAuth } from '../auth';
 import { RoleSwitcher } from '../components/RoleSwitcher';
 import { api } from '../api';
-import { globalErrorDepsRef } from '../main';
+import { globalErrorDepsRef } from '../auth/global-error-deps';
 
 interface RouterContext {
   queryClient: QueryClient;
-  auth: AuthSnapshot;
+  auth: RouterAuth;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -59,28 +59,31 @@ function AuthWrapper({ children }: { children: ReactNode }) {
  * Also wires the global error handler deps for QueryCache (ruling 6).
  */
 function AuthRouterSync({ children }: { children: ReactNode }) {
-  const { principal, effectiveActions, availableContexts, switchContext, stepUp, refreshPrincipal } = useAuth();
+  const { principal, effectiveActions, availableContexts, switchContext, stepUp, refreshPrincipal, status } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { t } = useTranslation('workspace');
+  const settled = status !== 'loading';
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
     if (
       currentAuth.principal !== principal ||
       currentAuth.effectiveActions !== effectiveActions ||
-      currentAuth.availableContexts !== availableContexts
+      currentAuth.availableContexts !== availableContexts ||
+      currentAuth.settled !== settled
     ) {
       router.update({
         context: {
           ...router.options.context,
-          auth: { principal, effectiveActions, availableContexts },
+          // Keep `ensure`: guards still use it while the provider is loading.
+          auth: { ...currentAuth, principal, effectiveActions, availableContexts, settled },
         },
       });
       void router.invalidate();
     }
-  }, [principal, effectiveActions, availableContexts, router]);
+  }, [principal, effectiveActions, availableContexts, settled, router]);
 
   // Keep the global error handler deps up to date (ruling 6, T-C1.02).
   useEffect(() => {

@@ -35,11 +35,13 @@ function buildJwt(claims: Record<string, unknown>): string {
  * @param sub       The user's sub (UUID).
  * @param username  The Cognito username.
  * @param originJti An optional origin JTI for refresh token families.
+ * @param idClaims  Extra ID-token claims (federated sign-in: email, identities).
  */
 export function createFakeTokenSet(
   sub: string,
   username: string,
   originJti?: string,
+  idClaims: Record<string, unknown> = {},
 ): TokenSet {
   const now = Math.floor(Date.now() / 1000);
   const jti = randomUUID();
@@ -67,6 +69,8 @@ export function createFakeTokenSet(
     auth_time: now,
     email: username, // simplification; real ID tokens carry email
     email_verified: true,
+    'cognito:username': username,
+    ...idClaims,
   });
 
   const refreshToken = `fake-refresh-${randomUUID()}`;

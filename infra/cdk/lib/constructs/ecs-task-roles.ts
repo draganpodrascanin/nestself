@@ -69,6 +69,14 @@ export class EcsTaskRoles extends cdk.Resource {
           'cognito-idp:GetTokensFromRefreshToken',
           'cognito-idp:RevokeToken',
           'cognito-idp:DescribeUserPoolClient',
+          // Enterprise SSO: register employer identity providers and list
+          // them on the app clients (phase 3).
+          'cognito-idp:UpdateUserPoolClient',
+          'cognito-idp:CreateIdentityProvider',
+          'cognito-idp:UpdateIdentityProvider',
+          'cognito-idp:DeleteIdentityProvider',
+          'cognito-idp:DescribeIdentityProvider',
+          'cognito-idp:ListIdentityProviders',
         ],
         resources: [userPoolArn],
       }),

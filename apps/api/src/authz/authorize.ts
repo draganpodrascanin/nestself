@@ -194,6 +194,11 @@ export function evaluate(
   let delegationFailureReason: string | null = null;
 
   for (const grant of ctx.grants) {
+    // Only the principal's own grants can match. ctx.grants also carries the
+    // delegation ancestors of delegated grants (held by other users); those
+    // serve the Step 7 chain validation alone and never grant an action.
+    if (grant.subjectUserId !== principal.userId) continue;
+
     // 5d. Revocation check
     if (grant.revokedAt != null) {
       trace?.push(`Step 5: grant ${grant.id} is revoked — skipped`);

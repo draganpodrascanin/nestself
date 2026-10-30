@@ -40,6 +40,9 @@ vi.mock('@aws-sdk/client-cognito-identity-provider', () => {
     ListUsersCommand: class {
       constructor(public input: unknown) {}
     },
+    AdminGetUserCommand: class {
+      constructor(public input: unknown) {}
+    },
     AssociateSoftwareTokenCommand: class {
       constructor(public input: unknown) {}
     },
@@ -78,6 +81,8 @@ describe('CognitoIdentityProvider', () => {
       POOL_ID,
       CLIENT_ID,
       CLIENT_SECRET,
+      'test-mobile-client-id',
+      'https://test.auth.eu-central-1.amazoncognito.com',
     );
   });
 
@@ -306,6 +311,8 @@ describe('CognitoIdentityProvider', () => {
         ],
       });
 
+      mockSend.mockResolvedValueOnce({ Username: 'user-1' }); // AdminGetUser without an MFA list
+
       const result = await provider.findUserByEmail('found@example.com');
       expect(result).toMatchObject({
         username: 'user-1',
@@ -314,7 +321,52 @@ describe('CognitoIdentityProvider', () => {
         emailVerified: true,
         enabled: true,
         locale: 'sr-Latn',
+        mfaEnrolled: false,
       });
+      const getUser = mockSend.mock.calls[1]![0] as { constructor: { name: string }; input: Record<string, unknown> };
+      expect(getUser.constructor.name).toBe('AdminGetUserCommand');
+      expect(getUser.input).toEqual({ UserPoolId: POOL_ID, Username: 'user-1' });
+    });
+
+    const LISTED = {
+      Users: [
+        {
+          Username: 'user-2',
+          Enabled: true,
+          UserStatus: 'CONFIRMED',
+          Attributes: [{ Name: 'sub', Value: 'sub-2' }, { Name: 'email', Value: 'mfa@example.com' }],
+        },
+      ],
+    };
+
+    it('reports mfaEnrolled true when AdminGetUser lists SOFTWARE_TOKEN_MFA', async () => {
+      mockSend.mockResolvedValueOnce(LISTED);
+      mockSend.mockResolvedValueOnce({ Username: 'user-2', UserMFASettingList: ['SOFTWARE_TOKEN_MFA'] });
+      const result = await provider.findUserByEmail('mfa@example.com');
+      expect(result).toMatchObject({ username: 'user-2', mfaEnrolled: true });
+    });
+
+    it('reports mfaEnrolled false for an MFA list without a software token', async () => {
+      mockSend.mockResolvedValueOnce(LISTED);
+      mockSend.mockResolvedValueOnce({ Username: 'user-2', UserMFASettingList: ['SMS_MFA'] });
+      const result = await provider.findUserByEmail('mfa@example.com');
+      expect(result?.mfaEnrolled).toBe(false);
+    });
+
+    it('returns null when AdminGetUser answers UserNotFoundException', async () => {
+      mockSend.mockResolvedValueOnce(LISTED);
+      const err = new Error('gone');
+      err.name = 'UserNotFoundException';
+      mockSend.mockRejectedValueOnce(err);
+      await expect(provider.findUserByEmail('mfa@example.com')).resolves.toBeNull();
+    });
+
+    it('maps any other AdminGetUser failure to an IdentityProviderError', async () => {
+      mockSend.mockResolvedValueOnce(LISTED);
+      const err = new Error('slow down');
+      err.name = 'TooManyRequestsException';
+      mockSend.mockRejectedValueOnce(err);
+      await expect(provider.findUserByEmail('mfa@example.com')).rejects.toBeInstanceOf(IdentityProviderError);
     });
   });
 });
@@ -322,7 +374,14 @@ describe('CognitoIdentityProvider', () => {
 describe('CognitoIdentityProvider.setTotpPreferred', () => {
   it('uses the user-level SetUserMFAPreference call with the access token', async () => {
     const { CognitoIdentityProvider } = await import('./cognito-identity-provider.js');
-    const provider = new CognitoIdentityProvider('eu-central-1', 'eu-central-1_test', 'web', 'secret');
+    const provider = new CognitoIdentityProvider(
+      'eu-central-1',
+      'eu-central-1_test',
+      'web',
+      'secret',
+      'mobile',
+      'https://test.auth.eu-central-1.amazoncognito.com',
+    );
     const sent: unknown[] = [];
     (provider as unknown as { client: { send: (c: unknown) => Promise<unknown> } }).client = {
       send: async (command: unknown) => {

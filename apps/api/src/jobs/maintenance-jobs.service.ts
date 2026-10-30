@@ -6,13 +6,16 @@
  * one on demand. Nothing here runs on a request path.
  *
  * Jobs run in system context (no tenant setting): they must see every
- * organization. Every change is written to the audit log with
+ * organization. The SSO certificate-expiry job (3.4.10) also reads the
+ * identity provider's view of each ACTIVE SAML connection. Every change is written to the audit log with
  * `actorKind: 'JOB'` and invalidates the affected principal caches.
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 
 import { AuthorizationRepository, type GrantRow } from '../db/repositories/authorization.repository.js';
 import { AuditRepository } from '../db/repositories/audit.repository.js';
+import { SsoRepository } from '../db/repositories/sso.repository.js';
+import { IdentityProviderService } from '../identity/identity-provider.service.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
@@ -35,6 +38,7 @@ export const MAINTENANCE_JOB_NAMES = [
   'mobile.prune-stale-families',
   'emergency.sweep-expired',
   'sessions.reconcile-ttl',
+  'sso.certificate-expiry',
 ] as const;
 export type MaintenanceJobName = (typeof MAINTENANCE_JOB_NAMES)[number];
 
@@ -67,12 +71,29 @@ export interface SessionTtlReport {
   failed: number;
 }
 
+/** Days before a SAML signing certificate expires from which the job warns. */
+export const SSO_CERTIFICATE_WARNING_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface SsoCertificateReport {
+  job: 'sso.certificate-expiry';
+  /** ACTIVE connections looked at. */
+  scanned: number;
+  /** Connections whose missing expiry was filled in from the identity provider. */
+  refreshed: number;
+  /** Connections whose certificate expires within the warning window (or has expired); each audited. */
+  expiring: number;
+  /** Connections whose provider lookup or audit write threw; logged and retried on the next run. */
+  failed: number;
+}
+
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
   | ({ job: 'grants.reconcile' } & GrantReconciliationReport)
   | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport)
   | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport)
-  | SessionTtlReport;
+  | SessionTtlReport
+  | SsoCertificateReport;
 
 @Injectable()
 export class MaintenanceJobsService {
@@ -85,6 +106,8 @@ export class MaintenanceJobsService {
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principals: PrincipalLoader,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
     private readonly sessions: SessionService,
+    @Inject(forwardRef(() => SsoRepository)) private readonly ssoRepo: SsoRepository,
+    @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
   ) {}
 
   /** Run one job by name. */
@@ -100,6 +123,8 @@ export class MaintenanceJobsService {
         return { job: name, ...(await this.sweepExpiredEmergencyAccess(now)) };
       case 'sessions.reconcile-ttl':
         return this.reconcileSessionTtl(now);
+      case 'sso.certificate-expiry':
+        return this.checkSsoCertificates(now);
     }
   }
 
@@ -175,6 +200,9 @@ export class MaintenanceJobsService {
     for (const [userId, orgs] of bySubject) {
       await this.principals.invalidateUser(userId, [...orgs]);
     }
+    // Delegatees of the closed grants cache them as ancestors (a grant closed
+    // without its tree, e.g. without membership, leaves active children).
+    await this.principals.invalidateDelegatees(rows.map((g) => g.id));
   }
 
   /**
@@ -243,6 +271,93 @@ export class MaintenanceJobsService {
     }
     this.logger.log(
       `sessions reconciled: ${report.scanned} scanned, ${report.destroyed.length} destroyed, ${report.failed} failed`,
+    );
+    return report;
+  }
+
+  /**
+   * SSO signing-certificate expiry (3.4.10, nightly). For every ACTIVE
+   * connection:
+   * - a SAML connection without a known `certificateExpiresAt` is looked up
+   *   with `describeProvider`; an expiry the provider reports is stored. Only
+   *   a provider registered from metadata XML reports one: for a metadata-URL
+   *   provider Cognito returns the URL, not the file, so its expiry stays
+   *   unknown and it is looked up again every night (implementation.md 22.11);
+   * - a certificate that expires within `SSO_CERTIFICATE_WARNING_DAYS`, or has
+   *   already expired, is audited as `sso_connection.changed` with reason
+   *   `certificate_expiring` (actor JOB, the connection's organization) and
+   *   logged as a warning. Staff then ask the employer for new metadata.
+   * A provider lookup or audit write that throws is counted in `failed`,
+   * logged by provider name and retried on the next run. Logs and audit
+   * details carry the provider name, dates and ids only, never metadata.
+   * The ops alert email waits for the SES mailer (follow-up).
+   */
+  async checkSsoCertificates(now = new Date()): Promise<SsoCertificateReport> {
+    const report: SsoCertificateReport = {
+      job: 'sso.certificate-expiry',
+      scanned: 0,
+      refreshed: 0,
+      expiring: 0,
+      failed: 0,
+    };
+    const connections = await this.ssoRepo.listActiveConnections();
+    for (const conn of connections) {
+      report.scanned += 1;
+      let expiresAt = conn.certificateExpiresAt;
+      if (!expiresAt && conn.protocol === 'SAML') {
+        try {
+          const info = await this.idp.describeProvider(conn.cognitoProviderName);
+          if (info?.certificateExpiresAt) {
+            await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: info.certificateExpiresAt });
+            expiresAt = info.certificateExpiresAt;
+            report.refreshed += 1;
+          }
+        } catch (err) {
+          report.failed += 1;
+          const reason = err instanceof Error ? err.name : 'unknown error';
+          this.logger.warn(
+            `SSO connection ${conn.cognitoProviderName}: certificate expiry not refreshed (${reason}); retried on the next run`,
+          );
+          continue;
+        }
+      }
+      if (!expiresAt) continue;
+      const msLeft = expiresAt.getTime() - now.getTime();
+      if (msLeft > SSO_CERTIFICATE_WARNING_DAYS * DAY_MS) continue;
+      const daysLeft = Math.floor(msLeft / DAY_MS);
+      try {
+        await this.audit.record({
+          action: 'sso_connection.changed',
+          actorUserId: null,
+          actorKind: 'JOB',
+          orgId: conn.orgId,
+          recordType: 'sso_connection',
+          recordId: conn.id,
+          result: 'ALLOWED',
+          details: {
+            reason: 'certificate_expiring',
+            expiresAt: expiresAt.toISOString(),
+            connectionId: conn.id,
+            daysLeft,
+            job: 'sso.certificate-expiry',
+          },
+          occurredAt: now,
+        });
+      } catch (err) {
+        report.failed += 1;
+        const reason = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`SSO connection ${conn.cognitoProviderName}: expiry audit not written (${reason})`);
+        continue;
+      }
+      report.expiring += 1;
+      this.logger.warn(
+        daysLeft < 0
+          ? `SSO connection ${conn.cognitoProviderName}: signing certificate expired on ${expiresAt.toISOString()}`
+          : `SSO connection ${conn.cognitoProviderName}: signing certificate expires on ${expiresAt.toISOString()} (${daysLeft} days left)`,
+      );
+    }
+    this.logger.log(
+      `SSO certificates: ${report.scanned} scanned, ${report.refreshed} refreshed, ${report.expiring} expiring, ${report.failed} failed`,
     );
     return report;
   }

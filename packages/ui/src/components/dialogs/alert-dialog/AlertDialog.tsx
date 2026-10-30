@@ -4,6 +4,7 @@ import { AlertDialog as BaseAlertDialog } from '@base-ui/react/alert-dialog';
 import { Children, createContext, isValidElement, useContext } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
+import { POPUP_LAYER_ABOVE_DIALOG } from '../../../lib/layers';
 import { useOpenState } from '../../../lib/use-open-state';
 import { AnimatePresence, m, MotionFeatures, useMotionPreset } from '../../../motion';
 
@@ -86,7 +87,7 @@ export function AlertDialogContent({
     <MotionFeatures>
       <AnimatePresence>
         {open ? (
-          <BaseAlertDialog.Portal keepMounted>
+          <BaseAlertDialog.Portal keepMounted className={POPUP_LAYER_ABOVE_DIALOG}>
             <BaseAlertDialog.Backdrop
               className="fixed inset-0 bg-scrim z-[var(--z-scrim)]"
               render={<m.div {...backdropMotion} />}

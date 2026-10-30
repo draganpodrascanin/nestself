@@ -13,6 +13,7 @@ import { MembershipsRepository } from '../db/repositories/memberships.repository
 import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { AccessRevocationService } from '../auth/access-revocation.service.js';
+import { PrincipalLoader } from '../principal/principal-loader.js';
 
 @Injectable()
 export class MembersService {
@@ -24,6 +25,7 @@ export class MembersService {
     @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => AccessRevocationService)) private readonly revocation: AccessRevocationService,
+    @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
   ) {}
 
   /**
@@ -47,6 +49,17 @@ export class MembersService {
           status: 404,
           code: 'not_found',
           message: 'Membership not found',
+        });
+      }
+
+      // Ending your own membership signs you out and removes your access to
+      // the organization with nobody left in the session to undo it: refuse
+      // before any write, revocation or audit.
+      if (membership.userId === actorUserId) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'cannot_end_self',
+          message: 'A member cannot end their own membership',
         });
       }
 
@@ -140,6 +153,8 @@ export class MembersService {
         sessionsForOrgId: orgId,
         orgIds: [orgId],
       });
+      // Delegatees of the revoked grants cache them as ancestors.
+      await this.principalLoader.invalidateDelegatees(result.revokedGrantIds);
     }
 
     const elapsed = performance.now() - start;

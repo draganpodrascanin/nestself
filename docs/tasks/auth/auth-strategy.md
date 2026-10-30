@@ -1473,9 +1473,11 @@ These actions target the confidential domain. The hard deny in AUTHZ-R-08 ensure
 | Action | Meaning | Resource | Constraint |
 |---|---|---|---|
 | `conversation.participate` | Send and receive messages in a private conversation | Conversation | `employee` template (scope `own`) or `expert` template (scope `assigned_cases`); no organization, platform or staff template scope |
-| `conversation.read.assigned` | Read conversations for supervised experts' cases | Conversation | `Assignment` kind `SUPERVISION` only |
+| `conversation.read.assigned` | Read conversations for supervised experts' cases | Conversation | `Assignment` kind `SUPERVISION` only (see note 1) |
 | `notes.read.supervision` | Read professional notes under clinical supervision | Professional notes | `Assignment` kind `SUPERVISION` only |
 | `records.read.emergency` | Read restricted records under emergency access | Professional records | `EmergencyAccess` only |
+
+Note 1 (amended 2026-10-24): `conversation.read.assigned` is also the assigned-expert path of 4.7.3. It accepts an `Assignment` of kind `CASE` or `SUPERVISION`, as AUTHZ-R-33 and the engine already do, and the `expert` template now lists it among its actions (4.4).
 
 #### Experts
 
@@ -1551,6 +1553,19 @@ These actions are data-subject rights and personal convenience actions. Like all
 | `data.erasure.request` | Request erasure of personal data (GDPR/ZZPL right to erasure) | Data erasure | `employee`, `expert`, `expert_lead`, and all staff templates |
 
 ### 4.4 Templates to grants
+
+**Amendments 2026-10-24** (auth phase 2, `docs/superpowers/plans/2026-10-24-auth-phase-2.md`):
+
+- The `expert` row gains `conversation.read.assigned` in its actions (it was listed only as a step-up action), so an expert assigned to a case through a `CASE` assignment can read that case's conversation (4.7.3).
+- No organization template holds `access.grant` or `access.revoke`; `employer_owner` holds `access.delegate` and `access.preview`. Until the owner decides otherwise, staff with `platform_owner` create and revoke organization grants through `/ops/orgs/:orgId/grants`, and owners delegate from their own grants.
+- AUTHZ-R-13: when a parent grant has no `delegationEnvelope`, the implementation treats the parent grant itself as the bound (actions, scope and conditions within the parent's) instead of refusing delegation; an envelope, when present, is an extra restriction.
+- The sample seed gives the sample HR admin the `employer_owner` template as well, so the access screen is reachable in development.
+
+**Amended 2026-10-24 (owner model, `employer_owner` row)**, product owner decision; supersedes the second bullet above for `employer_owner`. The template table below is left as written; this note wins where they differ:
+
+- `employer_owner` is the single superadmin of an organization. Its actions gain `access.grant` and `access.revoke` (now `access.grant`, `access.revoke`, `access.delegate`, `access.preview`, `policy.manage`, `service.configure`, `org.settings`), and its step-up actions are `access.grant`, `access.revoke` and `access.delegate` (class `administration`).
+- At most one active (unrevoked, not expired) `employer_owner` grant exists per organization (`scopeOrgId`). `GrantsService` enforces it on every write that could add one (`POST /orgs/:orgId/grants`, `POST /ops/orgs/:orgId/grants`, a `PATCH` of an owner grant's window, the transfer routes) and invitation create, import and acceptance do the same for an `employer_owner` invitation; a second owner is refused with 409 `owner_exists` and `details.currentOwnerUserId`. A grant whose window starts later already counts, so a future-dated second owner is refused too.
+- The owner hands the role to another ACTIVE member with `POST /orgs/:orgId/grants/transfer-ownership` (`access.grant`, so step-up gated; the caller must hold the current owner grant, otherwise 403 `forbidden`). Staff use `POST /ops/orgs/:orgId/grants/transfer-ownership` (no owner requirement; it creates the first owner when there is none). One transaction revokes the old owner grant (reason `ownership_transferred`) and creates the new one from the template; grants delegated from the old owner grant are not revoked but re-parented to the new owner grant in the same transaction (audited `grant.adjusted` with `details.reparented = true`). Both routes audit `grant.revoked` and `grant.created` with `details.transfer = true` (plus `byStaff = true` on the staff route).
 
 The 17 permission templates are the bridge between the product's persona model and the grant-based authorization engine. Each template is a seed: it defines a named set of actions, a default scope type, default conditions and boundaries. Assigning a template to a user creates one or more `Grant` rows. An administrator can then adjust the scope, tighten conditions or limit the delegation envelope. Templates do not replace grants at runtime; they are a creation-time convenience [D-17, S-01 section 2].
 
@@ -5362,6 +5377,18 @@ This section defines repeatable procedures for identity and access operations. E
 7. If the organization exceeds 500 employees, request a `UserFederation` rate-limit increase above the default 25 RPS before bulk activation [D-12].
 8. Set a reminder for `certificateExpiresAt` minus 30 days.
 9. Monitor `auth.sign_in.succeeded` and `auth.sign_in.failed` rates for the organization for the first 48 hours. Investigate if the failure rate exceeds 5 percent.
+
+**Amendment 2026-10-25** (auth phase 3, `docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`; the steps above are kept as written, this note wins where they differ). The steps as built, all in the admin `/sso` page or through the API with `sso.manage` (platform owner, step-up class `administration`):
+
+1. `POST /ops/sso-connections` creates the connection in `DRAFT` (`slug` builds `org-<slug>-saml|oidc`; a slug that would exceed 20 characters is refused with 422, never truncated). An OIDC client secret is write-only: it goes to Cognito at once and is never stored or returned.
+2. `POST /ops/sso-connections/:id/domains` returns the TXT record: name `_nestself-verify.<domain>`, value `nestself-domain-verification=<token>`. After the client publishes it, `POST /ops/sso-connections/:id/domains/:domainId/verify` queries the domain's authoritative name server; public email domains are refused with 422 `domain_blocklisted`, a failed lookup is 422 `domain_unverified`.
+3. Step 3 happens inside `POST /ops/sso-connections/:id/test`: it needs at least one verified domain, registers (or updates) the Cognito provider and adds it to the web and mobile clients, moves the connection to `TESTING` and returns `{ startUrl }`. The start URL carries a **single-use test nonce** (`test=<nonce>`, valid 15 minutes, spent by the first callback whatever its outcome); every test needs a new link.
+4. The invited test user opens that link. The callback binds only an address on a verified domain of this connection (for OIDC also `email_verified`), accepts the invitation of this connection's organization and activates the membership; it sets `lastTestedAt`. JIT never runs on a `TESTING` connection.
+5. As written (`identity.linked`, `invitation.accepted`; the provider string is `cognito:<providerName>`).
+6. `POST /ops/sso-connections/:id/activate` needs `TESTING` and `lastTestedAt`; any later change of the provider configuration while `TESTING` clears `lastTestedAt` again (RUN-R-01).
+8. `certificateExpiresAt` is watched by the nightly `sso.certificate-expiry` job (audit `sso_connection.changed`, reason `certificate_expiring`, from 30 days before); the alert email is a follow-up.
+
+Rollback is `PATCH /ops/sso-connections/:id` with `status: SUSPENDED` (back with `ACTIVE`); `TESTING` can return to `DRAFT`, which removes the Cognito provider. The sign-in routes are `GET /auth/sso/start?connection&surface[&returnPath][&test]` and `GET /auth/sso/callback`. The NestSelf SP values are shown in the connection's detail panel: entity ID `urn:amazon:cognito:sp:<COGNITO_USER_POOL_ID>`, ACS URL `<COGNITO_DOMAIN>/saml2/idpresponse` (the custom `auth.<domain>` is a CDK follow-up). Details: `docs/auth/implementation.md` section 22.
 
 **RUN-R-02** Domain verification must use DNS TXT records [DR-07]. **RUN-R-03** IdP-initiated sign-in stays disabled unless the client provides written risk acceptance, with signed and encrypted assertions, five-minute validity and replay-cache checks (`saml_assertion:{id}`, 10 min, GETDEL) [D-12, DR-06].
 

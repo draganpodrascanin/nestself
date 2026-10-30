@@ -159,13 +159,21 @@ Locally the API uses the same profile as you (`AWS_PROFILE`). If you prefer a le
         "cognito-idp:GetTokensFromRefreshToken",
         "cognito-idp:RevokeToken",
         "cognito-idp:ListUsers",
-        "cognito-idp:DescribeUserPoolClient"
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:UpdateUserPoolClient",
+        "cognito-idp:CreateIdentityProvider",
+        "cognito-idp:UpdateIdentityProvider",
+        "cognito-idp:DeleteIdentityProvider",
+        "cognito-idp:DescribeIdentityProvider",
+        "cognito-idp:ListIdentityProviders"
       ],
       "Resource": "arn:aws:cognito-idp:eu-central-1:<ACCOUNT_ID>:userpool/<USER_POOL_ID>"
     }
   ]
 }
 ```
+
+The `*IdentityProvider*` and `UpdateUserPoolClient` actions are for enterprise SSO: registering an employer's SAML or OIDC provider adds it to the web and mobile clients' supported identity providers.
 
 Add `ses:SendEmail` and `ses:SendRawEmail` on your SES identity when you set `SES_FROM_EMAIL`. In AWS the same actions are granted to the ECS task role by `infra/cdk/lib/constructs/ecs-task-roles.ts`.
 
@@ -175,7 +183,7 @@ Add `ses:SendEmail` and `ses:SendRawEmail` on your SES identity when you set `SE
 pnpm db:up                                    # Postgres and Redis
 pnpm --filter @nestself/api db:migrate
 pnpm --filter @nestself/api db:seed           # sample organization, people, grants
-pnpm --filter @nestself/api dev               # http://localhost:4000/api/health must report database up
+pnpm --filter @nestself/api dev               # http://localhost:4000/api/health must report database and redis up
 pnpm --filter @nestself/api worker:dev        # optional: nightly maintenance jobs on the Redis queue
 ```
 
@@ -226,7 +234,7 @@ From here on, invite real people as the HR admin (`POST /orgs/:orgId/invitations
 
 ## 7. Verify, operate, tear down
 
-- `GET http://localhost:4000/api/auth/me` after sign-in returns the principal; `GET /api/health` reports the **database only** (`health.controller.ts` registers just `DbHealthIndicator`). Redis is confirmed by the `Connected to Redis` line in the API log at boot; in cognito mode the process refuses to start without it.
+- `GET http://localhost:4000/api/auth/me` after sign-in returns the principal; `GET /api/health` reports both `database` and `redis` (`health.controller.ts` registers `DbHealthIndicator` and `RedisHealthIndicator`). In cognito mode the process refuses to start without Redis.
 - Lambda trigger logs: CloudWatch log groups `/aws/lambda/nestself-dev-cognito-custom-message` and `...-pre-sign-up`.
 - Pool users: `aws cognito-idp list-users --user-pool-id <USER_POOL_ID>`.
 - Change the stack (`infra/cdk/lib/auth-stack.ts`, `lib/config.ts`) and redeploy with the same `cdk deploy` command; `cdk diff -c stage=dev -c account=<ACCOUNT_ID>` previews the change.
@@ -245,7 +253,7 @@ Do this when the first features are complete. Each item is a manual prerequisite
 6. Deploy everything: `pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true -c edgeWafArn=<ARN>`.
 7. Run the migration task once (`aws ecs run-task ... nestself-staging-migrate`, see `infra/cdk/README.md`), then push the first images through the `deploy-staging` workflow.
 8. GitHub: create the `staging` environment and set the variables the workflow reads: `DEPLOY_ROLE_ARN`, `ECR_REPO_URI`, `ECR_REPO_NAME`, `ECR_REPO_MARKETING_URI`, `MIGRATE_NETWORK_CONFIG`, `SPA_WORKSPACE_BUCKET`, `SPA_ADMIN_BUCKET`, `CF_WORKSPACE_DIST_ID`, `CF_ADMIN_DIST_ID` (all are stack outputs). The deploy role trusts `main` and pull requests for staging, `v*` tags for production.
-9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); set `TRUST_PROXY_HOPS=1` behind the load balancer and `API_PUBLIC_URL`, `WORKSPACE_URL`, `ADMIN_URL` to the public origins.
+9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); the compute stack passes `WORKSPACE_URL`, `ADMIN_URL` and `API_PUBLIC_URL` from the stage config (`lib/config.ts`: the SPAs proxy `/api`, so the API origin is the workspace origin). Browser SSO runs on each surface's own origin, so the web client's registered `webCallbackUrls` for both SPA origins are exactly what the API sends as `redirect_uri` and none is unused (`docs/auth/implementation.md` 22.3); set `TRUST_PROXY_HOPS=1` behind the load balancer.
 10. Repeat for production with `-c stage=production`; enable the phase 2 security baseline (Service Control Policies, Security Hub) before real users.
 
 ## 9. Last: mobile
@@ -266,7 +274,7 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | --- | --- | --- |
 | Shell | `AWS_PROFILE`, `AWS_REGION`, `AWS_ACCOUNT_DEV` (`AWS_ACCOUNT_STAGING`, `AWS_ACCOUNT_PRODUCTION`) | you, section 2 |
 | `apps/api/.env` | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_WEB_CLIENT_ID`, `COGNITO_WEB_CLIENT_SECRET`, `COGNITO_MOBILE_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_ISSUER`, `SESSION_ENCRYPTION_KEY` | `env-from-outputs.mjs <stage>` |
-| `apps/api/.env` | `AUTH_MODE=cognito`, `REDIS_URL`, `SESSION_COOKIE_INSECURE_DEV=true` (local only), `AWS_PROFILE` or access keys, optional `SES_FROM_EMAIL`, `IP_HASH_SALT`, `JOBS_TIMEZONE` | you, section 5 |
+| `apps/api/.env` | `AUTH_MODE=cognito`, `REDIS_URL`, `SESSION_COOKIE_INSECURE_DEV=true` (local only), `AWS_PROFILE` or access keys, optional `SES_FROM_EMAIL`, `IP_HASH_SALT`, `JOBS_TIMEZONE`; `API_PUBLIC_URL=http://localhost:4000`, `WORKSPACE_URL`, `ADMIN_URL` (required in cognito mode: the SSO start and callback URLs and where the callback sends the browser) | you, section 5 |
 | `apps/workspace/.env.local`, `apps/admin/.env.local` | `VITE_DATA_SOURCE=api`, `VITE_API_URL` | you, section 6 |
 | `apps/mobile/.env.local` | `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_DATA_SOURCE=api`, `EXPO_PUBLIC_API_URL` | `env-from-outputs.mjs <stage> --mobile`, section 9 |
 | GitHub environment | `DEPLOY_ROLE_ARN`, `ECR_*`, `MIGRATE_NETWORK_CONFIG`, `SPA_*_BUCKET`, `CF_*_DIST_ID` | stack outputs, section 8 |
@@ -284,7 +292,7 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | `admin-create-user`: `Username should be an email` | This pool uses `UsernameAttributes: ['email']`; pass the address as `--username`. The opposite error (`Username cannot be of email format`) only appears on a pool built with `signInAliases: { username: true, email: true }` |
 | `delete-user-pool`: `deletion protection is activated`, then `It has a domain configured` | Three calls in order: `update-user-pool --deletion-protection INACTIVE`, `delete-user-pool-domain`, `delete-user-pool` |
 | Sign-in returns 401 `invalid_code` although the code was copied correctly | Cognito's EMAIL_OTP code is **eight** digits. Any field or schema capped at six truncates it; use `EMAIL_OTP_MIN_LENGTH`/`EMAIL_OTP_MAX_LENGTH` from `@nestself/contracts` |
-| Sign-in returns 401 `invalid_challenge` on every retry | The challenge token is single-use and is consumed before the code is checked, so one wrong digit ends it. Go back and request a new code |
+| Sign-in returns 401 `invalid_challenge` after retyping the code | A wrong code may be retyped twice; `MAX_EMAIL_OTP_ATTEMPTS = 3` ends the challenge, as does a `SignInThrottle` lock on the address. Request a new code |
 | Cognito calls fail with `AccessDenied` naming an account you did not deploy to | The API process did not see `AWS_PROFILE`. It must reach `process.env`: either exported in the shell that runs `pnpm dev`, or in `apps/api/.env` together with the `validateEnv` passthrough in `apps/api/src/config/env.ts` |
 | The hosted Cognito domain does not resolve right after deploy | macOS caches the NXDOMAIN from any lookup made before the domain existed. `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`. `dig` bypasses the cache and will look fine while `curl` and the browser still fail |
 | `Unable to locate credentials` in the API log | `AWS_PROFILE` not visible to the API process; put it in `apps/api/.env` or export it in the shell that runs `pnpm dev` |

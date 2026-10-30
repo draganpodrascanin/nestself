@@ -79,6 +79,7 @@ describe('Auth response schemas', () => {
           {
             membershipId: 'm-1',
             orgId: 'org-1',
+            orgName: 'Org One',
             orgUnitId: null,
             status: 'ACTIVE',
             startDate: '2026-01-01T00:00:00.000Z',
@@ -87,6 +88,23 @@ describe('Auth response schemas', () => {
         ],
       };
       expect(() => PrincipalSchema.parse(withMembership)).not.toThrow();
+    });
+
+    it('rejects a membership without the organization name', () => {
+      const withoutName = {
+        ...VALID_PRINCIPAL,
+        memberships: [
+          {
+            membershipId: 'm-1',
+            orgId: 'org-1',
+            orgUnitId: null,
+            status: 'ACTIVE',
+            startDate: '2026-01-01T00:00:00.000Z',
+            endDate: null,
+          },
+        ],
+      };
+      expect(() => PrincipalSchema.parse(withoutName)).toThrow();
     });
   });
 

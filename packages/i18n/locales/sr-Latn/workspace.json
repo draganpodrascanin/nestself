@@ -123,10 +123,11 @@
     "nav": "Pristup",
     "title": "Upravljanje pristupom",
     "lead": "Ko ima koji šablon dozvola u tvojoj organizaciji i šta mu svaki šablon omogućava.",
-    "sampleNote": "Primer podataka: dodela, delegiranje i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "sampleNote": "Primer podataka: dodela, delegiranje, opoziv i prenos vlasništva su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
     "loading": "Učitavanje pristupa",
     "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
     "noOrganization": "Za upravljanje pristupom tvoj nalog mora imati tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
     "tableCaption": "Dozvole u tvojoj organizaciji",
     "columns": {
       "template": "Šablon",
@@ -224,6 +225,16 @@
       "cancel": "Otkaži",
       "success": "Pristup je delegiran."
     },
+    "transfer": {
+      "open": "Prenesi vlasništvo",
+      "title": "Prenos vlasništva",
+      "description": "Izaberi aktivnog člana koji postaje vlasnik organizacije.",
+      "member": "Novi vlasnik",
+      "confirmation": "Vlasnička prava gubiš čim se prenos završi. Dozvole delegirane iz tvoje vlasničke dozvole prelaze na novog vlasnika.",
+      "submit": "Prenesi vlasništvo",
+      "cancel": "Otkaži",
+      "success": "Vlasništvo je preneto."
+    },
     "preview": {
       "title": "Stvarni pristup",
       "lead": "Izaberi člana da vidiš sve radnje koje mu njegove dozvole daju u ovoj organizaciji.",
@@ -246,8 +257,310 @@
       "templateRequired": "Izaberi šablon.",
       "orgUnitRequired": "Izaberi organizacionu jedinicu.",
       "reasonLength": "Unesi razlog dužine od 3 do 500 znakova.",
-      "actionsRequired": "Izaberi bar jednu radnju."
+      "actionsRequired": "Izaberi bar jednu radnju.",
+      "notOwner": "Samo trenutni vlasnik organizacije može da prenese vlasništvo.",
+      "alreadyOwner": "Ova osoba je već vlasnik organizacije.",
+      "ownerExists": "Organizacija već ima vlasnika. Vlasništvo se može samo preneti."
     }
+  },
+  "people": {
+    "nav": "Ljudi",
+    "title": "Ljudi",
+    "lead": "Članovi tvoje organizacije i pozivnice koje još čekaju prihvatanje.",
+    "sampleNote": "Primer podataka: premeštanje ljudi, završavanje članstva, pozivanje, uvoz i opoziv su isključeni. Ništa se ne kreira, ne menja i ne šalje.",
+    "noOrganization": "Za upravljanje ljudima potrebno je tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
+    "loading": "Učitavanje",
+    "choose": "Izaberi",
+    "cancel": "Otkaži",
+    "tabs": {
+      "label": "Odeljci o ljudima",
+      "members": "Članovi",
+      "invitations": "Pozivnice"
+    },
+    "filters": {
+      "orgUnit": "Organizaciona jedinica",
+      "allUnits": "Sve organizacione jedinice",
+      "status": "Status",
+      "allStatuses": "Svi statusi",
+      "search": "Pretraga",
+      "searchHint": "Ime ili imejl adresa"
+    },
+    "status": {
+      "ACTIVE": "Aktivan",
+      "INVITED": "Pozvan",
+      "ENDED": "Završeno"
+    },
+    "columns": {
+      "name": "Ime",
+      "email": "Imejl",
+      "orgUnit": "Organizaciona jedinica",
+      "lineManager": "Neposredni rukovodilac",
+      "status": "Status",
+      "startDate": "Datum početka",
+      "actions": "Radnje",
+      "template": "Šablon",
+      "expires": "Ističe"
+    },
+    "members": {
+      "caption": "Članovi",
+      "empty": "Nijedan član ne odgovara ovim filterima.",
+      "noUnit": "Bez organizacione jedinice",
+      "unknownUnit": "Nepoznata organizaciona jedinica",
+      "noLineManager": "Nema",
+      "unknownPerson": "Bivši član"
+    },
+    "paging": {
+      "showing_one": "Prikazan je {{count}} red",
+      "showing_few": "Prikazana su {{count}} reda",
+      "showing_other": "Prikazano je {{count}} redova",
+      "showingMore_one": "Prikazan je {{count}} red, ima ih još",
+      "showingMore_few": "Prikazana su {{count}} reda, ima ih još",
+      "showingMore_other": "Prikazano je {{count}} redova, ima ih još",
+      "loadMore": "Učitaj još",
+      "loadMoreFailed": "Dodatni redovi nisu mogli da se učitaju"
+    },
+    "move": {
+      "open": "Premesti",
+      "openFor": "Premesti: {{name}}",
+      "title": "Premeštanje člana",
+      "description": "Promeni organizacionu jedinicu ili neposrednog rukovodioca za: {{name}}.",
+      "orgUnit": "Organizaciona jedinica",
+      "lineManager": "Neposredni rukovodilac",
+      "noLineManager": "Bez neposrednog rukovodioca",
+      "submit": "Sačuvaj izmene",
+      "success": "Premešteno: {{name}}."
+    },
+    "end": {
+      "open": "Završi članstvo",
+      "openFor": "Završi članstvo: {{name}}",
+      "title": "Završavanje članstva",
+      "description": "Završiti članstvo za: {{name}}? Dozvole u organizaciji se opozivaju i pristup ovoj organizaciji prestaje. Ovo se ne može poništiti sa ove stranice.",
+      "reason": "Razlog",
+      "confirm": "Završi članstvo",
+      "success": "Članstvo je završeno: {{name}}.",
+      "reasons": {
+        "LEFT": "Napustio/la organizaciju",
+        "CONTRACT_ENDED": "Ugovor je istekao",
+        "DEACTIVATED_BY_HR": "Deaktivirao HR",
+        "MERGED": "Spojeno sa drugim nalogom"
+      }
+    },
+    "invitations": {
+      "caption": "Pozivnice na čekanju",
+      "empty": "Nema pozivnica na čekanju."
+    },
+    "invite": {
+      "open": "Pozovi",
+      "title": "Pozivanje osobe",
+      "email": "Imejl adresa",
+      "template": "Šablon dozvola",
+      "orgUnit": "Organizaciona jedinica",
+      "noOrgUnit": "Bez organizacione jedinice",
+      "submit": "Pošalji pozivnicu",
+      "success": "Pozivnica je kreirana za {{email}}."
+    },
+    "import": {
+      "open": "Uvoz",
+      "title": "Uvoz pozivnica",
+      "description": "Nalepi jednu osobu po redu u obliku imejl,šablon[,organizaciona jedinica]. Jedinica može biti njen id ili tačan naziv.",
+      "rows": "Redovi",
+      "rowsHint": "Primer: ana@example.com,employee,Product",
+      "preview_one": "{{count}} red je spreman za uvoz",
+      "preview_few": "{{count}} reda su spremna za uvoz",
+      "preview_other": "{{count}} redova je spremno za uvoz",
+      "problemsLabel": "Redovi za ispravku",
+      "problems": {
+        "columns": "Red {{line}}: očekuje se imejl,šablon i opciono organizaciona jedinica.",
+        "email": "Red {{line}}: „{{value}}” nije ispravna imejl adresa.",
+        "template": "Red {{line}}: „{{value}}” nije šablon sa kojim se ljudi mogu pozvati.",
+        "orgUnit": "Red {{line}}: ne postoji organizaciona jedinica „{{value}}”.",
+        "orgUnitAmbiguous": "Red {{line}}: više organizacionih jedinica se zove „{{value}}”. Umesto naziva upotrebi id jedinice.",
+        "tooMany": "{{rows}} redova: jedan uvoz prima najviše {{max}}."
+      },
+      "fixProblems": "Ispravi redove navedene ispod, pa pokreni uvoz ponovo.",
+      "noRows": "Nalepi bar jedan red.",
+      "submit": "Uvezi",
+      "success_one": "Kreirana je {{count}} pozivnica.",
+      "success_few": "Kreirane su {{count}} pozivnice.",
+      "success_other": "Kreirano je {{count}} pozivnica.",
+      "resultTitle": "Uvoz je završen",
+      "resultSummary": "Kreirano: {{created}}. Preskočeno: {{skipped}}. Nije uvezeno: {{failed}}.",
+      "errorsCaption": "Redovi koji nisu uvezeni",
+      "reason": "Razlog",
+      "done": "Gotovo",
+      "reasons": {
+        "invalidTemplate": "Ovaj šablon se ne može koristiti za pozivnice.",
+        "duplicateInBatch": "Ova imejl adresa se pojavljuje više puta u uvozu.",
+        "invalidOrgUnit": "Organizaciona jedinica ne pripada ovoj organizaciji.",
+        "ownerExists": "Organizacija već ima vlasnika.",
+        "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+        "alreadyMember": "Ova osoba je već aktivan član.",
+        "unknown": "Ovaj red nije mogao da se uveze."
+      }
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "openFor": "Opozovi pozivnicu za {{email}}",
+      "title": "Opoziv pozivnice",
+      "description": "Opozvati pozivnicu za {{email}}? Link iz pozivnice prestaje da radi.",
+      "confirm": "Opozovi pozivnicu",
+      "success": "Pozivnica za {{email}} je opozvana."
+    },
+    "errors": {
+      "loadTitle": "Ljudi nisu mogli da se učitaju",
+      "membersLoadTitle": "Članovi nisu mogli da se učitaju",
+      "directoryLoadTitle": "Neposredni rukovodioci nisu mogli da se učitaju",
+      "invitationsLoadTitle": "Pozivnice nisu mogle da se učitaju",
+      "orgUnitsLoadTitle": "Organizacione jedinice nisu mogle da se učitaju",
+      "validation": "Neki podaci nisu ispravni. Proveri ih i pokušaj ponovo.",
+      "conflict": "Ovo se već promenilo. Osveži listu i pokušaj ponovo.",
+      "ownerExists": "Organizacija već ima vlasnika. Vlasništvo se može samo preneti.",
+      "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
+      "notFound": "Ova osoba, organizaciona jedinica ili neposredni rukovodilac više ne postoji. Osveži listu i pokušaj ponovo.",
+      "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+      "alreadyMember": "Ova osoba je već aktivan član organizacije.",
+      "cannotEndSelf": "Ne možeš da okončaš sopstveno članstvo. Zamoli drugog administratora.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo u ovoj organizaciji.",
+      "contextMismatch": "Tvoja sesija je u drugom kontekstu. Izaberi ovu organizaciju u meniju konteksta na vrhu i pokušaj ponovo.",
+      "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "noChange": "Izaberi drugu organizacionu jedinicu ili neposrednog rukovodioca.",
+      "emailInvalid": "Unesi ispravnu imejl adresu.",
+      "templateRequired": "Izaberi šablon.",
+      "templateInvalid": "Ovaj šablon se ne može koristiti za pozivnice.",
+      "orgUnitInvalid": "Ova organizaciona jedinica ne pripada organizaciji."
+    }
+  },
+  "orgUnits": {
+    "nav": "Organizacione jedinice",
+    "title": "Organizacione jedinice",
+    "lead": "Struktura tvoje organizacije: sektori i timovi ispod kompanije.",
+    "sampleNote": "Primer podataka: preimenovanje, dodavanje i premeštanje organizacionih jedinica su isključeni. Ništa se ne kreira i ne menja.",
+    "noOrganization": "Za organizacione jedinice potrebno je tačno jedno aktivno članstvo u organizaciji.",
+    "chooseOrganization": "Tvoj nalog pripada većem broju organizacija. Izaberi onu kojom upravljaš u meniju konteksta na vrhu.",
+    "loading": "Učitavanje",
+    "empty": "Ova organizacija još nema organizacionih jedinica.",
+    "treeLabel": "Stablo organizacionih jedinica",
+    "choose": "Izaberi",
+    "cancel": "Otkaži",
+    "kinds": {
+      "COMPANY": "Kompanija",
+      "DEPARTMENT": "Sektor",
+      "TEAM": "Tim"
+    },
+    "fields": {
+      "name": "Naziv",
+      "kind": "Vrsta",
+      "parent": "Nova nadređena jedinica"
+    },
+    "rename": {
+      "open": "Preimenuj",
+      "openFor": "Preimenuj: {{name}}",
+      "title": "Preimenovanje organizacione jedinice",
+      "description": "Daj novi naziv jedinici {{name}}.",
+      "submit": "Sačuvaj naziv",
+      "success": "Jedinica se sada zove {{name}}."
+    },
+    "addChild": {
+      "open": "Dodaj podjedinicu",
+      "openFor": "Dodaj jedinicu ispod: {{name}}",
+      "title": "Dodavanje organizacione jedinice",
+      "description": "Nova jedinica se kreira ispod: {{name}}.",
+      "submit": "Dodaj jedinicu",
+      "success": "Dodato: {{name}}."
+    },
+    "move": {
+      "open": "Premesti",
+      "openFor": "Premesti: {{name}}",
+      "title": "Premeštanje organizacione jedinice",
+      "description": "Izaberi jedinicu ispod koje se premešta {{name}}. Njene podjedinice se premeštaju zajedno sa njom.",
+      "submit": "Premesti jedinicu",
+      "success": "{{name}} je sada ispod: {{parent}}."
+    },
+    "errors": {
+      "loadTitle": "Organizacione jedinice nisu mogle da se učitaju",
+      "validation": "Neki podaci nisu ispravni. Proveri ih i pokušaj ponovo.",
+      "notFound": "Ova jedinica više ne postoji ili je arhivirana. Osveži stranicu i pokušaj ponovo.",
+      "rootImmovable": "Jedinica kompanije na vrhu stabla ne može da se premesti.",
+      "cycle": "Jedinica ne može da se premesti ispod sebe ili neke svoje podjedinice.",
+      "invalidKind": "Mogu se dodavati samo sektori i timovi.",
+      "conflict": "Ova jedinica se već promenila. Osveži stranicu i pokušaj ponovo.",
+      "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "nameLength": "Unesi naziv dužine od 1 do 200 znakova.",
+      "noChange": "Unesi drugačiji naziv.",
+      "parentRequired": "Izaberi novu nadređenu jedinicu."
+    }
+  },
+  "cases": {
+    "nav": "Slučajevi",
+    "title": "Dodeljeni slučajevi",
+    "lead": "Razgovori slučajeva koji su vam dodeljeni. Lista prikazuje samo podatke; otvorite slučaj da pročitate poruke.",
+    "caption": "Razgovori vaših dodeljenih slučajeva",
+    "empty": "Nijedan slučaj vam nije dodeljen.",
+    "loading": "Učitavanje",
+    "sampleNote": "Primer podataka: ovi razgovori su fiktivni. Niko ih nije napisao i ništa se ne čita sa servera.",
+    "columns": {
+      "case": "Slučaj",
+      "employee": "Zaposleni",
+      "expert": "Stručnjak",
+      "started": "Započet",
+      "messages": "Poruke",
+      "open": "Razgovor"
+    },
+    "open": "Otvori",
+    "openFor": "Otvori razgovor slučaja {{id}}",
+    "paging": {
+      "showing": "Prikazano: {{shown}}",
+      "showingMore": "Prikazano: {{shown}}. Ima još.",
+      "loadMore": "Učitaj još",
+      "loadMoreFailed": "Ostali razgovori nisu mogli da se učitaju"
+    },
+    "back": "Nazad na dodeljene slučajeve",
+    "detailTitle": "Slučaj {{id}}",
+    "detailTitleLoading": "Razgovor slučaja",
+    "conversationId": "Razgovor {{id}}",
+    "retry": "Pokušaj ponovo",
+    "messages": {
+      "heading": "Poruke",
+      "label": "Poruke, od najstarije",
+      "readOnly": "Samo za čitanje. Odgovori se ne šalju sa ove stranice.",
+      "empty": "Ovaj razgovor još nema poruka.",
+      "you": "Vi",
+      "participant": "Učesnik {{id}}"
+    },
+    "intake": {
+      "heading": "Prijemni zapis",
+      "lead": "Unesite ID prijemnog zapisa ovog slučaja da biste ga pročitali. Možda će biti potrebno da potvrdite identitet.",
+      "idLabel": "ID prijemnog zapisa",
+      "required": "Unesite ID prijemnog zapisa.",
+      "open": "Otvori prijemni zapis",
+      "errorTitle": "Prijemni zapis nije mogao da se otvori",
+      "recorded": "Zabeleženo {{when}}"
+    },
+    "errors": {
+      "listTitle": "Razgovori nisu mogli da se učitaju",
+      "readTitle": "Razgovor nije mogao da se otvori",
+      "contextTitle": "Oblast za stručnjake nije mogla da se otvori",
+      "context": "Sesija nije mogla da se prebaci u kontekst stručnjaka. Izaberite Stručnjak u meniju konteksta na vrhu ili pokušajte kasnije.",
+      "stepUpCancelledTitle": "Potvrda je otkazana",
+      "stepUpCancelled": "Ovaj sadržaj se prikazuje tek kada potvrdite identitet. Ništa nije otvoreno.",
+      "forbidden": "Nemate pristup ovom zapisu.",
+      "notFound": "Ovaj zapis ne postoji ili više nije dostupan.",
+      "rateLimited": "Previše zahteva u kratkom roku. Sačekajte trenutak i pokušajte ponovo.",
+      "unknown": "Nešto je pošlo naopako. Pokušajte ponovo."
+    }
+  },
+  "conversations": {
+    "nav": "Razgovori",
+    "title": "Moji razgovori",
+    "lead": "Vaši razgovori sa stručnjacima. Otvorite razgovor da pročitate poruke.",
+    "caption": "Vaši razgovori sa stručnjacima",
+    "empty": "Još nemate razgovor sa stručnjakom.",
+    "back": "Nazad na moje razgovore",
+    "detailTitle": "Razgovor o slučaju {{id}}",
+    "detailTitleLoading": "Razgovor"
   },
   "contextSwitcher": {
     "label": "Promeni radni prostor",

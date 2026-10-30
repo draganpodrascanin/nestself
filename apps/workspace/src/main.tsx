@@ -3,8 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { routeTree } from './routeTree.gen';
+import { api } from './api';
+import { initialSnapshot, sampleRouteSnapshot } from './auth';
 import { handleApiError } from './auth/handle-api-error';
 import { globalErrorDepsRef } from './auth/global-error-deps';
+import { isSampleDataMode } from './data-source';
+import { shouldRetryQuery } from './query-retry';
 import './i18n';
 import './app.css';
 
@@ -29,7 +33,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      retry: shouldRetryQuery,
     },
   },
 });
@@ -38,7 +42,15 @@ const router = createRouter({
   routeTree,
   context: {
     queryClient,
-    auth: { principal: null, effectiveActions: [], availableContexts: [] },
+    auth: {
+      principal: null,
+      effectiveActions: [],
+      availableContexts: [],
+      settled: false,
+      // Sample mode has no session to wait for: guards of the first navigation
+      // get the `?role=` sample principal; SampleAuthProvider then fills the context.
+      ensure: isSampleDataMode ? () => Promise.resolve(sampleRouteSnapshot()) : () => initialSnapshot(api),
+    },
   },
   defaultPreload: 'intent',
   scrollRestoration: true,

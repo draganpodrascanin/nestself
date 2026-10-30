@@ -6,10 +6,11 @@ import type { GrantResponse } from '@nestself/contracts';
 import type { OpsAdminApi } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { accessErrorKey } from './access-errors';
-import { templateLabel } from './access-labels';
+import { grantStatus, templateLabel } from './access-labels';
 import { AssignOrgTemplateDialog } from './assign-org-template-dialog';
 import { GrantTable } from './grant-table';
 import { RevokeGrantDialog } from './revoke-grant-dialog';
+import { TransferOwnershipDialog } from './transfer-ownership-dialog';
 import { sampleMembers, sampleOrgGrants } from './sample-access';
 import { UserAccessLookup } from './user-access-lookup';
 import { useOperationsContext, useOrgGrants, useOrgMembers } from './use-ops-admin';
@@ -40,6 +41,8 @@ export function OrgAccessScreen({ opsApi, orgId, sampleMode }: OrgAccessScreenPr
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignKey, setAssignKey] = useState(0);
   const [revokeTarget, setRevokeTarget] = useState<GrantResponse | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferKey, setTransferKey] = useState(0);
 
   const allowed = (action: string) => (principal ? can(principal, action, undefined, effectiveActions) : false);
   const canGrant = allowed('access.grant');
@@ -52,6 +55,7 @@ export function OrgAccessScreen({ opsApi, orgId, sampleMode }: OrgAccessScreenPr
   // ids and an alert says what is missing.
   const membersError = !sampleMode && membersQuery.isError ? (accessErrorKey(membersQuery.error) ?? 'unknown') : null;
   const nameOf = (userId: string) => members.find((m) => m.userId === userId)?.displayName ?? userId;
+  const currentOwner = grants?.find((g) => g.templateKey === 'employer_owner' && grantStatus(g) === 'active') ?? null;
 
   return (
     <div className="space-y-8">
@@ -63,7 +67,7 @@ export function OrgAccessScreen({ opsApi, orgId, sampleMode }: OrgAccessScreenPr
       {sampleMode ? <Alert tone="info">{t('admin:access.sampleNote')}</Alert> : null}
 
       {canGrant ? (
-        <div>
+        <div className="flex flex-wrap gap-3">
           <Button
             disabled={sampleMode || grants === undefined}
             onClick={() => {
@@ -72,6 +76,16 @@ export function OrgAccessScreen({ opsApi, orgId, sampleMode }: OrgAccessScreenPr
             }}
           >
             {t('admin:access.assign.open')}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={sampleMode || grants === undefined}
+            onClick={() => {
+              setTransferKey((k) => k + 1);
+              setTransferOpen(true);
+            }}
+          >
+            {t('admin:access.transfer.open')}
           </Button>
         </div>
       ) : null}
@@ -110,6 +124,18 @@ export function OrgAccessScreen({ opsApi, orgId, sampleMode }: OrgAccessScreenPr
           opsApi={opsApi}
           orgId={orgId}
           members={members}
+        />
+      ) : null}
+
+      {canGrant && !sampleMode ? (
+        <TransferOwnershipDialog
+          key={transferKey}
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          opsApi={opsApi}
+          orgId={orgId}
+          members={members.filter((m) => m.userId !== currentOwner?.subjectUserId)}
+          currentOwnerName={currentOwner ? nameOf(currentOwner.subjectUserId) : null}
         />
       ) : null}
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Field, Input, Textarea, Select } from './Field';
+import { Dialog, DialogContent } from '../../dialogs/dialog/Dialog';
 import { expectNoA11yViolations } from '../../../test/axe';
 
 describe('Field', () => {
@@ -157,5 +158,58 @@ describe('Select motion', () => {
     await user.click(trigger);
     await user.click(await screen.findByRole('option', { name: 'Beta' }));
     expect(handleChange).toHaveBeenCalledWith('b', expect.anything());
+  });
+});
+
+/** The nearest ancestor (or self) whose class sets `--z-popup`, if any. */
+function popupLayerSource(el: Element): Element | null {
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    if (typeof node.className === 'string' && node.className.includes('[--z-popup:')) return node;
+  }
+  return null;
+}
+
+describe('Select layering', () => {
+  const options = [
+    { value: 'a', label: 'Option A' },
+    { value: 'b', label: 'Option B' },
+  ];
+
+  it('inside DialogContent the popup layers above the dialog and an option takes a mouse click', async () => {
+    const handleChange = vi.fn();
+    render(
+      <Dialog defaultOpen>
+        <DialogContent title="Pick">
+          <Field label="Choice">
+            <Select options={options} placeholder="Pick one" onValueChange={handleChange} />
+          </Field>
+        </DialogContent>
+      </Dialog>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: 'Choice' }));
+    const listbox = await screen.findByRole('listbox');
+
+    const positioner = listbox.parentElement!;
+    expect(positioner.className).toContain('z-[var(--z-popup,var(--z-dropdown))]');
+    const source = popupLayerSource(positioner);
+    expect(source?.className).toContain('[--z-popup:calc(var(--z-dialog)+1)]');
+    // The variable is set by the dialog, not by the select itself.
+    expect(source?.contains(screen.getByRole('dialog'))).toBe(true);
+
+    await user.click(await screen.findByRole('option', { name: 'Option B' }));
+    expect(handleChange).toHaveBeenCalledWith('b', expect.anything());
+  });
+
+  it('outside a dialog the popup falls back to the dropdown layer', async () => {
+    render(
+      <Field label="Choice">
+        <Select options={options} placeholder="Pick one" />
+      </Field>,
+    );
+    await userEvent.setup().click(screen.getByRole('combobox', { name: 'Choice' }));
+    const positioner = (await screen.findByRole('listbox')).parentElement!;
+    expect(positioner.className).toContain('z-[var(--z-popup,var(--z-dropdown))]');
+    expect(popupLayerSource(positioner)).toBeNull();
   });
 });

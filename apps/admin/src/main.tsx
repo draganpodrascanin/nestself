@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@ta
 import { routeTree } from './routeTree.gen';
 import { handleApiError } from './auth/handle-api-error';
 import { globalErrorDepsRef } from './auth/global-error-deps';
+import { api } from './api';
+import { initialSnapshot } from './auth';
+import { isSampleDataMode } from './data-source';
+import { shouldRetryQuery } from './query-retry';
 import './i18n';
 
 declare module '@tanstack/react-router' {
@@ -24,14 +28,21 @@ const onCacheError = (error: Error) => {
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: onCacheError }),
   mutationCache: new MutationCache({ onError: onCacheError }),
-  defaultOptions: { queries: { staleTime: 30_000 } },
+  defaultOptions: { queries: { staleTime: 30_000, retry: shouldRetryQuery } },
 });
 
 const router = createRouter({
   routeTree,
   context: {
     queryClient,
-    auth: { principal: null, effectiveActions: [], availableContexts: [] },
+    auth: {
+      principal: null,
+      effectiveActions: [],
+      availableContexts: [],
+      settled: false,
+      // Sample mode has no session to wait for; SampleAuthProvider fills the context.
+      ensure: isSampleDataMode ? undefined : () => initialSnapshot(api),
+    },
   },
   defaultPreload: 'intent',
   scrollRestoration: true,

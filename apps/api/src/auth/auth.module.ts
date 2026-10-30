@@ -24,6 +24,8 @@ import { MeResponseBuilder } from './me-response.builder.js';
 import { SessionModule } from '../session/session.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
+import { SsoCallbackService } from './sso-callback.service.js';
+import { InvitationMembershipActivator } from '../invitations/invitation-membership-activator.js';
 
 @Module({
   imports: [SessionModule, IdentityModule],
@@ -53,6 +55,8 @@ import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
     ProfileService,
     MeResponseBuilder,
     StepUpService,
+    SsoCallbackService,
+    InvitationMembershipActivator,
     AuthorizationGuard,
     AuthorizationService,
     ContextLoader,
@@ -67,6 +71,7 @@ import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
     AuthorizationService,
     ContextLoader,
     AccessRevocationService,
+    InvitationMembershipActivator,
   ],
 })
 export class AuthModule {}

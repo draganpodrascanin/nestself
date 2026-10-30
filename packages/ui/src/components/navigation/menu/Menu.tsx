@@ -5,6 +5,7 @@ import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '../../../lib/cn';
+import { POPUP_LAYER } from '../../../lib/layers';
 import { AnimatePresence, m, MotionFeatures, useMotionPreset } from '../../../motion';
 
 /** Lets `MenuPopup` see the open state so the exit animation can play before unmount. */
@@ -65,12 +66,12 @@ export function MenuPopup({ children, className, 'aria-label': ariaLabel }: Menu
       <AnimatePresence>
         {open ? (
           <BaseMenu.Portal keepMounted>
-            <BaseMenu.Positioner className="z-[var(--z-dropdown)]">
+            <BaseMenu.Positioner className={POPUP_LAYER}>
               <BaseMenu.Popup
                 aria-label={ariaLabel}
                 render={<m.div {...popupMotion} />}
                 className={cn(
-                  'shadow-menu rounded-control bg-surface z-[var(--z-dropdown)] p-1 origin-[var(--transform-origin)]',
+                  'shadow-menu rounded-control bg-surface p-1 origin-[var(--transform-origin)]',
                   className,
                 )}
               >

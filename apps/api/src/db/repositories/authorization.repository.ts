@@ -250,6 +250,95 @@ export class AuthorizationRepository {
     return Number(result.rows[0]?.depth ?? 0);
   }
 
+  /**
+   * Every ancestor grant reachable through `parent_grant_id` from the given
+   * (delegated) grants, revoked or not: the engine decides what a revoked or
+   * expired ancestor means. The given grants themselves are returned only
+   * when one is an ancestor of another. Same walk as `delegationDepth`: a
+   * parent hidden by the tenant scope or deleted ends its chain.
+   */
+  async findDelegationAncestors(grantIds: string[], tx?: DbExecutor): Promise<GrantRow[]> {
+    if (grantIds.length === 0) return [];
+    const seeds = sql.join(grantIds.map((id) => sql`${id}`), sql`, `);
+    const result = await this.exec(tx).execute<{ id: string }>(sql`
+      with recursive chain(id, parent_grant_id, hops) as (
+        select parent.id, parent.parent_grant_id, 1
+        from ${grants} as child join ${grants} as parent on parent.id = child.parent_grant_id
+        where child.id in (${seeds})
+        union all
+        select g.id, g.parent_grant_id, chain.hops + 1
+        from ${grants} as g join chain on g.id = chain.parent_grant_id
+        where chain.hops < 64
+      )
+      select distinct id from chain
+    `);
+    const ids = result.rows.map((r) => r.id);
+    if (ids.length === 0) return [];
+    return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
+  }
+
+  /**
+   * Every grant delegated, directly or not, from the given grants, revoked
+   * or not (a tree revoked a moment ago still names its delegatees). A given
+   * grant is included only when it descends from another given grant (callers
+   * pass a whole revoked tree). A child hidden by the tenant scope ends its
+   * branch; the system context sees every branch.
+   */
+  async findDelegationDescendants(grantIds: string[], tx?: DbExecutor): Promise<GrantRow[]> {
+    if (grantIds.length === 0) return [];
+    const seeds = sql.join(grantIds.map((id) => sql`${id}`), sql`, `);
+    const result = await this.exec(tx).execute<{ id: string }>(sql`
+      with recursive tree(id, hops) as (
+        select g.id, 1 from ${grants} as g where g.parent_grant_id in (${seeds})
+        union all
+        select g.id, tree.hops + 1
+        from ${grants} as g join tree on g.parent_grant_id = tree.id
+        where tree.hops < 64
+      )
+      select distinct id from tree
+    `);
+    const ids = result.rows.map((r) => r.id);
+    if (ids.length === 0) return [];
+    return this.exec(tx).select().from(grants).where(inArray(grants.id, ids));
+  }
+
+  /**
+   * Unrevoked `employer_owner` grants of the organization that have not
+   * expired at `now` (including ones that start later), oldest first. Takes
+   * a transaction-scoped advisory lock on the organization's ownership
+   * first, so concurrent owner writes for one organization serialise until
+   * the caller's transaction ends. Run inside `withOrgScope(orgId)`.
+   */
+  async findActiveOwnerGrants(orgId: string, now: Date, tx?: DbExecutor): Promise<GrantRow[]> {
+    const exec = this.exec(tx);
+    await exec.execute(sql`select pg_advisory_xact_lock(hashtext(${`employer_owner:${orgId}`}))`);
+    return exec
+      .select()
+      .from(grants)
+      .where(
+        and(
+          eq(grants.scopeOrgId, orgId),
+          eq(grants.templateKey, 'employer_owner'),
+          isNull(grants.revokedAt),
+          or(isNull(grants.validUntil), gt(grants.validUntil, now)),
+        ),
+      )
+      .orderBy(grants.grantedAt, grants.id);
+  }
+
+  /**
+   * Move the unrevoked direct children of `fromGrantId` under `toGrantId`
+   * (ownership transfer); returns the updated rows. Revoked children keep
+   * their history. Run inside the grants' `withOrgScope(orgId)`.
+   */
+  async reparentActiveChildren(fromGrantId: string, toGrantId: string, tx?: DbExecutor): Promise<GrantRow[]> {
+    return this.exec(tx)
+      .update(grants)
+      .set({ parentGrantId: toGrantId })
+      .where(and(eq(grants.parentGrantId, fromGrantId), isNull(grants.revokedAt)))
+      .returning();
+  }
+
   /** The user's ACTIVE membership in the organization. Run inside `withOrgScope(orgId)`. */
   async findActiveMembership(
     userId: string,

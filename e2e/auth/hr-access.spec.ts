@@ -1,0 +1,172 @@
+/**
+ * HR grant administration journey (workspace `/hr/access`).
+ *
+ * Run with `pnpm e2e:auth` against the seeded database: the seed gives the
+ * sample HR admin (user_ivana) the employer_owner template on top of her
+ * hr_admin and employee grants, which is what makes `access.preview` and
+ * `access.delegate` reachable here.
+ *
+ * Covered: the grant table, the effective-access preview, delegating part
+ * of her own hr_admin grant, and (since the owner model of 2026-10-24 gave
+ * employer_owner `access.grant` and `access.revoke`) assigning team_manager
+ * to Ana and revoking it again with a reason. Ownership transfer is not run
+ * here: it would move the seeded owner grant away from Ivana and break the
+ * next run. It is covered by the component tests in
+ * `apps/workspace/src/features/access/access-screen.test.tsx` and the API e2e.
+ *
+ * The session is fresh, so no step-up dialog fires in this journey.
+ *
+ * The screen is opened with a full page load (a deep link): the guards wait
+ * for the session before deciding, and the Access nav item appears because
+ * `/auth/me` carries the effective actions.
+ *
+ * Re-runs: the API accepts duplicate delegations, so every run adds one more
+ * delegated grant for Stefan; the assertions only require at least one such
+ * row. The team_manager grant for Ana is found by the id in the create
+ * response and revoked in the same run; revoked rows accumulate, and the
+ * assertions count them relative to the start of the run.
+ *
+ * Labels come from packages/i18n/locales/en/auth.json and workspace.json
+ * (`access`).
+ */
+import { test, expect } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+
+const WORKSPACE_URL = 'http://localhost:5173';
+const HR_ADMIN_EMAIL = 'user_ivana@example.com';
+const FIXED_OTP = '123456';
+
+const EMPLOYEE_NAME = 'Ana Nikolić';
+const MANAGER_NAME = 'Stefan Marković';
+/** A seeded org unit of org_sample (packages/sample-data, org-units.ts). */
+const ORG_UNIT_NAME = 'Product';
+
+async function signIn(page: Page) {
+  await page.goto(`${WORKSPACE_URL}/sign-in`);
+  await page.getByLabel('Email address').fill(HR_ADMIN_EMAIL);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByLabel('Verification code').fill(FIXED_OTP);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page).not.toHaveURL(/\/sign-in/, { timeout: 15_000 });
+}
+
+/** Opens a select inside a dialog and picks an option (the popup is portalled). */
+async function pick(page: Page, scope: Locator, label: string, option: string) {
+  const combobox = scope.getByRole('combobox', { name: label });
+  await combobox.click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+  await expect(combobox).toHaveText(option);
+}
+
+/** Picks a member in the effective-access preview and returns the panel. */
+async function previewFor(page: Page, memberName: string) {
+  const panel = page.getByRole('region', { name: 'Effective access' });
+  await panel.getByRole('combobox', { name: 'Member' }).click();
+  await page.getByRole('option', { name: memberName }).click();
+  return panel;
+}
+
+test.describe('Workspace HR grant administration', () => {
+  test('HR admin reviews grants, previews access, delegates, assigns and revokes', async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    // The nav offers the screen (effective actions from /auth/me).
+    await expect(page.getByRole('link', { name: 'Access', exact: true })).toBeVisible({ timeout: 15_000 });
+
+    // Deep link with a full page load: the guards wait for the session.
+    await page.goto(`${WORKSPACE_URL}/hr/access`);
+    await expect(page).toHaveURL(/\/hr\/access$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Access management' })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Grant table: header row plus the seeded grants.
+    const table = page.getByRole('table', { name: 'Grants in your organization' });
+    await expect(table).toBeVisible({ timeout: 15_000 });
+    await expect(table.getByRole('row').nth(1)).toBeVisible();
+    await expect(
+      table.getByRole('row').filter({ hasText: 'Employer owner' }).filter({ hasText: 'Ivana Jovanović' }),
+    ).toHaveCount(1);
+
+    // Effective access for an employee: the employee template's actions.
+    const anaPanel = await previewFor(page, EMPLOYEE_NAME);
+    await expect(
+      anaPanel.getByRole('list', { name: 'content' }).getByText('content.read', { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Delegate people.invite from Ivana's own hr_admin grant to Stefan.
+    await page.getByRole('button', { name: 'Delegate part of HR administrator' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delegate part of your access' });
+    await expect(dialog).toBeVisible();
+    // A pointer click on the option: the select's popup layers above the
+    // dialog (--z-popup, set on the dialog's portal element).
+    const member = dialog.getByRole('combobox', { name: 'Member' });
+    await member.click();
+    await page.getByRole('option', { name: MANAGER_NAME }).click();
+    await expect(member).toHaveText(MANAGER_NAME);
+    await dialog.getByRole('checkbox', { name: 'people.invite', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Delegate', exact: true }).click();
+
+    await expect(page.getByText('Access delegated.')).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeHidden();
+
+    // At least one delegated row for Stefan (earlier runs may have added more).
+    const delegatedRows = table
+      .getByRole('row')
+      .filter({ hasText: 'Delegated access' })
+      .filter({ hasText: MANAGER_NAME });
+    await expect(delegatedRows.first()).toBeVisible({ timeout: 10_000 });
+
+    // The delegation takes effect for Stefan: his effective access now lists
+    // people.invite (the context carries the delegated grant's parent chain).
+    const stefanPanel = await previewFor(page, MANAGER_NAME);
+    await expect(stefanPanel.getByText('people.invite', { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Owner-driven assignment: team_manager for Ana on one org unit, with the
+    // spending ceiling the template requires. The grant id comes from the
+    // create response, so the run revokes exactly the grant it created.
+    const anaManagerRows = table.getByRole('row').filter({ hasText: 'Team manager' }).filter({ hasText: EMPLOYEE_NAME });
+    const revokedBefore = await anaManagerRows.filter({ hasText: 'Revoked' }).count();
+
+    await page.getByRole('button', { name: 'Assign template' }).click();
+    const assign = page.getByRole('dialog', { name: 'Assign a permission template' });
+    await expect(assign).toBeVisible();
+    await pick(page, assign, 'Member', EMPLOYEE_NAME);
+    await pick(page, assign, 'Template', 'Team manager');
+    await pick(page, assign, 'Org unit', ORG_UNIT_NAME);
+    await assign.getByLabel('Amount').fill('500');
+    await assign.getByLabel('Currency').fill('EUR');
+    const created = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && /\/api\/orgs\/[^/]+\/grants$/.test(new URL(res.url()).pathname),
+    );
+    await assign.getByRole('button', { name: 'Assign', exact: true }).click();
+    const createdResponse = await created;
+    expect(createdResponse.status()).toBe(201);
+    const { id: createdId } = (await createdResponse.json()) as { id: string };
+
+    await expect(page.getByText('Template assigned.')).toBeVisible({ timeout: 10_000 });
+    await expect(assign).toBeHidden();
+    const createdRow = table.locator(`tr[data-grant-id="${createdId}"]`);
+    await expect(createdRow).toContainText('Team manager');
+    await expect(createdRow).toContainText(EMPLOYEE_NAME);
+    await expect(createdRow).toContainText('Active');
+
+    // Revoke that grant with a reason; the row stays, marked Revoked.
+    await createdRow.getByRole('button', { name: `Revoke Team manager from ${EMPLOYEE_NAME}` }).click();
+    const revoke = page.getByRole('alertdialog', { name: 'Revoke this grant?' });
+    await expect(revoke).toBeVisible();
+    await revoke.getByLabel('Reason').fill('End-to-end run clean-up');
+    await revoke.getByRole('button', { name: 'Revoke grant' }).click();
+
+    await expect(page.getByText('Grant revoked.')).toBeVisible({ timeout: 10_000 });
+    await expect(revoke).toBeHidden();
+    await expect(createdRow).toContainText('Revoked', { timeout: 10_000 });
+    await expect(createdRow.getByRole('button', { name: /^Revoke/ })).toHaveCount(0);
+    await expect(anaManagerRows.filter({ hasText: 'Revoked' })).toHaveCount(revokedBefore + 1);
+  });
+});

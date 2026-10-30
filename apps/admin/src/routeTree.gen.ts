@@ -19,16 +19,19 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as AuthenticatedAccessIndexRouteImport } from './routes/_authenticated/access/index'
+import { Route as AuthenticatedEmergencyIndexRouteImport } from './routes/_authenticated/emergency/index'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
+import { Route as AuthenticatedSsoIndexRouteImport } from './routes/_authenticated/sso/index'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedCmsResourcesIndexRouteImport } from './routes/_authenticated/cms/resources/index'
 import { Route as AuthenticatedCmsResourcesResourceIdRouteImport } from './routes/_authenticated/cms/resources/$resourceId'
 import { Route as AuthenticatedCmsResourcesNewRouteImport } from './routes/_authenticated/cms/resources/new'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
+import { Route as AuthenticatedOrganizationsOrgIdPeopleRouteImport } from './routes/_authenticated/organizations/$orgId/people'
 import { Route as AuthenticatedCmsResourcesResourceIdIndexRouteImport } from './routes/_authenticated/cms/resources/$resourceId/index'
 import { Route as AuthenticatedCmsResourcesResourceIdVariantsLocaleRouteImport } from './routes/_authenticated/cms/resources/$resourceId/variants/$locale'
 
@@ -82,6 +85,12 @@ const AuthenticatedAccessIndexRoute =
     path: '/access/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedEmergencyIndexRoute =
+  AuthenticatedEmergencyIndexRouteImport.update({
+    id: '/emergency/',
+    path: '/emergency/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedExpertsIndexRoute =
   AuthenticatedExpertsIndexRouteImport.update({
     id: '/experts/',
@@ -106,6 +115,11 @@ const AuthenticatedOrganizationsOrgIdRoute =
     path: '/organizations/$orgId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSsoIndexRoute = AuthenticatedSsoIndexRouteImport.update({
+  id: '/sso/',
+  path: '/sso/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -141,6 +155,12 @@ const AuthenticatedOrganizationsOrgIdAccessRoute =
     path: '/access',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
   } as any)
+const AuthenticatedOrganizationsOrgIdPeopleRoute =
+  AuthenticatedOrganizationsOrgIdPeopleRouteImport.update({
+    id: '/people',
+    path: '/people',
+    getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
 const AuthenticatedCmsResourcesResourceIdIndexRoute =
   AuthenticatedCmsResourcesResourceIdIndexRouteImport.update({
     id: '/',
@@ -166,11 +186,14 @@ export interface FileRoutesByFullPath {
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access/': typeof AuthenticatedAccessIndexRoute
+  '/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/experts/': typeof AuthenticatedExpertsIndexRoute
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/sso/': typeof AuthenticatedSsoIndexRoute
   '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
   '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
   '/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
@@ -187,10 +210,13 @@ export interface FileRoutesByTo {
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access': typeof AuthenticatedAccessIndexRoute
+  '/emergency': typeof AuthenticatedEmergencyIndexRoute
   '/experts': typeof AuthenticatedExpertsIndexRoute
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
+  '/sso': typeof AuthenticatedSsoIndexRoute
   '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/cms/resources': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
   '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
@@ -211,11 +237,14 @@ export interface FileRoutesById {
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/access/': typeof AuthenticatedAccessIndexRoute
+  '/_authenticated/emergency/': typeof AuthenticatedEmergencyIndexRoute
   '/_authenticated/experts/': typeof AuthenticatedExpertsIndexRoute
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
+  '/_authenticated/sso/': typeof AuthenticatedSsoIndexRoute
   '/_authenticated/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
   '/_authenticated/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/_authenticated/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
   '/_authenticated/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
@@ -235,11 +264,14 @@ export interface FileRouteTypes {
     | '/organizations/$orgId'
     | '/invite/$token'
     | '/access/'
+    | '/emergency/'
     | '/experts/'
     | '/organizations/'
+    | '/sso/'
     | '/cms/resources/$resourceId'
     | '/cms/resources/new'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/people'
     | '/cms/resources/'
     | '/organizations/$orgId/'
     | '/cms/resources/$resourceId/'
@@ -256,10 +288,13 @@ export interface FileRouteTypes {
     | '/experts/$expertId'
     | '/invite/$token'
     | '/access'
+    | '/emergency'
     | '/experts'
     | '/organizations'
+    | '/sso'
     | '/cms/resources/new'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/people'
     | '/cms/resources'
     | '/organizations/$orgId'
     | '/cms/resources/$resourceId'
@@ -279,11 +314,14 @@ export interface FileRouteTypes {
     | '/_authenticated/organizations/$orgId'
     | '/_public/invite/$token'
     | '/_authenticated/access/'
+    | '/_authenticated/emergency/'
     | '/_authenticated/experts/'
     | '/_authenticated/organizations/'
+    | '/_authenticated/sso/'
     | '/_authenticated/cms/resources/$resourceId'
     | '/_authenticated/cms/resources/new'
     | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/organizations/$orgId/people'
     | '/_authenticated/cms/resources/'
     | '/_authenticated/organizations/$orgId/'
     | '/_authenticated/cms/resources/$resourceId/'
@@ -367,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccessIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/emergency/': {
+      id: '/_authenticated/emergency/'
+      path: '/emergency'
+      fullPath: '/emergency/'
+      preLoaderRoute: typeof AuthenticatedEmergencyIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/experts/': {
       id: '/_authenticated/experts/'
       path: '/experts'
@@ -393,6 +438,13 @@ declare module '@tanstack/react-router' {
       path: '/organizations/$orgId'
       fullPath: '/organizations/$orgId'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/sso/': {
+      id: '/_authenticated/sso/'
+      path: '/sso'
+      fullPath: '/sso/'
+      preLoaderRoute: typeof AuthenticatedSsoIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_public/invite/$token': {
@@ -435,6 +487,13 @@ declare module '@tanstack/react-router' {
       path: '/access'
       fullPath: '/organizations/$orgId/access'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
+      parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
+    '/_authenticated/organizations/$orgId/people': {
+      id: '/_authenticated/organizations/$orgId/people'
+      path: '/people'
+      fullPath: '/organizations/$orgId/people'
+      preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
     }
     '/_authenticated/cms/resources/$resourceId/': {
@@ -490,6 +549,7 @@ const AuthenticatedCmsRouteWithChildren =
 
 interface AuthenticatedOrganizationsOrgIdRouteChildren {
   AuthenticatedOrganizationsOrgIdAccessRoute: typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  AuthenticatedOrganizationsOrgIdPeopleRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   AuthenticatedOrganizationsOrgIdIndexRoute: typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
 
@@ -497,6 +557,8 @@ const AuthenticatedOrganizationsOrgIdRouteChildren: AuthenticatedOrganizationsOr
   {
     AuthenticatedOrganizationsOrgIdAccessRoute:
       AuthenticatedOrganizationsOrgIdAccessRoute,
+    AuthenticatedOrganizationsOrgIdPeopleRoute:
+      AuthenticatedOrganizationsOrgIdPeopleRoute,
     AuthenticatedOrganizationsOrgIdIndexRoute:
       AuthenticatedOrganizationsOrgIdIndexRoute,
   }
@@ -515,8 +577,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
   AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
+  AuthenticatedEmergencyIndexRoute: typeof AuthenticatedEmergencyIndexRoute
   AuthenticatedExpertsIndexRoute: typeof AuthenticatedExpertsIndexRoute
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
+  AuthenticatedSsoIndexRoute: typeof AuthenticatedSsoIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -529,8 +593,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOrganizationsOrgIdRoute:
     AuthenticatedOrganizationsOrgIdRouteWithChildren,
   AuthenticatedAccessIndexRoute: AuthenticatedAccessIndexRoute,
+  AuthenticatedEmergencyIndexRoute: AuthenticatedEmergencyIndexRoute,
   AuthenticatedExpertsIndexRoute: AuthenticatedExpertsIndexRoute,
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
+  AuthenticatedSsoIndexRoute: AuthenticatedSsoIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

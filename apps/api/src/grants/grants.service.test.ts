@@ -83,9 +83,13 @@ function createMocks() {
     updateGrant: vi.fn(async (id: string, patch: Record<string, unknown>) => ({ ...grants.get(id)!, ...patch })),
     revokeGrantTree: vi.fn(async (ids: string[]) => ({ roots: ids, children: [] as string[] })),
     delegationDepth: vi.fn(async () => 0),
+    findActiveChildGrants: vi.fn(async (_parentIds: string[], _tx?: unknown): Promise<GrantRow[]> => []),
     listGrantsForOrg: vi.fn(async () => [row()]),
     findAncestorIds: vi.fn(async (id: string) => [id, 'ou_engineering']),
     listPlatformGrants: vi.fn(async () => [row({ id: 'grant_platform', scopeType: 'platform', scopeOrgId: null, scopeOrgUnitId: null })]),
+    findActiveOwnerGrants: vi.fn(async (_orgId: string, _now: Date, _tx?: unknown): Promise<GrantRow[]> => []),
+    revokeGrants: vi.fn(async (ids: string[], _revoked: unknown, _tx?: unknown) => ids),
+    reparentActiveChildren: vi.fn(async (_from: string, _to: string, _tx?: unknown): Promise<GrantRow[]> => []),
   };
   const orgUnits = {
     findByIdAndOrg: vi.fn(async (id: string) => ({ id, orgId: ORG })),
@@ -109,6 +113,7 @@ function createMocks() {
       populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
     })),
     invalidateUser: vi.fn(async () => {}),
+    invalidateDelegatees: vi.fn(async (_grantIds: string[]): Promise<string[]> => []),
     loadAssignments: vi.fn(async () => [
       { id: 'asg_client', userId: 'user_ana', kind: 'CLIENT', targetId: 'org_client', startAt: NOW, endAt: null },
     ]),
@@ -276,6 +281,285 @@ describe('GrantsService', () => {
     });
   });
 
+  // ── single employer owner (owner model, 2026-10-24) ─────────────────
+
+  describe('single employer owner per organization', () => {
+    const OWNER_CREATE = {
+      templateKey: 'employer_owner',
+      subjectUserId: 'user_stefan',
+      scopeType: 'organization' as const,
+      includeDescendants: false,
+      conditions: [],
+    };
+    const IVANA_OWNER = row({
+      id: 'grant_owner_ivana',
+      subjectUserId: 'user_ivana',
+      templateKey: 'employer_owner',
+      actions: ['access.grant', 'access.revoke', 'access.delegate'],
+      scopeType: 'organization',
+      scopeOrgUnitId: null,
+      conditions: null,
+    });
+
+    it('create rejects a second active employer_owner with 409 owner_exists and the current owner', async () => {
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValueOnce([IVANA_OWNER]);
+      const err = await apiError(svc.create(ORG, OWNER_CREATE, ACTOR));
+      expect(err.getStatus()).toBe(409);
+      expect(err.code).toBe('owner_exists');
+      expect(err.details).toEqual({ currentOwnerUserId: 'user_ivana' });
+      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, null);
+      expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
+      expect(m.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('create allows the first employer_owner of an organization', async () => {
+      const res = await svc.create(ORG, OWNER_CREATE, ACTOR);
+      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, null);
+      expect(m.authzRepo.createGrant.mock.calls[0]![0]).toMatchObject({ templateKey: 'employer_owner', subjectUserId: 'user_stefan' });
+      expect(res.id).toBe('grant_new');
+    });
+
+    it('create does not look up owners for other templates', async () => {
+      await svc.create(ORG, CREATE, ACTOR);
+      expect(m.authzRepo.findActiveOwnerGrants).not.toHaveBeenCalled();
+    });
+
+    it('update refuses to change the window of an owner grant while another owner is active', async () => {
+      const expired = row({ ...IVANA_OWNER, id: 'grant_owner_old', subjectUserId: 'user_stefan', validUntil: new Date('2026-10-01T00:00:00.000Z') });
+      m.grants.set(expired.id, expired);
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValueOnce([IVANA_OWNER]);
+      const err = await apiError(svc.update(ORG, expired.id, { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR));
+      expect(err.code).toBe('owner_exists');
+      expect(m.authzRepo.updateGrant).not.toHaveBeenCalled();
+    });
+
+    it('update of an owner grant ignores the grant itself', async () => {
+      m.grants.set(IVANA_OWNER.id, IVANA_OWNER);
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValueOnce([IVANA_OWNER]);
+      await svc.update(ORG, IVANA_OWNER.id, { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR);
+      expect(m.authzRepo.updateGrant).toHaveBeenCalled();
+    });
+  });
+
+  // ── transferOwnership (owner model, 2026-10-24) ────────────────────
+
+  describe('transferOwnership', () => {
+    const IVANA_OWNER = row({
+      id: 'grant_owner_ivana',
+      subjectUserId: 'user_ivana',
+      templateKey: 'employer_owner',
+      actions: ['access.grant', 'access.revoke', 'access.delegate'],
+      scopeType: 'organization',
+      scopeOrgUnitId: null,
+      conditions: null,
+    });
+    const BODY = { newOwnerUserId: 'user_stefan' };
+    const STAFF = { userId: 'user_nikola', context: { kind: 'operations' } } as Principal;
+
+    beforeEach(() => {
+      m.grants.set(IVANA_OWNER.id, IVANA_OWNER);
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValue([IVANA_OWNER]);
+    });
+
+    it('rejects a caller who is not the current owner with 403 forbidden', async () => {
+      const other = { userId: 'user_ana', context: { kind: 'organization', orgId: ORG } } as Principal;
+      const err = await apiError(svc.transferOwnership(ORG, BODY, other));
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('forbidden');
+      expect(m.authzRepo.revokeGrants).not.toHaveBeenCalled();
+      expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
+    });
+
+    it('rejects with 403 when the organization has no owner (org route)', async () => {
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValue([]);
+      const err = await apiError(svc.transferOwnership(ORG, BODY, ACTOR));
+      expect(err.code).toBe('forbidden');
+    });
+
+    it("rejects with 403 when the caller's owner grant has not started yet", async () => {
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValue([row({ ...IVANA_OWNER, validFrom: new Date('2026-11-01T00:00:00.000Z') })]);
+      const err = await apiError(svc.transferOwnership(ORG, BODY, ACTOR));
+      expect(err.code).toBe('forbidden');
+    });
+
+    it('rejects a new owner without an ACTIVE membership with 409 subject_not_member', async () => {
+      m.authzRepo.findActiveMembership.mockResolvedValueOnce(null as never);
+      const err = await apiError(svc.transferOwnership(ORG, BODY, ACTOR));
+      expect(err.getStatus()).toBe(409);
+      expect(err.code).toBe('subject_not_member');
+      expect(m.authzRepo.findActiveMembership).toHaveBeenCalledWith('user_stefan', ORG, null);
+      expect(m.authzRepo.revokeGrants).not.toHaveBeenCalled();
+    });
+
+    it('rejects transferring to the current owner with 409 conflict', async () => {
+      const err = await apiError(svc.transferOwnership(ORG, { newOwnerUserId: 'user_ivana' }, ACTOR));
+      expect(err.getStatus()).toBe(409);
+      expect(err.code).toBe('conflict');
+    });
+
+    it('revokes only the owner grant (children stay) and creates the new owner grant in one org-scoped transaction', async () => {
+      const res = await svc.transferOwnership(ORG, BODY, ACTOR);
+      expect(m.db.withOrgScope).toHaveBeenCalledTimes(1);
+      expect(m.db.withOrgScope).toHaveBeenCalledWith(ORG, expect.any(Function));
+      expect(m.authzRepo.revokeGrants).toHaveBeenCalledWith(
+        ['grant_owner_ivana'],
+        { at: NOW, byUserId: 'user_ivana', reason: 'ownership_transferred' },
+        null,
+      );
+      expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
+      const values = m.authzRepo.createGrant.mock.calls[0]![0] as Record<string, unknown>;
+      const owner = PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner')!;
+      expect(values).toMatchObject({
+        subjectUserId: 'user_stefan',
+        templateKey: 'employer_owner',
+        actions: [...owner.actions],
+        scopeType: 'organization',
+        scopeOrgId: ORG,
+        scopeOrgUnitId: null,
+        includeDescendants: false,
+        conditions: [],
+        validFrom: NOW,
+        validUntil: null,
+        parentGrantId: null,
+        grantedByUserId: 'user_ivana',
+      });
+      expect(res.revokedGrantId).toBe('grant_owner_ivana');
+      expect(res.createdGrant.id).toBe('grant_new');
+    });
+
+    it('audits grant.revoked (ownership_transferred) and grant.created with transfer = true', async () => {
+      await svc.transferOwnership(ORG, BODY, ACTOR);
+      expect(m.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'grant.revoked',
+          actorUserId: 'user_ivana',
+          orgId: ORG,
+          recordId: 'grant_owner_ivana',
+          details: expect.objectContaining({
+            subjectUserId: 'user_ivana',
+            templateKey: 'employer_owner',
+            reason: 'ownership_transferred',
+            transfer: true,
+            newOwnerUserId: 'user_stefan',
+          }),
+        }),
+      );
+      expect(m.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'grant.created',
+          actorUserId: 'user_ivana',
+          orgId: ORG,
+          recordId: 'grant_new',
+          details: expect.objectContaining({
+            subjectUserId: 'user_stefan',
+            templateKey: 'employer_owner',
+            transfer: true,
+            previousOwnerUserId: 'user_ivana',
+          }),
+        }),
+      );
+      for (const [event] of m.audit.record.mock.calls as unknown as [{ details: Record<string, unknown> }][]) {
+        expect(event.details).not.toHaveProperty('byStaff');
+      }
+    });
+
+    it('invalidates both subjects and the delegatees of the old owner grant', async () => {
+      await svc.transferOwnership(ORG, BODY, ACTOR);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ivana', [ORG]);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_owner_ivana']);
+    });
+
+    it("re-parents the old owner grant's active children to the new owner grant, audits and invalidates them", async () => {
+      const child = row({
+        id: 'grant_child_stefan',
+        subjectUserId: 'user_jovan',
+        templateKey: null,
+        actions: ['access.preview'],
+        scopeType: 'organization',
+        scopeOrgUnitId: null,
+        parentGrantId: 'grant_new',
+      });
+      m.authzRepo.reparentActiveChildren.mockResolvedValueOnce([child]);
+      await svc.transferOwnership(ORG, BODY, ACTOR);
+
+      expect(m.authzRepo.reparentActiveChildren).toHaveBeenCalledWith('grant_owner_ivana', 'grant_new', null);
+      // Re-parenting runs after the new grant exists, inside the same transaction.
+      expect(m.authzRepo.createGrant.mock.invocationCallOrder[0]!).toBeLessThan(
+        m.authzRepo.reparentActiveChildren.mock.invocationCallOrder[0]!,
+      );
+      expect(m.db.withOrgScope).toHaveBeenCalledTimes(1);
+      expect(m.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'grant.adjusted',
+          actorUserId: 'user_ivana',
+          orgId: ORG,
+          recordType: 'grant',
+          recordId: 'grant_child_stefan',
+          details: expect.objectContaining({ reparented: true, fromGrantId: 'grant_owner_ivana' }),
+        }),
+      );
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_jovan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_new']);
+    });
+
+    it('re-parents nothing when the staff route creates the first owner', async () => {
+      m.authzRepo.findActiveOwnerGrants.mockResolvedValue([]);
+      await svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true });
+      expect(m.authzRepo.reparentActiveChildren).not.toHaveBeenCalled();
+    });
+
+    it('does not create the new grant when the revoke step fails (one transaction)', async () => {
+      m.authzRepo.revokeGrants.mockRejectedValueOnce(new Error('db down'));
+      await expect(svc.transferOwnership(ORG, BODY, ACTOR)).rejects.toThrow('db down');
+      expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
+      expect(m.principalLoader.invalidateUser).not.toHaveBeenCalled();
+    });
+
+    describe('by staff', () => {
+      it('needs no owner grant and audits byStaff = true', async () => {
+        const res = await svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true });
+        expect(m.authzRepo.revokeGrants).toHaveBeenCalledWith(
+          ['grant_owner_ivana'],
+          { at: NOW, byUserId: 'user_nikola', reason: 'ownership_transferred' },
+          null,
+        );
+        expect(m.authzRepo.createGrant.mock.calls[0]![0]).toMatchObject({ subjectUserId: 'user_stefan', grantedByUserId: 'user_nikola' });
+        expect(res.revokedGrantId).toBe('grant_owner_ivana');
+        const events = (m.audit.record.mock.calls as unknown as [{ action: string; details: Record<string, unknown> }][]).map((c) => c[0]);
+        expect(events.map((e) => e.action)).toEqual(['grant.revoked', 'grant.created']);
+        for (const e of events) expect(e.details).toMatchObject({ transfer: true, byStaff: true });
+      });
+
+      it('creates the first owner when the organization has none', async () => {
+        m.authzRepo.findActiveOwnerGrants.mockResolvedValue([]);
+        const res = await svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true });
+        expect(m.authzRepo.revokeGrants).not.toHaveBeenCalled();
+        expect(res.revokedGrantId).toBeNull();
+        const events = (m.audit.record.mock.calls as unknown as [{ action: string; details: Record<string, unknown> }][]).map((c) => c[0]);
+        expect(events.map((e) => e.action)).toEqual(['grant.created']);
+        expect(events[0]!.details).toMatchObject({ transfer: true, byStaff: true, previousOwnerUserId: null });
+        expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
+        expect(m.principalLoader.invalidateUser).toHaveBeenCalledTimes(1);
+      });
+
+      it('still requires the new owner to be an ACTIVE member', async () => {
+        m.authzRepo.findActiveMembership.mockResolvedValueOnce(null as never);
+        const err = await apiError(svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true }));
+        expect(err.code).toBe('subject_not_member');
+      });
+    });
+
+    it('audit details carry no credential-like keys', async () => {
+      await svc.transferOwnership(ORG, BODY, STAFF, { byStaff: true });
+      for (const [event] of m.audit.record.mock.calls as unknown as [{ details: Record<string, unknown> }][]) {
+        for (const key of Object.keys(event.details)) {
+          expect(key).not.toMatch(/password|code|tokens?|secret/i);
+        }
+      }
+    });
+  });
+
   // ── list ────────────────────────────────────────────────────────────
 
   describe('list', () => {
@@ -319,6 +603,39 @@ describe('GrantsService', () => {
         }),
       );
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
+    });
+
+    it('invalidates the delegatees below the adjusted grant (their cached ancestor copy)', async () => {
+      await svc.update(ORG, 'grant_1', { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
+    });
+
+    describe('active delegated children (AUTHZ-R-37)', () => {
+      const ceiling = (amountMinor: number) => [{ type: 'spending_ceiling' as const, amountMinor, currency: 'EUR' }];
+      beforeEach(() => {
+        m.authzRepo.findActiveChildGrants.mockImplementation(async (parentIds: string[]) =>
+          parentIds.includes('grant_1')
+            ? [row({ id: 'grant_child', subjectUserId: 'user_stefan', parentGrantId: 'grant_1', templateKey: null, actions: ['budget.read'], conditions: ceiling(800) })]
+            : [],
+        );
+      });
+
+      it('refuses a ceiling below a child ceiling: 409 conflict naming the child, nothing written or audited', async () => {
+        const err = await apiError(svc.update(ORG, 'grant_1', { conditions: ceiling(500) }, ACTOR));
+        expect(err.getStatus()).toBe(409);
+        expect(err.code).toBe('conflict');
+        expect(err.details).toEqual({ children: ['grant_child'] });
+        expect(m.authzRepo.updateGrant).not.toHaveBeenCalled();
+        expect(m.audit.record).not.toHaveBeenCalled();
+        expect(m.principalLoader.invalidateUser).not.toHaveBeenCalled();
+      });
+
+      it('accepts a tighter ceiling that still contains the children and invalidates them', async () => {
+        const res = await svc.update(ORG, 'grant_1', { conditions: ceiling(900) }, ACTOR);
+        expect(res.conditions).toEqual(ceiling(900));
+        expect(m.authzRepo.updateGrant).toHaveBeenCalledOnce();
+        expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
+      });
     });
 
     it('rejects conditions missing a required type of the template', async () => {
@@ -393,7 +710,7 @@ describe('GrantsService', () => {
     it('invalidates every subject in the revoked tree', async () => {
       await svc.revoke(ORG, 'grant_1', { reason: 'role ended' }, ACTOR);
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
-      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_1']);
     });
 
     it('returns 409 for an already revoked grant and 404 for an unknown one', async () => {
@@ -690,6 +1007,78 @@ describe('GrantsService', () => {
     });
   });
 
+  describe('revokePlatform', () => {
+    const OPS_ACTOR = { userId: 'user_nikola', context: { kind: 'operations' } } as Principal;
+    const PLATFORM_GRANT = row({
+      id: 'grant_platform',
+      subjectUserId: 'user_ana',
+      templateKey: 'support_operator',
+      actions: ['support.case.read'],
+      scopeType: 'assigned_cases',
+      scopeOrgId: null,
+      scopeOrgUnitId: null,
+      conditions: null,
+    });
+
+    beforeEach(() => {
+      m.grants.set(PLATFORM_GRANT.id, PLATFORM_GRANT);
+      m.grants.set('grant_1', row());
+      m.authzRepo.revokeGrantTree.mockImplementation(async (ids: string[]) => {
+        m.grants.set(PLATFORM_GRANT.id, { ...PLATFORM_GRANT, revokedAt: NOW, revokedReason: 'left the team' });
+        return { roots: ids, children: ['grant_child'] };
+      });
+    });
+
+    it('revokes the tree in one system transaction and audits the root and each descendant', async () => {
+      const res = await svc.revokePlatform('grant_platform', { reason: 'left the team' }, OPS_ACTOR);
+
+      expect(m.db.withTransaction).toHaveBeenCalledTimes(1);
+      expect(m.db.withOrgScope).not.toHaveBeenCalled();
+      expect(m.authzRepo.revokeGrantTree).toHaveBeenCalledWith(
+        ['grant_platform'],
+        { at: NOW, byUserId: 'user_nikola', reason: 'left the team' },
+        SYSTEM_TX,
+      );
+      const events = m.audit.record.mock.calls.map((c) => (c as unknown as [Record<string, unknown>])[0]);
+      expect(events).toEqual([
+        expect.objectContaining({
+          action: 'grant.revoked',
+          orgId: null,
+          recordId: 'grant_platform',
+          details: expect.objectContaining({ reason: 'left the team', templateKey: 'support_operator', revokedDescendants: 1 }),
+        }),
+        expect.objectContaining({
+          action: 'grant.delegation_revoked',
+          orgId: null,
+          recordId: 'grant_child',
+          details: { reason: 'parent_revoked', rootGrantId: 'grant_platform' },
+        }),
+      ]);
+      expect(res.revokedAt).not.toBeNull();
+    });
+
+    it("invalidates the subject for the platform, member and client organizations, then the delegatees", async () => {
+      await svc.revokePlatform('grant_platform', { reason: 'left the team' }, OPS_ACTOR);
+      expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', ['platform', ORG, 'org_client']);
+      expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_platform']);
+    });
+
+    it('returns 404 for an organization-scoped or unknown grant without writing', async () => {
+      expect((await apiError(svc.revokePlatform('grant_1', { reason: 'x' }, OPS_ACTOR))).getStatus()).toBe(404);
+      expect((await apiError(svc.revokePlatform('nope', { reason: 'x' }, OPS_ACTOR))).getStatus()).toBe(404);
+      expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
+      expect(m.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 conflict for an already revoked platform grant', async () => {
+      m.grants.set(PLATFORM_GRANT.id, { ...PLATFORM_GRANT, revokedAt: NOW });
+      const err = await apiError(svc.revokePlatform('grant_platform', { reason: 'again' }, OPS_ACTOR));
+      expect(err.getStatus()).toBe(409);
+      expect(err.code).toBe('conflict');
+      expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listPlatform', () => {
     it('passes the subject and revoked filters to the repository', async () => {
       m.authzRepo.listPlatformGrants.mockResolvedValueOnce([
@@ -739,6 +1128,7 @@ describe('GrantsService', () => {
       expect(platformResource.orgId).toBeUndefined();
 
       expect(res.userId).toBe('user_ana');
+      expect(res.suspended).toBe(false);
       expect(res.contexts.map((c) => c.orgId)).toEqual([ORG, null]);
       expect(res.contexts[0]!.actions).toContain('content.read');
       expect(res.contexts[0]!.actions).not.toContain('conversation.participate');

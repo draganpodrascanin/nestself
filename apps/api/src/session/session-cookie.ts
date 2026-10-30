@@ -8,6 +8,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { parseCookie, stringifySetCookie } from 'cookie';
 
+const SSO_COOKIE_BASE = 'nestself_sso';
+
+/** The SSO browser-binding cookie is only ever sent to the callback. */
+export const SSO_COOKIE_PATH = '/api/auth/sso/callback';
+
 @Injectable()
 export class SessionCookies {
   private readonly logger = new Logger(SessionCookies.name);
@@ -16,6 +21,12 @@ export class SessionCookies {
   readonly sessionName: string;
   /** Effective CSRF cookie name. */
   readonly csrfName: string;
+  /**
+   * Browser binding of an SSO flow (login CSRF): `__Secure-nestself_sso`.
+   * Not `__Host-`: that prefix requires `Path=/`, and this cookie is scoped
+   * to the callback path. Drops the prefix in insecure dev like the others.
+   */
+  readonly ssoName: string;
 
   private readonly secure: boolean;
   private warnedInsecure = false;
@@ -40,10 +51,12 @@ export class SessionCookies {
       this.csrfName = rawCsrfName.startsWith('__Host-')
         ? rawCsrfName.slice('__Host-'.length)
         : rawCsrfName;
+      this.ssoName = SSO_COOKIE_BASE;
     } else {
       this.secure = true;
       this.sessionName = rawSessionName;
       this.csrfName = rawCsrfName;
+      this.ssoName = `__Secure-${SSO_COOKIE_BASE}`;
     }
   }
 
@@ -104,6 +117,39 @@ export class SessionCookies {
       sameSite: 'lax',
       path: '/',
       maxAge,
+    });
+  }
+
+  /** The SSO browser-binding nonce from the Cookie header, or null. */
+  parseSsoNonce(headers: Record<string, string | string[] | undefined>): string | null {
+    const raw = headers['cookie'] ?? headers['Cookie'];
+    if (typeof raw !== 'string' || !raw) return null;
+    return parseCookie(raw)[this.ssoName] ?? null;
+  }
+
+  /** Set at `GET /auth/sso/start`; HttpOnly, SameSite=Lax, callback path only. */
+  serializeSsoNonce(nonce: string, maxAgeSeconds: number): string {
+    return stringifySetCookie({
+      name: this.ssoName,
+      value: nonce,
+      secure: this.secure,
+      httpOnly: true,
+      sameSite: 'lax',
+      path: SSO_COOKIE_PATH,
+      maxAge: maxAgeSeconds,
+    });
+  }
+
+  /** Cleared by the callback on every outcome. */
+  clearSsoNonce(): string {
+    return stringifySetCookie({
+      name: this.ssoName,
+      value: '',
+      secure: this.secure,
+      httpOnly: true,
+      sameSite: 'lax',
+      path: SSO_COOKIE_PATH,
+      maxAge: 0,
     });
   }
 

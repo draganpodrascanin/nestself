@@ -106,6 +106,11 @@ export type {
 export {
   DiscoverRequestSchema,
   DiscoverResponseSchema,
+  isRelativeReturnPath,
+  SsoReturnPathSchema,
+  SsoStartQuerySchema,
+  SsoCallbackQuerySchema,
+  SSO_SIGN_IN_REASONS,
   EmailOtpStartRequestSchema,
   EmailOtpStartResponseSchema,
   EmailOtpVerifyRequestSchema,
@@ -137,6 +142,7 @@ export {
   WsTicketResponseSchema,
   TotpEnrolResponseSchema,
   TotpConfirmRequestSchema,
+  TotpConfirmResponseSchema,
   TotpEnrolRequestSchema,
   ProfileLocaleRequestSchema,
   ProfileDisplayNameRequestSchema,
@@ -144,11 +150,15 @@ export {
   StepUpRequiredErrorSchema,
   AUTH_ERROR_CODES,
   EMAIL_OTP_MIN_LENGTH,
+  DISPLAY_NAME_MAX_LENGTH,
   EMAIL_OTP_MAX_LENGTH,
 } from './auth.ts';
 export type {
   DiscoverRequest,
   DiscoverResponse,
+  SsoStartQuery,
+  SsoCallbackQuery,
+  SsoSignInReason,
   EmailOtpStartRequest,
   EmailOtpStartResponse,
   EmailOtpVerifyRequest,
@@ -177,6 +187,7 @@ export type {
   WsTicketResponse,
   TotpEnrolResponse,
   TotpConfirmRequest,
+  TotpConfirmResponse,
   TotpEnrolRequest,
   ProfileLocaleRequest,
   ProfileDisplayNameRequest,
@@ -202,6 +213,12 @@ export * from './org-admin.ts';
 // ---------------------------------------------------------------------------
 
 export * from './ops-admin.ts';
+
+// ---------------------------------------------------------------------------
+// Professional-interaction schemas (4.7)
+// ---------------------------------------------------------------------------
+
+export * from './professional.ts';
 
 // ---------------------------------------------------------------------------
 // Content capabilities (C-11)

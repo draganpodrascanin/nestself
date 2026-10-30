@@ -1,20 +1,19 @@
 /**
  * TOTP enrolment screen -- QR code + manual key + confirmation.
- * Uses the `qrcode` package to render the otpauth URI as a data-URL image.
+ * The QR code and manual key come from `TotpSecret`.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import QRCode from 'qrcode';
 import {
   OtpInput,
   Button,
   FormErrorSummary,
   Heading,
-  Text,
 } from '@nestself/ui';
 import type { FormErrorSummaryHandle } from '@nestself/ui';
 import type { AuthApi } from '@nestself/api-client';
 import type { TotpEnrolResponse } from '@nestself/contracts';
+import { TotpSecret } from '../totp-secret';
 
 interface Props {
   challengeToken: string;
@@ -23,16 +22,6 @@ interface Props {
   onError: (err: unknown) => void;
   /** Error raised by the parent sign-in page; rendered together with local validation. */
   error?: string | null;
-}
-
-/** Extracts the secret parameter from an otpauth:// URI. */
-function extractSecret(uri: string): string | null {
-  try {
-    const parsed = new URL(uri);
-    return parsed.searchParams.get('secret');
-  } catch {
-    return null;
-  }
 }
 
 export function TotpEnrolScreen({
@@ -46,7 +35,6 @@ export function TotpEnrolScreen({
   const [secretUri, setSecretUri] = useState<string | null>(null);
   // The enrol call rotates the challengeToken; the rotated one completes the step.
   const [activeToken, setActiveToken] = useState<string>(challengeToken);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,11 +59,6 @@ export function TotpEnrolScreen({
         if (cancelled) return;
         setSecretUri(result.secretUri);
         if (result.challengeToken) setActiveToken(result.challengeToken);
-        const dataUrl = await QRCode.toDataURL(result.secretUri, {
-          width: 200,
-          margin: 2,
-        });
-        if (!cancelled) setQrDataUrl(dataUrl);
       } catch (err) {
         if (!cancelled) onError(err);
       }
@@ -106,8 +89,6 @@ export function TotpEnrolScreen({
     }
   };
 
-  const manualKey = secretUri ? extractSecret(secretUri) : null;
-
   const errors = displayError
     ? [
         {
@@ -124,31 +105,7 @@ export function TotpEnrolScreen({
         {t('auth:totpEnrol.title')}
       </Heading>
 
-      <Text className="text-center text-text-secondary">
-        {t('auth:totpEnrol.scanQr')}
-      </Text>
-
-      {qrDataUrl ? (
-        <div className="flex justify-center">
-          <img
-            src={qrDataUrl}
-            alt="QR code for authenticator app"
-            width={200}
-            height={200}
-            className="rounded-control"
-          />
-        </div>
-      ) : (
-        <div className="flex justify-center">
-          <div className="h-[200px] w-[200px] animate-pulse rounded-control bg-tint" />
-        </div>
-      )}
-
-      {manualKey ? (
-        <Text className="text-center type-metadata text-text-secondary break-all">
-          {t('auth:totpEnrol.manualKey', { key: manualKey })}
-        </Text>
-      ) : null}
+      <TotpSecret secretUri={secretUri} />
 
       <FormErrorSummary
         ref={errorSummaryRef}

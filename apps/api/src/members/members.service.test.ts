@@ -82,6 +82,7 @@ describe('MembersService', () => {
   let authz: ReturnType<typeof createMockAuthzRepo>;
   let audit: ReturnType<typeof createMockAudit>;
   let revocation: ReturnType<typeof createMockRevocation>;
+  let principalLoader: { invalidateDelegatees: ReturnType<typeof vi.fn> };
   let service: MembersService;
 
   beforeEach(() => {
@@ -90,12 +91,14 @@ describe('MembersService', () => {
     authz = createMockAuthzRepo();
     audit = createMockAudit();
     revocation = createMockRevocation();
+    principalLoader = { invalidateDelegatees: vi.fn().mockResolvedValue([]) };
     service = new MembersService(
       dbs as never,
       memberships as never,
       authz as never,
       audit as never,
       revocation as never,
+      principalLoader as never,
     );
   });
 
@@ -107,6 +110,25 @@ describe('MembersService', () => {
     await expect(
       service.endMembership('org-1', 'mem-missing', { reason: 'LEFT' }, 'actor-1'),
     ).rejects.toThrow(expect.objectContaining({ code: 'not_found' }));
+  });
+
+  // ── Refuse ending your own membership ─────────────────────────────────
+
+  it('refuses to end the caller\'s own membership: 409 cannot_end_self, nothing written', async () => {
+    memberships.findByIdAndOrg.mockResolvedValue({ ...ACTIVE_MEMBERSHIP, userId: 'actor-1' });
+
+    const err = await service
+      .endMembership('org-1', 'mem-1', { reason: 'LEFT' }, 'actor-1')
+      .catch((e: unknown) => e);
+
+    expect(err).toEqual(expect.objectContaining({ code: 'cannot_end_self' }));
+    expect((err as { getStatus(): number }).getStatus()).toBe(409);
+    expect(memberships.endMembership).not.toHaveBeenCalled();
+    expect(authz.findActiveGrantsScopedToOrg).not.toHaveBeenCalled();
+    expect(authz.revokeGrantTree).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+    expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    expect(principalLoader.invalidateDelegatees).not.toHaveBeenCalled();
   });
 
   // ── Idempotent re-end ─────────────────────────────────────────────────
@@ -123,6 +145,7 @@ describe('MembersService', () => {
     expect(result.revokedGrantIds).toEqual([]);
     expect(memberships.endMembership).not.toHaveBeenCalled();
     expect(revocation.revokeAllAccess).not.toHaveBeenCalled();
+    expect(principalLoader.invalidateDelegatees).not.toHaveBeenCalled();
   });
 
   // ── Successful end with grants ────────────────────────────────────────
@@ -185,6 +208,8 @@ describe('MembersService', () => {
     );
 
     expect(result.revokedGrantIds).toEqual(['g-parent', 'g-received', 'g-child', 'g-grandchild']);
+    // The delegatees of the revoked trees cache them as ancestors.
+    expect(principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['g-parent', 'g-received', 'g-child', 'g-grandchild']);
     expect(authz.revokeGrantTree).toHaveBeenCalledOnce();
     expect(authz.revokeGrantTree).toHaveBeenCalledWith(
       ['g-parent', 'g-received'],

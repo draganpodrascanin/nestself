@@ -1,11 +1,13 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth } from '../auth';
+import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { ApiStatus } from './__root';
+import { UserMenu } from '../features/account/user-menu';
+import { ContextPicker } from '../features/context/context-picker';
 
 function PermissionBlock() {
   const { t } = useTranslation('common');
@@ -33,17 +35,27 @@ function AuthenticatedLayout() {
       can(principal, 'content.publish', undefined, effectiveActions) ||
       principal.staffTemplates.length > 0);
 
+  // Signed out (for example just after Sign out, before /sign-in renders):
+  // render nothing rather than flash the permission block.
+  if (!principal) return null;
+
   if (!hasAccess) {
     return <PermissionBlock />;
   }
 
   const showAccess = can(principal, 'access.preview', undefined, effectiveActions);
+  // Convenience only: `GET /ops/emergency-access` enforces `audit.read`.
+  const showEmergency = can(principal, 'audit.read', undefined, effectiveActions);
+  // Convenience only: every `/ops/sso-connections` route enforces `sso.manage`.
+  const showSso = can(principal, 'sso.manage', undefined, effectiveActions);
 
   const navItems = [
     { to: '/' as const, icon: House, label: t('nav.overview') },
     { to: '/experts' as const, icon: Users, label: t('nav.experts') },
     { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
     ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
+    ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
+    ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
     { to: '/cms/resources' as const, icon: Article, label: t('nav.content') },
     { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
     { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
@@ -75,9 +87,16 @@ function AuthenticatedLayout() {
         </nav>
       }
       topbar={
-        <div className="flex w-full items-center justify-between">
-          <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
-          <ApiStatus />
+        <div className="flex w-full min-w-0 items-center justify-between gap-2">
+          <span className="shrink-0 font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
+          <div className="flex min-w-0 items-center gap-2 @min-[480px]:gap-4">
+            {/* Hidden on narrow screens so the header fits 320px (WCAG reflow); the sample banner still shows. */}
+            <div className="hidden @min-[480px]:block">
+              <ApiStatus />
+            </div>
+            <ContextPicker sampleMode={isSampleDataMode} />
+            <UserMenu />
+          </div>
         </div>
       }
       bottomBar={
@@ -110,9 +129,12 @@ function AuthenticatedLayout() {
 }
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context, location }) => {
-    // In sample mode a principal always exists; in real mode redirect to sign-in.
-    if (!isSampleDataMode && !context.auth.principal) {
+  beforeLoad: async ({ context, location }) => {
+    // In sample mode a principal always exists; in real mode redirect to
+    // sign-in, after waiting for the session on a full page load.
+    if (isSampleDataMode) return;
+    const { principal } = await resolveRouteAuth(context.auth);
+    if (!principal) {
       throw redirect({ to: '/sign-in', search: { return: location.pathname } });
     }
   },

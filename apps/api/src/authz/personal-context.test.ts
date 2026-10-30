@@ -30,6 +30,7 @@ const EMPTY_EXTRAS: AvailableContextExtras = {
 const MEM_A: PrincipalMembership = {
   membershipId: 'mem-a',
   orgId: 'org_a',
+  orgName: 'Org org_a',
   orgUnitId: null,
   status: 'ACTIVE',
   startDate: '2024-01-01T00:00:00Z',
@@ -39,6 +40,7 @@ const MEM_A: PrincipalMembership = {
 const MEM_B: PrincipalMembership = {
   membershipId: 'mem-b',
   orgId: 'org_b',
+  orgName: 'Org org_b',
   orgUnitId: null,
   status: 'ACTIVE',
   startDate: '2023-06-01T00:00:00Z',
@@ -233,9 +235,9 @@ describe('resolveDefaultPersonalOrgId tie-break (item 5, T-C1.02)', () => {
   it('breaks equal startDate ties by orgId ascending', () => {
     const sameDate = '2024-01-01T00:00:00Z';
     const memberships: PrincipalMembership[] = [
-      { membershipId: 'mem-z', orgId: 'org_z', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
-      { membershipId: 'mem-a', orgId: 'org_a', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
-      { membershipId: 'mem-m', orgId: 'org_m', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+      { membershipId: 'mem-z', orgId: 'org_z', orgName: 'Org org_z', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+      { membershipId: 'mem-a', orgId: 'org_a', orgName: 'Org org_a', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
+      { membershipId: 'mem-m', orgId: 'org_m', orgName: 'Org org_m', orgUnitId: null, status: 'ACTIVE', startDate: sameDate, endDate: null },
     ];
     // All have the same startDate; should pick org_a (earliest orgId ascending)
     expect(resolveDefaultPersonalOrgId(memberships)).toBe('org_a');
@@ -243,8 +245,8 @@ describe('resolveDefaultPersonalOrgId tie-break (item 5, T-C1.02)', () => {
 
   it('prefers earlier startDate over orgId order', () => {
     const memberships: PrincipalMembership[] = [
-      { membershipId: 'mem-z', orgId: 'org_z', orgUnitId: null, status: 'ACTIVE', startDate: '2023-01-01T00:00:00Z', endDate: null },
-      { membershipId: 'mem-a', orgId: 'org_a', orgUnitId: null, status: 'ACTIVE', startDate: '2024-01-01T00:00:00Z', endDate: null },
+      { membershipId: 'mem-z', orgId: 'org_z', orgName: 'Org org_z', orgUnitId: null, status: 'ACTIVE', startDate: '2023-01-01T00:00:00Z', endDate: null },
+      { membershipId: 'mem-a', orgId: 'org_a', orgName: 'Org org_a', orgUnitId: null, status: 'ACTIVE', startDate: '2024-01-01T00:00:00Z', endDate: null },
     ];
     // org_z has earlier startDate, so it wins despite higher orgId
     expect(resolveDefaultPersonalOrgId(memberships)).toBe('org_z');

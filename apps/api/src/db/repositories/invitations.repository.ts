@@ -3,7 +3,7 @@
  * invitations feature; keep Drizzle query builders here, not in services.
  */
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull, gt } from 'drizzle-orm';
+import { and, desc, eq, isNull, gt, lt, or } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
 import {
@@ -15,6 +15,13 @@ import {
 
 export type InvitationRow = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
+
+export interface PendingInvitationListOptions {
+  limit: number;
+  /** Id of the last invitation of the previous page. */
+  cursor?: string;
+  now: Date;
+}
 
 @Injectable()
 export class InvitationsRepository {
@@ -76,6 +83,46 @@ export class InvitationsRepository {
       ),
     });
     return row ?? null;
+  }
+
+  /**
+   * Pending invitations of the organization (not accepted, not revoked, not
+   * expired at `now`), newest first by `(createdAt, id)`. The cursor is the id
+   * of the last row of the previous page; an unknown cursor yields an empty
+   * page. Fetches `limit + 1` rows so the caller can detect a next page.
+   */
+  async listPending(
+    orgId: string,
+    opts: PendingInvitationListOptions,
+    tx?: DbExecutor,
+  ): Promise<InvitationRow[]> {
+    const conditions = [
+      eq(invitations.orgId, orgId),
+      isNull(invitations.revokedAt),
+      isNull(invitations.acceptedAt),
+      gt(invitations.expiresAt, opts.now),
+    ];
+
+    if (opts.cursor) {
+      const [anchor] = await this.exec(tx)
+        .select({ id: invitations.id, createdAt: invitations.createdAt })
+        .from(invitations)
+        .where(and(eq(invitations.id, opts.cursor), eq(invitations.orgId, orgId)));
+      if (!anchor) return [];
+      conditions.push(
+        or(
+          lt(invitations.createdAt, anchor.createdAt),
+          and(eq(invitations.createdAt, anchor.createdAt), lt(invitations.id, anchor.id)),
+        )!,
+      );
+    }
+
+    return this.exec(tx)
+      .select()
+      .from(invitations)
+      .where(and(...conditions))
+      .orderBy(desc(invitations.createdAt), desc(invitations.id))
+      .limit(opts.limit + 1);
   }
 
   /** Find an invitation by token hash. */

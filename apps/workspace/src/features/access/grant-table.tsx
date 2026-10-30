@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Table, Td, Th } from '@nestself/ui';
 import type { BadgeTone } from '@nestself/ui';
@@ -42,8 +41,6 @@ export function GrantTable({
 }: GrantTableProps) {
   const { t, i18n } = useTranslation(['workspace', 'common']);
   const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
-  // Statuses are computed against the time the table first rendered.
-  const [now] = useState(() => Date.now());
 
   const nameOf = (userId: string) =>
     members.find((m) => m.userId === userId)?.displayName ?? userId;
@@ -85,14 +82,16 @@ export function GrantTable({
       </thead>
       <tbody>
         {grants.map((grant) => {
-          const status = grantStatus(grant, now);
+          // Current time on every render (grantStatus defaults to Date.now()): a grant
+          // created after the first render shows Active once the list refetches.
+          const status = grantStatus(grant);
           const template = templateLabel(t, grant.templateKey);
           const subject = nameOf(grant.subjectUserId);
           const revocable = canRevoke && status !== 'revoked';
           const delegable =
             canDelegate && status === 'active' && grant.subjectUserId === currentUserId;
           return (
-            <tr key={grant.id}>
+            <tr key={grant.id} data-grant-id={grant.id}>
               <Td className={cellClass}>{template}</Td>
               <Td className={cellClass}>{subject}</Td>
               <Td className={cellClass}>{scopeOf(grant)}</Td>

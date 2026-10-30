@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1792869554470,
-      "tag": "0006_cms_ee_foundation",
+      "when": 1792912393798,
+      "tag": "0006_sso_domains_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792912393900,
+      "tag": "0007_cms_ee_foundation",
       "breakpoints": true
     }
   ]

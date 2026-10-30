@@ -16,18 +16,26 @@ import {
   Compass,
   PaperPlaneTilt,
   DotsThree,
+  UsersThree,
+  TreeStructure,
+  Briefcase,
+  ChatsCircle,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth } from '../auth';
+import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
-import { ContextSwitcher } from '../components/ContextSwitcher';
+import { UserMenu } from '../features/account/user-menu';
+import { ContextPicker } from '../features/context/context-picker';
 import { isSampleDataMode } from '../data-source';
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context, location }) => {
-    // In sample mode a principal always exists; in real mode redirect to sign-in.
-    if (!isSampleDataMode && !context.auth.principal) {
+  beforeLoad: async ({ context, location }) => {
+    // In sample mode a principal always exists; in real mode redirect to
+    // sign-in, after waiting for the session on a full page load.
+    if (isSampleDataMode) return;
+    const { principal } = await resolveRouteAuth(context.auth);
+    if (!principal) {
       throw redirect({ to: '/sign-in', search: { return: location.pathname } });
     }
   },
@@ -98,11 +106,49 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr', icon: Buildings, label: t('common:nav.hr') }]
     : [];
 
+  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate as well.
+  const peopleNav: NavEntry[] = showHr
+    ? [{ to: '/hr/people', icon: UsersThree, label: t('workspace:people.nav') }]
+    : [];
+
+  const showOrgUnits =
+    showHr && principal ? can(principal, 'org_units.manage', undefined, effectiveActions) : false;
+  const orgUnitsNav: NavEntry[] = showOrgUnits
+    ? [{ to: '/hr/org-units', icon: TreeStructure, label: t('workspace:orgUnits.nav') }]
+    : [];
+
   const accessNav: NavEntry[] = showAccess
     ? [{ to: '/hr/access', icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
-  const allNavItems = [...coreNavItems, ...prototypeItems, ...managerNav, ...hrNav, ...accessNav];
+  // Expert area: an expert record, or the assigned-read action in this context.
+  const showCases = principal
+    ? principal.expert !== null || can(principal, 'conversation.read.assigned', undefined, effectiveActions)
+    : false;
+  const casesNav: NavEntry[] = showCases
+    ? [{ to: '/cases', icon: Briefcase, label: t('workspace:cases.nav') }]
+    : [];
+
+  // The participant list, outside the expert context (an expert reads cases there).
+  const showConversations = principal
+    ? principal.context.kind !== 'expert' &&
+      can(principal, 'conversation.participate', undefined, effectiveActions)
+    : false;
+  const conversationsNav: NavEntry[] = showConversations
+    ? [{ to: '/conversations', icon: ChatsCircle, label: t('workspace:conversations.nav') }]
+    : [];
+
+  const allNavItems = [
+    ...coreNavItems,
+    ...prototypeItems,
+    ...conversationsNav,
+    ...casesNav,
+    ...managerNav,
+    ...hrNav,
+    ...peopleNav,
+    ...orgUnitsNav,
+    ...accessNav,
+  ];
 
   /**
    * Bottom bar: up to 5 slots.
@@ -214,11 +260,15 @@ function AuthenticatedLayout() {
   );
 
   const topbar = (
-    <div className="flex w-full items-center justify-between">
-      <p className="type-label text-primary">NestSelf</p>
-      <div className="flex items-center gap-3">
-        <ContextSwitcher />
-        <ApiStatus />
+    <div className="flex w-full min-w-0 items-center justify-between gap-2">
+      <p className="shrink-0 type-label text-primary">NestSelf</p>
+      <div className="flex min-w-0 items-center gap-2 @min-[480px]:gap-4">
+        {/* Hidden on narrow screens so the header fits 320px (WCAG reflow); the sample banner still shows. */}
+        <div className="hidden @min-[480px]:block">
+          <ApiStatus />
+        </div>
+        <ContextPicker sampleMode={isSampleDataMode} />
+        <UserMenu />
       </div>
     </div>
   );

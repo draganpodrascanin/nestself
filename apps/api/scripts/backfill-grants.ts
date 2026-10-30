@@ -19,9 +19,12 @@ const pool = new Pool({
 });
 
 backfillGrants(createDatabase(pool), new Date())
-  .then(({ created, skipped }) => {
-    console.log(`Grant backfill complete: ${created.length} created, ${skipped.length} skipped`);
+  .then(({ created, skipped, widened }) => {
+    console.log(
+      `Grant backfill complete: ${created.length} created, ${skipped.length} skipped, ${widened.length} widened`,
+    );
     for (const id of created) console.log(`  created ${id}`);
+    for (const id of widened) console.log(`  widened to organization scope (review): ${id}`);
   })
   .catch((e) => {
     console.error(e);

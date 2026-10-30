@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
@@ -78,5 +78,46 @@ describe('Admin: Permission check', () => {
 
     const permBlock = await screen.findByText(/not available to your role/i);
     expect(permBlock).toBeInTheDocument();
+  });
+});
+
+describe('Admin: Emergency access navigation', () => {
+  it('shows the Emergency access item to a principal holding audit.read', async () => {
+    renderWithRouter({ path: '/', auth: authFor('admin') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).getByRole('link', { name: i18n.t('admin:nav.emergency') })).toBeInTheDocument();
+  });
+
+  it('hides it from operations staff without audit.read', async () => {
+    renderWithRouter({ path: '/', auth: authFor('operations') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).queryByRole('link', { name: i18n.t('admin:nav.emergency') })).not.toBeInTheDocument();
+  });
+
+  it('renders the sample records on /emergency in sample mode', async () => {
+    renderWithRouter({ path: '/emergency', auth: authFor('admin') });
+    expect(await screen.findByRole('heading', { level: 1, name: i18n.t('admin:emergency.title') })).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('admin:emergency.sampleNote'))).toBeInTheDocument();
+  });
+});
+
+describe('Admin: SSO navigation', () => {
+  it('shows the SSO item to a principal holding sso.manage', async () => {
+    renderWithRouter({ path: '/', auth: authFor('admin') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).getByRole('link', { name: i18n.t('admin:nav.sso') })).toBeInTheDocument();
+  });
+
+  it('hides it from operations staff without sso.manage', async () => {
+    expect(SAMPLE_PRINCIPALS.operations.effectiveActions).not.toContain('sso.manage');
+    renderWithRouter({ path: '/', auth: authFor('operations') });
+    const nav = await screen.findByRole('navigation', { name: 'Admin navigation' });
+    expect(within(nav).queryByRole('link', { name: i18n.t('admin:nav.sso') })).not.toBeInTheDocument();
+  });
+
+  it('renders the sample connections on /sso in sample mode', async () => {
+    renderWithRouter({ path: '/sso', auth: authFor('admin') });
+    expect(await screen.findByRole('heading', { level: 1, name: i18n.t('admin:sso.title') })).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('admin:sso.sampleNote'))).toBeInTheDocument();
   });
 });

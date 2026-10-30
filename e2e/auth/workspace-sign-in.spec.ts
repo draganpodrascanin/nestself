@@ -58,30 +58,18 @@ test.describe('Workspace email-code sign-in', () => {
       page.getByRole('heading', { name: /Jovan/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // Sign out -- the button lives in the settings page or a nav menu.
-    // If a dedicated "Sign out" button is visible on the current page, click
-    // it directly; otherwise navigate to /settings where it usually lives.
-    const signOutButton = page.getByRole('button', { name: 'Sign out' });
-    const signOutLink = page.getByRole('link', { name: 'Sign out' });
+    // Sign out through the user menu in the app shell header.
+    await page.getByRole('button', { name: /^Account menu for / }).click();
+    await page.getByRole('menuitem', { name: 'Sign out' }).click();
 
-    if (await signOutButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await signOutButton.click();
-    } else if (await signOutLink.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await signOutLink.click();
-    } else {
-      // Fall back: call the sign-out API directly and reload.
-      // This ensures the test still validates the unauthenticated redirect
-      // even if the sign-out UI is not yet wired up.
-      await page.evaluate(() =>
-        fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }),
-      );
-      await page.goto(`${WORKSPACE_URL}/`);
-    }
-
-    // After sign-out, the sign-in page should appear (redirect or landing).
+    await expect(page).toHaveURL(/\/sign-in(\?|$)/, { timeout: 10_000 });
+    // The sign-in page appears, and the session is gone: a protected route
+    // sends the user back to sign-in.
     await expect(
       page.getByRole('heading', { name: 'Sign in' }),
     ).toBeVisible({ timeout: 10_000 });
+    await page.goto(`${WORKSPACE_URL}/settings`);
+    await expect(page).toHaveURL(/\/sign-in\?return=/, { timeout: 10_000 });
   });
 });
 

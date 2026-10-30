@@ -55,6 +55,31 @@ export const InvitationImportResponseSchema = z.object({
 });
 export type InvitationImportResponse = z.infer<typeof InvitationImportResponseSchema>;
 
+/**
+ * `POST .../invitations` response. Outside production it also carries the raw
+ * `devToken` so local flows and tests can open the activation link; the list
+ * routes never return it (only the hash is stored).
+ */
+export const InvitationCreateResponseSchema = InvitationResponseSchema.extend({
+  devToken: z.string().min(1).optional(),
+});
+export type InvitationCreateResponse = z.infer<typeof InvitationCreateResponseSchema>;
+
+/** `GET .../invitations`: pending invitations (not accepted, not revoked, not expired), newest first. */
+export const InvitationListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.literal('pending').default('pending'),
+});
+export type InvitationListQuery = z.infer<typeof InvitationListQuerySchema>;
+
+export const InvitationListResponseSchema = z.object({
+  items: z.array(InvitationResponseSchema),
+  /** Id of the last item; pass it back as `cursor` for the next page. */
+  nextCursor: z.string().nullable(),
+});
+export type InvitationListResponse = z.infer<typeof InvitationListResponseSchema>;
+
 // --- Org units ---
 export const OrgUnitCreateRequestSchema = z.object({
   parentId: z.string().min(1),
@@ -85,6 +110,11 @@ export const OrgUnitResponseSchema = z.object({
   archivedAt: z.string().datetime().nullable(),
 });
 export type OrgUnitResponse = z.infer<typeof OrgUnitResponseSchema>;
+
+export const OrgUnitListResponseSchema = z.object({
+  items: z.array(OrgUnitResponseSchema),
+});
+export type OrgUnitListResponse = z.infer<typeof OrgUnitListResponseSchema>;
 
 // --- Members ---
 export const MemberListQuerySchema = z.object({
@@ -211,6 +241,22 @@ export const GrantPreviewResponseSchema = z.object({
   assignmentIds: z.array(z.string()),
 });
 export type GrantPreviewResponse = z.infer<typeof GrantPreviewResponseSchema>;
+
+// --- Ownership transfer (owner model, 2026-10-24) ---
+export const OwnershipTransferRequestSchema = z.object({
+  newOwnerUserId: z.string().min(1),
+});
+export type OwnershipTransferRequest = z.infer<typeof OwnershipTransferRequestSchema>;
+
+/**
+ * `revokedGrantId` is the previous owner's `employer_owner` grant. It is null
+ * only on the staff route when the organization had no owner yet.
+ */
+export const OwnershipTransferResponseSchema = z.object({
+  revokedGrantId: z.string().min(1).nullable(),
+  createdGrant: GrantResponseSchema,
+});
+export type OwnershipTransferResponse = z.infer<typeof OwnershipTransferResponseSchema>;
 
 // --- Approval authorities ---
 export const ApprovalAuthorityCreateRequestSchema = z.object({

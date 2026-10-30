@@ -7,7 +7,8 @@ export default [
   ...node,
   {
     name: 'nestself-root/ignore-workspaces',
-    ignores: ['apps/**', 'packages/**'],
+    // Workspaces lint themselves; the Playwright report and results folders are generated (git-ignored).
+    ignores: ['apps/**', 'packages/**', 'e2e/auth-report/**', 'e2e/auth-results/**'],
   },
   {
     name: 'nestself-e2e/browser-globals',
