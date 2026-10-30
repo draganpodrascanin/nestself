@@ -9,7 +9,7 @@ void i18next
   .use(LanguageDetector)
   .init({
     ...i18nBaseOptions,
-    resources: resourcesFor(['common', 'admin', 'auth', 'cms']) as Resource,
+    resources: resourcesFor(['common', 'admin', 'auth', 'cms', 'library']) as Resource,
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],

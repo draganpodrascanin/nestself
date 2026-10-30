@@ -17,7 +17,7 @@ import { can } from '@nestself/contracts';
 import type { ContentDocument } from '@nestself/content/schema';
 import { validateContentDocument, transliterateDocument, transliterateText as transliterateFn } from '@nestself/content/schema';
 import { ContentEditor } from '@nestself/content/editor';
-import type { ContentEditorHandle } from '@nestself/content/editor';
+import type { ContentEditorHandle, ContentEditorLabels } from '@nestself/content/editor';
 import { ContentRenderer } from '@nestself/content/render';
 import type { ContentRendererLabels } from '@nestself/content/render';
 import { ApiError } from '@nestself/api-client';
@@ -202,20 +202,71 @@ function VariantEditorPage() {
     imageUnavailable: t('library:renderer.imageUnavailable', { defaultValue: 'Image unavailable' }),
   };
 
-  // --- Toolbar labels for the editor ---
-  const toolbarLabels = {
-    bold: t('cms:editor.toolbar.bold'),
-    heading: t('cms:editor.toolbar.heading'),
-    bulletList: t('cms:editor.toolbar.bulletList'),
-    orderedList: t('cms:editor.toolbar.orderedList'),
-    quote: t('cms:editor.toolbar.quote'),
-    image: t('cms:editor.toolbar.image'),
-    link: t('cms:editor.toolbar.link'),
-    linkUrl: t('cms:editor.toolbar.linkUrl'),
-    linkInsert: t('cms:editor.toolbar.linkInsert'),
-    linkRemove: t('cms:editor.toolbar.linkRemove'),
-    undo: t('cms:editor.toolbar.undo'),
-    redo: t('cms:editor.toolbar.redo'),
+  // --- Editor labels (Notion-style menus, bubble menu, block handle) ---
+  const editorLabels: ContentEditorLabels = {
+    editorLabel: t('cms:editor.toolbar.toolbar', { defaultValue: 'Content editor' }),
+    slashMenu: {
+      placeholder: t('cms:editor.slash.placeholder', { defaultValue: 'Filter blocks...' }),
+      empty: t('cms:editor.slash.empty', { defaultValue: 'No matching blocks' }),
+      groupText: t('cms:editor.slash.groupText', { defaultValue: 'Text' }),
+      groupLists: t('cms:editor.slash.groupLists', { defaultValue: 'Lists' }),
+      groupBlocks: t('cms:editor.slash.groupBlocks', { defaultValue: 'Blocks' }),
+      groupMedia: t('cms:editor.slash.groupMedia', { defaultValue: 'Media' }),
+    },
+    slashItems: {
+      paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+      paragraphHint: t('cms:editor.slash.paragraphHint', { defaultValue: 'Plain text' }),
+      heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+      heading2Hint: t('cms:editor.slash.heading2Hint', { defaultValue: 'Section heading' }),
+      heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+      heading3Hint: t('cms:editor.slash.heading3Hint', { defaultValue: 'Subsection' }),
+      bulletList: t('cms:editor.toolbar.bulletList'),
+      bulletListHint: t('cms:editor.slash.bulletListHint', { defaultValue: 'Unordered list' }),
+      numberedList: t('cms:editor.toolbar.orderedList'),
+      numberedListHint: t('cms:editor.slash.numberedListHint', { defaultValue: 'Ordered list' }),
+      checklist: t('cms:editor.toolbar.checklist', { defaultValue: 'Checklist' }),
+      checklistHint: t('cms:editor.slash.checklistHint', { defaultValue: 'Checkable items' }),
+      quote: t('cms:editor.toolbar.quote'),
+      quoteHint: t('cms:editor.slash.quoteHint', { defaultValue: 'Blockquote' }),
+      note: t('cms:editor.toolbar.note', { defaultValue: 'Professional note' }),
+      noteHint: t('cms:editor.slash.noteHint', { defaultValue: 'Tip, warning or info' }),
+      step: t('cms:editor.toolbar.step', { defaultValue: 'Practical step' }),
+      stepHint: t('cms:editor.slash.stepHint', { defaultValue: 'Numbered instruction' }),
+      cta: t('cms:editor.toolbar.cta', { defaultValue: 'Call to action' }),
+      ctaHint: t('cms:editor.slash.ctaHint', { defaultValue: 'Action button' }),
+      related: t('cms:editor.toolbar.related', { defaultValue: 'Related resource' }),
+      relatedHint: t('cms:editor.slash.relatedHint', { defaultValue: 'Link to another article' }),
+      image: t('cms:editor.toolbar.image'),
+      imageHint: t('cms:editor.slash.imageHint', { defaultValue: 'Upload or paste' }),
+    },
+    bubbleMenu: {
+      bold: t('cms:editor.toolbar.bold'),
+      link: t('cms:editor.toolbar.link'),
+      linkUrl: t('cms:editor.toolbar.linkUrl'),
+      linkInsert: t('cms:editor.toolbar.linkInsert'),
+      linkRemove: t('cms:editor.toolbar.linkRemove'),
+      linkInvalid: t('cms:editor.toolbar.linkInvalid', {
+        defaultValue: 'Only https:// links and internal references are allowed.',
+      }),
+      turnInto: t('cms:editor.bubble.turnInto', { defaultValue: 'Turn into' }),
+      paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+      heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+      heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+      quote: t('cms:editor.toolbar.quote'),
+    },
+    blockHandle: {
+      addBlock: t('cms:editor.block.add', { defaultValue: 'Add block' }),
+      dragBlock: t('cms:editor.block.drag', { defaultValue: 'Drag or open menu' }),
+      turnInto: t('cms:editor.bubble.turnInto', { defaultValue: 'Turn into' }),
+      duplicate: t('cms:editor.block.duplicate', { defaultValue: 'Duplicate' }),
+      delete: t('cms:editor.block.delete', { defaultValue: 'Delete' }),
+      moveUp: t('cms:editor.block.moveUp', { defaultValue: 'Move up' }),
+      moveDown: t('cms:editor.block.moveDown', { defaultValue: 'Move down' }),
+      paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+      heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+      heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+      quote: t('cms:editor.toolbar.quote'),
+    },
   };
 
   // --- Debounced autosave ---
@@ -633,7 +684,7 @@ function VariantEditorPage() {
                   onChange={handleBodyChange}
                   editable={canWrite}
                   placeholder={t('cms:editor.bodyPlaceholder')}
-                  toolbarLabels={toolbarLabels}
+                  labels={editorLabels}
                   onInsertImage={handleInsertImage}
                   editorRef={editorHandleRef}
                 />
