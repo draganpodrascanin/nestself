@@ -355,9 +355,56 @@ function VariantEditorPage() {
     );
   }
   if (loadState.status === 'not-found') {
+    // Offer to create the variant for authored locales (not sr-Cyrl).
+    const isAuthoredMissing = !isDerivedLocale && AUTHORED_LOCALES.includes(routeLocale as AuthoredLocale);
+    const handleCreateVariant = async () => {
+      if (isSampleDataMode) {
+        toast.add({ title: t('cms:sample.saveNotice'), tone: 'info' });
+        return;
+      }
+      try {
+        await cmsApi.addVariant(resourceId, routeLocale as AuthoredLocale);
+        // Reload the page to pick up the new variant
+        setLoadState({ status: 'loading' });
+        const res = await cmsApi.getResource(resourceId);
+        const foundVariant = res.variants?.find((v) => v.locale === routeLocale);
+        if (!foundVariant) {
+          setLoadState({ status: 'not-found' });
+          return;
+        }
+        const revisions = foundVariant.revisions ?? [];
+        const workingRevision =
+          revisions.find((r) => r.state === 'draft') ??
+          revisions.sort((a, b) => b.revisionNumber - a.revisionNumber)[0];
+        if (!workingRevision) {
+          setLoadState({ status: 'not-found' });
+          return;
+        }
+        setLoadState({
+          status: 'ready',
+          resource: res,
+          variant: foundVariant,
+          revision: workingRevision,
+        });
+      } catch (err) {
+        const code = (err as { code?: string }).code ?? 'unknown';
+        toast.add({
+          title: t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }),
+          tone: 'danger',
+        });
+      }
+    };
     return (
       <div className="flex flex-col gap-4 py-12">
         <Alert tone="warning">{t('cms:editor.notFound')}</Alert>
+        {isAuthoredMissing && canWrite ? (
+          <Button variant="primary" onClick={handleCreateVariant}>
+            {t('cms:editor.createVariant', {
+              defaultValue: 'Create {{locale}} variant',
+              locale: t(`cms:detail.locale.${routeLocale}`, { defaultValue: routeLocale }),
+            })}
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -825,10 +872,37 @@ function VariantEditorReady({
     }
   };
 
-  // ─── Publish ──────────────────────────────────────────────────────
+  // ─── Return for changes ──────────────────────────────────────────
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnComment, setReturnComment] = useState('');
+
+  const handleReturnForChanges = async () => {
+    if (isSampleDataMode) {
+      toast.add({ title: t('cms:sample.saveNotice'), tone: 'info' });
+      setReturnDialogOpen(false);
+      return;
+    }
+
+    setActionError(null);
+    try {
+      const updated = await cmsApi.returnForChanges(revisionId, returnComment || undefined);
+      setRevisionState(updated.state);
+      toast.add({ title: t('cms:editor.returnedForChanges'), tone: 'success' });
+      setReturnDialogOpen(false);
+      setReturnComment('');
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? 'unknown';
+      setActionError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
+    }
+  };
+
+  // ─── Publish dialog ──────────────────────────────────────────────
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+
   const handlePublish = async () => {
     if (isSampleDataMode) {
       toast.add({ title: t('cms:sample.publishNotice'), tone: 'info' });
+      setPublishDialogOpen(false);
       return;
     }
 
@@ -838,6 +912,7 @@ function VariantEditorReady({
         resourceId,
         audience: proposedAudience ? [{ kind: proposedAudience as AudienceKind, includeDescendants: true }] : [],
       } as import('@nestself/contracts').PublicationCreateRequest);
+      setPublishDialogOpen(false);
       toast.add({ title: t('cms:detail.publishSuccess'), tone: 'success' });
     } catch (err) {
       const code = (err as { code?: string }).code ?? 'unknown';
@@ -910,7 +985,8 @@ function VariantEditorReady({
     handleFieldChange();
   };
 
-  // ─── Preview panel motion ─────────────────────────────────────────
+  // ─── Dialog / preview motion ──────────────────────────────────────
+  const dialogMotion = useMotionPreset('dialog');
   const previewMotion = useMotionPreset('disclosure');
   const currentPreviewWidth = PREVIEW_WIDTHS.find((p) => p.key === previewWidth)?.width ?? 390;
 
@@ -1245,12 +1321,17 @@ function VariantEditorReady({
                     </Button>
                   ) : null}
                   {canReview && revisionState === 'in_review' ? (
-                    <Button variant="secondary" onClick={handleApprove}>
-                      {t('cms:editor.approve')}
-                    </Button>
+                    <>
+                      <Button variant="secondary" onClick={handleApprove}>
+                        {t('cms:editor.approve')}
+                      </Button>
+                      <Button variant="ghost" onClick={() => setReturnDialogOpen(true)}>
+                        {t('cms:editor.returnChanges')}
+                      </Button>
+                    </>
                   ) : null}
                   {canPublish && revisionState === 'approved' ? (
-                    <Button variant="primary" onClick={handlePublish}>
+                    <Button variant="primary" onClick={() => setPublishDialogOpen(true)}>
                       {t('cms:detail.publishNow')}
                     </Button>
                   ) : null}
@@ -1291,8 +1372,9 @@ function VariantEditorReady({
                       style={{ maxHeight: 'calc(100vh - 200px)' }}
                     >
                       <div
+                        data-testid="preview-frame"
                         className="mx-auto overflow-y-auto p-4"
-                        style={{ width: `${currentPreviewWidth}px`, maxWidth: '100%' }}
+                        style={{ width: `${currentPreviewWidth}px` }}
                       >
                         <h1 className="type-screen-title text-text">
                           {displayTitle || t('cms:editor.titlePlaceholder')}
@@ -1323,6 +1405,88 @@ function VariantEditorReady({
           </div>
         </TabPanel>
       </Tabs>
+
+      {/* Return for changes dialog */}
+      <MotionFeatures>
+        <AnimatePresence>
+          {returnDialogOpen ? (
+            <m.div
+              {...dialogMotion}
+              className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/40"
+              role="presentation"
+              onClick={(e) => { if (e.target === e.currentTarget) setReturnDialogOpen(false); }}
+            >
+              <div
+                className="w-full max-w-md rounded-control border border-border-subtle bg-surface p-6 shadow-menu"
+                role="dialog"
+                aria-label={t('cms:editor.returnChanges')}
+              >
+                <Heading level={2}>{t('cms:editor.returnChanges')}</Heading>
+                <div className="mt-4">
+                  <Field label={t('cms:editor.returnComment')} id="return-comment">
+                    <textarea
+                      value={returnComment}
+                      onInput={(e) => setReturnComment((e.target as HTMLTextAreaElement).value)}
+                      placeholder={t('cms:editor.returnCommentPlaceholder')}
+                      rows={3}
+                      className="w-full min-h-20 px-3 py-2 resize-y rounded-control border border-border-control bg-surface text-text placeholder:text-text-secondary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    />
+                  </Field>
+                </div>
+                <div className="mt-4 flex justify-end gap-3">
+                  <Button variant="secondary" onClick={() => setReturnDialogOpen(false)}>
+                    {t('common:action.cancel')}
+                  </Button>
+                  <Button variant="primary" onClick={handleReturnForChanges}>
+                    {t('cms:editor.returnChanges')}
+                  </Button>
+                </div>
+              </div>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
+      </MotionFeatures>
+
+      {/* Publish confirmation dialog */}
+      <MotionFeatures>
+        <AnimatePresence>
+          {publishDialogOpen ? (
+            <m.div
+              {...dialogMotion}
+              className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-black/40"
+              role="presentation"
+              onClick={(e) => { if (e.target === e.currentTarget) setPublishDialogOpen(false); }}
+            >
+              <div
+                className="w-full max-w-md rounded-control border border-border-subtle bg-surface p-6 shadow-menu"
+                role="dialog"
+                aria-label={t('cms:editor.publishDialog')}
+              >
+                <Heading level={2}>{t('cms:editor.publishDialog')}</Heading>
+                <p className="mt-2 type-body text-text-secondary">
+                  {t('cms:editor.publishConfirm')}
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  <p className="type-label text-text">{t('cms:editor.proposedAudience')}</p>
+                  <p className="type-body text-text-secondary">
+                    {proposedAudience
+                      ? t(`cms:editor.audience${proposedAudience === 'all_eligible' ? 'All' : proposedAudience === 'organization' ? 'Org' : 'OrgUnit'}`)
+                      : t('cms:editor.audienceAll')}
+                  </p>
+                </div>
+                <div className="mt-4 flex justify-end gap-3">
+                  <Button variant="secondary" onClick={() => setPublishDialogOpen(false)}>
+                    {t('common:action.cancel')}
+                  </Button>
+                  <Button variant="primary" onClick={handlePublish}>
+                    {t('cms:detail.publishNow')}
+                  </Button>
+                </div>
+              </div>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
+      </MotionFeatures>
     </div>
   );
 }
