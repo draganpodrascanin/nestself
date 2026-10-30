@@ -6,14 +6,18 @@
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
-  PERMISSION_TEMPLATES,
   type InvitationCreateRequest,
   type InvitationImportRequest,
+  type InvitationListQuery,
+  type InvitationListResponse,
+  type InvitationResponse,
 } from '@nestself/contracts';
 import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
+import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
+import { SsoRepository } from '../db/repositories/sso.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { generateToken, hashToken } from './invitation-token.js';
@@ -21,11 +25,22 @@ import { InvitationMailer } from './invitation-mailer.js';
 import { orgUnits } from '../db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../db/db.service.js';
+import { OWNER_TEMPLATE_KEY, findInvitableTemplate, ownerExists } from '../grants/grant-rules.js';
 
 /** Milliseconds in 7 days. */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-const TEMPLATE_KEYS = new Set(PERMISSION_TEMPLATES.map((t) => t.key));
+/** `details.reason` (and import row reason) for an address another organization's SSO owns. */
+export const SSO_DOMAIN_CLAIMED = 'sso_domain_claimed';
+
+function ssoDomainClaimed(): ApiHttpException {
+  return new ApiHttpException({
+    status: 409,
+    code: 'conflict',
+    message: 'This email domain signs in through another organization\'s identity provider',
+    details: { reason: SSO_DOMAIN_CLAIMED },
+  });
+}
 
 @Injectable()
 export class InvitationsService {
@@ -38,6 +53,8 @@ export class InvitationsService {
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => InvitationMailer)) private readonly mailer: InvitationMailer,
+    @Inject(forwardRef(() => AuthorizationRepository)) private readonly authzRepo: AuthorizationRepository,
+    @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -51,6 +68,7 @@ export class InvitationsService {
     isProduction: boolean,
   ) {
     this.validateTemplateKey(body.templateKey);
+    if (await this.domainClaimedElsewhere(body.email, orgId)) throw ssoDomainClaimed();
 
     const token = generateToken();
     const tokenHash = hashToken(token);
@@ -58,6 +76,12 @@ export class InvitationsService {
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
 
     const row = await this.dbs.withOrgScope(orgId, async (tx) => {
+      // Owner model (2026-10-24): one active employer_owner per organization.
+      if (body.templateKey === OWNER_TEMPLATE_KEY) {
+        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
+        if (current) throw ownerExists(current.subjectUserId);
+      }
+
       // Validate orgUnitId belongs to the org.
       if (body.orgUnitId) {
         await this.assertOrgUnitBelongsToOrg(body.orgUnitId, orgId, tx);
@@ -140,10 +164,11 @@ export class InvitationsService {
 
     // Detect duplicates within the batch.
     const seenEmails = new Set<string>();
+    const claimedCache = new Map<string, boolean>();
 
     for (const inv of body.invitations) {
       // Template key check.
-      if (!TEMPLATE_KEYS.has(inv.templateKey as never)) {
+      if (!findInvitableTemplate(inv.templateKey)) {
         errors.push({ email: inv.email, reason: `Invalid template key: ${inv.templateKey}` });
         continue;
       }
@@ -154,6 +179,11 @@ export class InvitationsService {
         continue;
       }
       seenEmails.add(inv.email);
+
+      if (await this.domainClaimedElsewhere(inv.email, orgId, claimedCache)) {
+        errors.push({ email: inv.email, reason: SSO_DOMAIN_CLAIMED });
+        continue;
+      }
 
       validRows.push(inv);
     }
@@ -175,6 +205,17 @@ export class InvitationsService {
             errors.push({ email: r.email, reason: `Org unit ${ouId} does not belong to this organization` });
           }
           // Remove them from valid list (mutating the iteration is fine; we filter below).
+        }
+      }
+
+      // Owner model (2026-10-24): employer_owner rows are refused while the
+      // organization has an active owner.
+      if (validRows.some((r) => r.templateKey === OWNER_TEMPLATE_KEY)) {
+        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
+        if (current) {
+          for (const r of validRows.filter((v) => v.templateKey === OWNER_TEMPLATE_KEY)) {
+            errors.push({ email: r.email, reason: 'owner_exists' });
+          }
         }
       }
 
@@ -248,6 +289,23 @@ export class InvitationsService {
   }
 
   // -----------------------------------------------------------------------
+  // List pending
+  // -----------------------------------------------------------------------
+
+  /** Pending invitations of the organization, newest first, one page at a time. */
+  async listPending(orgId: string, query: InvitationListQuery): Promise<InvitationListResponse> {
+    const rows = await this.dbs.withOrgScope(orgId, (tx) =>
+      this.invitations.listPending(orgId, { limit: query.limit, cursor: query.cursor, now: new Date() }, tx),
+    );
+    const hasMore = rows.length > query.limit;
+    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    return {
+      items: items.map((row) => this.toResponse(row) as InvitationResponse),
+      nextCursor: hasMore ? items[items.length - 1]!.id : null,
+    };
+  }
+
+  // -----------------------------------------------------------------------
   // Revoke
   // -----------------------------------------------------------------------
 
@@ -311,12 +369,14 @@ export class InvitationsService {
     };
   }
 
+  /** Only active organization and employee templates may be invited (C1). */
   private validateTemplateKey(key: string): void {
-    if (!TEMPLATE_KEYS.has(key as never)) {
+    if (!findInvitableTemplate(key)) {
       throw new ApiHttpException({
         status: 400,
         code: 'validation',
         message: `Invalid template key: ${key}`,
+        details: { templateKey: key },
       });
     }
   }
@@ -380,5 +440,25 @@ export class InvitationsService {
       response['devToken'] = devToken;
     }
     return response;
+  }
+
+  /**
+   * The address's domain is a verified domain of an ACTIVE SSO connection of
+   * another organization: its sign-ins go to that organization's IdP, which
+   * would never bind this invitation. Read in the system context (not the
+   * inviting tenant's), because RLS hides other tenants' connections.
+   */
+  private async domainClaimedElsewhere(
+    email: string,
+    orgId: string,
+    cache?: Map<string, boolean>,
+  ): Promise<boolean> {
+    const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+    const cached = cache?.get(domain);
+    if (cached !== undefined) return cached;
+    const connection = await this.sso.findActiveConnectionForDomain(domain);
+    const claimed = !!connection && connection.orgId !== orgId;
+    cache?.set(domain, claimed);
+    return claimed;
   }
 }

@@ -23,6 +23,7 @@ const PRINCIPAL = {
     {
       membershipId: 'mem_1',
       orgId: 'org_sample',
+      orgName: 'Org org_sample',
       orgUnitId: 'ou_root',
       status: 'ACTIVE' as const,
       startDate: '2024-01-01T00:00:00.000Z',

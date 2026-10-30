@@ -27,7 +27,11 @@ import type {
   AuthOutcome,
   TokenSet,
   IdpUser,
+  IdTokenClaims,
+  ProviderInfo,
+  ProviderInput,
 } from './identity-provider.service.js';
+import type { Jwks } from 'aws-jwt-verify/jwk';
 import { mapCognitoError } from './cognito-error-map.js';
 import { parseAuthResult } from './cognito-helpers.js';
 import {
@@ -40,6 +44,28 @@ import {
   cognitoConfirmForgotPassword,
   type CognitoClientConfig,
 } from './cognito-user-ops.js';
+import {
+  cognitoBuildAuthorizeUrl,
+  cognitoCreateProvider,
+  cognitoDeleteProvider,
+  cognitoDescribeProvider,
+  cognitoExchangeAuthorizationCode,
+  cognitoListProviders,
+  cognitoUpdateProvider,
+  createCognitoIdTokenVerifier,
+  type CognitoSsoConfig,
+  type IdTokenVerifier,
+} from './cognito-sso-ops.js';
+
+type AuthorizeUrlInput = Parameters<IdentityProviderService['buildAuthorizeUrl']>[0];
+type CodeExchangeInput = Parameters<IdentityProviderService['exchangeAuthorizationCode']>[0];
+
+/** Test seams; production uses the global `fetch` and the pool's JWKS. */
+export interface CognitoIdentityProviderOptions {
+  fetch?: typeof fetch;
+  /** Pre-load the JWKS instead of downloading it (tests). */
+  jwks?: Jwks;
+}
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -48,15 +74,21 @@ import {
 @Injectable()
 export class CognitoIdentityProvider extends IdentityProviderService {
   private readonly client: CognitoIdentityProviderClient;
+  private readonly domain: string;
+  private verifier: Promise<IdTokenVerifier> | null = null;
 
   constructor(
     private readonly region: string,
     private readonly userPoolId: string,
     private readonly webClientId: string,
     private readonly webClientSecret: string,
+    private readonly mobileClientId: string,
+    domain: string,
+    private readonly options: CognitoIdentityProviderOptions = {},
   ) {
     super();
     this.client = new CognitoIdentityProviderClient({ region });
+    this.domain = domain.replace(/\/+$/, '');
   }
 
   // -- Helpers --------------------------------------------------------------
@@ -68,6 +100,28 @@ export class CognitoIdentityProvider extends IdentityProviderService {
       webClientId: this.webClientId,
       computeSecretHash: (u) => this.computeSecretHash(u),
     };
+  }
+
+  private get ssoCfg(): CognitoSsoConfig {
+    return {
+      client: this.client,
+      userPoolId: this.userPoolId,
+      webClientId: this.webClientId,
+      webClientSecret: this.webClientSecret,
+      mobileClientId: this.mobileClientId,
+      domain: this.domain,
+      fetch: this.options.fetch ?? globalThis.fetch,
+      idTokenVerifier: () => this.idTokenVerifier(),
+    };
+  }
+
+  private idTokenVerifier(): Promise<IdTokenVerifier> {
+    this.verifier ??= createCognitoIdTokenVerifier(
+      this.userPoolId,
+      this.webClientId,
+      this.options.jwks,
+    );
+    return this.verifier;
   }
 
   private computeSecretHash(username: string): string {
@@ -383,5 +437,37 @@ export class CognitoIdentityProvider extends IdentityProviderService {
     newPassword: string;
   }): Promise<void> {
     return cognitoConfirmForgotPassword(this.cfg, input);
+  }
+
+  // -- Enterprise SSO (delegated to cognito-sso-ops.ts) ---------------------
+
+  async createProvider(input: ProviderInput): Promise<void> {
+    return cognitoCreateProvider(this.ssoCfg, input);
+  }
+
+  async updateProvider(input: ProviderInput): Promise<void> {
+    return cognitoUpdateProvider(this.ssoCfg, input);
+  }
+
+  async deleteProvider(name: string): Promise<void> {
+    return cognitoDeleteProvider(this.ssoCfg, name);
+  }
+
+  async describeProvider(name: string): Promise<ProviderInfo | null> {
+    return cognitoDescribeProvider(this.ssoCfg, name);
+  }
+
+  async listProviders(): Promise<string[]> {
+    return cognitoListProviders(this.ssoCfg);
+  }
+
+  buildAuthorizeUrl(input: AuthorizeUrlInput): string {
+    return cognitoBuildAuthorizeUrl(this.ssoCfg, input);
+  }
+
+  async exchangeAuthorizationCode(
+    input: CodeExchangeInput,
+  ): Promise<TokenSet & { idTokenClaims: IdTokenClaims }> {
+    return cognitoExchangeAuthorizationCode(this.ssoCfg, input);
   }
 }

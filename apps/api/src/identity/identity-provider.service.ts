@@ -44,6 +44,51 @@ export interface IdpUser {
 }
 
 // ---------------------------------------------------------------------------
+// Enterprise SSO (phase 3)
+// ---------------------------------------------------------------------------
+
+export type ProviderProtocol = 'SAML' | 'OIDC';
+
+/**
+ * What registering an employer's identity provider in the pool needs. The
+ * OIDC client secret is write-only: it is passed through to Cognito and
+ * never stored by NestSelf nor returned by `describeProvider`.
+ */
+export interface ProviderInput {
+  /** Cognito provider name (`org-<slug>-saml|oidc`, at most 20 characters). */
+  name: string;
+  protocol: ProviderProtocol;
+  metadataUrl?: string;
+  metadataXml?: string;
+  oidcIssuer?: string;
+  oidcClientId?: string;
+  oidcClientSecret?: string;
+  /** Pool attribute -> IdP attribute (claim or SAML attribute name). */
+  attributeMapping: Record<string, string>;
+}
+
+export interface ProviderInfo {
+  name: string;
+  protocol: ProviderProtocol;
+  /** Earliest `notAfter` of the SAML signing certificates; null when unknown or OIDC. */
+  certificateExpiresAt: Date | null;
+}
+
+/** The verified ID token of a federated (or native) sign-in, normalised. */
+export interface IdTokenClaims {
+  sub: string;
+  email: string;
+  /** null when the token carries no `email_verified` claim. */
+  emailVerified: boolean | null;
+  /** The `identities` claim of a federated user; null for native users. */
+  identities: { providerName: string; userId: string }[] | null;
+  /** `cognito:username`; federated users look like `<providerName>_<subject>`. */
+  username: string;
+  /** `auth_time` in epoch seconds. */
+  authTime: number;
+}
+
+// ---------------------------------------------------------------------------
 // Error
 // ---------------------------------------------------------------------------
 
@@ -57,6 +102,8 @@ export type IdentityProviderErrorCode =
   | 'not_authorized'
   | 'password_policy'
   | 'totp_already_enrolled'
+  | 'provider_exists'
+  | 'provider_not_found'
   | 'unavailable';
 
 export class IdentityProviderError extends Error {
@@ -221,4 +268,50 @@ export abstract class IdentityProviderService {
     code: string;
     newPassword: string;
   }): Promise<void>;
+
+  // -- Enterprise SSO -------------------------------------------------------
+
+  /**
+   * Register an identity provider in the pool and list it on the web and
+   * mobile clients. `provider_exists` when the name is taken.
+   */
+  abstract createProvider(input: ProviderInput): Promise<void>;
+
+  /** Replace the provider's metadata and mapping; `provider_not_found` when absent. */
+  abstract updateProvider(input: ProviderInput): Promise<void>;
+
+  /** Remove the provider from both clients, then from the pool. Idempotent. */
+  abstract deleteProvider(name: string): Promise<void>;
+
+  /** Null when the pool has no provider of that name. */
+  abstract describeProvider(name: string): Promise<ProviderInfo | null>;
+
+  /** Names of every identity provider registered in the pool. */
+  abstract listProviders(): Promise<string[]>;
+
+  /**
+   * Absolute URL that starts the PKCE authorization-code flow straight at
+   * the given provider (no hosted-UI chooser).
+   */
+  abstract buildAuthorizeUrl(input: {
+    providerName: string;
+    state: string;
+    codeChallenge: string;
+    redirectUri: string;
+    /** Defaults to `openid email profile`. */
+    surfaceScopes?: readonly string[];
+  }): string;
+
+  /**
+   * Redeem an authorization code with its PKCE verifier. `invalid_code` when
+   * the code is unknown, used, expired or the verifier does not match.
+   */
+  abstract exchangeAuthorizationCode(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<TokenSet & { idTokenClaims: IdTokenClaims }>;
 }
+
+/** Scopes requested on the SSO authorize URL unless the caller narrows them. */
+export const DEFAULT_SSO_SCOPES: readonly string[] = ['openid', 'email', 'profile'];

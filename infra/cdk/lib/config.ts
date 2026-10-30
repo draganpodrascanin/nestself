@@ -7,6 +7,8 @@ export interface StageConfig {
   readonly domainName: string;
   readonly workspaceUrl: string;
   readonly adminUrl: string;
+  /** Public origin of the API (`API_PUBLIC_URL`): the SPAs proxy `/api`, so it is the workspace origin except locally. */
+  readonly apiPublicUrl: string;
   readonly mobileCallbackUrls: string[];
   readonly webCallbackUrls: string[];
   readonly webLogoutUrls: string[];
@@ -35,6 +37,7 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     domainName: 'nestself.rs',
     workspaceUrl: 'http://localhost:5173',
     adminUrl: 'http://localhost:5174',
+    apiPublicUrl: 'http://localhost:4000',
     mobileCallbackUrls: ['nestself://auth/callback'],
     webCallbackUrls: [
       'http://localhost:5173/api/auth/sso/callback',
@@ -68,6 +71,7 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     domainName: 'staging.nestself.rs',
     workspaceUrl: 'https://app.staging.nestself.rs',
     adminUrl: 'https://admin.staging.nestself.rs',
+    apiPublicUrl: 'https://app.staging.nestself.rs',
     mobileCallbackUrls: ['nestself://auth/callback'],
     webCallbackUrls: [
       'https://app.staging.nestself.rs/api/auth/sso/callback',
@@ -100,6 +104,7 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     domainName: 'nestself.rs',
     workspaceUrl: 'https://app.nestself.rs',
     adminUrl: 'https://admin.nestself.rs',
+    apiPublicUrl: 'https://app.nestself.rs',
     mobileCallbackUrls: ['nestself://auth/callback'],
     webCallbackUrls: [
       'https://app.nestself.rs/api/auth/sso/callback',

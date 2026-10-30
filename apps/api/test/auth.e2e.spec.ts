@@ -304,6 +304,14 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     expect(verifyRes.status).toBe(200);
 
     const hrCsrf = extractCsrf(verifyRes);
+
+    // /auth/me names the organization of each membership (context picker).
+    const meRes = await hrAgent.get('/api/auth/me');
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.principal.memberships).toEqual([
+      expect.objectContaining({ orgId: 'org_sample', orgName: 'Example d.o.o.', status: 'ACTIVE' }),
+    ]);
+
     const progRes = await hrAgent
       .get('/api/orgs/org_sample/programme')
       .set('X-CSRF-Token', hrCsrf);
@@ -791,4 +799,51 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
     });
   });
+
+  describe('authenticator enrolment for a signed-in user', () => {
+    it('the public sign-in enrol route requires a challengeToken: 400 validation without one', async () => {
+      const res = await request(app.getHttpServer()).post('/api/auth/totp/enrol').send({});
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('validation');
+    });
+
+    it('POST /api/auth/me/totp/enrol without a session is 401', async () => {
+      const res = await request(app.getHttpServer()).post('/api/auth/me/totp/enrol').send({});
+      expect(res.status).toBe(401);
+    });
+
+    it('a signed-in user enrols with the session token and confirms with a code', async () => {
+      // Stefan is locked out by the lockout case above; ivana signs in again here.
+      const email = 'user_ivana@example.com';
+      const ivana = request.agent(app.getHttpServer());
+      const start = await ivana.post('/api/auth/email-otp/start').send({ email });
+      const verify = await ivana
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: start.body.challengeToken, code: lastSentCode(email) });
+      expect(verify.status).toBe(200);
+      const csrf = extractCsrf(verify);
+
+      const enrol = await ivana.post('/api/auth/me/totp/enrol').set('X-CSRF-Token', csrf).send({});
+      expect(enrol.status).toBe(200);
+      expect(enrol.headers['cache-control']).toBe('no-store');
+      expect(enrol.body.challengeToken).toBeNull();
+      const secret = (enrol.body.secretUri as string).match(/secret=([A-Z2-7]+)/)?.[1];
+      expect(secret).toBeTruthy();
+
+      const confirm = await ivana
+        .post('/api/auth/totp/confirm')
+        .set('X-CSRF-Token', csrf)
+        .send({ code: computeTotp(secret!) });
+      expect(confirm.status).toBe(200);
+      expect(confirm.body).toEqual({ enrolled: true });
+
+      // A session cookie alone must not replace the authenticator.
+      const again = await ivana.post('/api/auth/me/totp/enrol').set('X-CSRF-Token', csrf).send({});
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('totp_already_enrolled');
+      expect(again.body).not.toHaveProperty('secretUri');
+      await ivana.post('/api/auth/sign-out').set('X-CSRF-Token', csrf);
+    });
+  });
 });
+

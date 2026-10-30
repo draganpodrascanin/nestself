@@ -2,6 +2,7 @@
  * Unit tests for MembersAdminService — mocked repositories.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MemberItemSchema } from '@nestself/contracts';
 import { MembersAdminService } from './members-admin.service.js';
 import type { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import type { OrgUnitsRepository, OrgUnitRow } from '../db/repositories/org-units.repository.js';
@@ -60,6 +61,10 @@ function createMocks() {
     updateMembership: vi.fn(async (_id: string, _orgId: string, values: Record<string, unknown>) =>
       makeMembership(values),
     ) as MembershipsRepository['updateMembership'],
+    findMemberContact: vi.fn(async () => ({
+      displayName: 'Jovan Petrović',
+      email: 'user_jovan@example.com',
+    })) as MembershipsRepository['findMemberContact'],
   };
 
   const orgUnits: Partial<OrgUnitsRepository> = {
@@ -122,6 +127,19 @@ describe('MembersAdminService', () => {
       await expect(
         service.updateMember(ORG_ID, 'mem_1', { lineManagerUserId: 'bad_user' }),
       ).rejects.toThrow('Line manager has no active membership');
+    });
+
+    it('returns the member item with the member\'s name and email', async () => {
+      const item = await service.updateMember(ORG_ID, 'mem_1', { orgUnitId: 'team_product' });
+
+      expect((mocks.memberships.findMemberContact as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('user_jovan');
+      expect(item).toMatchObject({
+        userId: 'user_jovan',
+        displayName: 'Jovan Petrović',
+        email: 'user_jovan@example.com',
+        orgUnitId: 'team_product',
+      });
+      expect(MemberItemSchema.safeParse(item).success).toBe(true);
     });
 
     it('invalidates cache after update', async () => {

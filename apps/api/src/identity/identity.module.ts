@@ -27,9 +27,13 @@ import { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from '@nestself/sampl
             config.get<string>('COGNITO_USER_POOL_ID')!,
             config.get<string>('COGNITO_WEB_CLIENT_ID')!,
             config.get<string>('COGNITO_WEB_CLIENT_SECRET')!,
+            config.get<string>('COGNITO_MOBILE_CLIENT_ID')!,
+            config.get<string>('COGNITO_DOMAIN')!,
           );
         }
-        const fake = new FakeIdentityProvider();
+        const fake = new FakeIdentityProvider({
+          apiPublicUrl: config.get<string>('API_PUBLIC_URL'),
+        });
         // Local development: the sample people exist in the fake pool with the
         // same subjects the database seed links (SAMPLE_EXTERNAL_IDENTITIES).
         // Tests seed their own users and skip this.

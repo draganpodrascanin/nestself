@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, VideoCamera, Lifebuoy, Presentation } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint, VideoCamera, Lifebuoy, Presentation } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
@@ -9,6 +9,8 @@ import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
 import { UserRoomListener } from '../calls/user-room-listener';
 import { canSeeWebinars } from '../webinars/route-gate';
 import { ApiStatus } from './__root';
+import { UserMenu } from '../features/account/user-menu';
+import { ContextPicker } from '../features/context/context-picker';
 
 function PermissionBlock() {
   const { t } = useTranslation('common');
@@ -38,11 +40,19 @@ function AuthenticatedLayout() {
   // Experts hold no staff template; their admin space is their consultations (T-CW-1.5).
   const expertAccess = isConsultingExpert(principal, effectiveActions);
 
-  if (!principal || (!staffAccess && !expertAccess)) {
+  // Signed out (for example just after Sign out, before /sign-in renders):
+  // render nothing rather than flash the permission block.
+  if (!principal) return null;
+
+  if (!staffAccess && !expertAccess) {
     return <PermissionBlock />;
   }
 
   const showAccess = can(principal, 'access.preview', undefined, effectiveActions);
+  // Convenience only: `GET /ops/emergency-access` enforces `audit.read`.
+  const showEmergency = can(principal, 'audit.read', undefined, effectiveActions);
+  // Convenience only: every `/ops/sso-connections` route enforces `sso.manage`.
+  const showSso = can(principal, 'sso.manage', undefined, effectiveActions);
   const consultationsNav = canListConsultations(principal, effectiveActions)
     ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
     : [];
@@ -66,6 +76,8 @@ function AuthenticatedLayout() {
         { to: '/experts' as const, icon: Users, label: t('nav.experts') },
         { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
         ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
+        ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
+        ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
         { to: '/content' as const, icon: Article, label: t('nav.content') },
         { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
         { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
@@ -98,9 +110,16 @@ function AuthenticatedLayout() {
         </nav>
       }
       topbar={
-        <div className="flex w-full items-center justify-between">
-          <span className="font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
-          <ApiStatus />
+        <div className="flex w-full min-w-0 items-center justify-between gap-2">
+          <span className="shrink-0 font-[var(--font-weight-label)] text-primary">NestSelf Admin</span>
+          <div className="flex min-w-0 items-center gap-2 @min-[480px]:gap-4">
+            {/* Hidden on narrow screens so the header fits 320px (WCAG reflow); the sample banner still shows. */}
+            <div className="hidden @min-[480px]:block">
+              <ApiStatus />
+            </div>
+            <ContextPicker sampleMode={isSampleDataMode} />
+            <UserMenu />
+          </div>
         </div>
       }
       bottomBar={

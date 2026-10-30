@@ -79,6 +79,18 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     expect(extraSampleGrantIds()).toEqual(['grant_user_ivana_employer_owner', 'grant_user_ivana_approver']);
   });
 
+  it('gives employer_owner to exactly one person in org_sample: Ivana (owner model)', () => {
+    const owners = SAMPLE_PEOPLE.filter((p) => p.orgId === 'org_sample').filter((p) => {
+      const derived = templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => tmpl.key);
+      const extra = EXTRA_SAMPLE_TEMPLATES[p.id] ?? [];
+      return [...derived, ...extra].includes('employer_owner');
+    });
+    expect(owners.map((p) => p.id)).toEqual(['user_ivana']);
+    expect(SAMPLE_GRANTS.filter((g) => g.id.endsWith('_employer_owner')).map((g) => g.id)).toEqual([
+      'grant_user_ivana_employer_owner',
+    ]);
+  });
+
   it('names only known templates', () => {
     const known = new Set<string>(PERMISSION_TEMPLATES.map((tmpl) => tmpl.key));
     expect(Object.values(EXTRA_SAMPLE_TEMPLATES).flat().every((key) => known.has(key))).toBe(true);

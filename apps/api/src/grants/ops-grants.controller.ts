@@ -4,9 +4,11 @@
  *
  * GET  /ops/grants                                 — platform grants (access.preview)
  * POST /ops/grants                                 — platform grant from an operations template (access.grant)
+ * POST /ops/grants/:grantId/revoke                 — revoke a platform grant with descendants (access.revoke)
  * GET  /ops/orgs/:orgId/grants                     — organization grants (access.preview)
  * POST /ops/orgs/:orgId/grants                     — organization grant from a template (access.grant)
  * POST /ops/orgs/:orgId/grants/:grantId/revoke     — revoke with descendants (access.revoke)
+ * POST /ops/orgs/:orgId/grants/transfer-ownership — staff sets the organization owner (access.grant)
  * GET  /ops/orgs/:orgId/grants/preview?userId=     — effective access preview (access.preview)
  * GET  /ops/users/:userId/access                   — effective access per context (access.preview)
  *
@@ -22,6 +24,7 @@ import {
   GrantCreateRequestSchema,
   GrantPreviewQuerySchema,
   GrantRevokeRequestSchema,
+  OwnershipTransferRequestSchema,
   PlatformGrantCreateRequestSchema,
   type GrantCreateRequest,
   type GrantListResponse,
@@ -29,6 +32,8 @@ import {
   type GrantPreviewResponse,
   type GrantResponse,
   type GrantRevokeRequest,
+  type OwnershipTransferRequest,
+  type OwnershipTransferResponse,
   type PlatformGrantCreateRequest,
   type Principal,
   type UserAccessResponse,
@@ -42,8 +47,12 @@ import { GrantsService } from './grants.service.js';
 import { WRITE_THROTTLE } from '../authz/throttles.js';
 import { GrantListQuerySchema, type GrantListQuery } from './grants.controller.js';
 
-const routeUserId = (req: Record<string, unknown>): string | undefined =>
-  (req['params'] as Record<string, string | undefined> | undefined)?.['userId'];
+const routeParam =
+  (name: string) =>
+  (req: Record<string, unknown>): string | undefined =>
+    (req['params'] as Record<string, string | undefined> | undefined)?.[name];
+const routeUserId = routeParam('userId');
+const routeGrantId = routeParam('grantId');
 
 @Controller('ops')
 export class OpsGrantsController {
@@ -67,6 +76,18 @@ export class OpsGrantsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<GrantResponse> {
     return this.grants.createPlatform(body, principal);
+  }
+
+  @Post('grants/:grantId/revoke')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['access.revoke'], operationsResource('grant', routeGrantId))
+  async revokePlatform(
+    @Param('grantId') grantId: string,
+    @Body(new ZodValidationPipe(GrantRevokeRequestSchema)) body: GrantRevokeRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<GrantResponse> {
+    return this.grants.revokePlatform(grantId, body, principal);
   }
 
   // ── Organization grants ───────────────────────────────────────────────
@@ -99,6 +120,19 @@ export class OpsGrantsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<GrantResponse> {
     return this.grants.create(orgId, body, principal);
+  }
+
+  /** Support path: no current-owner requirement; creates the first owner when there is none. */
+  @Post('orgs/:orgId/grants/transfer-ownership')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['access.grant'], operationsOrgResource('grant'))
+  async transferOwnershipOrg(
+    @Param('orgId') orgId: string,
+    @Body(new ZodValidationPipe(OwnershipTransferRequestSchema)) body: OwnershipTransferRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<OwnershipTransferResponse> {
+    return this.grants.transferOwnership(orgId, body, principal, { byStaff: true });
   }
 
   @Post('orgs/:orgId/grants/:grantId/revoke')

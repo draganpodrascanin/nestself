@@ -33,6 +33,8 @@ export const PINO_REDACT_PATHS: string[] = [
   'req.body.voucherCode',
   // Crisis-readiness location shared before a psychological consultation (CALL-34)
   'req.body.locationText',
+  'req.body.oidcClientSecret',
+  'req.body.verificationToken',
 
   // Wildcard paths for nested objects
   '*.password',
@@ -48,6 +50,8 @@ export const PINO_REDACT_PATHS: string[] = [
   '*.conversationBody',
   '*.professionalNote',
   '*.locationText',
+  '*.oidcClientSecret',
+  '*.verificationToken',
 
   // Chime SDK join tokens (CW-R-69, D-CW-08): top level and up to three
   // levels deep, which reaches `res.body.attendee.JoinToken` and the

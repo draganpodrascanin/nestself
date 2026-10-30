@@ -6,7 +6,9 @@
     "content": "Content",
     "eventRequests": "Event requests",
     "settings": "Settings",
-    "access": "Access"
+    "access": "Access",
+    "emergency": "Emergency access",
+    "sso": "SSO"
   },
   "experts": {
     "title": "Experts",
@@ -40,7 +42,39 @@
     "tabsLabel": "Organisation sections",
     "tabs": {
       "overview": "Overview",
-      "access": "Access"
+      "access": "Access",
+      "people": "People"
+    },
+    "search": "Search",
+    "searchHint": "Start of the name or slug",
+    "searchSubmit": "Search",
+    "loading": "Loading organisations",
+    "empty": "There are no organisations yet.",
+    "noMatch": "No organisation matches this search.",
+    "limited": "Your access is limited to assigned clients. Open an assigned client from a link you were given.",
+    "slug": "Slug",
+    "id": "ID",
+    "created": "Created",
+    "sampleNote": "Sample mode: this is the sample organisation, and transferring ownership is turned off. Nothing is created, changed or sent.",
+    "statuses": {
+      "ONBOARDING": "Onboarding",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "ENDED": "Ended"
+    },
+    "owner": {
+      "title": "Owner",
+      "current": "{{name}} owns this organisation.",
+      "none": "This organisation has no owner yet.",
+      "set": "Set the owner",
+      "loadTitle": "The owner could not be loaded"
+    },
+    "errors": {
+      "loadTitle": "The organisation could not be loaded",
+      "notFound": "This organisation does not exist.",
+      "forbidden": "Your account is not allowed to open this organisation.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again."
     }
   },
   "tables": {
@@ -95,7 +129,7 @@
     "notConnected": "API not connected (sample mode)"
   },
   "access": {
-    "sampleNote": "Sample mode: assigning and revoking are turned off. Nothing is created, changed or revoked.",
+    "sampleNote": "Sample mode: assigning, revoking and transferring ownership are turned off. Nothing is created, changed or revoked.",
     "loading": "Loading access",
     "empty": "No grants in this organisation yet.",
     "org": {
@@ -109,7 +143,7 @@
       "lead": "Staff templates held outside any organisation, at the scope each template defines.",
       "tableCaption": "Platform grants",
       "empty": "No platform grants yet.",
-      "readOnlyNote": "Platform grants cannot be revoked from this screen yet: the operations API has no revoke route for them.",
+      "revokeNote": "Revoking a platform grant also revokes every grant delegated from it.",
       "scopeOf": "Scope: {{scope}}"
     },
     "columns": {
@@ -205,6 +239,17 @@
       "cancel": "Keep grant",
       "success": "Grant revoked."
     },
+    "transfer": {
+      "open": "Transfer ownership",
+      "title": "Transfer ownership",
+      "description": "Choose the active member who becomes the owner of this organisation.",
+      "member": "New owner",
+      "currentOwner": "{{name}} loses owner rights as soon as the transfer completes. Grants delegated from their owner grant move to the new owner.",
+      "noOwner": "This organisation has no owner yet. The member you choose becomes its first owner.",
+      "submit": "Transfer ownership",
+      "cancel": "Cancel",
+      "success": "Ownership transferred."
+    },
     "reason": {
       "label": "Reason",
       "hint": "Between 3 and 500 characters. The reason is kept in the audit log."
@@ -235,7 +280,468 @@
       "notFound": "This item no longer exists. Refresh the list and try again.",
       "userNotFound": "No user with this ID exists.",
       "forbidden": "Your account is not allowed to do this.",
-      "userIdRequired": "Enter a user ID."
+      "userIdRequired": "Enter a user ID.",
+      "alreadyOwner": "This person is already the owner of the organisation.",
+      "ownerExists": "This organisation already has an owner. Transfer ownership instead."
+    }
+  },
+  "paging": {
+    "showing_one": "Showing {{count}} row",
+    "showing_few": "Showing {{count}} rows",
+    "showing_other": "Showing {{count}} rows",
+    "showingMore_one": "Showing {{count}} row, more are available",
+    "showingMore_few": "Showing {{count}} rows, more are available",
+    "showingMore_other": "Showing {{count}} rows, more are available",
+    "loadMore": "Load more",
+    "loadMoreFailed": "More rows could not be loaded"
+  },
+  "people": {
+    "title": "People",
+    "lead": "Members of this organisation and the invitations still waiting to be accepted.",
+    "sampleNote": "Sample mode: ending memberships, inviting, importing and revoking are turned off. Nothing is created, changed or sent.",
+    "loading": "Loading",
+    "choose": "Choose",
+    "cancel": "Cancel",
+    "tabs": {
+      "label": "People sections",
+      "members": "Members",
+      "invitations": "Invitations"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "search": "Search",
+      "searchHint": "Name or email address"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "INVITED": "Invited",
+      "ENDED": "Ended"
+    },
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "orgUnit": "Org unit",
+      "status": "Status",
+      "startDate": "Start date",
+      "actions": "Actions",
+      "template": "Template",
+      "expires": "Expires"
+    },
+    "members": {
+      "caption": "Members",
+      "empty": "No members match these filters."
+    },
+    "end": {
+      "open": "End membership",
+      "openFor": "End the membership of {{name}}",
+      "title": "End membership",
+      "description": "End the membership of {{name}}? Their permissions in this organisation are revoked and they lose access to it. This cannot be undone from this page.",
+      "reason": "Reason",
+      "confirm": "End membership",
+      "success": "The membership of {{name}} has ended.",
+      "reasons": {
+        "LEFT": "Left the organization",
+        "CONTRACT_ENDED": "Contract ended",
+        "DEACTIVATED_BY_HR": "Deactivated at the employer's request",
+        "SUSPENDED_BY_PLATFORM": "Ended by NestSelf operations",
+        "MERGED": "Merged into another account"
+      }
+    },
+    "invitations": {
+      "caption": "Pending invitations",
+      "empty": "There are no pending invitations.",
+      "noOrgUnit": "No org unit"
+    },
+    "invite": {
+      "open": "Invite",
+      "title": "Invite a person",
+      "email": "Email address",
+      "template": "Permission template",
+      "submit": "Send invitation",
+      "success": "An invitation was created for {{email}}.",
+      "description": "The invitation covers the whole organisation. HR can place the person in an org unit later."
+    },
+    "import": {
+      "open": "Import",
+      "title": "Import invitations",
+      "description": "Paste one person per line as email,template[,org unit id].",
+      "rows": "Rows",
+      "rowsHint": "Example: ana@example.com,employee,team_product",
+      "preview_one": "{{count}} row ready to import",
+      "preview_few": "{{count}} rows ready to import",
+      "preview_other": "{{count}} rows ready to import",
+      "problemsLabel": "Rows to fix",
+      "problems": {
+        "columns": "Line {{line}}: expected email,template and an optional org unit.",
+        "email": "Line {{line}}: \"{{value}}\" is not a valid email address.",
+        "template": "Line {{line}}: \"{{value}}\" is not a template people can be invited with.",
+        "tooMany": "{{rows}} rows: one import takes at most {{max}}."
+      },
+      "fixProblems": "Fix the rows listed below, then import again.",
+      "noRows": "Paste at least one row.",
+      "submit": "Import",
+      "success_one": "{{count}} invitation was created.",
+      "success_few": "{{count}} invitations were created.",
+      "success_other": "{{count}} invitations were created.",
+      "resultTitle": "Import finished",
+      "resultSummary": "Created: {{created}}. Skipped: {{skipped}}. Not imported: {{failed}}.",
+      "errorsCaption": "Rows that were not imported",
+      "reason": "Reason",
+      "done": "Done",
+      "reasons": {
+        "invalidTemplate": "This template cannot be used for invitations.",
+        "duplicateInBatch": "This email address appears more than once in the import.",
+        "invalidOrgUnit": "The org unit does not belong to this organization.",
+        "ownerExists": "The organization already has an owner.",
+        "duplicateInvitation": "A pending invitation already exists for this email address.",
+        "alreadyMember": "This person is already an active member.",
+        "unknown": "This row could not be imported."
+      }
+    },
+    "revoke": {
+      "open": "Revoke",
+      "openFor": "Revoke the invitation for {{email}}",
+      "title": "Revoke invitation",
+      "description": "Revoke the invitation for {{email}}? The invitation link stops working.",
+      "confirm": "Revoke invitation",
+      "success": "The invitation for {{email}} was revoked."
+    },
+    "errors": {
+      "loadTitle": "People could not be loaded",
+      "membersLoadTitle": "Members could not be loaded",
+      "invitationsLoadTitle": "Invitations could not be loaded",
+      "validation": "Some of the details are not valid. Check them and try again.",
+      "conflict": "This has already changed. Refresh the list and try again.",
+      "ownerExists": "The organization already has an owner. Ownership can only be transferred.",
+      "subjectNotMember": "This person is not an active member of the organization.",
+      "notFound": "This person or invitation no longer exists. Refresh the list and try again.",
+      "duplicateInvitation": "A pending invitation already exists for this email address.",
+      "alreadyMember": "This person is already an active member of the organization.",
+      "cannotEndSelf": "You cannot end your own membership. Ask another staff member.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again.",
+      "emailInvalid": "Enter a valid email address.",
+      "templateRequired": "Choose a template.",
+      "templateInvalid": "This template cannot be used for invitations.",
+      "forbidden": "Your account is not allowed to do this for this organisation.",
+      "reasonRequired": "Choose a reason."
+    }
+  },
+  "users": {
+    "title": "Account",
+    "stateLabel": "Account state:",
+    "cancel": "Cancel",
+    "state": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "suspend": {
+      "open": "Suspend user",
+      "title": "Suspend this user?",
+      "description": "{{userId}} is signed out everywhere and cannot sign in until the suspension is lifted.",
+      "confirm": "Suspend user",
+      "success": "{{userId}} is suspended.",
+      "self": "You cannot suspend your own account."
+    },
+    "reinstate": {
+      "open": "Reinstate user",
+      "title": "Reinstate this user?",
+      "description": "{{userId}} can sign in again. Their memberships and grants are as they were.",
+      "confirm": "Reinstate user",
+      "success": "{{userId}} is reinstated."
+    },
+    "errors": {
+      "notFound": "No user with this ID exists.",
+      "conflict": "This account has already changed. Look the user up again.",
+      "cannotSuspendSelf": "You cannot suspend your own account. Ask another staff member.",
+      "forbidden": "Your account is not allowed to suspend or reinstate this user.",
+      "validation": "Enter a reason between 3 and 500 characters.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unknown": "Something went wrong. Try again."
+    }
+  },
+  "emergency": {
+    "title": "Emergency access",
+    "intro": "Time-limited access to one case or one person's records, requested with a written purpose and approved by a second staff member.",
+    "sampleNote": "Sample mode: these are sample records, and requesting, approving, denying, revoking and reading are turned off. Nothing is created, changed or read.",
+    "loading": "Loading emergency access records…",
+    "empty": "No emergency access has been requested.",
+    "noMatch": "No record has this status.",
+    "filter": "Status",
+    "cancel": "Cancel",
+    "purpose": "Purpose",
+    "you": "{{userId}} (you)",
+    "notApproved": "Not approved yet",
+    "waiting": "Waiting for another staff member to approve.",
+    "minutes": "{{minutes}} min",
+    "statuses": {
+      "all": "All",
+      "pending": "Pending",
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "scopeKinds": {
+      "CASE": "Case",
+      "USER_RECORDS": "Person's records"
+    },
+    "recordTypes": {
+      "conversation": "Conversation",
+      "intake": "Intake"
+    },
+    "columns": {
+      "status": "Status",
+      "requester": "Requested by",
+      "approver": "Approved by",
+      "scope": "Scope",
+      "purpose": "Purpose",
+      "expiry": "Expiry",
+      "actions": "Actions"
+    },
+    "expiry": {
+      "pending": "{{minutes}} min from approval",
+      "remaining": "{{hours}} h {{minutes}} min left (until {{time}})",
+      "expired": "Expired {{time}}",
+      "revoked": "Revoked {{time}}"
+    },
+    "request": {
+      "open": "Request access",
+      "title": "Request emergency access",
+      "description": "A second staff member has to approve the request. The window starts when it is approved.",
+      "purpose": "Purpose",
+      "purposeHint": "Why you need this access, in 10 to 1000 characters. It is recorded with the request.",
+      "scopeKind": "Scope",
+      "caseId": "Case ID",
+      "userId": "User ID",
+      "duration": "Duration",
+      "durationHint": "The window ends after this time, four hours at most.",
+      "submit": "Send request",
+      "success": "Emergency access requested. Another staff member has to approve it."
+    },
+    "approve": {
+      "open": "Approve",
+      "title": "Approve this emergency access?",
+      "description": "{{requester}} gets access to {{scope}} {{scopeId}} from now until the window ends.",
+      "confirm": "Approve",
+      "success": "Emergency access approved."
+    },
+    "deny": {
+      "open": "Deny",
+      "title": "Deny this request?",
+      "description": "The request by {{requester}} for {{scope}} {{scopeId}} is removed.",
+      "confirm": "Deny request",
+      "success": "Request denied."
+    },
+    "revoke": {
+      "open": "Revoke",
+      "title": "Revoke this emergency access?",
+      "description": "{{requester}} loses access to {{scope}} {{scopeId}} now.",
+      "confirm": "Revoke access",
+      "success": "Emergency access revoked."
+    },
+    "record": {
+      "open": "Open record",
+      "title": "Read a record under emergency access",
+      "description": "Within {{scope}} {{scopeId}}. One record at a time, read-only.",
+      "auditedTitle": "This access is audited",
+      "audited": "Every read here is audited and attributed to you.",
+      "recordType": "Record type",
+      "recordId": "Record ID",
+      "submit": "Read record",
+      "contentLabel": "Record content",
+      "conversationHeading": "Conversation {{id}}",
+      "intakeHeading": "Intake {{id}}",
+      "caseLine": "Case {{caseId}}",
+      "intakeMeta": "Case {{caseId}}, written {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "This conversation has no messages."
+    },
+    "errors": {
+      "loadTitle": "Emergency access could not be loaded",
+      "selfApprovalDenied": "You cannot approve your own request. Ask another staff member.",
+      "notActive": "This emergency access is not active, or the record is outside its scope.",
+      "conflict": "This request is no longer pending. The list has been refreshed.",
+      "notFound": "Nothing was found with this ID.",
+      "forbidden": "Your account is not allowed to do this.",
+      "validation": "Check the purpose, scope and duration and try again.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "purposeLength": "Write a purpose between 10 and 1000 characters.",
+      "scopeIdRequired": "Enter the ID of the case or person.",
+      "recordIdRequired": "Enter the record ID.",
+      "unknown": "Something went wrong. Try again."
+    }
+  },
+  "sso": {
+    "title": "Single sign-on",
+    "intro": "Employer identity providers (SAML or OIDC). A connection starts as a draft, moves to testing once a domain is verified, and becomes active after a test sign-in.",
+    "sampleNote": "Sample data: these connections are fictional. Nothing can be created, tested or changed in sample mode.",
+    "loading": "Loading SSO connections…",
+    "empty": "No SSO connections yet.",
+    "newConnection": "New connection",
+    "cancel": "Cancel",
+    "never": "Never",
+    "notKnown": "Not known",
+    "none": "None",
+    "details": "Details",
+    "columns": {
+      "organization": "Organisation",
+      "provider": "Provider name",
+      "protocol": "Protocol",
+      "status": "Status",
+      "domains": "Domains",
+      "lastTested": "Last tested",
+      "certificate": "Certificate expires",
+      "actions": "Actions"
+    },
+    "statuses": {
+      "DRAFT": "Draft",
+      "TESTING": "Testing",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended"
+    },
+    "protocols": {
+      "SAML": "SAML",
+      "OIDC": "OIDC"
+    },
+    "domainsCount": "{{verified}} of {{count}} verified",
+    "jitWarning": "JIT creates an account for anyone the identity provider asserts on a verified domain.",
+    "create": {
+      "title": "New SSO connection",
+      "description": "The connection starts as a draft. Nothing is sent to the identity provider until you test it, except an OIDC client secret, which is handed over straight away.",
+      "organization": "Organisation",
+      "organizationPlaceholder": "Choose an organisation",
+      "slug": "Slug",
+      "slugHint": "2 to 11 lowercase letters, digits or hyphens. It builds the provider name and cannot change later.",
+      "providerPreview": "Provider name: {{name}}",
+      "protocol": "Protocol",
+      "metadataSource": "SAML metadata",
+      "metadataSourceUrl": "Fetch from a URL",
+      "metadataSourceXml": "Paste the XML",
+      "metadataUrl": "Metadata URL",
+      "metadataXml": "Metadata XML",
+      "oidcIssuer": "Issuer URL",
+      "oidcClientId": "Client ID",
+      "oidcClientSecret": "Client secret",
+      "secretHint": "Write-only: kept by the identity provider and never shown again. Needed before the first test.",
+      "jit": "Create accounts on first sign-in (JIT)",
+      "defaultOrgUnit": "Default org unit ID",
+      "defaultOrgUnitHint": "Optional. Accounts created on first sign-in join this org unit.",
+      "submit": "Create connection",
+      "success": "Connection created as a draft."
+    },
+    "edit": {
+      "open": "Edit",
+      "title": "Edit connection",
+      "description": "Only the fields you change are sent.",
+      "secretReplace": "Replace client secret",
+      "secretReplaceHint": "Leave empty to keep the current secret. The secret is never shown.",
+      "metadataXmlHint": "Leave empty to keep the current XML.",
+      "defaultOrgUnitHint": "Leave empty to clear it.",
+      "submit": "Save changes",
+      "success": "Changes saved.",
+      "activeWarning": "This connection is active. Changing the provider settings (metadata, issuer, client ID or client secret) takes it back to testing: sign-in through this connection stays off for employees until a new test sign-in succeeds and you activate it again.",
+      "backToTesting": "Changes saved. The connection is back in testing: run a test sign-in, then activate it again."
+    },
+    "detail": {
+      "title": "Connection {{provider}}",
+      "close": "Close details",
+      "organization": "Organisation",
+      "provider": "Provider name",
+      "protocol": "Protocol",
+      "status": "Status",
+      "metadataUrl": "Metadata URL",
+      "oidcIssuer": "Issuer URL",
+      "oidcClientId": "Client ID",
+      "secret": "Client secret",
+      "secretWriteOnly": "Write-only, never shown",
+      "jit": "JIT provisioning",
+      "jitOn": "On",
+      "jitOff": "Off",
+      "defaultOrgUnit": "Default org unit",
+      "certificate": "Certificate expires",
+      "lastTested": "Last test sign-in",
+      "spTitle": "Values for the employer's identity provider",
+      "entityId": "Entity ID",
+      "acsUrl": "ACS URL",
+      "spMissing": "Service provider values are not configured for this environment."
+    },
+    "copy": {
+      "label": "Copy {{label}}",
+      "done": "{{label}} copied",
+      "failed": "Could not copy. Select the value and copy it by hand."
+    },
+    "domains": {
+      "title": "Domains",
+      "empty": "No domains yet. Add the employer's email domain and verify it with a DNS record.",
+      "domain": "Domain",
+      "status": "Status",
+      "pending": "Pending",
+      "verifiedAt": "Verified {{time}}",
+      "record": "DNS record",
+      "add": "Add domain",
+      "addTitle": "Add domain",
+      "addDescription": "An email domain of the employer, such as their company domain. Public email domains are refused.",
+      "field": "Domain",
+      "submit": "Add domain",
+      "addedTitle": "Publish this DNS record",
+      "txtIntro": "Ask the employer's DNS administrator to publish this TXT record, then select Verify next to the domain. DNS changes can take a while to appear.",
+      "txtName": "Record name",
+      "txtValue": "Record value",
+      "done": "Done",
+      "verify": "Verify",
+      "verified": "{{domain}} is verified."
+    },
+    "actions": {
+      "test": "Test sign-in",
+      "testStarted": "Test sign-in opened in a new tab",
+      "testNote": "The test link is single-use and expires in 15 minutes. It opens the workspace sign-in in a new tab; complete it with an account on a verified domain (you land on the workspace as that account), then come back here and select Activate.",
+      "testLink": "Open the test sign-in",
+      "activate": "Activate",
+      "activated": "Connection activated.",
+      "suspend": "Suspend",
+      "suspendTitle": "Suspend this connection?",
+      "suspendDescription": "Sign-in no longer sends people to {{provider}}; they use the email code until the connection is reactivated.",
+      "suspended": "Connection suspended.",
+      "reactivate": "Reactivate",
+      "reactivated": "Connection reactivated.",
+      "testDismiss": "Hide the test link"
+    },
+    "errors": {
+      "loadTitle": "SSO connections could not be loaded",
+      "actionTitle": "The action could not be completed",
+      "domainBlocklisted": "Public email domains such as gmail.com cannot be used for SSO. Use the employer's own domain.",
+      "domainUnverified": "The DNS TXT record was not found or does not match. Check the record name and value, or wait for DNS to update, and try again.",
+      "connectionState": "This change is not possible in the connection's current status. The list has been refreshed.",
+      "connectionStateTest": "Only a draft or testing connection with at least one verified domain can be tested.",
+      "connectionStateActivate": "Complete a test sign-in on a verified domain before activating the connection.",
+      "conflict": "Someone changed this connection meanwhile. The list has been refreshed.",
+      "conflictProviderName": "A connection with this provider name already exists. Choose another slug.",
+      "conflictProviderNameReserved": "Another organisation already uses this slug for its SSO connection. Choose a different slug.",
+      "conflictDomain": "This domain is already attached to a connection.",
+      "validation": "Check the fields and try again.",
+      "idpRefused": "The identity provider refused this configuration. Check the metadata or the issuer and client details.",
+      "notFound": "This connection or domain no longer exists. The list has been refreshed.",
+      "organizationNotFound": "This organisation no longer exists. Choose another one.",
+      "forbidden": "Your account is not allowed to manage SSO connections.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "unavailable": "The identity provider is not reachable right now. Try again later.",
+      "unknown": "Something went wrong. Try again.",
+      "fieldSlug": "Choose a shorter slug: the provider name must stay within 20 characters.",
+      "fieldProtocol": "The protocol cannot change after the connection was tested.",
+      "fieldSecret": "The client secret applies to OIDC connections only and cannot be sent with a reset to draft.",
+      "fieldSecretMissing": "Add the OIDC client secret (Edit) before testing the connection.",
+      "fieldDefaultOrgUnit": "This org unit does not belong to the organisation.",
+      "fieldSamlMetadata": "A SAML connection needs a metadata URL or metadata XML.",
+      "fieldOidc": "An OIDC connection needs an issuer URL and a client ID.",
+      "fieldIdpInitiated": "Sign-in started by the identity provider is not available.",
+      "organizationRequired": "Choose an organisation.",
+      "slugPattern": "Use 2 to 11 lowercase letters, digits or hyphens.",
+      "urlInvalid": "Enter a full URL starting with https://.",
+      "metadataXmlRequired": "Paste the metadata XML.",
+      "clientIdRequired": "Enter the client ID.",
+      "domainInvalid": "Enter a domain such as example.com, without @ or https://.",
+      "nothingChanged": "Change at least one field."
     }
   }
 }

@@ -155,7 +155,7 @@ export const webinarRegistrations = pgTable(
      * The registrant's organisation: the membership that made them eligible.
      * Never null, so a registration is visible only in its organisation's
      * tenant scope (and the system context), even for an occurrence open to
-     * all (migration 0013).
+     * all (migration 0014).
      */
     orgId: text()
       .notNull()

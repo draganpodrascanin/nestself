@@ -189,6 +189,7 @@ All routes under the global `/api` prefix.
 | PATCH | /orgs/:orgId/grants/:grantId | @Authorize(access.grant) | 10/min |
 | POST | /orgs/:orgId/grants/:grantId/revoke | @Authorize(access.revoke) | 10/min |
 | POST | /orgs/:orgId/grants/delegate | @Authorize(access.delegate) | 10/min |
+| POST | /orgs/:orgId/grants/transfer-ownership | @Authorize(access.grant); caller must hold the owner grant | 10/min |
 | GET | /orgs/:orgId/approval-authorities | @Authorize(access.preview) | default |
 | POST | /orgs/:orgId/approval-authorities | @Authorize(access.grant) | 10/min |
 | PATCH | /orgs/:orgId/approval-authorities/:id | @Authorize(access.grant) | 10/min |
@@ -203,6 +204,7 @@ All routes under the global `/api` prefix.
 | GET | /ops/orgs/:orgId/grants/preview | @Authorize(access.preview), operationsOrgResource | default |
 | POST | /ops/orgs/:orgId/grants | @Authorize(access.grant), operationsOrgResource | 10/min |
 | POST | /ops/orgs/:orgId/grants/:grantId/revoke | @Authorize(access.revoke), operationsOrgResource | 10/min |
+| POST | /ops/orgs/:orgId/grants/transfer-ownership | @Authorize(access.grant), operationsOrgResource | 10/min |
 | GET | /ops/users/:userId/access | @Authorize(access.preview), operationsResource | default |
 | GET | /ops/emergency-access | @Authorize(audit.read), operationsResource | default |
 | POST | /ops/emergency-access | @Authorize(access.emergency.request), operationsResource | 10/min |
@@ -213,9 +215,50 @@ All routes under the global `/api` prefix.
 | GET | /professional/conversations/:id | @Authenticated; `require(conversation.read.assigned)` | default |
 | GET | /professional/me/conversations/:id | @Authenticated; `require(conversation.participate)` | default |
 | GET | /professional/intake/:id | @Authenticated; `require(conversation.read.assigned)` | default |
+| GET | /auth/sso/start | @Public (302 to the identity provider) | 10/min |
+| GET | /auth/sso/callback | @Public (always 302) | 10/min |
+| GET | /auth/sso/_fake/authorize | @Public; registered only with `AUTH_MODE=stub` | default |
+| GET | /ops/sso-connections | @Authorize(sso.manage), operationsResource | default |
+| POST | /ops/sso-connections | @Authorize(sso.manage), operationsResource | 10/min |
+| PATCH | /ops/sso-connections/:id | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/domains | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/domains/:domainId/verify | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/test | @Authorize(sso.manage), operationsResource | 10/min |
+| POST | /ops/sso-connections/:id/activate | @Authorize(sso.manage), operationsResource | 10/min |
 | GET | /invitations/:token/preview | @Public | 10/min |
 | POST | /invitations/accept | @Public | 10/min |
 | POST | /leads/* (3 routes) | @Public | default |
+
+### Organization owner (owner model, 2026-10-24)
+
+`employer_owner` is an organization's single superadmin and holds
+`access.grant` and `access.revoke`. `GrantsService` keeps at most one active
+(unrevoked, not expired) `employer_owner` grant per `scopeOrgId`:
+`AuthorizationRepository.findActiveOwnerGrants` takes a transaction-scoped
+advisory lock on the organization's ownership and returns the active owner
+grants, and `create`, an owner grant's window `update`, the transfer,
+invitation create/import and invitation acceptance answer a second owner with 409 `owner_exists`
+(`details.currentOwnerUserId`).
+
+`transferOwnership` (both transfer routes) runs in one `withOrgScope`
+transaction: the organization route requires the caller's own started owner
+grant (403 `forbidden`), both routes require the new owner's ACTIVE membership
+(409 `subject_not_member`) and refuse the current owner (409 `conflict`). It
+revokes the old owner grant only (reason `ownership_transferred`), creates
+the new grant from the template, and re-parents the old grant's active
+(unrevoked) children to the new grant
+(`AuthorizationRepository.reparentActiveChildren`); the bounds still hold
+because the new grant has the same template and actions. It audits
+`grant.revoked` + `grant.created` with `details.transfer = true` (and
+`byStaff = true` on the ops route) and one `grant.adjusted`
+(`details.reparented = true`, `fromGrantId`) per moved child. The response is
+`OwnershipTransferResponse` (`revokedGrantId`, null when staff created the
+first owner, and `createdGrant`). Afterwards the old and new owners, the moved
+children's subjects and the delegatees below both grants are invalidated.
+
+`InvitationsService.create` refuses an `employer_owner` invitation while the
+organization has an active owner (409 `owner_exists`); `import` reports such
+rows in `errors` with reason `owner_exists`.
 
 ### Principal cache (T-1.7)
 
@@ -380,6 +423,6 @@ On each message with a `userId`:
 
 ### Not yet implemented
 
-- SSO / SAML (routes stubbed as `ssoStartUrl: null`)
+- IdP-initiated SSO, SCIM, federated step-up and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
 - Push notifications
 - A step-up screen in the mobile app (the API accepts bearer step-up)

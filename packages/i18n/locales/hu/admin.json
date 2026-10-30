@@ -6,7 +6,9 @@
     "content": "Tartalom",
     "eventRequests": "Eseményigények",
     "settings": "Beállítások",
-    "access": "Hozzáférés"
+    "access": "Hozzáférés",
+    "emergency": "Vészhelyzeti hozzáférés",
+    "sso": "SSO"
   },
   "experts": {
     "title": "Szakértők",
@@ -40,7 +42,39 @@
     "tabsLabel": "A szervezet részei",
     "tabs": {
       "overview": "Áttekintés",
-      "access": "Hozzáférés"
+      "access": "Hozzáférés",
+      "people": "Munkatársak"
+    },
+    "search": "Keresés",
+    "searchHint": "A név vagy a rövid név eleje",
+    "searchSubmit": "Keresés",
+    "loading": "Szervezetek betöltése",
+    "empty": "Még nincsenek szervezetek.",
+    "noMatch": "Egy szervezet sem felel meg a keresésnek.",
+    "limited": "A hozzáférésed a hozzád rendelt ügyfelekre korlátozódik. Egy hozzád rendelt ügyfelet a kapott linkről nyithatsz meg.",
+    "slug": "Rövid név",
+    "id": "Azonosító",
+    "created": "Létrehozva",
+    "sampleNote": "Mintamód: ez a mintaszervezet, és a tulajdonjog átruházása ki van kapcsolva. Semmi sem jön létre, nem változik és nem kerül elküldésre.",
+    "statuses": {
+      "ONBOARDING": "Bevezetés alatt",
+      "ACTIVE": "Aktív",
+      "SUSPENDED": "Felfüggesztve",
+      "ENDED": "Megszűnt"
+    },
+    "owner": {
+      "title": "Tulajdonos",
+      "current": "A szervezet tulajdonosa: {{name}}.",
+      "none": "Ennek a szervezetnek még nincs tulajdonosa.",
+      "set": "Tulajdonos kijelölése",
+      "loadTitle": "A tulajdonost nem sikerült betölteni"
+    },
+    "errors": {
+      "loadTitle": "A szervezetet nem sikerült betölteni",
+      "notFound": "Ez a szervezet nem létezik.",
+      "forbidden": "A fiókod nem nyithatja meg ezt a szervezetet.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra."
     }
   },
   "tables": {
@@ -95,7 +129,7 @@
     "notConnected": "API nincs csatlakoztatva (mintaadatok mód)"
   },
   "access": {
-    "sampleNote": "Mintaadatok: a kiosztás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
+    "sampleNote": "Mintaadatok: a kiosztás, a visszavonás és a tulajdonjog átruházása ki van kapcsolva. Semmi sem jön létre, nem módosul és nem kerül visszavonásra.",
     "loading": "Hozzáférés betöltése",
     "empty": "Ebben a szervezetben még nincs kiosztott jogosultság.",
     "org": {
@@ -109,7 +143,7 @@
       "lead": "Szervezeten kívüli munkatársi sablonok, az egyes sablonok által meghatározott hatókörben.",
       "tableCaption": "Platformjogosultságok",
       "empty": "Még nincs platformjogosultság.",
-      "readOnlyNote": "A platformjogosultságok egyelőre nem vonhatók vissza erről a képernyőről: az üzemeltetési API-ban nincs ehhez útvonal.",
+      "revokeNote": "Egy platformjogosultság visszavonása a belőle delegált összes jogosultságot is visszavonja.",
       "scopeOf": "Hatókör: {{scope}}"
     },
     "columns": {
@@ -205,6 +239,17 @@
       "cancel": "Megtartás",
       "success": "A jogosultság visszavonva."
     },
+    "transfer": {
+      "open": "Tulajdonjog átruházása",
+      "title": "Tulajdonjog átruházása",
+      "description": "Válaszd ki azt az aktív tagot, aki ennek a szervezetnek a tulajdonosa lesz.",
+      "member": "Új tulajdonos",
+      "currentOwner": "{{name}} az átruházás befejeztével elveszíti a tulajdonosi jogait. A tulajdonosi jogosultságából delegált jogosultságok az új tulajdonoshoz kerülnek.",
+      "noOwner": "Ennek a szervezetnek még nincs tulajdonosa. A kiválasztott tag lesz az első tulajdonosa.",
+      "submit": "Tulajdonjog átruházása",
+      "cancel": "Mégse",
+      "success": "A tulajdonjog átruházva."
+    },
     "reason": {
       "label": "Indoklás",
       "hint": "3–500 karakter. Az indoklás bekerül az auditnaplóba."
@@ -235,7 +280,464 @@
       "notFound": "Ez az elem már nem létezik. Frissítsd a listát, és próbáld újra.",
       "userNotFound": "Nincs ilyen azonosítójú felhasználó.",
       "forbidden": "A fiókod ehhez nem jogosult.",
-      "userIdRequired": "Adj meg egy felhasználói azonosítót."
+      "userIdRequired": "Adj meg egy felhasználói azonosítót.",
+      "alreadyOwner": "Ez a személy már a szervezet tulajdonosa.",
+      "ownerExists": "Ennek a szervezetnek már van tulajdonosa. Helyette ruházd át a tulajdonjogot."
+    }
+  },
+  "paging": {
+    "showing_one": "{{count}} sor látható",
+    "showing_other": "{{count}} sor látható",
+    "showingMore_one": "{{count}} sor látható, további sorok is vannak",
+    "showingMore_other": "{{count}} sor látható, további sorok is vannak",
+    "loadMore": "Továbbiak betöltése",
+    "loadMoreFailed": "A további sorokat nem sikerült betölteni"
+  },
+  "people": {
+    "title": "Munkatársak",
+    "lead": "A szervezet tagjai és az elfogadásra váró meghívók.",
+    "sampleNote": "Mintamód: a tagság megszüntetése, a meghívás, az importálás és a visszavonás ki van kapcsolva. Semmi sem jön létre, nem változik és nem kerül elküldésre.",
+    "loading": "Betöltés",
+    "choose": "Válassz",
+    "cancel": "Mégse",
+    "tabs": {
+      "label": "Munkatársak szakaszai",
+      "members": "Tagok",
+      "invitations": "Meghívók"
+    },
+    "filters": {
+      "status": "Állapot",
+      "allStatuses": "Minden állapot",
+      "search": "Keresés",
+      "searchHint": "Név vagy e-mail-cím"
+    },
+    "status": {
+      "ACTIVE": "Aktív",
+      "INVITED": "Meghívva",
+      "ENDED": "Megszűnt"
+    },
+    "columns": {
+      "name": "Név",
+      "email": "E-mail",
+      "orgUnit": "Szervezeti egység",
+      "status": "Állapot",
+      "startDate": "Kezdés dátuma",
+      "actions": "Műveletek",
+      "template": "Sablon",
+      "expires": "Lejár"
+    },
+    "members": {
+      "caption": "Tagok",
+      "empty": "Egy tag sem felel meg ezeknek a szűrőknek."
+    },
+    "end": {
+      "open": "Tagság megszüntetése",
+      "openFor": "Tagság megszüntetése: {{name}}",
+      "title": "Tagság megszüntetése",
+      "description": "Megszünteted a tagságot: {{name}}? A szervezetben kapott jogosultságai visszavonásra kerülnek, és elveszíti a hozzáférést. Ez az oldalon nem vonható vissza.",
+      "reason": "Indok",
+      "confirm": "Tagság megszüntetése",
+      "success": "A tagság megszűnt: {{name}}.",
+      "reasons": {
+        "LEFT": "Kilépett a szervezetből",
+        "CONTRACT_ENDED": "A szerződés lejárt",
+        "DEACTIVATED_BY_HR": "A munkáltató kérésére inaktiválva",
+        "SUSPENDED_BY_PLATFORM": "A NestSelf üzemeltetése szüntette meg",
+        "MERGED": "Másik fiókkal összevonva"
+      }
+    },
+    "invitations": {
+      "caption": "Függő meghívók",
+      "empty": "Nincsenek függő meghívók.",
+      "noOrgUnit": "Nincs szervezeti egység"
+    },
+    "invite": {
+      "open": "Meghívás",
+      "title": "Személy meghívása",
+      "email": "E-mail-cím",
+      "template": "Jogosultságsablon",
+      "submit": "Meghívó küldése",
+      "success": "Meghívó készült ehhez a címhez: {{email}}.",
+      "description": "A meghívó az egész szervezetre szól. A HR később szervezeti egységhez rendelheti a személyt."
+    },
+    "import": {
+      "open": "Importálás",
+      "title": "Meghívók importálása",
+      "description": "Soronként egy személyt illessz be e-mail,sablon[,szervezeti egység azonosítója] formában.",
+      "rows": "Sorok",
+      "rowsHint": "Példa: ana@example.com,employee,team_product",
+      "preview_one": "{{count}} sor importálható",
+      "preview_other": "{{count}} sor importálható",
+      "problemsLabel": "Javítandó sorok",
+      "problems": {
+        "columns": "{{line}}. sor: e-mail,sablon és egy opcionális szervezeti egység szükséges.",
+        "email": "{{line}}. sor: „{{value}}” nem érvényes e-mail-cím.",
+        "template": "{{line}}. sor: „{{value}}” nem olyan sablon, amellyel meghívás küldhető.",
+        "tooMany": "{{rows}} sor: egy importálás legfeljebb {{max}} sort fogad."
+      },
+      "fixProblems": "Javítsd az alább felsorolt sorokat, majd importálj újra.",
+      "noRows": "Illessz be legalább egy sort.",
+      "submit": "Importálás",
+      "success_one": "{{count}} meghívó jött létre.",
+      "success_other": "{{count}} meghívó jött létre.",
+      "resultTitle": "Az importálás befejeződött",
+      "resultSummary": "Létrehozva: {{created}}. Kihagyva: {{skipped}}. Nem importálva: {{failed}}.",
+      "errorsCaption": "Nem importált sorok",
+      "reason": "Indok",
+      "done": "Kész",
+      "reasons": {
+        "invalidTemplate": "Ez a sablon nem használható meghívókhoz.",
+        "duplicateInBatch": "Ez az e-mail-cím többször szerepel az importálásban.",
+        "invalidOrgUnit": "A szervezeti egység nem ehhez a szervezethez tartozik.",
+        "ownerExists": "A szervezetnek már van tulajdonosa.",
+        "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
+        "alreadyMember": "Ez a személy már aktív tag.",
+        "unknown": "Ezt a sort nem sikerült importálni."
+      }
+    },
+    "revoke": {
+      "open": "Visszavonás",
+      "openFor": "Meghívó visszavonása: {{email}}",
+      "title": "Meghívó visszavonása",
+      "description": "Visszavonod a meghívót: {{email}}? A meghívó linkje nem fog működni.",
+      "confirm": "Meghívó visszavonása",
+      "success": "A meghívó visszavonva: {{email}}."
+    },
+    "errors": {
+      "loadTitle": "A munkatársakat nem sikerült betölteni",
+      "membersLoadTitle": "A tagokat nem sikerült betölteni",
+      "invitationsLoadTitle": "A meghívókat nem sikerült betölteni",
+      "validation": "Néhány adat érvénytelen. Ellenőrizd őket, és próbáld újra.",
+      "conflict": "Ez már megváltozott. Frissítsd a listát, és próbáld újra.",
+      "ownerExists": "A szervezetnek már van tulajdonosa. A tulajdonjog csak átruházható.",
+      "subjectNotMember": "Ez a személy nem aktív tagja a szervezetnek.",
+      "notFound": "Ez a személy vagy meghívó már nem létezik. Frissítsd a listát, és próbáld újra.",
+      "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
+      "alreadyMember": "Ez a személy már aktív tagja a szervezetnek.",
+      "cannotEndSelf": "A saját tagságodat nem szüntetheted meg. Kérj meg egy másik munkatársat.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra.",
+      "emailInvalid": "Adj meg érvényes e-mail-címet.",
+      "templateRequired": "Válassz sablont.",
+      "templateInvalid": "Ez a sablon nem használható meghívókhoz.",
+      "forbidden": "A fiókod ennél a szervezetnél ehhez nem jogosult.",
+      "reasonRequired": "Válassz indokot."
+    }
+  },
+  "users": {
+    "title": "Fiók",
+    "stateLabel": "Fiók állapota:",
+    "cancel": "Mégse",
+    "state": {
+      "active": "Aktív",
+      "suspended": "Felfüggesztve"
+    },
+    "suspend": {
+      "open": "Felhasználó felfüggesztése",
+      "title": "Felfüggeszted ezt a felhasználót?",
+      "description": "{{userId}} mindenhol kijelentkezik, és a felfüggesztés feloldásáig nem tud bejelentkezni.",
+      "confirm": "Felhasználó felfüggesztése",
+      "success": "{{userId}} felfüggesztve.",
+      "self": "A saját fiókodat nem függesztheted fel."
+    },
+    "reinstate": {
+      "open": "Felfüggesztés feloldása",
+      "title": "Feloldod a felhasználó felfüggesztését?",
+      "description": "{{userId}} újra be tud jelentkezni. A tagságai és jogosultságai változatlanok.",
+      "confirm": "Felfüggesztés feloldása",
+      "success": "{{userId}} felfüggesztése feloldva."
+    },
+    "errors": {
+      "notFound": "Nincs ilyen azonosítójú felhasználó.",
+      "conflict": "Ez a fiók időközben megváltozott. Keresd meg újra a felhasználót.",
+      "cannotSuspendSelf": "A saját fiókodat nem függesztheted fel. Kérj meg egy másik munkatársat.",
+      "forbidden": "A fiókod nem függesztheti fel és nem oldhatja fel ezt a felhasználót.",
+      "validation": "Adj meg 3–500 karakter hosszú indoklást.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "unknown": "Valami hiba történt. Próbáld újra."
+    }
+  },
+  "emergency": {
+    "title": "Vészhelyzeti hozzáférés",
+    "intro": "Időben korlátozott hozzáférés egy esethez vagy egy személy adataihoz, írásos céllal, egy második munkatárs jóváhagyásával.",
+    "sampleNote": "Mintamód: ezek mintarekordok, a kérés, jóváhagyás, elutasítás, visszavonás és olvasás ki van kapcsolva. Semmi nem jön létre, nem változik, és senki nem olvas semmit.",
+    "loading": "Vészhelyzeti hozzáférések betöltése…",
+    "empty": "Még senki nem kért vészhelyzeti hozzáférést.",
+    "noMatch": "Egyik rekord sem ilyen állapotú.",
+    "filter": "Állapot",
+    "cancel": "Mégse",
+    "purpose": "Cél",
+    "you": "{{userId}} (te)",
+    "notApproved": "Még nincs jóváhagyva",
+    "waiting": "Egy másik munkatárs jóváhagyására vár.",
+    "minutes": "{{minutes}} perc",
+    "statuses": {
+      "all": "Összes",
+      "pending": "Függőben",
+      "active": "Aktív",
+      "expired": "Lejárt",
+      "revoked": "Visszavonva"
+    },
+    "scopeKinds": {
+      "CASE": "Eset",
+      "USER_RECORDS": "Személy adatai"
+    },
+    "recordTypes": {
+      "conversation": "Beszélgetés",
+      "intake": "Felvételi lap"
+    },
+    "columns": {
+      "status": "Állapot",
+      "requester": "Kérte",
+      "approver": "Jóváhagyta",
+      "scope": "Hatókör",
+      "purpose": "Cél",
+      "expiry": "Lejárat",
+      "actions": "Műveletek"
+    },
+    "expiry": {
+      "pending": "{{minutes}} perc a jóváhagyástól",
+      "remaining": "Még {{hours}} óra {{minutes}} perc ({{time}}-ig)",
+      "expired": "Lejárt: {{time}}",
+      "revoked": "Visszavonva: {{time}}"
+    },
+    "request": {
+      "open": "Hozzáférés kérése",
+      "title": "Vészhelyzeti hozzáférés kérése",
+      "description": "A kérést egy második munkatársnak jóvá kell hagynia. Az időszak a jóváhagyással kezdődik.",
+      "purpose": "Cél",
+      "purposeHint": "Miért van szükséged erre a hozzáférésre, 10–1000 karakterben. A kéréssel együtt rögzítjük.",
+      "scopeKind": "Hatókör",
+      "caseId": "Esetazonosító",
+      "userId": "Felhasználóazonosító",
+      "duration": "Időtartam",
+      "durationHint": "Az időszak ennyi idő után véget ér, legfeljebb négy óra.",
+      "submit": "Kérés elküldése",
+      "success": "Vészhelyzeti hozzáférés kérve. Egy másik munkatársnak jóvá kell hagynia."
+    },
+    "approve": {
+      "open": "Jóváhagyás",
+      "title": "Jóváhagyod ezt a vészhelyzeti hozzáférést?",
+      "description": "{{requester}} mostantól az időszak végéig hozzáfér ehhez: {{scope}} {{scopeId}}.",
+      "confirm": "Jóváhagyás",
+      "success": "Vészhelyzeti hozzáférés jóváhagyva."
+    },
+    "deny": {
+      "open": "Elutasítás",
+      "title": "Elutasítod ezt a kérést?",
+      "description": "{{requester}} kérése ({{scope}} {{scopeId}}) törlődik.",
+      "confirm": "Kérés elutasítása",
+      "success": "Kérés elutasítva."
+    },
+    "revoke": {
+      "open": "Visszavonás",
+      "title": "Visszavonod ezt a vészhelyzeti hozzáférést?",
+      "description": "{{requester}} azonnal elveszíti a hozzáférést ehhez: {{scope}} {{scopeId}}.",
+      "confirm": "Hozzáférés visszavonása",
+      "success": "Vészhelyzeti hozzáférés visszavonva."
+    },
+    "record": {
+      "open": "Rekord megnyitása",
+      "title": "Rekord olvasása vészhelyzeti hozzáféréssel",
+      "description": "Hatókör: {{scope}} {{scopeId}}. Egyszerre egy rekord, csak olvasásra.",
+      "auditedTitle": "Ez a hozzáférés naplózott",
+      "audited": "Minden itteni olvasást naplózunk, és a nevedhez rendelünk.",
+      "recordType": "Rekordtípus",
+      "recordId": "Rekordazonosító",
+      "submit": "Rekord olvasása",
+      "contentLabel": "Rekord tartalma",
+      "conversationHeading": "Beszélgetés: {{id}}",
+      "intakeHeading": "Felvételi lap: {{id}}",
+      "caseLine": "Eset: {{caseId}}",
+      "intakeMeta": "Eset: {{caseId}}, írva: {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "Ebben a beszélgetésben nincs üzenet."
+    },
+    "errors": {
+      "loadTitle": "A vészhelyzeti hozzáférések nem tölthetők be",
+      "selfApprovalDenied": "A saját kérésedet nem hagyhatod jóvá. Kérj meg egy másik munkatársat.",
+      "notActive": "Ez a vészhelyzeti hozzáférés nem aktív, vagy a rekord kívül esik a hatókörén.",
+      "conflict": "Ez a kérés már nincs függőben. A listát frissítettük.",
+      "notFound": "Ezzel az azonosítóval nem található semmi.",
+      "forbidden": "A fiókod ezt nem teheti meg.",
+      "validation": "Ellenőrizd a célt, a hatókört és az időtartamot, majd próbáld újra.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "purposeLength": "Adj meg 10–1000 karakter hosszú célt.",
+      "scopeIdRequired": "Add meg az eset vagy a személy azonosítóját.",
+      "recordIdRequired": "Add meg a rekord azonosítóját.",
+      "unknown": "Valami hiba történt. Próbáld újra."
+    }
+  },
+  "sso": {
+    "title": "Egyszeri bejelentkezés (SSO)",
+    "intro": "A munkáltatók identitásszolgáltatói (SAML vagy OIDC). A kapcsolat piszkozatként indul, egy domain igazolása után tesztelés alá kerül, és egy próbabejelentkezés után válik aktívvá.",
+    "sampleNote": "Mintaadatok: ezek a kapcsolatok kitaláltak. Mintamódban semmi sem hozható létre, tesztelhető vagy módosítható.",
+    "loading": "SSO-kapcsolatok betöltése…",
+    "empty": "Még nincs SSO-kapcsolat.",
+    "newConnection": "Új kapcsolat",
+    "cancel": "Mégse",
+    "never": "Soha",
+    "notKnown": "Nem ismert",
+    "none": "Nincs",
+    "details": "Részletek",
+    "columns": {
+      "organization": "Szervezet",
+      "provider": "Szolgáltatónév",
+      "protocol": "Protokoll",
+      "status": "Állapot",
+      "domains": "Domainek",
+      "lastTested": "Utolsó teszt",
+      "certificate": "Tanúsítvány lejárata",
+      "actions": "Műveletek"
+    },
+    "statuses": {
+      "DRAFT": "Piszkozat",
+      "TESTING": "Tesztelés",
+      "ACTIVE": "Aktív",
+      "SUSPENDED": "Felfüggesztve"
+    },
+    "protocols": {
+      "SAML": "SAML",
+      "OIDC": "OIDC"
+    },
+    "domainsCount": "{{count}} közül {{verified}} igazolva",
+    "jitWarning": "A JIT fiókot hoz létre mindenkinek, akit az identitásszolgáltató egy igazolt domainen azonosít.",
+    "create": {
+      "title": "Új SSO-kapcsolat",
+      "description": "A kapcsolat piszkozatként indul. Amíg nem teszteled, semmi nem jut el az identitásszolgáltatóhoz, kivéve az OIDC kliens titkos kulcsát, amelyet azonnal átadunk.",
+      "organization": "Szervezet",
+      "organizationPlaceholder": "Válassz szervezetet",
+      "slug": "Rövid azonosító",
+      "slugHint": "2–11 kisbetű, számjegy vagy kötőjel. Ebből készül a szolgáltatónév, és később nem módosítható.",
+      "providerPreview": "Szolgáltatónév: {{name}}",
+      "protocol": "Protokoll",
+      "metadataSource": "SAML-metaadatok",
+      "metadataSourceUrl": "Letöltés URL-ről",
+      "metadataSourceXml": "XML beillesztése",
+      "metadataUrl": "Metaadat-URL",
+      "metadataXml": "Metaadat-XML",
+      "oidcIssuer": "Kibocsátó URL-je",
+      "oidcClientId": "Kliensazonosító",
+      "oidcClientSecret": "Kliens titkos kulcsa",
+      "secretHint": "Csak írható: az identitásszolgáltató őrzi, és soha többé nem jelenik meg. Az első teszt előtt szükséges.",
+      "jit": "Fiók létrehozása az első bejelentkezéskor (JIT)",
+      "defaultOrgUnit": "Alapértelmezett szervezeti egység azonosítója",
+      "defaultOrgUnitHint": "Nem kötelező. Az első bejelentkezéskor létrehozott fiókok ehhez az egységhez kerülnek.",
+      "submit": "Kapcsolat létrehozása",
+      "success": "A kapcsolat piszkozatként létrejött."
+    },
+    "edit": {
+      "open": "Szerkesztés",
+      "title": "Kapcsolat szerkesztése",
+      "description": "Csak a módosított mezőket küldjük el.",
+      "secretReplace": "Kliens titkos kulcsának cseréje",
+      "secretReplaceHint": "Hagyd üresen, ha a jelenlegi kulcs marad. A kulcs soha nem jelenik meg.",
+      "metadataXmlHint": "Hagyd üresen, ha a jelenlegi XML marad.",
+      "defaultOrgUnitHint": "Hagyd üresen a törléséhez.",
+      "submit": "Módosítások mentése",
+      "success": "A módosítások elmentve.",
+      "activeWarning": "Ez a kapcsolat aktív. A szolgáltatói beállítások (metaadatok, kibocsátó, kliensazonosító vagy klienstitok) módosítása visszaviszi tesztelésre: a munkatársak nem jelentkezhetnek be ezen a kapcsolaton keresztül, amíg egy új tesztbejelentkezés sikeres nem lesz, és újra nem aktiválod.",
+      "backToTesting": "A módosítások elmentve. A kapcsolat újra tesztelés alatt áll: végezz tesztbejelentkezést, majd aktiváld újra."
+    },
+    "detail": {
+      "title": "{{provider}} kapcsolat",
+      "close": "Részletek bezárása",
+      "organization": "Szervezet",
+      "provider": "Szolgáltatónév",
+      "protocol": "Protokoll",
+      "status": "Állapot",
+      "metadataUrl": "Metaadat-URL",
+      "oidcIssuer": "Kibocsátó URL-je",
+      "oidcClientId": "Kliensazonosító",
+      "secret": "Kliens titkos kulcsa",
+      "secretWriteOnly": "Csak írható, soha nem jelenik meg",
+      "jit": "JIT-fióklétrehozás",
+      "jitOn": "Be",
+      "jitOff": "Ki",
+      "defaultOrgUnit": "Alapértelmezett szervezeti egység",
+      "certificate": "Tanúsítvány lejárata",
+      "lastTested": "Utolsó próbabejelentkezés",
+      "spTitle": "Értékek a munkáltató identitásszolgáltatója számára",
+      "entityId": "Entity ID",
+      "acsUrl": "ACS URL",
+      "spMissing": "A szolgáltatói értékek ebben a környezetben nincsenek beállítva."
+    },
+    "copy": {
+      "label": "Másolás: {{label}}",
+      "done": "Kimásolva: {{label}}",
+      "failed": "A másolás nem sikerült. Jelöld ki az értéket, és másold kézzel."
+    },
+    "domains": {
+      "title": "Domainek",
+      "empty": "Még nincs domain. Add hozzá a munkáltató e-mail-domainjét, és igazold egy DNS-rekorddal.",
+      "domain": "Domain",
+      "status": "Állapot",
+      "pending": "Függőben",
+      "verifiedAt": "Igazolva: {{time}}",
+      "record": "DNS-rekord",
+      "add": "Domain hozzáadása",
+      "addTitle": "Domain hozzáadása",
+      "addDescription": "A munkáltató egyik e-mail-domainje, például a cég domainje. A nyilvános e-mail-domaineket elutasítjuk.",
+      "field": "Domain",
+      "submit": "Domain hozzáadása",
+      "addedTitle": "Tedd közzé ezt a DNS-rekordot",
+      "txtIntro": "Kérd meg a munkáltató DNS-rendszergazdáját, hogy tegye közzé ezt a TXT-rekordot, majd válaszd a domain melletti Igazolás gombot. A DNS-változások megjelenése eltarthat egy ideig.",
+      "txtName": "Rekord neve",
+      "txtValue": "Rekord értéke",
+      "done": "Kész",
+      "verify": "Igazolás",
+      "verified": "A(z) {{domain}} domain igazolva."
+    },
+    "actions": {
+      "test": "Próbabejelentkezés",
+      "testStarted": "A próbabejelentkezés új lapon nyílt meg",
+      "testNote": "A tesztlink csak egyszer használható, és 15 perc múlva lejár. Új lapon megnyitja a munkatér bejelentkezését; fejezd be egy igazolt domainhez tartozó fiókkal (azzal a fiókkal lépsz be a munkatérbe), majd térj vissza ide, és válaszd az Aktiválás gombot.",
+      "testLink": "Próbabejelentkezés megnyitása",
+      "activate": "Aktiválás",
+      "activated": "A kapcsolat aktív.",
+      "suspend": "Felfüggesztés",
+      "suspendTitle": "Felfüggeszted ezt a kapcsolatot?",
+      "suspendDescription": "A bejelentkezés többé nem irányít senkit a(z) {{provider}} szolgáltatóhoz; az újraaktiválásig e-mailes kóddal lépnek be.",
+      "suspended": "A kapcsolat felfüggesztve.",
+      "reactivate": "Újraaktiválás",
+      "reactivated": "A kapcsolat újra aktív.",
+      "testDismiss": "Tesztlink elrejtése"
+    },
+    "errors": {
+      "loadTitle": "Az SSO-kapcsolatok nem tölthetők be",
+      "actionTitle": "A műveletet nem sikerült befejezni",
+      "domainBlocklisted": "Nyilvános e-mail-domain, például a gmail.com, nem használható SSO-hoz. Használd a munkáltató saját domainjét.",
+      "domainUnverified": "A DNS TXT-rekord nem található, vagy nem egyezik. Ellenőrizd a rekord nevét és értékét, vagy várd meg a DNS frissülését, majd próbáld újra.",
+      "connectionState": "Ez a módosítás a kapcsolat jelenlegi állapotában nem lehetséges. A listát frissítettük.",
+      "connectionStateTest": "Csak piszkozat vagy tesztelés alatti kapcsolat tesztelhető, legalább egy igazolt domainnel.",
+      "connectionStateActivate": "Aktiválás előtt végezz el egy próbabejelentkezést egy igazolt domainen.",
+      "conflict": "Valaki időközben módosította ezt a kapcsolatot. A listát frissítettük.",
+      "conflictProviderName": "Már létezik kapcsolat ezzel a szolgáltatónévvel. Válassz másik rövid azonosítót.",
+      "conflictProviderNameReserved": "Egy másik szervezet már használja ezt a rövid azonosítót az SSO-kapcsolatához. Válassz másik rövid azonosítót.",
+      "conflictDomain": "Ez a domain már egy kapcsolathoz tartozik.",
+      "validation": "Ellenőrizd a mezőket, és próbáld újra.",
+      "idpRefused": "Az identitásszolgáltató elutasította ezt a beállítást. Ellenőrizd a metaadatokat vagy a kibocsátó és a kliens adatait.",
+      "notFound": "Ez a kapcsolat vagy domain már nem létezik. A listát frissítettük.",
+      "organizationNotFound": "Ez a szervezet már nem létezik. Válassz másikat.",
+      "forbidden": "A fiókod nem kezelhet SSO-kapcsolatokat.",
+      "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
+      "unavailable": "Az identitásszolgáltató jelenleg nem érhető el. Próbáld újra később.",
+      "unknown": "Valami hiba történt. Próbáld újra.",
+      "fieldSlug": "Válassz rövidebb azonosítót: a szolgáltatónév legfeljebb 20 karakter lehet.",
+      "fieldProtocol": "A protokoll a kapcsolat tesztelése után nem módosítható.",
+      "fieldSecret": "A kliens titkos kulcsa csak OIDC-kapcsolatra vonatkozik, és piszkozatra visszaállítással együtt nem küldhető.",
+      "fieldSecretMissing": "Tesztelés előtt add meg az OIDC kliens titkos kulcsát (Szerkesztés).",
+      "fieldDefaultOrgUnit": "Ez a szervezeti egység nem a szervezethez tartozik.",
+      "fieldSamlMetadata": "A SAML-kapcsolathoz metaadat-URL vagy metaadat-XML szükséges.",
+      "fieldOidc": "Az OIDC-kapcsolathoz kibocsátó URL és kliensazonosító szükséges.",
+      "fieldIdpInitiated": "Az identitásszolgáltató által indított bejelentkezés nem érhető el.",
+      "organizationRequired": "Válassz szervezetet.",
+      "slugPattern": "Használj 2–11 kisbetűt, számjegyet vagy kötőjelet.",
+      "urlInvalid": "Adj meg teljes, https://-sel kezdődő URL-t.",
+      "metadataXmlRequired": "Illeszd be a metaadat-XML-t.",
+      "clientIdRequired": "Add meg a kliensazonosítót.",
+      "domainInvalid": "Adj meg egy domaint, például example.com, @ és https:// nélkül.",
+      "nothingChanged": "Módosíts legalább egy mezőt."
     }
   }
 }

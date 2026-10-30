@@ -63,6 +63,30 @@ describe('audit-events', () => {
     }
   });
 
+  it('catalogues the SSO phase 3 actions', () => {
+    for (const action of [
+      'identity.denied',
+      'sso_connection.changed',
+      'sso_connection.tested',
+      'sso_domain.added',
+      'sso_domain.verified',
+    ]) {
+      expect(AUDIT_ACTIONS).toContain(action);
+    }
+  });
+
+  it('sso_domain actions and identity.denied map to ADMIN', () => {
+    expect(categoryFor('sso_domain.added')).toBe('ADMIN');
+    expect(categoryFor('sso_domain.verified')).toBe('ADMIN');
+    expect(categoryFor('sso_connection.changed')).toBe('ADMIN');
+    expect(categoryFor('sso_connection.tested')).toBe('ADMIN');
+    expect(categoryFor('identity.denied')).toBe('ADMIN');
+  });
+
+  it('has no duplicate actions', () => {
+    expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
+  });
+
   it('data.erasure.requested maps to ADMIN', () => {
     expect(categoryFor('data.erasure.requested')).toBe('ADMIN');
   });

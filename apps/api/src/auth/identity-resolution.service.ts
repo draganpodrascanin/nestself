@@ -41,10 +41,25 @@ export type SessionCreationResult = MeResponse & {
   csrfToken: string;
 };
 
+/** Pool-native Cognito users. */
+export const NATIVE_PROVIDER = 'cognito';
+
+/**
+ * `external_identities.provider` of a federated Cognito user (D-04):
+ * `cognito:<providerName>`, the provider being the SSO connection's
+ * `cognitoProviderName`.
+ */
+export function federatedProvider(providerName: string): string {
+  return `${NATIVE_PROVIDER}:${providerName}`;
+}
+
 export function authMethodFromOutcome(
   _outcome: AuthOutcome,
   wasPassword: boolean,
+  /** Tokens from the SSO code flow (3.4.9: MFA delegated to the IdP). */
+  federated = false,
 ): AuthMethod {
+  if (federated) return 'sso';
   if (wasPassword) return 'password_totp';
   return 'email_otp';
 }
@@ -89,12 +104,18 @@ export class IdentityResolutionService {
     meta: { ip: string | null; userAgent: string | null },
     wasPassword: boolean,
     secondFactor = false,
+    /**
+     * Set for the SSO callback: the identity is looked up under
+     * `cognito:<providerName>` and the session records `auth.method = 'sso'`.
+     */
+    federatedProviderName?: string,
   ): Promise<SessionCreationResult> {
     const { decodeJwtClaims } = await import('../identity/identity-provider.service.js');
     const claims = decodeJwtClaims(tokens.idToken);
     const sub = claims.sub ?? '';
+    const provider = federatedProviderName ? federatedProvider(federatedProviderName) : NATIVE_PROVIDER;
 
-    const identity = await this.identities.findExternalIdentity('cognito', sub);
+    const identity = await this.identities.findExternalIdentity(provider, sub);
 
     if (!identity) {
       throw new ApiHttpException({
@@ -120,7 +141,7 @@ export class IdentityResolutionService {
 
     const context = this.defaultContext(loaded);
     const population = this.resolvePopulation(loaded, context);
-    const authMethod = authMethodFromOutcome({ kind: 'tokens', tokens }, wasPassword);
+    const authMethod = authMethodFromOutcome({ kind: 'tokens', tokens }, wasPassword, !!federatedProviderName);
 
     const { sessionId, csrfToken, absoluteExpiresAt } =
       await this.sessions.create({
@@ -145,7 +166,11 @@ export class IdentityResolutionService {
         userAgent: meta.userAgent,
       });
 
-    await this.throttle.reset(email);
+    // Only a native sign-in consumed the email-code throttle. A federated one
+    // never did, and its address is the IdP's assertion, not checked against
+    // the connection's verified domains on this path: it must not reset the
+    // throttle of whatever address the IdP names.
+    if (!federatedProviderName) await this.throttle.reset(email);
 
     const principal: Principal = {
       userId: loaded.userId,
@@ -277,6 +302,21 @@ export class IdentityResolutionService {
         return new ApiHttpException({
           status: 409, code: 'totp_already_enrolled',
           message: 'TOTP is already enrolled',
+        });
+      case 'provider_exists':
+        return new ApiHttpException({
+          status: 409, code: 'conflict',
+          message: 'An identity provider with this name already exists',
+        });
+      case 'provider_not_found':
+        return new ApiHttpException({
+          status: 404, code: 'not_found',
+          message: 'Identity provider not found',
+        });
+      case 'unavailable':
+        return new ApiHttpException({
+          status: 503, code: 'unavailable',
+          message: 'The identity provider is unavailable. Try again later.',
         });
       default:
         return new ApiHttpException({

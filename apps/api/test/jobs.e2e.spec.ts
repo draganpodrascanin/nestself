@@ -493,7 +493,7 @@ describe.skipIf(!shouldRun)('Calls jobs and provider events (e2e)', () => {
     })).toBe('duplicate');
     expect(emitted('call.session.ended')).toHaveLength(1);
 
-    // Migration 0008: a provider end no longer blocks a second session, which then is the live one.
+    // Migration 0009: a provider end no longer blocks a second session, which then is the live one.
     const [next] = await testDb.db
       .insert(callSessions)
       .values({ appointmentId: APPT_LIVE, orgId: ORG, format: 'CONSULTATION', startsAt: row.startsAt, endsAt: row.endsAt })

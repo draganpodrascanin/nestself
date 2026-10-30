@@ -111,6 +111,12 @@ export const envSchema = z
     // Proxy
     TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 
+    // Stub mode: every SSO domain verification passes (Playwright); ignored with AUTH_MODE=cognito
+    FAKE_DNS_TXT_AUTOVERIFY: z
+      .enum(['true', 'false'])
+      .transform((v) => v === 'true')
+      .optional(),
+
     // Fake identity provider
     FAKE_IDP_FIXED_OTP: z.union([
       z.literal('').transform(() => undefined),
@@ -193,6 +199,12 @@ export const envSchema = z
           'SESSION_ENCRYPTION_KEY',
           'SESSION_ENCRYPTION_KEY is required when AUTH_MODE=cognito',
         ],
+        // The SSO start URL, the callback registered on the Cognito client and
+        // the post-sign-in redirects are built from these; the localhost
+        // fallbacks only suit stub mode.
+        ['WORKSPACE_URL', 'WORKSPACE_URL is required when AUTH_MODE=cognito'],
+        ['ADMIN_URL', 'ADMIN_URL is required when AUTH_MODE=cognito'],
+        ['API_PUBLIC_URL', 'API_PUBLIC_URL is required when AUTH_MODE=cognito'],
       ];
 
       for (const [key, message] of required) {

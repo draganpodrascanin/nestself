@@ -114,6 +114,14 @@ export class StepUpService {
     this.assertRecordable(principal);
 
     const challenge = await this.challenges.consume(challengeToken);
+    if (challenge?.stepUp && challenge.stepUp.userId !== principal.userId) {
+      // A step-up challenge minted for someone else: refuse and record it
+      // (never the token or the code).
+      await this.record(principal, 'auth.step_up.failed', meta, {
+        method: STEP_UP_METHOD, reason: 'foreign_challenge',
+      });
+      throw invalidChallenge();
+    }
     if (
       !challenge ||
       challenge.kind !== 'email_otp' ||

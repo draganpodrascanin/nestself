@@ -7,6 +7,11 @@
  * `grant.*` event and invalidate the affected principals. Rules live in
  * `grant-rules.ts`.
  *
+ * Owner model (2026-10-24): an organization has at most one active
+ * `employer_owner` grant. Every path here that writes one (create, update of
+ * its window, ownership transfer) checks under a per-organization advisory
+ * lock and answers a second owner with 409 `owner_exists`.
+ *
  * @see docs/tasks/auth/auth-strategy.md 4.4, 4.5.6, 4.5.10
  */
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
@@ -23,6 +28,8 @@ import {
   type GrantRevokeRequest,
   type GrantUpdateRequest,
   type ActiveContext,
+  type OwnershipTransferRequest,
+  type OwnershipTransferResponse,
   type PlatformGrantCreateRequest,
   type Principal,
   type UserAccessContext,
@@ -39,6 +46,10 @@ import { validateDelegation } from '../authz/delegation.js';
 import { effectiveAccess } from '../authz/effective-access.js';
 import {
   MAX_DELEGATION_DEPTH,
+  OWNER_TEMPLATE_KEY,
+  OWNERSHIP_TRANSFERRED_REASON,
+  hasStarted,
+  ownerExists,
   assertOrgScopeType,
   assertWindow,
   checkDelegationBounds,
@@ -111,6 +122,10 @@ export class GrantsService {
           code: 'subject_not_member',
           message: 'The subject has no active membership in this organization',
         });
+      }
+      if (template.key === OWNER_TEMPLATE_KEY) {
+        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, new Date(), tx);
+        if (current) throw ownerExists(current.subjectUserId);
       }
 
       const row = await this.authzRepo.createGrant(
@@ -215,16 +230,80 @@ export class GrantsService {
       return created;
     });
 
-    // A platform grant applies in every context: drop the cached grants for
-    // the platform, the subject's organizations and assigned clients.
-    const assignments = await this.principalLoader.loadAssignments(subject.userId);
+    await this.invalidatePlatformSubject(subject.userId);
+    return toGrantResponse(row);
+  }
+
+  /**
+   * Revoke a platform-scoped grant (`scope_org_id IS NULL`) and every grant
+   * delegated from it. Organization grants are not visible here (404); they
+   * are revoked through `/ops/orgs/:orgId/grants/:grantId/revoke`.
+   */
+  async revokePlatform(grantId: string, body: GrantRevokeRequest, actor: Principal): Promise<GrantResponse> {
+    // Tree revocation and audit share one system transaction, as in
+    // createPlatform: in strict mode a rejected audit write rolls it back.
+    const root = await this.db.withTransaction(async (tx) => {
+      const grant = await this.authzRepo.findGrantById(grantId, tx);
+      if (!grant || grant.scopeOrgId !== null) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Grant not found' });
+      }
+      if (grant.revokedAt) {
+        throw new ApiHttpException({ status: 409, code: 'conflict', message: 'Grant is already revoked' });
+      }
+      const { children } = await this.authzRepo.revokeGrantTree(
+        [grant.id],
+        { at: new Date(), byUserId: actor.userId, reason: body.reason },
+        tx,
+      );
+
+      const revoked = (await this.authzRepo.findGrantById(grant.id, tx)) ?? grant;
+      await this.audit.record(
+        grantEvent('grant.revoked', revoked, actor, null, {
+          subjectUserId: revoked.subjectUserId,
+          templateKey: revoked.templateKey,
+          scopeType: revoked.scopeType,
+          actionsCount: revoked.actions.length,
+          reason: body.reason,
+          revokedDescendants: children.length,
+        }),
+      );
+      for (const childId of children) {
+        await this.audit.record({
+          action: 'grant.delegation_revoked',
+          actorUserId: actor.userId,
+          actorKind: 'USER',
+          orgId: null,
+          recordType: 'grant',
+          recordId: childId,
+          result: 'ALLOWED',
+          details: { reason: 'parent_revoked', rootGrantId: grant.id },
+        });
+      }
+      return revoked;
+    });
+
+    await this.invalidatePlatformSubject(root.subjectUserId);
+    // The delegatees of the revoked tree (their entries cache it as ancestors).
+    await this.principalLoader.invalidateDelegatees([root.id]);
+    return toGrantResponse(root);
+  }
+
+  /**
+   * A platform grant applies in every context: drop the subject's cached
+   * grants for the platform, their membership organizations and their
+   * assigned CLIENT organizations.
+   */
+  private async invalidatePlatformSubject(userId: string): Promise<void> {
+    const [subject, assignments] = await Promise.all([
+      this.principalLoader.load(userId),
+      this.principalLoader.loadAssignments(userId),
+    ]);
     const orgIds = new Set<string>([
       'platform',
-      ...subject.memberships.map((ms) => ms.orgId),
+      ...(subject?.memberships ?? []).map((ms) => ms.orgId),
       ...assignments.filter((a) => a.kind === 'CLIENT').map((a) => a.targetId),
     ]);
-    await this.principalLoader.invalidateUser(subject.userId, [...orgIds]);
-    return toGrantResponse(row);
+    await this.principalLoader.invalidateUser(userId, [...orgIds]);
   }
 
   /**
@@ -242,7 +321,7 @@ export class GrantsService {
       contexts.push(await this.evaluateAccess(loaded, orgId));
     }
     contexts.push(await this.evaluateAccess(loaded, null));
-    return { userId, contexts };
+    return { userId, suspended: loaded.isSuspended, contexts };
   }
 
   // ── Update ────────────────────────────────────────────────────────────
@@ -262,6 +341,13 @@ export class GrantsService {
       if (body.validUntil !== undefined) patch.validUntil = new Date(body.validUntil);
 
       assertWindow(patch.validFrom ?? grant.validFrom, patch.validUntil ?? grant.validUntil);
+
+      // A new window could revive an expired owner grant next to the current owner.
+      if (grant.templateKey === OWNER_TEMPLATE_KEY && (patch.validFrom || patch.validUntil)) {
+        const others = await this.authzRepo.findActiveOwnerGrants(orgId, new Date(), tx);
+        const other = others.find((g) => g.id !== grant.id);
+        if (other) throw ownerExists(other.subjectUserId);
+      }
 
       if (patch.conditions) {
         const template = grant.templateKey ? findActiveTemplate(grant.templateKey) : null;
@@ -344,6 +430,169 @@ export class GrantsService {
     // The delegatees of the revoked tree (their entries cache it as ancestors).
     await this.principalLoader.invalidateDelegatees([root.id]);
     return toGrantResponse(root);
+  }
+
+  // ── Ownership transfer (owner model, 2026-10-24) ─────────────────────
+
+  /**
+   * Hand the organization's `employer_owner` grant to another ACTIVE member.
+   *
+   * Organization route: the caller must hold the current, started owner
+   * grant (403 `forbidden` otherwise). Staff route (`byStaff`): no owner
+   * requirement; an organization without an owner simply gets one.
+   *
+   * One org-scoped transaction revokes every active owner grant (reason
+   * `ownership_transferred`), creates the new owner's grant from the
+   * template and re-parents the old grant's active delegations to it (same
+   * template and actions, so the bounds still hold). Audits `grant.revoked`
+   * and `grant.created` with `details.transfer = true` (`byStaff = true` on
+   * the staff route) and `grant.adjusted` (`reparented`) per moved child.
+   */
+  async transferOwnership(
+    orgId: string,
+    body: OwnershipTransferRequest,
+    actor: Principal,
+    options: { byStaff?: boolean } = {},
+  ): Promise<OwnershipTransferResponse> {
+    const byStaff = options.byStaff === true;
+    const template = findActiveTemplate(OWNER_TEMPLATE_KEY);
+    if (!template) {
+      throw new ApiHttpException({ status: 400, code: 'template_inactive', message: 'Template is unknown or inactive' });
+    }
+    const now = new Date();
+    const staffDetail = byStaff ? { byStaff: true } : {};
+
+    const result = await this.db.withOrgScope(orgId, async (tx) => {
+      const owners = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
+      const callerGrant = owners.find((g) => g.subjectUserId === actor.userId && hasStarted(g, now));
+      if (!byStaff && !callerGrant) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'forbidden',
+          message: 'Only the current owner can transfer ownership',
+        });
+      }
+      if (owners.some((g) => g.subjectUserId === body.newOwnerUserId)) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'conflict',
+          message: 'The user is already the owner of this organization',
+        });
+      }
+      const membership = await this.authzRepo.findActiveMembership(body.newOwnerUserId, orgId, tx);
+      if (!membership) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'subject_not_member',
+          message: 'The new owner has no active membership in this organization',
+        });
+      }
+
+      // The caller's grant first, so it is the one reported as revoked.
+      const previous = callerGrant ? [callerGrant, ...owners.filter((g) => g !== callerGrant)] : owners;
+      const revokedIds = await this.revokeOwnerGrants(previous, actor, orgId, now, body.newOwnerUserId, staffDetail, tx);
+      const previousOwner = previous[0] ?? null;
+
+      const created = await this.authzRepo.createGrant(
+        {
+          subjectUserId: body.newOwnerUserId,
+          templateKey: template.key,
+          actions: [...template.actions],
+          scopeType: 'organization',
+          scopeOrgId: orgId,
+          scopeOrgUnitId: null,
+          includeDescendants: false,
+          conditions: [],
+          validFrom: now,
+          validUntil: null,
+          parentGrantId: null,
+          grantedByUserId: actor.userId,
+        },
+        tx,
+      );
+      await this.audit.record(
+        grantEvent('grant.created', created, actor, orgId, {
+          subjectUserId: created.subjectUserId,
+          templateKey: template.key,
+          scopeType: 'organization',
+          actionsCount: created.actions.length,
+          conditionTypes: [],
+          transfer: true,
+          previousOwnerUserId: previousOwner?.subjectUserId ?? null,
+          ...staffDetail,
+        }),
+      );
+      const revokedPrevious = previous.filter((g) => revokedIds.includes(g.id));
+      const reparented: GrantRow[] = [];
+      for (const old of revokedPrevious) {
+        const children = await this.authzRepo.reparentActiveChildren(old.id, created.id, tx);
+        for (const child of children) {
+          await this.audit.record(
+            grantEvent('grant.adjusted', child, actor, orgId, {
+              subjectUserId: child.subjectUserId,
+              reparented: true,
+              fromGrantId: old.id,
+              ...staffDetail,
+            }),
+          );
+        }
+        reparented.push(...children);
+      }
+      return { previous: revokedPrevious, created, reparented };
+    });
+
+    const subjects = new Set([
+      ...result.previous.map((g) => g.subjectUserId),
+      result.created.subjectUserId,
+      ...result.reparented.map((g) => g.subjectUserId),
+    ]);
+    for (const userId of subjects) {
+      await this.principalLoader.invalidateUser(userId, [orgId]);
+    }
+    if (result.previous.length > 0) {
+      // Delegatees cached the old owner grant as an ancestor of theirs; after
+      // re-parenting they hang below the new grant.
+      await this.principalLoader.invalidateDelegatees(result.previous.map((g) => g.id));
+      await this.principalLoader.invalidateDelegatees([result.created.id]);
+    }
+    return {
+      revokedGrantId: result.previous[0]?.id ?? null,
+      createdGrant: toGrantResponse(result.created),
+    };
+  }
+
+  /** Revoke owner grants (not their delegations) and audit each; returns the revoked ids. */
+  private async revokeOwnerGrants(
+    owners: readonly GrantRow[],
+    actor: Principal,
+    orgId: string,
+    now: Date,
+    newOwnerUserId: string,
+    staffDetail: Record<string, unknown>,
+    tx: DbExecutor,
+  ): Promise<string[]> {
+    if (owners.length === 0) return [];
+    const revokedIds = await this.authzRepo.revokeGrants(
+      owners.map((g) => g.id),
+      { at: now, byUserId: actor.userId, reason: OWNERSHIP_TRANSFERRED_REASON },
+      tx,
+    );
+    for (const owner of owners.filter((g) => revokedIds.includes(g.id))) {
+      await this.audit.record(
+        grantEvent('grant.revoked', owner, actor, orgId, {
+          subjectUserId: owner.subjectUserId,
+          templateKey: owner.templateKey,
+          scopeType: owner.scopeType,
+          actionsCount: owner.actions.length,
+          reason: OWNERSHIP_TRANSFERRED_REASON,
+          revokedDescendants: 0,
+          transfer: true,
+          newOwnerUserId,
+          ...staffDetail,
+        }),
+      );
+    }
+    return revokedIds;
   }
 
   // ── Delegate ──────────────────────────────────────────────────────────

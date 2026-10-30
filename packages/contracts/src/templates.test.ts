@@ -110,6 +110,17 @@ describe('templates', () => {
     expect(actionsOf('support_operator')).toContain('support.troubleshoot');
   });
 
+  it('employer_owner holds access.grant and access.revoke behind step-up (owner model, 2026-10-24)', () => {
+    const owner = PERMISSION_TEMPLATES.find((t) => t.key === 'employer_owner')!;
+    expect(owner.scopeType).toBe('organization');
+    expect(owner.actions).toEqual(expect.arrayContaining([
+      'access.grant', 'access.revoke', 'access.delegate', 'access.preview',
+    ]));
+    expect(owner.stepUpActions).toEqual(expect.arrayContaining([
+      'access.grant', 'access.revoke', 'access.delegate',
+    ]));
+  });
+
   it('specific templates have the expected requiredConditionTypes', () => {
     const byKey = (k: string) => PERMISSION_TEMPLATES.find((t) => t.key === k)!;
     expect([...byKey('expert').requiredConditionTypes]).toEqual(['categories']);

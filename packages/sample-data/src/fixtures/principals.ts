@@ -7,6 +7,7 @@
  */
 import { PrincipalSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import type { Principal } from '@nestself/contracts';
+import { SAMPLE_ORG } from './org.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +41,7 @@ const employeePrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_jovan',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: 'team_product',
       status: 'ACTIVE',
       startDate: '2024-01-15T00:00:00Z',
@@ -63,6 +65,7 @@ const managerPrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_stefan',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: 'team_product',
       status: 'ACTIVE',
       startDate: '2024-03-01T00:00:00Z',
@@ -86,6 +89,7 @@ const hrAdminPrincipal: Principal = PrincipalSchema.parse({
     {
       membershipId: 'mem_ivana',
       orgId: 'org_sample',
+      orgName: SAMPLE_ORG.name,
       orgUnitId: null,
       status: 'ACTIVE',
       startDate: '2023-11-01T00:00:00Z',

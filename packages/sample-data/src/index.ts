@@ -12,9 +12,17 @@ export type { SampleTestimonial } from './fixtures/testimonials.ts';
 export { SAMPLE_ORG_UNITS } from './fixtures/org-units.ts';
 export { SAMPLE_EXPERT_CREDENTIALS } from './fixtures/credentials.ts';
 export { SAMPLE_CASE } from './fixtures/case.ts';
+export { SAMPLE_CONVERSATIONS } from './fixtures/conversations.ts';
+export type { SampleConversation } from './fixtures/conversations.ts';
 export { SAMPLE_PRINCIPALS } from './fixtures/principals.ts';
 export { SAMPLE_GRANTS } from './fixtures/grants.ts';
 export type { SampleGrant } from './fixtures/grants.ts';
+export { SAMPLE_INVITATIONS } from './fixtures/invitations.ts';
+export type { SampleInvitation } from './fixtures/invitations.ts';
+export { SAMPLE_EMERGENCY_ACCESS } from './fixtures/emergency-access.ts';
+export type { SampleEmergencyAccess } from './fixtures/emergency-access.ts';
+export { SAMPLE_SSO_CONNECTIONS } from './fixtures/sso-connections.ts';
+export type { SampleSsoConnection } from './fixtures/sso-connections.ts';
 export { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from './fixtures/identities.ts';
 export { SAMPLE_APPOINTMENTS, SAMPLE_CALL_SESSIONS } from './fixtures/appointments.ts';
 export type {

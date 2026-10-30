@@ -27,6 +27,8 @@ import {
   orgUnitClosure,
   orgUnits,
   posts,
+  ssoConnections,
+  ssoDomains,
   webinarMessages,
   webinarPollResults,
   webinarRegistrations,
@@ -55,7 +57,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]!.n)).toBe(15);
+    expect(Number(rows[0]!.n)).toBe(16);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -192,9 +194,10 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'call_sessions','call_participants','call_events','call_client_events',
                            'call_outcomes','call_feedback','call_consents','appointment_approvals',
                            'webinars','webinar_hosts','webinar_registrations','webinar_messages',
-                           'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings')`,
+                           'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings',
+                           'sso_domains')`,
       );
-      expect(rows).toHaveLength(33);
+      expect(rows).toHaveLength(34);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -339,6 +342,53 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         .from(conversations)
         .where(eq(conversations.id, 'rls_conv_leak'));
       expect(leaked).toEqual([]);
+    });
+
+    it('sso_domains is isolated by tenant through its connection', async () => {
+      await owner.db.insert(ssoConnections).values([
+        { id: 'rls_sso_a', orgId: 'rls_org_a', protocol: 'SAML', cognitoProviderName: 'org-rlsa-saml' },
+        { id: 'rls_sso_b', orgId: 'rls_org_b', protocol: 'SAML', cognitoProviderName: 'org-rlsb-saml' },
+      ]);
+      await owner.db.insert(ssoDomains).values([
+        { id: 'rls_ssod_a', connectionId: 'rls_sso_a', domain: 'rls-a.example', verificationToken: 'token-a' },
+        { id: 'rls_ssod_b', connectionId: 'rls_sso_b', domain: 'rls-b.example', verificationToken: 'token-b' },
+      ]);
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx
+          .select({ id: ssoDomains.id })
+          .from(ssoDomains)
+          .where(inArray(ssoDomains.id, ['rls_ssod_a', 'rls_ssod_b'])),
+      );
+      expect(fromA.map((d) => d.id)).toEqual(['rls_ssod_a']);
+
+      // System context (no tenant setting) sees both: home-realm discovery runs there.
+      const unscoped = await app.db
+        .select({ id: ssoDomains.id })
+        .from(ssoDomains)
+        .where(inArray(ssoDomains.id, ['rls_ssod_a', 'rls_ssod_b']));
+      expect(unscoped).toHaveLength(2);
+
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx
+          .insert(ssoDomains)
+          .values({ id: 'rls_ssod_leak', connectionId: 'rls_sso_b', domain: 'rls-leak.example', verificationToken: 'x' }),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // An update from another tenant touches nothing.
+      const updated = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx
+          .update(ssoDomains)
+          .set({ verifiedAt: new Date('2026-10-25T00:00:00Z') })
+          .where(eq(ssoDomains.id, 'rls_ssod_a'))
+          .returning({ id: ssoDomains.id }),
+      );
+      expect(updated).toEqual([]);
+      const [row] = await owner.db.select({ verifiedAt: ssoDomains.verifiedAt }).from(ssoDomains).where(eq(ssoDomains.id, 'rls_ssod_a'));
+      expect(row!.verifiedAt).toBeNull();
     });
 
     it('appointments are isolated by tenant (CW-R-19)', async () => {
@@ -489,7 +539,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
       expect(cause.message).toMatch(/row-level security policy/);
 
-      // A registration always carries the registrant's organisation (migration 0013): no platform-wide registration.
+      // A registration always carries the registrant's organisation (migration 0014): no platform-wide registration.
       await expect(
         owner.db
           .insert(webinarRegistrations)
@@ -521,7 +571,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(Object.keys(webinarPollResults)).not.toContain('userId');
     });
 
-    it('0012: a webinar session names an existing occurrence; a message can lose its author (T-CW-2.5, D-CW-29)', async () => {
+    it('0013: a webinar session names an existing occurrence; a message can lose its author (T-CW-2.5, D-CW-29)', async () => {
       const window = { startsAt: new Date('2026-11-20T15:00:00Z'), endsAt: new Date('2026-11-20T16:00:00Z') };
       await expect(
         owner.db.insert(callSessions).values({ ...window, id: 'rls_ws_ghost', format: 'WEBINAR', webinarId: 'no_such_webinar' }),

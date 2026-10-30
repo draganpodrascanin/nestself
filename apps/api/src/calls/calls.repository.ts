@@ -51,7 +51,7 @@ type ParticipantRow = typeof callParticipants.$inferSelect;
 type DbEndReason = NonNullable<SessionRow['endReason']>;
 
 /**
- * What closed an ENDED session (migration 0008, T-CW-1.2, D-CW-09): the
+ * What closed an ENDED session (migration 0009, T-CW-1.2, D-CW-09): the
  * expert's end, Chime's own `MeetingEnded`, or the `calls.cleanup` and
  * `calls.reconcile` jobs. Only `provider` lets a later join inside the window
  * start a new session.

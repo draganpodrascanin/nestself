@@ -20,7 +20,7 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, grants } from '../src/db/schema/index.js';
+import { auditEvents, conversations, grants } from '../src/db/schema/index.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
@@ -33,6 +33,8 @@ const ORG = 'org_sample';
 const CONV = `/api/professional/conversations/${SAMPLE_CASE.conversation.id}`;
 const MY_CONV = `/api/professional/me/conversations/${SAMPLE_CASE.conversation.id}`;
 const INTAKE = `/api/professional/intake/${SAMPLE_CASE.intake.id}`;
+const ASSIGNED_LIST = '/api/professional/conversations';
+const MY_LIST = '/api/professional/me/conversations';
 /** Fixed TOTP secret for the staff users of this suite (base32). */
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 const STAFF = ['user_milica', 'user_nikola'];
@@ -288,6 +290,118 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     }
   });
 
+  const expectedSummary = {
+    id: SAMPLE_CASE.conversation.id,
+    caseId: SAMPLE_CASE.id,
+    orgId: ORG,
+    employeeUserId: SAMPLE_CASE.employeeUserId,
+    expertUserId: SAMPLE_CASE.expertUserId,
+    createdAt: expect.any(String),
+    messageCount: SAMPLE_CASE.conversation.messages.length,
+  };
+
+  describe('conversation lists (metadata only)', () => {
+    it('the assigned expert lists the conversation of her CASE assignment without any body', async () => {
+      const milica = await signInStaff('user_milica', { kind: 'expert' });
+      const res = await milica.get(ASSIGNED_LIST);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ items: [expectedSummary], nextCursor: null });
+      expect(JSON.stringify(res.body)).not.toContain(SAMPLE_CASE.conversation.messages[0]!.body);
+    });
+
+    it('the list needs no step-up: a 20-minute-old expert session still lists, while the read is refused', async () => {
+      const agent = request.agent(app.getHttpServer());
+      const pw = await agent
+        .post('/api/auth/password')
+        .send({ email: 'user_milica@example.com', password: SAMPLE_DEV_PASSWORD });
+      const totp = await agent
+        .post('/api/auth/challenge')
+        .send({ challengeToken: pw.body.challengeToken, response: computeTotp(TOTP_SECRET) });
+      const ctx = await agent.post('/api/auth/context').set('X-CSRF-Token', extractCsrf(totp)).send({ context: { kind: 'expert' } });
+      await ageSession(extractSessionId(totp, ctx));
+
+      const list = await agent.get(ASSIGNED_LIST);
+      expect(list.status).toBe(200);
+      expect(list.body.items).toHaveLength(1);
+      expect((await agent.get(CONV)).body.code).toBe('step_up_required');
+    });
+
+    it('the participant lists their own conversation and sees nothing on the assigned list', async () => {
+      const jovan = await signInMember('user_jovan');
+      const own = await jovan.get(MY_LIST);
+      expect(own.status).toBe(200);
+      expect(own.body).toEqual({ items: [expectedSummary], nextCursor: null });
+
+      const assigned = await jovan.get(ASSIGNED_LIST);
+      expect(assigned.status).toBe(200);
+      expect(assigned.body).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('an hr_admin and platform staff list nothing, and listing writes no access.denied audit', async () => {
+      const ivana = await signInMember('user_ivana');
+      expect((await ivana.get(ASSIGNED_LIST)).body).toEqual({ items: [], nextCursor: null });
+      expect((await ivana.get(MY_LIST)).body).toEqual({ items: [], nextCursor: null });
+
+      const nikola = await signInStaff('user_nikola', { kind: 'operations' });
+      const before = await testDb.db.select().from(auditEvents).where(eq(auditEvents.actorUserId, 'user_nikola'));
+      expect((await nikola.get(ASSIGNED_LIST)).body).toEqual({ items: [], nextCursor: null });
+      const after = await testDb.db.select().from(auditEvents).where(eq(auditEvents.actorUserId, 'user_nikola'));
+      expect(after.filter((e) => e.action === 'access.denied')).toHaveLength(
+        before.filter((e) => e.action === 'access.denied').length,
+      );
+    });
+
+    it('pages the participant list by cursor, newest first, through exactly the full list', async () => {
+      await testDb.db.insert(conversations).values(
+        [1, 2, 3].map((n) => ({
+          id: `conv_test_page_${n}`,
+          orgId: ORG,
+          caseId: `case_test_page_${n}`,
+          employeeUserId: 'user_jovan',
+          expertUserId: 'user_milica',
+          createdAt: new Date(Date.now() + n * 1000),
+        })),
+      );
+      const jovan = await signInMember('user_jovan');
+
+      const full = await jovan.get(MY_LIST).query({ limit: 100 });
+      expect(full.status).toBe(200);
+      expect(full.body.nextCursor).toBeNull();
+      const all = (full.body.items as Array<{ id: string; messageCount: number }>).map((i) => i.id);
+      expect(all.slice(0, 3)).toEqual(['conv_test_page_3', 'conv_test_page_2', 'conv_test_page_1']);
+      expect(all).toContain(SAMPLE_CASE.conversation.id);
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: request.Response = await jovan.get(MY_LIST).query(cursor ? { limit: 1, cursor } : { limit: 1 });
+        expect(page.status).toBe(200);
+        expect(page.body.items.length).toBeLessThanOrEqual(1);
+        seen.push(...(page.body.items as Array<{ id: string }>).map((i) => i.id));
+        cursor = page.body.nextCursor as string | null;
+      } while (cursor);
+      expect(seen).toEqual(all);
+
+      // The extra cases are not assigned to milica, so her list is unchanged.
+      const milica = await signInStaff('user_milica', { kind: 'expert' });
+      expect((await milica.get(ASSIGNED_LIST)).body).toEqual({ items: [expectedSummary], nextCursor: null });
+    });
+
+    it('rejects a limit outside 1..100 with 400 and answers an unknown cursor with an empty page', async () => {
+      const jovan = await signInMember('user_jovan');
+      expect((await jovan.get(MY_LIST).query({ limit: 0 })).status).toBe(400);
+      expect((await jovan.get(MY_LIST).query({ limit: 101 })).status).toBe(400);
+      const unknown = await jovan.get(MY_LIST).query({ cursor: 'conv_missing' });
+      expect(unknown.status).toBe(200);
+      expect(unknown.body).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('the list routes require a session: 401 without one', async () => {
+      expect((await request(app.getHttpServer()).get(ASSIGNED_LIST)).status).toBe(401);
+      expect((await request(app.getHttpServer()).get(MY_LIST)).status).toBe(401);
+    });
+  });
+
   it('the expert loses the conversation once her expert grant is revoked', async () => {
     await testDb.db
       .update(grants)
@@ -300,5 +414,10 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     const res = await milica.get(CONV);
     expect(res.status).toBe(404);
     expect(res.body).not.toHaveProperty('messages');
+
+    // The CASE assignment remains, but the list applies the same engine check.
+    const list = await milica.get(ASSIGNED_LIST);
+    expect(list.status).toBe(200);
+    expect(list.body).toEqual({ items: [], nextCursor: null });
   });
 });

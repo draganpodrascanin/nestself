@@ -1,6 +1,6 @@
 {
-  "id": "afae9838-98c6-42b2-a6ad-d76c15dfe938",
-  "prevId": "71bdaf8a-052b-4173-9bca-a54c0ec0371f",
+  "id": "71bdaf8a-052b-4173-9bca-a54c0ec0371f",
+  "prevId": "14e14870-6fd7-4357-88a3-eeb39ba28678",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2273,6 +2273,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sso_domains_connection_id_verified_at_idx": {
+          "name": "sso_domains_connection_id_verified_at_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2292,9 +2313,20 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "sso_domains_tenant_isolation": {
+          "name": "sso_domains_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.audit_events": {
       "name": "audit_events",
@@ -6521,7 +6553,7 @@
           "name": "org_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "user_id": {
           "name": "user_id",
@@ -6682,8 +6714,8 @@
           "to": [
             "public"
           ],
-          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"webinar_registrations\".\"org_id\" = current_setting('app.current_org_id', true))",
-          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"webinar_registrations\".\"org_id\" = current_setting('app.current_org_id', true))"
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"webinar_registrations\".\"org_id\" IS NULL OR \"webinar_registrations\".\"org_id\" = current_setting('app.current_org_id', true))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"webinar_registrations\".\"org_id\" IS NULL OR \"webinar_registrations\".\"org_id\" = current_setting('app.current_org_id', true))"
         }
       },
       "checkConstraints": {

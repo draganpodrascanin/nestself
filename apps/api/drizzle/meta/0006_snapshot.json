@@ -1,5 +1,5 @@
 {
-  "id": "270a349d-2df1-4c51-8e4c-39a310de2e0d",
+  "id": "4e3768d9-afd2-46b5-b441-782be848f3b7",
   "prevId": "1337bdfe-334f-4080-9f3b-ac384d616370",
   "version": "7",
   "dialect": "postgresql",
@@ -2261,6 +2261,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sso_domains_connection_id_verified_at_idx": {
+          "name": "sso_domains_connection_id_verified_at_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2280,9 +2301,20 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "sso_domains_tenant_isolation": {
+          "name": "sso_domains_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.audit_events": {
       "name": "audit_events",
@@ -3807,251 +3839,6 @@
       },
       "checkConstraints": {},
       "isRLSEnabled": true
-    },
-    "public.appointments": {
-      "name": "appointments",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expert_user_id": {
-          "name": "expert_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "employee_user_id": {
-          "name": "employee_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "appointment_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'CONFIRMED'"
-        },
-        "service_category": {
-          "name": "service_category",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "time_zone": {
-          "name": "time_zone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'Europe/Belgrade'"
-        },
-        "funding_ref": {
-          "name": "funding_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "follow_up_of": {
-          "name": "follow_up_of",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "appointments_org_id_starts_at_idx": {
-          "name": "appointments_org_id_starts_at_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "appointments_employee_user_id_starts_at_idx": {
-          "name": "appointments_employee_user_id_starts_at_idx",
-          "columns": [
-            {
-              "expression": "employee_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "appointments_expert_user_id_starts_at_idx": {
-          "name": "appointments_expert_user_id_starts_at_idx",
-          "columns": [
-            {
-              "expression": "expert_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "appointments_follow_up_of_idx": {
-          "name": "appointments_follow_up_of_idx",
-          "columns": [
-            {
-              "expression": "follow_up_of",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "appointments_org_id_organizations_id_fk": {
-          "name": "appointments_org_id_organizations_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "appointments_expert_user_id_users_id_fk": {
-          "name": "appointments_expert_user_id_users_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "expert_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "appointments_employee_user_id_users_id_fk": {
-          "name": "appointments_employee_user_id_users_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "employee_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "appointments_follow_up_of_appointments_id_fk": {
-          "name": "appointments_follow_up_of_appointments_id_fk",
-          "tableFrom": "appointments",
-          "tableTo": "appointments",
-          "columnsFrom": [
-            "follow_up_of"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "appointments_tenant_isolation": {
-          "name": "appointments_tenant_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "public"
-          ],
-          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"appointments\".\"org_id\" = current_setting('app.current_org_id', true))",
-          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR \"appointments\".\"org_id\" = current_setting('app.current_org_id', true))"
-        }
-      },
-      "checkConstraints": {
-        "appointments_ends_after_starts_check": {
-          "name": "appointments_ends_after_starts_check",
-          "value": "\"appointments\".\"ends_at\" > \"appointments\".\"starts_at\""
-        }
-      },
-      "isRLSEnabled": true
     }
   },
   "enums": {
@@ -4062,29 +3849,6 @@
         "USER",
         "SYSTEM",
         "JOB"
-      ]
-    },
-    "public.appointment_approval_status": {
-      "name": "appointment_approval_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "APPROVED",
-        "REJECTED",
-        "EXPIRED"
-      ]
-    },
-    "public.appointment_status": {
-      "name": "appointment_status",
-      "schema": "public",
-      "values": [
-        "PROPOSED",
-        "AWAITING_APPROVAL",
-        "CONFIRMED",
-        "COMPLETED",
-        "CANCELED",
-        "DECLINED",
-        "NO_SHOW"
       ]
     },
     "public.assignment_kind": {

@@ -102,7 +102,7 @@ export interface WebinarHostRecord {
 export interface WebinarRegistrationRecord {
   id: string;
   webinarId: string;
-  /** The registrant's organisation; never null (migration 0013). */
+  /** The registrant's organisation; never null (migration 0014). */
   orgId: string;
   userId: string;
   registeredAt: Date;

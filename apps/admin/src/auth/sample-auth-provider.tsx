@@ -7,7 +7,8 @@
  */
 import { useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { ActiveContext } from '@nestself/contracts';
+import type { ActiveContext, Principal } from '@nestself/contracts';
+import { ApiError } from '@nestself/api-client';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { AuthContext } from './auth-context';
 import { SampleAuthExtrasContext } from './sample-extras';
@@ -50,6 +51,20 @@ function resolveInitialRole(): SampleRole {
   return 'admin';
 }
 
+/** The API's rule for `POST /auth/context` (session-endpoints.service.ts). */
+function sampleContextAllowed(principal: Principal, context: ActiveContext): boolean {
+  switch (context.kind) {
+    case 'personal':
+      return true;
+    case 'organization':
+      return principal.memberships.some((m) => m.orgId === context.orgId && m.status === 'ACTIVE');
+    case 'expert':
+      return principal.expert !== null;
+    case 'operations':
+      return principal.staffTemplates.length > 0;
+  }
+}
+
 interface Props {
   children: ReactNode;
   initialRole?: SampleRole;
@@ -67,9 +82,28 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
     setRole('admin');
   }, []);
 
-  const switchContext = useCallback(async (_context: ActiveContext) => {
-    // No-op in sample mode
-  }, []);
+  // Context switching is local: the label and `principal.context` change,
+  // the precomputed sample actions do not. Contexts the sample principal
+  // could not hold are refused the way the API refuses them.
+  const [switched, setSwitched] = useState<{ role: SampleRole; context: ActiveContext } | null>(null);
+  const switchContext = useCallback(
+    async (context: ActiveContext) => {
+      if (!sampleContextAllowed(sample.principal, context)) {
+        throw new ApiError({
+          status: 403,
+          code: 'invalid_context',
+          message: 'The requested context is not available to this user',
+          requestId: null,
+        });
+      }
+      setSwitched({ role, context });
+    },
+    [sample, role],
+  );
+  const principal = useMemo<Principal>(
+    () => (switched && switched.role === role ? { ...sample.principal, context: switched.context } : sample.principal),
+    [sample, switched, role],
+  );
 
   const stepUp = useCallback(async () => {
     // Sample mode has no session to re-authenticate; treat it as verified.
@@ -97,7 +131,7 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const authValue = useMemo(
     () => ({
       status: 'authenticated' as const,
-      principal: sample.principal,
+      principal,
       effectiveActions: sample.effectiveActions,
       signOut,
       switchContext,
@@ -105,7 +139,7 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
       refreshPrincipal,
       error: null,
     }),
-    [sample, signOut, switchContext, stepUp, refreshPrincipal],
+    [principal, sample, signOut, switchContext, stepUp, refreshPrincipal],
   );
 
   const extras = useMemo(

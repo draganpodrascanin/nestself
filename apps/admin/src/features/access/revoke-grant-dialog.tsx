@@ -12,7 +12,7 @@ import type { FormError } from '@nestself/ui';
 import type { GrantResponse } from '@nestself/contracts';
 import type { OpsAdminApi } from '@nestself/api-client';
 import { accessErrorKey } from './access-errors';
-import { useRevokeOrgGrant } from './use-ops-admin';
+import { useRevokeGrant } from './use-ops-admin';
 
 const REASON_MIN = 3;
 const REASON_MAX = 500;
@@ -25,7 +25,8 @@ export interface RevokeGrantDialogProps {
   subjectName: string;
   onClose: () => void;
   opsApi: OpsAdminApi;
-  orgId: string;
+  /** The grant's organization; `null` for a platform grant (`/ops/grants/:id/revoke`). */
+  orgId: string | null;
 }
 
 export function RevokeGrantDialog({
@@ -38,7 +39,7 @@ export function RevokeGrantDialog({
 }: RevokeGrantDialogProps) {
   const { t } = useTranslation(['admin', 'common']);
   const { add: addToast } = useToast();
-  const revokeGrant = useRevokeOrgGrant(opsApi, orgId);
+  const revokeGrant = useRevokeGrant(opsApi, orgId);
   const formRef = useRef<HTMLFormElement>(null);
   /**
    * The confirm button of `AlertDialogContent` also closes the dialog. While

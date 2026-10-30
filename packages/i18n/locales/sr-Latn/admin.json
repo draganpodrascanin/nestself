@@ -6,7 +6,9 @@
     "content": "Sadržaj",
     "eventRequests": "Zahtevi za događaje",
     "settings": "Podešavanja",
-    "access": "Pristup"
+    "access": "Pristup",
+    "emergency": "Hitan pristup",
+    "sso": "SSO"
   },
   "experts": {
     "title": "Stručnjaci",
@@ -40,7 +42,39 @@
     "tabsLabel": "Delovi organizacije",
     "tabs": {
       "overview": "Pregled",
-      "access": "Pristup"
+      "access": "Pristup",
+      "people": "Ljudi"
+    },
+    "search": "Pretraga",
+    "searchHint": "Početak naziva ili kratkog naziva",
+    "searchSubmit": "Pretraži",
+    "loading": "Učitavanje organizacija",
+    "empty": "Još nema organizacija.",
+    "noMatch": "Nijedna organizacija ne odgovara pretrazi.",
+    "limited": "Tvoj pristup je ograničen na dodeljene klijente. Dodeljenog klijenta otvori preko linka koji si dobio/la.",
+    "slug": "Kratki naziv",
+    "id": "ID",
+    "created": "Kreirano",
+    "sampleNote": "Režim uzoraka: ovo je organizacija iz uzorka, a prenos vlasništva je isključen. Ništa se ne kreira, ne menja niti šalje.",
+    "statuses": {
+      "ONBOARDING": "U uvođenju",
+      "ACTIVE": "Aktivna",
+      "SUSPENDED": "Suspendovana",
+      "ENDED": "Završena"
+    },
+    "owner": {
+      "title": "Vlasnik",
+      "current": "Vlasnik ove organizacije: {{name}}.",
+      "none": "Ova organizacija još nema vlasnika.",
+      "set": "Odredi vlasnika",
+      "loadTitle": "Vlasnik nije mogao da se učita"
+    },
+    "errors": {
+      "loadTitle": "Organizacija nije mogla da se učita",
+      "notFound": "Ova organizacija ne postoji.",
+      "forbidden": "Tvoj nalog nema dozvolu da otvori ovu organizaciju.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
     }
   },
   "tables": {
@@ -95,7 +129,7 @@
     "notConnected": "API nije povezan (režim uzorka)"
   },
   "access": {
-    "sampleNote": "Primer podataka: dodela i opoziv su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
+    "sampleNote": "Primer podataka: dodela, opoziv i prenos vlasništva su isključeni. Ništa se ne kreira, ne menja i ne opoziva.",
     "loading": "Učitavanje pristupa",
     "empty": "U ovoj organizaciji još nema dodeljenih dozvola.",
     "org": {
@@ -109,7 +143,7 @@
       "lead": "Šabloni osoblja van bilo koje organizacije, u obuhvatu koji svaki šablon određuje.",
       "tableCaption": "Dozvole na platformi",
       "empty": "Još nema dozvola na platformi.",
-      "readOnlyNote": "Dozvole na platformi za sada nije moguće opozvati sa ovog ekrana: operativni API nema rutu za njihov opoziv.",
+      "revokeNote": "Opoziv dozvole na platformi opoziva i sve dozvole delegirane iz nje.",
       "scopeOf": "Obuhvat: {{scope}}"
     },
     "columns": {
@@ -205,6 +239,17 @@
       "cancel": "Zadrži dozvolu",
       "success": "Dozvola je opozvana."
     },
+    "transfer": {
+      "open": "Prenesi vlasništvo",
+      "title": "Prenos vlasništva",
+      "description": "Izaberi aktivnog člana koji postaje vlasnik ove organizacije.",
+      "member": "Novi vlasnik",
+      "currentOwner": "Vlasnička prava korisnika {{name}} prestaju čim se prenos završi. Dozvole delegirane iz te vlasničke dozvole prelaze na novog vlasnika.",
+      "noOwner": "Ova organizacija još nema vlasnika. Član kog izabereš postaje njen prvi vlasnik.",
+      "submit": "Prenesi vlasništvo",
+      "cancel": "Otkaži",
+      "success": "Vlasništvo je preneto."
+    },
     "reason": {
       "label": "Razlog",
       "hint": "Od 3 do 500 znakova. Razlog se čuva u evidenciji revizije."
@@ -235,7 +280,468 @@
       "notFound": "Ova stavka više ne postoji. Osveži listu i pokušaj ponovo.",
       "userNotFound": "Ne postoji korisnik sa ovim ID-jem.",
       "forbidden": "Tvoj nalog nema dozvolu za ovo.",
-      "userIdRequired": "Unesi ID korisnika."
+      "userIdRequired": "Unesi ID korisnika.",
+      "alreadyOwner": "Ova osoba je već vlasnik organizacije.",
+      "ownerExists": "Ova organizacija već ima vlasnika. Umesto toga prenesi vlasništvo."
+    }
+  },
+  "paging": {
+    "showing_one": "Prikazan je {{count}} red",
+    "showing_few": "Prikazana su {{count}} reda",
+    "showing_other": "Prikazano je {{count}} redova",
+    "showingMore_one": "Prikazan je {{count}} red, ima ih još",
+    "showingMore_few": "Prikazana su {{count}} reda, ima ih još",
+    "showingMore_other": "Prikazano je {{count}} redova, ima ih još",
+    "loadMore": "Učitaj još",
+    "loadMoreFailed": "Dodatni redovi nisu mogli da se učitaju"
+  },
+  "people": {
+    "title": "Ljudi",
+    "lead": "Članovi ove organizacije i pozivnice koje još čekaju prihvatanje.",
+    "sampleNote": "Režim uzoraka: završavanje članstva, pozivanje, uvoz i opoziv su isključeni. Ništa se ne kreira, ne menja niti šalje.",
+    "loading": "Učitavanje",
+    "choose": "Izaberi",
+    "cancel": "Otkaži",
+    "tabs": {
+      "label": "Odeljci o ljudima",
+      "members": "Članovi",
+      "invitations": "Pozivnice"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "Svi statusi",
+      "search": "Pretraga",
+      "searchHint": "Ime ili imejl adresa"
+    },
+    "status": {
+      "ACTIVE": "Aktivan",
+      "INVITED": "Pozvan",
+      "ENDED": "Završeno"
+    },
+    "columns": {
+      "name": "Ime",
+      "email": "Imejl",
+      "orgUnit": "Organizaciona jedinica",
+      "status": "Status",
+      "startDate": "Datum početka",
+      "actions": "Radnje",
+      "template": "Šablon",
+      "expires": "Ističe"
+    },
+    "members": {
+      "caption": "Članovi",
+      "empty": "Nijedan član ne odgovara ovim filterima."
+    },
+    "end": {
+      "open": "Završi članstvo",
+      "openFor": "Završi članstvo: {{name}}",
+      "title": "Završavanje članstva",
+      "description": "Završiti članstvo za: {{name}}? Dozvole u ovoj organizaciji se opozivaju i pristup njoj prestaje. Ovo se ne može poništiti sa ove stranice.",
+      "reason": "Razlog",
+      "confirm": "Završi članstvo",
+      "success": "Članstvo je završeno: {{name}}.",
+      "reasons": {
+        "LEFT": "Napustio/la organizaciju",
+        "CONTRACT_ENDED": "Ugovor je istekao",
+        "DEACTIVATED_BY_HR": "Deaktivirano na zahtev poslodavca",
+        "SUSPENDED_BY_PLATFORM": "Završila operativa NestSelfa",
+        "MERGED": "Spojeno sa drugim nalogom"
+      }
+    },
+    "invitations": {
+      "caption": "Pozivnice na čekanju",
+      "empty": "Nema pozivnica na čekanju.",
+      "noOrgUnit": "Bez organizacione jedinice"
+    },
+    "invite": {
+      "open": "Pozovi",
+      "title": "Pozivanje osobe",
+      "email": "Imejl adresa",
+      "template": "Šablon dozvola",
+      "submit": "Pošalji pozivnicu",
+      "success": "Pozivnica je kreirana za {{email}}.",
+      "description": "Pozivnica važi za celu organizaciju. HR kasnije može da rasporedi osobu u organizacionu jedinicu."
+    },
+    "import": {
+      "open": "Uvoz",
+      "title": "Uvoz pozivnica",
+      "description": "Nalepi jednu osobu po redu u obliku imejl,šablon[,id organizacione jedinice].",
+      "rows": "Redovi",
+      "rowsHint": "Primer: ana@example.com,employee,team_product",
+      "preview_one": "{{count}} red je spreman za uvoz",
+      "preview_few": "{{count}} reda su spremna za uvoz",
+      "preview_other": "{{count}} redova je spremno za uvoz",
+      "problemsLabel": "Redovi za ispravku",
+      "problems": {
+        "columns": "Red {{line}}: očekuje se imejl,šablon i opciono organizaciona jedinica.",
+        "email": "Red {{line}}: „{{value}}” nije ispravna imejl adresa.",
+        "template": "Red {{line}}: „{{value}}” nije šablon sa kojim se ljudi mogu pozvati.",
+        "tooMany": "{{rows}} redova: jedan uvoz prima najviše {{max}}."
+      },
+      "fixProblems": "Ispravi redove navedene ispod, pa pokreni uvoz ponovo.",
+      "noRows": "Nalepi bar jedan red.",
+      "submit": "Uvezi",
+      "success_one": "Kreirana je {{count}} pozivnica.",
+      "success_few": "Kreirane su {{count}} pozivnice.",
+      "success_other": "Kreirano je {{count}} pozivnica.",
+      "resultTitle": "Uvoz je završen",
+      "resultSummary": "Kreirano: {{created}}. Preskočeno: {{skipped}}. Nije uvezeno: {{failed}}.",
+      "errorsCaption": "Redovi koji nisu uvezeni",
+      "reason": "Razlog",
+      "done": "Gotovo",
+      "reasons": {
+        "invalidTemplate": "Ovaj šablon se ne može koristiti za pozivnice.",
+        "duplicateInBatch": "Ova imejl adresa se pojavljuje više puta u uvozu.",
+        "invalidOrgUnit": "Organizaciona jedinica ne pripada ovoj organizaciji.",
+        "ownerExists": "Organizacija već ima vlasnika.",
+        "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+        "alreadyMember": "Ova osoba je već aktivan član.",
+        "unknown": "Ovaj red nije mogao da se uveze."
+      }
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "openFor": "Opozovi pozivnicu za {{email}}",
+      "title": "Opoziv pozivnice",
+      "description": "Opozvati pozivnicu za {{email}}? Link iz pozivnice prestaje da radi.",
+      "confirm": "Opozovi pozivnicu",
+      "success": "Pozivnica za {{email}} je opozvana."
+    },
+    "errors": {
+      "loadTitle": "Ljudi nisu mogli da se učitaju",
+      "membersLoadTitle": "Članovi nisu mogli da se učitaju",
+      "invitationsLoadTitle": "Pozivnice nisu mogle da se učitaju",
+      "validation": "Neki podaci nisu ispravni. Proveri ih i pokušaj ponovo.",
+      "conflict": "Ovo se već promenilo. Osveži listu i pokušaj ponovo.",
+      "ownerExists": "Organizacija već ima vlasnika. Vlasništvo se može samo preneti.",
+      "subjectNotMember": "Ova osoba nije aktivan član organizacije.",
+      "notFound": "Ova osoba ili pozivnica više ne postoji. Osveži listu i pokušaj ponovo.",
+      "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
+      "alreadyMember": "Ova osoba je već aktivan član organizacije.",
+      "cannotEndSelf": "Ne možeš da okončaš sopstveno članstvo. Zamoli drugog člana osoblja.",
+      "rateLimited": "Previše pokušaja. Sačekaj trenutak i pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "emailInvalid": "Unesi ispravnu imejl adresu.",
+      "templateRequired": "Izaberi šablon.",
+      "templateInvalid": "Ovaj šablon se ne može koristiti za pozivnice.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo u ovoj organizaciji.",
+      "reasonRequired": "Izaberi razlog."
+    }
+  },
+  "users": {
+    "title": "Nalog",
+    "stateLabel": "Stanje naloga:",
+    "cancel": "Otkaži",
+    "state": {
+      "active": "Aktivan",
+      "suspended": "Suspendovan"
+    },
+    "suspend": {
+      "open": "Suspenduj korisnika",
+      "title": "Suspendovati ovog korisnika?",
+      "description": "Korisnik {{userId}} se odjavljuje svuda i ne može da se prijavi dok se suspenzija ne ukine.",
+      "confirm": "Suspenduj korisnika",
+      "success": "Korisnik {{userId}} je suspendovan.",
+      "self": "Ne možeš da suspenduješ sopstveni nalog."
+    },
+    "reinstate": {
+      "open": "Ukini suspenziju",
+      "title": "Ukinuti suspenziju ovog korisnika?",
+      "description": "Korisnik {{userId}} ponovo može da se prijavi. Članstva i dozvole ostaju kakvi su bili.",
+      "confirm": "Ukini suspenziju",
+      "success": "Suspenzija korisnika {{userId}} je ukinuta."
+    },
+    "errors": {
+      "notFound": "Ne postoji korisnik sa ovim ID-jem.",
+      "conflict": "Ovaj nalog se u međuvremenu promenio. Ponovo potraži korisnika.",
+      "cannotSuspendSelf": "Ne možeš da suspenduješ sopstveni nalog. Zamoli drugog člana osoblja.",
+      "forbidden": "Tvoj nalog nema dozvolu da suspenduje ili vrati ovog korisnika.",
+      "validation": "Unesi razlog dužine od 3 do 500 znakova.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
+    }
+  },
+  "emergency": {
+    "title": "Hitan pristup",
+    "intro": "Vremenski ograničen pristup jednom slučaju ili zapisima jedne osobe, uz pisanu svrhu i odobrenje drugog člana osoblja.",
+    "sampleNote": "Primer: ovo su primer zapisi, a zahtevanje, odobravanje, odbijanje, opoziv i čitanje su isključeni. Ništa se ne kreira, ne menja i ne čita.",
+    "loading": "Učitavanje zapisa o hitnom pristupu…",
+    "empty": "Hitan pristup nije zatražen.",
+    "noMatch": "Nijedan zapis nema ovaj status.",
+    "filter": "Status",
+    "cancel": "Otkaži",
+    "purpose": "Svrha",
+    "you": "{{userId}} (ti)",
+    "notApproved": "Još nije odobreno",
+    "waiting": "Čeka se odobrenje drugog člana osoblja.",
+    "minutes": "{{minutes}} min",
+    "statuses": {
+      "all": "Svi",
+      "pending": "Na čekanju",
+      "active": "Aktivan",
+      "expired": "Istekao",
+      "revoked": "Opozvan"
+    },
+    "scopeKinds": {
+      "CASE": "Slučaj",
+      "USER_RECORDS": "Zapisi osobe"
+    },
+    "recordTypes": {
+      "conversation": "Razgovor",
+      "intake": "Prijemni upitnik"
+    },
+    "columns": {
+      "status": "Status",
+      "requester": "Zatražio",
+      "approver": "Odobrio",
+      "scope": "Obuhvat",
+      "purpose": "Svrha",
+      "expiry": "Ističe",
+      "actions": "Radnje"
+    },
+    "expiry": {
+      "pending": "{{minutes}} min od odobrenja",
+      "remaining": "Još {{hours}} h {{minutes}} min (do {{time}})",
+      "expired": "Isteklo {{time}}",
+      "revoked": "Opozvano {{time}}"
+    },
+    "request": {
+      "open": "Zatraži pristup",
+      "title": "Zatraži hitan pristup",
+      "description": "Zahtev mora da odobri drugi član osoblja. Period počinje od odobrenja.",
+      "purpose": "Svrha",
+      "purposeHint": "Zašto ti je potreban ovaj pristup, od 10 do 1000 znakova. Beleži se uz zahtev.",
+      "scopeKind": "Obuhvat",
+      "caseId": "ID slučaja",
+      "userId": "ID korisnika",
+      "duration": "Trajanje",
+      "durationHint": "Period se završava posle ovog vremena, najviše četiri sata.",
+      "submit": "Pošalji zahtev",
+      "success": "Hitan pristup je zatražen. Mora da ga odobri drugi član osoblja."
+    },
+    "approve": {
+      "open": "Odobri",
+      "title": "Odobriti ovaj hitan pristup?",
+      "description": "Korisnik {{requester}} dobija pristup ({{scope}} {{scopeId}}) od sada do kraja perioda.",
+      "confirm": "Odobri",
+      "success": "Hitan pristup je odobren."
+    },
+    "deny": {
+      "open": "Odbij",
+      "title": "Odbiti ovaj zahtev?",
+      "description": "Zahtev korisnika {{requester}} ({{scope}} {{scopeId}}) se uklanja.",
+      "confirm": "Odbij zahtev",
+      "success": "Zahtev je odbijen."
+    },
+    "revoke": {
+      "open": "Opozovi",
+      "title": "Opozvati ovaj hitan pristup?",
+      "description": "Korisnik {{requester}} odmah gubi pristup ({{scope}} {{scopeId}}).",
+      "confirm": "Opozovi pristup",
+      "success": "Hitan pristup je opozvan."
+    },
+    "record": {
+      "open": "Otvori zapis",
+      "title": "Čitanje zapisa uz hitan pristup",
+      "description": "U okviru: {{scope}} {{scopeId}}. Jedan po jedan zapis, samo za čitanje.",
+      "auditedTitle": "Ovaj pristup se beleži",
+      "audited": "Svako čitanje ovde se beleži i pripisuje tebi.",
+      "recordType": "Vrsta zapisa",
+      "recordId": "ID zapisa",
+      "submit": "Pročitaj zapis",
+      "contentLabel": "Sadržaj zapisa",
+      "conversationHeading": "Razgovor {{id}}",
+      "intakeHeading": "Prijemni upitnik {{id}}",
+      "caseLine": "Slučaj {{caseId}}",
+      "intakeMeta": "Slučaj {{caseId}}, napisano {{time}}",
+      "messageMeta": "{{author}}, {{time}}",
+      "noMessages": "Ovaj razgovor nema poruka."
+    },
+    "errors": {
+      "loadTitle": "Hitan pristup nije moguće učitati",
+      "selfApprovalDenied": "Ne možeš da odobriš sopstveni zahtev. Zamoli drugog člana osoblja.",
+      "notActive": "Ovaj hitan pristup nije aktivan ili je zapis van njegovog obuhvata.",
+      "conflict": "Ovaj zahtev više nije na čekanju. Lista je osvežena.",
+      "notFound": "Ništa nije pronađeno sa ovim ID-jem.",
+      "forbidden": "Tvoj nalog nema dozvolu za ovo.",
+      "validation": "Proveri svrhu, obuhvat i trajanje pa pokušaj ponovo.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "purposeLength": "Napiši svrhu dužine od 10 do 1000 znakova.",
+      "scopeIdRequired": "Unesi ID slučaja ili osobe.",
+      "recordIdRequired": "Unesi ID zapisa.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo."
+    }
+  },
+  "sso": {
+    "title": "Jedinstvena prijava (SSO)",
+    "intro": "Provajderi identiteta poslodavaca (SAML ili OIDC). Veza počinje kao nacrt, prelazi u testiranje kada se domen potvrdi i postaje aktivna posle probne prijave.",
+    "sampleNote": "Probni podaci: ove veze su izmišljene. U probnom režimu ništa ne može da se napravi, testira ili promeni.",
+    "loading": "Učitavanje SSO veza…",
+    "empty": "Još nema SSO veza.",
+    "newConnection": "Nova veza",
+    "cancel": "Otkaži",
+    "never": "Nikad",
+    "notKnown": "Nepoznato",
+    "none": "Nema",
+    "details": "Detalji",
+    "columns": {
+      "organization": "Organizacija",
+      "provider": "Naziv provajdera",
+      "protocol": "Protokol",
+      "status": "Status",
+      "domains": "Domeni",
+      "lastTested": "Poslednji test",
+      "certificate": "Sertifikat ističe",
+      "actions": "Radnje"
+    },
+    "statuses": {
+      "DRAFT": "Nacrt",
+      "TESTING": "Testiranje",
+      "ACTIVE": "Aktivna",
+      "SUSPENDED": "Obustavljena"
+    },
+    "protocols": {
+      "SAML": "SAML",
+      "OIDC": "OIDC"
+    },
+    "domainsCount": "Potvrđeno {{verified}} od {{count}}",
+    "jitWarning": "JIT pravi nalog za svakoga koga provajder identiteta potvrdi na potvrđenom domenu.",
+    "create": {
+      "title": "Nova SSO veza",
+      "description": "Veza počinje kao nacrt. Ništa se ne šalje provajderu identiteta dok je ne testiraš, osim OIDC tajne klijenta, koja se predaje odmah.",
+      "organization": "Organizacija",
+      "organizationPlaceholder": "Izaberi organizaciju",
+      "slug": "Kratka oznaka",
+      "slugHint": "Od 2 do 11 malih slova, cifara ili crtica. Od nje nastaje naziv provajdera i kasnije ne može da se promeni.",
+      "providerPreview": "Naziv provajdera: {{name}}",
+      "protocol": "Protokol",
+      "metadataSource": "SAML metapodaci",
+      "metadataSourceUrl": "Preuzmi sa URL-a",
+      "metadataSourceXml": "Nalepi XML",
+      "metadataUrl": "URL metapodataka",
+      "metadataXml": "XML metapodataka",
+      "oidcIssuer": "URL izdavaoca",
+      "oidcClientId": "ID klijenta",
+      "oidcClientSecret": "Tajna klijenta",
+      "secretHint": "Samo za upis: čuva je provajder identiteta i nikad se više ne prikazuje. Potrebna je pre prvog testa.",
+      "jit": "Napravi nalog pri prvoj prijavi (JIT)",
+      "defaultOrgUnit": "ID podrazumevane organizacione jedinice",
+      "defaultOrgUnitHint": "Nije obavezno. Nalozi napravljeni pri prvoj prijavi pridružuju se ovoj jedinici.",
+      "submit": "Napravi vezu",
+      "success": "Veza je napravljena kao nacrt."
+    },
+    "edit": {
+      "open": "Izmeni",
+      "title": "Izmena veze",
+      "description": "Šalju se samo polja koja promeniš.",
+      "secretReplace": "Zameni tajnu klijenta",
+      "secretReplaceHint": "Ostavi prazno da zadržiš postojeću tajnu. Tajna se nikad ne prikazuje.",
+      "metadataXmlHint": "Ostavi prazno da zadržiš postojeći XML.",
+      "defaultOrgUnitHint": "Ostavi prazno da je ukloniš.",
+      "submit": "Sačuvaj izmene",
+      "success": "Izmene su sačuvane.",
+      "activeWarning": "Ova veza je aktivna. Izmena podešavanja provajdera (metapodaci, izdavalac, ID klijenta ili tajna klijenta) vraća je na testiranje: zaposleni ne mogu da se prijave preko ove veze dok nova probna prijava ne uspe i dok je ponovo ne aktiviraš.",
+      "backToTesting": "Izmene su sačuvane. Veza je ponovo na testiranju: uradi probnu prijavu, pa je ponovo aktiviraj."
+    },
+    "detail": {
+      "title": "Veza {{provider}}",
+      "close": "Zatvori detalje",
+      "organization": "Organizacija",
+      "provider": "Naziv provajdera",
+      "protocol": "Protokol",
+      "status": "Status",
+      "metadataUrl": "URL metapodataka",
+      "oidcIssuer": "URL izdavaoca",
+      "oidcClientId": "ID klijenta",
+      "secret": "Tajna klijenta",
+      "secretWriteOnly": "Samo za upis, nikad se ne prikazuje",
+      "jit": "JIT nalozi",
+      "jitOn": "Uključeno",
+      "jitOff": "Isključeno",
+      "defaultOrgUnit": "Podrazumevana organizaciona jedinica",
+      "certificate": "Sertifikat ističe",
+      "lastTested": "Poslednja probna prijava",
+      "spTitle": "Vrednosti za provajdera identiteta poslodavca",
+      "entityId": "Entity ID",
+      "acsUrl": "ACS URL",
+      "spMissing": "Vrednosti pružaoca usluge nisu podešene za ovo okruženje."
+    },
+    "copy": {
+      "label": "Kopiraj: {{label}}",
+      "done": "Kopirano: {{label}}",
+      "failed": "Kopiranje nije uspelo. Označi vrednost i kopiraj je ručno."
+    },
+    "domains": {
+      "title": "Domeni",
+      "empty": "Još nema domena. Dodaj domen e-pošte poslodavca i potvrdi ga DNS zapisom.",
+      "domain": "Domen",
+      "status": "Status",
+      "pending": "Na čekanju",
+      "verifiedAt": "Potvrđen {{time}}",
+      "record": "DNS zapis",
+      "add": "Dodaj domen",
+      "addTitle": "Dodavanje domena",
+      "addDescription": "Domen e-pošte poslodavca, na primer domen kompanije. Javni domeni e-pošte se odbijaju.",
+      "field": "Domen",
+      "submit": "Dodaj domen",
+      "addedTitle": "Objavi ovaj DNS zapis",
+      "txtIntro": "Zamoli DNS administratora poslodavca da objavi ovaj TXT zapis, pa izaberi Potvrdi pored domena. Promene u DNS-u mogu potrajati.",
+      "txtName": "Naziv zapisa",
+      "txtValue": "Vrednost zapisa",
+      "done": "Gotovo",
+      "verify": "Potvrdi",
+      "verified": "Domen {{domain}} je potvrđen."
+    },
+    "actions": {
+      "test": "Probna prijava",
+      "testStarted": "Probna prijava je otvorena u novoj kartici",
+      "testNote": "Probni link može da se iskoristi samo jednom i ističe za 15 minuta. Otvara prijavu u radni prostor u novoj kartici; završi je nalogom na potvrđenom domenu (ulaziš u radni prostor kao taj nalog), zatim se vrati ovde i izaberi Aktiviraj.",
+      "testLink": "Otvori probnu prijavu",
+      "activate": "Aktiviraj",
+      "activated": "Veza je aktivirana.",
+      "suspend": "Obustavi",
+      "suspendTitle": "Obustaviti ovu vezu?",
+      "suspendDescription": "Prijava više ne šalje ljude na {{provider}}; koriste kod iz e-pošte dok se veza ponovo ne aktivira.",
+      "suspended": "Veza je obustavljena.",
+      "reactivate": "Ponovo aktiviraj",
+      "reactivated": "Veza je ponovo aktivirana.",
+      "testDismiss": "Sakrij probni link"
+    },
+    "errors": {
+      "loadTitle": "SSO veze nije moguće učitati",
+      "actionTitle": "Radnju nije bilo moguće završiti",
+      "domainBlocklisted": "Javni domeni e-pošte kao što je gmail.com ne mogu da se koriste za SSO. Koristi domen poslodavca.",
+      "domainUnverified": "DNS TXT zapis nije pronađen ili se ne poklapa. Proveri naziv i vrednost zapisa ili sačekaj da se DNS osveži, pa pokušaj ponovo.",
+      "connectionState": "Ova promena nije moguća u trenutnom statusu veze. Lista je osvežena.",
+      "connectionStateTest": "Testirati se može samo veza u nacrtu ili testiranju sa bar jednim potvrđenim domenom.",
+      "connectionStateActivate": "Pre aktiviranja završi probnu prijavu na potvrđenom domenu.",
+      "conflict": "Neko je u međuvremenu promenio ovu vezu. Lista je osvežena.",
+      "conflictProviderName": "Veza sa ovim nazivom provajdera već postoji. Izaberi drugu kratku oznaku.",
+      "conflictProviderNameReserved": "Druga organizacija već koristi ovu kratku oznaku za svoju SSO vezu. Izaberi drugu kratku oznaku.",
+      "conflictDomain": "Ovaj domen je već povezan sa nekom vezom.",
+      "validation": "Proveri polja pa pokušaj ponovo.",
+      "idpRefused": "Provajder identiteta je odbio ovu konfiguraciju. Proveri metapodatke ili podatke o izdavaocu i klijentu.",
+      "notFound": "Ova veza ili domen više ne postoje. Lista je osvežena.",
+      "organizationNotFound": "Ova organizacija više ne postoji. Izaberi drugu.",
+      "forbidden": "Tvoj nalog nema dozvolu da upravlja SSO vezama.",
+      "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
+      "unavailable": "Provajder identiteta trenutno nije dostupan. Pokušaj kasnije.",
+      "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "fieldSlug": "Izaberi kraću oznaku: naziv provajdera mora da ostane do 20 znakova.",
+      "fieldProtocol": "Protokol ne može da se promeni kada je veza testirana.",
+      "fieldSecret": "Tajna klijenta važi samo za OIDC veze i ne može da se pošalje uz vraćanje u nacrt.",
+      "fieldSecretMissing": "Dodaj OIDC tajnu klijenta (Izmeni) pre testiranja veze.",
+      "fieldDefaultOrgUnit": "Ova organizaciona jedinica ne pripada organizaciji.",
+      "fieldSamlMetadata": "SAML vezi je potreban URL ili XML metapodataka.",
+      "fieldOidc": "OIDC vezi su potrebni URL izdavaoca i ID klijenta.",
+      "fieldIdpInitiated": "Prijava koju pokreće provajder identiteta nije dostupna.",
+      "organizationRequired": "Izaberi organizaciju.",
+      "slugPattern": "Koristi od 2 do 11 malih slova, cifara ili crtica.",
+      "urlInvalid": "Unesi pun URL koji počinje sa https://.",
+      "metadataXmlRequired": "Nalepi XML metapodataka.",
+      "clientIdRequired": "Unesi ID klijenta.",
+      "domainInvalid": "Unesi domen kao što je example.com, bez @ ili https://.",
+      "nothingChanged": "Promeni bar jedno polje."
     }
   }
 }

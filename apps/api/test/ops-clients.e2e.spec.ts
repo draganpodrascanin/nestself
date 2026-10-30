@@ -194,6 +194,16 @@ describe.skipIf(!shouldRun)('Operations routes for assigned clients (e2e)', () =
     expect(res.body).toHaveProperty('templateKey', 'employee');
   });
 
+  it('POST /ops/orgs/org_sample/invitations refuses the client_operations staff template (400)', async () => {
+    const res = await nikolaAgent
+      .post('/api/ops/orgs/org_sample/invitations')
+      .set('X-CSRF-Token', nikolaCsrf)
+      .send({ email: 'ops-staff@example.com', templateKey: 'client_operations' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('code', 'validation');
+    expect(res.body.details).toEqual({ templateKey: 'client_operations' });
+  });
+
   it('DELETE /ops/orgs/org_sample/invitations/:id revokes an invitation (200)', async () => {
     const createRes = await nikolaAgent
       .post('/api/ops/orgs/org_sample/invitations')

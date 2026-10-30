@@ -690,7 +690,7 @@ export function sampleWebinarRows(sample: SampleWebinar) {
       ({
         id: `webinar_registration_${sample.id}_${userId}`,
         webinarId: sample.id,
-        // A registration always carries the registrant's organisation (migration 0013).
+        // A registration always carries the registrant's organisation (migration 0014).
         orgId: SAMPLE_PEOPLE.find((person) => person.id === userId)?.orgId ?? SAMPLE_ORG.id,
         userId,
         registeredAt: new Date(new Date(sample.startsAt).getTime() - 7 * 24 * 60 * 60_000),

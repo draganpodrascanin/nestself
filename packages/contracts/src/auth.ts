@@ -39,6 +39,52 @@ export const DiscoverResponseSchema = z.object({
 });
 export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
+// ---------------------------------------------------------------------------
+// Enterprise SSO redirect (API-R-06, API-R-07)
+// ---------------------------------------------------------------------------
+
+/**
+ * API-R-06: a return path is relative. It starts with a single `/`, contains
+ * no `//` (protocol-relative or authority), no backslash (browsers read `/\`
+ * as `//`) and no control characters.
+ */
+export function isRelativeReturnPath(value: string): boolean {
+  if (!value.startsWith('/')) return false;
+  if (value.includes('//') || value.includes('\\')) return false;
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
+  return !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+export const SsoReturnPathSchema = z
+  .string()
+  .max(2048)
+  .refine(isRelativeReturnPath, 'returnPath must be a relative path');
+
+/** `GET /auth/sso/start` query. `connection` is the connection's `cognitoProviderName`. */
+export const SsoStartQuerySchema = z.object({
+  connection: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/),
+  surface: z.enum(['workspace', 'admin']),
+  returnPath: SsoReturnPathSchema.optional(),
+  /**
+   * Staff test sign-in of a TESTING connection: the single-use nonce
+   * `POST /ops/sso-connections/:id/test` put into its `startUrl`.
+   */
+  test: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/).optional(),
+});
+export type SsoStartQuery = z.infer<typeof SsoStartQuerySchema>;
+
+/** `GET /auth/sso/callback` query as Cognito sends it (`error` instead of `code` on failure). */
+export const SsoCallbackQuerySchema = z.object({
+  code: z.string().min(1).max(2048).optional(),
+  state: z.string().min(1).max(256).optional(),
+  error: z.string().max(256).optional(),
+});
+export type SsoCallbackQuery = z.infer<typeof SsoCallbackQuerySchema>;
+
+/** `?reason=` values the SSO callback puts on the surface's `/sign-in` URL. */
+export const SSO_SIGN_IN_REASONS = ['sso_denied', 'sso_email_unverified'] as const;
+export type SsoSignInReason = (typeof SSO_SIGN_IN_REASONS)[number];
+
 export const EmailOtpStartRequestSchema = z.object({
   email: emailField,
   /** Language of the code email (Cognito CustomMessage trigger). Pool default when absent. */
@@ -131,6 +177,8 @@ export type ActiveContext = z.infer<typeof ActiveContextSchema>;
 export const PrincipalMembershipSchema = z.object({
   membershipId: z.string().min(1),
   orgId: z.string().min(1),
+  /** Display name of the organization, for the context picker. */
+  orgName: z.string().min(1),
   orgUnitId: z.string().min(1).nullable(),
   status: z.enum(['INVITED', 'ACTIVE']),
   startDate: z.string().datetime(),
@@ -236,14 +284,23 @@ export const TotpConfirmRequestSchema = z.object({
 });
 export type TotpConfirmRequest = z.infer<typeof TotpConfirmRequestSchema>;
 
+/** `POST /auth/totp/confirm` (200). */
+export const TotpConfirmResponseSchema = z.object({
+  enrolled: z.literal(true),
+});
+export type TotpConfirmResponse = z.infer<typeof TotpConfirmResponseSchema>;
+
 // --- Profile (PATCH /auth/me/locale, PATCH /auth/me/display-name) ---
 export const ProfileLocaleRequestSchema = z.object({
   locale: LocaleSchema,
 });
 export type ProfileLocaleRequest = z.infer<typeof ProfileLocaleRequestSchema>;
 
+/** Longest display name the profile route accepts (after trimming). */
+export const DISPLAY_NAME_MAX_LENGTH = 120;
+
 export const ProfileDisplayNameRequestSchema = z.object({
-  displayName: z.string().trim().min(1).max(120),
+  displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH),
 });
 export type ProfileDisplayNameRequest = z.infer<typeof ProfileDisplayNameRequestSchema>;
 
@@ -292,6 +349,8 @@ export const AUTH_ERROR_CODES = [
   'rate_limited',
   'csrf_rejected',
   'session_expired',
+  /** The identity provider failed for a reason the caller did not cause (503). */
+  'unavailable',
   'context_mismatch',
   'delegation_exceeds_boundary',
   'conflict',
@@ -301,11 +360,29 @@ export const AUTH_ERROR_CODES = [
   'missing_conditions',
   'self_approval_denied',
   'emergency_not_active',
+  'owner_exists',
+  /** `POST /ops/users/:userId/suspend` on the caller's own account (409). */
+  'cannot_suspend_self',
+  /** `POST .../members/:id/end` on the caller's own membership (409). */
+  'cannot_end_self',
+  /** An SSO connection is not in the status the operation needs, e.g. test without a verified domain (409). */
+  'sso_connection_state',
+  /** A public email domain (`PUBLIC_EMAIL_DOMAINS`) cannot be bound to an SSO connection (422). */
+  'domain_blocklisted',
+  /** The `_nestself-verify` DNS TXT record was missing or did not match (422). */
+  'domain_unverified',
+  /** The IdP did not assert a verified email (SSO-R-08); the user continues with the email code. */
+  'sso_email_unverified',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
+/**
+ * `POST /auth/totp/enrol` (sign-in MFA_SETUP step): the `totp_enrol`
+ * challengeToken is required. Signed-in users enrol through
+ * `POST /auth/me/totp/enrol` instead.
+ */
 export const TotpEnrolRequestSchema = z.object({
-  challengeToken: z.string().min(1).optional(),
+  challengeToken: z.string().min(1),
 });
 export type TotpEnrolRequest = z.infer<typeof TotpEnrolRequestSchema>;

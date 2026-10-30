@@ -45,6 +45,20 @@ describe('pino-redaction', () => {
     expect(output).toContain('[redacted]');
   });
 
+  it('redacts the SSO client secret and domain verification token in bodies and nested objects', () => {
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          req: { body: { oidcClientSecret: 'oidc_sec_1', verificationToken: 'vt_1' } },
+          nested: { oidcClientSecret: 'oidc_sec_2', verificationToken: 'vt_2', safe: 'visible' },
+        },
+        'test',
+      );
+    });
+    for (const v of ['oidc_sec_1', 'vt_1', 'oidc_sec_2', 'vt_2']) expect(output).not.toContain(v);
+    expect(output).toContain('visible');
+  });
+
   it('redacts req.headers.authorization', () => {
     const output = captureLog((logger) => {
       logger.info(

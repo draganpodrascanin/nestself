@@ -12,7 +12,9 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `PORT` | HTTP port the API listens on | `4000` |
 | `DATABASE_URL` | PostgreSQL connection string. In Docker and AWS use the `nestself_api` login (a member of `nestself_app`) so row-level security applies; migrations run as the owner | `postgresql://nestself:nestself_dev@localhost:5432/nestself` |
 | `DATABASE_POOL_MAX` | Maximum connections in the pg Pool | `10` |
-| `TEST_DATABASE_URL` | Integration tests only: a database the suites may drop and recreate (`<name>_schema`, `<name>_auth`, `<name>_jobs` ...) | unset (suites skip) |
+| `TEST_DATABASE_URL` | Integration tests only: a server and base name the suites may drop and recreate databases under (`<name>_<prefix>_schema`, `<name>_<prefix>_auth` ...) | unset (suites skip) |
+| `TEST_DATABASE_PREFIX` | Integration tests only: the `<prefix>` in test database names (letters, digits, underscores) | first 8 hex characters of the SHA-1 of the repository root path |
+| `E2E_DATABASE_URL` | `pnpm e2e:auth` only: the database the stub API uses; dropped, recreated, migrated and seeded on every run, so it must name a `nestself_e2e_*` or `nestself_test_*` database (others are refused) | `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server |
 | `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction (set to 1 or more behind a load balancer) | `0` |
 
 ### Authentication mode
@@ -62,7 +64,7 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 | `MARKETING_URL` | Origin of the marketing app (CORS) | `http://localhost:3000` |
 | `WORKSPACE_URL` | Origin of the workspace app (CORS, CSRF, WebSocket handshake) | `http://localhost:5173` |
 | `ADMIN_URL` | Origin of the admin app (CORS, CSRF, WebSocket handshake) | `http://localhost:5174` |
-| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links) | unset |
+| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links, mobile and direct SSO callers). Browser SSO redirects use the surface's own origin instead (`docs/auth/implementation.md` §18, §22.3). Required with `AUTH_MODE=cognito` | unset |
 | `SES_FROM_EMAIL` | Enables the SES invitation mailer; without it invitation links are logged | unset |
 
 ### Worker process
@@ -73,7 +75,7 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 
 ### Video (NS-CALLS-01)
 
-`apps/api/src/video/video.module.ts` picks the provider from these values. With `VIDEO_PROVIDER=chime` the schema refuses start-up unless `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` are all set (D-CW-06). `node infra/cdk/scripts/env-from-outputs.mjs <stage>` prints the queue and bucket values once `NestSelf-<stage>-Video` is deployed (`infra/cdk/README.md`, "Video stack"). None of these variables is in `apps/api/.env.example` yet. How calls are authorized is in `docs/auth/implementation.md`, section 22.
+`apps/api/src/video/video.module.ts` picks the provider from these values. With `VIDEO_PROVIDER=chime` the schema refuses start-up unless `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN` and `RECORDINGS_BUCKET` are all set (D-CW-06). `node infra/cdk/scripts/env-from-outputs.mjs <stage>` prints the queue and bucket values once `NestSelf-<stage>-Video` is deployed (`infra/cdk/README.md`, "Video stack"). None of these variables is in `apps/api/.env.example` yet. How calls are authorized is in `docs/auth/implementation.md`, section 23.
 
 | Variable | Type | Meaning | Default |
 | --- | --- | --- | --- |
@@ -132,4 +134,4 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
 - The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
 - Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables. The consultations and webinars epic added the video variables above.
-- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run.
+- Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run. Each database is named `<base>_<prefix>_<suffix>` (`testDatabaseName` in `apps/api/test/db/test-database-name.ts`): the prefix is `TEST_DATABASE_PREFIX` or a hash of the repository root, so two git worktrees running the same suite against one server never drop each other's database. Names longer than PostgreSQL's 63-byte limit shorten the base. `pnpm e2e:auth` uses the same prefix for its own database, `nestself_e2e_<prefix>` (or `E2E_DATABASE_URL`), and never the `DATABASE_URL` in `.env`; see `e2e/README.md`.

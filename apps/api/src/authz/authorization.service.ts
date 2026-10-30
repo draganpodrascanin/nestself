@@ -78,6 +78,17 @@ export class AuthorizationService {
   }
 
   /**
+   * Pure decision for list filtering: true when `authorize()` allows the
+   * action on the resource. Unlike `require()` it neither audits a denial nor
+   * enforces step-up freshness, so it must only gate metadata (list rows),
+   * never the content a single-record read returns.
+   */
+  async allows(principal: Principal, action: Action, resource: Resource): Promise<boolean> {
+    const ctx = await this.contextLoader.build(principal, resource, { action });
+    return authorize(principal, action, resource, ctx).allowed;
+  }
+
+  /**
    * Compute the effective actions for a principal's current context.
    * Used by GET /auth/me.
    */

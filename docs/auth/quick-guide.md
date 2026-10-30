@@ -11,16 +11,17 @@ NestSelf serves five populations from one platform: employees of client companie
 | Decision | What we chose | Why |
 |---|---|---|
 | Identity provider | Amazon Cognito, one user pool per environment in Frankfurt (eu-central-1) | Email one-time codes, authenticator apps and passkeys without building them; free at pilot scale; EU data residency. Behind an interface so it can be replaced. |
-| Sign-in methods | Employees use an email code. Experts and staff use a password plus an authenticator app. Employers may later bring their own SSO. | Removes passwords for the largest population; no SMS costs in Serbia and Hungary. |
+| Sign-in methods | Employees use an email code. Experts and staff use a password plus an authenticator app. Employers can bring their own SAML or OIDC sign-in (enterprise SSO). | Removes passwords for the largest population; no SMS costs in Serbia and Hungary. |
 | Web sessions | The browser gets an opaque cookie; the API keeps Cognito tokens encrypted in Redis (Backend-for-Frontend) | Tokens never reach JavaScript; revoking a session is deleting a key; CSRF handled with a double-submit token. |
 | Mobile | The app talks to Cognito directly (PKCE) and calls the API with a bearer token | The standard native pattern; tokens live in the device's secure store. |
 | Authorization | Hand-built grants evaluated by a pure `authorize()` function | Delegation, spending ceilings, effective-access previews and a 150-case golden test table are native; tokens carry no roles, so access changes apply within seconds. |
 | Organization structure | A tree of org units with a closure table | Cheap ancestor queries for "manager of this team and everything under it". |
 | Database access | Drizzle ORM with PostgreSQL row-level security | Tenant isolation lives in the database: a query without an organization filter returns nothing. Partial indexes, checks and views are part of the schema. |
 | Audit | Append-only, partitioned `audit_events` with retention tiers | Every consequential action is recorded; nothing sensitive (tokens, message bodies, raw IPs) ever is. |
-| Background work | BullMQ on Redis, run by a separate worker process | Reconciliation (expired grants, stale mobile token families, audit partitions, expired sessions, expired emergency access) is audited like any user action and never runs inside the API process. |
+| Background work | BullMQ on Redis, run by a separate worker process | Reconciliation (expired grants, stale mobile token families, audit partitions, expired sessions, expired emergency access, expiring SSO certificates) is audited like any user action and never runs inside the API process. |
 | Step-up | Sensitive actions need a sign-in or a fresh email code from the last 5 to 30 minutes, depending on the action's class | Granting access, ending memberships, reading confidential records and emergency access stay safe on an unattended screen. Every class uses an email code for now; the authenticator for the emergency class is an owner decision. |
 | Legacy roles | Removed from the database; every permission is a grant | One source of truth. `db:backfill-grants` converted the old role columns before migration `0005` dropped them. |
+| Organization ownership | Exactly one `employer_owner` per organization: the organization's superadmin, who grants and revokes access and can hand the role to another member. NestSelf staff can change anything for an organization, including transferring its ownership | One accountable person per client, support never locked out. A second owner is refused with 409 `owner_exists`. |
 | Enforcement | Every route declares `@Public`, `@Authenticated` or `@Authorize`; a CI test fails otherwise | Default deny cannot be forgotten. |
 | Rollout | Cognito first, platform stacks later, mobile last | Local development stays local; the CDK app deploys only the auth stack unless asked for more. |
 
@@ -40,12 +41,118 @@ NestSelf serves five populations from one platform: employees of client companie
 - **Invitation**: HR invites by email; the link previews the organization name and activates the membership on acceptance, then runs the matching sign-in.
 - **Mobile**: email code directly against Cognito; the app refreshes tokens itself and uses short-lived tickets to open WebSockets.
 
+![Workspace sign-in](screenshots/workspace-sign-in-identifier.png)
+*Workspace sign-in: one field first; the address decides the method.*
+
+![Email code step](screenshots/workspace-sign-in-code.png)
+*Employees then type the code from the email.*
+
+![Authenticator enrolment](screenshots/admin-totp-enrol.png)
+*Staff and experts enrol an authenticator on their first sign-in to the admin app.*
+
+## Enterprise SSO
+
+An employer can let its employees sign in through its own identity provider (SAML 2.0 or OIDC). Only sign-ins that start at NestSelf are accepted; the employer's portal cannot push people in.
+
+**What staff do** (admin `/sso`, platform owners, every change after a recent sign-in or step-up):
+
+1. Create the connection for the organization: a slug (it builds the provider name, for example `org-acme-saml`) and the employer's metadata, or the OIDC issuer, client ID and secret. The secret goes straight to Cognito and is never shown or stored by NestSelf. A slug belongs to one organization: another organization cannot take it, for either protocol. The connection starts as a draft.
+2. Add the employer's email domains. Each gets a DNS TXT record (`_nestself-verify.<domain>`) that the employer publishes; then select Verify. Public mail domains such as `gmail.com` are refused.
+3. Hand the employer the entity ID and ACS URL from the detail panel, then select Test sign-in. The link works once and for 15 minutes; an invited test person on a verified domain signs in with it.
+4. Activate. From then on, discovery sends that employer's addresses to their sign-in. Suspend sends them back to the email code. Changing the provider settings of an active connection (metadata, issuer, client ID or secret) takes it back to testing: run a new test sign-in and activate it again.
+
+**What an employee sees:** they type their work address on the normal sign-in screen, see "Redirecting to your organisation's sign-in…", sign in at their employer and land in NestSelf. NestSelf binds the account only for a pending invitation of that organization (or automatic accounts, if the employer turned them on), and only for an address on one of the connection's verified domains. Anyone else sees a neutral "Your organisation has not enabled your account yet" message. The employer's sign-in counts as the second factor.
+
+A nightly job warns (audit row and log line) when an employer's signing certificate expires within 30 days.
+
+![Admin SSO connections](screenshots/admin-sso-connections.png)
+*Staff: the SSO connections of the fictional sample organization, created through the stub API for the screenshot.*
+
+![SSO connection detail](screenshots/admin-sso-connection-detail.png)
+*Staff: a connection's values for the employer and its domains; the pending one shows the TXT record to publish.*
+
+![Create SSO connection](screenshots/admin-sso-create-connection.png)
+*Staff: the create dialog, cancelled.*
+
+![SSO redirect](screenshots/workspace-sign-in-sso-redirect.png)
+*Employee: discovery recognised the employer's domain. For the screenshot the browser was kept from leaving the page.*
+
+![SSO denied](screenshots/workspace-sign-in-sso-denied.png)
+*Employee: the employer signed the person in, but NestSelf had nothing to bind them to.*
+
+Everything is tested locally against a fake identity provider; the test against a real employer IdP waits for a pilot employer (`implementation.md`, section 22).
+
 ## Step-up and the access screens
 
 - **Step-up**: when the API answers `step_up_required`, the web apps open a dialog, email a fresh code and retry the action once the code is accepted. Cancelling leaves the action undone without an error. Wrong codes follow the same three-tries rule as sign-in. Mobile has no step-up screen yet.
-- **Workspace, `/hr/access`**: for HR administrators who are also employer owners (the sample Ivana). Shows the organization's grants, previews any member's effective access and delegates part of one's own grant. Assign and revoke appear only for holders of `access.grant` and `access.revoke`, which no organization template carries yet.
-- **Admin, organization Access tab and `/access`**: for platform owners. Assigns organization templates to an organization's members (organization-wide; org-unit grants are HR's job), assigns staff templates, revokes organization grants and looks up any user's access per context.
+- **Workspace, `/hr/access`**: for the organization's owner (the sample Ivana, who is also its HR administrator). Shows the organization's grants, previews any member's effective access, assigns and revokes templates, delegates part of one's own grant and transfers ownership to another active member.
+- **Admin, organization Access tab and `/access`**: for platform owners. Assigns organization templates to an organization's members (organization-wide; org-unit grants are HR's job), transfers an organization's ownership (also when it has no owner yet), assigns staff templates, revokes grants and looks up any user's access per context.
 - **Sample mode** shows the same screens over fixtures with every change disabled.
+
+![Step-up dialog](screenshots/step-up-dialog.png)
+*Step-up: a fresh email code before a sensitive change, here an assignment.*
+
+![Workspace access screen](screenshots/workspace-access.png)
+*Workspace `/hr/access` for the owner.*
+
+![Transfer ownership](screenshots/workspace-transfer-ownership.png)
+*Transfer ownership: only the current owner sees it; the old owner's delegations move to the new owner.*
+
+![Admin organization access](screenshots/admin-org-access.png)
+*The same organization seen by staff in the admin app.*
+
+The screenshots are of the real screens against the stub API with the fictional sample people; `pnpm docs:auth:screenshots` regenerates them (`implementation.md`, section 19).
+
+## What each role can do and where
+
+Every auth capability of the API has a screen in the web apps since 2026-10-25 (`implementation.md`, section 3.1, maps each one to its route, gate and API). The screens hide what a role cannot do, but the API decides: hiding a button is a convenience, never the check. Everyone signed in has `/settings` (display name, language, signed-in sessions, sign out everywhere, and the authenticator for password users), the account menu with Sign out, and the context picker in the header when they have more than one context.
+
+| Role | What they can do | Where |
+|---|---|---|
+| Owner (`employer_owner`, one per organization) | Grant, revoke and delegate access, preview anyone's effective access, transfer ownership | Workspace `/hr/access` (the sample owner is also HR admin; the route sits under the HR area) |
+| HR admin (`hr_admin`) | See members, move them between org units and line managers, end memberships; invite, import and revoke invitations; add, rename and move org units | Workspace `/hr/people` (Members, Invitations) and `/hr/org-units` |
+| Manager (`team_manager`) | Their team's budget, events and approvals; their own account and sessions | Workspace manager area and `/settings`; no access administration |
+| Employee (`employee`) | Their own conversations with an expert, read-only; their account and sessions; switch between personal and organization contexts | Workspace `/conversations` and `/settings` |
+| Expert (`expert`) | Read the conversations of the cases assigned to them (a fresh sign-in or step-up within 15 minutes) and the intake record | Workspace `/cases` (switches them to the expert context) |
+| Staff: platform owner (`platform_owner`) | List organizations, see an organization's members and end memberships, set or transfer its owner, manage platform and organization grants, look up any user's access, suspend and reinstate users, request, approve, deny and revoke emergency access and read a record under it | Admin `/organizations`, `/organizations/:orgId` (Overview, People, Access), `/access`, `/emergency` |
+| Staff: platform owner, SSO (`sso.manage`, held by `platform_owner` only) | Register, verify, test, activate, suspend and edit an employer's SSO connection | Admin `/sso` |
+| Staff: client operations (`client_operations`) | For assigned clients only: members, invitations and imports, end memberships | Admin `/organizations/:orgId/people`, opened by link (the list is platform-wide only) |
+
+![Settings and sessions](screenshots/workspace-settings-sessions.png)
+*Everyone: the signed-in sessions in `/settings`, with Sign out everywhere.*
+
+![Context picker](screenshots/workspace-context-picker.png)
+*Everyone with more than one context: the picker in the header switches between personal and organization (and expert or operations where held).*
+
+![HR people](screenshots/workspace-people-members.png)
+*HR admin: `/hr/people`, members with Move and End membership.*
+
+![HR invitation import](screenshots/workspace-people-import-result.png)
+*HR admin: importing invitations from pasted lines, with the rows the server refused and why. The two invitations were created in the disposable e2e database for the screenshot.*
+
+![Org units](screenshots/workspace-org-units.png)
+*HR admin: the org-unit tree with Rename, Add child and Move.*
+
+![Expert cases](screenshots/workspace-expert-cases.png)
+*Expert: the conversations of assigned cases.*
+
+![Employee conversation](screenshots/workspace-my-conversation.png)
+*Employee: their own conversation, read-only.*
+
+![Admin organizations](screenshots/admin-organizations.png)
+*Staff: the organizations list.*
+
+![Admin organization people](screenshots/admin-org-people.png)
+*Staff: an organization's members.*
+
+![Suspend dialog](screenshots/admin-user-suspend.png)
+*Staff: suspending a user from the access lookup asks for a reason; one's own account cannot be suspended.*
+
+![Emergency access](screenshots/admin-emergency-list.png)
+*Staff: emergency access. Approve and Deny appear only on someone else's request; the rows were staged for the screenshot.*
+
+![Emergency record view](screenshots/admin-emergency-record.png)
+*Staff: reading a record under approved emergency access, with the audited notice.*
 
 ## Where to look
 
@@ -63,7 +170,10 @@ NestSelf serves five populations from one platform: employees of client companie
 | Grant administration, confidential reads, emergency access | `apps/api/src/grants/`, `apps/api/src/professional/`, `apps/api/src/emergency/` |
 | Step-up | `apps/api/src/auth/step-up.service.ts`, `apps/api/src/authz/step-up-freshness.ts`, the web apps' `src/auth/step-up-dialog.tsx` |
 | Access screens | `apps/workspace/src/features/access/`, `apps/admin/src/features/access/` |
-| Phase 2 status and what is left | `docs/tasks/auth/phase-2-readiness.md`, `implementation.md` section 21 |
+| Settings, people, org units, organizations, emergency, expert screens | `apps/{workspace,admin}/src/features/` (`account`, `context`, `people`, `org-units`, `organizations`, `users`, `emergency`, `cases`); the full map is `implementation.md` section 3.1 |
+| Browser journeys and screenshots | `e2e/auth/`, `e2e/screenshots/`, `e2e/README.md` |
+| Enterprise SSO | `apps/api/src/sso/`, `apps/api/src/auth/sso-callback.service.ts`, `discover.service.ts`, `apps/api/src/identity/cognito-sso-ops.ts`, `apps/admin/src/features/sso/`, `implementation.md` section 22 |
+| Phase 2 and 3 status and what is left | `docs/tasks/auth/phase-2-readiness.md`, `implementation.md` section 21 |
 | Environment variables | `docs/environment.md`, `apps/api/src/config/env.ts` |
 
 ## Running it locally
@@ -73,7 +183,7 @@ pnpm install && pnpm db:up
 cp apps/api/.env.example apps/api/.env
 pnpm --filter @nestself/api db:migrate && pnpm --filter @nestself/api db:seed
 pnpm --filter @nestself/api dev
-pnpm --filter @nestself/api build && pnpm --filter @nestself/api worker   # optional: jobs, needs REDIS_URL (worker:dev does not boot under tsx yet)
+pnpm --filter @nestself/api worker:dev   # optional: jobs, needs REDIS_URL (runs through the Nest compiler)
 ```
 
 Stub mode uses a fake identity provider pre-loaded with the sample people. Employees (`user_jovan@example.com`, `user_ivana@example.com`, `user_stefan@example.com`, `user_dragan@example.com`) sign in with the code printed in the API log, and Ivana reaches `/hr/access`; staff and experts (`user_nikola@example.com`, `user_milica@example.com`) use the password `Nestself-dev-1234!` and enrol an authenticator on first sign-in. Set `VITE_DATA_SOURCE=api` in a web app's `.env.local` to use the real screens. Skip `pnpm db:up` when PostgreSQL and Redis already run outside Docker; the Compose file claims port 6379 and fails against a local Redis or Valkey.
@@ -93,4 +203,4 @@ A real Cognito dev pool exists since 2026-10-24 (`eu-central-1_g6OGYONQ0` in acc
 
 ## What is not done yet
 
-Enterprise SSO (phase 3), mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Open owner decisions: whether employer owners or HR administrators may grant and revoke access, the authenticator for emergency step-up, and a `cases` table before anything writes conversations. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.
+For enterprise SSO: the live test with a pilot employer's IdP, binding the account after the email code when the employer did not confirm the address, SSO on mobile, step-up for SSO users, the certificate alert email, IdP-initiated sign-in and SCIM (`implementation.md` section 22.14). Beyond SSO: mobile step-up, the remaining nightly jobs (Cognito user export, retention sweeper, audit export), file and export authorization, the security baseline that waits for staging, and the compliance track (privacy notices, processing agreement, breach procedure), which must land before the first real employee signs in. Screens for approval authorities and for changing a grant's conditions are still missing; the rest of the auth capabilities have screens (mobile keeps sign-in, settings and sign-out). Open owner decisions: the authenticator for emergency step-up and a `cases` table before anything writes conversations. Who administers grants inside an organization was decided on 2026-10-24: the single employer owner, and NestSelf staff. The full list is `implementation.md` section 21; the status per task is `docs/tasks/auth/phase-2-readiness.md`.

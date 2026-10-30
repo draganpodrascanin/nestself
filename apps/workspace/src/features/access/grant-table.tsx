@@ -91,7 +91,7 @@ export function GrantTable({
           const delegable =
             canDelegate && status === 'active' && grant.subjectUserId === currentUserId;
           return (
-            <tr key={grant.id}>
+            <tr key={grant.id} data-grant-id={grant.id}>
               <Td className={cellClass}>{template}</Td>
               <Td className={cellClass}>{subject}</Td>
               <Td className={cellClass}>{scopeOf(grant)}</Td>

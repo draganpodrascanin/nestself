@@ -28,6 +28,8 @@ export type UserAccessContext = z.infer<typeof UserAccessContextSchema>;
 
 export const UserAccessResponseSchema = z.object({
   userId: z.string().min(1),
+  /** True while the account is suspended (`POST /ops/users/:userId/suspend`). */
+  suspended: z.boolean(),
   contexts: z.array(UserAccessContextSchema),
 });
 export type UserAccessResponse = z.infer<typeof UserAccessResponseSchema>;
@@ -93,3 +95,181 @@ export const EmergencyRecordResponseSchema = z.object({
   content: z.unknown(),
 });
 export type EmergencyRecordResponse = z.infer<typeof EmergencyRecordResponseSchema>;
+
+// --- Organizations (client list for the operations workspace) ---
+
+/** Lifecycle of an employer client (`organizations.status`). */
+export const ORGANIZATION_STATUSES = ['ONBOARDING', 'ACTIVE', 'SUSPENDED', 'ENDED'] as const;
+export const OrganizationStatusSchema = z.enum(ORGANIZATION_STATUSES);
+export type OrganizationStatus = z.infer<typeof OrganizationStatusSchema>;
+
+/** `GET /ops/organizations`: ordered by name, then id; `search` matches a name or slug prefix. */
+export const OrganizationListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().min(1).max(200).optional(),
+});
+export type OrganizationListQuery = z.infer<typeof OrganizationListQuerySchema>;
+
+export const OrganizationResponseSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  slug: z.string(),
+  status: OrganizationStatusSchema,
+  createdAt: z.string().datetime(),
+});
+export type OrganizationResponse = z.infer<typeof OrganizationResponseSchema>;
+
+export const OrganizationListResponseSchema = z.object({
+  items: z.array(OrganizationResponseSchema),
+  /** Id of the last item; pass it back as `cursor` for the next page. */
+  nextCursor: z.string().nullable(),
+});
+export type OrganizationListResponse = z.infer<typeof OrganizationListResponseSchema>;
+
+// --- SSO connections (D-12, 3.4, 5.4) ---
+
+export const SSO_PROTOCOLS = ['SAML', 'OIDC'] as const;
+export const SsoProtocolSchema = z.enum(SSO_PROTOCOLS);
+export type SsoProtocol = z.infer<typeof SsoProtocolSchema>;
+
+/** Lifecycle of `sso_connections.status` (3.4.1). */
+export const SSO_CONNECTION_STATUSES = ['DRAFT', 'TESTING', 'ACTIVE', 'SUSPENDED'] as const;
+export const SsoConnectionStatusSchema = z.enum(SSO_CONNECTION_STATUSES);
+export type SsoConnectionStatus = z.infer<typeof SsoConnectionStatusSchema>;
+
+/**
+ * Statuses a `PATCH` may request. `TESTING` is set only by `POST :id/test`
+ * and `ACTIVE` from `TESTING` only by `POST :id/activate`; the service
+ * enforces the allowed transitions.
+ */
+export const SSO_CONNECTION_PATCH_STATUSES = ['DRAFT', 'ACTIVE', 'SUSPENDED'] as const;
+
+/**
+ * Builds the Cognito provider name `org-<slug>-saml|oidc`: 11 characters is
+ * the longest slug that keeps the name within 20 characters.
+ */
+export const SSO_SLUG_PATTERN = /^[a-z0-9-]{2,11}$/;
+
+/** One lowercase DNS label per segment, at least two segments, no scheme, path or `@`. */
+const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/**
+ * IdP-initiated sign-in stays off until the written risk-acceptance process
+ * exists (D-12, SSO-R-12): the field is accepted only as `false`.
+ */
+const idpInitiatedOff = (value: { idpInitiatedAllowed?: boolean }) => value.idpInitiatedAllowed !== true;
+const IDP_INITIATED_REFUSED = {
+  message: 'IdP-initiated sign-in is not available',
+  path: ['idpInitiatedAllowed'],
+};
+
+/** `POST /ops/sso-connections`: a new connection starts in `DRAFT`. */
+export const SsoConnectionCreateRequestSchema = z
+  .object({
+    orgId: z.string().min(1),
+    /** Short organization handle used to build `cognitoProviderName`. */
+    slug: z.string().regex(SSO_SLUG_PATTERN),
+    protocol: SsoProtocolSchema,
+    metadataUrl: z.string().url().optional(),
+    metadataXml: z.string().optional(),
+    oidcIssuer: z.string().url().optional(),
+    oidcClientId: z.string().min(1).optional(),
+    /**
+     * Write-only: passed to the identity provider registration and never
+     * stored by NestSelf nor returned in a response (3.4.2).
+     */
+    oidcClientSecret: z.string().min(1).max(1024).optional(),
+    attributeMapping: z.record(z.string(), z.string()).optional(),
+    idpInitiatedAllowed: z.boolean().default(false),
+    jitProvisioning: z.boolean().default(false),
+    defaultOrgUnitId: z.string().min(1).optional(),
+  })
+  .refine(idpInitiatedOff, IDP_INITIATED_REFUSED);
+export type SsoConnectionCreateRequest = z.infer<typeof SsoConnectionCreateRequestSchema>;
+
+/**
+ * `PATCH /ops/sso-connections/:id`: at least one field. `null` clears a
+ * metadata field or the default org unit.
+ */
+export const SsoConnectionUpdateRequestSchema = z
+  .object({
+    status: z.enum(SSO_CONNECTION_PATCH_STATUSES).optional(),
+    /** Immutable once the connection has been tested (the service answers 422). */
+    protocol: SsoProtocolSchema.optional(),
+    metadataUrl: z.string().url().nullable().optional(),
+    metadataXml: z.string().nullable().optional(),
+    oidcIssuer: z.string().url().nullable().optional(),
+    oidcClientId: z.string().min(1).nullable().optional(),
+    /** Write-only, as on create: replaces the secret held by the identity provider. */
+    oidcClientSecret: z.string().min(1).max(1024).optional(),
+    attributeMapping: z.record(z.string(), z.string()).nullable().optional(),
+    idpInitiatedAllowed: z.boolean().optional(),
+    jitProvisioning: z.boolean().optional(),
+    defaultOrgUnitId: z.string().min(1).nullable().optional(),
+  })
+  .refine(idpInitiatedOff, IDP_INITIATED_REFUSED)
+  .refine((value) => Object.values(value).some((v) => v !== undefined), {
+    message: 'At least one field is required',
+  });
+export type SsoConnectionUpdateRequest = z.infer<typeof SsoConnectionUpdateRequestSchema>;
+
+/** `POST /ops/sso-connections/:id/domains`: the domain is trimmed and lowercased. */
+export const SsoConnectionDomainRequestSchema = z.object({
+  domain: z
+    .string()
+    .transform((d) => d.trim().toLowerCase())
+    .pipe(z.string().regex(DOMAIN_PATTERN)),
+});
+export type SsoConnectionDomainRequest = z.infer<typeof SsoConnectionDomainRequestSchema>;
+
+/**
+ * One domain of a connection with the DNS TXT record that proves ownership
+ * (3.4.4): `txtRecordName` is `_nestself-verify.<domain>`, `txtRecordValue`
+ * is `nestself-domain-verification=<token>`.
+ */
+export const SsoDomainResponseSchema = z.object({
+  id: z.string().min(1),
+  domain: z.string().min(1),
+  verifiedAt: z.string().datetime().nullable(),
+  txtRecordName: z.string().min(1),
+  txtRecordValue: z.string().min(1),
+});
+export type SsoDomainResponse = z.infer<typeof SsoDomainResponseSchema>;
+
+/** Service-provider values the client's IdP administrator needs; null until known for the stage. */
+export const SsoSpMetadataSchema = z.object({
+  entityId: z.string().min(1),
+  acsUrl: z.string().url(),
+});
+export type SsoSpMetadata = z.infer<typeof SsoSpMetadataSchema>;
+
+export const SsoConnectionResponseSchema = z.object({
+  id: z.string().min(1),
+  orgId: z.string().min(1),
+  protocol: SsoProtocolSchema,
+  cognitoProviderName: z.string(),
+  status: SsoConnectionStatusSchema,
+  metadataUrl: z.string().url().nullable(),
+  oidcIssuer: z.string().url().nullable(),
+  oidcClientId: z.string().nullable(),
+  idpInitiatedAllowed: z.boolean(),
+  jitProvisioning: z.boolean(),
+  defaultOrgUnitId: z.string().nullable(),
+  certificateExpiresAt: z.string().datetime().nullable(),
+  lastTestedAt: z.string().datetime().nullable(),
+  domains: z.array(SsoDomainResponseSchema),
+  spMetadata: SsoSpMetadataSchema.nullable(),
+});
+export type SsoConnectionResponse = z.infer<typeof SsoConnectionResponseSchema>;
+
+export const SsoConnectionListResponseSchema = z.object({
+  items: z.array(SsoConnectionResponseSchema),
+});
+export type SsoConnectionListResponse = z.infer<typeof SsoConnectionListResponseSchema>;
+
+/** `POST /ops/sso-connections/:id/test`: an absolute URL that starts a test sign-in. */
+export const SsoTestResponseSchema = z.object({
+  startUrl: z.string().url(),
+});
+export type SsoTestResponse = z.infer<typeof SsoTestResponseSchema>;

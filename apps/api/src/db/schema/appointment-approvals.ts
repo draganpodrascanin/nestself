@@ -11,7 +11,7 @@
  * the employee; the controller validates it and it never enters audit details.
  *
  * Tenant-scoped under forced RLS (CW-R-19); the FORCE statement is hand-written
- * in migration 0010.
+ * in migration 0011.
  *
  * @see docs/tasks/calls-webinars/06-implementation-guidelines.md section 7.4
  */

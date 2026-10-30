@@ -25,6 +25,7 @@ const EXCEPTION_MAP: Record<string, { code: IdentityProviderErrorCode; retryable
   EnableSoftwareTokenMFAException: { code: 'totp_already_enrolled', retryable: false },
   InvalidParameterException: { code: 'not_authorized', retryable: false },
   PasswordResetRequiredException: { code: 'not_authorized', retryable: false },
+  DuplicateProviderException: { code: 'provider_exists', retryable: false },
 };
 
 /**

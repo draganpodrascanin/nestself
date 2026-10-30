@@ -1,6 +1,6 @@
 {
-  "id": "71bdaf8a-052b-4173-9bca-a54c0ec0371f",
-  "prevId": "14e14870-6fd7-4357-88a3-eeb39ba28678",
+  "id": "14e14870-6fd7-4357-88a3-eeb39ba28678",
+  "prevId": "d584b0b7-90c3-4a13-bb68-0d7dd97740b8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2273,6 +2273,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sso_domains_connection_id_verified_at_idx": {
+          "name": "sso_domains_connection_id_verified_at_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2292,9 +2313,20 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "sso_domains_tenant_isolation": {
+          "name": "sso_domains_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.audit_events": {
       "name": "audit_events",
@@ -5169,19 +5201,6 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "call_sessions_webinar_id_webinars_id_fk": {
-          "name": "call_sessions_webinar_id_webinars_id_fk",
-          "tableFrom": "call_sessions",
-          "tableTo": "webinars",
-          "columnsFrom": [
-            "webinar_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
         "call_sessions_org_id_organizations_id_fk": {
           "name": "call_sessions_org_id_organizations_id_fk",
           "tableFrom": "call_sessions",
@@ -5649,7 +5668,7 @@
           "name": "author_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "kind": {
           "name": "kind",
@@ -6322,20 +6341,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "provider_pipeline_arn": {
-          "name": "provider_pipeline_arn",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "raw_segments_prefix": {
           "name": "raw_segments_prefix",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "concatenation_pipeline_id": {
-          "name": "concatenation_pipeline_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -6352,18 +6359,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
-        },
-        "handoff_location": {
-          "name": "handoff_location",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "failure_reason": {
-          "name": "failure_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "started_at": {
           "name": "started_at",
@@ -6385,12 +6380,6 @@
         },
         "handed_off_at": {
           "name": "handed_off_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "failed_at": {
-          "name": "failed_at",
           "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false

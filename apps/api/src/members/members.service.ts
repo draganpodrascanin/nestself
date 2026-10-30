@@ -52,6 +52,17 @@ export class MembersService {
         });
       }
 
+      // Ending your own membership signs you out and removes your access to
+      // the organization with nobody left in the session to undo it: refuse
+      // before any write, revocation or audit.
+      if (membership.userId === actorUserId) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'cannot_end_self',
+          message: 'A member cannot end their own membership',
+        });
+      }
+
       // Idempotent: already ended → return the existing result.
       if (membership.status === 'ENDED') {
         return {

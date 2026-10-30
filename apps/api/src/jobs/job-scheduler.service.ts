@@ -32,6 +32,7 @@ export const MAINTENANCE_SCHEDULES: Record<MaintenanceJobName, string> = {
   'mobile.prune-stale-families': '30 2 * * *',
   'emergency.sweep-expired': '*/15 * * * *',
   'sessions.reconcile-ttl': '45 2 * * *',
+  'sso.certificate-expiry': '0 3 * * *',
 };
 
 @Injectable()

@@ -14,6 +14,7 @@ import {
   PasswordResponseSchema,
   SessionListResponseSchema,
   TotpEnrolResponseSchema,
+  TotpConfirmResponseSchema,
   StepUpStartResponseSchema,
   InvitationPreviewResponseSchema,
   InvitationAcceptResponseSchema,
@@ -25,8 +26,12 @@ import type { ApiClient } from './client';
 import { z } from 'zod';
 
 function jsonPost(body: unknown): RequestInit {
+  return jsonSend('POST', body);
+}
+
+function jsonSend(method: 'POST' | 'PATCH', body: unknown): RequestInit {
   return {
-    method: 'POST',
+    method,
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
   };
@@ -118,22 +123,48 @@ export function createAuthApi(client: ApiClient) {
       }),
 
     /**
-     * POST /auth/totp/enrol — start TOTP enrolment (returns secretUri).
-     * During sign-in pass the `totp_enrol` challengeToken; the response carries
-     * a fresh challengeToken to use with `challenge()` and the authenticator code.
+     * POST /auth/totp/enrol — sign-in TOTP enrolment (MFA_SETUP step). Pass the
+     * `totp_enrol` challengeToken; the response carries a fresh challengeToken
+     * to use with `challenge()` and the authenticator code. Signed-in users
+     * call `totpEnrolSignedIn()` instead.
      */
-    totpEnrol: (challengeToken?: string) =>
+    totpEnrol: (challengeToken: string) =>
       client.request('/api/auth/totp/enrol', {
-        ...jsonPost(challengeToken ? { challengeToken } : {}),
+        ...jsonPost({ challengeToken }),
         schema: TotpEnrolResponseSchema,
       }),
 
-    /** POST /auth/totp/confirm — confirm TOTP enrolment with a code (204). */
+    /**
+     * POST /auth/me/totp/enrol — start authenticator enrolment for the
+     * signed-in user (session token, no challenge). `challengeToken` is null;
+     * finish with `totpConfirm(code)`. 409 `totp_already_enrolled` when the
+     * account already has an authenticator.
+     */
+    totpEnrolSignedIn: () =>
+      client.request('/api/auth/me/totp/enrol', {
+        ...jsonPost({}),
+        schema: TotpEnrolResponseSchema,
+      }),
+
+    /** PATCH /auth/me/locale — persist the preferred locale; returns the refreshed principal. */
+    updateLocale: (locale: Locale) =>
+      client.request('/api/auth/me/locale', {
+        ...jsonSend('PATCH', { locale }),
+        schema: MeResponseSchema,
+      }),
+
+    /** PATCH /auth/me/display-name — change the display name; returns the refreshed principal. */
+    updateDisplayName: (displayName: string) =>
+      client.request('/api/auth/me/display-name', {
+        ...jsonSend('PATCH', { displayName }),
+        schema: MeResponseSchema,
+      }),
+
+    /** POST /auth/totp/confirm — confirm signed-in enrolment with a code; answers `{ enrolled: true }`. */
     totpConfirm: (code: string) =>
       client.request('/api/auth/totp/confirm', {
         ...jsonPost({ code }),
-        schema: z.undefined(),
-        expectBody: false,
+        schema: TotpConfirmResponseSchema,
       }),
 
     /** POST /auth/step-up/start — initiate a step-up challenge. */

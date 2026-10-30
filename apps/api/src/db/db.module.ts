@@ -9,6 +9,8 @@ import { MembershipsRepository } from './repositories/memberships.repository.js'
 import { OrgUnitsRepository } from './repositories/org-units.repository.js';
 import { ApprovalAuthoritiesRepository } from './repositories/approval-authorities.repository.js';
 import { ProfessionalRepository } from './repositories/professional.repository.js';
+import { OrganizationsRepository } from './repositories/organizations.repository.js';
+import { SsoRepository } from './repositories/sso.repository.js';
 
 /**
  * Global database module: the Drizzle handle plus the repositories every
@@ -28,6 +30,8 @@ import { ProfessionalRepository } from './repositories/professional.repository.j
     OrgUnitsRepository,
     ApprovalAuthoritiesRepository,
     ProfessionalRepository,
+    OrganizationsRepository,
+    SsoRepository,
   ],
   exports: [
     DbService,
@@ -40,6 +44,8 @@ import { ProfessionalRepository } from './repositories/professional.repository.j
     OrgUnitsRepository,
     ApprovalAuthoritiesRepository,
     ProfessionalRepository,
+    OrganizationsRepository,
+    SsoRepository,
   ],
 })
 export class DbModule {}

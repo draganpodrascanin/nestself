@@ -1,6 +1,6 @@
 {
-  "id": "fd952f07-12b2-4804-9cb1-4d8e8756edde",
-  "prevId": "afae9838-98c6-42b2-a6ad-d76c15dfe938",
+  "id": "afae9838-98c6-42b2-a6ad-d76c15dfe938",
+  "prevId": "71bdaf8a-052b-4173-9bca-a54c0ec0371f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2273,6 +2273,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sso_domains_connection_id_verified_at_idx": {
+          "name": "sso_domains_connection_id_verified_at_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2292,9 +2313,20 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "sso_domains_tenant_isolation": {
+          "name": "sso_domains_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.audit_events": {
       "name": "audit_events",
@@ -4834,18 +4866,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "replica_index": {
-          "name": "replica_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "floor_attendee_id": {
-          "name": "floor_attendee_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "first_joined_at": {
           "name": "first_joined_at",
           "type": "timestamp (3) with time zone",
@@ -4992,10 +5012,6 @@
         "call_participants_reconnect_count_check": {
           "name": "call_participants_reconnect_count_check",
           "value": "\"call_participants\".\"reconnect_count\" >= 0"
-        },
-        "call_participants_replica_index_check": {
-          "name": "call_participants_replica_index_check",
-          "value": "\"call_participants\".\"replica_index\" IS NULL OR \"call_participants\".\"replica_index\" >= 1"
         }
       },
       "isRLSEnabled": true
@@ -5041,13 +5057,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "replica_meeting_ids": {
-          "name": "replica_meeting_ids",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
         },
         "status": {
           "name": "status",

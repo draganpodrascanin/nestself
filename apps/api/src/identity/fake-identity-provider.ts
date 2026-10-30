@@ -21,6 +21,9 @@ import type {
   AuthOutcome,
   TokenSet,
   IdpUser,
+  IdTokenClaims,
+  ProviderInfo,
+  ProviderInput,
 } from './identity-provider.service.js';
 import { verifyTotp, generateTotpSecret, codesEqual } from './totp.js';
 import {
@@ -29,6 +32,14 @@ import {
   type FakeSession,
   type FakeUser,
 } from './fake-user-store.js';
+import { FakeSsoStore } from './fake-sso-store.js';
+
+const DEFAULT_API_PUBLIC_URL = 'http://localhost:4000';
+
+export interface FakeIdentityProviderOptions {
+  /** Origin of the API; the fake authorize URL points at its stub route. */
+  apiPublicUrl?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -36,6 +47,8 @@ import {
 
 export class FakeIdentityProvider extends IdentityProviderService {
   private readonly store = new FakeUserStore();
+  private readonly sso = new FakeSsoStore();
+  private readonly apiPublicUrl: string;
   private readonly sessions = new Map<string, FakeSession>();
   /** username -> pending TOTP association session id (signed-in enrolment). */
   private readonly pendingByUsername = new Map<string, string>();
@@ -45,13 +58,14 @@ export class FakeIdentityProvider extends IdentityProviderService {
     return this.store.sentCodes;
   }
 
-  constructor() {
+  constructor(options: FakeIdentityProviderOptions = {}) {
     super();
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
         'FakeIdentityProvider must not be used in production',
       );
     }
+    this.apiPublicUrl = (options.apiPublicUrl ?? DEFAULT_API_PUBLIC_URL).replace(/\/+$/, '');
   }
 
   // -- Helpers --------------------------------------------------------------
@@ -442,5 +456,115 @@ export class FakeIdentityProvider extends IdentityProviderService {
     newPassword: string;
   }): Promise<void> {
     return this.store.confirmForgotPassword(input);
+  }
+
+  // -- Enterprise SSO (delegated to FakeSsoStore) ---------------------------
+
+  async createProvider(input: ProviderInput): Promise<void> {
+    this.sso.createProvider(input);
+  }
+
+  async updateProvider(input: ProviderInput): Promise<void> {
+    this.sso.updateProvider(input);
+  }
+
+  async deleteProvider(name: string): Promise<void> {
+    this.sso.deleteProvider(name);
+  }
+
+  async describeProvider(name: string): Promise<ProviderInfo | null> {
+    return this.sso.describeProvider(name);
+  }
+
+  async listProviders(): Promise<string[]> {
+    return [...this.sso.providers.keys()];
+  }
+
+  /**
+   * Points at the stub-only `GET /api/auth/sso/_fake/authorize` route on the
+   * origin of the redirect URI, i.e. the surface's own origin (its SPA proxies
+   * `/api`), like Cognito's hop stays in the flow's browser. Falls back to
+   * the configured API origin when the redirect URI does not parse.
+   */
+  buildAuthorizeUrl(input: {
+    providerName: string;
+    state: string;
+    codeChallenge: string;
+    redirectUri: string;
+    surfaceScopes?: readonly string[];
+  }): string {
+    const params = new URLSearchParams({
+      connection: input.providerName,
+      state: input.state,
+      code_challenge: input.codeChallenge,
+      redirect_uri: input.redirectUri,
+    });
+    let origin = this.apiPublicUrl;
+    try {
+      origin = new URL(input.redirectUri).origin;
+    } catch {
+      // keep the API origin
+    }
+    return `${origin}/api/auth/sso/_fake/authorize?${params.toString()}`;
+  }
+
+  /**
+   * Stands in for the employer IdP plus Cognito's hosted UI: a 10-minute,
+   * single-use code for a seeded federated user, bound to the S256 challenge
+   * (and to the redirect URI when given).
+   */
+  issueAuthorizationCode(
+    providerName: string,
+    subject: string,
+    codeChallenge: string,
+    redirectUri?: string,
+  ): string {
+    return this.sso.issueAuthorizationCode(providerName, subject, codeChallenge, redirectUri);
+  }
+
+  async exchangeAuthorizationCode(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<TokenSet & { idTokenClaims: IdTokenClaims }> {
+    const federated = this.sso.redeemAuthorizationCode(input);
+    const user = this.store.upsertFederatedUser(federated);
+    const identities = [{ providerName: federated.providerName, userId: federated.subject }];
+    const tokens = this.store.issueTokens(user, {
+      email: federated.email,
+      email_verified: federated.emailVerified,
+      identities: identities.map((i) => ({ ...i, providerType: this.providerType(i.providerName) })),
+    });
+    return {
+      ...tokens,
+      idTokenClaims: {
+        sub: user.sub,
+        email: federated.email,
+        emailVerified: federated.emailVerified,
+        identities,
+        username: user.username,
+        authTime: decodeJwtClaims(tokens.idToken).auth_time ?? Math.floor(Date.now() / 1000),
+      },
+    };
+  }
+
+  private providerType(name: string): string {
+    return this.sso.providers.get(name)?.protocol ?? 'SAML';
+  }
+
+  // -- SSO test helpers -----------------------------------------------------
+
+  seedFederatedUsers(users: Parameters<FakeSsoStore['seedFederatedUsers']>[0]): void {
+    this.sso.seedFederatedUsers(users);
+  }
+
+  /** Seeded federated users of one provider (the stub authorize route picks one). */
+  listFederatedUsers(providerName: string) {
+    return this.sso.listFederatedUsers(providerName);
+  }
+
+  /** Pretend the provider's signing certificate expires at `at` (null: unknown). */
+  setProviderCertificateExpiry(name: string, at: Date | null): void {
+    this.sso.setCertificateExpiry(name, at);
   }
 }

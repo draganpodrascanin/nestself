@@ -13,6 +13,7 @@ import {
   AdminDeleteUserCommand,
   AdminDisableUserCommand,
   AdminEnableUserCommand,
+  AdminGetUserCommand,
   ListUsersCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
@@ -135,19 +136,31 @@ export async function cognitoFindUserByEmail(
     if (!user) return null;
 
     const attrs = user.Attributes;
-    const mfaList = (user as Record<string, unknown>)
-      .UserMFASettingList as string[] | undefined;
     const status = user.UserStatus ?? 'UNKNOWN';
+    const username = user.Username ?? '';
+
+    // ListUsers does not return MFA settings; AdminGetUser does. A user
+    // deleted between the two calls is reported as not found, like before.
+    let mfaList: string[];
+    try {
+      const detail = await cfg.client.send(
+        new AdminGetUserCommand({ UserPoolId: cfg.userPoolId, Username: username }),
+      );
+      mfaList = detail?.UserMFASettingList ?? [];
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'UserNotFoundException') return null;
+      throw err;
+    }
 
     return {
-      username: user.Username ?? '',
+      username,
       sub: getUserAttr(attrs, 'sub') ?? '',
       email: getUserAttr(attrs, 'email') ?? email,
       emailVerified: getUserAttr(attrs, 'email_verified') === 'true',
       enabled: user.Enabled ?? true,
       status,
       hasPassword: status === 'EXTERNAL_PROVIDER' ? false : null,
-      mfaEnrolled: mfaList != null ? mfaList.length > 0 : null,
+      mfaEnrolled: mfaList.includes('SOFTWARE_TOKEN_MFA'),
       locale: getUserAttr(attrs, 'custom:locale'),
     };
   } catch (err) {

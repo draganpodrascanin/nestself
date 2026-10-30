@@ -16,6 +16,9 @@ export type AccessErrorKey =
   | 'delegationExceedsBoundary'
   | 'rateLimited'
   | 'conflict'
+  | 'ownerExists'
+  | 'notOwner'
+  | 'alreadyOwner'
   | 'unknown';
 
 const BY_CODE: Record<string, AccessErrorKey> = {
@@ -25,6 +28,7 @@ const BY_CODE: Record<string, AccessErrorKey> = {
   delegation_exceeds_boundary: 'delegationExceedsBoundary',
   rate_limited: 'rateLimited',
   conflict: 'conflict',
+  owner_exists: 'ownerExists',
 };
 
 export function accessErrorKey(err: unknown): AccessErrorKey | null {
@@ -36,4 +40,17 @@ export function accessErrorKey(err: unknown): AccessErrorKey | null {
     if (err.status === 409) return 'conflict';
   }
   return 'unknown';
+}
+
+/**
+ * Ownership transfer reuses the shared mapping, with two codes read in its
+ * own terms: `forbidden` means the caller is no longer the owner, and
+ * `conflict` means the chosen member already holds the owner grant.
+ */
+export function transferErrorKey(err: unknown): AccessErrorKey | null {
+  if (err instanceof ApiError && err.status !== 429) {
+    if (err.code === 'forbidden') return 'notOwner';
+    if (err.code === 'conflict') return 'alreadyOwner';
+  }
+  return accessErrorKey(err);
 }

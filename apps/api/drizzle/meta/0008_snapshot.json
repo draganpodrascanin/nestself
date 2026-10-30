@@ -1,6 +1,6 @@
 {
-  "id": "8724d11a-6b72-4ad9-b20f-9e87eb8ba9a5",
-  "prevId": "a2c4afcd-b30b-4e3e-9367-b9c16d7dc596",
+  "id": "a2c4afcd-b30b-4e3e-9367-b9c16d7dc596",
+  "prevId": "270a349d-2df1-4c51-8e4c-39a310de2e0d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2261,6 +2261,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sso_domains_connection_id_verified_at_idx": {
+          "name": "sso_domains_connection_id_verified_at_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2280,9 +2301,20 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "sso_domains_tenant_isolation": {
+          "name": "sso_domains_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))",
+          "withCheck": "(coalesce(current_setting('app.current_org_id', true), '') = '' OR EXISTS (select 1 from \"sso_connections\" where \"sso_connections\".\"id\" = \"sso_domains\".\"connection_id\" and \"sso_connections\".\"org_id\" = current_setting('app.current_org_id', true)))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.audit_events": {
       "name": "audit_events",
@@ -5024,13 +5056,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "end_reason": {
-          "name": "end_reason",
-          "type": "call_session_end_reason",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "location_text": {
           "name": "location_text",
           "type": "text",
@@ -5064,7 +5089,7 @@
             }
           ],
           "isUnique": true,
-          "where": "status <> 'FAILED' AND end_reason IS DISTINCT FROM 'PROVIDER'",
+          "where": "status <> 'FAILED'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5286,16 +5311,6 @@
         "ATTENDEE",
         "FACILITATOR",
         "PARTICIPANT"
-      ]
-    },
-    "public.call_session_end_reason": {
-      "name": "call_session_end_reason",
-      "schema": "public",
-      "values": [
-        "EXPERT",
-        "PROVIDER",
-        "CLEANUP",
-        "RECONCILE"
       ]
     },
     "public.call_session_status": {

@@ -26,6 +26,9 @@ const cognitoEnv = {
   COGNITO_DOMAIN: 'https://auth.example.com',
   SESSION_ENCRYPTION_KEY:
     '50ae5236f4be6a75e1e42b53edb562f16c001b4db854f252dbb2e6b91e9a2309',
+  WORKSPACE_URL: 'https://app.example.com',
+  ADMIN_URL: 'https://admin.example.com',
+  API_PUBLIC_URL: 'https://api.example.com',
 };
 
 describe('envSchema', () => {
@@ -93,6 +96,28 @@ describe('envSchema', () => {
       expect(messages).toContain(
         'COGNITO_DOMAIN is required when AUTH_MODE=cognito',
       );
+    }
+  });
+
+  it.each(['WORKSPACE_URL', 'ADMIN_URL', 'API_PUBLIC_URL'] as const)(
+    'rejects AUTH_MODE=cognito without %s (SSO redirects and start URLs are built from it)',
+    (key) => {
+      const { [key]: _, ...env } = cognitoEnv;
+      const result = envSchema.safeParse(env);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((i) => i.message)).toContain(`${key} is required when AUTH_MODE=cognito`);
+        expect(result.error.issues.find((i) => i.message.startsWith(key))?.path).toEqual([key]);
+      }
+    },
+  );
+
+  it('keeps WORKSPACE_URL, ADMIN_URL and API_PUBLIC_URL optional in stub mode', () => {
+    const result = envSchema.safeParse(baseEnv);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.WORKSPACE_URL).toBeUndefined();
+      expect(result.data.API_PUBLIC_URL).toBeUndefined();
     }
   });
 

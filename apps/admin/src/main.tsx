@@ -6,6 +6,7 @@ import { routeTree } from './routeTree.gen';
 import { api } from './api';
 import { initialSnapshot } from './auth';
 import { isSampleDataMode } from './data-source';
+import { shouldRetryQuery } from './query-retry';
 import './i18n';
 
 declare module '@tanstack/react-router' {
@@ -15,7 +16,7 @@ declare module '@tanstack/react-router' {
 }
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000 } },
+  defaultOptions: { queries: { staleTime: 30_000, retry: shouldRetryQuery } },
 });
 
 const router = createRouter({

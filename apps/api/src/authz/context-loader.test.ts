@@ -155,7 +155,7 @@ describe('ContextLoader with the real PrincipalLoader (delegated grants)', () =>
     ...PRINCIPAL,
     context: { kind: 'organization', orgId: 'org-1' },
     memberships: [
-      { membershipId: 'm-1', orgId: 'org-1', orgUnitId: null, status: 'ACTIVE', startDate: '2026-01-01T00:00:00.000Z', endDate: null },
+      { membershipId: 'm-1', orgId: 'org-1', orgName: 'Org 1', orgUnitId: null, status: 'ACTIVE', startDate: '2026-01-01T00:00:00.000Z', endDate: null },
     ],
   };
   const invitation = { type: 'Invitation', orgId: 'org-1' };

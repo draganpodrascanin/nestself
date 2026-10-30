@@ -86,6 +86,14 @@ function computeInitials(displayName: string): string {
   return letters.join('') || '?';
 }
 
+/** True when a cached principal has the fields the current code reads. */
+function hasCurrentShape(p: LoadedPrincipal): boolean {
+  return (
+    Array.isArray(p.memberships) &&
+    p.memberships.every((m) => typeof m.orgName === 'string' && m.orgName.length > 0)
+  );
+}
+
 function isMembershipActive(
   status: string,
   startDate: Date,
@@ -121,7 +129,10 @@ export class PrincipalLoader {
     const cached = await this.cache.get(cacheKey);
     if (cached) {
       try {
-        return JSON.parse(cached) as LoadedPrincipal;
+        const parsed = JSON.parse(cached) as LoadedPrincipal;
+        // Entries written before memberships carried orgName are a miss, so
+        // a rolling deploy never serves the older shape.
+        if (hasCurrentShape(parsed)) return parsed;
       } catch {
         // Corrupted cache entry — fall through
       }
@@ -143,6 +154,7 @@ export class PrincipalLoader {
         memberships.push({
           membershipId: m.id,
           orgId: m.orgId,
+          orgName: m.org.name,
           orgUnitId: m.orgUnitId,
           status: active ? 'ACTIVE' : 'INVITED',
           startDate: m.startDate.toISOString(),

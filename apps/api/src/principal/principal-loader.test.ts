@@ -53,6 +53,7 @@ const DB_USER = {
       status: 'ACTIVE',
       startDate: new Date('2025-01-01'),
       endDate: null,
+      org: { name: 'Org One' },
     },
   ],
   expert: null,
@@ -120,6 +121,47 @@ describe('PrincipalLoader', () => {
 
       expect(result).toEqual(cached);
       expect(identities.findUserForPrincipal).not.toHaveBeenCalled();
+    });
+
+    it('carries the organization name on each membership', async () => {
+      identities.findUserForPrincipal.mockResolvedValue(DB_USER);
+
+      const result = await loader.load('user-1');
+
+      expect(result!.memberships[0]!.orgName).toBe('Org One');
+      const [, value] = cache.set.mock.calls[0]!;
+      expect(JSON.parse(value as string).memberships[0].orgName).toBe('Org One');
+    });
+
+    it('treats a cached entry without membership orgName as a miss', async () => {
+      const olderShape = {
+        userId: 'user-1',
+        displayName: 'Cached',
+        initials: 'C',
+        locale: 'sr-Latn',
+        memberships: [
+          {
+            membershipId: 'm-1',
+            orgId: 'org-1',
+            orgUnitId: null,
+            status: 'ACTIVE',
+            startDate: '2025-01-01T00:00:00.000Z',
+            endDate: null,
+          },
+        ],
+        staffTemplates: [],
+        expert: null,
+        isSuspended: false,
+        isDeactivated: false,
+        populationHints: { hasStaffGrants: false, hasExpertGrants: false, hasActiveMembership: true },
+      };
+      cache.get.mockResolvedValue(JSON.stringify(olderShape));
+      identities.findUserForPrincipal.mockResolvedValue(DB_USER);
+
+      const result = await loader.load('user-1');
+
+      expect(identities.findUserForPrincipal).toHaveBeenCalledOnce();
+      expect(result!.memberships[0]!.orgName).toBe('Org One');
     });
 
     it('returns null for unknown user', async () => {

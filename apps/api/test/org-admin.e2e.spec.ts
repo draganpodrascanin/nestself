@@ -400,6 +400,9 @@ describe.skipIf(!shouldRun)('Org Admin (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.orgUnitId).toBe(createdTeamId);
+      // A full member item: the clients validate it with MemberItemSchema.
+      expect(res.body).toMatchObject({ userId: 'user_jovan', email: 'user_jovan@example.com' });
+      expect(res.body.displayName).not.toBe('');
 
       // Verify jovan's /auth/me reflects the new orgUnitId after cache invalidation.
       const meRes = await jovanAgent.get('/api/auth/me');

@@ -101,6 +101,7 @@ export interface TextareaProps {
   name?: string;
   value?: string;
   defaultValue?: string;
+  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   rows?: number;
   className?: string;
 }

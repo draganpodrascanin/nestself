@@ -255,15 +255,17 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     name: 'Employer Owner',
     workspace: 'organization',
     population: 'employer_admin',
+    // Owner model (2026-10-24): the employer owner is the single superadmin of
+    // an organization and holds access.grant / access.revoke as well.
     actions: [
-      'access.delegate', 'access.preview', 'policy.manage',
-      'service.configure', 'org.settings',
+      'access.grant', 'access.revoke', 'access.delegate', 'access.preview',
+      'policy.manage', 'service.configure', 'org.settings',
     ],
     scopeType: 'organization',
     defaultConditions: [],
     requiredConditionTypes: [],
     requiresSecondFactor: true,
-    stepUpActions: ['access.delegate'],
+    stepUpActions: ['access.grant', 'access.revoke', 'access.delegate'],
     isActive: true,
     legacyRole: null,
   },
