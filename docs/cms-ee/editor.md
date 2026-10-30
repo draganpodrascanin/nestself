@@ -8,6 +8,7 @@ Notion-style rich text editor for the NestSelf CMS, built on Tiptap 3.32.0.
 packages/content/src/editor/
   ContentEditor.tsx    — Main editor component (canvas, labels, layout)
   editor-extensions.ts — Full Tiptap extension set (schema, shortcuts, plugins)
+  node-views.tsx       — React node views for interactive blocks (Phase B)
   SlashMenu.tsx        — "/" command palette with Floating UI positioning
   EditorBubbleMenu.tsx — Selection toolbar: Bold, Link, Turn Into
   BlockHandle.tsx      — Drag handle: "+", grip, block menu
@@ -40,9 +41,52 @@ packages/content/src/editor/
 | DragHandle | `@tiptap/extension-drag-handle` | Block-level drag & drop |
 | SlashMenu | custom (wraps `@tiptap/suggestion`) | "/" command palette |
 
+### React node views (`node-views.tsx`)
+
+Seven custom blocks have interactive React node views, registered via
+`ReactNodeViewRenderer` from `@tiptap/react`:
+
+| Node view | Type | Behaviour |
+|---|---|---|
+| `ProfessionalNoteView` | content | Aside with note kind picker (tip/warning/info/disclaimer), border colour from tokens |
+| `PracticalStepView` | content | Numbered badge, editable title input, body content |
+| `ChecklistView` | content | `<ul>` wrapper |
+| `ChecklistItemView` | content | `<li>` with a real checkbox that toggles `[x]` prefix in the `label` attr |
+| `CtaView` | atom | Button preview, kind select, optional label input (max 100 chars) |
+| `RelatedResourceView` | atom | Resource ID input (text for now; search picker planned) |
+| `ImageView` | atom | Upload placeholder / asset reference, required alt text, optional caption |
+
+All node views switch between editable and read-only modes based on
+`editor.isEditable`. They use semantic token classes (`text-text`,
+`bg-surface`, `border-border-control`, etc.) and no hex literals.
+
 ### How documents map to the strict schema
 
 The editor's internal JSON is `{type:'doc', content:[...]}`. `toContentDocument()` wraps it in a `ContentDocument` envelope with `schemaVersion` and strips extraneous attributes (e.g. `orderedList.type`, link mark's `target`/`rel`). `fromContentDocument()` strips `schemaVersion` for `setContent()`. The Zod schema in `packages/content/src/schema/` validates the document on save.
+
+## Admin integration (Phase A)
+
+The variant editor route
+(`apps/admin/src/routes/_authenticated/cms/resources/$resourceId/variants/$locale.tsx`)
+connects the `ContentEditor` to the CMS API:
+
+- **API mode**: `createCmsApi(api)` factory from `@nestself/api-client` for
+  `getResource`, `saveRevision` (If-Match ETag), `submitRevision`,
+  `approveRevision`, `publishNow`, `createNewRevision`.
+- **Autosave**: 5-second debounce, one-in-flight with trailing save
+  (`inflightRef`, `trailingRef`), `lockVersionRef` updated on each 200.
+- **Conflict handling**: 409 shows a banner with "Reload server version"
+  and "Keep mine" (overwrite with server's lockVersion).
+- **Navigation blocking**: `useBlocker` from TanStack Router with
+  `shouldBlockFn` + `enableBeforeUnload`; flush save on unmount.
+- **Collapsible properties panel**: `Accordion` from `@nestself/ui`
+  containing summary, outcome, duration, sources, proposedAudience.
+- **Locale tabs**: All four locales (sr-Latn, hu, en, sr-Cyrl) with
+  revision state badges.
+- **Preview panel**: Toggle with disclosure motion preset, 390/1440/320px
+  width switcher, `ContentRenderer` rendering the current document.
+- **Workflow actions**: Submit (draft/changes_requested), Approve
+  (in_review), Publish now (approved), New revision (approved/superseded).
 
 ## How to add a block
 
@@ -79,6 +123,28 @@ Note: `Mod-I` (italic) is intentionally swallowed. The italic mark exists in sto
 - Bubble menu: Buttons with `aria-label` and `aria-pressed`.
 - Block handle: Buttons with `aria-label`, block menu with `role="menu"`.
 - All menus animated per the Motion rule (popover preset) with reduced-motion support via `useMotionPreset`.
+
+## Test coverage
+
+### Unit tests (Vitest)
+
+| File | Covers |
+|---|---|
+| `ContentEditor.test.tsx` | Round-trip (insert every block, export, reimport), slash menu insertion, bubble menu bold toggle, block handle visibility, keyboard shortcuts, paste normalization |
+| `node-views.test.tsx` | All 7 node view components: rendering, attribute updates via `updateAttributes`, editable vs read-only gating, checkbox toggle |
+| `$locale.test.tsx` (admin) | Route loading, locale tabs, properties accordion, preview panel, workflow buttons, useBlocker, conflict state, revision badges |
+
+### Storybook stories
+
+`ContentEditor.stories.tsx`: Empty, WithContent, ReadOnly, CustomLabels,
+AllBlocks (every custom block type), AllBlocksReadOnly.
+
+### E2E (Playwright)
+
+`e2e/content/editor.spec.ts`: Author creates resource, opens editor,
+expands properties panel, checks locale tabs, toggles preview, submits
+revision; reviewer approves; publisher publishes. Screenshots saved to
+`docs/cms-ee/manual/screenshots/{author,reviewer,publisher}/`.
 
 ## Tiptap documentation URLs
 

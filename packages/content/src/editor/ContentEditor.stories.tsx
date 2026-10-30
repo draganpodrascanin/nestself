@@ -106,6 +106,96 @@ const richDoc: ContentDocument = {
   ],
 } as unknown as ContentDocument;
 
+/** Document containing every custom block type for visual testing. */
+const allBlocksDoc: ContentDocument = {
+  type: 'doc',
+  schemaVersion: CURRENT_SCHEMA_VERSION,
+  content: [
+    {
+      type: 'sectionHeading',
+      attrs: { level: 2 },
+      content: [{ type: 'text', text: 'All custom blocks' }],
+    },
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'Demonstrates every interactive node view.' }],
+    },
+    // Professional notes (all four kinds)
+    {
+      type: 'professionalNote',
+      attrs: { noteKind: 'tip' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'This is a Tip note.' }] },
+      ],
+    },
+    {
+      type: 'professionalNote',
+      attrs: { noteKind: 'warning' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'This is a Warning note.' }] },
+      ],
+    },
+    {
+      type: 'professionalNote',
+      attrs: { noteKind: 'info' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'This is an Info note.' }] },
+      ],
+    },
+    {
+      type: 'professionalNote',
+      attrs: { noteKind: 'disclaimer' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'This is a Disclaimer note.' }] },
+      ],
+    },
+    // Practical steps
+    {
+      type: 'practicalStep',
+      attrs: { stepNumber: 1, title: 'Take a deep breath' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Inhale for four seconds, hold for seven, exhale for eight.' }] },
+      ],
+    },
+    {
+      type: 'practicalStep',
+      attrs: { stepNumber: 2, title: 'Journal your thoughts' },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Write down three things you are grateful for today.' }] },
+      ],
+    },
+    // Checklist
+    {
+      type: 'checklist',
+      content: [
+        { type: 'checklistItem', attrs: { label: '[x] Morning stretches' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Morning stretches' }] }] },
+        { type: 'checklistItem', attrs: { label: 'Midday walk' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Midday walk' }] }] },
+        { type: 'checklistItem', attrs: { label: 'Evening reflection' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Evening reflection' }] }] },
+      ],
+    },
+    // Image (no asset uploaded -- placeholder)
+    {
+      type: 'image',
+      attrs: { mediaAssetId: null, alt: '', caption: '' },
+    },
+    // Related resource
+    {
+      type: 'relatedResource',
+      attrs: { contentResourceId: 'res_stress_management_101' },
+    },
+    // CTA with label
+    {
+      type: 'cta',
+      attrs: { ctaKind: 'open_content', targetId: null, label: 'Read more about stress management' },
+    },
+    // CTA without label
+    {
+      type: 'cta',
+      attrs: { ctaKind: 'suggest_topic', targetId: null, label: null },
+    },
+  ],
+} as unknown as ContentDocument;
+
 // ---------------------------------------------------------------------------
 // Wrapper with onChange tracking
 // ---------------------------------------------------------------------------
@@ -190,5 +280,21 @@ export const CustomLabels: Story = {
       undo: 'Ponisti',
       redo: 'Ponovi',
     },
+  },
+};
+
+/** Showcases every custom block type with interactive node views. */
+export const AllBlocks: Story = {
+  args: {
+    initialDocument: allBlocksDoc,
+    placeholder: 'Start writing...',
+  },
+};
+
+/** All custom blocks in read-only mode (kind pickers and inputs hidden). */
+export const AllBlocksReadOnly: Story = {
+  args: {
+    initialDocument: allBlocksDoc,
+    editable: false,
   },
 };
