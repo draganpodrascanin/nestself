@@ -56,6 +56,7 @@ vi.mock('@tanstack/react-router', () => {
     },
     redirect,
     useBlocker: (...args: unknown[]) => mockUseBlocker(...args),
+    useNavigate: () => vi.fn(),
     Outlet: () => null,
     Link: ({ children, ...props }: Record<string, unknown>) => <a {...props}>{children as React.ReactNode}</a>,
   };
@@ -248,10 +249,13 @@ describe('VariantEditorPage', () => {
     expect(screen.getByTestId('content-renderer')).toBeInTheDocument();
   });
 
-  it('renders the proposedAudience inside the properties panel for authored locales', () => {
+  it('renders the proposedAudience inside the properties panel for authored locales', async () => {
+    const user = userEvent.setup();
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
-    // The audience field label is inside the Accordion panel (open by default)
+    // The properties accordion is collapsed by default (Notion polish);
+    // expand it to verify the audience field is inside.
+    await user.click(screen.getByText(testI18n.t('cms:editor.propertiesPanel')));
     expect(
       screen.getByText(testI18n.t('cms:editor.proposedAudience')),
     ).toBeInTheDocument();
@@ -346,10 +350,12 @@ describe('VariantEditorPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the sources section with add button inside properties panel', () => {
+  it('shows the sources section with add button inside properties panel', async () => {
+    const user = userEvent.setup();
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
-    // Sources and Add button are inside the Accordion (open by default)
+    // The properties accordion is collapsed by default; expand it.
+    await user.click(screen.getByText(testI18n.t('cms:editor.propertiesPanel')));
     expect(
       screen.getByRole('button', { name: testI18n.t('cms:editor.addSource') }),
     ).toBeInTheDocument();
@@ -406,10 +412,12 @@ describe('VariantEditorPage', () => {
     expect(call).toBeDefined();
   });
 
-  it('shows summary field with pre-filled data inside properties panel', () => {
+  it('shows summary field with pre-filled data inside properties panel', async () => {
+    const user = userEvent.setup();
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Latn' });
 
-    // Summary textarea inside the accordion
+    // The properties accordion is collapsed by default; expand it.
+    await user.click(screen.getByText(testI18n.t('cms:editor.propertiesPanel')));
     const summaryField = screen.getByText(testI18n.t('cms:editor.summary'));
     expect(summaryField).toBeInTheDocument();
   });

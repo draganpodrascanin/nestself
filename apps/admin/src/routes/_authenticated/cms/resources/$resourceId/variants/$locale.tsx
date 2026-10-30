@@ -495,7 +495,7 @@ function VariantEditorReady({
   const [actionError, setActionError] = useState<string | null>(null);
 
   // ─── Properties panel state ───────────────────────────────────────
-  const [propsOpen, setPropsOpen] = useState<string[]>(['properties']);
+  const [propsOpen, setPropsOpen] = useState<string[]>([]);
 
   // ─── Renderer labels ──────────────────────────────────────────────
   const rendererLabels: ContentRendererLabels = {
@@ -1052,15 +1052,18 @@ function VariantEditorReady({
           <div className="flex gap-6">
             {/* Main editor column */}
             <div className="flex-1 min-w-0 flex flex-col gap-6">
-              {/* Title field (always visible) */}
-              <Field label={t('cms:editor.titleField')} required id="title">
-                <Input
-                  value={isDerivedLocale ? displayTitle : title}
-                  onChange={(e) => { setTitle(e.target.value); handleFieldChange(); }}
-                  placeholder={t('cms:editor.titlePlaceholder')}
-                  readOnly={isDerivedLocale || !editable}
-                />
-              </Field>
+              {/* Title — large borderless heading input (Notion-style) */}
+              <input
+                id="title"
+                type="text"
+                value={isDerivedLocale ? displayTitle : title}
+                onChange={(e) => { setTitle(e.target.value); handleFieldChange(); }}
+                placeholder={t('cms:editor.titlePlaceholder')}
+                readOnly={isDerivedLocale || !editable}
+                aria-label={t('cms:editor.titleField')}
+                aria-required
+                className="w-full border-0 bg-transparent p-0 type-section-title text-text placeholder:text-text-secondary focus:outline-none"
+              />
 
               {/* Collapsible properties panel */}
               {!isDerivedLocale ? (
