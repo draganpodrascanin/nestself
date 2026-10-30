@@ -21,7 +21,7 @@ import {
   DurationBadge,
   useToast,
 } from '@nestself/ui';
-import { ContentRenderer } from '@nestself/content/render';
+import { ContentDetailLayout } from '@nestself/content/render';
 import type {
   MediaUrlResolver,
   MediaAssetMeta,
@@ -332,168 +332,156 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
   // CTA when the withdrawal task adds the replacement data model. The field exists
   // in the contract but is always null at M1.
 
+  // -- Build the document prop for ContentDetailLayout -----------------------
+  const document = detail.body &&
+    typeof detail.body === 'object' &&
+    'type' in (detail.body as Record<string, unknown>)
+    ? (detail.body as { type: 'doc'; schemaVersion: number; content: unknown[] })
+    : { type: 'doc' as const, schemaVersion: 1, content: [] };
+
+  // -- Reviewer / author metadata -------------------------------------------
+  const authorLabel = detail.reviewerName
+    ? t('library:detail.reviewedBy', { name: detail.reviewerName })
+    : detail.authorName;
+  const dateLabel = detail.reviewerName && detail.reviewedAt
+    ? t('library:detail.reviewedOn', {
+        date: formatDate(new Date(detail.reviewedAt), locale as Locale),
+      })
+    : null;
+
   return (
-    <div className="space-y-6 max-w-reading">
-      <Link to="/" className="type-metadata text-text-secondary hover:text-primary no-underline">
-        &larr; {t('library:detail.backToHome')}
-      </Link>
-
-      <Heading level={1} typeRole="screenTitle">
-        {detail.title}
-      </Heading>
-
-      <Text className="type-body text-text-secondary">{detail.summary}</Text>
-
-      {/* Metadata row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Badge tone="neutral">{detail.category.label}</Badge>
-        {detail.durationSeconds != null ? (
-          <DurationBadge
-            durationSeconds={detail.durationSeconds}
-            formatLabel={(seconds) => {
-              const minutes = Math.round(seconds / 60);
-              if (minutes < 1) return t('library:durationFormat.lessThanMinute');
-              return t('library:durationFormat.minutes', { count: minutes });
-            }}
-          />
-        ) : detail.durationBand ? (
-          <DurationBadge
-            bandLabel={t(`library:duration.${detail.durationBand}`)}
-            formatLabel={(seconds) => {
-              const minutes = Math.round(seconds / 60);
-              if (minutes < 1) return t('library:durationFormat.lessThanMinute');
-              return t('library:durationFormat.minutes', { count: minutes });
-            }}
-          />
-        ) : null}
-      </div>
-
-      {/* Outcome */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-2">
-          {t('library:detail.outcome')}
-        </Heading>
-        <Text>{detail.outcome}</Text>
-      </section>
-
-      {/* Reviewer and date — use formatDate not formatDateTime (Minor) */}
-      {detail.reviewerName ? (
-        <div className="type-metadata text-text-secondary">
-          <span>{t('library:detail.reviewedBy', { name: detail.reviewerName })}</span>
-          {detail.reviewedAt ? (
-            <span>
-              {' · '}
-              {t('library:detail.reviewedOn', {
-                date: formatDate(new Date(detail.reviewedAt), locale as Locale),
-              })}
-            </span>
+    <ContentDetailLayout
+      className="max-w-reading"
+      // -- Slots --
+      beforeTitle={
+        <Link to="/" className="type-metadata text-text-secondary hover:text-primary no-underline">
+          &larr; {t('library:detail.backToHome')}
+        </Link>
+      }
+      title={detail.title}
+      summary={detail.summary}
+      author={authorLabel}
+      dateLabel={dateLabel}
+      outcomeLabel={t('library:detail.outcome')}
+      outcome={detail.outcome}
+      metaExtra={
+        <>
+          <Badge tone="neutral">{detail.category.label}</Badge>
+          {detail.durationSeconds != null ? (
+            <DurationBadge
+              durationSeconds={detail.durationSeconds}
+              formatLabel={(seconds) => {
+                const minutes = Math.round(seconds / 60);
+                if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+                return t('library:durationFormat.minutes', { count: minutes });
+              }}
+            />
+          ) : detail.durationBand ? (
+            <DurationBadge
+              bandLabel={t(`library:duration.${detail.durationBand}`)}
+              formatLabel={(seconds) => {
+                const minutes = Math.round(seconds / 60);
+                if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+                return t('library:durationFormat.minutes', { count: minutes });
+              }}
+            />
           ) : null}
-        </div>
-      ) : null}
-
-      {/* Content body */}
-      {detail.body &&
-      typeof detail.body === 'object' &&
-      'type' in (detail.body as Record<string, unknown>) ? (
-        <ContentRenderer
-          document={
-            detail.body as {
-              type: 'doc';
-              schemaVersion: number;
-              content: unknown[];
-            }
-          }
-          media={mediaMeta}
-          mediaUrl={mediaUrl as MediaUrlResolver}
-          resolveCta={resolveCta}
-          resolveRelated={(id) => {
-            const rel = detail.relatedResources.find((r) => r.resourceId === id);
-            if (!rel) return null;
-            return {
-              title: rel.title,
-              href: `/content/${rel.resourceId}`,
-              description: rel.summary,
-            };
-          }}
-          resolveInternalLink={(id) => `/content/${id}`}
-          linkComponent={RendererLinkComponent}
-          labels={rendererLabels}
-          documentKey={detail.id}
-        />
-      ) : null}
-
-      {/* Save button */}
-      {onToggleSave ? (
-        <div className="pt-4 border-t border-border-subtle">
-          <Button
-            variant="secondary"
-            onClick={onToggleSave}
-            aria-pressed={detail.saved}
-            loading={savePending}
-            disabled={savePending}
-          >
-            {detail.saved
-              ? t('library:detail.unsave')
-              : t('library:detail.save')}
-          </Button>
-          {saveDemoMessage ? (
-            <Text className="mt-2 type-metadata text-text-secondary">
-              {saveDemoMessage}
-            </Text>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Sources */}
-      {detail.sources.length > 0 ? (
-        <section>
-          <Heading level={2} typeRole="sectionTitle" className="mb-2">
-            {t('library:detail.sources')}
-          </Heading>
-          <ul className="list-disc pl-5 space-y-1">
-            {detail.sources.map((source, i) => (
-              <li key={i}>
-                {source.url ? (
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-info hover:underline"
-                  >
-                    {source.label}
-                  </a>
-                ) : (
-                  <span>{source.label}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* Related resources */}
-      {detail.relatedResources.length > 0 ? (
-        <section>
-          <Heading level={2} typeRole="sectionTitle" className="mb-2">
-            {t('library:detail.related')}
-          </Heading>
-          <div className="space-y-2">
-            {detail.relatedResources.map((rel) => (
-              <Link
-                key={rel.resourceId}
-                to="/content/$contentId"
-                params={{ contentId: rel.resourceId }}
-                className="block p-3 rounded-card border border-border-subtle hover:border-primary transition-colors no-underline"
+        </>
+      }
+      afterBody={
+        <>
+          {/* Save button */}
+          {onToggleSave ? (
+            <div className="mt-6 pt-4 border-t border-border-subtle">
+              <Button
+                variant="secondary"
+                onClick={onToggleSave}
+                aria-pressed={detail.saved}
+                loading={savePending}
+                disabled={savePending}
               >
-                <Text className="font-[var(--font-weight-label)]">{rel.title}</Text>
-                <Text className="type-metadata text-text-secondary">
-                  {rel.summary}
+                {detail.saved
+                  ? t('library:detail.unsave')
+                  : t('library:detail.save')}
+              </Button>
+              {saveDemoMessage ? (
+                <Text className="mt-2 type-metadata text-text-secondary">
+                  {saveDemoMessage}
                 </Text>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-    </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Sources */}
+          {detail.sources.length > 0 ? (
+            <section className="mt-6">
+              <Heading level={2} typeRole="sectionTitle" className="mb-2">
+                {t('library:detail.sources')}
+              </Heading>
+              <ul className="list-disc pl-5 space-y-1">
+                {detail.sources.map((source, i) => (
+                  <li key={i}>
+                    {source.url ? (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-info hover:underline"
+                      >
+                        {source.label}
+                      </a>
+                    ) : (
+                      <span>{source.label}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {/* Related resources */}
+          {detail.relatedResources.length > 0 ? (
+            <section className="mt-6">
+              <Heading level={2} typeRole="sectionTitle" className="mb-2">
+                {t('library:detail.related')}
+              </Heading>
+              <div className="space-y-2">
+                {detail.relatedResources.map((rel) => (
+                  <Link
+                    key={rel.resourceId}
+                    to="/content/$contentId"
+                    params={{ contentId: rel.resourceId }}
+                    className="block p-3 rounded-card border border-border-subtle hover:border-primary transition-colors no-underline"
+                  >
+                    <Text className="font-[var(--font-weight-label)]">{rel.title}</Text>
+                    <Text className="type-metadata text-text-secondary">
+                      {rel.summary}
+                    </Text>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </>
+      }
+      // -- ContentRenderer props --
+      document={document}
+      media={mediaMeta}
+      mediaUrl={mediaUrl as MediaUrlResolver}
+      resolveCta={resolveCta}
+      resolveRelated={(id) => {
+        const rel = detail.relatedResources.find((r) => r.resourceId === id);
+        if (!rel) return null;
+        return {
+          title: rel.title,
+          href: `/content/${rel.resourceId}`,
+          description: rel.summary,
+        };
+      }}
+      resolveInternalLink={(id) => `/content/${id}`}
+      linkComponent={RendererLinkComponent}
+      labels={rendererLabels}
+      documentKey={detail.id}
+    />
   );
 }

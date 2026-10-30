@@ -103,4 +103,83 @@ describe('ContentDetailLayout', () => {
     );
     expect(screen.getByTestId('extra')).toBeInTheDocument();
   });
+
+  // -- Slot tests (backward compatible) --
+
+  it('renders beforeTitle slot above the title', () => {
+    render(
+      <ContentDetailLayout
+        {...BASE_PROPS}
+        title="T"
+        beforeTitle={<nav data-testid="back-link">Back</nav>}
+      />,
+    );
+    const nav = screen.getByTestId('back-link');
+    const h1 = screen.getByRole('heading', { level: 1 });
+    // beforeTitle appears before the title in the DOM
+    expect(nav.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders summary after the title', () => {
+    render(
+      <ContentDetailLayout {...BASE_PROPS} title="T" summary="A brief summary" />,
+    );
+    expect(screen.getByText('A brief summary')).toBeInTheDocument();
+  });
+
+  it('renders outcome as section with heading when outcomeLabel is set', () => {
+    render(
+      <ContentDetailLayout
+        {...BASE_PROPS}
+        title="T"
+        outcome="Learn something"
+        outcomeLabel="What you'll learn"
+      />,
+    );
+    const heading = screen.getByRole('heading', { level: 2, name: "What you'll learn" });
+    expect(heading).toBeInTheDocument();
+    expect(screen.getByText('Learn something')).toBeInTheDocument();
+  });
+
+  it('renders metaExtra in the metadata row', () => {
+    render(
+      <ContentDetailLayout
+        {...BASE_PROPS}
+        title="T"
+        metaExtra={<span data-testid="badge">Category</span>}
+      />,
+    );
+    expect(screen.getByTestId('badge')).toBeInTheDocument();
+  });
+
+  it('renders afterBody after the content body', () => {
+    render(
+      <ContentDetailLayout
+        {...BASE_PROPS}
+        title="T"
+        afterBody={<div data-testid="save-btn">Save</div>}
+      />,
+    );
+    const body = screen.getByText('Hello world');
+    const save = screen.getByTestId('save-btn');
+    expect(body.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('applies custom className to the article wrapper', () => {
+    const { container } = render(
+      <ContentDetailLayout
+        {...BASE_PROPS}
+        title="T"
+        className="custom-class"
+      />,
+    );
+    expect(container.querySelector('article')?.className).toBe('custom-class');
+  });
+
+  it('uses default className when none is provided', () => {
+    const { container } = render(
+      <ContentDetailLayout {...BASE_PROPS} title="T" />,
+    );
+    expect(container.querySelector('article')?.className).toContain('max-w-[720px]');
+  });
 });
