@@ -4,10 +4,9 @@
  * Exercises the CMS content lifecycle for one article: authoring, review,
  * publish, employee discovery, audience isolation and context switching.
  *
- * The admin editor UI is not yet wired to API mode (the save, submit and
- * approve handlers are stubbed). CMS workflow steps are therefore driven
- * through the API, and the admin UI tests are marked `test.fail()` until
- * the fix lands. The reader-side (workspace) steps run against the real UI.
+ * The article is set up through the API so the reader-side steps
+ * (workspace) start from a known state; writing, review and publishing
+ * through the admin UI are the @editor journey (editor.spec.ts).
  *
  * Every assertion is hard: there are no `.catch(() => false)` guards, no
  * `try/catch` fallbacks and no annotation placeholders. If a step fails the
@@ -19,7 +18,6 @@ import * as path from 'node:path';
 import {
   API_URL,
   WORKSPACE_URL,
-  ADMIN_URL,
   USERS,
   signInEmployee,
   signInStaff,
@@ -65,36 +63,17 @@ function getArticle(): ArticleSetupResult {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1: Author creates article (admin UI -- currently stubbed)
+// Step 1: Author opens the resource list (writing, review and publishing
+// through the admin UI are covered by the @editor journey, editor.spec.ts)
 // ---------------------------------------------------------------------------
 
-test.describe('Step 1: Author creates article via admin UI', () => {
+test.describe('Step 1: Author opens the resource list', () => {
   test.describe.configure({ mode: 'serial' });
-
-  // BUG: admin editor's API mode is stubbed -- resource list shows data
-  // (sign-in and listing work), but create/save/submit/approve handlers
-  // produce toasts without calling the API.
-  // Files: apps/admin/src/routes/_authenticated/cms/resources/new.tsx,
-  //        apps/admin/src/routes/_authenticated/cms/resources/$resourceId/variants/$locale.tsx
-  // Expected: full API-mode wiring with createCmsApi client.
 
   test('author signs in and sees the resource list', async ({ page }) => {
     await signInStaff(page, USERS.author);
     await page.getByRole('link', { name: 'Content', exact: true }).click();
     await page.getByRole('heading', { name: 'Resources', exact: true }).first().waitFor({ timeout: 10_000 });
-  });
-
-  test('author creates a new article', async ({ page }) => {
-    // BUG: admin editor create page is not yet wired to API mode.
-    test.fail();
-    await signInStaff(page, USERS.author);
-    await page.goto(`${ADMIN_URL}/cms/resources/new`);
-    await page.getByRole('heading', { name: 'Create article' }).waitFor({ timeout: 15_000 });
-    await page.getByLabel('Primary category').click();
-    await page.getByText('Stress & emotional balance').click();
-    await page.getByLabel('Article title').fill('How to manage stress at work');
-    await page.getByRole('button', { name: 'Create article' }).click();
-    await page.getByRole('heading', { name: 'Variant editor' }).waitFor({ timeout: 10_000 });
   });
 });
 
@@ -396,30 +375,5 @@ test.describe('Step 5: Audience isolation', () => {
       path: screenshotPath('employee', 'org-b-home-no-article'),
       fullPage: false,
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Review and publish screenshots (skipped until admin UI is wired)
-// ---------------------------------------------------------------------------
-
-test.describe('Review and publish screenshots (admin UI)', () => {
-  // BUG: admin editor API mode is stubbed -- cannot take meaningful
-  // screenshots of the review/approve/publish workflow through the UI.
-  // Files: apps/admin/src/routes/_authenticated/cms/resources/$resourceId/variants/$locale.tsx
-  // Expected: reviewer sees revision in_review state, clicks Approve;
-  //           publisher sees Publish dialog with audience selector.
-  test.fail();
-
-  test('reviewer approves the article', async ({ page }) => {
-    await signInStaff(page, USERS.reviewer);
-    await page.goto(`${ADMIN_URL}/cms/resources`);
-    await expect(page.getByRole('heading', { name: 'Resources', exact: true }).first()).toBeVisible();
-  });
-
-  test('publisher publishes the article', async ({ page }) => {
-    await signInStaff(page, USERS.publisher);
-    await page.goto(`${ADMIN_URL}/cms/resources`);
-    await expect(page.getByRole('heading', { name: 'Resources', exact: true }).first()).toBeVisible();
   });
 });
