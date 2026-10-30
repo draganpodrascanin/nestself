@@ -64,10 +64,13 @@ People on screen are the fictional sample people: Jovan Petrović (employee) and
 | 83 | [83-hr-approval-decline-dialog-desktop.png](83-hr-approval-decline-dialog-desktop.png)<br>[83-hr-approval-decline-dialog-mobile.png](83-hr-approval-decline-dialog-mobile.png) | `/approvals` | HR admin and approver (Ivana Jovanović, sample), workspace app | Declining asks for a short reason that only the employee sees. | follow-up approval > decline with a reason |
 | 84 | [84-employee-follow-up-approved-desktop.png](84-employee-follow-up-approved-desktop.png)<br>[84-employee-follow-up-approved-mobile.png](84-employee-follow-up-approved-mobile.png) | `/appointments/:id (the follow-up)` | Employee (Jovan Petrović, sample), workspace app | The approved follow-up is a confirmed appointment. | follow-up approval > approved |
 | 85 | [85-employee-follow-up-declined-by-manager-desktop.png](85-employee-follow-up-declined-by-manager-desktop.png)<br>[85-employee-follow-up-declined-by-manager-mobile.png](85-employee-follow-up-declined-by-manager-mobile.png) | `/appointments/:id (the follow-up)` | Employee (Jovan Petrović, sample), workspace app | The declined follow-up with the approver's reason. | follow-up approval > declined |
+| 90 | [90-operations-consultations-list-desktop.png](90-operations-consultations-list-desktop.png)<br>[90-operations-consultations-list-mobile.png](90-operations-consultations-list-mobile.png) | `/consultations` | Operations, webinar moderator (Nikola Đorđević, sample), admin app | The operations consultations list with Expert and Organisation columns and the filters. | operations consultations > list |
+| 91 | [91-operations-consultation-new-desktop.png](91-operations-consultation-new-desktop.png)<br>[91-operations-consultation-new-mobile.png](91-operations-consultation-new-mobile.png) | `/consultations/new` | Operations, webinar moderator (Nikola Đorđević, sample), admin app | The "New consultation" form filled in (organisation, employee, category, expert, date, start, end) before submitting. | operations consultations > new form |
+| 92 | [92-operations-consultation-cancel-desktop.png](92-operations-consultation-cancel-desktop.png)<br>[92-operations-consultation-cancel-mobile.png](92-operations-consultation-cancel-mobile.png) | `/consultations/:id` | Operations, webinar moderator (Nikola Đorđević, sample), admin app | The created consultation's detail page with the "Cancel appointment" confirmation dialog open. | operations consultations > cancel dialog |
 
 ## Not captured
 
-Every screen was captured.
+- 93. `support-calls-lookup` (/support/calls): Nikola's support_operator grant has scope assigned_cases, but the e2e seed creates no SUPPORT_CASE assignment, so diagnostic.read is absent from his effective actions and the /support/calls route gate redirects to the overview.
 
 ## Defects found while capturing
 
