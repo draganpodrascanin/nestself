@@ -183,6 +183,11 @@ test.describe('@editor Editor journey', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter'); // leave the quote
     await page.keyboard.type('Ovo *nije kurziv* i ostaje običan tekst');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('1. Prvi korak');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter'); // leave the list
+    await page.keyboard.type('[] Stavka za proveru');
 
     await waitForSaved(page);
     const { body } = await readRevision(page, resourceId, 'sr-Latn');
@@ -191,6 +196,12 @@ test.describe('@editor Editor journey', () => {
     expect(findBlock(body, 'quote', 'Mali koraci se računaju.')).toBeTruthy();
     expect(findBlock(body, 'paragraph', 'Ovo *nije kurziv* i ostaje')).toBeTruthy();
     expect(allNodes(body).some((n) => n.marks?.some((m) => m.type === 'italic'))).toBe(false);
+    expect(
+      (body.content ?? []).some((n) => n.type === 'orderedList' && textOf(n).includes('Prvi korak')),
+    ).toBe(true);
+    expect(
+      (body.content ?? []).some((n) => n.type === 'checklist' && textOf(n).includes('Stavka za proveru')),
+    ).toBe(true);
   });
 
   // ─── 5. Bubble menu: bold, link, turn into ───────────────────────
@@ -257,7 +268,13 @@ test.describe('@editor Editor journey', () => {
     // Hovering a block shows the "+" and the grip; the grip opens the block menu.
     const quote = editor.locator('blockquote', { hasText: 'Mali koraci' });
     await quote.hover();
-    await expect(page.getByRole('button', { name: 'Add block' })).toBeVisible();
+    // "+" opens the slash menu on a new block below; Esc closes it.
+    await page.getByRole('button', { name: 'Add block' }).click();
+    await expect(slashMenu(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(slashMenu(page)).toBeHidden();
+    await page.keyboard.press('Backspace'); // the typed "/"
+    await quote.hover();
     await page.getByRole('button', { name: 'Drag or open menu' }).click();
     const blockMenu = page.getByRole('menu');
     for (const item of ['Turn into', 'Duplicate', 'Delete', 'Move up', 'Move down']) {
