@@ -62,3 +62,4 @@ docker/api.env
 # Local media storage (MED-R-01)
 apps/api/.media/
 .media/
+e2e/.article-state.json
