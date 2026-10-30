@@ -22,11 +22,6 @@ import { RECORDING_NOTICE, attendeeJoins, createWebinar, hostJoins, publishWebin
 
 const TITLES = { desktop: 'Building calm team habits', mobile: 'Focus without overload' };
 
-/** See e2e/calls/manual.ts DEFECTS. */
-const DEF_7 =
-  'DEF-7: the webinar room client does not forward webinar.floor.muted and webinar.floor.unmute_requested (FORWARDED_EVENTS in packages/api-client/src/webinars.ts), so the attendee never sees the unmute consent prompt';
-
-
 test.describe('webinar moderator (T-CW-2.6)', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -214,7 +209,6 @@ test.describe('webinar moderator (T-CW-2.6)', () => {
   });
 
   test('asked to unmute, the attendee consents before the microphone opens (WBN-26)', async () => {
-    test.fixme(true, DEF_7);
     const queue = ops.page.getByTestId('webinar-moderator-queue');
     await attendee.page.getByTestId('webinar-hand-raise').click();
     await queue.getByTestId('webinar-queue-hand').getByRole('button', { name: /Give the floor/ }).click();

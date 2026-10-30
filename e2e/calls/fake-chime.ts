@@ -171,6 +171,17 @@ class FakeAudioVideo {
   }
   async startContentShareFromScreenCapture() {}
   stopContentShare() {}
+  // Media replication (D-CW-14): a replica attendee given the floor joins the primary, audio only.
+  async promoteToPrimaryMeeting(credentials) {
+    this.primaryAttendeeId = credentials?.attendeeId ?? null;
+    hooks.promotions = [...(hooks.promotions ?? []), this.primaryAttendeeId];
+    return new realSdk.MeetingSessionStatus(realSdk.MeetingSessionStatusCode.OK);
+  }
+  demoteFromPrimaryMeeting() {
+    this.primaryAttendeeId = null;
+    hooks.demotions = (hooks.demotions ?? 0) + 1;
+    setTimeout(() => this.notify('audioVideoWasDemotedFromPrimaryMeeting', new realSdk.MeetingSessionStatus(realSdk.MeetingSessionStatusCode.OK)), 0);
+  }
 
   // Test controls (the other participant and the network)
   async remoteJoined(attendeeId = 'fake-remote') {

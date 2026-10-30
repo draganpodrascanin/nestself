@@ -37,7 +37,7 @@ export function titleFor(testInfo: TestInfo, titles: WebinarTitles): string {
  * an hour (attendees may join from 15 minutes before, hosts from 30).
  * Returns the new webinar's id; the draft detail is on screen.
  */
-export async function createWebinar(ops: Page, title: string, capture?: TestInfo): Promise<string> {
+export async function createWebinar(ops: Page, title: string, capture?: TestInfo, capacity = 50): Promise<string> {
   const start = new Date(Math.ceil((Date.now() + 10 * MINUTE) / MINUTE) * MINUTE);
   const end = new Date(start.getTime() + 60 * MINUTE);
   await ops.goto(`${ADMIN_URL}/webinars/new`);
@@ -47,7 +47,7 @@ export async function createWebinar(ops: Page, title: string, capture?: TestInfo
   await form.getByRole('radio', { name: 'Selected organisations' }).check();
   // The pickers list the sample organisation (Example d.o.o.), the expert and the moderators by name.
   await form.getByRole('group', { name: 'Organisations' }).getByRole('checkbox').first().check();
-  await form.getByRole('spinbutton', { name: 'Capacity' }).fill('50');
+  await form.getByRole('spinbutton', { name: 'Capacity' }).fill(String(capacity));
   await form.getByRole('checkbox', { name: EXPERT.displayName }).check();
   await form.getByRole('combobox', { name: 'Moderator' }).click();
   await ops.getByRole('option', { name: new RegExp(OPERATIONS.firstName) }).click();

@@ -373,6 +373,27 @@ export const MANUAL_SHOTS = {
     state: 'An ended webinar: the attendance table per registration, without names, and the recording state.',
     step: 'webinar admin > attendance',
   },
+  'operations-webinar-cancel': {
+    n: 86,
+    route: '/webinars/:id',
+    role: OPERATIONS,
+    state: 'Cancel a published webinar: the confirmation that registered employees are emailed and that it cannot be undone.',
+    step: 'webinar operations > cancel',
+  },
+  'employee-webinar-canceled': {
+    n: 87,
+    route: '/webinars/:id',
+    role: EMPLOYEE,
+    state: 'The registered employee sees that the webinar was canceled.',
+    step: 'webinar operations > cancel',
+  },
+  'employee-webinar-replica-floor': {
+    n: 88,
+    route: '/webinars/:id/live',
+    role: EMPLOYEE,
+    state: 'A webinar with 300 places (media replication): the attendee in a replica meeting is given the floor, audio only.',
+    step: 'webinar replication > floor by promotion',
+  },
   'operations-webinar-stop-recording': {
     n: 75,
     route: '/webinars/:id/live',
@@ -506,13 +527,10 @@ export const DEFECTS: Defect[] = [
   {
     id: 'DEF-7',
     summary: 'The webinar room client does not forward `webinar.floor.muted` and `webinar.floor.unmute_requested` (FORWARDED_EVENTS in packages/api-client/src/webinars.ts lacks WEBINAR_FLOOR_MUTE_PARTICIPANT_EVENT_NAMES), although the attendee\'s socket receives both.',
-    effect: 'A host can mute a speaker and ask to unmute (the speaker row says so), but the attendee is never asked for consent: screen 78 cannot be produced.',
-    fixedBy: null,
+    effect: 'A host could mute a speaker and ask to unmute (the speaker row said so), but the attendee was never asked for consent: screen 78 could not be produced.',
+    fixedBy: '3adf19c fix(web): forward floor mute events to the attendee, hand state after the floor (T-CW-2.4)',
   },
 ];
 
 /** Screens that cannot be captured yet, with the defect or missing feature behind them. */
-export const NOT_CAPTURED: Partial<Record<ManualShotKey, string>> = {
-  'employee-webinar-unmute-request':
-    'DEF-7: the attendee never receives the unmute request, so the consent prompt does not open (`webinar-moderator.spec.ts` keeps the scenario as test.fixme).',
-};
+export const NOT_CAPTURED: Partial<Record<ManualShotKey, string>> = {};
