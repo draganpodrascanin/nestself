@@ -28,7 +28,7 @@ const API_URL_BASE = `http://localhost:${process.env.E2E_API_PORT ?? '4130'}`;
 // 1. Author signs in and navigates to the editor
 // ---------------------------------------------------------------------------
 
-test.describe('Editor journey', () => {
+test.describe('@editor Editor journey', () => {
   test.describe.configure({ mode: 'serial' });
 
   let resourceId: string;

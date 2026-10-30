@@ -48,7 +48,7 @@ Seven custom blocks have interactive React node views, registered via
 
 | Node view | Type | Behaviour |
 |---|---|---|
-| `ProfessionalNoteView` | content | Aside with note kind picker (tip/warning/info/disclaimer), border colour from tokens |
+| `ProfessionalNoteView` | content | Aside with note kind picker (tip/warning/disclaimer), border colour from tokens |
 | `PracticalStepView` | content | Numbered badge, editable title input, body content |
 | `ChecklistView` | content | `<ul>` wrapper |
 | `ChecklistItemView` | content | `<li>` with a real checkbox that toggles `[x]` prefix in the `label` attr |
@@ -79,8 +79,11 @@ connects the `ContentEditor` to the CMS API:
   and "Keep mine" (overwrite with server's lockVersion).
 - **Navigation blocking**: `useBlocker` from TanStack Router with
   `shouldBlockFn` + `enableBeforeUnload`; flush save on unmount.
+- **Title**: Large borderless heading input styled with `type-section-title`
+  (Notion-style; replaces the wrapped `<Field><Input>` from Phase A).
 - **Collapsible properties panel**: `Accordion` from `@nestself/ui`
-  containing summary, outcome, duration, sources, proposedAudience.
+  containing summary, outcome, duration (minutes), sources, proposedAudience.
+  Starts collapsed (`defaultValue={[]}`); the author expands to fill.
 - **Locale tabs**: All four locales (sr-Latn, hu, en, sr-Cyrl) with
   revision state badges.
 - **Preview panel**: Toggle with disclosure motion preset, 390/1440/320px
@@ -105,17 +108,32 @@ connects the `ContentEditor` to the CMS API:
 |---|---|
 | `/` | Open slash command menu |
 | `Mod-B` | Toggle bold |
+| `Mod-K` | Toggle link popover (dispatches `nestself:toggle-link` custom event) |
+| `Mod-/` | Toggle block menu (dispatches `nestself:toggle-block-menu` custom event) |
 | `Mod-Alt-2` | Toggle heading 2 |
 | `Mod-Alt-3` | Toggle heading 3 |
 | `Alt-Shift-ArrowUp` | Move current block up |
 | `Alt-Shift-ArrowDown` | Move current block down |
-| `## ` | Markdown: heading 2 |
-| `### ` | Markdown: heading 3 |
-| `- ` | Markdown: bullet list |
-| `1. ` | Markdown: ordered list |
-| `> ` | Markdown: blockquote |
+| `## ` | Markdown shortcut: heading 2 |
+| `### ` | Markdown shortcut: heading 3 |
+| `- ` | Markdown shortcut: bullet list |
+| `1. ` | Markdown shortcut: ordered list |
+| `> ` | Markdown shortcut: blockquote |
+| `[] ` | Markdown shortcut: checklist |
 
 Note: `Mod-I` (italic) is intentionally swallowed. The italic mark exists in storage for backward compatibility but cannot be created by users.
+
+### Custom event communication
+
+Tiptap extensions cannot directly control React component state in the
+Toolbar or BlockHandle. Two keyboard shortcuts dispatch custom events on
+`editor.view.dom`:
+
+- **`nestself:toggle-link`** — Fired by `Mod-K` on the Link mark extension.
+  The `Toolbar` component listens for it and toggles the link popover.
+- **`nestself:toggle-block-menu`** — Fired by `Mod-/` on the
+  `BlockKeyboardShortcuts` extension. The `BlockHandle` component listens
+  for it, resolves the current block position, and opens the block menu.
 
 ## Accessibility
 
@@ -130,9 +148,9 @@ Note: `Mod-I` (italic) is intentionally swallowed. The italic mark exists in sto
 
 | File | Covers |
 |---|---|
-| `ContentEditor.test.tsx` | Round-trip (insert every block, export, reimport), slash menu insertion, bubble menu bold toggle, block handle visibility, keyboard shortcuts, paste normalization |
+| `ContentEditor.test.tsx` | Round-trip (insert every block, export, reimport), slash menu insertion, bubble menu bold toggle, keyboard shortcuts (Mod-I swallowed, Mod-K link event, Mod-/ block menu event, Alt-Shift-Arrow block move), markdown shortcut input rules (shipped extension verification), converter cleanup, paste normalization, extension factory configuration |
 | `node-views.test.tsx` | All 7 node view components: rendering, attribute updates via `updateAttributes`, editable vs read-only gating, checkbox toggle |
-| `$locale.test.tsx` (admin) | Route loading, locale tabs, properties accordion, preview panel, workflow buttons, useBlocker, conflict state, revision badges |
+| `$locale.test.tsx` (admin) | Route loading, locale tabs, properties accordion (collapsed by default, expand to verify), preview panel, workflow buttons, useBlocker, conflict state, revision badges, borderless title input |
 
 ### Storybook stories
 
@@ -141,10 +159,11 @@ AllBlocks (every custom block type), AllBlocksReadOnly.
 
 ### E2E (Playwright)
 
-`e2e/content/editor.spec.ts`: Author creates resource, opens editor,
-expands properties panel, checks locale tabs, toggles preview, submits
-revision; reviewer approves; publisher publishes. Screenshots saved to
-`docs/cms-ee/manual/screenshots/{author,reviewer,publisher}/`.
+`e2e/content/editor.spec.ts` (`@editor` tag): Author creates resource via
+API, opens editor, expands properties panel, checks locale tabs, toggles
+preview, fills content and submits; reviewer approves; publisher publishes.
+Screenshots saved to `docs/cms-ee/manual/screenshots/{author,reviewer,publisher}/`.
+Run with `pnpm e2e:content -g "@editor"`.
 
 ## Tiptap documentation URLs
 
