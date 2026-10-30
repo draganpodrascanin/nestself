@@ -9,6 +9,7 @@
  * POST   /api/ops/cms/variants/:variantId/revisions             -- new working rev
  * POST   /api/ops/cms/revisions/:revisionId/submit  -- submit for review
  * POST   /api/ops/cms/revisions/:revisionId/approve -- approve
+ * POST   /api/ops/cms/revisions/:revisionId/return  -- return for changes
  * POST   /api/ops/cms/publications                  -- publish now
  *
  * Media routes (GET /media/:assetId, GET /media/:assetId/:rendition) live
@@ -252,6 +253,26 @@ export class CmsController {
     @Res({ passthrough: true }) res: HttpRes,
   ) {
     const result = await this.cmsService.approveRevision(revisionId, principal);
+    if (result && typeof (result as Record<string, unknown>).lockVersion === 'number') {
+      res.setHeader('ETag', `"${(result as { lockVersion: number }).lockVersion}"`);
+    }
+    return result;
+  }
+
+  @Post('revisions/:revisionId/return')
+  @HttpCode(HttpStatus.OK)
+  @Authorize(
+    ACTIONS['content.review'],
+    cmsResource('forRevision', 'revisionId', { review: true }),
+    { denyAs: 'not_found' },
+  )
+  async returnForChanges(
+    @Param('revisionId') revisionId: string,
+    @Body(new ZodValidationPipe(ReviewDecisionRequestSchema)) body: { comment?: string },
+    @CurrentPrincipal() principal: Principal,
+    @Res({ passthrough: true }) res: HttpRes,
+  ) {
+    const result = await this.cmsService.returnForChanges(revisionId, body.comment ?? null, principal);
     if (result && typeof (result as Record<string, unknown>).lockVersion === 'number') {
       res.setHeader('ETag', `"${(result as { lockVersion: number }).lockVersion}"`);
     }

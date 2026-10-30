@@ -951,6 +951,111 @@ export class CmsService {
   }
 
   // =========================================================================
+  // Return for changes (POST revisions/:id/return)
+  // =========================================================================
+
+  async returnForChanges(
+    revisionId: string,
+    comment: string | null,
+    principal: Principal,
+  ) {
+    const updated = await this.withPgErrorMapping(() => this.dbService.db.transaction(async (tx) => {
+      // Load revision + context
+      const contextRows = await tx
+        .select({
+          revId: contentRevisions.id,
+          revState: contentRevisions.state,
+          revAuthorUserId: contentRevisions.authorUserId,
+          revLastEditorUserId: contentRevisions.lastEditorUserId,
+          variantId: contentVariants.id,
+          resourceId: contentResources.id,
+        })
+        .from(contentRevisions)
+        .innerJoin(contentVariants, eq(contentRevisions.contentVariantId, contentVariants.id))
+        .innerJoin(contentResources, eq(contentVariants.contentResourceId, contentResources.id))
+        .where(eq(contentRevisions.id, revisionId))
+        .limit(1);
+
+      const ctx = contextRows[0];
+      if (!ctx) {
+        throw new ApiHttpException({ status: 404, code: 'not_found', message: 'Revision not found' });
+      }
+
+      if (ctx.revState !== 'in_review') {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_revision_locked',
+          message: `Cannot return a revision in state ${ctx.revState}`,
+        });
+      }
+
+      // Self-review guard
+      if (ctx.revAuthorUserId === principal.userId || ctx.revLastEditorUserId === principal.userId) {
+        throw new ApiHttpException({
+          status: 403,
+          code: 'content_self_review',
+          message: 'A reviewer cannot return a revision they authored or last edited',
+        });
+      }
+
+      // Lock order: resource, then variant
+      await tx.execute(
+        sql`SELECT id FROM content_resources WHERE id = ${ctx.resourceId} FOR UPDATE`,
+      );
+      await tx.execute(
+        sql`SELECT id FROM content_variants WHERE id = ${ctx.variantId} FOR UPDATE`,
+      );
+
+      const now = new Date();
+
+      const result = await tx
+        .update(contentRevisions)
+        .set({
+          state: 'changes_requested',
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(contentRevisions.id, revisionId),
+            eq(contentRevisions.state, 'in_review'),
+          ),
+        )
+        .returning();
+
+      if (result.length === 0) {
+        throw new ApiHttpException({
+          status: 409,
+          code: 'content_revision_locked',
+          message: 'The revision state changed concurrently',
+        });
+      }
+
+      // Outbox
+      await this.outboxWriter.write(tx, {
+        type: 'content.returned',
+        aggregateType: 'content_revision',
+        aggregateId: revisionId,
+        payload: { revisionId, comment },
+      });
+
+      return result[0]!;
+    }));
+
+    // Audit
+    await this.auditWriter.record({
+      action: 'content.returned',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      recordType: 'content_revision',
+      recordId: revisionId,
+      result: 'ALLOWED',
+      sessionId: principal.sessionId ?? null,
+    });
+
+    return updated;
+  }
+
+  // =========================================================================
   // Publish now (POST publications)
   // =========================================================================
 

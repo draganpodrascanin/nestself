@@ -74,6 +74,7 @@ export const AUDIT_ACTIONS = [
   'media.deleted',
   'content.submitted',
   'content.approved',
+  'content.returned',
   'publication.created',
 ] as const;
 
