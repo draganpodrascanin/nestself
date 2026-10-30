@@ -379,9 +379,13 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
 
   const handleNodeChange = useCallback(
     (data: { node: PmNode | null; editor: Editor; pos: number }) => {
+      // Update which block the handle targets, but do NOT close the menu.
+      // The previous version called `setMenuOpen(false)` here, which raced
+      // with keyboard-triggered opens (Mod+/) and made menu items detach
+      // mid-click.  The menu is now closed only by explicit user actions:
+      // Escape, outside click, or selecting a menu item.
       setCurrentNode(data.node);
       setCurrentPos(data.pos);
-      setMenuOpen(false);
     },
     [],
   );
