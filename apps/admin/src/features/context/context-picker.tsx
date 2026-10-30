@@ -32,15 +32,16 @@ export function ContextPicker({ sampleMode }: ContextPickerProps) {
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
 
+  const { availableContexts } = useAuth();
   if (!principal) return null;
-  const options = contextOptions(principal);
+  const options = contextOptions(availableContexts);
   // One option means there is nothing to choose between.
   if (options.length < 2) return null;
 
   const label = (option: ContextOption) =>
-    option.key.startsWith('organization:') && 'orgName' in option
+    ('orgName' in option)
       ? option.orgName
-      : t(`auth:context.picker.option.${option.key as 'personal' | 'expert' | 'operations'}`);
+      : t(`auth:context.picker.option.${option.key as 'expert' | 'operations'}`);
   const current = options.find((o) => sameContext(o.context, principal.context)) ?? null;
   const currentLabel = current ? label(current) : t('auth:context.picker.none');
   const triggerLabel = t('auth:context.picker.open', { name: currentLabel });
