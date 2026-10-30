@@ -70,8 +70,9 @@ test.describe('webinar attendee (T-CW-2.6)', () => {
     await expect(lobby.getByText(/^Your camera stays off[.;] you can write to the hosts and raise your hand to ask for the floor\.$/i)).toBeVisible();
     await expect(page.getByTestId('webinar-detail-countdown')).toHaveText(/^Starts in \d{2}:\d{2}$/);
     await expect(lobby.getByRole('button', { name: 'Join webinar' })).toBeEnabled();
-    // No attendee list or other attendee's name anywhere (D-CW-15).
-    await expect(page.getByText('Jovan')).toHaveCount(0);
+    // No attendee list or attendee's name anywhere on the page (D-CW-15); the header's
+    // account menu names the signed-in viewer, so the check reads the main landmark.
+    await expect(page.getByRole('main').getByText('Jovan')).toHaveCount(0);
     await shot(page, testInfo, 'employee-webinar-registered');
   });
 
