@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
+  check,
   index,
   integer,
   pgPolicy,
@@ -51,10 +52,23 @@ export const organizations = pgTable(
     cohortThreshold: integer(),
     /** Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED. */
     status: text().notNull().default('ACTIVE'),
+    /**
+     * What an employee's confirmation of a follow-up does (D-CW-37):
+     * `AUTOMATIC` confirms it, `MANAGER_APPROVAL` routes it to an approver.
+     * Stored UPPER_CASE; the appointments module maps it to the contract's
+     * lower-case `FollowUpApprovalPolicy` (`follow-up-policy.ts`).
+     */
+    followUpApprovalPolicy: text().notNull().default('AUTOMATIC'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex('organizations_slug_key').on(t.slug)],
+  (t) => [
+    uniqueIndex('organizations_slug_key').on(t.slug),
+    check(
+      'organizations_follow_up_approval_policy_check',
+      sql`${t.followUpApprovalPolicy} in ('AUTOMATIC', 'MANAGER_APPROVAL')`,
+    ),
+  ],
 );
 
 /**

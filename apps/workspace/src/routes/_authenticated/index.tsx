@@ -5,17 +5,15 @@ import {
   Heading,
   Text,
   CategoryIcon,
-  Avatar,
   StatusBlock,
   PhotoFigure,
-  CoverageNotice,
 } from '@nestself/ui';
-import { supportAreaIcon } from '@nestself/contracts';
+import { can, supportAreaIcon } from '@nestself/contracts';
 import type { SupportArea } from '@nestself/contracts';
-import { SAMPLE_BOOKING, SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { formatDateTime } from '@nestself/i18n';
-import type { Locale } from '@nestself/i18n';
+import { SAMPLE_POSTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import { useAuth } from '../../auth';
+import { NextAppointment } from '../../calls/next-appointment';
+import { isSampleDataMode } from '../../data-source';
 
 const searchSchema = z.object({
   denied: z.string().optional(),
@@ -27,15 +25,15 @@ export const Route = createFileRoute('/_authenticated/')({
 });
 
 function HomePage() {
-  const { t, i18n } = useTranslation(['workspace', 'common']);
-  const { principal } = useAuth();
+  const { t } = useTranslation(['workspace', 'common']);
+  const { principal, effectiveActions } = useAuth();
   const { denied } = Route.useSearch();
-  const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
 
   const supportAreas: SupportArea[] = ['psychological', 'legal', 'financial'];
+  const showUpcoming = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
 
-  // Latest two posts
-  const latestPosts = SAMPLE_POSTS.slice(0, 2);
+  // Latest two posts: fixtures, so sample mode only (sample-data rule); the channels API arrives with its epic.
+  const latestPosts = isSampleDataMode ? SAMPLE_POSTS.slice(0, 2) : [];
 
   const findPersonName = (authorId: string) => {
     const person = SAMPLE_PEOPLE.find((p) => p.id === authorId);
@@ -78,48 +76,37 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Next appointment card */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.upcoming')}
-        </Heading>
-        <div className="rounded-card border border-border-subtle bg-surface p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Avatar initials="MR" name={SAMPLE_BOOKING.advisorName} size="md" />
-            <div>
-              <Text className="font-[var(--font-weight-label)]">
-                {t('workspace:appointment.with', { name: SAMPLE_BOOKING.advisorName })}
-              </Text>
-              <Text className="type-metadata text-text-secondary">
-                {formatDateTime(new Date(SAMPLE_BOOKING.appointmentAt), locale)}
-              </Text>
-            </div>
-          </div>
-          <CoverageNotice>
-            {t('workspace:appointment.format')}: {t(`workspace:appointment.${SAMPLE_BOOKING.format}`)}
-          </CoverageNotice>
-        </div>
-      </section>
+      {/* Next appointment (CALL-02): the same list as /appointments, for those who hold consultations */}
+      {showUpcoming ? (
+        <section>
+          <Heading level={2} typeRole="sectionTitle" className="mb-4">
+            {t('workspace:home.upcoming')}
+          </Heading>
+          <NextAppointment />
+        </section>
+      ) : null}
 
-      {/* Channel digest */}
-      <section>
-        <Heading level={2} typeRole="sectionTitle" className="mb-4">
-          {t('workspace:home.recentMessages')}
-        </Heading>
-        <div className="space-y-3">
-          {latestPosts.map((post) => (
-            <div
-              key={post.id}
-              className="rounded-card border border-border-subtle bg-surface p-4"
-            >
-              <Text className="font-[var(--font-weight-label)] mb-1">
-                {findPersonName(post.authorId)}
-              </Text>
-              <Text className="text-text-secondary">{post.content}</Text>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Channel digest: sample posts in sample mode only */}
+      {latestPosts.length > 0 ? (
+        <section>
+          <Heading level={2} typeRole="sectionTitle" className="mb-4">
+            {t('workspace:home.recentMessages')}
+          </Heading>
+          <div className="space-y-3">
+            {latestPosts.map((post) => (
+              <div
+                key={post.id}
+                className="rounded-card border border-border-subtle bg-surface p-4"
+              >
+                <Text className="font-[var(--font-weight-label)] mb-1">
+                  {findPersonName(post.authorId)}
+                </Text>
+                <Text className="text-text-secondary">{post.content}</Text>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* One optional photo */}
       <PhotoFigure

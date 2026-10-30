@@ -95,8 +95,9 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
 
   it('0005 refuses to drop the legacy roles before the backfill', async () => {
     expect(MIGRATION_0005[0]).toContain('DO $$');
+    // The first such user in id order: the sample platform administrator since it joined SAMPLE_PEOPLE (T-CW-2.1).
     await expect(testDb.pool.query(MIGRATION_0005[0]!)).rejects.toThrow(
-      /user user_milica holds a legacy role without a backfilled grant/,
+      /user user_admin holds a legacy role without a backfilled grant/,
     );
   });
 

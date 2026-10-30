@@ -50,6 +50,69 @@
       "when": 1792912393798,
       "tag": "0006_sso_domains_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792912453798,
+      "tag": "0007_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792914436592,
+      "tag": "0008_calls",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792917022349,
+      "tag": "0009_call_session_end_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792919246603,
+      "tag": "0010_follow_up",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792921385530,
+      "tag": "0011_appointment_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792922154146,
+      "tag": "0012_webinars",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792932462283,
+      "tag": "0013_webinar_recording_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792934781677,
+      "tag": "0014_webinar_registrations_org",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792936192544,
+      "tag": "0015_call_replicas",
+      "breakpoints": true
     }
   ]
 }

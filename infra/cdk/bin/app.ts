@@ -11,6 +11,7 @@ import { NestSelfComputeStack } from '../lib/compute-stack.js';
 import { NestSelfEdgeStack } from '../lib/edge-stack.js';
 import { NestSelfObservabilityStack } from '../lib/observability-stack.js';
 import { NestSelfCiStack } from '../lib/ci-stack.js';
+import { NestSelfVideoStack } from '../lib/video-stack.js';
 import type { Stage } from '../lib/config.js';
 import { getStageConfig } from '../lib/config.js';
 
@@ -60,12 +61,23 @@ const sharedProps: cdk.StackProps = {
 // --- Auth stack (every stage) ---
 // Rollout order (2026-10-22): Cognito only while development is local, then the
 // platform stacks when the web apps ship, mobile last. Without `-c platform=true`
-// this app contains only the auth stack, so `cdk deploy --all` cannot create the
-// network, database, compute, edge, observability or CI resources by accident.
+// this app contains only the auth stack (plus the video stack for dev), so
+// `cdk deploy --all` cannot create the network, database, compute, edge,
+// observability or CI resources by accident.
 const _authStack = new NestSelfAuthStack(app, `NestSelf-${stage}-Auth`, {
   ...sharedProps,
   config,
 });
+
+// --- Video stack, dev (D-CW-31) ---
+// Dev has no security baseline stack, so the video stack creates its own key.
+// Deploy it alone like the auth stack: `cdk deploy NestSelf-dev-Video`.
+if (stage === 'dev') {
+  const _devVideo = new NestSelfVideoStack(app, `NestSelf-${stage}-Video`, {
+    ...sharedProps,
+    config,
+  });
+}
 
 const platformRequested =
   app.node.tryGetContext('platform') === 'true' || app.node.tryGetContext('platform') === true;
@@ -117,6 +129,13 @@ if (platformRequested) {
   const _ci = new NestSelfCiStack(app, `NestSelf-${stage}-CI`, {
     ...sharedProps,
     config,
+  });
+
+  // Staging and production encrypt the video resources with the platform key.
+  const _video = new NestSelfVideoStack(app, `NestSelf-${stage}-Video`, {
+    ...sharedProps,
+    config,
+    platformKey: securityBaseline.platformKey,
   });
 }
 

@@ -173,9 +173,33 @@ export function sessionLockKey(sessionIdHash: string): string {
   return `lock:session:${sessionIdHash}`;
 }
 
+/**
+ * `call:{sessionId}:create`: the lock that serialises concurrent first joins
+ * of a call session (D-CW-07, CW-R-12).
+ */
+export function callCreateLockKey(sessionId: string): string {
+  return `call:${sessionId}:create`;
+}
+
+/**
+ * `call:{sessionId}:participant:{participantId}`: the participant's cached
+ * `{ meeting, attendee }` join credentials, kept until the room closes
+ * (D-CW-08). The only place a join token is stored.
+ */
+export function callParticipantCredentialsKey(sessionId: string, participantId: string): string {
+  return `call:${sessionId}:participant:${participantId}`;
+}
+
 // ---------------------------------------------------------------------------
 // Pub/sub channels
 // ---------------------------------------------------------------------------
 
 /** Channel name for cache invalidation messages. */
 export const INVALIDATE_CHANNEL = 'invalidate';
+
+/**
+ * Channel of the Socket.IO room events (T-CW-1.6): `RoomEmitter` publishes
+ * `{ room, event, payload }` from the API and the worker, and the
+ * `RoomEventRelay` of every API task emits it to its own sockets.
+ */
+export const ROOM_EVENTS_CHANNEL = 'room_events';

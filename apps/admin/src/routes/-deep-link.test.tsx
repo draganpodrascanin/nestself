@@ -22,6 +22,9 @@ vi.mock('../data-source', () => ({
   resolveDataSource: () => 'api',
 }));
 
+// No socket in these tests: the user room listener gets a client that never connects.
+vi.mock('../calls/user-room-client', () => ({ userRoomClient: { subscribe: () => () => undefined } }));
+
 import { routeTree } from '../routeTree.gen';
 import { api } from '../api';
 import { initialSnapshot } from '../auth';

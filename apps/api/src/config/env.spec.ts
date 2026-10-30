@@ -165,6 +165,108 @@ describe('envSchema', () => {
   });
 });
 
+describe('envSchema: video provider (T-CW-0.2, D-CW-05, D-CW-06)', () => {
+  const chimeEnv = {
+    ...baseEnv,
+    VIDEO_PROVIDER: 'chime',
+    CHIME_REGION: 'eu-central-1',
+    CHIME_EVENTS_QUEUE_URL:
+      'https://sqs.eu-central-1.amazonaws.com/111122223333/nestself-dev-chime-events',
+    CHIME_EVENTS_QUEUE_ARN:
+      'arn:aws:sqs:eu-central-1:111122223333:nestself-dev-chime-events',
+    RECORDINGS_BUCKET: 'nestself-dev-recordings-111122223333',
+  };
+
+  function messagesOf(env: Record<string, string>): string[] {
+    const result = envSchema.safeParse(env);
+    return result.success ? [] : result.error.issues.map((i) => i.message);
+  }
+
+  it('defaults to the fake provider with the smoke test off', () => {
+    const parsed = envSchema.parse(baseEnv);
+    expect(parsed.VIDEO_PROVIDER).toBe('none');
+    expect(parsed.VIDEO_SMOKE_ENABLED).toBe(false);
+    expect(parsed.CHIME_REGION).toBeUndefined();
+  });
+
+  it('accepts a complete chime configuration', () => {
+    const result = envSchema.safeParse(chimeEnv);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown VIDEO_PROVIDER', () => {
+    expect(envSchema.safeParse({ ...baseEnv, VIDEO_PROVIDER: 'zoom' }).success).toBe(false);
+  });
+
+  it('rejects CHIME_REGION=us-east-1 (CW-R-68)', () => {
+    expect(envSchema.safeParse({ ...chimeEnv, CHIME_REGION: 'us-east-1' }).success).toBe(false);
+    expect(envSchema.safeParse({ ...baseEnv, CHIME_REGION: 'us-east-1' }).success).toBe(false);
+  });
+
+  it.each([
+    'CHIME_REGION',
+    'CHIME_EVENTS_QUEUE_URL',
+    'CHIME_EVENTS_QUEUE_ARN',
+    'RECORDINGS_BUCKET',
+  ] as const)('rejects VIDEO_PROVIDER=chime without %s', (key) => {
+    const { [key]: _, ...env } = chimeEnv;
+    expect(messagesOf(env)).toContain(`${key} is required when VIDEO_PROVIDER=chime`);
+  });
+
+  it('rejects a CHIME_EVENTS_QUEUE_URL that is not a URL', () => {
+    expect(
+      envSchema.safeParse({ ...chimeEnv, CHIME_EVENTS_QUEUE_URL: 'not-a-url' }).success,
+    ).toBe(false);
+  });
+
+  it('treats blank video variables as unset, the way .env.example leaves them (T-CW-1.2)', () => {
+    const parsed = envSchema.parse({
+      ...baseEnv,
+      VIDEO_PROVIDER: '',
+      CHIME_REGION: '',
+      CHIME_EVENTS_QUEUE_URL: '',
+      CHIME_EVENTS_QUEUE_ARN: '',
+      RECORDINGS_BUCKET: '',
+      VIDEO_SMOKE_ENABLED: '',
+    });
+    expect(parsed.VIDEO_PROVIDER).toBe('none');
+    expect(parsed.CHIME_REGION).toBeUndefined();
+    expect(parsed.CHIME_EVENTS_QUEUE_URL).toBeUndefined();
+    expect(parsed.CHIME_EVENTS_QUEUE_ARN).toBeUndefined();
+    expect(parsed.RECORDINGS_BUCKET).toBeUndefined();
+    expect(parsed.VIDEO_SMOKE_ENABLED).toBe(false);
+  });
+
+  it('still requires the chime variables when they are blank', () => {
+    const messages = messagesOf({ ...chimeEnv, CHIME_REGION: '', CHIME_EVENTS_QUEUE_URL: '' });
+    expect(messages).toContain('CHIME_REGION is required when VIDEO_PROVIDER=chime');
+    expect(messages).toContain('CHIME_EVENTS_QUEUE_URL is required when VIDEO_PROVIDER=chime');
+  });
+
+  it('parses VIDEO_SMOKE_ENABLED as a boolean flag, so "false" stays false', () => {
+    expect(envSchema.parse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'false' }).VIDEO_SMOKE_ENABLED).toBe(false);
+    expect(envSchema.parse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'true' }).VIDEO_SMOKE_ENABLED).toBe(true);
+    expect(envSchema.safeParse({ ...baseEnv, VIDEO_SMOKE_ENABLED: 'yes' }).success).toBe(false);
+  });
+
+  it('parses VIDEO_FAKE_EVENTS_IN_API as a boolean flag, on by default with the fake provider only (T-CW-2.5)', () => {
+    expect(resolveAppEnv(envSchema.parse(baseEnv)).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: '' })).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'true' })).VIDEO_FAKE_EVENTS_IN_API).toBe(true);
+    expect(resolveAppEnv(envSchema.parse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'false' })).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+    expect(envSchema.safeParse({ ...baseEnv, VIDEO_FAKE_EVENTS_IN_API: 'yes' }).success).toBe(false);
+    // The real provider's events and jobs belong to the worker, whatever the flag says.
+    expect(resolveAppEnv(envSchema.parse(chimeEnv)).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+    expect(resolveAppEnv(envSchema.parse({ ...chimeEnv, VIDEO_FAKE_EVENTS_IN_API: 'true' })).VIDEO_FAKE_EVENTS_IN_API).toBe(false);
+  });
+
+  it('reads STAGE for the provider tags, defaulting to dev', () => {
+    expect(envSchema.parse(baseEnv).STAGE).toBe('dev');
+    expect(envSchema.parse({ ...baseEnv, STAGE: '' }).STAGE).toBe('dev');
+    expect(envSchema.parse({ ...baseEnv, STAGE: 'staging' }).STAGE).toBe('staging');
+  });
+});
+
 describe('resolveAppEnv', () => {
   it('derives SESSION_ENCRYPTION_KEY from JWT_SECRET in stub mode', () => {
     const parsed = envSchema.parse(baseEnv);

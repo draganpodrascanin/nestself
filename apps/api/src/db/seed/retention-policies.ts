@@ -60,4 +60,45 @@ export const RETENTION_POLICIES: readonly RetentionPolicyRow[] = [
   row('expert_credential', 10 * YEAR, null),
   // Hungarian employment-related records created from 2025-01-01: 3 years after employment ends.
   row('employment_record', 3 * YEAR, 3 * YEAR, 'HU'),
+  // Calls and webinars [D-CW-29, guidelines 16.3]: defaults, not law; the DPIA
+  // and L-02, L-03 can change them. Each is a single period (min = max).
+  // Appointment and session metadata, participants, outcomes and provider
+  // events: 7 years, delivery status feeds settlement (FINANCIAL tier).
+  row('appointments', 7 * YEAR, 7 * YEAR),
+  row('call_sessions', 7 * YEAR, 7 * YEAR),
+  row('call_participants', 7 * YEAR, 7 * YEAR),
+  row('call_events', 7 * YEAR, 7 * YEAR),
+  row('call_outcomes', 7 * YEAR, 7 * YEAR),
+  // Follow-up approval items: with the appointment, 7 years (FINANCIAL tier).
+  row('appointment_approvals', 7 * YEAR, 7 * YEAR),
+  // Client diagnostics: 90 days (ADMIN tier).
+  row('call_client_events', 90, 90),
+  // Consultation feedback: 24 months (ADMIN tier).
+  row('call_feedback', 730, 730),
+  // Workshop chat: 24 hours after the session (ADMIN tier).
+  row('call_messages', 1, 1),
+  // Webinar messages and questions: 12 months after the occurrence, then
+  // author links removed (CONTENT_ACCESS tier).
+  row('webinar_messages', 1 * YEAR, 1 * YEAR),
+  // Raw webinar recording segments in S3: 30 days, the bucket lifecycle
+  // (CONTENT_ACCESS tier). The concatenated replay follows the CMS content
+  // lifecycle (published_content, draft_content above).
+  row('webinar_recording_segments', 30, 30),
+  // Ephemeral location text on call_sessions (F-CW-04): deleted when the
+  // session ends (SECURITY tier).
+  row('call_session_location_text', 0, 0),
+  // Planning assumptions under D-CW-29 for the tables it does not name.
+  // Occurrences, hosts, certificates and recording rows: 7 years (FINANCIAL tier).
+  row('webinars', 7 * YEAR, 7 * YEAR),
+  row('webinar_hosts', 7 * YEAR, 7 * YEAR),
+  row('webinar_certificates', 7 * YEAR, 7 * YEAR),
+  row('webinar_recordings', 7 * YEAR, 7 * YEAR),
+  // Consent records: with the session, 7 years (FINANCIAL tier).
+  row('call_consents', 7 * YEAR, 7 * YEAR),
+  // Registrations: 24 months (ADMIN tier).
+  row('webinar_registrations', 730, 730),
+  // Polls, options and aggregate results: 1 year (CONTENT_ACCESS tier).
+  row('webinar_polls', 1 * YEAR, 1 * YEAR),
+  row('webinar_poll_options', 1 * YEAR, 1 * YEAR),
+  row('webinar_poll_results', 1 * YEAR, 1 * YEAR),
 ];

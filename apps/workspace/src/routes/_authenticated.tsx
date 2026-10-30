@@ -15,6 +15,9 @@ import {
   TreeStructure,
   Briefcase,
   ChatsCircle,
+  SealCheck,
+  SlidersHorizontal,
+  Presentation,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -23,6 +26,8 @@ import { ApiStatus } from '../components/ApiStatus';
 import { UserMenu } from '../features/account/user-menu';
 import { ContextPicker } from '../features/context/context-picker';
 import { isSampleDataMode } from '../data-source';
+import { UserRoomListener } from '../calls/user-room-listener';
+import { canAttendWebinars } from '../webinars/route-gate';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
@@ -38,17 +43,21 @@ export const Route = createFileRoute('/_authenticated')({
 });
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace']);
+  const { t } = useTranslation(['common', 'workspace', 'calls']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
 
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
+  // Appointments only for someone who can hold consultations (an HR-only principal has none).
+  const showAppointments = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
+  const appointmentsNav = showAppointments ? [{ to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') }] : [];
+
   const navItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
     { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
+    ...appointmentsNav,
     { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
     { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
     { to: '/polls' as const, icon: ChartBar, label: t('nav.polls') },
@@ -106,22 +115,39 @@ function AuthenticatedLayout() {
     ? [{ to: '/conversations' as const, icon: ChatsCircle, label: t('workspace:conversations.nav') }]
     : [];
 
+  // Follow-up approvals (T-CW-1.10): the approver's items, and HR's policy under the `_hr` gate.
+  const showApprovals = principal ? can(principal, 'approval.decide', undefined, effectiveActions) : false;
+  const approvalsNav = showApprovals
+    ? [{ to: '/approvals' as const, icon: SealCheck, label: t('nav.approvals') }]
+    : [];
+  const followUpPolicyNav = showHr
+    ? [{ to: '/follow-up-policy' as const, icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
+    : [];
+
+  // Webinars (T-CW-2.4): discovery and registration for holders of `event.register`.
+  const webinarsNav = canAttendWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
+    : [];
+
   const allNavItems = [
     ...navItems,
+    ...webinarsNav,
     ...conversationsNav,
     ...casesNav,
     ...managerNav,
+    ...approvalsNav,
     ...hrNav,
     ...peopleNav,
     ...orgUnitsNav,
     ...accessNav,
+    ...followUpPolicyNav,
   ];
 
   /** Bottom bar: at most 5 items. */
   const bottomBarItems = [
     { to: '/' as const, icon: House, label: t('nav.home') },
     { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    { to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') },
+    ...appointmentsNav,
     { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
     { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
   ];
@@ -175,6 +201,8 @@ function AuthenticatedLayout() {
 
   return (
     <AppShell sidebar={sidebar} topbar={topbar} bottomBar={bottomBar}>
+      {/* Follow-up proposals and reminders on the user's own room, on every page (CALL-42, CALL-01). */}
+      <UserRoomListener />
       <Outlet />
     </AppShell>
   );

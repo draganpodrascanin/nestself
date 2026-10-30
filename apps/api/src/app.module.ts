@@ -28,6 +28,11 @@ import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
+import { VideoModule } from './video/video.module.js';
+import { AppointmentsModule } from './appointments/appointments.module.js';
+import { CallsModule } from './calls/calls.module.js';
+import { CallsJobsModule } from './jobs/calls-jobs.module.js';
+import { WebinarsModule } from './webinars/webinars.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SsoModule } from './sso/sso.module.js';
 import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
@@ -82,6 +87,11 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     GrantsModule,
     ProfessionalModule,
     EmergencyModule,
+    VideoModule,
+    AppointmentsModule,
+    CallsModule,
+    CallsJobsModule,
+    WebinarsModule,
     OrganizationsModule,
     SsoModule,
     // Stub-only fake IdP authorize route (D-12); absent with AUTH_MODE=cognito.

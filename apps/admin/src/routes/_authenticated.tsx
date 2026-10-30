@@ -1,10 +1,13 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint, VideoCamera, Lifebuoy, Presentation } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { isSampleDataMode } from '../data-source';
+import { canListConsultations, isConsultingExpert } from '../calls/route-gate';
+import { UserRoomListener } from '../calls/user-room-listener';
+import { canSeeWebinars } from '../webinars/route-gate';
 import { ApiStatus } from './__root';
 import { UserMenu } from '../features/account/user-menu';
 import { ContextPicker } from '../features/context/context-picker';
@@ -24,22 +27,24 @@ function PermissionBlock() {
 }
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation('admin');
+  const { t } = useTranslation(['admin', 'calls']);
   const { principal, effectiveActions } = useAuth();
 
   // Access gate: must have relevant admin permissions (CLIENT-R-05/06).
   // Smallest honest rule: at least one of these, or having staff templates.
-  const hasAccess =
-    principal &&
+  const staffAccess =
+    !!principal &&
     (can(principal, 'client.configure', undefined, effectiveActions) ||
       can(principal, 'content.publish', undefined, effectiveActions) ||
       principal.staffTemplates.length > 0);
+  // Experts hold no staff template; their admin space is their consultations (T-CW-1.5).
+  const expertAccess = isConsultingExpert(principal, effectiveActions);
 
   // Signed out (for example just after Sign out, before /sign-in renders):
   // render nothing rather than flash the permission block.
   if (!principal) return null;
 
-  if (!hasAccess) {
+  if (!staffAccess && !expertAccess) {
     return <PermissionBlock />;
   }
 
@@ -48,18 +53,36 @@ function AuthenticatedLayout() {
   const showEmergency = can(principal, 'audit.read', undefined, effectiveActions);
   // Convenience only: every `/ops/sso-connections` route enforces `sso.manage`.
   const showSso = can(principal, 'sso.manage', undefined, effectiveActions);
+  const consultationsNav = canListConsultations(principal, effectiveActions)
+    ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
+    : [];
 
-  const navItems = [
-    { to: '/' as const, icon: House, label: t('nav.overview') },
-    { to: '/experts' as const, icon: Users, label: t('nav.experts') },
-    { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
-    ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
-    ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
-    ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
-    { to: '/content' as const, icon: Article, label: t('nav.content') },
-    { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
-    { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
-  ];
+  // PLT-05: call diagnostics and problem reports for support operators.
+  const supportNav = can(principal, 'diagnostic.read', undefined, effectiveActions)
+    ? [{ to: '/support/calls' as const, icon: Lifebuoy, label: t('calls:supportCalls.nav') }]
+    : [];
+
+  // Webinars (T-CW-2.4): occurrences for `event.manage` and `event.moderate`; a presenter's own for `event.present`.
+  const webinarsNav = canSeeWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
+    : [];
+
+  const navItems = staffAccess
+    ? [
+        { to: '/' as const, icon: House, label: t('nav.overview') },
+        ...consultationsNav,
+        ...webinarsNav,
+        ...supportNav,
+        { to: '/experts' as const, icon: Users, label: t('nav.experts') },
+        { to: '/organizations' as const, icon: Buildings, label: t('nav.organizations') },
+        ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
+        ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
+        ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
+        { to: '/content' as const, icon: Article, label: t('nav.content') },
+        { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
+        { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
+      ]
+    : [...consultationsNav, ...webinarsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
 
   return (
     <AppShell
@@ -123,6 +146,8 @@ function AuthenticatedLayout() {
         </nav>
       }
     >
+      {/* Suggested times and reminders on the user's own room, on every page (T-CW-1.9, CALL-01). */}
+      <UserRoomListener />
       <Outlet />
     </AppShell>
   );

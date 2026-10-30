@@ -14,13 +14,14 @@ import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import type { Action, ActiveContext, Principal, Resource } from '@nestself/contracts';
 import { isAction } from '@nestself/contracts';
 
-import { PrincipalLoader, type LoadedPrincipal } from '../principal/principal-loader.js';
+import { PrincipalLoader } from '../principal/principal-loader.js';
 
 import { ContextLoader } from '../authz/context-loader.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from '../authz/authorize.js';
 import { isContextValid } from '../authz/context.js';
+import { assemblePrincipal } from '../principal/assemble-principal.js';
 
 /** The envelope every authorized job payload must carry. */
 export interface AuthorizedJobPayload<TData = unknown> {
@@ -125,7 +126,8 @@ export class JobAuthorization {
       return { status: 'skipped', reason: 'principal_inactive' };
     }
 
-    const principal = this.assemblePrincipal(loaded, payload.context);
+    // Context from the payload, no interactive auth.
+    const principal = assemblePrincipal(loaded, payload.context);
     const ctx = await this.contextLoader.build(principal, payload.resource, {
       action: payload.action,
       loadedPrincipal: loaded,
@@ -154,30 +156,6 @@ export class JobAuthorization {
       details: { job: job.name, jobId: job.id ?? null, action: payload.action },
     });
     return { status: 'completed', result };
-  }
-
-  /** Principal for a background job: context from the payload, no interactive auth. */
-  private assemblePrincipal(loaded: LoadedPrincipal, context: ActiveContext): Principal {
-    return {
-      userId: loaded.userId,
-      displayName: loaded.displayName,
-      initials: loaded.initials,
-      locale: loaded.locale,
-      memberships: loaded.memberships,
-      staffTemplates: loaded.staffTemplates,
-      expert: loaded.expert,
-      context,
-      // Jobs never satisfy a step-up requirement: the auth snapshot is
-      // deliberately old and without a second factor.
-      auth: {
-        method: 'sso',
-        time: new Date(0).toISOString(),
-        secondFactor: false,
-        lastStepUpAt: null,
-      },
-      sessionId: null,
-      tokenFamily: null,
-    };
   }
 
   private async auditSkip(

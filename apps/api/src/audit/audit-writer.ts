@@ -39,7 +39,15 @@ export interface AuditEventInput {
 // Forbidden detail keys (D-21)
 // ---------------------------------------------------------------------------
 
-const FORBIDDEN_KEYS = new Set([
+/**
+ * Keys are compared after lower-casing and dropping every character that is
+ * not a letter or digit, so `joinToken`, `JoinToken`, `JOINTOKEN` and
+ * `join_token` all match (CW-R-69). The match is on the whole key:
+ * `codeVerifierHash` and `tokenFamily` are kept.
+ */
+const normaliseKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const FORBIDDEN_KEY_NAMES = [
   'password',
   'code',
   'token',
@@ -47,6 +55,9 @@ const FORBIDDEN_KEYS = new Set([
   'accessToken',
   'idToken',
   'refreshToken',
+  // Chime SDK attendee credential and the credentials blob (CW-R-69, CW-R-33a, D-CW-08)
+  'joinToken',
+  'credentials',
   'secret',
   'oidcClientSecret',
   'verificationToken',
@@ -69,8 +80,12 @@ const FORBIDDEN_KEYS = new Set([
   'professionalNote',
   'voucherCode',
   'emailAddress',
+  // Crisis-readiness location an employee shares before a consultation (CALL-34, CW-R-80a)
+  'locationText',
   'ip',
-]);
+];
+
+const FORBIDDEN_KEYS: ReadonlySet<string> = new Set(FORBIDDEN_KEY_NAMES.map(normaliseKey));
 
 const MAX_STRING_LENGTH = 500;
 
@@ -205,7 +220,7 @@ function sanitizeObject(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value)) {
-    if (FORBIDDEN_KEYS.has(key)) continue;
+    if (FORBIDDEN_KEYS.has(normaliseKey(key))) continue;
     if (key === 'email') continue; // drop bare 'email'; callers use 'emailNormalised'
     result[key] = sanitizeValue(val);
   }

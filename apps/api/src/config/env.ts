@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
+import { VIDEO_PROVIDER_NAMES } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
 // Reusable field definitions
@@ -25,6 +26,15 @@ const optionalString = z.union([
   z.literal('').transform(() => undefined),
   z.string(),
 ]).optional();
+
+/**
+ * Blank as unset for schemas that are not plain strings (enums, literals,
+ * flags): `.env.example` leaves optional variables as `NAME=`, and the empty
+ * string must then behave as if the line were absent, defaults included.
+ */
+function blankAsUnset<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema);
+}
 
 const hexKey64 = z
   .string()
@@ -112,6 +122,34 @@ export const envSchema = z
       z.literal('').transform(() => undefined),
       z.string().regex(/^\d{6}$/),
     ]).optional(),
+
+    // Deployment stage (set by the compute stack); tags provider resources (D-CW-11)
+    STAGE: optionalString.transform((v) => v ?? 'dev'),
+
+    // Video provider (NS-CALLS-01, D-CW-05, D-CW-06): `none` selects the fake
+    VIDEO_PROVIDER: blankAsUnset(z.enum(VIDEO_PROVIDER_NAMES).default('none')),
+    // Only Frankfurt is accepted, even outside the chime refinement (CW-R-68)
+    CHIME_REGION: blankAsUnset(z.literal('eu-central-1').optional()),
+    CHIME_EVENTS_QUEUE_URL: optionalUrl,
+    CHIME_EVENTS_QUEUE_ARN: optionalString,
+    RECORDINGS_BUCKET: optionalString,
+    // Nightly real-provider smoke test (CI only). Parsed like the other boolean
+    // flags: `z.coerce.boolean()` would turn the string "false" into true.
+    VIDEO_SMOKE_ENABLED: blankAsUnset(
+      z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => v === 'true'),
+    ),
+    // With the fake provider the meetings live in the API process, so their
+    // events and the webinar jobs are handled there (T-CW-1.2, T-CW-2.5).
+    // Unset means on; `resolveAppEnv` turns it off for the real provider.
+    VIDEO_FAKE_EVENTS_IN_API: blankAsUnset(
+      z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => (v === undefined ? undefined : v === 'true')),
+    ),
   })
   .superRefine((data, ctx) => {
     // D-36: stub mode is refused in production
@@ -179,6 +217,26 @@ export const envSchema = z
         }
       }
     }
+
+    // D-CW-06: the real provider needs the Frankfurt region, the chime-events
+    // queue (D-CW-12) and the recordings bucket (D-CW-18) before start-up.
+    if (data.VIDEO_PROVIDER === 'chime') {
+      const requiredForChime = [
+        'CHIME_REGION',
+        'CHIME_EVENTS_QUEUE_URL',
+        'CHIME_EVENTS_QUEUE_ARN',
+        'RECORDINGS_BUCKET',
+      ] as const;
+      for (const key of requiredForChime) {
+        if (!data[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${key} is required when VIDEO_PROVIDER=chime`,
+            path: [key],
+          });
+        }
+      }
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;
@@ -189,11 +247,17 @@ export type Env = z.infer<typeof envSchema>;
  * In stub mode, when `SESSION_ENCRYPTION_KEY` is absent, a deterministic
  * dev key is derived from `JWT_SECRET` with a logged warning.
  */
-export type AppEnv = Env & {
+export type AppEnv = Omit<Env, 'VIDEO_FAKE_EVENTS_IN_API'> & {
   /** Resolved (possibly derived) session encryption key. */
   resolvedSessionEncryptionKey: string | undefined;
   /** Derived Cognito issuer URL. */
   resolvedCognitoIssuer: string | undefined;
+  /**
+   * The fake provider's events and the webinar jobs run in the API process:
+   * true with `VIDEO_PROVIDER=none` unless set to `false`, always false with
+   * `chime` (T-CW-1.2, T-CW-2.5).
+   */
+  VIDEO_FAKE_EVENTS_IN_API: boolean;
 };
 
 export function resolveAppEnv(env: Env): AppEnv {
@@ -220,6 +284,7 @@ export function resolveAppEnv(env: Env): AppEnv {
     ...env,
     resolvedSessionEncryptionKey,
     resolvedCognitoIssuer,
+    VIDEO_FAKE_EVENTS_IN_API: env.VIDEO_PROVIDER === 'none' && env.VIDEO_FAKE_EVENTS_IN_API !== false,
   };
 }
 

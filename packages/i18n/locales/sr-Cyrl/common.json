@@ -18,7 +18,9 @@
     "back": "Назад",
     "close": "Затвори",
     "openMenu": "Отвори мени",
-    "closeMenu": "Затвори мени"
+    "closeMenu": "Затвори мени",
+    "approvals": "Одобрења",
+    "followUpPolicy": "Одобрење наредних сесија"
   },
   "action": {
     "continue": "Настави",

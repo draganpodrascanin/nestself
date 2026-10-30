@@ -1,0 +1,1 @@
+{ "extends": "@nestself/typescript-config/vite-react.json", "compilerOptions": { "types": ["vite/client"] }, "include": ["src"] }
