@@ -84,8 +84,9 @@ describe('webinars in sample mode', () => {
     expect(within(lobby).getByTestId('webinar-detail-countdown')).toHaveTextContent('Starts in 31 days');
     expect(within(lobby).getByRole('button', { name: calls.webinar.join })).toBeDisabled();
     expect(within(lobby).getByText(calls.webinar.detail.registerToJoin)).toBeInTheDocument();
-    // No attendee list or names in the lobby (D-CW-15).
-    expect(screen.queryByText(/Jovan|Ana /)).not.toBeInTheDocument();
+    // No attendee list or names in the lobby (D-CW-15). The page content only: the
+    // header's account menu names the signed-in viewer.
+    expect(within(screen.getByRole('main')).queryByText(/Jovan|Ana /)).not.toBeInTheDocument();
     expect(within(lobby).getByRole('link', { name: calls.webinar.detail.sampleDemo })).toHaveAttribute('href', `/webinars/${UPCOMING}/live`);
   });
 
