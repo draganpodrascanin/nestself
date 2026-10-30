@@ -43,6 +43,15 @@ python3 docs/tasks/calls-webinars/pdf/make-review-html.py docs/tasks/calls-webin
 node docs/tasks/calls-webinars/pdf/build-pdf.mjs docs/tasks/calls-webinars/pdf/calls-webinars-review.html docs/tasks/calls-webinars/calls-webinars-review.pdf
 ```
 
+## Rebuilding the user manual
+
+`manual/make-manual-html.py` generates `manual/user-manual.html` from the screenshots and `manual/screenshots/INDEX.md`, with every on-screen word read by key from the English catalog (`packages/i18n/locales/en/calls.json` and `common.json`), so a renamed button fails the build. A screen the text does not place is added to a closing chapter, and a planned screen without files shows as pending. `pdf/build-pdf.mjs` renders it after the in-page paginator has packed the steps into fixed A4 sheets, and refuses to write when a sheet overflows. Run both from a checkout that has `node_modules`:
+
+```
+python3 docs/tasks/calls-webinars/manual/make-manual-html.py docs/tasks/calls-webinars
+node docs/tasks/calls-webinars/pdf/build-pdf.mjs docs/tasks/calls-webinars/manual/user-manual.html docs/tasks/calls-webinars/user-manual.pdf
+```
+
 ## Conventions used in this package
 
 Plain English, no em-dashes, no placeholders. Numbers come from cited facts or are labelled planning assumptions. Sample data is fictional and flagged. Canonical names (modules, env variables, tables, routes, actions, events, keys, jobs, packages) are defined once in section 7 of the decision record and used verbatim everywhere else.
