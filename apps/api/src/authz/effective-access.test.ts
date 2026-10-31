@@ -267,7 +267,7 @@ describe('effectiveActions for assignment-scoped grants (DEF-3)', () => {
 
   it('counts every action of the expert grant while one CASE assignment is current', () => {
     const actions = effectiveActions(expertPrincipal, expertCtx([assignment()]));
-    expect(expertTemplate.actions).toHaveLength(15);
+    expect(expertTemplate.actions).toHaveLength(17); // 15 + intake.respond, intake.permission.request (CMS EE)
     expect(actions.sort()).toEqual([...expertTemplate.actions].sort());
     expect(actions).toContain('consultation.join');
     expect(actions).toContain('delivery.record');

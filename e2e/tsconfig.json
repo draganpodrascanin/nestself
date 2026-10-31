@@ -2,7 +2,7 @@
   "extends": "../packages/typescript-config/base.json",
   "compilerOptions": {
     "types": ["node"],
-    "lib": ["ES2023", "DOM"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": ["./**/*.ts", "../playwright.config.ts", "../playwright.auth.config.ts", "../playwright.content.config.ts", "../playwright.motion.config.ts", "../playwright.calls.config.ts"]
 }

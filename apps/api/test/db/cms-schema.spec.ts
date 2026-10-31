@@ -44,7 +44,7 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
     // 0000 through 0016 = 17 migrations (SSO domains at 0006, calls at 0007–0015, CMS at 0016)
-    expect(Number(rows[0]!.n)).toBe(8);
+    expect(Number(rows[0]!.n)).toBe(17);
   });
 
   it('nestself_unaccent returns unaccented text', async () => {

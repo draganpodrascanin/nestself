@@ -862,6 +862,13 @@
           "notNull": true,
           "default": "'ACTIVE'"
         },
+        "follow_up_approval_policy": {
+          "name": "follow_up_approval_policy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'AUTOMATIC'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp (3) with time zone",
@@ -912,7 +919,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "organizations_follow_up_approval_policy_check": {
+          "name": "organizations_follow_up_approval_policy_check",
+          "value": "\"organizations\".\"follow_up_approval_policy\" in ('AUTOMATIC', 'MANAGER_APPROVAL')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.approval_authorities": {
@@ -9528,6 +9540,29 @@
         "JOB"
       ]
     },
+    "public.appointment_approval_status": {
+      "name": "appointment_approval_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "EXPIRED"
+      ]
+    },
+    "public.appointment_status": {
+      "name": "appointment_status",
+      "schema": "public",
+      "values": [
+        "PROPOSED",
+        "AWAITING_APPROVAL",
+        "CONFIRMED",
+        "COMPLETED",
+        "CANCELED",
+        "DECLINED",
+        "NO_SHOW"
+      ]
+    },
     "public.assignment_kind": {
       "name": "assignment_kind",
       "schema": "public",
@@ -9560,6 +9595,68 @@
         "ALLOWED",
         "DENIED",
         "NONE"
+      ]
+    },
+    "public.call_consent_type": {
+      "name": "call_consent_type",
+      "schema": "public",
+      "values": [
+        "RECORDING",
+        "TRANSCRIPTION"
+      ]
+    },
+    "public.call_format": {
+      "name": "call_format",
+      "schema": "public",
+      "values": [
+        "CONSULTATION",
+        "WEBINAR",
+        "WORKSHOP"
+      ]
+    },
+    "public.call_outcome_status": {
+      "name": "call_outcome_status",
+      "schema": "public",
+      "values": [
+        "COMPLETED",
+        "NO_SHOW_EMPLOYEE",
+        "NO_SHOW_EXPERT",
+        "TECHNICAL_FAILURE",
+        "CANCELED"
+      ]
+    },
+    "public.call_participant_role": {
+      "name": "call_participant_role",
+      "schema": "public",
+      "values": [
+        "EXPERT",
+        "EMPLOYEE",
+        "PRESENTER",
+        "MODERATOR",
+        "ATTENDEE",
+        "FACILITATOR",
+        "PARTICIPANT"
+      ]
+    },
+    "public.call_session_end_reason": {
+      "name": "call_session_end_reason",
+      "schema": "public",
+      "values": [
+        "EXPERT",
+        "PROVIDER",
+        "CLEANUP",
+        "RECONCILE"
+      ]
+    },
+    "public.call_session_status": {
+      "name": "call_session_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "CREATING",
+        "ACTIVE",
+        "ENDED",
+        "FAILED"
       ]
     },
     "public.channel_scope": {
@@ -10028,6 +10125,18 @@
         "withdrawn"
       ]
     },
+    "public.recording_status": {
+      "name": "recording_status",
+      "schema": "public",
+      "values": [
+        "SCHEDULED",
+        "RECORDING",
+        "PROCESSING",
+        "READY",
+        "HANDED_OFF",
+        "FAILED"
+      ]
+    },
     "public.review_discipline": {
       "name": "review_discipline",
       "schema": "public",
@@ -10065,103 +10174,6 @@
         "PSYCHOLOGICAL",
         "LEGAL",
         "FINANCIAL"
-      ]
-    },
-    "public.appointment_approval_status": {
-      "name": "appointment_approval_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "APPROVED",
-        "REJECTED",
-        "EXPIRED"
-      ]
-    },
-    "public.appointment_status": {
-      "name": "appointment_status",
-      "schema": "public",
-      "values": [
-        "PROPOSED",
-        "AWAITING_APPROVAL",
-        "CONFIRMED",
-        "COMPLETED",
-        "CANCELED",
-        "DECLINED",
-        "NO_SHOW"
-      ]
-    },
-    "public.call_consent_type": {
-      "name": "call_consent_type",
-      "schema": "public",
-      "values": [
-        "RECORDING",
-        "TRANSCRIPTION"
-      ]
-    },
-    "public.call_format": {
-      "name": "call_format",
-      "schema": "public",
-      "values": [
-        "CONSULTATION",
-        "WEBINAR",
-        "WORKSHOP"
-      ]
-    },
-    "public.call_outcome_status": {
-      "name": "call_outcome_status",
-      "schema": "public",
-      "values": [
-        "COMPLETED",
-        "NO_SHOW_EMPLOYEE",
-        "NO_SHOW_EXPERT",
-        "TECHNICAL_FAILURE",
-        "CANCELED"
-      ]
-    },
-    "public.call_participant_role": {
-      "name": "call_participant_role",
-      "schema": "public",
-      "values": [
-        "EXPERT",
-        "EMPLOYEE",
-        "PRESENTER",
-        "MODERATOR",
-        "ATTENDEE",
-        "FACILITATOR",
-        "PARTICIPANT"
-      ]
-    },
-    "public.call_session_end_reason": {
-      "name": "call_session_end_reason",
-      "schema": "public",
-      "values": [
-        "EXPERT",
-        "PROVIDER",
-        "CLEANUP",
-        "RECONCILE"
-      ]
-    },
-    "public.call_session_status": {
-      "name": "call_session_status",
-      "schema": "public",
-      "values": [
-        "PENDING",
-        "CREATING",
-        "ACTIVE",
-        "ENDED",
-        "FAILED"
-      ]
-    },
-    "public.recording_status": {
-      "name": "recording_status",
-      "schema": "public",
-      "values": [
-        "SCHEDULED",
-        "RECORDING",
-        "PROCESSING",
-        "READY",
-        "HANDED_OFF",
-        "FAILED"
       ]
     },
     "public.webinar_message_kind": {
