@@ -29,32 +29,25 @@ function buildJwt(claims: Record<string, unknown>): string {
   return `${headerPayload}.${signHs256(headerPayload)}`;
 }
 
-/** What a test may change about the tokens; the defaults are the fake's long-standing shape. */
-export interface FakeTokenOptions {
-  /**
-   * Leave `username` out of the ID token. A real Cognito pool puts the pool
-   * username in `cognito:username` there and keeps `username` for the access
-   * token, so this builds the ID token the API receives in production. The
-   * default carries both claims, which hides code that reads the wrong one.
-   */
-  omitIdTokenUsername?: boolean;
-}
-
 /**
  * Create a realistic-looking TokenSet for local development.
+ *
+ * The pool username is carried the way a real Cognito pool carries it: the
+ * access token has a `username` claim, the ID token has `cognito:username`
+ * and no `username` claim. Code that reads the wrong one fails here as it
+ * would against the real pool (the fake used to put both on the ID token,
+ * which hid exactly that).
  *
  * @param sub       The user's sub (UUID).
  * @param username  The Cognito username.
  * @param originJti An optional origin JTI for refresh token families.
  * @param idClaims  Extra ID-token claims (federated sign-in: email, identities).
- * @param options   Test switches, see {@link FakeTokenOptions}.
  */
 export function createFakeTokenSet(
   sub: string,
   username: string,
   originJti?: string,
   idClaims: Record<string, unknown> = {},
-  options: FakeTokenOptions = {},
 ): TokenSet {
   const now = Math.floor(Date.now() / 1000);
   const jti = randomUUID();
@@ -74,7 +67,6 @@ export function createFakeTokenSet(
 
   const idToken = buildJwt({
     sub,
-    ...(options.omitIdTokenUsername ? {} : { username }),
     token_use: 'id',
     client_id: 'fake-web',
     iat: now,

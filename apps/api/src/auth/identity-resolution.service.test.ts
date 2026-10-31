@@ -110,9 +110,11 @@ describe('federated identities (D-04, 3.4.9)', () => {
     }
 
     it('stores cognito:username when the token has no username claim', async () => {
-      // The ID token of a real pool: `cognito:username` and no `username` (an access-token claim).
-      const cognito = createFakeTokenSet('sub-1', 'org-acme-saml_ana', undefined, {}, { omitIdTokenUsername: true });
-      expect(decodeJwtClaims(cognito.idToken)).not.toHaveProperty('username');
+      // The fake IdP's ID token is the one a real pool issues: `cognito:username` and no `username`.
+      const cognito = createFakeTokenSet('sub-1', 'org-acme-saml_ana');
+      const claims = decodeJwtClaims(cognito.idToken);
+      expect(claims).toMatchObject({ 'cognito:username': 'org-acme-saml_ana' });
+      expect(claims).not.toHaveProperty('username');
       expect(await storedUsername(cognito.idToken)).toBe('org-acme-saml_ana');
     });
 

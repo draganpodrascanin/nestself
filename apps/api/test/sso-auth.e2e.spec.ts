@@ -18,7 +18,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
-import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import { IdentityProviderService, decodeJwtClaims } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
@@ -430,6 +430,29 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
         expect(sessionCookie(callback)).toBeDefined();
       } finally {
         await setConnection({ status: 'ACTIVE' });
+      }
+    });
+
+    it('the fake IdP issues the ID token of a real pool (cognito:username, no username claim) and the session keeps that username', async () => {
+      // A real Cognito ID token has no `username` claim; a fake that adds one hides code reading the wrong claim.
+      const exchange = vi.spyOn(idp, 'exchangeAuthorizationCode');
+      try {
+        const email = 'shaped@acme.example';
+        await invite(email);
+        seedFederated('sub-shaped', email);
+        const { callback } = await federatedSignIn(email);
+
+        const { idToken } = await exchange.mock.results[0]!.value;
+        const claims = decodeJwtClaims(idToken);
+        expect(claims).not.toHaveProperty('username');
+        expect(claims['cognito:username']).toBe(`${PROVIDER}_sub-shaped`);
+
+        // The session holds the pool username (`<providerName>_<subject>`), not the sub.
+        const sessionId = sessionCookie(callback)!.split(';')[0]!.slice('nestself_session='.length);
+        const raw = await app.get<KeyValueStore>(KEY_VALUE_STORE).get(sessionKey(hashSessionId(sessionId)));
+        expect((JSON.parse(raw!) as { cognito: { username: string } }).cognito.username).toBe(`${PROVIDER}_sub-shaped`);
+      } finally {
+        exchange.mockRestore();
       }
     });
 
