@@ -81,6 +81,7 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
   const sso = {
     findConnection: vi.fn(async (id: string) => (conn && conn.id === id ? { ...conn, domains: [] } : null)),
     findDomainByName: vi.fn(async (name: string) => (name === 'acme.example' ? domain : null)),
+    updateConnection: vi.fn().mockResolvedValue({}),
   };
   const tx = {
     insert: vi.fn().mockReturnValue({
@@ -124,7 +125,10 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
 type Ctx = ReturnType<typeof setup>;
 
 /** What the callback stores for an unverified OIDC sign-in; answers the handle and the token set. */
-async function openPending(ctx: Ctx, overrides: { returnPath?: string | null; surface?: 'workspace' | 'admin' } = {}) {
+async function openPending(
+  ctx: Ctx,
+  overrides: { returnPath?: string | null; surface?: 'workspace' | 'admin'; testSignIn?: boolean } = {},
+) {
   const tokens = createFakeTokenSet(SUB, USERNAME);
   const handle = await ctx.pendingBinds.open({
     connectionId: 'conn_1',
@@ -134,6 +138,7 @@ async function openPending(ctx: Ctx, overrides: { returnPath?: string | null; su
     email: EMAIL,
     surface: overrides.surface ?? 'workspace',
     returnPath: overrides.returnPath === undefined ? '/people' : overrides.returnPath,
+    testSignIn: overrides.testSignIn ?? false,
     tokens,
   });
   return { handle, tokens };
@@ -256,6 +261,63 @@ describe('SsoBindService', () => {
       // Single use: the pending binding is gone.
       expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toBeNull();
       expect(ctx.deleteUser).not.toHaveBeenCalled();
+      // An ordinary sign-in on an ACTIVE connection marks nothing tested.
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+    });
+
+    it('a staff test sign-in on a TESTING connection binds through the invitation, signs in and marks the connection tested', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      const result = await ctx.service.verify(await startAndReadCode(ctx, handle), META);
+
+      expect(result.session.sessionId).toBe('sess_1');
+      expect(ctx.invitations.accept).toHaveBeenCalledWith('inv_1', expect.any(Date), 'user_new', ctx.tx);
+      expect(ctx.sso.updateConnection).toHaveBeenCalledTimes(1);
+      expect(ctx.sso.updateConnection).toHaveBeenCalledWith(
+        'conn_1', { lastTestedAt: expect.any(Date) }, ctx.tx, { fromStatus: 'TESTING' },
+      );
+      // As the callback's test path: only a sign-in that worked marks the connection tested.
+      expect(ctx.identity.resolveIdentityAndCreateSession.mock.invocationCallOrder[0]!).toBeLessThan(
+        ctx.sso.updateConnection.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('a staff test sign-in whose session is refused does not mark the connection tested', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('Account is suspended or deactivated'));
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+    });
+
+    it('a staff test sign-in never provisions JIT on a TESTING connection (no_invitation, sso_denied)', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING', jitProvisioning: true }) });
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
+
+      expect(ctx.identities.createUser).not.toHaveBeenCalled();
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).toHaveBeenCalledWith(USERNAME);
+      expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'no_invitation' });
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+    });
+
+    it('a staff test sign-in through a connection suspended meanwhile is still denied (connection_inactive)', async () => {
+      const ctx = setup({ conn: connection({ status: 'SUSPENDED' }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
+
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'connection_inactive' });
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
     });
 
     it('answers / when the sign-in had no return path, and keeps the surface', async () => {
@@ -304,7 +366,7 @@ describe('SsoBindService', () => {
       ['whose domain lost its verification', { conn: connection(), domain: { connectionId: 'conn_1', verifiedAt: null, domain: 'acme.example' } }],
       ['whose domain moved to another connection', { conn: connection(), domain: { connectionId: 'conn_other', verifiedAt: new Date(), domain: 'acme.example' } }],
       ['that no longer exists', { conn: null }],
-      ['back in TESTING', { conn: connection({ status: 'TESTING' }) }],
+      ['in TESTING, without a staff test sign-in', { conn: connection({ status: 'TESTING' }) }],
       ['now named for another protocol', { conn: connection({ cognitoProviderName: 'org-acme-saml', protocol: 'SAML' }) }],
     ])('verify through a connection %s answers sso_denied (connection_inactive)', async (_label, opts) => {
       const ctx = setup(opts as { conn: Conn | null; domain?: DomainRow });
@@ -316,6 +378,21 @@ describe('SsoBindService', () => {
       expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
       expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toBeNull();
+      expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'connection_inactive' });
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['whose domain lost its verification', { conn: connection({ status: 'TESTING' }), domain: { connectionId: 'conn_1', verifiedAt: null, domain: 'acme.example' } }],
+      ['now named for another protocol', { conn: connection({ status: 'TESTING', cognitoProviderName: 'org-acme-saml', protocol: 'SAML' }) }],
+    ])('a staff test sign-in through a TESTING connection %s is still denied', async (_label, opts) => {
+      const ctx = setup(opts as { conn: Conn | null; domain?: DomainRow });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
+
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
       expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'connection_inactive' });
     });
 

@@ -4,7 +4,8 @@
  * not mark the address verified, so the callback keeps the pool user and
  * stores what the binding needs once the mailbox is proven: the connection,
  * the provider name, the `sub` and pool username, the address, where the
- * sign-in continues, and the token set of the code exchange.
+ * sign-in continues, whether it was a staff test sign-in, and the token set
+ * of the code exchange.
  *
  * - `open` stores the record for `SSO_PENDING_BIND_TTL` (15 minutes) and
  *   answers its handle: 32 random bytes, base64url, the only thing the
@@ -36,6 +37,12 @@ export interface PendingBind {
   email: string;
   surface: 'workspace' | 'admin';
   returnPath: string | null;
+  /**
+   * The sign-in came through a staff test link of the connection (its
+   * single-use nonce was valid): the binding may finish while the connection
+   * is TESTING, and marks it tested.
+   */
+  testSignIn: boolean;
   /** The token set of the code exchange; the three token strings are `TokenCipher` ciphertexts. */
   tokens: { accessToken: string; idToken: string; refreshToken: string; expiresIn: number };
   createdAt: string;
@@ -72,6 +79,7 @@ function parse(raw: string | null): PendingBind | null {
     !isString(r.email) ||
     (r.surface !== 'workspace' && r.surface !== 'admin') ||
     (r.returnPath !== null && !isString(r.returnPath)) ||
+    typeof r.testSignIn !== 'boolean' ||
     !isString(r.createdAt) ||
     !Number.isFinite(Date.parse(r.createdAt)) ||
     !t ||
@@ -90,6 +98,7 @@ function parse(raw: string | null): PendingBind | null {
     email: r.email,
     surface: r.surface,
     returnPath: r.returnPath,
+    testSignIn: r.testSignIn,
     tokens: { accessToken: t.accessToken, idToken: t.idToken, refreshToken: t.refreshToken, expiresIn: t.expiresIn },
     createdAt: r.createdAt,
   };
@@ -115,6 +124,7 @@ export class PendingBindStore {
       email: input.email,
       surface: input.surface,
       returnPath: input.returnPath,
+      testSignIn: input.testSignIn,
       tokens: {
         accessToken: this.cipher.encrypt(input.tokens.accessToken),
         idToken: this.cipher.encrypt(input.tokens.idToken),

@@ -39,12 +39,14 @@
  *
  * The second journey is an OIDC provider that does not confirm the address
  * (SSO-R-08; Entra ID omits `email_verified` by default):
- * 1. Ivana invites `it.tester@acmeid.example` and `maria@acmeid.example`.
+ * 1. Ivana invites `oidc.tester@acmeid.example` and `maria@acmeid.example`.
  * 2. Nikola creates the OIDC connection `org-acmeid-oidc` with its client
  *    secret (`createOidcConnection`: a staged registration, or the provider
  *    the fake IdP kept from an earlier run against the same API process),
- *    verifies `acmeid.example`, tests it with the tester (an address the IdP
- *    confirms) and activates it.
+ *    verifies `acmeid.example` and starts the test. The tester's address is
+ *    not confirmed by the IdP either, so the test sign-in also waits for the
+ *    email code; the tester types `123456`, which binds, signs in and marks
+ *    the TESTING connection tested, and Nikola activates it.
  * 3. Maria signs in on the workspace; the fake IdP asserts her address with
  *    `email_verified=false`. The callback keeps the sign-in pending and sends
  *    her to `/sign-in?reason=sso_email_unverified&bind=<handle>`, never with
@@ -70,8 +72,13 @@ const TESTER = 'it.tester@acme.example';
 const INVITED = 'invited@acme.example';
 /** Bound through an hr_admin invitation; display name `it.admin`. */
 const IT_ADMIN = 'it.admin@acme.example';
-/** The OIDC journey: the tester's address is confirmed by the IdP, Maria's is not. */
-const OIDC_TESTER = 'it.tester@acmeid.example';
+/**
+ * The OIDC journey: the IdP confirms neither address. The tester's address is
+ * its own, not the screenshot run's `it.tester@acmeid.example` (signed in
+ * confirmed), because an API process reused between the two runs keeps the
+ * fake IdP's users and their state.
+ */
+const OIDC_TESTER = 'oidc.tester@acmeid.example';
 const MARIA = 'maria@acmeid.example';
 
 test.describe('Federated sign-in through the identity provider', () => {
@@ -205,7 +212,7 @@ test.describe('Federated sign-in through the identity provider', () => {
     await admin.close();
   });
 
-  test('an OIDC provider that does not confirm the address: the employee confirms it with an email code', async ({ browser }) => {
+  test('an OIDC provider that does not confirm the address: the staff test and the employee finish with an email code', async ({ browser }) => {
     // 1. Ivana invites the tester and the employee.
     const hr = await browser.newContext();
     const hrPage = await hr.newPage();
@@ -235,16 +242,29 @@ test.describe('Federated sign-in through the identity provider', () => {
     const tested = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/test`);
     expect(tested.status, JSON.stringify(tested.body)).toBe(200);
 
+    // Not tested yet: activation is refused.
+    const early = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/activate`);
+    expect(early.status).toBe(409);
+
+    // The staff test sign-in, as with Entra ID: the IdP does not confirm the address, so it
+    // waits for the email code, which binds the tester and marks the TESTING connection tested.
     const tester = await browser.newContext();
-    await signInAtIdpAs(tester, OIDC_TESTER);
+    await signInAtIdpAs(tester, OIDC_TESTER, { emailVerified: false });
     const testerPage = await tester.newPage();
     await testerPage.goto(tested.body.startUrl as string);
+    await expect(testerPage.getByRole('heading', { level: 1, name: 'Confirm your email address' })).toBeVisible({ timeout: 15_000 });
+    expect(new URL(testerPage.url()).searchParams.get('bind')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    await expect(testerPage.getByText(/did not confirm o\*\*\*@acmeid\.example/)).toBeVisible({ timeout: 10_000 });
+    await testerPage.getByLabel('Verification code').fill(FIXED_OTP);
+    await testerPage.getByRole('button', { name: 'Confirm' }).click();
     await expect(testerPage).toHaveURL(new RegExp(`^${WORKSPACE_URL}/(\\?.*)?$`), { timeout: 15_000 });
+    await expect(testerPage.getByRole('heading', { name: /oidc\.tester/i })).toBeVisible({ timeout: 15_000 });
     await tester.close();
 
     const activated = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/activate`);
     expect(activated.status, JSON.stringify(activated.body)).toBe(200);
     expect(activated.body.status).toBe('ACTIVE');
+    expect(activated.body.lastTestedAt).not.toBeNull();
     await staff.close();
 
     // 3. Maria: discovery -> IdP without email_verified -> the confirm-email step -> home.

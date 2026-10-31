@@ -528,11 +528,12 @@ export class FakeIdentityProvider extends IdentityProviderService {
     redirectUri: string;
   }): Promise<TokenSet & { idTokenClaims: IdTokenClaims }> {
     const federated = this.sso.redeemAuthorizationCode(input);
-    const user = this.store.upsertFederatedUser(federated);
+    const user = this.store.upsertFederatedUser({ ...federated, emailVerified: federated.emailVerified === true });
     const identities = [{ providerName: federated.providerName, userId: federated.subject }];
     const tokens = this.store.issueTokens(user, {
       email: federated.email,
-      email_verified: federated.emailVerified,
+      // undefined drops the claim from the token: an IdP that sends none (Entra ID by default).
+      email_verified: federated.emailVerified ?? undefined,
       identities: identities.map((i) => ({ ...i, providerType: this.providerType(i.providerName) })),
     });
     return {

@@ -30,6 +30,7 @@ function input(overrides: Partial<PendingBindInput> = {}): PendingBindInput {
     email: 'maria@acme.example',
     surface: 'workspace',
     returnPath: '/people',
+    testSignIn: false,
     tokens: createFakeTokenSet('sub-1', 'org-acme-oidc_idp-1'),
     ...overrides,
   };
@@ -101,6 +102,27 @@ describe('PendingBindStore', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it.each([true, false])('keeps whether a staff test sign-in opened the record (testSignIn %s)', async (testSignIn) => {
+    const { pendingBinds } = setup();
+    const id = pendingBindId(await pendingBinds.open(input({ testSignIn })));
+    expect((await pendingBinds.peek(id))!.testSignIn).toBe(testSignIn);
+    expect((await pendingBinds.take(id))!.testSignIn).toBe(testSignIn);
+  });
+
+  it.each([
+    ['without the flag', undefined],
+    ['with a flag that is not a boolean', 'true'],
+  ])('answers null for a record %s', async (_label, flag) => {
+    const { store, pendingBinds } = setup();
+    const id = pendingBindId(await pendingBinds.open(input()));
+    const { testSignIn: _drop, ...record } = JSON.parse((await store.get(ssoPendingBindKey(id)))!) as Record<string, unknown>;
+    await store.set(ssoPendingBindKey(id), JSON.stringify(flag === undefined ? record : { ...record, testSignIn: flag }), {
+      ttlSeconds: 60,
+    });
+    expect(await pendingBinds.peek(id)).toBeNull();
+    expect(await pendingBinds.take(id)).toBeNull();
   });
 
   it('keeps a missing refresh token as null', async () => {

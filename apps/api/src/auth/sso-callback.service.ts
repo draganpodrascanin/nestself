@@ -26,10 +26,12 @@
  *      pool user is not deleted (it is not an orphan);
  *   2. new bindings need the connection ACTIVE, or TESTING on a staff test
  *      sign-in (`test=<nonce>` from `POST /ops/sso-connections/:id/test`,
- *      single use), and a verified email: the email's domain is a verified
- *      domain of that connection, and for OIDC also `email_verified === true`
- *      unless the connection's `oidcEmailVerifiedClaimRequired` is off
- *      (SSO-R-08; SAML relies on the domain inference);
+ *      single use; this also holds when the binding finishes later through
+ *      the email code, see below), and a verified email: the email's domain
+ *      is a verified domain of that connection, and for OIDC also
+ *      `email_verified === true` unless the connection's
+ *      `oidcEmailVerifiedClaimRequired` is off (SSO-R-08; SAML relies on the
+ *      domain inference);
  *   3. a pending invitation of the connection's organization (Review Focus 2)
  *      for the same email (lowercased, trimmed, timing-safe: SSO-R-09) binds
  *      and activates the membership;
@@ -47,8 +49,11 @@
  * binding needs, `identity.verification_started` is recorded, and the user
  * lands on `/sign-in?reason=sso_email_unverified&bind=<handle>` to confirm
  * the address with a NestSelf code (`SsoBindService`). The redirect never
- * carries the address. With the connection's switch off, the address counts
- * as verified (as for SAML) and paths 3 to 5 run.
+ * carries the address. A pending binding opened by a valid staff test
+ * sign-in records it (`testSignIn`), so the code may finish it on the
+ * TESTING connection and mark the connection tested, as path 2 does here
+ * (Entra ID sends no `email_verified` at all). With the connection's switch
+ * off, the address counts as verified (as for SAML) and paths 3 to 5 run.
  *
  * Success creates the session (`auth.method = 'sso'`, `secondFactor = true`:
  * MFA is delegated to the IdP, 3.4.9) and redirects to the surface origin
@@ -325,7 +330,7 @@ export class SsoCallbackService {
     // Fails closed: only an explicit `false` lifts the requirement.
     const claimRequired = connection.oidcEmailVerifiedClaimRequired !== false;
     if (connection.protocol === 'OIDC' && claims.emailVerified !== true && claimRequired) {
-      return this.openPendingBind(exchanged, email, record, connection, meta);
+      return this.openPendingBind(exchanged, email, record, connection, meta, isTest);
     }
 
     // 3-4. Invitation or JIT, in one transaction of the connection's tenant.
@@ -372,7 +377,9 @@ export class SsoCallbackService {
    * user stays (it is not an orphan yet); the binding waits in a pending
    * record until the user proves the mailbox with a NestSelf code
    * (`SsoBindService`). The browser carries the opaque handle, never the
-   * address.
+   * address. `testSignIn`: the flow came through a valid staff test link (its
+   * nonce is spent by now), so the code may finish it on a TESTING
+   * connection and mark that connection tested.
    */
   private async openPendingBind(
     exchanged: TokenSet & { idTokenClaims: IdTokenClaims },
@@ -380,6 +387,7 @@ export class SsoCallbackService {
     record: PkceRecord,
     connection: SsoConnectionRow,
     meta: RequestMeta,
+    testSignIn: boolean,
   ): Promise<SsoRedirect> {
     const claims = exchanged.idTokenClaims;
     const handle = await this.pendingBinds.open({
@@ -390,6 +398,7 @@ export class SsoCallbackService {
       email,
       surface: record.surface,
       returnPath: record.returnPath,
+      testSignIn,
       tokens: {
         accessToken: exchanged.accessToken,
         idToken: exchanged.idToken,
@@ -408,7 +417,12 @@ export class SsoCallbackService {
       ip: meta.ip,
       userAgent: meta.userAgent,
       // false or null: whether the provider said no or said nothing (the claim switch question).
-      details: { emailNormalised: email, connectionId: connection.id, emailVerifiedClaim: claims.emailVerified },
+      details: {
+        emailNormalised: email,
+        connectionId: connection.id,
+        emailVerifiedClaim: claims.emailVerified,
+        testSignIn,
+      },
     });
     return { location: this.signInUrl(record.surface, 'sso_email_unverified', { bind: handle }) };
   }

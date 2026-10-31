@@ -14,11 +14,16 @@
  * - `verify` checks the code, then takes the pending binding (single use),
  *   reloads the connection and binds exactly as the callback does
  *   (`FederatedBindingService`: an invitation of the connection's
- *   organization, else JIT), in that organization's transaction. The session
- *   is created from the token set of the original code exchange. A connection
- *   that is no longer ACTIVE, has another provider name or no longer has the
- *   address's domain verified (Review Focus 2) binds nothing, and neither does
- *   a sign-in nothing can be bound to: the orphan pool user is deleted,
+ *   organization, else JIT, never JIT while TESTING), in that organization's
+ *   transaction. The session is created from the token set of the original
+ *   code exchange. The connection must be ACTIVE, or TESTING when a staff
+ *   test sign-in opened the pending binding (`testSignIn`: its test link was
+ *   valid); such a test that binds and signs in marks the connection tested,
+ *   as the callback's test path does (Entra ID sends no `email_verified`, so
+ *   a staff test against it can only finish here). A connection that no
+ *   longer qualifies, has another provider name or no longer has the
+ *   address's domain verified (Review Focus 2) binds nothing, and neither
+ *   does a sign-in nothing can be bound to: the orphan pool user is deleted,
  *   `identity.denied` is recorded and the answer is 403 `sso_denied`.
  * - `resend` mails a new code for the same challenge, within the cooldown and
  *   the attempts `NestselfOtpService` enforces.
@@ -185,6 +190,13 @@ export class SsoBindService {
       throw ssoDenied();
     }
 
+    // A staff test sign-in that bound and signed in marks the connection tested, as the callback does.
+    if (connection.status === 'TESTING' && record.testSignIn) {
+      await this.dbs.withOrgScope(connection.orgId, (tx) =>
+        this.sso.updateConnection(connection.id, { lastTestedAt: new Date() }, tx, { fromStatus: 'TESTING' }),
+      );
+    }
+
     return {
       returnPath: record.returnPath ?? '/',
       session: { sessionId: session.sessionId, csrfToken: session.csrfToken, absoluteExpiresAt: session.absoluteExpiresAt },
@@ -203,10 +215,14 @@ export class SsoBindService {
   // Internals
   // -------------------------------------------------------------------------
 
-  /** The connection may still bind this sign-in: ACTIVE, the same provider, the domain verified for it. */
+  /**
+   * The connection may still bind this sign-in: ACTIVE (or TESTING for a
+   * staff test sign-in), the same provider, the domain verified for it.
+   */
   private async stillVouches(connection: SsoConnectionRow, record: TakenPendingBind): Promise<boolean> {
+    const usable = connection.status === 'ACTIVE' || (connection.status === 'TESTING' && record.testSignIn);
     return (
-      connection.status === 'ACTIVE' &&
+      usable &&
       connection.cognitoProviderName === record.providerName &&
       (await this.binding.isDomainVerifiedFor(connection, domainOf(record.email)))
     );

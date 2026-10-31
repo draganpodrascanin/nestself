@@ -177,7 +177,8 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     return row!.id;
   }
 
-  function seedFederated(subject: string, email: string, emailVerified = true) {
+  /** `emailVerified: null`: the IdP sends no `email_verified` claim (Entra ID by default). */
+  function seedFederated(subject: string, email: string, emailVerified: boolean | null = true) {
     idp.seedFederatedUsers([{ providerName: PROVIDER, subject, email, emailVerified }]);
   }
 
@@ -1047,6 +1048,73 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
         expect(sessionCookie(callback)).toBeDefined();
       } finally {
         await setConnection({ oidcEmailVerifiedClaimRequired: true });
+      }
+    });
+
+    it('a staff test sign-in without an email_verified claim finishes through the code and marks the TESTING connection tested', async () => {
+      // Entra ID sends no email_verified claim at all: without this path no staff test could complete.
+      const email = 'pending.tester@acme.example';
+      await invite(email);
+      seedFederated(`sub-${email}`, email, null);
+      await setConnection({ status: 'TESTING', lastTestedAt: null });
+      try {
+        const { agent, callback, location } = await federatedSignIn(email, { test: await issueTestNonce() });
+        const url = new URL(location);
+        expect(url.origin + url.pathname).toBe(`${WORKSPACE}/sign-in`);
+        expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+        const handle = url.searchParams.get('bind')!;
+        expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(sessionCookie(callback)).toBeUndefined();
+        const started = (await auditFor('identity.verification_started')).filter(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        );
+        expect(started.map((e) => e.details)).toEqual([
+          { emailNormalised: email, connectionId, emailVerifiedClaim: null, testSignIn: true },
+        ]);
+        // Not tested yet: nothing is bound until the code.
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).toBeNull();
+
+        const { challengeToken, code } = await startCode(agent, handle, email);
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(200);
+        expect(verify.body).toEqual({ returnPath: '/' });
+        expect(sessionCookie(verify)).toBeDefined();
+
+        const me = await agent.get('/api/auth/me');
+        expect(me.status).toBe(200);
+        expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).not.toBeNull();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
+      }
+    });
+
+    it('on a TESTING connection, a sign-in that did not come through the test link is denied at the callback', async () => {
+      const email = 'not.a.tester@acme.example';
+      await invite(email);
+      seedFederated(`sub-${email}`, email, null);
+      // Started while ACTIVE (a TESTING connection refuses a start without the link), completed after the reset.
+      const agent = request.agent(app.getHttpServer());
+      const start = await agent.get('/api/auth/sso/start').query({ connection: PROVIDER, surface: 'workspace' });
+      const authorizeUrl = new URL(start.headers.location as string);
+      authorizeUrl.searchParams.set('as', email);
+      const authorize = await agent.get(authorizeUrl.pathname + authorizeUrl.search);
+      await setConnection({ status: 'TESTING', lastTestedAt: null });
+      try {
+        const cb = new URL(authorize.headers.location as string);
+        const callback = await agent.get(cb.pathname + cb.search);
+        expect(callback.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+        expect(sessionCookie(callback)).toBeUndefined();
+        const denied = (await auditFor('identity.denied')).filter(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        );
+        expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['connection_inactive']);
+        expect((await auditFor('identity.verification_started')).some(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        )).toBe(false);
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).toBeNull();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
       }
     });
 

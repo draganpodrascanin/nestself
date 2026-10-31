@@ -142,12 +142,14 @@ type Ctx = ReturnType<typeof setup>;
 /** Run start, then mint a code as the fake authorize route would. */
 async function startAndAuthorize(
   ctx: Ctx,
-  user: { subject?: string; email?: string; emailVerified?: boolean } = {},
+  /** `emailVerified: null`: the IdP sends no `email_verified` claim (Entra ID by default). */
+  user: { subject?: string; email?: string; emailVerified?: boolean | null } = {},
   query: { surface?: 'workspace' | 'admin'; returnPath?: string; test?: string } = {},
 ) {
   const subject = user.subject ?? 'idp-subject-1';
+  const emailVerified = user.emailVerified === undefined ? true : user.emailVerified;
   ctx.idp.seedFederatedUsers([
-    { providerName: PROVIDER, subject, email: user.email ?? 'new@acme.example', emailVerified: user.emailVerified ?? true },
+    { providerName: PROVIDER, subject, email: user.email ?? 'new@acme.example', emailVerified },
   ]);
   const started = await ctx.service.start(
     { connection: PROVIDER, surface: query.surface ?? 'workspace', ...(query.returnPath ? { returnPath: query.returnPath } : {}), ...(query.test ? { test: query.test } : {}) },
@@ -703,6 +705,8 @@ describe('SsoCallbackService', () => {
         email: 'new@acme.example',
         surface: 'workspace',
         returnPath: '/people',
+        // An ordinary sign-in on an ACTIVE connection, not a staff test.
+        testSignIn: false,
         tokens: {
           accessToken: exchanged.accessToken,
           idToken: exchanged.idToken,
@@ -722,9 +726,31 @@ describe('SsoCallbackService', () => {
         result: 'ALLOWED',
         ip: META.ip,
         userAgent: META.userAgent,
-        details: { emailNormalised: 'new@acme.example', connectionId: 'conn_1', emailVerifiedClaim: false },
+        details: { emailNormalised: 'new@acme.example', connectionId: 'conn_1', emailVerifiedClaim: false, testSignIn: false },
       });
       expect(allAuditDetails(ctx)).not.toContain(handle);
+    });
+
+    it('a staff test sign-in on TESTING without an email_verified claim opens a record marked testSignIn and audits it', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const nonce = await issueTestNonce(ctx);
+      const flow = await startAndAuthorize(ctx, { emailVerified: null }, { test: nonce });
+      const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
+
+      expect(res.location).toMatch(/^http:\/\/ws\.test\/sign-in\?reason=sso_email_unverified&bind=[A-Za-z0-9_-]{43}$/);
+      const handle = new URL(res.location).searchParams.get('bind')!;
+      expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toMatchObject({ connectionId: 'conn_1', testSignIn: true });
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'identity.verification_started',
+          details: { emailNormalised: 'new@acme.example', connectionId: 'conn_1', emailVerifiedClaim: null, testSignIn: true },
+        }),
+      );
+      // Nothing is bound yet, so nothing is marked tested; the single-use nonce is spent.
+      expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(await ctx.store.get(`sso_test:${nonce}`)).toBeNull();
     });
 
     it('an unverified address on the admin surface returns to the admin sign-in with its own handle', async () => {
