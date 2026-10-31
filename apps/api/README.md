@@ -140,7 +140,7 @@ Four global guards are registered via `APP_GUARD` in `app.module.ts`:
 1. **AuthenticationGuard**: session cookie or bearer token; attaches `request.principal`.
 2. **CsrfGuard**: double-submit CSRF check on session-cookie requests.
 3. **AuthorizationGuard**: evaluates `@Authorize(action, resolver)` metadata.
-4. **ThrottlerGuard**: rate limiting (default 60 req/min).
+4. **AppThrottlerGuard**: rate limiting, NestJS's `ThrottlerGuard` plus the redirect of a throttled SSO hop (default 60 req/min per client IP; `GET /health` is not throttled).
 
 Routes use `@Public()`, `@Authenticated()` or `@Authorize(action, resolver)` decorators. A CI test fails on any undecorated route.
 
@@ -154,11 +154,12 @@ Environment: `API_PUBLIC_URL` (public API origin for the start and callback URLs
 
 ## What is still missing
 
-- Enterprise SSO follow-ups: the live IdP test with a pilot employer (T-3.4), federated users on mobile bearer lookups, binding after the email code that follows `sso_email_unverified` (`docs/auth/implementation.md` section 22.14)
-- Remaining nightly jobs: weekly Cognito user export, retention sweeper, audit export to S3 (the SSO certificate-expiry job exists)
-- File delivery and export authorization (T-2.9, T-2.11)
-- Write routes for the confidential domain (they need a `cases` table first) and professional notes
-- Push notifications
-- Payment and booking endpoints
+Phase 4 closed the mobile bearer lookups of federated users, the binding after the email code and the `cases` table. What is still open, by reason (`docs/auth/implementation.md` section 21, "Still open", has every item with its notes):
 
-`docs/tasks/auth/phase-2-readiness.md` has the status of every phase 2 task; `docs/auth/implementation.md` section 21 lists the open gaps and owner decisions.
+- **Owner decisions**: an authenticator or passkey step-up for the `emergency` class (every class steps up with an email code today), the `presenter` template, the retention periods and with them the retention sweeper, who approves emergency access, the staging date, IdP-initiated SSO (stays off), SCIM provisioning, and the compliance track (privacy notices, processing agreement, breach procedure, data-subject-rights endpoints)
+- **Pilot**: the live IdP test with the pilot organisation (T-3.4), whether its OIDC provider emits `email_verified`, a sweep of unbound Cognito pool users, retry and batching of invitation mails, the SSO throttle budgets against real traffic, and a member search for the admin app's member choices
+- **AWS**: deploying staging and production with the Cognito auth domain, confirming that the load balancer refuses direct traffic, the security baseline (T-2.8), the weekly Cognito user export (T-2.12) and the audit export to S3
+- **Not built in the auth phases**: step-up, administration and confirm-email screens on mobile; screens for approval authorities and for changing a grant's conditions; file delivery and export authorization (T-2.9, T-2.11)
+- **Outside auth**: write routes for the confidential domain and professional notes, push notifications, payment and booking endpoints
+
+`docs/tasks/auth/phase-2-readiness.md` has the status of every task of phases 2 to 4.

@@ -152,10 +152,10 @@ All routes under the global `/api` prefix.
 
 | Method | Path | Decorator | Throttle |
 |--------|------|-----------|----------|
-| POST | /auth/discover | @Public | default (wrong codes are bounded per address by `SignInThrottle`) |
-| POST | /auth/email-otp/start | @Public | default |
-| POST | /auth/email-otp/verify | @Public | default |
-| POST | /auth/password | @Public | default |
+| POST | /auth/discover | @Public | default |
+| POST | /auth/email-otp/start | @Public | default (a locked address gets no code) |
+| POST | /auth/email-otp/verify | @Public | default (wrong codes are bounded per address by `SignInThrottle`: five failures lock the address for 15 minutes) |
+| POST | /auth/password | @Public | default (wrong passwords count toward the same `SignInThrottle` lock) |
 | POST | /auth/challenge | @Public | default |
 | POST | /auth/totp/enrol | @Public | default |
 | POST | /auth/totp/confirm | @Authenticated | default |
@@ -222,7 +222,7 @@ All routes under the global `/api` prefix.
 | GET | /auth/sso/start | @Public, @RedirectOnThrottle (302 to the identity provider) | 60/min per IP and connection |
 | GET | /auth/sso/callback | @Public, @RedirectOnThrottle (always 302) | 120/min per IP |
 | POST | /auth/sso/bind/start | @Public (pending binding: mails the confirm-email code) | 10/min per IP |
-| POST | /auth/sso/bind/verify | @Public (binds, sets the session cookies) | 10/min per IP |
+| POST | /auth/sso/bind/verify | @Public (binds, sets the session cookies) | 10/min per IP; wrong codes count toward the address's `SignInThrottle` lock |
 | POST | /auth/sso/bind/resend | @Public | 10/min per IP |
 | POST | /auth/sso/bind-token | @Public (mobile federated binding, 204) | 10/min per IP |
 | GET | /auth/sso/_fake/authorize | @Public; registered only with `AUTH_MODE=stub` | default |

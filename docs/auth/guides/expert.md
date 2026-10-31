@@ -46,7 +46,7 @@ Who this is for: experts who read the conversations of the cases assigned to the
 
 ## Verify your identity
 
-1. When **Verify your identity** opens as you open a case or an intake record more than 15 minutes after signing in, type the code NestSelf emailed you and press **Verify**.
+1. When **Verify your identity** opens as you open a case or an intake record more than 15 minutes since you signed in or last verified your identity, type the code NestSelf emailed you and press **Verify**.
 
    <p><img src="../screenshots/guide-workspace-expert-step-up.png" alt="Verify your identity" width="65%"></p>
 

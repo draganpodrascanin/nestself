@@ -89,8 +89,9 @@ Pilot readiness and auth debts (design `docs/superpowers/specs/2026-10-30-auth-p
 | 13 | Confidential reads without an existence oracle; health indicator | Done | `70794e4..30e5e01` |
 | 14 | Web: access route gate, `/auth/me` resilience, import reasons, member search | Done | `30e5e01..e4828c1`, fix `8141da3` |
 | 15 | CDK: Cognito custom domain, environment, ALB restricted to CloudFront | Done (synthesized and tested, not deployed) | `e4828c1..c5a9c4c` |
-| 16 | Documentation, screenshots and PDFs | Done | the `docs(auth): phase 4 documented; screenshots and PDFs rebuilt` commit |
-| 17 | User guides: one tutorial PDF per role | Done | the `docs(auth): per-role tutorial guides with screenshots, as PDFs` commit |
+| 16 | Documentation, screenshots and PDFs | Done | the `docs(auth): phase 4 documented; screenshots and PDFs rebuilt` commit, fix `docs(auth): CDK setup no longer claims the invitation link is logged` |
+| 17 | User guides: one tutorial PDF per role | Done | the commits `docs(auth): per-role tutorial guides with screenshots, as PDFs`, `docs(auth): guide pictures legible, every step pictured, SSO onboarding on one connection` and `docs(auth): a guide step and its picture stay on one page` |
+| Final review | Fixes from the whole-branch review | Done | the commits `fix(auth): invitation links open the accept screen, SSO reads behind step-up, picker keeps its choice, address-free logs, example domains`, `fix(auth): step-up codes bound to their session, invitation audit inside its transaction, cheaper native bearer path, unthrottled health checks`, `docs(auth): guides corrected, stale sentences fixed, PDFs rebuilt` and `test(infra,web): certificate region checked at synth, alias target and cdk.json flag asserted, web parity check` |
 
 Owner confirmations after this phase (`implementation.md` section 17.2): `cdk diff NestSelf-dev-Auth -c stage=dev -c account=$AWS_ACCOUNT_DEV` shows no differences before the next dev deploy (phase 4 left the dev template unchanged); after the first staging and production deploys, the load balancer refuses traffic that does not come through CloudFront (`CDK-setup.md` 8.6 step 2); the Cognito custom domain is deployed before the first employer configures its identity provider. The live IdP test (T-3.4) waits for the pilot organisation (`implementation.md` section 22.13).
 

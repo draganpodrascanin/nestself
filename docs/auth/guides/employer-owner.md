@@ -48,7 +48,7 @@ Who this is for: the one person who owns their organisation in NestSelf and deci
 
 ## Verify your identity
 
-1. When **Verify your identity** opens as you assign, delegate, revoke or transfer more than 30 minutes after signing in, type the code NestSelf emailed you and press **Verify**.
+1. When **Verify your identity** opens as you assign, delegate, revoke or transfer more than 30 minutes since you signed in or last verified your identity, type the code NestSelf emailed you and press **Verify**.
 
    <p><img src="../screenshots/guide-workspace-step-up.png" alt="Verify your identity" width="65%"></p>
 

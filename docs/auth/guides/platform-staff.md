@@ -68,7 +68,7 @@ Who this is for: NestSelf staff who work in NestSelf Admin. The pictures show fi
 
    <p><img src="../screenshots/admin-emergency-list.png" alt="Emergency access" width="100%"></p>
 
-5. Type the record ID and press **Read record**.
+5. Choose the **Record type**, type the record ID and press **Read record**.
 
    <p><img src="../screenshots/guide-admin-emergency-record.png" alt="Read a record under emergency access" width="75%"></p>
 
@@ -127,3 +127,13 @@ Who this is for: NestSelf staff who work in NestSelf Admin. The pictures show fi
 ## What to tell the client about `email_verified`
 
 Ask whether their OIDC sign-in sends `email_verified` (Entra ID does not by default). If it does not, leave **Require a verified email claim from the provider** on: each employee then confirms their address once with a code NestSelf sends them. Turn it off (**Edit**) only after the client confirms in writing that the email their sign-in sends is their directory's verified address.
+
+## Verify your identity
+
+1. When **Verify your identity** opens as you suspend or reinstate a user, end a membership, change access, or open or change SSO connections more than 30 minutes since you signed in or last verified your identity, type the code NestSelf emailed you and press **Verify**.
+
+   <p><img src="../screenshots/guide-admin-emergency-step-up.png" alt="Verify your identity" width="65%"></p>
+
+   **If it fails:** "The code you entered is not valid." Type the code from the newest email, or press **Send a new code**.
+
+2. Press **Cancel** instead to leave the change undone. On the **SSO** page the connections then stay hidden until you press **Try again** and verify.

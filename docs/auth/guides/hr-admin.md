@@ -34,7 +34,7 @@ Who this is for: HR administrators who manage their organisation's people and or
 
    <p><img src="../screenshots/guide-workspace-people-import-result.png" alt="Import finished" width="65%"></p>
 
-4. Press **Done**, then correct the rows listed under **Not imported** and import them again.
+4. Note the rows listed under **Not imported** first, because **Done** closes the result; then press **Done**, correct those rows and import them again.
 
 ## Revoke an invitation
 
