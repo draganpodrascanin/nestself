@@ -47,7 +47,7 @@ function renderDeepLink(path: string) {
     // As main.tsx builds it in API mode.
     context: {
       queryClient,
-      auth: { principal: null, effectiveActions: [], settled: false, ensure: () => initialSnapshot(api) },
+      auth: { principal: null, effectiveActions: [], availableContexts: [], settled: false, ensure: () => initialSnapshot(api) },
     },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
@@ -70,7 +70,7 @@ describe('workspace deep links (API mode)', () => {
 
   it('renders a gated route once /auth/me answers with a session', async () => {
     const hrAdmin = SAMPLE_PRINCIPALS.hr_admin;
-    answerMe(() => json(200, { principal: hrAdmin.principal, effectiveActions: hrAdmin.effectiveActions }));
+    answerMe(() => json(200, { principal: hrAdmin.principal, effectiveActions: hrAdmin.effectiveActions, availableContexts: hrAdmin.availableContexts }));
 
     const router = renderDeepLink('/hr');
 

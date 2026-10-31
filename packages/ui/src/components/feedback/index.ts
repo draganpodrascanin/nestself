@@ -4,3 +4,4 @@ export * from './toast';
 export * from './skeleton';
 export * from './status-block';
 export * from './progress-bar';
+export * from './duration-badge';

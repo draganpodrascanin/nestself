@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5174 --strictPort",
+    "dev": "vite --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 5174",
     "lint": "eslint .",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@nestself/api-client": "workspace:*",
     "@nestself/assets": "workspace:*",
+    "@nestself/content": "workspace:*",
     "@nestself/contracts": "workspace:*",
     "@nestself/i18n": "workspace:*",
     "@nestself/sample-data": "workspace:*",

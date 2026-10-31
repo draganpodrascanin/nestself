@@ -44,13 +44,13 @@ export function releaseInitialMe(client: ApiClient): void {
 export async function initialSnapshot(client: ApiClient): Promise<AuthSnapshot> {
   try {
     const me = await initialMe(client);
-    return { principal: me.principal, effectiveActions: me.effectiveActions };
+    return { principal: me.principal, effectiveActions: me.effectiveActions, availableContexts: me.availableContexts };
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 401) {
       // Not a signed-out answer, but the guard cannot let the user in either.
       console.warn('Session could not be loaded', err);
     }
-    return { principal: null, effectiveActions: [] };
+    return { principal: null, effectiveActions: [], availableContexts: [] };
   }
 }
 

@@ -18,10 +18,33 @@ export type {
   SsoConnectionCreateBody,
   SsoDomainBody,
 } from './org-admin';
+export { createCmsApi, computeContentDigest } from './cms';
+export type {
+  CmsApi,
+  RevisionResponse,
+  ResourceSummary,
+  ResourceDetailResponse,
+  VariantResponse,
+  PublicationResponse,
+  MediaAssetDetailResponse,
+  MediaUploadResponse,
+} from './cms';
 export { createProfessionalApi } from './professional';
 export type { ProfessionalApi, ConversationListParams } from './professional';
 export { healthQueryOptions } from './queries/health';
 export { meQueryOptions } from './queries/auth';
+export {
+  contextKey,
+  libraryKeys,
+  savedKeys,
+  requestKeys,
+  questionKeys,
+  cmsKeys,
+  mediaKeys,
+  pollKeys,
+  intakeKeys,
+  reportingKeys,
+} from './query-keys';
 export {
   APPROVAL_OUTCOMES,
   AppointmentExpertOptionsSchema,

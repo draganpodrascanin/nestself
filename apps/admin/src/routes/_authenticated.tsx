@@ -78,7 +78,7 @@ function AuthenticatedLayout() {
         ...(showAccess ? [{ to: '/access' as const, icon: ShieldCheck, label: t('nav.access') }] : []),
         ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
         ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
-        { to: '/content' as const, icon: Article, label: t('nav.content') },
+        { to: '/cms/resources' as const, icon: Article, label: t('nav.content') },
         { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
         { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
       ]

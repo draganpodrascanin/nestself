@@ -9,6 +9,9 @@
  *   (bearer tokens are rejected with `session_required`).
  * - `operationsOrgResource`: for `/ops/orgs/:orgId/*` controllers. Same
  *   checks as `operationsResource`, scoped to the organization in the route.
+ * - `personalOrgResource`: for `/library/*` and `/me/*` controllers. Enforces
+ *   C-22 / ACC-R-04: the active context must be `personal` with an `orgId`
+ *   matching an ACTIVE membership.
  */
 import type { Principal, Resource } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
@@ -34,6 +37,35 @@ export function orgResourceFromContext(type: string): ResourceResolver {
       });
     }
     return { type, orgId };
+  };
+}
+
+/**
+ * Resource scoped to the personal context's organization (C-22, ACC-R-04).
+ *
+ * Used by `/library/*` and `/me/*` controllers. Requires the active context to
+ * be `personal` with an `orgId`; the authorization engine and `denialCode`
+ * handle membership-currency validation.
+ */
+export function personalOrgResource(
+  type: string,
+  id?: (req: Record<string, unknown>) => string | undefined,
+): ResourceResolver {
+  return (req, principal: Principal): Resource => {
+    const ctx = principal.context;
+    if (ctx.kind !== 'personal' || !ctx.orgId) {
+      throw new ApiHttpException({
+        status: 403,
+        code: 'invalid_context',
+        message: 'This endpoint requires a personal context with an organisation',
+      });
+    }
+    return {
+      type,
+      id: id?.(req),
+      orgId: ctx.orgId,
+      ownerId: principal.userId,
+    };
   };
 }
 

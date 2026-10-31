@@ -49,6 +49,20 @@ export const ACTIONS = {
   'content.restrict': 'content.restrict',
   'content.promote': 'content.promote',
   'content.bookmark': 'content.bookmark',
+  'taxonomy.manage': 'taxonomy.manage',
+  'home.manage': 'home.manage',
+  'media.upload': 'media.upload',
+  'media.manage': 'media.manage',
+
+  // Engagement
+  'poll.manage': 'poll.manage',
+  'poll.respond': 'poll.respond',
+  'poll.results.read': 'poll.results.read',
+
+  // Editorial requests
+  'editorial.request.submit': 'editorial.request.submit',
+  'editorial.request.manage': 'editorial.request.manage',
+  'editorial.brief.manage': 'editorial.brief.manage',
 
   // Requests, scheduling and services
   'request.view': 'request.view',
@@ -73,6 +87,11 @@ export const ACTIONS = {
   'conversation.read.assigned': 'conversation.read.assigned',
   'notes.read.supervision': 'notes.read.supervision',
   'records.read.emergency': 'records.read.emergency',
+  'intake.queue.view': 'intake.queue.view',
+  'intake.claim': 'intake.claim',
+  'intake.reassign': 'intake.reassign',
+  'intake.respond': 'intake.respond',
+  'intake.permission.request': 'intake.permission.request',
 
   // Experts
   'expert.verify': 'expert.verify',
@@ -119,6 +138,7 @@ export const ACTIONS = {
   // Reporting
   'reports.aggregate.read': 'reports.aggregate.read',
   'report.export': 'report.export',
+  'content.metrics.read': 'content.metrics.read',
 
   // Support
   'support.troubleshoot': 'support.troubleshoot',
@@ -153,6 +173,8 @@ export const CONFIDENTIAL_ACTIONS: readonly Action[] = [
   'conversation.read.assigned',
   'notes.read.supervision',
   'records.read.emergency',
+  'intake.respond',
+  'intake.permission.request',
 ] as const;
 
 /**

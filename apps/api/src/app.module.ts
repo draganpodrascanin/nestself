@@ -28,6 +28,9 @@ import { GrantsModule } from './grants/grants.module.js';
 import { WsModule } from './ws/ws.module.js';
 import { ProfessionalModule } from './professional/professional.module.js';
 import { EmergencyModule } from './emergency/emergency.module.js';
+import { MediaModule } from './media/media.module.js';
+import { CmsModule } from './cms/cms.module.js';
+import { LibraryModule } from './library/library.module.js';
 import { VideoModule } from './video/video.module.js';
 import { AppointmentsModule } from './appointments/appointments.module.js';
 import { CallsModule } from './calls/calls.module.js';
@@ -97,6 +100,9 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     // Stub-only fake IdP authorize route (D-12); absent with AUTH_MODE=cognito.
     ConditionalModule.registerWhen(FakeSsoModule, isStubAuthMode),
     WsModule,
+    MediaModule.register(),
+    CmsModule,
+    LibraryModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },

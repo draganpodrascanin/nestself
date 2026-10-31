@@ -155,6 +155,28 @@ catalog:
   gray-matter: 4.0.3
   remark-gfm: 4.0.1
   rehype-slug: 6.0.0
+  # CMS and employee experience. Tiptap 3.32.0 (2026-10-13) is the newest release older than two weeks
+  # (2026-10-30); every @tiptap package must share one version. The drag handle is MIT since 2025 and
+  # declares the collaboration packages as required peers, so they are listed although nothing collaborates.
+  "@tiptap/core": 3.32.0
+  "@tiptap/pm": 3.32.0
+  "@tiptap/react": 3.32.0
+  "@tiptap/starter-kit": 3.32.0
+  "@tiptap/extension-placeholder": 3.32.0
+  "@tiptap/extensions": 3.32.0
+  "@tiptap/suggestion": 3.32.0
+  "@tiptap/extension-drag-handle": 3.32.0
+  "@tiptap/extension-drag-handle-react": 3.32.0
+  "@tiptap/extension-node-range": 3.32.0
+  "@tiptap/extension-collaboration": 3.32.0
+  "@tiptap/y-tiptap": 3.0.10
+  yjs: 13.6.33
+  y-protocols: 1.0.7
+  "@floating-ui/dom": 1.8.0
+  file-type: 22.1.1
+  "@aws-sdk/client-s3": 3.1155.0
+  "@aws-sdk/lib-storage": 3.1155.0
+  date-holidays: 3.37.0
 
 # pnpm 10 blocks dependency build scripts unless allow-listed.
 onlyBuiltDependencies:

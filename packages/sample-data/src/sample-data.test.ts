@@ -13,6 +13,9 @@ import {
   SAMPLE_ORG,
   SAMPLE_TEAMS,
   SAMPLE_PEOPLE,
+  SAMPLE_EDITORIAL_STAFF,
+  SAMPLE_CATEGORY_IDS,
+  SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_SESSIONS,
   SAMPLE_CHANNELS,
   SAMPLE_POSTS,
@@ -41,6 +44,7 @@ describe('sample-data fixtures', () => {
     SAMPLE_ORG,
     ...SAMPLE_TEAMS,
     ...SAMPLE_PEOPLE,
+    ...SAMPLE_EDITORIAL_STAFF,
     ...SAMPLE_CHANNELS,
     ...SAMPLE_POSTS,
     ...SAMPLE_POLLS,
@@ -72,6 +76,20 @@ describe('sample-data fixtures', () => {
       if ('photo' in obj) {
         expect((obj as { photo: unknown }).photo).toBeNull();
       }
+    }
+  });
+
+  it('has six stable launch category ids', () => {
+    expect(Object.values(SAMPLE_CATEGORY_IDS)).toEqual([
+      'cat_stress', 'cat_sleep', 'cat_relationships', 'cat_money', 'cat_work', 'cat_body',
+    ]);
+  });
+
+  it('editorial staff have password identities and first names only', () => {
+    for (const staff of SAMPLE_EDITORIAL_STAFF) {
+      const identity = SAMPLE_EXTERNAL_IDENTITIES.find((i) => i.userId === staff.id);
+      expect(identity?.signIn).toBe('password');
+      expect(staff.displayName).not.toContain(' ');
     }
   });
 

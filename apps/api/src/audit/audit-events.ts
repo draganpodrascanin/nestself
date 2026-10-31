@@ -68,6 +68,15 @@ export const AUDIT_ACTIONS = [
   'sso_domain.added',
   'sso_domain.verified',
   'data.erasure.requested',
+  // CMS media and editorial workflow (CMS-EE)
+  'media.uploaded',
+  'media.rejected',
+  'media.updated',
+  'media.deleted',
+  'content.submitted',
+  'content.approved',
+  'content.changes_requested',
+  'publication.created',
   // Consultations and webinars (NS-CALLS-01, decision record section 7)
   'appointment.created',
   'appointment.canceled',
@@ -152,6 +161,8 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('sso_connection.')) return 'ADMIN';
   if (action.startsWith('sso_domain.')) return 'ADMIN';
   if (action === 'data.erasure.requested') return 'ADMIN';
+  if (action.startsWith('media.')) return 'CONTENT_ACCESS';
+  if (action === 'publication.created') return 'CONTENT_ACCESS';
   // NS-CALLS-01 (guidelines 7.5, CW-R-27a, CW-R-33b): completion and no-show
   // and the outcome feed settlement; joins and tickets prove who was in the
   // room; messages, the floor and recordings are content access.

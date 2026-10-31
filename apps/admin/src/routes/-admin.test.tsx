@@ -29,7 +29,7 @@ function renderWithRouter(opts: { path: string; auth: AuthSnapshot }) {
 
 function authFor(role: keyof typeof SAMPLE_PRINCIPALS): AuthSnapshot {
   const p = SAMPLE_PRINCIPALS[role];
-  return { principal: p.principal, effectiveActions: p.effectiveActions };
+  return { principal: p.principal, effectiveActions: p.effectiveActions, availableContexts: p.availableContexts };
 }
 
 beforeEach(async () => {

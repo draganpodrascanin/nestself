@@ -14,7 +14,7 @@ function renderRoute(initialUrl: string, role: 'employee' | 'expert') {
   const sample = SAMPLE_PRINCIPALS[role];
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: sample.principal, effectiveActions: sample.effectiveActions } },
+    context: { queryClient, auth: { principal: sample.principal, effectiveActions: sample.effectiveActions, availableContexts: sample.availableContexts } },
     history: createMemoryHistory({ initialEntries: [initialUrl] }),
   });
   return render(

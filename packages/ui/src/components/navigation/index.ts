@@ -5,3 +5,4 @@ export * from './tabs';
 export * from './menu';
 export * from './accordion';
 export * from './breadcrumbs';
+export * from './show-more';

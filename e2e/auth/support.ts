@@ -25,9 +25,9 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { PERMISSION_TEMPLATES } from '../../packages/contracts/src/templates.ts';
 import { e2eDatabaseUrl } from '../e2e-database.ts';
 import { computeTotp } from './totp';
+import { ADMIN_URL, WORKSPACE_URL } from '../ports';
 
-export const WORKSPACE_URL = 'http://localhost:5173';
-export const ADMIN_URL = 'http://localhost:5174';
+export { ADMIN_URL, WORKSPACE_URL };
 export const FIXED_OTP = '123456';
 export const STAFF_PASSWORD = 'Nestself-dev-1234!';
 

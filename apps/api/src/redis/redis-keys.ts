@@ -67,6 +67,9 @@ export const STEP_UP_BEARER_TTL = 1800;
 /** Idempotency key: 24 h. */
 export const IDEMPOTENCY_TTL = 86400;
 
+/** In-flight reservation of an idempotency key: 60 s. */
+export const IDEMPOTENCY_IN_FLIGHT_TTL = 60;
+
 /** Session lock: 5 s. */
 export const SESSION_LOCK_TTL = 5;
 
@@ -158,9 +161,12 @@ export function stepUpKey(originJti: string): string {
   return `stepup:${originJti}`;
 }
 
-/** `idempotency:{key}` */
-export function idempotencyKey(key: string): string {
-  return `idempotency:${key}`;
+/**
+ * `idempotency:{scope}:{userId}:{key}`. The scope separates unrelated
+ * endpoints; the user id keeps one user's key from ever matching another's.
+ */
+export function idempotencyKey(scope: string, userId: string, key: string): string {
+  return `idempotency:${scope}:${userId}:${key}`;
 }
 
 /** `throttle:{route}:{key}` */
@@ -171,6 +177,38 @@ export function throttleKey(route: string, key: string): string {
 /** `lock:session:{sessionIdHash}` — takes the already-hashed session id. */
 export function sessionLockKey(sessionIdHash: string): string {
   return `lock:session:${sessionIdHash}`;
+}
+
+/** Available-context extras cache: same TTL as principal (30 s). */
+export const CONTEXT_EXTRAS_TTL_BASE = 30;
+export const CONTEXT_EXTRAS_TTL_JITTER = 5;
+
+/** `ctx_extras:{userId}` */
+export function contextExtrasKey(userId: string): string {
+  return `ctx_extras:${userId}`;
+}
+
+/** Org names cache: short TTL (60 s). */
+export const ORG_NAMES_TTL_BASE = 60;
+export const ORG_NAMES_TTL_JITTER = 10;
+
+/** `org_names:{orgId1},{orgId2},...` — sorted ids for stable cache key. */
+export function orgNamesKey(orgIds: string[]): string {
+  return `org_names:${[...orgIds].sort().join(',')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Availability version keys (ACC-R-20, 5.9.5)
+// ---------------------------------------------------------------------------
+
+/** `availability_version:{orgId}` — per-org availability version counter. */
+export function availabilityVersionKey(orgId: string): string {
+  return `availability_version:${orgId}`;
+}
+
+/** `availability_version_global` — global availability version counter (separate prefix to avoid collision with org id "global"). */
+export function availabilityVersionGlobalKey(): string {
+  return 'availability_version_global';
 }
 
 /**

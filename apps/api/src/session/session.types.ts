@@ -44,6 +44,7 @@ export interface SessionRecord {
   surface: 'workspace' | 'admin';
   population: Population;
   context: ActiveContext;
+  lastPersonalOrgId?: string;
   cognito: CognitoSession;
   auth: SessionAuth;
   lastStepUpAt: string | null;

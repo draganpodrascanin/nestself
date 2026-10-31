@@ -127,7 +127,7 @@ function serve(routes: Record<string, () => Response>, who: (typeof SAMPLE_PRINC
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: who.principal, effectiveActions: who.effectiveActions }));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: who.principal, effectiveActions: who.effectiveActions, availableContexts: [who.principal.context] }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
@@ -138,7 +138,7 @@ function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: null, effectiveActions: [], settled: false, ensure: () => initialSnapshot(api) } },
+    context: { queryClient, auth: { principal: null, effectiveActions: [], availableContexts: [], settled: false, ensure: () => initialSnapshot(api) } },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(

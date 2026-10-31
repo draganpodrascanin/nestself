@@ -6,7 +6,7 @@ import type { Locale } from '@nestself/i18n';
 
 import type { Resource } from 'i18next';
 
-const resources = resourcesFor(['common', 'workspace', 'auth', 'calls']) as Resource;
+const resources = resourcesFor(['common', 'workspace', 'auth', 'library', 'calls']) as Resource;
 
 function syncHtmlLang(lng: string): void {
   const meta = localeMeta[lng as Locale];

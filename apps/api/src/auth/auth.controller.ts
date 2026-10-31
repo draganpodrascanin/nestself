@@ -13,8 +13,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Principal } from '@nestself/contracts';
-import type { SessionRecord } from '../session/session.types.js';
+import type { Principal, MeResponse, PasswordResponse } from '@nestself/contracts';import type { SessionRecord } from '../session/session.types.js';
 
 interface HttpReq {
   headers: Record<string, string | string[] | undefined>;
@@ -209,7 +208,7 @@ export class AuthController {
     @Req() req: HttpReq,
     @Res({ passthrough: true }) res: HttpRes,
     @Body() body: unknown,
-  ) {
+  ): Promise<MeResponse> {
     const { challengeToken, code } = validate(EmailOtpVerifyRequestSchema, body);
     const surface = extractSurface(req);
     const result = await this.signIn.emailOtpVerify(
@@ -219,7 +218,7 @@ export class AuthController {
       extractMeta(req),
     );
     this.setSessionCookies(res, result.sessionId, result.csrfToken, result.absoluteExpiresAt);
-    return { principal: result.principal, effectiveActions: result.effectiveActions };
+    return { principal: result.principal, effectiveActions: result.effectiveActions, availableContexts: result.availableContexts };
   }
 
   // -----------------------------------------------------------------------
@@ -233,7 +232,7 @@ export class AuthController {
     @Req() req: HttpReq,
     @Res({ passthrough: true }) res: HttpRes,
     @Body() body: unknown,
-  ) {
+  ): Promise<PasswordResponse> {
     const { email, password } = validate(PasswordRequestSchema, body);
     const surface = extractSurface(req);
     const result = await this.signIn.passwordSignIn(
@@ -248,7 +247,7 @@ export class AuthController {
     }
 
     this.setSessionCookies(res, result.sessionId, result.csrfToken, result.absoluteExpiresAt);
-    return { principal: result.principal, effectiveActions: result.effectiveActions };
+    return { principal: result.principal, effectiveActions: result.effectiveActions, availableContexts: result.availableContexts };
   }
 
   // -----------------------------------------------------------------------
@@ -262,7 +261,7 @@ export class AuthController {
     @Req() req: HttpReq,
     @Res({ passthrough: true }) res: HttpRes,
     @Body() body: unknown,
-  ) {
+  ): Promise<PasswordResponse> {
     const { challengeToken, response } = validate(ChallengeRequestSchema, body);
     const surface = extractSurface(req);
     const result = await this.signIn.respondChallenge(
@@ -275,7 +274,7 @@ export class AuthController {
       return result;
     }
     this.setSessionCookies(res, result.sessionId, result.csrfToken, result.absoluteExpiresAt);
-    return { principal: result.principal, effectiveActions: result.effectiveActions };
+    return { principal: result.principal, effectiveActions: result.effectiveActions, availableContexts: result.availableContexts };
   }
 
   // -----------------------------------------------------------------------
@@ -374,7 +373,12 @@ export class AuthController {
         message: 'Context switch requires an active session',
       });
     }
-    return this.sessionEndpoints.switchContext(session.sessionId, principal, context);
+    return this.sessionEndpoints.switchContext(
+      session.sessionId,
+      principal,
+      context,
+      session.lastPersonalOrgId,
+    );
   }
 
   // -----------------------------------------------------------------------

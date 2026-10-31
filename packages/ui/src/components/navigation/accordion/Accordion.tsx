@@ -54,6 +54,16 @@ export interface AccordionItemProps {
   children: ReactNode;
   /** Heading level for the header element. */
   headingLevel?: 2 | 3 | 4;
+  /**
+   * Keep the panel content in the DOM when collapsed.
+   * Useful for accessibility (screen readers, in-page search).
+   */
+  keepMounted?: boolean;
+  /**
+   * Use the `hidden="until-found"` attribute so content is searchable
+   * by the browser's find-in-page. Overrides `keepMounted`.
+   */
+  hiddenUntilFound?: boolean;
   className?: string;
 }
 
@@ -62,6 +72,8 @@ export function AccordionItem({
   title,
   children,
   headingLevel,
+  keepMounted,
+  hiddenUntilFound,
   className,
 }: AccordionItemProps) {
   const HeaderTag = headingLevel ? (`h${headingLevel}` as const) : undefined;
@@ -97,6 +109,8 @@ export function AccordionItem({
         inner element so the panel collapses all the way to zero.
       */}
       <BaseAccordion.Panel
+        hiddenUntilFound={hiddenUntilFound}
+        keepMounted={keepMounted}
         className={cn(
           'overflow-hidden type-body text-text-secondary',
           'h-[var(--accordion-panel-height)] transition-[height,opacity] duration-[var(--motion-standard)] ease-standard',

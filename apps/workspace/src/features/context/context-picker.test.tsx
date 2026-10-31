@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Principal } from '@nestself/contracts';
+import type { AvailableContextEntry, Principal } from '@nestself/contracts';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { ContextPicker } from './context-picker';
 import { apiError, makeAuth, renderAt, t } from '../cases/cases-test-harness';
@@ -11,7 +11,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const HR = SAMPLE_PRINCIPALS.hr_admin.principal;
+// Ruling E: hr_admin defaults to personal; set organization for tests that
+// verify the picker behaviour starting from an organization context.
+const HR: Principal = {
+  ...SAMPLE_PRINCIPALS.hr_admin.principal,
+  context: { kind: 'organization', orgId: 'org_sample' },
+};
+
+// Available contexts for the HR admin: personal + organization for one org.
+const HR_CONTEXTS: AvailableContextEntry[] = [
+  { kind: 'personal', orgId: 'org_sample', orgName: 'Example d.o.o.' },
+  { kind: 'organization', orgId: 'org_sample', orgName: 'Example d.o.o.' },
+];
 
 /** Ivana with a second, invited membership and an expert record and staff templates. */
 const MULTI: Principal = {
@@ -41,6 +52,17 @@ const MULTI: Principal = {
   staffTemplates: ['support_operator'],
 };
 
+// Available contexts for the MULTI principal: personal + organization for
+// org_sample, personal-only for org_second (no org-workspace grant there),
+// plus expert and operations.
+const MULTI_CONTEXTS: AvailableContextEntry[] = [
+  { kind: 'personal', orgId: 'org_sample', orgName: 'Example d.o.o.' },
+  { kind: 'organization', orgId: 'org_sample', orgName: 'Example d.o.o.' },
+  { kind: 'personal', orgId: 'org_second', orgName: 'Second Org d.o.o.' },
+  { kind: 'expert' },
+  { kind: 'operations' },
+];
+
 const open = async (user: ReturnType<typeof userEvent.setup>, current: string) => {
   await user.click(await screen.findByRole('button', { name: t('auth:context.picker.open', { name: current }) }));
   return screen.findByRole('menu', { name: t('auth:context.picker.heading') });
@@ -49,7 +71,7 @@ const open = async (user: ReturnType<typeof userEvent.setup>, current: string) =
 describe('ContextPicker', () => {
   it('offers personal, each ACTIVE membership by name, expert and operations, and marks the current one', async () => {
     const user = userEvent.setup();
-    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI }));
+    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS }));
     const menu = await open(user, 'Example d.o.o.');
     const items = within(menu).getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual([
@@ -63,8 +85,9 @@ describe('ContextPicker', () => {
 
   it('never offers an organization without an ACTIVE membership (Review Focus 4)', async () => {
     const user = userEvent.setup();
-    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI }));
+    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS }));
     const menu = await open(user, 'Example d.o.o.');
+    // Invited Org is not in availableContexts (the API excludes non-ACTIVE memberships).
     expect(within(menu).queryByText('Invited Org d.o.o.')).not.toBeInTheDocument();
   });
 
@@ -80,12 +103,13 @@ describe('ContextPicker', () => {
     const { router } = renderAt(
       <ContextPicker sampleMode={false} />,
       '/conversations',
-      makeAuth({ principal: MULTI, switchContext, refreshPrincipal }),
+      makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS, switchContext, refreshPrincipal }),
     );
     const menu = await open(user, 'Example d.o.o.');
     await user.click(within(menu).getByRole('menuitem', { name: 'Second Org d.o.o.' }));
     await waitFor(() => expect(refreshPrincipal).toHaveBeenCalledTimes(1));
-    expect(switchContext).toHaveBeenCalledWith({ kind: 'organization', orgId: 'org_second' });
+    // Second Org is a personal-only context (no org-workspace grant).
+    expect(switchContext).toHaveBeenCalledWith({ kind: 'personal', orgId: 'org_second' });
     expect(calls).toEqual(['switch', 'refresh']);
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
@@ -93,7 +117,7 @@ describe('ContextPicker', () => {
   it('switching to expert lands on the assigned cases', async () => {
     const user = userEvent.setup();
     const switchContext = vi.fn().mockResolvedValue(undefined);
-    const { router } = renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, switchContext }));
+    const { router } = renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS, switchContext }));
     const menu = await open(user, 'Example d.o.o.');
     await user.click(within(menu).getByRole('menuitem', { name: t('auth:context.picker.option.expert') }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/cases'));
@@ -103,7 +127,7 @@ describe('ContextPicker', () => {
   it('choosing the current context changes nothing', async () => {
     const user = userEvent.setup();
     const switchContext = vi.fn();
-    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, switchContext }));
+    renderAt(<ContextPicker sampleMode={false} />, '/', makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS, switchContext }));
     const menu = await open(user, 'Example d.o.o.');
     await user.click(within(menu).getByRole('menuitem', { name: new RegExp('^Example d.o.o.') }));
     expect(switchContext).not.toHaveBeenCalled();
@@ -121,7 +145,7 @@ describe('ContextPicker', () => {
     const { router } = renderAt(
       <ContextPicker sampleMode={false} />,
       '/conversations',
-      makeAuth({ principal: MULTI, switchContext: vi.fn().mockRejectedValue(err), refreshPrincipal }),
+      makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS, switchContext: vi.fn().mockRejectedValue(err), refreshPrincipal }),
     );
     const menu = await open(user, 'Example d.o.o.');
     await user.click(within(menu).getByRole('menuitem', { name: t('auth:context.picker.option.personal') }));
@@ -155,7 +179,7 @@ describe('ContextPicker', () => {
     const { router } = renderAt(
       <ContextPicker sampleMode={false} />,
       '/conversations',
-      makeAuth({ principal: MULTI, switchContext, refreshPrincipal }),
+      makeAuth({ principal: MULTI, availableContexts: MULTI_CONTEXTS, switchContext, refreshPrincipal }),
     );
     const menu = await open(user, 'Example d.o.o.');
     await user.click(within(menu).getByRole('menuitem', { name: 'Second Org d.o.o.' }));
@@ -166,7 +190,7 @@ describe('ContextPicker', () => {
 
   it('says in sample mode that switching creates nothing', async () => {
     const user = userEvent.setup();
-    renderAt(<ContextPicker sampleMode />, '/', makeAuth({ principal: HR }));
+    renderAt(<ContextPicker sampleMode />, '/', makeAuth({ principal: HR, availableContexts: HR_CONTEXTS }));
     const menu = await open(user, 'Example d.o.o.');
     expect(within(menu).getByText(t('auth:context.picker.sampleNote'))).toBeInTheDocument();
   });

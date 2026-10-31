@@ -46,6 +46,7 @@ function createTestRouter(opts: {
       auth: {
         principal: sample.principal,
         effectiveActions: sample.effectiveActions,
+        availableContexts: [],
       },
     },
     history,

@@ -124,7 +124,7 @@ describe('Step 1: User state', () => {
 // ---------------------------------------------------------------------------
 
 describe('Step 2: Context validity', () => {
-  it('denies when org context has no active membership', () => {
+  it('denies when org context membership is date-expired', () => {
     const p = makePrincipal({
       memberships: [
         {

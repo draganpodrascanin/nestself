@@ -34,6 +34,8 @@ export interface StatusBlockProps {
   body: string;
   action?: StatusBlockAction;
   icon?: ComponentType<PhosphorIconProps>;
+  /** Heading level for the title. Defaults to 3 for backward compatibility. */
+  headingLevel?: 2 | 3 | 4;
   className?: string;
 }
 
@@ -54,6 +56,7 @@ export function StatusBlock({
   body,
   action,
   icon,
+  headingLevel = 3,
   className,
 }: StatusBlockProps) {
   const IconComponent = icon ?? defaultIcons[state];
@@ -77,7 +80,13 @@ export function StatusBlock({
               <Icon icon={IconComponent} size={48} />
             </div>
           ) : null}
-          <h3 className="type-section-title mb-2">{title}</h3>
+          {headingLevel === 2 ? (
+            <h2 className="type-section-title mb-2">{title}</h2>
+          ) : headingLevel === 4 ? (
+            <h4 className="type-section-title mb-2">{title}</h4>
+          ) : (
+            <h3 className="type-section-title mb-2">{title}</h3>
+          )}
           <p className="max-w-[52ch] mx-auto text-text-secondary">{body}</p>
           {action ? (
             <div className="mt-5">

@@ -19,11 +19,12 @@ function renderSample(initialRole: 'hr_admin' | 'admin') {
 describe('SampleAuthProvider context switching', () => {
   it('switches the sample principal locally', async () => {
     const { result } = renderSample('hr_admin');
+    // Ruling E: hr_admin defaults to personal context.
+    expect(result.current.principal?.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
+    await act(() => result.current.switchContext({ kind: 'organization', orgId: 'org_sample' }));
     expect(result.current.principal?.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
     await act(() => result.current.switchContext({ kind: 'personal' }));
     expect(result.current.principal?.context).toEqual({ kind: 'personal' });
-    await act(() => result.current.switchContext({ kind: 'organization', orgId: 'org_sample' }));
-    expect(result.current.principal?.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
   });
 
   it('refuses a context the sample principal could not hold, as the API does', async () => {
@@ -37,7 +38,8 @@ describe('SampleAuthProvider context switching', () => {
       expect(err).toBeInstanceOf(ApiError);
       expect((err as ApiError).code).toBe('invalid_context');
     }
-    expect(result.current.principal?.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+    // Ruling E: context stays at personal (the default) after refused switches.
+    expect(result.current.principal?.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
   });
 
   it('lets staff move between operations and personal', async () => {
@@ -57,6 +59,7 @@ describe('sampleRouteSnapshot (guards on the first navigation in sample mode)', 
     const snapshot = await resolveRouteAuth({
       principal: null,
       effectiveActions: [],
+      availableContexts: [],
       settled: false,
       ensure: () => Promise.resolve(sampleRouteSnapshot()),
     });

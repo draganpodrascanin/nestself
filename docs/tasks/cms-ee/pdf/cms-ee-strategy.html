@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NestSelf CMS and employee experience strategy</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+/* Page-specific refinements that stay within the token system */
+.decisions.two { grid-template-columns: 1fr 1fr; gap: 2.4mm 3mm; }
+.decisions.two .decision { padding: 2.4mm 3mm; grid-template-columns: 10mm 1fr; gap: 2mm; }
+.decisions.two .title { font-size: 9pt; line-height: 1.3; }
+.decisions.two .why { font-size: 8.1pt; line-height: 1.35; }
+.decisions.two .id { font-size: 8.3pt; }
+.loop { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.4mm; }
+.loop .step { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-card); padding: 3.2mm 3.4mm; display: flex; flex-direction: column; gap: 1.6mm; }
+.loop .step h3 { font-size: 9.6pt; line-height: 1.25; }
+.loop .step p { font-size: 8.2pt; line-height: 1.38; color: var(--color-text-secondary); }
+.loop .step.brand { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+.loop .step.brand p { color: var(--color-accent); }
+.loop .step.brand .icon { color: var(--color-accent); }
+.levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+.levels .card { padding: 3.4mm 3.8mm; }
+.levels .card h3 { font-size: 9.8pt; margin-bottom: 1mm; }
+.levels .card p { font-size: 8.3pt; line-height: 1.38; color: var(--color-text-secondary); }
+.levels .card .exit { margin-top: 2mm; padding-top: 2mm; border-top: 1px solid var(--color-border-subtle); font-size: 8pt; color: var(--color-text); }
+.levels .card.active { border-color: var(--color-primary); box-shadow: inset 0 3px 0 var(--color-primary); }
+.mods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.6mm; }
+.mods .node { text-align: left; }
+.mods .node code { font-size: 7.6pt; }
+.lane-label { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-primary); margin: 3mm 0 1.6mm; }
+.states { display: flex; flex-wrap: wrap; gap: 1.6mm; align-items: center; font-size: 8.4pt; }
+.states .arrow { color: var(--color-text-secondary); font-size: 8pt; }
+.states code { background: var(--color-surface); border: 1px solid var(--color-border-subtle); }
+.formula { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.4mm; }
+.formula .term { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-control); padding: 2.4mm 3mm; font-size: 8.6pt; line-height: 1.35; }
+.formula .term b { display: block; font-size: 8.9pt; color: var(--color-primary); margin-bottom: 0.4mm; }
+.paths { display: flex; flex-wrap: wrap; gap: 1.8mm; }
+.paths .pill { font-size: 8pt; padding: 0.8mm 3mm; }
+.home { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 4mm; counter-reset: m; }
+.home li { list-style: none; counter-increment: m; display: grid; grid-template-columns: 7mm 1fr; gap: 2mm; font-size: 8.7pt; line-height: 1.35; padding: 1.5mm 0; border-top: 1px solid var(--color-border-subtle); }
+.home li::before { content: counter(m); font-weight: 600; color: var(--color-primary); font-variant-numeric: tabular-nums; }
+.home li b { font-weight: 600; }
+.home { padding: 0; }
+.doors { display: grid; grid-template-columns: 1fr; gap: 2.4mm; }
+.door { display: grid; grid-template-columns: 9mm 1fr; gap: 3mm; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-control); padding: 2.4mm 3.2mm; font-size: 8.8pt; line-height: 1.38; }
+.door.closed { background: var(--color-danger-surface); border-color: var(--color-danger-surface); }
+.door.closed .icon { color: var(--color-danger); }
+.door strong { display: block; font-size: 9.2pt; }
+.door small { color: var(--color-text-secondary); font-size: 8.2pt; }
+.timeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.6mm; }
+.timeline .phase { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-card); padding: 3.4mm 3.6mm; display: flex; flex-direction: column; min-height: 112mm; }
+.timeline .phase h3 { font-size: 10pt; font-weight: 600; line-height: 1.25; margin: 1mm 0 2mm; }
+.timeline .phase li { font-size: 8.1pt; line-height: 1.36; color: var(--color-text-secondary); }
+.timeline .phase ul { padding-left: 1.05em; }
+.timeline .phase .exit { margin-top: auto; padding-top: 2.4mm; border-top: 1px solid var(--color-border-subtle); font-size: 8pt; color: var(--color-text); }
+.timeline .phase .exit b { color: var(--color-primary); font-weight: 600; }
+.timeline .phase.active { border-color: var(--color-primary); box-shadow: inset 0 3px 0 var(--color-primary); }
+.needs { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+.needs .card { padding: 3.2mm 3.8mm; }
+.needs .card h3 { font-size: 9.4pt; line-height: 1.3; margin-bottom: 1mm; }
+.needs .card p { font-size: 8.3pt; line-height: 1.38; }
+.needs .card .default { margin-top: 1.6mm; font-size: 8.1pt; color: var(--color-text); background: var(--color-accent-soft); border-radius: var(--radius-small); padding: 1.3mm 2.2mm; }
+.needs .card .default b { font-weight: 600; }
+.grid > * { min-width: 0; }
+.icon-row > div { min-width: 0; }
+table.data td code { font-size: 7.6pt; }
+.lead.compact { font-size: 11pt; }
+</style>
+</head>
+<body>
+
+<!-- ============ 1 · COVER ============ -->
+<section class="page cover">
+  <div class="cover-art-wrap">
+    <svg class="cover-art" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.5" aria-hidden="true">
+      <circle cx="50" cy="50" r="48"/><circle cx="50" cy="50" r="38"/><circle cx="50" cy="50" r="28"/><circle cx="50" cy="50" r="18"/><circle cx="50" cy="50" r="8"/>
+    </svg>
+  </div>
+  <div class="cover-inner">
+    <div class="wordmark">nestself</div>
+    <h1>CMS and employee experience strategy</h1>
+    <p class="subtitle">How NestSelf publishes reviewed content, how employees find and use it, and how polls, requests and general questions reach an outcome. An overview for review; the engineering reference carries every detail.</p>
+    <div class="cover-meta">
+      <div><strong>Version 1.0</strong>24 October 2026</div>
+      <div><strong>Status</strong>Draft for founder review</div>
+      <div><strong>Engineering reference</strong>docs/tasks/cms-ee/cms-ee-strategy.md</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 · DECISIONS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Overview</span><h2>What this strategy decides</h2></div><div class="meta">Fourteen of the thirty-two decisions carry the design. Each has a numbered entry, with conditions and alternatives, in the engineering reference.</div></div>
+  <p class="lead compact" style="margin-bottom:4mm">A small content system inside the platform we already run. Every resource in all four languages. One availability rule decides what every employee sees, everywhere. Original employee text never enters the CMS.</p>
+  <div class="decisions two">
+    <div class="decision"><div class="id">C-02</div><div><div class="title">A thin CMS inside the NestSelf API and admin, no headless CMS</div><div class="why">One sign-in, one grant model, one audit log. A second system would need its own access rules.</div></div></div>
+    <div class="decision"><div class="id">C-03</div><div><div class="title">Tiptap in the admin; content stored as validated structured blocks</div><div class="why">Editors cannot insert HTML or scripts. Employees' screens render the blocks with NestSelf components, never raw HTML.</div></div></div>
+    <div class="decision"><div class="id">C-06</div><div><div class="title">Approval binds one exact revision</div><div class="why">A fingerprint covers text, media, links, call to action and audience. Any change after approval needs review again.</div></div></div>
+    <div class="decision"><div class="id">C-07</div><div><div class="title">One shared catalogue; clients see it through audiences</div><div class="why">No copies per client. Personal state (saved items, votes, requests) is per employer and isolated by row-level security.</div></div></div>
+    <div class="decision"><div class="id">C-08</div><div><div class="title">Author, reviewer and publisher are separate grants</div><div class="why">The existing content actions are reused; review moves out of the publisher template. Nobody approves their own work.</div></div></div>
+    <div class="decision"><div class="id">C-10</div><div><div class="title">One availability decision for every read path</div><div class="why">Home, lists, search counts, detail, saved items and media all ask the same question, so they cannot disagree or leak.</div></div></div>
+    <div class="decision"><div class="id">C-11</div><div><div class="title">Client capabilities come from configuration, never from copy <span class="pill warning">founder: per client</span></div><div class="why">Library, general questions and event interest are switched on per client. Editors cannot promise a service.</div></div></div>
+    <div class="decision"><div class="id">C-14</div><div><div class="title">Private media, scanned, re-checked on every request</div><div class="why">No public file links. Revoking access works for the next byte range, not the next day.</div></div></div>
+    <div class="decision"><div class="id">C-15</div><div><div class="title">Search in PostgreSQL, Serbian and Hungarian aware</div><div class="why">Both stemmers ship with PostgreSQL. Cyrillic and Latin fold to one form. Counts and snippets only cover what the reader may see.</div></div></div>
+    <div class="decision"><div class="id">C-17</div><div><div class="title">General questions live in the confidential domain</div><div class="why">The confidential domain's own access paths: the asker, the professional who claimed it, or approved emergency access. Nobody else, whatever their role.</div></div></div>
+    <div class="decision"><div class="id">C-19</div><div><div class="title">Poll votes are pseudonymous and never shown in small groups</div><div class="why">One current answer per person per poll; ten distinct participants before any distribution appears.</div></div></div>
+    <div class="decision"><div class="id">C-20</div><div><div class="title">Requests are tracked to an outcome; editors see a sanitized brief</div><div class="why">Owners, due dates on a business calendar, and no raw employee text or identity in the editorial queue.</div></div></div>
+    <div class="decision"><div class="id">C-22</div><div><div class="title">The employee context names its employer</div><div class="why">A person with two employers has two separate sets of saved items, votes and requests. Switching clears every cached screen.</div></div></div>
+    <div class="decision"><div class="id">C-27</div><div><div class="title">Employees and professionals use the workspace app; staff use the admin</div><div class="why">Professionals are not staff. Their question queue sits beside the employee workspace, as the auth strategy places it.</div></div></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">2</span></div>
+</section>
+
+<!-- ============ 3 · THE LOOP AND THE RELEASE LEVELS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Scope</span><h2>The loop the first version closes</h2></div><div class="meta">Epic NS-CONTENT-01, version 1.0 of 22 October 2026. Its backlog is the acceptance contract.</div></div>
+  <div class="loop">
+    <div class="step brand"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg><h3>Find a relevant topic</h3><p>By need, category or everyday words, in the reader's language.</p></div>
+    <div class="step"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z"/></svg><h3>Get practical help</h3><p>Short articles, audio and video with transcripts, checklists, answered questions.</p></div>
+    <div class="step"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><h3>Save or try something</h3><p>Saved items and the last position stay private to this employer context.</p></div>
+    <div class="step"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M168,112a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,112Zm-8,24H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Zm72-8A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"/></svg><h3>Ask or suggest</h3><p>A general question to a professional, or a topic, format or translation request.</p></div>
+    <div class="step"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M227.32,28.68a16,16,0,0,0-15.66-4.08l-.15,0L19.57,82.84a16,16,0,0,0-2.49,29.8L102,154l41.3,84.87A15.86,15.86,0,0,0,157.74,248q.69,0,1.38-.06a15.88,15.88,0,0,0,14-11.51l58.2-191.94c0-.05,0-.1,0-.15A16,16,0,0,0,227.32,28.68ZM157.83,231.85l-.05.14,0-.07-40.06-82.3,48-48a8,8,0,0,0-11.31-11.31l-48,48L24.08,98.25l-.07,0,.14,0L216,40Z"/></svg><h3>See what happened</h3><p>A private answer, a published resource, or a reasoned closure, with status on the way.</p></div>
+  </div>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="card"><h3>In the first version</h3><ul class="small"><li>Admin authoring, professional review, scheduling, withdrawal</li><li>Six categories, six resource types, collections, Home curation</li><li>Media with rights and expiry, delivered only to its audience</li><li>Home, Explore, search, detail, saved items, preferences</li><li>Usefulness feedback and interest polls</li><li>Editorial requests with owners, due dates and outcomes</li><li>General questions answered by assigned professionals</li><li>Neutral notifications, privacy-safe aggregates, retention</li></ul></div>
+    <div class="card"><h3>Deliberately not in it</h3><ul class="small"><li>Native mobile screens (the API is ready for them)</li><li>Event registration, consultations, budgets, team offers</li><li>A page builder, an open forum, peer answers, comments</li><li>AI advice or recommendations from sensitive history</li><li>Wellbeing scores or any diagnosis-like question</li><li>HR editing professional content, named usage reports</li><li>Public marketing CMS delivery</li></ul></div>
+  </div>
+  <div class="lane-label" style="margin-top:6mm">Release levels</div>
+  <div class="levels">
+    <div class="card active"><span class="eyebrow">M1</span><h3>First vertical slice</h3><p>An admin publishes an article with an image; an invited employee reads and saves it.</p><div class="exit">Drafts and other clients' content denied, including the image.</div></div>
+    <div class="card"><span class="eyebrow">V1</span><h3>Complete epic</h3><p>Full workflow, search, all formats, collections, polls, requests, moderated questions.</p><div class="exit">The fifteen-step acceptance scenario passes; queues have owners.</div></div>
+    <div class="card"><span class="eyebrow">V1.1</span><h3>After the pilot</h3><p>HR featuring proposals, more content languages, bulk editing.</p><div class="exit">A stable pilot and a demonstrated need.</div></div>
+    <div class="card"><span class="eyebrow">Later</span><h3>Separate epics</h3><p>Events, consultations, budgets, programs, wellbeing measurement, community.</p><div class="exit">Each with its own access and operational rules.</div></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">3</span></div>
+</section>
+
+<!-- ============ 4 · STARTING POINT ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Starting point</span><h2>What exists, and what the epic assumed</h2></div><div class="meta">The epic was written before the code was reviewed. These corrections come from the repository on 24 October 2026.</div></div>
+  <table class="data compact">
+    <thead><tr><th style="width:42mm">Topic</th><th style="width:52mm">The epic assumed</th><th>The strategy uses</th></tr></thead>
+    <tbody>
+      <tr><td class="key">Data layer</td><td>PostgreSQL with Prisma</td><td>Drizzle with row-level security, as the auth strategy decided (D-37)</td></tr>
+      <tr><td class="key">Content permissions</td><td>New actions such as <code>content.create</code></td><td>Eleven <code>content.*</code> actions already exist and are reused; sixteen new actions cover taxonomy, media, polls, requests and intake</td></tr>
+      <tr><td class="key">Templates</td><td>Author, publisher, intake expert</td><td>Existing author and publisher templates change; reviewer, editorial lead, intake professional and intake lead are added</td></tr>
+      <tr><td class="key">Routes</td><td><code>/api/employee</code>, <code>/api/admin</code>, <code>/api/intake</code></td><td>The auth strategy's prefixes: <code>/api/library</code>, <code>/api/me</code>, <code>/api/expert/intake</code>, <code>/api/ops/cms</code>, <code>/api/orgs/:orgId</code></td></tr>
+      <tr><td class="key">Employer context</td><td>"Personal context of the active organization"</td><td>The personal context had no organization; it now names one, and personal state is kept per employer</td></tr>
+      <tr><td class="key">Client caches</td><td>Cleared on organization switch</td><td>The web apps kept old queries on switch; the fix ships in M1 with a test</td></tr>
+      <tr><td class="key">Restricted intake</td><td>A new module</td><td>The confidential-domain module the auth strategy reserved (T-2.4), with its four access paths</td></tr>
+    </tbody>
+  </table>
+  <div class="grid cols-3" style="margin-top:6mm">
+    <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg></div><div><h4>Ready to build on</h4><p class="small muted">Sessions, the decision engine with its golden table, default-deny routes, audit, row-level security, BullMQ jobs, SES mail, two seeded clients.</p></div></div></div>
+    <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg></div><div><h4>Missing and planned here</h4><p class="small muted">Editor, content schema, media storage and delivery, search, outbox, idempotency handling, notifications, reporting.</p></div></div></div>
+    <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></svg></div><div><h4>Retired</h4><p class="small muted">The flat <code>content_items</code> table and its sample screens. Legacy team polls and channels stay until the auth track retires them.</p></div></div></div>
+  </div>
+  <div class="callout info" style="margin-top:6mm"><strong>Depends on the authentication track</strong>Operations routes for assigned clients (T-2.0), grant administration (T-2.1) before the pilot, and step-up enforcement (T-2.6) before questions open. If step-up is not delivered in time, this epic implements its restricted branch.</div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">4</span></div>
+</section>
+
+<!-- ============ 5 · ARCHITECTURE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Architecture</span><h2>Modules and what each one owns</h2></div><div class="meta">New NestJS modules in the existing API. No new runtime, identity system or database.</div></div>
+  <div class="diagram">
+    <div class="zone"><span class="zone-label">Surfaces</span>
+      <div class="grid cols-3" style="gap:3mm">
+        <div class="node brand"><strong>Workspace web</strong><small>Employees: Home, Explore, Saved, My requests. Professionals: Questions</small></div>
+        <div class="node brand"><strong>Admin web</strong><small>Staff: editor, review, publishing, taxonomy, media, demand, polls</small></div>
+        <div class="node"><strong>Workspace, organization context</strong><small>HR: monthly suppressed summary only</small></div>
+      </div>
+    </div>
+    <div class="zone" style="margin-top:5mm"><span class="zone-label">API modules</span>
+      <div class="mods">
+        <div class="node soft"><strong>cms</strong><small>Resources, revisions, review, publications, taxonomy, collections, Home slots</small></div>
+        <div class="node soft"><strong>media</strong><small>Uploads, scanning, renditions, rights, protected delivery</small></div>
+        <div class="node soft"><strong>library</strong><small>Availability, Home, discovery, search, detail, saved items, events</small></div>
+        <div class="node soft"><strong>engagement</strong><small>Polls, votes, feedback, pseudonyms</small></div>
+        <div class="node soft"><strong>editorial</strong><small>Requests, timelines, briefs, business clock</small></div>
+        <div class="node accent"><strong>professional</strong><small>Intake queues, questions, private replies, publication permission</small></div>
+        <div class="node soft"><strong>notifications</strong><small>Outbox, in-app notices, neutral email</small></div>
+        <div class="node soft"><strong>reporting</strong><small>Suppression, metrics, employer summary</small></div>
+      </div>
+    </div>
+    <div class="zone" style="margin-top:5mm"><span class="zone-label">Shared foundation (exists)</span>
+      <div class="grid cols-4" style="gap:3mm">
+        <div class="node"><strong>Sessions and guards</strong><small>Cookie sessions, CSRF, default deny</small></div>
+        <div class="node"><strong>authorize()</strong><small>Grants, assignments, confidential hard deny</small></div>
+        <div class="node"><strong>PostgreSQL 17</strong><small>Drizzle, row-level security, audit</small></div>
+        <div class="node"><strong>Valkey and BullMQ</strong><small>Caches, scheduled and queued jobs</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid cols-2" style="margin-top:4mm">
+    <div class="callout"><strong>The professional module is walled off</strong>Only its own code may import its tables; a lint rule and a response-scanning test enforce that no CMS, editorial, reporting or HR response carries an intake field.</div>
+    <div class="callout"><strong>State changes and events commit together</strong>A transactional outbox carries ids, never text. Workers deliver notifications and index updates once, retry on failure and show what failed to an owner.</div>
+  </div>
+  <table class="data compact" style="margin-top:4mm">
+    <thead><tr><th style="width:44mm">Route prefix</th><th style="width:34mm">Context</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>/api/library</code>, <code>/api/me</code></td><td>Personal, per employer</td><td>Catalogue reads, media, search; saved items, preferences, requests, questions, notifications</td></tr>
+      <tr><td><code>/api/expert/intake</code></td><td>Expert</td><td>Queues, claims, replies, permission requests</td></tr>
+      <tr><td><code>/api/ops/cms</code></td><td>Operations, web session</td><td>Editing, review, publishing, taxonomy, media, demand, polls, performance</td></tr>
+      <tr><td><code>/api/orgs/:orgId</code></td><td>Organization</td><td>The monthly employer summary</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-top:3mm">A new shared package, <code>@nestself/content</code>, holds the block schema and validation (used by the API), the Tiptap editor (admin only) and the renderer (admin preview and workspace), so all three agree on one format.</p>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">5</span></div>
+</section>
+
+<!-- ============ 6 · CONTENT MODEL AND WORKFLOW ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Content</span><h2>From draft to publication</h2></div><div class="meta">One resource, one variant per language, immutable revisions, and publications that point at one approved revision.</div></div>
+  <div class="split">
+    <aside class="aside stack-tight"><h3>Four records</h3><p><b>Resource</b>: the language-independent item (article, video, audio, practical resource, Q&amp;A or collection) with its primary category and owner.</p><p><b>Variant</b>: one language version with its own review.</p><p><b>Revision</b>: a frozen snapshot once submitted; the one working draft autosaves and refuses to overwrite a newer change.</p><p><b>Publication</b>: the approved revision, its audience and its time window.</p></aside>
+    <div>
+      <ol class="steps">
+        <li><h4>Author drafts</h4><p>Type, language, category, the promise to the reader ("what you get"), duration, sources, media and a proposed audience. Validation lists what is missing.</p></li>
+        <li><h4>Preview in the real layout</h4><p>The employee renderer at phone and desktop widths, for a simulated client and team; no real employee's state is loaded.</p></li>
+        <li><h4>Submit one revision for review</h4><p>A reviewer qualified for the discipline approves or returns it with comments. Authors and last editors cannot review their own revision.</p></li>
+        <li><h4>Publish now or schedule</h4><p>The publisher confirms the audience, which may narrow the approved one but never widen it. Only the approved fingerprint can go live.</p></li>
+        <li><h4>Maintain</h4><p>Review dates, rights expiry and collection minimums create tasks for an owner and a backup. Urgent withdrawal removes the item everywhere at once.</p></li>
+      </ol>
+    </div>
+  </div>
+  <div class="lane-label" style="margin-top:5mm">States</div>
+  <table class="data compact">
+    <tbody>
+      <tr><td class="key" style="width:30mm">Revision</td><td><div class="states"><code>draft</code><span class="arrow">→</span><code>in_review</code><span class="arrow">→</span><code>changes_requested</code> or <code>approved</code><span class="arrow">→</span><code>superseded</code></div></td></tr>
+      <tr><td class="key">Publication</td><td><div class="states"><code>scheduled</code><span class="arrow">→</span><code>live</code><span class="arrow">→</span><code>expired</code>, or <code>withdrawn</code> at any time</div></td></tr>
+      <tr><td class="key">Media asset</td><td><div class="states"><code>uploaded</code><span class="arrow">→</span><code>quarantined</code><span class="arrow">→</span><code>processing</code><span class="arrow">→</span><code>ready</code>, or <code>rejected</code>; <code>expired</code> when rights end</div></td></tr>
+    </tbody>
+  </table>
+  <div class="callout" style="margin-top:5mm"><strong>Editing live content never shows half-reviewed text</strong>Employees keep seeing the previous approved revision until the new one is approved and its publication starts. Starting a publication never waits for a background job: availability is computed from the stored times on every read.</div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">6</span></div>
+</section>
+
+<!-- ============ 7 · WHO MAY DO WHAT ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Permissions</span><h2>Who may do what</h2></div><div class="meta">Templates are starting sets of grants, not roles. One person may hold several, but never review their own work.</div></div>
+  <table class="data compact">
+    <thead><tr><th style="width:34mm">Template</th><th style="width:26mm">Scope</th><th>Main actions</th><th style="width:40mm">Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="key">Content author <span class="pill soft">changed</span></td><td>Assigned categories</td><td><code>content.write</code>, <code>content.submit</code>, <code>content.preview</code>, <code>media.upload</code></td><td>Cannot review or publish</td></tr>
+      <tr><td class="key">Content reviewer <span class="pill success">new</span></td><td>Assigned categories</td><td><code>content.review</code>, <code>content.preview</code></td><td>Limited to approved disciplines: psychological, legal, financial, health, nutrition, general</td></tr>
+      <tr><td class="key">Content publisher <span class="pill soft">changed</span></td><td>Assigned categories</td><td><code>content.publish</code>, <code>content.schedule</code>, <code>content.restrict</code>, <code>content.archive</code>, <code>content.preview</code></td><td>Review removed from this template</td></tr>
+      <tr><td class="key">Editorial lead <span class="pill success">new</span></td><td>Platform</td><td><code>taxonomy.manage</code>, <code>home.manage</code>, <code>media.manage</code>, <code>poll.manage</code>, request and brief management, metrics</td><td>Never reads raw employee text</td></tr>
+      <tr><td class="key">Intake professional <span class="pill success">new</span></td><td>Assigned queues</td><td><code>intake.queue.view</code>, <code>intake.claim</code></td><td>Reads a question only after claiming it</td></tr>
+      <tr><td class="key">Intake lead <span class="pill success">new</span></td><td>Assigned queues</td><td><code>intake.queue.view</code>, <code>intake.reassign</code></td><td>Reassignment removes the previous reader at once</td></tr>
+      <tr><td class="key">Expert <span class="pill soft">changed</span></td><td>Assigned cases</td><td><code>conversation.read.assigned</code>, <code>intake.respond</code>, <code>intake.permission.request</code></td><td>Only through the claim's case assignment</td></tr>
+      <tr><td class="key">Employee <span class="pill soft">changed</span></td><td>Own, per employer</td><td><code>content.read</code>, <code>content.bookmark</code>, <code>feedback.submit</code>, <code>poll.respond</code>, <code>editorial.request.submit</code>, <code>conversation.participate</code></td><td>Sees only available content of the active employer</td></tr>
+      <tr><td class="key">HR administrator</td><td>Organization</td><td><code>reports.aggregate.read</code></td><td>Monthly summary above the threshold; no names, no text</td></tr>
+    </tbody>
+  </table>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="card tinted"><h3>Editorial scope is the primary category</h3><p class="small">The auth strategy's "assigned collections" scope is mapped to categories: an author assigned to Sleep and rest edits resources whose primary category is Sleep and rest. Lists are filtered to the categories a person holds the action for.</p></div>
+    <div class="card"><h3>No administrator key to private questions</h3><p class="small">Platform, organization and category grants are refused by the decision engine for confidential records. A known record id gives an admin, HR or CMS account nothing.</p></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">7</span></div>
+</section>
+
+<!-- ============ 8 · AVAILABILITY ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Access</span><h2>One rule decides what an employee sees</h2></div><div class="meta">One implementation, composed by every read path, proven by a golden table of twenty-two cases against PostgreSQL.</div></div>
+  <p class="lead compact" style="margin-bottom:4mm">A publication is available only when every one of these holds. Audience rows combine with OR; everything else is AND.</p>
+  <div class="formula">
+    <div class="term"><b>Active person</b>Not suspended or deactivated</div>
+    <div class="term"><b>Valid employer context</b>An active, current membership in the named organization</div>
+    <div class="term"><b>Active resource</b>Not archived</div>
+    <div class="term"><b>Published and current</b>Started, not ended, not withdrawn, the latest for its language</div>
+    <div class="term"><b>Audience matches</b>All clients, this organization, or this team and its parents</div>
+    <div class="term"><b>Capability enabled</b>The client has the capability the publication requires</div>
+    <div class="term"><b>Media valid</b>Every referenced file processed, scanned and within its rights</div>
+    <div class="term"><b>The reader's language</b>Always the interface language; Cyrillic is generated from the approved Latin text</div>
+    <div class="term"><b>Collections cannot widen</b>A collection never makes a hidden child visible</div>
+  </div>
+  <div class="lane-label" style="margin-top:6mm">Read paths that use it</div>
+  <div class="paths">
+    <span class="pill accent">Home</span><span class="pill accent">Explore and categories</span><span class="pill accent">Collections</span><span class="pill accent">Search results, counts, facets, snippets</span><span class="pill accent">Content detail</span><span class="pill accent">Saved items</span><span class="pill accent">Related links and calls to action</span><span class="pill accent">Media files, every byte range</span><span class="pill accent">Poll placement</span><span class="pill accent">Admin preview (simulated)</span>
+  </div>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,112a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Zm80-72H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></svg></div><div><h4>Unavailable means not found</h4><p class="small muted">An employee who may not see an item gets a 404, not a refusal that confirms it exists. A saved item that was withdrawn shows a neutral "no longer available".</p></div></div></div>
+    <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M244.8,150.4a8,8,0,0,1-11.2-1.6A51.6,51.6,0,0,0,192,128a8,8,0,0,1-7.37-4.89,8,8,0,0,1,0-6.22A8,8,0,0,1,192,112a24,24,0,1,0-23.24-30,8,8,0,1,1-15.5-4A40,40,0,1,1,219,117.51a67.94,67.94,0,0,1,27.43,21.68A8,8,0,0,1,244.8,150.4ZM190.92,212a8,8,0,1,1-13.84,8,57,57,0,0,0-98.16,0,8,8,0,1,1-13.84-8,72.06,72.06,0,0,1,33.74-29.92,48,48,0,1,1,58.36,0A72.06,72.06,0,0,1,190.92,212ZM128,176a32,32,0,1,0-32-32A32,32,0,0,0,128,176ZM72,120a8,8,0,0,0-8-8A24,24,0,1,1,87.24,82a8,8,0,1,0,15.5-4A40,40,0,1,0,37,117.51,67.94,67.94,0,0,0,9.6,139.19a8,8,0,1,0,12.8,9.61A51.6,51.6,0,0,1,64,128,8,8,0,0,0,72,120Z"/></svg></div><div><h4>Two employers, two worlds</h4><p class="small muted">Saved items, history, votes and requests belong to one employer context. Switching employer clears every cached screen before the new one loads.</p></div></div></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">8</span></div>
+</section>
+
+<!-- ============ 9 · EMPLOYEE EXPERIENCE ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Employees</span><h2>Home, Explore, Saved, My requests</h2></div><div class="meta">Built mobile first in the workspace app. No mood questions, no streaks, no view counts.</div></div>
+  <div class="grid cols-2">
+    <div>
+      <div class="lane-label" style="margin-top:0">Home, in this order, empty modules omitted</div>
+      <ol class="home">
+        <li><span><b>Greeting and search</b>, with the current employer visible</span></li>
+        <li><span><b>One featured item</b> with its outcome and duration</span></li>
+        <li><span><b>Quick needs</b>: "A calmer end to the day", "Better sleep"</span></li>
+        <li><span><b>Under five minutes</b>: three or four formats</span></li>
+        <li><span><b>Saved and continue</b>, when private state exists</span></li>
+        <li><span><b>Explore topics</b>: the six starter categories</span></li>
+        <li><span><b>Collection of the month</b>, curated</span></li>
+        <li><span><b>Ask a professional</b>: one approved answer</span></li>
+        <li><span><b>Shape future topics</b>: at most one poll</span></li>
+        <li><span><b>Additional support</b>: only what really works</span></li>
+      </ol>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg></div><div><h4>Search in everyday language</h4><p class="small muted">Serbian Latin or Cyrillic, with or without diacritics, Hungarian, English; results always in the reader's language. Synonyms such as "I cannot switch off". Typing errors fall back to similarity matching. Raw search text is never stored.</p></div></div></div>
+      <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M251.77,73a8,8,0,0,0-8.21.39L208,97.05V72a16,16,0,0,0-16-16H32A16,16,0,0,0,16,72V184a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V159l35.56,23.71A8,8,0,0,0,248,184a8,8,0,0,0,8-8V80A8,8,0,0,0,251.77,73ZM192,184H32V72H192V184Zm48-22.95-32-21.33V116.28L240,95Z"/></svg></div><div><h4>Detail that works on a phone</h4><p class="small muted">Outcome, duration, author and reviewer with the review date, practical steps, transcripts and captions. Video never starts with sound. "Was this useful?" and one allowed next step.</p></div></div></div>
+      <div class="card"><div class="icon-row"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40ZM128,214.8C109.74,204.16,32,155.69,32,102A46.06,46.06,0,0,1,78,56c19.45,0,35.78,10.36,42.6,27a8,8,0,0,0,14.8,0c6.82-16.67,23.15-27,42.6-27a46.06,46.06,0,0,1,46,46C224,155.61,146.24,204.15,128,214.8Z"/></svg></div><div><h4>Private by default</h4><p class="small muted">Up to three interests, optional and editable. Continuation history can be switched off, which deletes it. Nothing here infers a health condition.</p></div></div></div>
+    </div>
+  </div>
+  <div class="lane-label" style="margin-top:6mm">Required states, each with translated copy and a test</div>
+  <table class="data compact">
+    <tbody>
+      <tr><td class="key" style="width:38mm">Loading</td><td>Skeleton and an announcement; the previous employer's content disappears at once</td><td class="key" style="width:38mm">Language switch</td><td>Every screen reloads in the new language; nothing stays in the old one</td></tr>
+      <tr><td class="key">Saved item withdrawn</td><td>"This content is no longer available", with a replacement only if the reader may see it</td><td class="key">Media failure</td><td>Retry, transcript, and a report that carries only a safe error code</td></tr>
+      <tr><td class="key">No results</td><td>Related topics and "Suggest content"; nothing is sent until the employee confirms</td><td class="key">Session expired</td><td>Sign in again and return; form text is never put in the address</td></tr>
+    </tbody>
+  </table>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">9</span></div>
+</section>
+
+<!-- ============ 10 · MEDIA ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Media</span><h2>Files that only reach their audience</h2></div><div class="meta">Local storage in development, a private S3 bucket in staging and production, both behind the same interface.</div></div>
+  <div class="journey">
+    <div class="hop"><div class="who">Upload</div><div class="what">Staff stream a file through the API into a private quarantine area. Size is capped per kind before anything is read.</div></div>
+    <div class="hop"><div class="who">Check</div><div class="what">The real file type is read from its bytes; the malware verdict comes from GuardDuty in AWS. SVG, HTML and executables are refused.</div></div>
+    <div class="hop"><div class="who">Process</div><div class="what">Metadata such as GPS is stripped; images get phone and desktop renditions; audio and video are probed for length and rewritten for streaming.</div></div>
+    <div class="hop"><div class="who">Approve</div><div class="what soft">Rights, licence, consent and alternative text sit on the asset. A revision with an unready or expired file cannot be submitted or published.</div></div>
+    <div class="hop"><div class="who">Deliver</div><div class="what brand">Every request, including every byte range of a video, re-checks the reader's access. No public links, no shared caches.</div></div>
+  </div>
+  <table class="data compact" style="margin-top:6mm">
+    <thead><tr><th>Kind</th><th>Accepted</th><th class="num">Size limit</th><th class="num">Length limit</th><th>Delivered as</th></tr></thead>
+    <tbody>
+      <tr><td class="key">Image</td><td>JPEG, PNG, WebP</td><td class="num">15 MB</td><td class="num">n/a</td><td>WebP and JPEG renditions with focal point</td></tr>
+      <tr><td class="key">Audio</td><td>MP3, M4A</td><td class="num">100 MB</td><td class="num">30 min</td><td>Streamed with seeking; transcript in the text</td></tr>
+      <tr><td class="key">Video</td><td>MP4 (H.264, AAC)</td><td class="num">300 MB</td><td class="num">10 min</td><td>Streamed with seeking; captions and transcript</td></tr>
+      <tr><td class="key">Captions</td><td>WebVTT</td><td class="num">512 KB</td><td class="num">n/a</td><td>Caption track, on by default when available</td></tr>
+      <tr><td class="key">PDF</td><td>PDF, optional extra only</td><td class="num">20 MB</td><td class="num">n/a</td><td>A download in a sandbox; never the only format</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warning" style="margin-top:6mm"><strong>What revocation can and cannot do</strong>New requests are refused the moment access ends. Bytes already downloaded, or a PDF saved by the reader, cannot be recalled; the product copy never promises otherwise. Faster signed delivery is a later decision with its own revocation window.</div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">10</span></div>
+</section>
+
+<!-- ============ 11 · POLLS AND REQUESTS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Engagement</span><h2>Polls, feedback and requests</h2></div><div class="meta">Each signal has an owner and an outcome the employee can see.</div></div>
+  <div class="grid cols-2">
+    <div class="stack">
+      <div class="card"><h3>Interest polls</h3><ul class="small"><li>One question, two to five options and "none of these"; open seven to fourteen days</li><li>Topic interest or format preference only; never a health question</li><li>One current answer per person, changeable until close; no history kept</li><li>Eligibility fixed at opening; new members join the next poll</li><li>At most one poll per person per week; a skipped poll stays away</li><li>Closing records a decision and, where possible, links what was published</li></ul></div>
+      <div class="card tinted"><h3>What the employee is told</h3><p class="small">"Participation is optional. Your employer cannot see your individual response. NestSelf uses responses for aggregate content planning." The word anonymous is never used: votes are pseudonymous, keyed per poll with a secret the editors do not hold.</p></div>
+    </div>
+    <div class="stack">
+      <div class="card"><h3>Editorial requests</h3><p class="small muted" style="margin-bottom:2mm">Suggest a topic, another format or a translation, register interest in an event topic, or report a problem with a resource. Structured choices are enough to submit.</p>
+        <table class="data compact"><tbody>
+          <tr><td class="key">Received</td><td>Triage within 2 business days</td></tr>
+          <tr><td class="key">Waiting for you</td><td>One reminder after 7 days; closed after 14 without reply</td></tr>
+          <tr><td class="key">Reviewing, planned, preparing</td><td>An owner, a next action and a due date at every step</td></tr>
+          <tr><td class="key">Available</td><td>A link the sender can actually open</td></tr>
+          <tr><td class="key">Closed with an explanation</td><td>A reason, and an alternative where one exists</td></tr>
+        </tbody></table></div>
+      <div class="callout"><strong>Editors work from a brief</strong>Any free text the employee adds goes to the confidential domain; a professional turns it into a sanitized brief. Editors never see who asked or what they wrote.</div>
+    </div>
+  </div>
+  <div class="grid cols-3" style="margin-top:5mm">
+    <div class="tile"><div class="value">10</div><div class="label">distinct participants before any distribution appears, internally or to an employer</div></div>
+    <div class="tile"><div class="value">5</div><div class="label">business days for a decision or meaningful update, on the Belgrade calendar with holidays</div></div>
+    <div class="tile"><div class="value">3</div><div class="label">answers to "Was this useful?": yes, partly, no, with a predefined reason</div></div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">11</span></div>
+</section>
+
+<!-- ============ 12 · GENERAL QUESTIONS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Questions</span><h2>A general question reaches one professional</h2></div><div class="meta">Professional answers to general educational questions. Not therapy, not a chat, not an emergency channel.</div></div>
+  <div class="grid cols-2">
+    <div>
+      <div class="lane-label" style="margin-top:0">Who can open the original question</div>
+      <div class="doors">
+        <div class="door"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg></div><div><strong>The employee who asked</strong><small>Their question, clarifications and the approved reply</small></div></div>
+        <div class="door"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M168,112a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,112Zm-8,24H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Zm72-8A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"/></svg></div><div><strong>The professional who claimed it</strong><small>Through the case assignment the claim creates; gone when reassigned</small></div></div>
+        <div class="door"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg></div><div><strong>Time-limited emergency access</strong><small>Separately approved and logged, from the auth strategy</small></div></div>
+        <div class="door closed"><div class="icon-chip"><svg class="icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></div><div><strong>Everyone else</strong><small>Platform owner, CMS staff, client success, HR, managers: refused in code, even with the id</small></div></div>
+      </div>
+    </div>
+    <div>
+      <ol class="steps">
+        <li><h4>Ask</h4><p>Subject, language and up to 1,500 characters. No attachments. The form says who reads it, that the employer does not, and where urgent help is.</p></li>
+        <li><h4>Claim</h4><p>Queues per discipline show only safe details. Claiming is atomic and creates the read path; the first read needs a fresh sign-in.</p></li>
+        <li><h4>Clarify, at most twice</h4><p>One clear question per round, so the flow never becomes an unpromised chat.</p></li>
+        <li><h4>Answer</h4><p>Private, attributed and dated, reviewed by a second professional where the subject requires it.</p></li>
+        <li><h4>Maybe publish a generalized version</h4><p>Only with the employee's yes to the exact text. Declining changes nothing about their answer.</p></li>
+      </ol>
+    </div>
+  </div>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <div class="card"><h3>Before claiming</h3><p class="small muted">The queue shows the discipline, language, waiting time in business hours, due date and clarification round. Never the question, never the asker's name, never the employer's name.</p></div>
+    <div class="card tinted"><h3>After claiming</h3><p class="small">The professional reads the question and replies privately. Every read is audited without copying the text. If the claim sits idle for two business days, it returns to the queue and the former reader loses access.</p></div>
+  </div>
+  <div class="grid cols-4" style="margin-top:5mm">
+    <div class="tile"><div class="value">1,500</div><div class="label">characters per question; no attachments</div></div>
+    <div class="tile"><div class="value">2</div><div class="label">clarification rounds at most</div></div>
+    <div class="tile"><div class="value">5</div><div class="label">business days target for the first answer</div></div>
+    <div class="tile"><div class="value">0</div><div class="label">emergency numbers hard-coded; the help block is a maintained, reviewed item</div></div>
+  </div>
+  <div class="callout warning" style="margin-top:5mm"><strong>The form stays closed until the queue is staffed</strong>Each discipline needs a named owner and backup with weekly capacity before questions open (founder decision F-C03). Until then the screen explains honestly what is available instead.</div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">12</span></div>
+</section>
+
+<!-- ============ 13 · PRIVACY AND RETENTION ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Privacy</span><h2>Who sees what, and for how long</h2></div><div class="meta">Periods are configurable and pending legal review; the code reads them from the retention table.</div></div>
+  <table class="data compact matrix">
+    <thead><tr><th style="width:44mm">Information</th><th>Employee</th><th>CMS staff</th><th>Assigned professional</th><th>HR and managers</th></tr></thead>
+    <tbody>
+      <tr><td>Published resource</td><td><span class="pill success">if available</span></td><td><span class="pill success">in scope</span></td><td><span class="pill success">as a reader</span></td><td><span class="pill success">as a reader</span></td></tr>
+      <tr><td>Drafts and reviews</td><td><span class="pill danger">no</span></td><td><span class="pill success">by grant</span></td><td><span class="pill soft">review only</span></td><td><span class="pill danger">no</span></td></tr>
+      <tr><td>Saved items and history</td><td><span class="pill success">own</span></td><td><span class="pill danger">no</span></td><td><span class="pill danger">no</span></td><td><span class="pill danger">no</span></td></tr>
+      <tr><td>Question or request free text</td><td><span class="pill success">own</span></td><td><span class="pill danger">no</span></td><td><span class="pill warning">claimed only</span></td><td><span class="pill danger">no</span></td></tr>
+      <tr><td>Sanitized brief</td><td><span class="pill soft">outcome</span></td><td><span class="pill success">assigned</span></td><td><span class="pill soft">as needed</span></td><td><span class="pill danger">no</span></td></tr>
+      <tr><td>Individual poll choice</td><td><span class="pill success">own</span></td><td><span class="pill danger">no</span></td><td><span class="pill danger">no</span></td><td><span class="pill danger">no</span></td></tr>
+      <tr><td>Aggregates</td><td><span class="pill soft">decisions</span></td><td><span class="pill success">suppressed</span></td><td><span class="pill danger">no</span></td><td><span class="pill warning">monthly, k = 10</span></td></tr>
+    </tbody>
+  </table>
+  <div class="grid cols-2" style="margin-top:6mm">
+    <table class="data compact">
+      <thead><tr><th>Data</th><th>Proposed retention</th></tr></thead>
+      <tbody>
+        <tr><td class="key">Archived revisions</td><td>24 months</td></tr>
+        <tr><td class="key">Saved items</td><td>Until removed; 30 days after membership ends</td></tr>
+        <tr><td class="key">Continuation history</td><td>90 days of inactivity; off deletes it</td></tr>
+        <tr><td class="key">Individual poll answers</td><td>90 days after the poll closes</td></tr>
+        <tr><td class="key">Question and note text</td><td>90 days after closure</td></tr>
+        <tr><td class="key">Request metadata</td><td>12 months; one setting, changed without a deploy</td></tr>
+        <tr><td class="key">Usage events</td><td>90 days; monthly aggregates 12 months</td></tr>
+      </tbody>
+    </table>
+    <div class="stack">
+      <div class="callout"><strong>Not in logs, not in links</strong>Search text, questions, answers, poll choices and notes are redacted from logs, error reports, audit details, event payloads and URLs, and a test proves it.</div>
+      <div class="callout"><strong>Neutral messages</strong>Email says "You have a new update in NestSelf" and links to a screen that checks access again. No topic, no question text.</div>
+      <div class="callout"><strong>No tracking</strong>No advertising pixels, session replay or input recording. Usage events are day-level and pseudonymous.</div>
+    </div>
+  </div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">13</span></div>
+</section>
+
+<!-- ============ 14 · DELIVERY ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Delivery</span><h2>Four milestones and a pilot week</h2></div><div class="meta">Two engineers with parallel agents. About ten calendar weeks, one more than the epic estimated.</div></div>
+  <div class="timeline">
+    <div class="phase active"><span class="eyebrow">Weeks 1–3</span><h3>M1 First vertical slice</h3><ul><li>Dependencies and the editor spike first</li><li>Employer context and cache fix</li><li>Actions, templates, category scope</li><li>Core tables and migration</li><li>Block schema, renderer, minimal editor</li><li>Images, availability, detail, saved</li></ul><div class="exit"><b>Exit</b> Admin publishes; Employee A reads and saves; Employee B is refused, image included.</div></div>
+    <div class="phase"><span class="eyebrow">Weeks 4–5</span><h3>M2 A usable library</h3><ul><li>Review, scheduling, withdrawal</li><li>Taxonomy, collections, Home slots</li><li>Search in both scripts</li><li>Audio, video, captions, S3</li><li>Languages and preferences</li></ul><div class="exit"><b>Exit</b> A live revision stays live while its successor is reviewed; phones and languages work.</div></div>
+    <div class="phase"><span class="eyebrow">Weeks 6–7</span><h3>M3 Feedback and requests</h3><ul><li>Feedback and interest polls</li><li>Suppression service</li><li>Confidential module skeleton</li><li>Requests, calendar, queues</li><li>Notifications and recovery</li></ul><div class="exit"><b>Exit</b> A poll reaches a decision; one request is fulfilled, another closed with a reason.</div></div>
+    <div class="phase"><span class="eyebrow">Weeks 8–9</span><h3>M4 Questions and controls</h3><ul><li>General questions and claims</li><li>Step-up on first read</li><li>Publication permission</li><li>Metrics and employer summary</li><li>Retention and freshness tasks</li></ul><div class="exit"><b>Exit</b> A professional answer with no admin or HR read path; the full scenario passes.</div></div>
+    <div class="phase"><span class="eyebrow">Week 10</span><h3>Pilot preparation</h3><ul><li>Performance and accessibility checks</li><li>Runbooks and owners</li><li>Starter content and staffed queues</li></ul><div class="exit"><b>Exit</b> Evidence of readiness for real employees, not an empty library.</div></div>
+  </div>
+  <div class="grid cols-3" style="margin-top:6mm">
+    <div class="tile"><div class="value">15</div><div class="label">steps in the acceptance scenario, run end to end in Playwright and in staging</div></div>
+    <div class="tile"><div class="value">22</div><div class="label">availability golden cases, plus thirty new decision-engine cases</div></div>
+    <div class="tile"><div class="value">500</div><div class="label">milliseconds P95 target for list and detail at 100 sessions, to be measured</div></div>
+  </div>
+  <div class="callout" style="margin-top:5mm"><strong>Why ten weeks</strong>The epic's two-week first slice assumed an editor, a media path and a content schema already existed. None do, so M1 takes three weeks on its critical path. The remaining milestones keep the epic's two-week rhythm.</div>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">14</span></div>
+</section>
+
+<!-- ============ 15 · DECISIONS ============ -->
+<section class="page">
+  <div class="page-head"><div><span class="eyebrow">Next</span><h2>Decisions taken, and what remains</h2></div><div class="meta">The founder answered the open product questions on 24 October 2026. Legal review remains before real employees use the library.</div></div>
+  <div class="needs">
+    <div class="card"><h3>Every resource in all four languages <span class="pill success">decided</span></h3><p>Readers always see their chosen language. Serbian Latin, Hungarian and English are written and reviewed; Cyrillic is generated from the approved Latin text, as the interface already is.</p><div class="default"><b>Effect:</b> a resource publishes only when all three are approved; writing and review effort roughly triples.</div></div>
+    <div class="card"><h3>Questions open only when staffed <span class="pill success">accepted</span></h3><p>Each discipline needs a named owner and backup with weekly capacity.</p><div class="default"><b>Effect:</b> the question form explains what is available until then.</div></div>
+    <div class="card"><h3>Request metadata kept 12 months <span class="pill success">decided</span></h3><p>The value is one setting in the retention table.</p><div class="default"><b>Effect:</b> a command changes it without a deployment, and the change is audited.</div></div>
+    <div class="card"><h3>Library on for every client <span class="pill success">accepted</span></h3><p>General questions and event interest stay off per client until they are staffed.</p><div class="default"><b>Effect:</b> client success switches them on later.</div></div>
+    <div class="card"><h3>Schedule <span class="pill soft">assumed</span></h3><p>About ten calendar weeks to a pilot-ready V1, one more than the epic's estimate.</p><div class="default"><b>Default:</b> keep V1 scope; accept the extra week.</div></div>
+    <div class="card"><h3>Content capacity <span class="pill warning">needed</span></h3><p>Serbian, Hungarian and English writers and professional reviewers for about forty starter resources.</p><div class="default"><b>Needed by:</b> M2, when the library opens to the first synthetic pilot.</div></div>
+  </div>
+  <div class="lane-label" style="margin-top:6mm">For legal counsel and the DPO</div>
+  <table class="data compact">
+    <tbody>
+      <tr><td class="key" style="width:18mm">L-C01</td><td>Can a general educational question ever count as health documentation in Serbia or Hungary? Default: no; a record that becomes a professional case is reclassified.</td></tr>
+      <tr><td class="key">L-C02</td><td>Lawful basis and notice text for pseudonymous votes, feedback and usage events, which remain personal data under GDPR.</td></tr>
+      <tr><td class="key">L-C03</td><td>Licence and consent records for stock, generated and commissioned media, and consent withdrawal.</td></tr>
+      <tr><td class="key">L-C04, L-C05</td><td>The retention periods, and the threshold of ten for employer summaries.</td></tr>
+    </tbody>
+  </table>
+  <div class="page-footer"><span>NestSelf · CMS and employee experience strategy</span><span class="num">15</span></div>
+</section>
+
+</body>
+</html>

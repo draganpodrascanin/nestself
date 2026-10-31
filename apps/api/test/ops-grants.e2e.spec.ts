@@ -55,7 +55,10 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
     await app.init();
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
-    idp.seedUsers([{ email: NIKOLA_EMAIL, password: TEMP_PASSWORD, temporaryPassword: TEMP_PASSWORD }]);
+    idp.seedUsers([
+      { email: NIKOLA_EMAIL, password: TEMP_PASSWORD, temporaryPassword: TEMP_PASSWORD },
+      { email: 'user_jovan@example.com' }, // employee for context_mismatch test
+    ]);
     const idpUser = await idp.findUserByEmail(NIKOLA_EMAIL);
     if (!idpUser) throw new Error('FakeIDP user not found');
     await testDb.db.insert(externalIdentities).values({
@@ -64,6 +67,16 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
       subject: idpUser.sub,
       cognitoUsername: idpUser.username,
       email: NIKOLA_EMAIL,
+      emailVerified: true,
+    });
+    const jovanIdp = await idp.findUserByEmail('user_jovan@example.com');
+    if (!jovanIdp) throw new Error('FakeIDP user_jovan not found');
+    await testDb.db.insert(externalIdentities).values({
+      userId: 'user_jovan',
+      provider: 'cognito',
+      subject: jovanIdp.sub,
+      cognitoUsername: jovanIdp.username,
+      email: 'user_jovan@example.com',
       emailVerified: true,
     });
 
@@ -411,23 +424,23 @@ describe.skipIf(!shouldRun)('Operations grant administration (e2e)', () => {
     });
 
     it('outside the operations context both routes are refused with context_mismatch', async () => {
-      const toPersonal = await nikola.agent
-        .post('/api/auth/context')
-        .set('X-CSRF-Token', nikola.csrf)
-        .send({ context: { kind: 'personal' } });
-      expect(toPersonal.status).toBe(200);
+      // Ruling E: staff-only users (like nikola) can only be in operations
+      // context, so we sign in an employee via OTP who lands in personal
+      // context and verify ops endpoints reject them.
+      const empAgent = request.agent(app.getHttpServer());
+      const start = await empAgent.post('/api/auth/email-otp/start').send({ email: 'user_jovan@example.com' });
+      expect(start.status).toBe(200);
+      const code = idp.sentCodes.filter((c: { email: string }) => c.email === 'user_jovan@example.com').pop()!.code;
+      const verify = await empAgent
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: start.body.challengeToken, code });
+      expect(verify.status).toBe(200);
 
-      const list = await nikola.agent.get('/api/ops/organizations');
+      const list = await empAgent.get('/api/ops/organizations');
       expect(list.status).toBe(403);
       expect(list.body.code).toBe('context_mismatch');
-      const one = await nikola.agent.get(`/api/ops/organizations/${ORG}`);
+      const one = await empAgent.get(`/api/ops/organizations/${ORG}`);
       expect(one.status).toBe(403);
-
-      const back = await nikola.agent
-        .post('/api/auth/context')
-        .set('X-CSRF-Token', nikola.csrf)
-        .send({ context: { kind: 'operations' } });
-      expect(back.status).toBe(200);
     });
 
     it('unauthenticated requests are 401', async () => {

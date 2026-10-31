@@ -557,5 +557,21 @@
     "back": "Vissza a beszélgetéseimhez",
     "detailTitle": "Beszélgetés a(z) {{id}} esetről",
     "detailTitleLoading": "Beszélgetés"
+  },
+  "contextSwitcher": {
+    "label": "Munkaterület váltása",
+    "personal": "Saját terület",
+    "personalWithOrg": "Saját terület · {{orgName}}",
+    "organization": "Kezelés · {{orgName}}",
+    "expert": "Szakértő",
+    "operations": "Operációk",
+    "switchFailed": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra.",
+    "current": "Aktuális",
+    "switching": "Munkaterület váltása…",
+    "error": {
+      "org_context_expired": "A tagsága ebben a szervezetben lejárt.",
+      "invalid_context": "Ez a munkaterület nem elérhető az Ön számára.",
+      "unknown": "A munkaterület váltása nem sikerült. Kérjük, próbálja újra."
+    }
   }
 }

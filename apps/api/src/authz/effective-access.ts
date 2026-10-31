@@ -26,9 +26,18 @@ import type {
   Resource,
   GrantInput,
   GrantCondition,
+  Workspace,
 } from '@nestself/contracts';
-import { ACTION_LIST } from '@nestself/contracts';
+import { ACTION_LIST, PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { authorize } from './authorize.js';
+
+// ---------------------------------------------------------------------------
+// Template-workspace lookup (used by context-scoped filtering)
+// ---------------------------------------------------------------------------
+
+const TEMPLATE_WORKSPACE = new Map<string, Workspace>(
+  PERMISSION_TEMPLATES.map((t) => [t.key, t.workspace]),
+);
 
 /**
  * Enumerate the effective access entries for a principal in the current
@@ -187,4 +196,47 @@ function syntheticResource(grant: GrantInput): Resource {
   }
 
   return resource;
+}
+
+// ---------------------------------------------------------------------------
+// Context-scoped effective actions (Defect 2, T-C1.02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the effective actions filtered by the principal's active context
+ * workspace:
+ *
+ * - **personal**: exclude grants whose template workspace is `'organization'`
+ * - **organization**: include all grants (no workspace filter)
+ * - **expert**: include only grants from `'expert'` workspace templates
+ * - **operations**: include only grants from `'operations'` workspace templates
+ *
+ * One helper used by session-endpoints, identity-resolution and profile.
+ */
+export function contextScopedEffectiveActions(
+  principal: Principal,
+  ctx: AuthorizationContext,
+): Action[] {
+  const kind = principal.context.kind;
+  let filteredGrants = ctx.grants;
+
+  if (kind === 'personal') {
+    filteredGrants = ctx.grants.filter((g) => {
+      const ws = g.templateKey ? TEMPLATE_WORKSPACE.get(g.templateKey) : undefined;
+      return ws !== 'organization';
+    });
+  } else if (kind === 'expert') {
+    filteredGrants = ctx.grants.filter((g) => {
+      const ws = g.templateKey ? TEMPLATE_WORKSPACE.get(g.templateKey) : undefined;
+      return ws === 'expert';
+    });
+  } else if (kind === 'operations') {
+    filteredGrants = ctx.grants.filter((g) => {
+      const ws = g.templateKey ? TEMPLATE_WORKSPACE.get(g.templateKey) : undefined;
+      return ws === 'operations';
+    });
+  }
+  // organization: no filtering — all grants visible
+
+  return effectiveActions(principal, { ...ctx, grants: filteredGrants });
 }

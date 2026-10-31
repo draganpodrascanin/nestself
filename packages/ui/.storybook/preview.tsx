@@ -1,5 +1,6 @@
 import './storybook.css';
 import { applyTheme } from '@nestself/tokens/theme';
+import { AnnouncerProvider } from '../src/components/foundation/live-region/LiveRegion';
 import type { Decorator, Preview } from '@storybook/react-vite';
 
 const withTheme: Decorator = (Story, context) => {
@@ -10,9 +11,11 @@ const withTheme: Decorator = (Story, context) => {
   applyTheme({ palette, mode, font });
 
   return (
-    <div data-app-root className="bg-canvas text-text p-6">
-      <Story />
-    </div>
+    <AnnouncerProvider>
+      <div data-app-root className="bg-canvas text-text p-6">
+        <Story />
+      </div>
+    </AnnouncerProvider>
   );
 };
 

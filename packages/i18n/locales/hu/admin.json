@@ -165,11 +165,15 @@
       "client_operations": "Ügyfélműveletek",
       "content_author": "Tartalomszerző",
       "content_publisher": "Tartalomkiadó",
+      "content_reviewer": "Tartalomlektor",
+      "editorial_lead": "Szerkesztővezető",
       "service_coordinator": "Szolgáltatáskoordinátor",
       "support_operator": "Ügyfélszolgálati operátor",
       "nestself_finance": "NestSelf pénzügy",
       "expert": "Szakértő",
       "expert_lead": "Vezető szakértő",
+      "intake_professional": "Beérkezési szakember",
+      "intake_lead": "Beérkezési vezető",
       "employer_owner": "Munkáltatói tulajdonos",
       "hr_admin": "HR-adminisztrátor",
       "team_manager": "Csapatvezető",
@@ -738,6 +742,13 @@
       "clientIdRequired": "Add meg a kliensazonosítót.",
       "domainInvalid": "Adj meg egy domaint, például example.com, @ és https:// nélkül.",
       "nothingChanged": "Módosíts legalább egy mezőt."
+    }
+  },
+  "contextSwitcher": {
+    "error": {
+      "org_context_expired": "A szervezeti tagságod lejárt.",
+      "invalid_context": "Ez a munkaterület nem elérhető számodra.",
+      "unknown": "Nem sikerült váltani a munkaterületet. Kérjük, próbáld újra."
     }
   }
 }

@@ -165,11 +165,15 @@
       "client_operations": "Client operations",
       "content_author": "Content author",
       "content_publisher": "Content publisher",
+      "content_reviewer": "Content reviewer",
+      "editorial_lead": "Editorial lead",
       "service_coordinator": "Service coordinator",
       "support_operator": "Support operator",
       "nestself_finance": "NestSelf finance",
       "expert": "Expert",
       "expert_lead": "Expert lead",
+      "intake_professional": "Intake professional",
+      "intake_lead": "Intake lead",
       "employer_owner": "Employer owner",
       "hr_admin": "HR administrator",
       "team_manager": "Team manager",
@@ -742,6 +746,13 @@
       "clientIdRequired": "Enter the client ID.",
       "domainInvalid": "Enter a domain such as example.com, without @ or https://.",
       "nothingChanged": "Change at least one field."
+    }
+  },
+  "contextSwitcher": {
+    "error": {
+      "org_context_expired": "Your membership in this organisation has ended.",
+      "invalid_context": "This workspace is not available to you.",
+      "unknown": "Could not switch workspace. Please try again."
     }
   }
 }

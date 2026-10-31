@@ -55,6 +55,7 @@ function createGuard(mocks: ReturnType<typeof createMocks>) {
     mocks.contextLoader as never,
     mocks.audit as never,
     mocks.store as never,
+    { get: vi.fn() } as never,
   );
 }
 
@@ -241,6 +242,112 @@ describe('AuthorizationGuard', () => {
       expect((err as ApiHttpException).getStatus()).toBe(401);
     }
   });
+  // -------------------------------------------------------------------------
+  // Context expiry mapping (T-C1.02, AUTHZ-R-32)
+  // -------------------------------------------------------------------------
+
+  describe('invalid_context mapping', () => {
+    const ENDED_MEMBERSHIP = {
+      membershipId: 'm-1', orgId: 'org-1', orgUnitId: null,
+      status: 'ENDED' as const, startDate: '2026-01-01', endDate: '2026-02-01',
+    };
+
+    async function denyWithInvalidContext(principal: unknown) {
+      const meta = {
+        action: 'wellbeing_checkin:read' as const,
+        resolver: vi.fn().mockResolvedValue(RESOURCE),
+      };
+      mocks.reflector.getAllAndOverride
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(meta);
+      mockAuthorize.mockReturnValue({
+        allowed: false, grantIds: [], assignmentIds: [], denialReason: 'invalid_context', explanation: [],
+      });
+      try {
+        await guard.canActivate(mockContext({ principal, params: {} }));
+      } catch (err) {
+        return err as ApiHttpException;
+      }
+      return expect.unreachable('Should have thrown');
+    }
+
+    function expectAudited(reason: string) {
+      expect(mocks.audit.record).toHaveBeenCalledTimes(1);
+      expect(mocks.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'access.denied',
+          result: 'DENIED',
+          orgId: 'org-1',
+          details: expect.objectContaining({ reason }),
+        }),
+      );
+    }
+
+    it('personal context with an orgId and no current membership: 403 org_context_expired', async () => {
+      const principal = { ...PRINCIPAL, memberships: [], context: { kind: 'personal' as const, orgId: 'org-1' } };
+      const err = await denyWithInvalidContext(principal);
+      expect(err).toBeInstanceOf(ApiHttpException);
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('org_context_expired');
+      expectAudited('org_context_expired');
+    });
+
+    it('organization context with an ended membership: 403 org_context_expired, not the 404 non-disclosure answer', async () => {
+      const principal = {
+        ...PRINCIPAL,
+        memberships: [ENDED_MEMBERSHIP],
+        context: { kind: 'organization' as const, orgId: 'org-1' },
+      };
+      // Precondition: the visibility check alone would hide the org (404).
+      const err = await denyWithInvalidContext(principal);
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('org_context_expired');
+      expectAudited('org_context_expired');
+    });
+
+    it('the same ended membership with a non-context denial still answers 404', async () => {
+      const principal = {
+        ...PRINCIPAL,
+        memberships: [ENDED_MEMBERSHIP],
+        context: { kind: 'organization' as const, orgId: 'org-1' },
+      };
+      const meta = { action: 'wellbeing_checkin:read' as const, resolver: vi.fn().mockResolvedValue(RESOURCE) };
+      mocks.reflector.getAllAndOverride
+        .mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValueOnce(meta);
+      mockAuthorize.mockReturnValue({
+        allowed: false, grantIds: [], assignmentIds: [], denialReason: 'no_grant', explanation: [],
+      });
+      await expect(guard.canActivate(mockContext({ principal, params: {} }))).rejects.toMatchObject({
+        code: 'not_found',
+      });
+    });
+
+    it('expert context that is invalid: 403 invalid_context', async () => {
+      const principal = { ...PRINCIPAL, context: { kind: 'expert' as const } };
+      const err = await denyWithInvalidContext(principal);
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('invalid_context');
+      expectAudited('invalid_context');
+    });
+
+    it('operations context that is invalid: 403 invalid_context', async () => {
+      const principal = { ...PRINCIPAL, context: { kind: 'operations' as const } };
+      const err = await denyWithInvalidContext(principal);
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('invalid_context');
+      expectAudited('invalid_context');
+    });
+
+    it('bare personal context that is invalid: 403 invalid_context', async () => {
+      const principal = { ...PRINCIPAL, memberships: [], context: { kind: 'personal' as const } };
+      const err = await denyWithInvalidContext(principal);
+      expect(err.getStatus()).toBe(403);
+      expect(err.code).toBe('invalid_context');
+      expectAudited('invalid_context');
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Step-up freshness (T-2.6)
   // -------------------------------------------------------------------------

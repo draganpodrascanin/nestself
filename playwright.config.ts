@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { ADMIN_PORT, ADMIN_URL, API_URL, MARKETING_PORT, MARKETING_URL, WORKSPACE_PORT, WORKSPACE_URL } from './e2e/ports';
 
 const CI = !!process.env.CI;
 export default defineConfig({
@@ -12,7 +13,7 @@ export default defineConfig({
   outputDir: 'e2e/test-results',
   timeout: 60_000,
   expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled' } },
-  use: { baseURL: 'http://localhost:3000', locale: 'en-GB', timezoneId: 'Europe/Belgrade', reducedMotion: 'reduce', trace: 'retain-on-failure' },
+  use: { baseURL: MARKETING_URL, locale: 'en-GB', timezoneId: 'Europe/Belgrade', reducedMotion: 'reduce', trace: 'retain-on-failure' },
   projects: [
     {
       name: 'mobile-390',
@@ -31,8 +32,26 @@ export default defineConfig({
     },
   ],
   webServer: [
-    { command: 'pnpm --filter @nestself/marketing dev', url: 'http://localhost:3000', reuseExistingServer: !CI, timeout: 180_000 },
-    { command: 'pnpm --filter @nestself/workspace dev', url: 'http://localhost:5173', reuseExistingServer: !CI, timeout: 180_000 },
-    { command: 'pnpm --filter @nestself/admin dev', url: 'http://localhost:5174', reuseExistingServer: !CI, timeout: 180_000 },
+    {
+      command: 'pnpm --filter @nestself/marketing dev',
+      url: MARKETING_URL,
+      reuseExistingServer: !CI,
+      timeout: 180_000,
+      env: { PORT: String(MARKETING_PORT) },
+    },
+    {
+      command: 'pnpm --filter @nestself/workspace dev',
+      url: WORKSPACE_URL,
+      reuseExistingServer: !CI,
+      timeout: 180_000,
+      env: { VITE_PORT: String(WORKSPACE_PORT), VITE_API_PROXY_TARGET: API_URL },
+    },
+    {
+      command: 'pnpm --filter @nestself/admin dev',
+      url: ADMIN_URL,
+      reuseExistingServer: !CI,
+      timeout: 180_000,
+      env: { VITE_PORT: String(ADMIN_PORT), VITE_API_PROXY_TARGET: API_URL },
+    },
   ],
 });

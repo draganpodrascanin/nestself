@@ -69,6 +69,12 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
     this.pool = new Pool({
       connectionString,
       max: configService.get<number>('DATABASE_POOL_MAX', 10),
+      // Fail fast on pool exhaustion instead of hanging indefinitely.
+      // A caller that holds a connection and requests another from the
+      // same pool inside the same async context (e.g. withOrgScope +
+      // dbService.db) will deadlock under load.  The timeout surfaces
+      // the bug as a 503 rather than an infinite wait.
+      connectionTimeoutMillis: configService.get<number>('DATABASE_POOL_TIMEOUT_MS', 10_000),
       application_name: 'nestself-api',
     });
     this.pool.on('error', (err) => {

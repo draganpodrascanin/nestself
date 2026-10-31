@@ -19,7 +19,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
 import { ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
-import type { MeResponse, Principal } from '@nestself/contracts';
+import type { AvailableContextEntry, MeResponse, Principal } from '@nestself/contracts';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
 import { ToastProvider } from '@nestself/ui';
 import { AuthProvider } from '../../auth';
@@ -35,10 +35,20 @@ afterEach(() => {
 });
 
 const ADMIN = SAMPLE_PRINCIPALS.admin;
-const OPS_ME: MeResponse = { principal: ADMIN.principal, effectiveActions: [...ADMIN.effectiveActions] };
+
+// The admin sample fixture has only [{ kind: 'operations' }] in
+// availableContexts. For the picker to render (it needs >=2 options), we add
+// a personal context entry so both tests can switch between the two.
+const ADMIN_CONTEXTS: AvailableContextEntry[] = [
+  { kind: 'operations' },
+  { kind: 'personal', orgId: 'org_admin_home', orgName: 'Personal' },
+];
+
+const OPS_ME: MeResponse = { principal: ADMIN.principal, effectiveActions: [...ADMIN.effectiveActions], availableContexts: ADMIN_CONTEXTS };
 const PERSONAL_ME: MeResponse = {
   principal: { ...ADMIN.principal, context: { kind: 'personal' } },
   effectiveActions: ['preferences.manage'],
+  availableContexts: ADMIN_CONTEXTS,
 };
 
 function fakeClient() {
@@ -144,22 +154,14 @@ describe('useOperationsContext', () => {
 describe('a context that is no longer valid (admin)', () => {
   it('refreshes after invalid_context and the ended organization disappears from the menu', async () => {
     const user = userEvent.setup();
+    // The picker derives options from availableContexts, not memberships.
+    // Initially the admin has an extra org context that will become invalid.
     const withOrg: MeResponse = {
       ...OPS_ME,
-      principal: {
-        ...OPS_ME.principal,
-        memberships: [
-          {
-            membershipId: 'mem_x',
-            orgId: 'org_sample',
-            orgName: 'Example d.o.o.',
-            orgUnitId: null,
-            status: 'ACTIVE',
-            startDate: '2025-01-01T00:00:00.000Z',
-            endDate: null,
-          },
-        ],
-      },
+      availableContexts: [
+        { kind: 'operations' },
+        { kind: 'organization', orgId: 'org_sample', orgName: 'Example d.o.o.' },
+      ],
     };
     let current = withOrg;
     const request = vi.fn(async (path: string, init: RequestInit) => {

@@ -53,7 +53,8 @@ function ToastViewport({ dismissLabel }: { dismissLabel: string }) {
               />
             )}
             className={cn(
-              'px-6 py-4 relative rounded-control bg-primary type-body text-on-primary shadow-menu',
+              // pr-12 keeps the text clear of the absolutely placed close button.
+              'pl-6 pr-12 py-4 relative rounded-control bg-primary type-body text-on-primary shadow-menu',
             )}
           >
             <BaseToast.Title className="font-[var(--font-weight-label)]">

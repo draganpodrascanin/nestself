@@ -51,6 +51,9 @@ test.describe('Federated sign-in through the identity provider', () => {
     const hr = await browser.newContext();
     const hrPage = await hr.newPage();
     await signInWithEmailCode(hrPage, WORKSPACE_URL, 'user_ivana@example.com');
+    // HR admins start in their personal context; invitations are an organization action.
+    const switched = await api(hrPage, 'POST', '/api/auth/context', { context: { kind: 'organization', orgId: ORG } });
+    expect(switched.status, `switch to ${ORG}: ${JSON.stringify(switched.body)}`).toBe(200);
     for (const email of [TESTER, INVITED]) {
       const res = await api(hrPage, 'POST', `/api/orgs/${ORG}/invitations`, { email, templateKey: 'employee' });
       expect([201, 409], `invite ${email}: ${JSON.stringify(res.body)}`).toContain(res.status);

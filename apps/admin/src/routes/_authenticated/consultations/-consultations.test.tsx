@@ -24,7 +24,7 @@ function renderAt(path: string, role: keyof typeof SAMPLE_PRINCIPALS) {
   const sample = SAMPLE_PRINCIPALS[role];
   const router = createRouter({
     routeTree,
-    context: { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }), auth: { principal: sample.principal, effectiveActions: sample.effectiveActions } },
+    context: { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }), auth: { principal: sample.principal, effectiveActions: sample.effectiveActions, availableContexts: [] } },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(<RouterProvider router={router} />);

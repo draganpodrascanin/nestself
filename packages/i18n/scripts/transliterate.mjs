@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { transliterateObject } from './transliterate-core.mjs';
+import { transliterateObject } from '../src/transliterate.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const localesDir = join(__dirname, '..', 'locales');

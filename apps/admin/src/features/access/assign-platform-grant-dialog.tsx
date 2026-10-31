@@ -28,10 +28,14 @@ const IDS = {
 
 /**
  * Staff templates. The server takes each at its own scope (`platform` or
- * `assigned_*`), so the scope is shown, not chosen. None of them requires a
- * condition today; a `missing_conditions` answer still renders its message.
+ * `assigned_*`), so the scope is shown, not chosen. This dialog sends no
+ * conditions, so templates with required condition types (content_reviewer)
+ * are not offered until grant administration can collect them (X-D02). A
+ * `missing_conditions` answer still renders its message.
  */
-const STAFF_TEMPLATES = assignableTemplates('operations');
+const STAFF_TEMPLATES = assignableTemplates('operations').filter(
+  (tpl) => tpl.requiredConditionTypes.length === 0,
+);
 
 export interface AssignPlatformGrantDialogProps {
   open: boolean;

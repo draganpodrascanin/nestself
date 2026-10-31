@@ -19,7 +19,7 @@ function renderApprovals() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: sample.principal, effectiveActions: sample.effectiveActions } },
+    context: { queryClient, auth: { principal: sample.principal, effectiveActions: sample.effectiveActions, availableContexts: sample.availableContexts } },
     history: createMemoryHistory({ initialEntries: ['/approvals'] }),
   });
   render(

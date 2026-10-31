@@ -1,7 +1,7 @@
 /**
  * Permission template keys and definitions.
  *
- * The 17 templates bridge the product persona model and the grant-based
+ * The 21 templates bridge the product persona model and the grant-based
  * authorization engine. Each template seeds one or more Grant rows.
  * [D-17, 4.4]
  *
@@ -19,11 +19,15 @@ export const TEMPLATE_KEYS = [
   'client_operations',
   'content_author',
   'content_publisher',
+  'content_reviewer',
+  'editorial_lead',
   'service_coordinator',
   'support_operator',
   'nestself_finance',
   'expert',
   'expert_lead',
+  'intake_professional',
+  'intake_lead',
   'employer_owner',
   'hr_admin',
   'team_manager',
@@ -33,6 +37,21 @@ export const TEMPLATE_KEYS = [
   'employee',
   'event_supplier',
 ] as const;
+
+/**
+ * Review disciplines (cms-ee C-08, ACC-R-07): the values a `content_reviewer`
+ * grant's `categories` condition may hold.
+ */
+export const REVIEW_DISCIPLINES = [
+  'psychological',
+  'legal',
+  'financial',
+  'health',
+  'nutrition',
+  'general',
+] as const;
+
+export type ReviewDiscipline = (typeof REVIEW_DISCIPLINES)[number];
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
@@ -69,7 +88,7 @@ export interface PermissionTemplateDefinition {
 }
 
 // ---------------------------------------------------------------------------
-// The 17 permission template definitions (4.4 table)
+// The 21 permission template definitions (4.4 table)
 // ---------------------------------------------------------------------------
 
 /** @see Section 4.4 template table */
@@ -126,7 +145,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     workspace: 'operations',
     population: 'staff',
     actions: [
-      'content.write', 'content.submit', 'content.preview',
+      'content.write', 'content.submit', 'content.preview', 'media.upload',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_collections',
@@ -143,8 +162,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     workspace: 'operations',
     population: 'staff',
     actions: [
-      'content.review', 'content.publish', 'content.schedule',
-      'content.archive', 'content.restrict', 'event.manage',
+      'content.publish', 'content.schedule',
+      'content.archive', 'content.restrict', 'content.preview', 'event.manage',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_collections',
@@ -154,6 +173,44 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     stepUpActions: [],
     isActive: true,
     legacyRole: 'OPERATIONS',
+  },
+  {
+    // Review is separate from publication (cms-ee C-08, ACC-R-03). The
+    // categories condition holds the approved review disciplines (ACC-R-07).
+    key: 'content_reviewer',
+    name: 'Content Reviewer',
+    workspace: 'operations',
+    population: 'staff',
+    actions: [
+      'content.review', 'content.preview',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'assigned_collections',
+    defaultConditions: [],
+    requiredConditionTypes: ['categories'],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    key: 'editorial_lead',
+    name: 'Editorial Lead',
+    workspace: 'operations',
+    population: 'staff',
+    actions: [
+      'taxonomy.manage', 'home.manage', 'media.manage', 'poll.manage',
+      'poll.results.read', 'content.metrics.read', 'editorial.request.manage',
+      'editorial.brief.manage', 'content.preview',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'platform',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
   },
   {
     key: 'service_coordinator',
@@ -217,6 +274,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'availability.manage', 'case.accept', 'case.decline',
       'appointment.propose', 'conversation.participate', 'conversation.read.assigned',
       'consultation.join', 'delivery.record', 'earnings.read', 'expert.profile.edit',
+      'intake.respond', 'intake.permission.request',
       'event.present',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
@@ -249,6 +307,40 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     ],
     isActive: true,
     legacyRole: 'EXPERT',
+  },
+  {
+    key: 'intake_professional',
+    name: 'Intake Professional',
+    workspace: 'expert',
+    population: 'expert',
+    actions: [
+      'intake.queue.view', 'intake.claim',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'assigned_queues',
+    defaultConditions: [],
+    requiredConditionTypes: ['categories'],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    key: 'intake_lead',
+    name: 'Intake Lead',
+    workspace: 'expert',
+    population: 'expert',
+    actions: [
+      'intake.queue.view', 'intake.reassign',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'assigned_queues',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
   },
   {
     key: 'employer_owner',
@@ -358,6 +450,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'content.read', 'content.bookmark', 'service.request', 'service.book',
       'appointment.cancel', 'appointment.reschedule', 'event.register',
       'consultation.join', 'conversation.participate',
+      'poll.respond', 'editorial.request.submit',
       'preferences.manage', 'voucher.activate',
       'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],

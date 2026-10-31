@@ -28,12 +28,15 @@ import {
   grantsKey,
   assignmentsKey,
   orgTreeKey,
+  contextExtrasKey,
   PRINCIPAL_TTL_BASE,
   PRINCIPAL_TTL_JITTER,
   GRANTS_TTL_BASE,
   GRANTS_TTL_JITTER,
   ASSIGNMENTS_TTL,
   ORG_TREE_TTL,
+  CONTEXT_EXTRAS_TTL_BASE,
+  CONTEXT_EXTRAS_TTL_JITTER,
   INVALIDATE_CHANNEL,
 } from '../redis/redis-keys.js';
 import type {
@@ -43,6 +46,8 @@ import type {
   GrantCondition,
 } from '@nestself/contracts';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { isMembershipDateCurrent } from '../authz/personal-context.js';
+import type { AvailableContextExtras } from '../authz/personal-context.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,16 +99,21 @@ function hasCurrentShape(p: LoadedPrincipal): boolean {
   );
 }
 
+/** Adapts DB-level membership to the shared currency check from personal-context. */
 function isMembershipActive(
   status: string,
   startDate: Date,
   endDate: Date | null,
   now: Date,
 ): boolean {
-  if (status !== 'ACTIVE') return false;
-  if (startDate > now) return false;
-  if (endDate != null && endDate <= now) return false;
-  return true;
+  return isMembershipDateCurrent(
+    {
+      status: status as 'ACTIVE' | 'INVITED',
+      startDate: startDate.toISOString(),
+      endDate: endDate?.toISOString() ?? null,
+    },
+    now,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +214,63 @@ export class PrincipalLoader {
     await this.cache.set(cacheKey, JSON.stringify(loaded), ttl);
 
     return loaded;
+  }
+
+  /**
+   * Pre-load the extra data that `computeAvailableContexts` needs:
+   * per-org grant template keys and org names (Ruling B, T-C1.02).
+   */
+  async loadAvailableContextExtras(loaded: LoadedPrincipal): Promise<AvailableContextExtras> {
+    const orgIds = loaded.memberships
+      .filter((m) => m.status === 'ACTIVE')
+      .map((m) => m.orgId);
+
+    if (orgIds.length === 0) {
+      return { orgGrantTemplateKeys: new Map(), orgNames: new Map() };
+    }
+
+    // Item 11 (T-C1.02): cache the extras with the same TTL as the principal
+    // so two consecutive /me calls do not query grants and names twice.
+    const cacheKey = contextExtrasKey(loaded.userId);
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as {
+          orgGrantTemplateKeys: [string, string[]][];
+          orgNames: [string, string][];
+        };
+        return {
+          orgGrantTemplateKeys: new Map(parsed.orgGrantTemplateKeys),
+          orgNames: new Map(parsed.orgNames),
+        };
+      } catch {
+        // Corrupted cache entry -- fall through
+      }
+    }
+
+    const now = new Date();
+    const [grantRows, orgNames] = await Promise.all([
+      this.authzRepo.findActiveOrgGrantTemplateKeys(loaded.userId, orgIds, now),
+      this.authzRepo.findOrgNames(orgIds),
+    ]);
+
+    const keyMap = new Map<string, string[]>();
+    for (const { orgId, templateKey } of grantRows) {
+      const arr = keyMap.get(orgId) ?? [];
+      arr.push(templateKey);
+      keyMap.set(orgId, arr);
+    }
+
+    const result: AvailableContextExtras = { orgGrantTemplateKeys: keyMap, orgNames };
+
+    // Serialise Maps for cache storage.
+    const ttl = jitter(CONTEXT_EXTRAS_TTL_BASE, CONTEXT_EXTRAS_TTL_JITTER);
+    await this.cache.set(cacheKey, JSON.stringify({
+      orgGrantTemplateKeys: [...keyMap.entries()],
+      orgNames: [...orgNames.entries()],
+    }), ttl);
+
+    return result;
   }
 
   /** Load grants for a user in an org context. */
@@ -339,7 +406,7 @@ export class PrincipalLoader {
    * @see AUTH-R-11, AUTHZ-R-44
    */
   async invalidateUser(userId: string, orgIds?: string[]): Promise<void> {
-    const keys = [principalKey(userId), assignmentsKey(userId)];
+    const keys = [principalKey(userId), assignmentsKey(userId), contextExtrasKey(userId)];
     if (orgIds) {
       for (const orgId of orgIds) {
         keys.push(grantsKey(userId, orgId));
@@ -349,6 +416,7 @@ export class PrincipalLoader {
     this.cache.purgeLru(`principal:${userId}`);
     this.cache.purgeLru(`grants:${userId}`);
     this.cache.purgeLru(`assignments:${userId}`);
+    this.cache.purgeLru(`ctx_extras:${userId}`);
 
     await this.cache.del(...keys);
     const msg = JSON.stringify({ keys, reason: 'invalidation', userId });

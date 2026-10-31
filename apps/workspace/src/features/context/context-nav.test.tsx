@@ -33,10 +33,18 @@ afterEach(() => {
 
 const HR = SAMPLE_PRINCIPALS.hr_admin;
 
-const ORG_ME: MeResponse = { principal: HR.principal, effectiveActions: [...HR.effectiveActions] };
+// Ruling E: HR defaults to personal context, but the test scenario starts
+// in organization context (as if the user already switched) to verify
+// gated navigation after a context change.
+const ORG_ME: MeResponse = {
+  principal: { ...HR.principal, context: { kind: 'organization', orgId: 'org_sample' } },
+  effectiveActions: [...HR.effectiveActions],
+  availableContexts: [...HR.availableContexts],
+};
 const PERSONAL_ME: MeResponse = {
-  principal: { ...HR.principal, context: { kind: 'personal' } },
+  principal: { ...HR.principal, context: { kind: 'personal', orgId: 'org_sample' } },
   effectiveActions: ['content.read', 'conversation.participate', 'preferences.manage'],
+  availableContexts: [...HR.availableContexts],
 };
 
 function fakeClient() {
@@ -129,6 +137,10 @@ describe('a context that is no longer valid', () => {
     const withSecond: MeResponse = {
       ...ORG_ME,
       principal: { ...ORG_ME.principal, memberships: [...ORG_ME.principal.memberships, second] },
+      availableContexts: [
+        ...ORG_ME.availableContexts,
+        { kind: 'organization' as const, orgId: 'org_second', orgName: 'Second Org d.o.o.' },
+      ],
     };
     let current = withSecond;
     const request = vi.fn(async (path: string, init: RequestInit) => {

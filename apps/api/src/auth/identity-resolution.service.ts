@@ -26,9 +26,12 @@ import type {
   TokenSet,
 } from '../identity/identity-provider.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import {
+  defaultContext,
+  resolvePopulation,
+} from '../authz/personal-context.js';
 import type {
   Principal,
-  ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
 import type { AuthMethod } from '../session/session.types.js';
@@ -139,8 +142,8 @@ export class IdentityResolutionService {
       });
     }
 
-    const context = this.defaultContext(loaded);
-    const population = this.resolvePopulation(loaded, context);
+    const context = defaultContext(loaded);
+    const population = resolvePopulation(loaded, context);
     const authMethod = authMethodFromOutcome({ kind: 'tokens', tokens }, wasPassword, !!federatedProviderName);
 
     const { sessionId, csrfToken, absoluteExpiresAt } =
@@ -197,27 +200,10 @@ export class IdentityResolutionService {
   }
 
   async buildMeResponse(
-    _loaded: LoadedPrincipal,
+    loaded: LoadedPrincipal,
     principal: Principal,
   ): Promise<MeResponse> {
     return this.meResponse.build(principal);
-  }
-
-  resolvePopulation(
-    loaded: LoadedPrincipal,
-    context: ActiveContext,
-  ): 'employee' | 'expert' | 'staff' {
-    if (loaded.staffTemplates.length > 0) return 'staff';
-    if (loaded.expert && context.kind === 'expert') return 'expert';
-    return 'employee';
-  }
-
-  defaultContext(loaded: LoadedPrincipal): ActiveContext {
-    if (loaded.staffTemplates.length > 0) return { kind: 'operations' };
-    if (loaded.expert) return { kind: 'expert' };
-    const active = loaded.memberships.find((m) => m.status === 'ACTIVE');
-    if (active) return { kind: 'organization', orgId: active.orgId };
-    return { kind: 'personal' };
   }
 
   // -- Audit helpers (fire-and-forget) ----------------------------------------

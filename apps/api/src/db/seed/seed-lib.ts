@@ -9,8 +9,11 @@
 import { and, count, eq, inArray, notInArray } from 'drizzle-orm';
 import {
   SAMPLE_ORG,
+  SAMPLE_ORG_B,
+  SAMPLE_ORG_B_UNITS,
   SAMPLE_TEAMS,
   SAMPLE_PEOPLE,
+  SAMPLE_EDITORIAL_STAFF,
   SAMPLE_CHANNELS,
   SAMPLE_POSTS,
   SAMPLE_POLLS,
@@ -20,6 +23,13 @@ import {
   SAMPLE_EXPERT_CREDENTIALS,
   SAMPLE_EXTERNAL_IDENTITIES,
   SAMPLE_CASE,
+  SAMPLE_CATEGORIES,
+  SAMPLE_CATEGORY_LABELS,
+  SAMPLE_ACCEPTANCE_PEOPLE,
+  SAMPLE_ACCEPTANCE_ROLES,
+  SAMPLE_CONTENT_RESOURCES,
+  SAMPLE_PUBLICATION_DATES,
+  acceptanceScaleEmployees,
   SAMPLE_APPOINTMENTS,
   SAMPLE_CALL_SESSIONS,
   SAMPLE_WEBINARS,
@@ -34,6 +44,7 @@ import {
   type SampleWebinarMessage,
   type SampleWebinarPoll,
 } from '@nestself/sample-data';
+import { approvalHash } from '@nestself/content/schema';
 // Calls and webinars: SAMPLE_APPOINTMENTS and both entries of
 // SAMPLE_CALL_SESSIONS (call_sessions, call_participants, call_outcomes,
 // call_feedback, T-CW-1.1), and SAMPLE_WEBINARS, SAMPLE_WEBINAR_MESSAGES and
@@ -102,11 +113,36 @@ export const extraSampleGrantIds = (): string[] =>
     keys.map((key) => `grant_${personId}_${key}`),
   );
 
+/** Ids of the grants created for `SAMPLE_EDITORIAL_STAFF`. */
+export const editorialStaffGrantIds = (): string[] =>
+  SAMPLE_EDITORIAL_STAFF.map((staff) => `grant_${staff.id}_${staff.templateKey}`);
+
+/** Id of the COLLECTION assignment that gives a staff member one category. */
+export const editorialAssignmentId = (userId: string, categoryId: string): string =>
+  `assignment_${userId}_collection_${categoryId}`;
+
 const upperRole = <T extends string>(role: string | null | undefined): T | null =>
   role ? (role.toUpperCase() as T) : null;
 
-export async function seed(db: Database): Promise<Record<string, number>> {
-  // ── Organisation ──
+export interface SeedOptions {
+  /**
+   * Also seed the generated acceptance employees that bring organization A to
+   * 30 and organization B to 12 employees (epic 23.1). Off by default: the
+   * named people are enough for the demos; aggregate tests switch it on.
+   */
+  seedAcceptanceScale?: boolean;
+}
+
+/**
+ * Id of the grant that gives an acceptance person the employee template in one
+ * organization. The person's first membership keeps the plain id, later ones
+ * are suffixed with the organization (the convention of the grant backfill).
+ */
+export const acceptanceEmployeeGrantId = (userId: string, orgId: string, index: number): string =>
+  index === 0 ? `grant_${userId}_employee` : `grant_${userId}_${orgId}_employee`;
+
+export async function seed(db: Database, options: SeedOptions = {}): Promise<Record<string, number>> {
+  // ── Organisations (A and B) ──
   await upsertById(
     db,
     t.organizations,
@@ -119,6 +155,19 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       status: 'ACTIVE',
     },
     { name: SAMPLE_ORG.name, slug: SAMPLE_ORG.slug },
+  );
+  await upsertById(
+    db,
+    t.organizations,
+    {
+      id: SAMPLE_ORG_B.id,
+      name: SAMPLE_ORG_B.name,
+      slug: SAMPLE_ORG_B.slug,
+      country: 'HU',
+      timezone: 'Europe/Budapest',
+      status: 'ACTIVE',
+    },
+    { name: SAMPLE_ORG_B.name, slug: SAMPLE_ORG_B.slug },
   );
 
   // ── Legacy teams (legacy_teams table) ──
@@ -142,8 +191,17 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   // ── Closure table (AUTHZ-R-09: every node is its own ancestor at depth 0) ──
-  const closureRows = buildClosureRows(
-    SAMPLE_ORG_UNITS.map((u) => ({ id: u.id, parentId: u.parentId })),
+  // Organization B's units, then both trees' closure rows.
+  for (const ou of SAMPLE_ORG_B_UNITS) {
+    await upsertById(
+      db,
+      t.orgUnits,
+      { id: ou.id, orgId: ou.orgId, parentId: ou.parentId, kind: ou.kind, name: ou.name },
+      { name: ou.name, kind: ou.kind, parentId: ou.parentId },
+    );
+  }
+  const closureRows = [SAMPLE_ORG_UNITS, SAMPLE_ORG_B_UNITS].flatMap((units) =>
+    buildClosureRows(units.map((u) => ({ id: u.id, parentId: u.parentId }))),
   );
   for (const row of closureRows) {
     await db
@@ -190,6 +248,56 @@ export async function seed(db: Database): Promise<Record<string, number>> {
           set: { status: 'ACTIVE', orgUnitId: defaultTeamId },
         });
     }
+  }
+
+  // ── Editorial staff (CMS epic): operations staff without a legacy role ──
+  for (const staff of SAMPLE_EDITORIAL_STAFF) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: staff.id,
+        email: `${staff.id}@example.com`,
+        displayName: staff.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: staff.displayName },
+    );
+  }
+
+  // ── Acceptance people (T-C1.14): organization B and the two-membership person ──
+  for (const person of SAMPLE_ACCEPTANCE_PEOPLE) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: person.id,
+        email: `${person.id}@example.com`,
+        displayName: person.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: person.displayName },
+    );
+    for (const m of person.memberships) {
+      await upsertAcceptanceMembership(db, person.id, m.orgId, m.orgUnitId);
+    }
+  }
+
+  // ── Generated acceptance employees (opt-in, epic 23.1 scale) ──
+  const generatedEmployees = options.seedAcceptanceScale ? acceptanceScaleEmployees() : [];
+  for (const employee of generatedEmployees) {
+    await upsertById(
+      db,
+      t.users,
+      {
+        id: employee.id,
+        email: `${employee.id}@example.com`,
+        displayName: employee.displayName,
+        locale: 'sr-Latn',
+      },
+      { displayName: employee.displayName },
+    );
+    await upsertAcceptanceMembership(db, employee.id, employee.orgId, employee.orgUnitId);
   }
 
   // ── External identities (fake pool subjects, D-04) ──
@@ -285,6 +393,57 @@ export async function seed(db: Database): Promise<Record<string, number>> {
     );
   }
 
+  // ── Categories and labels (T-C1.04) ──
+  for (const cat of SAMPLE_CATEGORIES) {
+    await upsertById(
+      db,
+      t.categories,
+      { id: cat.id, slug: cat.slug, sortOrder: cat.sortOrder },
+      { slug: cat.slug, sortOrder: cat.sortOrder },
+    );
+  }
+  for (const label of SAMPLE_CATEGORY_LABELS) {
+    await upsertById(
+      db,
+      t.categoryLabels,
+      {
+        id: label.id,
+        categoryId: label.categoryId,
+        locale: label.locale,
+        name: label.name,
+        description: label.description,
+      },
+      { name: label.name, description: label.description },
+    );
+  }
+
+  // ── Organization content capabilities (T-C1.04) ──
+  // Every seeded organization gets the 'library' capability.
+  // configuredByUserId is the client-operations staff member (holds
+  // service.configure) rather than the HR admin.
+  const clientOps = SAMPLE_PEOPLE.find((p) => p.platformRole === 'operations');
+  const configuredByUserId = clientOps?.id ?? SAMPLE_PEOPLE[0]!.id;
+
+  // Iterate the organization fixtures, not a hard-coded list. The seed only
+  // manages organizations it inserted (SAMPLE_ORG and any future additions);
+  // test-created orgs are not seeded.
+  const seededOrgIds = [SAMPLE_ORG.id, SAMPLE_ORG_B.id];
+  for (const orgId of seededOrgIds) {
+    const capId = `org_cap_${orgId}_library`;
+    await upsertById(
+      db,
+      t.orgContentCapabilities,
+      {
+        id: capId,
+        orgId,
+        capability: 'library',
+        enabledFrom: SAMPLE_START_DATE,
+        configuredByUserId,
+      },
+      { enabledFrom: SAMPLE_START_DATE },
+    );
+  }
+
   // ── Content ──
   for (const c of SAMPLE_CONTENT) {
     const area = c.area.toUpperCase() as 'PSYCHOLOGICAL' | 'LEGAL' | 'FINANCIAL';
@@ -303,6 +462,8 @@ export async function seed(db: Database): Promise<Record<string, number>> {
       { title: c.title, summary: c.summary },
     );
   }
+
+  await seedContentResources(db);
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
   for (const rp of RETENTION_POLICIES) {
@@ -411,6 +572,91 @@ export async function seed(db: Database): Promise<Record<string, number>> {
         })
         .onConflictDoNothing({ target: t.assignments.id });
     }
+  }
+
+  // ── Editorial staff grants and category assignments (T-C1.03) ──
+  // Granted explicitly from the template (no legacy role). ACC-R-06
+  // exception: grants derived from a legacy role carry no category
+  // assignment, so user_nikola's content_author and content_publisher (from
+  // the OPERATIONS role) stay fail-closed: no COLLECTION assignment, no
+  // content access, until one is created explicitly. The reviewer's
+  // categories condition holds its review disciplines (ACC-R-07); the
+  // COLLECTION assignments target category ids (C-09, ACC-R-06).
+  for (const staff of SAMPLE_EDITORIAL_STAFF) {
+    const tmpl = PERMISSION_TEMPLATES.find((candidate) => candidate.key === staff.templateKey);
+    if (!tmpl) throw new Error(`SAMPLE_EDITORIAL_STAFF names an unknown template: ${staff.templateKey}`);
+    // A template that requires the categories condition (the reviewer) must
+    // get its disciplines from the fixture; a grant without them would be
+    // unusable, so fail the seed loudly.
+    if (tmpl.requiredConditionTypes.includes('categories') && staff.disciplines.length === 0) {
+      throw new Error(`${staff.id} holds ${tmpl.key} but the fixture names no review disciplines`);
+    }
+    const update = {
+      actions: [...tmpl.actions],
+      scopeType: tmpl.scopeType,
+      ...resolveSampleScope(tmpl.scopeType, null, defaultTeamId),
+      conditions:
+        staff.disciplines.length > 0 ? [{ type: 'categories', allowed: [...staff.disciplines] }] : null,
+    };
+    await db
+      .insert(t.grants)
+      .values({
+        id: `grant_${staff.id}_${tmpl.key}`,
+        subjectUserId: staff.id,
+        templateKey: tmpl.key,
+        grantedByUserId: hrAdmin?.id ?? staff.id,
+        grantedAt: SAMPLE_START_DATE,
+        validFrom: SAMPLE_START_DATE,
+        ...update,
+      })
+      .onConflictDoUpdate({ target: t.grants.id, set: update });
+
+    for (const categoryId of staff.categoryIds) {
+      await db
+        .insert(t.assignments)
+        .values({
+          id: editorialAssignmentId(staff.id, categoryId),
+          userId: staff.id,
+          kind: 'COLLECTION',
+          targetId: categoryId,
+          assignedByUserId: hrAdmin?.id ?? staff.id,
+          startAt: SAMPLE_START_DATE,
+        })
+        .onConflictDoNothing({ target: t.assignments.id });
+    }
+  }
+
+  // ── Employee grants for the acceptance people (T-C1.14) ──
+  // One employee grant per ACTIVE membership; the id convention matches the
+  // grant backfill. Organization B has no HR admin, so its members are their
+  // own granter (as in the backfill).
+  const employeeTemplate = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === 'employee');
+  if (!employeeTemplate) throw new Error('The employee permission template is missing');
+  const employeeGrantees = [
+    ...SAMPLE_ACCEPTANCE_PEOPLE.flatMap((p) =>
+      p.memberships.map((m, index) => ({ userId: p.id, orgId: m.orgId, index })),
+    ),
+    ...generatedEmployees.map((e) => ({ userId: e.id, orgId: e.orgId, index: 0 })),
+  ];
+  for (const { userId, orgId, index } of employeeGrantees) {
+    const update = {
+      actions: [...employeeTemplate.actions],
+      scopeType: employeeTemplate.scopeType,
+      ...resolveSampleScope(employeeTemplate.scopeType, orgId, null),
+      conditions: null,
+    };
+    await db
+      .insert(t.grants)
+      .values({
+        id: acceptanceEmployeeGrantId(userId, orgId, index),
+        subjectUserId: userId,
+        templateKey: employeeTemplate.key,
+        grantedByUserId: orgId === SAMPLE_ORG.id ? (hrAdmin?.id ?? userId) : userId,
+        grantedAt: SAMPLE_START_DATE,
+        validFrom: SAMPLE_START_DATE,
+        ...update,
+      })
+      .onConflictDoUpdate({ target: t.grants.id, set: update });
   }
 
   // ── Confidential professional domain: one case (T-2.4) ──
@@ -567,6 +813,133 @@ export async function seed(db: Database): Promise<Record<string, number>> {
   }
 
   return countAll(db);
+}
+
+async function upsertAcceptanceMembership(
+  db: Database,
+  userId: string,
+  orgId: string,
+  orgUnitId: string,
+): Promise<void> {
+  await db
+    .insert(t.memberships)
+    .values({
+      userId,
+      orgId,
+      status: 'ACTIVE',
+      startDate: SAMPLE_START_DATE,
+      orgUnitId,
+    })
+    .onConflictDoUpdate({
+      target: [t.memberships.userId, t.memberships.orgId, t.memberships.startDate],
+      set: { status: 'ACTIVE', orgUnitId },
+    });
+}
+
+/**
+ * Sample articles with an approved revision per variant and the publications
+ * of the availability demo (T-C1.14): `all_eligible` and `org_a` are live,
+ * `future` is scheduled, `withdrawn` was live and then withdrawn. The
+ * reviewer approves, the publisher publishes. Idempotent (stable ids).
+ */
+async function seedContentResources(db: Database): Promise<void> {
+  const authorId = SAMPLE_ACCEPTANCE_ROLES.author;
+  const reviewerId = SAMPLE_ACCEPTANCE_ROLES.reviewer;
+  const publisherId = SAMPLE_ACCEPTANCE_ROLES.publisher;
+  const liveFrom = new Date(SAMPLE_PUBLICATION_DATES.liveFrom);
+  const futureFrom = new Date(SAMPLE_PUBLICATION_DATES.futureFrom);
+  const withdrawnAt = new Date(SAMPLE_PUBLICATION_DATES.withdrawnAt);
+
+  for (const resource of SAMPLE_CONTENT_RESOURCES) {
+    const resourceValues = {
+      type: resource.type,
+      state: 'active' as const,
+      primaryCategoryId: resource.primaryCategoryId,
+      ownerUserId: authorId,
+      reviewPolicy: resource.reviewPolicy,
+      reviewDiscipline: resource.reviewDiscipline,
+    };
+    await upsertById(db, t.contentResources, { id: resource.id, ...resourceValues }, resourceValues);
+
+    for (const variant of resource.variants) {
+      const variantValues = {
+        contentResourceId: resource.id,
+        locale: variant.locale,
+        slug: variant.slug,
+      };
+      await upsertById(db, t.contentVariants, { id: variant.id, ...variantValues }, variantValues);
+
+      const hash = await approvalHash({
+        body: variant.body,
+        title: variant.title,
+        summary: variant.summary,
+        outcome: variant.outcome,
+        durationSeconds: resource.durationSeconds,
+        difficulty: resource.difficulty,
+        sources: [...resource.sources],
+        locale: variant.locale,
+        mediaAssetIds: [],
+        relatedResourceIds: [],
+        cta: null,
+        reviewDiscipline: resource.reviewDiscipline,
+        proposedAudience: null,
+      });
+
+      const revisionId = `rev_${variant.id}_1`;
+      const revisionValues = {
+        contentVariantId: variant.id,
+        revisionNumber: 1,
+        state: 'approved' as const,
+        body: variant.body,
+        title: variant.title,
+        summary: variant.summary,
+        outcome: variant.outcome,
+        durationSeconds: resource.durationSeconds,
+        durationBand: resource.durationBand,
+        difficulty: resource.difficulty,
+        sources: [...resource.sources],
+        authorUserId: authorId,
+        lastEditorUserId: authorId,
+        approvalHash: hash,
+        submittedAt: liveFrom,
+        approvedAt: liveFrom,
+        approvedByUserId: reviewerId,
+      };
+      await upsertById(db, t.contentRevisions, { id: revisionId, ...revisionValues }, revisionValues);
+
+      const publicationId = `pub_${variant.id}`;
+      const scenario = resource.scenario;
+      const publicationValues = {
+        contentVariantId: variant.id,
+        contentRevisionId: revisionId,
+        approvalHash: hash,
+        state:
+          scenario === 'future'
+            ? ('scheduled' as const)
+            : scenario === 'withdrawn'
+              ? ('withdrawn' as const)
+              : ('live' as const),
+        requiredCapability: 'library' as const,
+        startsAt: scenario === 'future' ? futureFrom : liveFrom,
+        withdrawnAt: scenario === 'withdrawn' ? withdrawnAt : null,
+        withdrawnByUserId: scenario === 'withdrawn' ? publisherId : null,
+        withdrawalReason: scenario === 'withdrawn' ? SAMPLE_PUBLICATION_DATES.withdrawalReason : null,
+        publishedByUserId: publisherId,
+      };
+      await upsertById(db, t.contentPublications, { id: publicationId, ...publicationValues }, publicationValues);
+
+      const audienceValues =
+        scenario === 'org_a'
+          ? { kind: 'organization' as const, orgId: SAMPLE_ORG.id, orgUnitId: null }
+          : { kind: 'all_eligible' as const, orgId: null, orgUnitId: null };
+      await upsertById(
+        db,
+        t.contentPublicationAudiences,
+        { id: `aud_${publicationId}_1`, publicationId, ...audienceValues },
+        { publicationId, ...audienceValues },
+      );
+    }
+  }
 }
 
 /**
@@ -913,6 +1286,14 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     conversations: t.conversations,
     conversationMessages: t.conversationMessages,
     intakeRecords: t.intakeRecords,
+    categories: t.categories,
+    categoryLabels: t.categoryLabels,
+    orgContentCapabilities: t.orgContentCapabilities,
+    contentResources: t.contentResources,
+    contentVariants: t.contentVariants,
+    contentRevisions: t.contentRevisions,
+    contentPublications: t.contentPublications,
+    contentPublicationAudiences: t.contentPublicationAudiences,
     appointments: t.appointments,
     callSessions: t.callSessions,
     callParticipants: t.callParticipants,

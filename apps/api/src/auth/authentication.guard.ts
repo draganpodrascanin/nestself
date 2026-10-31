@@ -34,6 +34,7 @@ import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { requestMeta, type RequestMeta } from '../common/request-meta.js';
 import type { SessionRecord } from '../session/session.types.js';
+import { defaultContext, resolveDefaultPersonalOrgId, resolvePopulation } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
   userMobileFamiliesKey,
@@ -143,8 +144,33 @@ export class AuthenticationGuard implements CanActivate {
       });
     }
 
+    // Item 4 (T-C1.02): old sessions that stored bare {kind:'personal'}
+    // without an orgId are auto-upgraded to include the default orgId when
+    // the user has an ACTIVE date-current membership.
+    let resolvedContext = record.context;
+    if (
+      record.context.kind === 'personal' &&
+      !('orgId' in record.context && record.context.orgId) &&
+      loaded.memberships.some((m) => m.status === 'ACTIVE')
+    ) {
+      const orgId = resolveDefaultPersonalOrgId(loaded.memberships, record.lastPersonalOrgId);
+      if (orgId) {
+        resolvedContext = { kind: 'personal', orgId };
+        // Persist once so future requests skip this resolution.
+        try {
+          await this.sessions.updateContext(
+            record.sessionId,
+            resolvedContext,
+            resolvePopulation(loaded, resolvedContext),
+          );
+        } catch {
+          // Non-critical: the session will be upgraded on the next request.
+        }
+      }
+    }
+
     const principal = this.assemblePrincipal(loaded, {
-      context: record.context,
+      context: resolvedContext,
       auth: {
         method: record.auth.method,
         time: record.auth.time,
@@ -216,7 +242,7 @@ export class AuthenticationGuard implements CanActivate {
     }
 
     // Determine default context for bearer callers
-    const context = this.defaultContext(loaded);
+    const context = defaultContext(loaded);
 
     const principal = this.assemblePrincipal(loaded, {
       context,
@@ -258,19 +284,5 @@ export class AuthenticationGuard implements CanActivate {
     };
   }
 
-  private defaultContext(loaded: LoadedPrincipal): ActiveContext {
-    if (loaded.staffTemplates.length > 0) {
-      return { kind: 'operations' };
-    }
-    if (loaded.expert) {
-      return { kind: 'expert' };
-    }
-    const activeMembership = loaded.memberships.find(
-      (m) => m.status === 'ACTIVE',
-    );
-    if (activeMembership) {
-      return { kind: 'organization', orgId: activeMembership.orgId };
-    }
-    return { kind: 'personal' };
-  }
+  // defaultContext is now imported from personal-context.ts (ruling 9, T-C1.02).
 }

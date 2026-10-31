@@ -113,6 +113,13 @@
       "when": 1792936192544,
       "tag": "0015_call_replicas",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792936192600,
+      "tag": "0016_cms_ee_foundation",
+      "breakpoints": true
     }
   ]
 }

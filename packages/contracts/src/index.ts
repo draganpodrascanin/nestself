@@ -64,8 +64,8 @@ export type { Action } from './actions.ts';
 // Templates (4.4)
 // ---------------------------------------------------------------------------
 
-export { TEMPLATE_KEYS, PERMISSION_TEMPLATES } from './templates.ts';
-export type { TemplateKey, PermissionTemplateDefinition } from './templates.ts';
+export { TEMPLATE_KEYS, PERMISSION_TEMPLATES, REVIEW_DISCIPLINES } from './templates.ts';
+export type { TemplateKey, PermissionTemplateDefinition, ReviewDiscipline } from './templates.ts';
 
 // ---------------------------------------------------------------------------
 // Authorization types (4.5, 5.8.2)
@@ -128,6 +128,7 @@ export {
   PrincipalMembershipSchema,
   AuthInfoSchema,
   PrincipalSchema,
+  AvailableContextEntrySchema,
   MeResponseSchema,
   EmailOtpVerifyResponseSchema,
   ChallengeResponseSchema,
@@ -175,6 +176,7 @@ export type {
   PrincipalMembership,
   AuthInfo,
   Principal,
+  AvailableContextEntry,
   MeResponse,
   PasswordResponse,
   ContextSwitchRequest,
@@ -217,6 +219,31 @@ export * from './ops-admin.ts';
 // ---------------------------------------------------------------------------
 
 export * from './professional.ts';
+
+// ---------------------------------------------------------------------------
+// Content capabilities (C-11)
+// ---------------------------------------------------------------------------
+
+export { CONTENT_CAPABILITIES } from './content/capabilities.ts';
+export type { ContentCapability } from './content/capabilities.ts';
+
+// ---------------------------------------------------------------------------
+// Media contracts (C-14, 8.15)
+// ---------------------------------------------------------------------------
+
+export * from './content/media.ts';
+
+// ---------------------------------------------------------------------------
+// CMS contracts (C-06, 7.13)
+// ---------------------------------------------------------------------------
+
+export * from './content/cms.ts';
+
+// ---------------------------------------------------------------------------
+// Library contracts (9.6, 9.15, T-C1.11)
+// ---------------------------------------------------------------------------
+
+export * from './content/library.ts';
 
 // ---------------------------------------------------------------------------
 // Appointments and call sessions (NS-CALLS-01)

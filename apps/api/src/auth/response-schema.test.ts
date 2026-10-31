@@ -127,6 +127,7 @@ describe('Auth response schemas', () => {
           tokenFamily: null,
         },
         effectiveActions: ['wellbeing_checkin:read'],
+        availableContexts: [{ kind: 'personal', orgId: 'org-1' }],
       };
       expect(() => MeResponseSchema.parse(data)).not.toThrow();
     });

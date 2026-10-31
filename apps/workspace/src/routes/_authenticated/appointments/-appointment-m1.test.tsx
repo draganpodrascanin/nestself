@@ -81,7 +81,7 @@ function serve(routes: Record<string, () => Response>, me: { principal: unknown;
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, search: url.search, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: me.principal, effectiveActions: me.effectiveActions }));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: me.principal, effectiveActions: me.effectiveActions, availableContexts: [(me.principal as { context: unknown }).context] }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
@@ -92,7 +92,7 @@ function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: null, effectiveActions: [], settled: false, ensure: () => initialSnapshot(api) } },
+    context: { queryClient, auth: { principal: null, effectiveActions: [], availableContexts: [], settled: false, ensure: () => initialSnapshot(api) } },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(
@@ -218,8 +218,10 @@ describe('appointment pages, M1 completion (API mode)', { timeout: 20_000 }, () 
     const hr = SAMPLE_PRINCIPALS.hr_admin;
     const sent = serve({}, { principal: hr.principal, effectiveActions: hr.effectiveActions.filter((action) => action !== 'consultation.join') });
     renderAt('/');
-    expect(await screen.findByRole('heading', { level: 1 }, { timeout: 5000 })).toBeInTheDocument();
-    await screen.findAllByRole('link', { name: 'Support' });
+    // Home re-renders once its content loads, so wait for a heading that stays.
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument(), { timeout: 5000 });
+    // The navigation has rendered (prototype screens such as Support are sample-only, CLI-R-05).
+    await screen.findAllByRole('link', { name: 'Home' });
     expect(screen.queryByRole('link', { name: 'Appointments' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your next appointment' })).not.toBeInTheDocument();
     expect(sent.some((s) => s.path === '/api/appointments')).toBe(false);

@@ -561,5 +561,21 @@
     "back": "Nazad na moje razgovore",
     "detailTitle": "Razgovor o slučaju {{id}}",
     "detailTitleLoading": "Razgovor"
+  },
+  "contextSwitcher": {
+    "label": "Promeni radni prostor",
+    "personal": "Moj prostor",
+    "personalWithOrg": "Moj prostor · {{orgName}}",
+    "organization": "Upravljanje · {{orgName}}",
+    "expert": "Ekspert",
+    "operations": "Operacije",
+    "switchFailed": "Promena radnog prostora nije uspela. Pokušajte ponovo.",
+    "current": "Trenutni",
+    "switching": "Promena radnog prostora…",
+    "error": {
+      "org_context_expired": "Vaše članstvo u ovoj organizaciji je isteklo.",
+      "invalid_context": "Ovaj radni prostor vam nije dostupan.",
+      "unknown": "Promena radnog prostora nije uspela. Pokušajte ponovo."
+    }
   }
 }

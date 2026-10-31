@@ -152,6 +152,7 @@ function makeAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
     status: 'authenticated',
     principal: BASE_PRINCIPAL,
     effectiveActions: ADMIN.effectiveActions,
+    availableContexts: ADMIN.availableContexts,
     signOut: vi.fn().mockResolvedValue(undefined),
     switchContext: vi.fn().mockResolvedValue(undefined),
     stepUp: vi.fn().mockResolvedValue(true),
@@ -794,6 +795,17 @@ describe('PlatformAccessScreen', () => {
     expect(options).not.toContain(t('admin:access.templates.expert'));
   });
 
+  it('offers editorial_lead but not content_reviewer, which needs a categories condition', async () => {
+    const user = userEvent.setup();
+    renderPlatform();
+    await openAssign(user);
+    await user.click(screen.getByRole('combobox', { name: t('admin:access.assign.template') }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toContain(t('admin:access.templates.editorial_lead'));
+    expect(options).not.toContain(t('admin:access.templates.content_reviewer'));
+    expect(options).not.toContain(t('admin:access.templates.intake_professional'));
+  });
+
   it('assigns support_operator at the template scope and shows the new row', async () => {
     const user = userEvent.setup();
     const listPlatformGrants = vi
@@ -936,7 +948,7 @@ describe('access routes and navigation', () => {
       routeTree,
       context: {
         queryClient,
-        auth: { principal: sample.principal, effectiveActions: sample.effectiveActions },
+        auth: { principal: sample.principal, effectiveActions: sample.effectiveActions, availableContexts: sample.availableContexts },
       },
       history: createMemoryHistory({ initialEntries: [initialUrl] }),
     });

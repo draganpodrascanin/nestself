@@ -160,7 +160,7 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   }
 
   /** Email-OTP sign-in for employees and organization admins. */
-  async function signInMember(userId: string) {
+  async function signInMember(userId: string, orgContext = true) {
     const email = `${userId}@example.com`;
     const agent = request.agent(app.getHttpServer());
     const start = await agent.post('/api/auth/email-otp/start').send({ email });
@@ -170,7 +170,9 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
       .post('/api/auth/email-otp/verify')
       .send({ challengeToken: start.body.challengeToken, code });
     expect(verify.status).toBe(200);
-    await switchContext(agent, extractCsrf(verify), { kind: 'organization', orgId: ORG });
+    if (orgContext) {
+      await switchContext(agent, extractCsrf(verify), { kind: 'organization', orgId: ORG });
+    }
     return agent;
   }
 
@@ -236,7 +238,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   });
 
   it('the participant reads their own conversation but not through the expert route', async () => {
-    const jovan = await signInMember('user_jovan');
+    // C1: employee stays in personal context (no org-workspace grant).
+    const jovan = await signInMember('user_jovan', false);
 
     const own = await jovan.get(MY_CONV);
     expect(own.status).toBe(200);
@@ -327,7 +330,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     });
 
     it('the participant lists their own conversation and sees nothing on the assigned list', async () => {
-      const jovan = await signInMember('user_jovan');
+      // Ruling E: employees stay in personal context (no org-workspace grant).
+      const jovan = await signInMember('user_jovan', false);
       const own = await jovan.get(MY_LIST);
       expect(own.status).toBe(200);
       expect(own.body).toEqual({ items: [expectedSummary], nextCursor: null });
@@ -362,7 +366,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
           createdAt: new Date(Date.now() + n * 1000),
         })),
       );
-      const jovan = await signInMember('user_jovan');
+      // Ruling E: employees stay in personal context.
+      const jovan = await signInMember('user_jovan', false);
 
       const full = await jovan.get(MY_LIST).query({ limit: 100 });
       expect(full.status).toBe(200);
@@ -388,7 +393,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     });
 
     it('rejects a limit outside 1..100 with 400 and answers an unknown cursor with an empty page', async () => {
-      const jovan = await signInMember('user_jovan');
+      // Ruling E: employees stay in personal context.
+      const jovan = await signInMember('user_jovan', false);
       expect((await jovan.get(MY_LIST).query({ limit: 0 })).status).toBe(400);
       expect((await jovan.get(MY_LIST).query({ limit: 101 })).status).toBe(400);
       const unknown = await jovan.get(MY_LIST).query({ cursor: 'conv_missing' });

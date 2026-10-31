@@ -167,7 +167,7 @@ export type PasswordResetConfirmResponse = z.infer<typeof PasswordResetConfirmRe
 // ---------------------------------------------------------------------------
 
 export const ActiveContextSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('personal') }),
+  z.object({ kind: z.literal('personal'), orgId: z.string().min(1).optional() }),
   z.object({ kind: z.literal('organization'), orgId: z.string().min(1) }),
   z.object({ kind: z.literal('expert') }),
   z.object({ kind: z.literal('operations') }),
@@ -214,9 +214,18 @@ export const PrincipalSchema = z.object({
 });
 export type Principal = z.infer<typeof PrincipalSchema>;
 
+export const AvailableContextEntrySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('personal'), orgId: z.string().min(1), orgName: z.string().optional() }),
+  z.object({ kind: z.literal('organization'), orgId: z.string().min(1), orgName: z.string().optional() }),
+  z.object({ kind: z.literal('expert') }),
+  z.object({ kind: z.literal('operations') }),
+]);
+export type AvailableContextEntry = z.infer<typeof AvailableContextEntrySchema>;
+
 export const MeResponseSchema = z.object({
   principal: PrincipalSchema,
   effectiveActions: z.array(z.string()),
+  availableContexts: z.array(AvailableContextEntrySchema),
 });
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
@@ -360,6 +369,7 @@ export const AUTH_ERROR_CODES = [
   'missing_conditions',
   'self_approval_denied',
   'emergency_not_active',
+  'idempotency_conflict',
   'owner_exists',
   /** `POST /ops/users/:userId/suspend` on the caller's own account (409). */
   'cannot_suspend_self',

@@ -57,9 +57,15 @@ function routeParam(req: Record<string, unknown>, name: string): string | undefi
   return (req['params'] as Record<string, string | undefined> | undefined)?.[name];
 }
 
-/** The caller's active organisation, if any. */
+/**
+ * The caller's active organisation, if any: the organization context, or the
+ * organisation of a personal context (an employee in "My space" of that org).
+ */
 export function contextOrgId(principal: Principal): string | undefined {
-  return principal.context.kind === 'organization' ? principal.context.orgId : undefined;
+  const ctx = principal.context;
+  if (ctx.kind === 'organization') return ctx.orgId;
+  if (ctx.kind === 'personal' && 'orgId' in ctx && ctx.orgId) return ctx.orgId;
+  return undefined;
 }
 
 /** The occurrence as a staff resource: its id and organisation. */

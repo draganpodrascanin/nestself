@@ -17,10 +17,15 @@ import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { externalIdentities, memberships } from '../src/db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
+import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+import {
+  MeResponseSchema,
+  PasswordResponseSchema,
+} from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -85,6 +90,8 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { email: 'user_stefan@example.com' },
       { email: 'user_ivana@example.com' },
       { email: 'user_nikola@example.com', password: 'TempPassword1!', temporaryPassword: 'TempPassword1!' },
+      // Editorial staff (CMS): email-OTP for e2e simplicity.
+      { email: 'user_katarina@example.com' },
       // Pool-only users for the retry cases: they never reach a session.
       { email: 'retry_exhaust@example.com' },
       { email: 'retry_lock@example.com' },
@@ -96,6 +103,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       { localId: 'user_stefan', email: 'user_stefan@example.com' },
       { localId: 'user_ivana', email: 'user_ivana@example.com' },
       { localId: 'user_nikola', email: 'user_nikola@example.com' },
+      { localId: 'user_katarina', email: 'user_katarina@example.com' },
     ];
     for (const p of people) {
       const idpUser = await idp.findUserByEmail(p.email);
@@ -146,7 +154,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   // 1. Employee email-OTP sign-in
   // -----------------------------------------------------------------------
 
-  it('employee email-OTP: start → verify → session cookies', async () => {
+  it('employee email-OTP: start → verify → session cookies (item 1: schema parse)', async () => {
     const startRes = await agent
       .post('/api/auth/email-otp/start')
       .send({ email: 'user_jovan@example.com' });
@@ -163,9 +171,11 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       .post('/api/auth/email-otp/verify')
       .send({ challengeToken, code: lastCode!.code });
     expect(verifyRes.status).toBe(200);
-    expect(verifyRes.body).toHaveProperty('principal');
-    expect(verifyRes.body.principal).toHaveProperty('userId', 'user_jovan');
-    expect(verifyRes.body.principal.auth).toMatchObject({ method: 'email_otp', secondFactor: false });
+
+    // Item 1: parse with contracts schema
+    const verifyBody = MeResponseSchema.parse(verifyRes.body);
+    expect(verifyBody.principal.userId).toBe('user_jovan');
+    expect(verifyBody.principal.auth).toMatchObject({ method: 'email_otp', secondFactor: false });
 
     const setCookies = verifyRes.headers['set-cookie'] as unknown as string[];
     expect(setCookies.some((c: string) => c.startsWith('nestself_session='))).toBe(true);
@@ -178,11 +188,13 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   // 2. GET /auth/me returns the principal
   // -----------------------------------------------------------------------
 
-  it('GET /api/auth/me returns authenticated principal', async () => {
+  it('GET /api/auth/me returns authenticated principal (item 1: schema parse)', async () => {
     const res = await agent.get('/api/auth/me');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('principal');
-    expect(res.body.principal.userId).toBe('user_jovan');
+
+    // Item 1: parse with contracts schema
+    const me = MeResponseSchema.parse(res.body);
+    expect(me.principal.userId).toBe('user_jovan');
   });
 
   // -----------------------------------------------------------------------
@@ -245,24 +257,28 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   // 5. Context switch
   // -----------------------------------------------------------------------
 
-  it('POST /api/auth/context switches the active context', async () => {
+  it('POST /api/auth/context switches the active context (item 1: schema parse)', async () => {
     const res = await agent
       .post('/api/auth/context')
       .set('X-CSRF-Token', csrfToken)
       .send({ context: { kind: 'personal' } });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('principal');
-    expect(res.body.principal.context).toEqual({ kind: 'personal' });
 
-    // Switch back to the org context.
-    const backRes = await agent
+    // Item 1: parse with contracts schema
+    const ctxBody = MeResponseSchema.parse(res.body);
+    // ACC-R-12: personal context resolves orgId from ACTIVE date-current membership.
+    expect(ctxBody.principal.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
+
+    // C1: a plain employee cannot switch to the organization context
+    // (no org-workspace template grant via canEnterContext).
+    const orgDenied = await agent
       .post('/api/auth/context')
       .set('X-CSRF-Token', csrfToken)
       .send({ context: { kind: 'organization', orgId: 'org_sample' } });
-    expect(backRes.status).toBe(200);
-    expect(backRes.body.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+    expect(orgDenied.status).toBe(403);
+    expect(orgDenied.body).toHaveProperty('code', 'invalid_context');
 
-    // An employee cannot claim the operations or expert contexts (AUTHZ-R-32).
+    // An employee cannot claim operations, expert, or unknown org contexts.
     for (const context of [{ kind: 'operations' }, { kind: 'expert' }, { kind: 'organization', orgId: 'org_other' }]) {
       const denied = await agent
         .post('/api/auth/context')
@@ -271,8 +287,11 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(denied.status).toBe(403);
       expect(denied.body).toHaveProperty('code', 'invalid_context');
     }
+
+    // Confirm the context was unchanged (still personal).
     const me = await agent.get('/api/auth/me');
-    expect(me.body.principal.context).toEqual({ kind: 'organization', orgId: 'org_sample' });
+    const meBody = MeResponseSchema.parse(me.body);
+    expect(meBody.principal.context).toEqual({ kind: 'personal', orgId: 'org_sample' });
   });
 
   // -----------------------------------------------------------------------
@@ -312,6 +331,13 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect.objectContaining({ orgId: 'org_sample', orgName: 'Example d.o.o.', status: 'ACTIVE' }),
     ]);
 
+    // Item 2: hr_admin now signs in with personal context; switch to org first.
+    const ctxRes = await hrAgent
+      .post('/api/auth/context')
+      .set('X-CSRF-Token', hrCsrf)
+      .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+    expect(ctxRes.status).toBe(200);
+
     const progRes = await hrAgent
       .get('/api/orgs/org_sample/programme')
       .set('X-CSRF-Token', hrCsrf);
@@ -327,7 +353,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
   // 7. Staff password + TOTP flow
   // -----------------------------------------------------------------------
 
-  it('staff password flow: temp password → new password → MFA setup → TOTP → tokens', async () => {
+  it('staff password flow: temp password → new password → MFA setup → TOTP → tokens (item 1: schema parse)', async () => {
     const staffAgent = request.agent(app.getHttpServer());
 
     // Step 1: POST /auth/password with temporary password → NEW_PASSWORD_REQUIRED.
@@ -335,17 +361,20 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       .post('/api/auth/password')
       .send({ email: 'user_nikola@example.com', password: 'TempPassword1!' });
     expect(pwRes.status).toBe(200);
-    expect(pwRes.body).toHaveProperty('step', 'new_password');
-    let challengeToken = pwRes.body.challengeToken as string;
+    // Item 1: parse password response with contracts schema
+    const pwBody = PasswordResponseSchema.parse(pwRes.body);
+    expect('step' in pwBody && pwBody.step).toBe('new_password');
+    let challengeToken = 'challengeToken' in pwBody ? (pwBody.challengeToken as string) : '';
 
     // Step 2: Respond with new password → MFA_SETUP (user has no TOTP enrolled).
     const newPwRes = await staffAgent
       .post('/api/auth/challenge')
       .send({ challengeToken, response: 'NewSecurePassword1!' });
-    // A follow-up challenge is a 200 with { step, challengeToken }, like POST /auth/password.
     expect(newPwRes.status).toBe(200);
-    const mfaSetupToken = newPwRes.body.challengeToken as string;
-    expect(newPwRes.body).toHaveProperty('step', 'totp_enrol');
+    // Item 1: parse challenge response
+    const challengeBody = PasswordResponseSchema.parse(newPwRes.body);
+    expect('step' in challengeBody && challengeBody.step).toBe('totp_enrol');
+    const mfaSetupToken = 'challengeToken' in challengeBody ? (challengeBody.challengeToken as string) : '';
     expect(mfaSetupToken).toBeTruthy();
     challengeToken = mfaSetupToken;
 
@@ -366,14 +395,17 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     }
 
     // Step 4: Complete MFA setup via /auth/challenge with the enrolment challenge token.
-    // The completeMfaSetup flow skips TOTP verification and issues tokens directly.
     const completeRes = await staffAgent
       .post('/api/auth/challenge')
       .send({ challengeToken, response: computeTotp(totpSecret) });
     expect(completeRes.status).toBe(200);
-    expect(completeRes.body).toHaveProperty('principal');
-    expect(completeRes.body.principal).toHaveProperty('userId', 'user_nikola');
-    expect(completeRes.body.principal.auth).toMatchObject({ method: 'password_totp', secondFactor: true });
+    // Item 1: parse the final challenge response (MeResponse branch of the union)
+    const completeBody = PasswordResponseSchema.parse(completeRes.body);
+    expect('principal' in completeBody).toBe(true);
+    if ('principal' in completeBody) {
+      expect(completeBody.principal.userId).toBe('user_nikola');
+      expect(completeBody.principal.auth).toMatchObject({ method: 'password_totp', secondFactor: true });
+    }
 
     const staffCsrf = extractCsrf(completeRes);
     expect(staffCsrf).toBeTruthy();
@@ -797,6 +829,96 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(me.body.effectiveActions).not.toContain('program.overview');
       expect(me.body.effectiveActions).not.toContain('access.preview');
       await jovan.agent.post('/api/auth/sign-out').set('X-CSRF-Token', jovan.csrf);
+    });
+
+    it("katarina's /me in the operations context lists content.write and content.preview (assigned_collections fix)", async () => {
+      // Katarina is a content_author with assigned_collections scope and
+      // COLLECTION assignments to all six launch categories. Before the
+      // effective-actions fix, the synthetic resource lacked `collectionId`
+      // so the scope check always failed and she got no content.* actions.
+      const katarina = await signInAs('user_katarina@example.com');
+
+      // The default context for staff is operations.
+      expect(katarina.body.effectiveActions).toEqual(
+        expect.arrayContaining(['content.write', 'content.preview']),
+      );
+
+      const me = await katarina.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toEqual(
+        expect.arrayContaining(['content.write', 'content.preview', 'content.submit']),
+      );
+      // She is NOT editorial_lead, so she must not have taxonomy.manage.
+      expect(me.body.effectiveActions).not.toContain('taxonomy.manage');
+
+      await katarina.agent.post('/api/auth/sign-out').set('X-CSRF-Token', katarina.csrf);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // org_context_expired (T-C1.02)
+  // -----------------------------------------------------------------------
+
+  describe('org context expiry', () => {
+    it('an ended membership turns an org route into 403 org_context_expired; the personal switch then follows the remaining memberships', async () => {
+      const email = 'user_ivana@example.com';
+      const ivana = request.agent(app.getHttpServer());
+      const startRes = await ivana.post('/api/auth/email-otp/start').send({ email });
+      expect(startRes.status).toBe(200);
+      const verifyRes = await ivana
+        .post('/api/auth/email-otp/verify')
+        .send({ challengeToken: startRes.body.challengeToken, code: lastSentCode(email) });
+      expect(verifyRes.status).toBe(200);
+      const csrf = extractCsrf(verifyRes);
+
+      const ctxRes = await ivana
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', csrf)
+        .send({ context: { kind: 'organization', orgId: 'org_sample' } });
+      expect(ctxRes.status).toBe(200);
+
+      const before = await ivana.get('/api/orgs/org_sample/programme');
+      expect(before.status).toBe(200);
+
+      const where = and(eq(memberships.userId, 'user_ivana'), eq(memberships.orgId, 'org_sample'));
+      const [original] = await testDb.db.select().from(memberships).where(where);
+      expect(original).toBeDefined();
+      const loader = app.get(PrincipalLoader);
+
+      try {
+        // End the membership the way the members module does, then drop the cache.
+        await testDb.db
+          .update(memberships)
+          .set({ status: 'ENDED', endDate: new Date(Date.now() - 60_000) })
+          .where(where);
+        await loader.invalidateUser('user_ivana', ['org_sample']);
+
+        const expired = await ivana.get('/api/orgs/org_sample/programme');
+        expect(expired.status).toBe(403);
+        expect(expired.body).toHaveProperty('code', 'org_context_expired');
+
+        // Other memberships of the user decide what the personal context resolves to.
+        const remaining = (
+          await testDb.db.select().from(memberships).where(eq(memberships.userId, 'user_ivana'))
+        ).filter((m) => m.status === 'ACTIVE');
+        const personal = await ivana
+          .post('/api/auth/context')
+          .set('X-CSRF-Token', csrf)
+          .send({ context: { kind: 'personal' } });
+        if (remaining.length === 0) {
+          expect(personal.status).toBe(403);
+          expect(personal.body).toHaveProperty('code', 'invalid_context');
+        } else {
+          expect(personal.status).toBe(200);
+          expect(personal.body.principal.context).toEqual({ kind: 'personal', orgId: remaining[0]!.orgId });
+        }
+      } finally {
+        await testDb.db
+          .update(memberships)
+          .set({ status: original!.status, endDate: original!.endDate })
+          .where(where);
+        await loader.invalidateUser('user_ivana', ['org_sample']);
+      }
     });
   });
 

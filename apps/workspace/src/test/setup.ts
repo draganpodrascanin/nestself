@@ -1,25 +1,33 @@
 import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
 
-// jsdom lacks these; the call components (`@nestself/video`) use them.
-if (!window.matchMedia) {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  });
+afterEach(() => {
+  cleanup();
+});
+
+// Polyfill window.matchMedia for jsdom (required by motion / Base UI and @nestself/video)
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+});
+
+// Polyfill ResizeObserver for jsdom (required by Base UI Positioner)
+class ResizeObserverPolyfill {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
 }
-if (!globalThis.ResizeObserver) {
-  globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
-}
+globalThis.ResizeObserver = ResizeObserverPolyfill as unknown as typeof ResizeObserver;
+
+// Polyfill Element.prototype.scrollIntoView for jsdom
+Element.prototype.scrollIntoView = function () {};

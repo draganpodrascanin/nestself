@@ -52,7 +52,11 @@ export function createSampleAuthApi(): AuthApi {
 
     me: async () =>
       ({
-        principal: { context: { kind: 'personal' }, staffTemplates: [] },
+        principal: { context: { kind: 'personal', orgId: 'org_sample' }, staffTemplates: [] },
+        availableContexts: [
+          { kind: 'personal', orgId: 'org_sample' },
+          { kind: 'organization', orgId: 'org_sample' },
+        ],
       }) as unknown as Resolved<'me'>,
 
     switchContext: async () => ({}) as unknown as Resolved<'switchContext'>,

@@ -14,9 +14,10 @@
  * (possibly from another checkout) is never reused by mistake.
  */
 import { defineConfig } from '@playwright/test';
+import { STORYBOOK_PORT } from './e2e/ports';
 
 const CI = !!process.env.CI;
-const PORT = Number(process.env.MOTION_STORYBOOK_PORT ?? 6106);
+const PORT = process.env.MOTION_STORYBOOK_PORT ? Number(process.env.MOTION_STORYBOOK_PORT) : STORYBOOK_PORT;
 
 export default defineConfig({
   testDir: './e2e/motion',

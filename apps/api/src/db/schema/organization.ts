@@ -180,6 +180,8 @@ export const memberships = pgTable(
       .on(t.userId, t.orgId)
       .where(sql`${t.status} = 'ACTIVE'`),
     index('idx_memberships_active_org').on(t.orgId).where(sql`${t.status} = 'ACTIVE'`),
+    /** Composite target for tenant-consistency FKs from library tables. */
+    uniqueIndex('memberships_id_org_id_key').on(t.id, t.orgId),
     pgPolicy('memberships_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),

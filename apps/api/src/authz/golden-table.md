@@ -22,13 +22,13 @@ Dates in the JSON are ISO-8601 strings; the test loader parses them to
 
 ## Coverage
 
-The table covers every template (17), every denial reason (11), every
+The table covers every template (21), every denial reason (11), every
 scope type (9), every condition kind (4), delegation success and failure
 paths, self-approval, emergency access lifecycle, confidential-domain
 isolation, membership edge cases, and user-state denials.
 
 Labels use prefixes: EMP, MGR, ORG, PLAT, EXP, FIN, CLFIN, COORD, CMS,
-LEAD, OPS, EVT, SYS, CONF-DENY, DELEG, OWNER.
+LEAD, OPS, EVT, SYS, CONF-DENY, CMSE, DELEG, OWNER.
 
 CONF-DENY rows use the professional module's resource shape (`id` = case
 id, `ownerId` = employee, `isConfidential: true`) on
@@ -43,6 +43,27 @@ id, `ownerId` = employee, `isConfidential: true`) on
 
 The deny rows carry a matching CASE assignment, so step 4 passes and the
 denial comes from the step 5 administrative-scope exclusion.
+
+## CMSE rows (T-C1.03)
+
+CMSE-01 to CMSE-30 are cases CMS-01 to CMS-30 of cms-ee-strategy 5.8
+(renamed because the CMS-01 to CMS-06 labels were already taken by the
+content author and publisher rows). They cover the sixteen CMS actions, the
+four editorial templates and the reviewer and publisher split. Where the
+strategy table expects `confidential_domain_denied` for an administrative
+grant (CMS-18, CMS-28, CMS-29), the engine returns `no_matching_grant`: that
+reason is reserved for step 3 (a non-confidential action on a confidential
+resource), while step 5 skips administrative scopes silently, as in
+CONF-DENY-01 and CONF-DENY-02. CMSE-30 (ended CASE assignment) returns
+`no_matching_assignment`.
+
+Added in the review follow-up: CMSE-20 carries `collectionId: cat-sleep`, so
+adding `media.manage` to the author grant flips it to allowed. CMSE-31 to
+CMSE-35 cover an ended CASE assignment on `intake.respond` (denied), an
+`intake_professional` with QUEUE and CASE assignments reading the record body
+(denied: wrong scope), an author calling `content.publish` in an assigned
+category, and `editorial_lead` and `platform_owner` calling `content.review`
+(all denied).
 
 DELEG rows cover a delegatee whose `ctx.grants` carries its own delegated
 child grant plus the ancestor chain held by other users (as

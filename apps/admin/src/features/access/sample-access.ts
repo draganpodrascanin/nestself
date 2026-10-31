@@ -2,7 +2,7 @@
  * Sample-mode data for the access screens, derived from the shared fixtures.
  * Nothing here is created or sent anywhere.
  */
-import { SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
+import { SAMPLE_EDITORIAL_STAFF, SAMPLE_GRANTS, SAMPLE_PEOPLE } from '@nestself/sample-data';
 import type { GrantResponse, UserAccessContext } from '@nestself/contracts';
 import { grantStatus } from './access-labels';
 import type { AccessMember } from './access-labels';
@@ -25,7 +25,7 @@ export function sampleMembers(orgId: string): AccessMember[] {
 
 /** Every sample person, for naming the subjects of platform grants. */
 export function samplePeople(): AccessMember[] {
-  return SAMPLE_PEOPLE.map((p) => ({ userId: p.id, displayName: p.displayName }));
+  return [...SAMPLE_PEOPLE, ...SAMPLE_EDITORIAL_STAFF].map((p) => ({ userId: p.id, displayName: p.displayName }));
 }
 
 /**
@@ -34,7 +34,7 @@ export function samplePeople(): AccessMember[] {
  * when the id is not a sample person, like the API's 404.
  */
 export function sampleUserAccess(userId: string): UserAccessContext[] | null {
-  if (!SAMPLE_PEOPLE.some((p) => p.id === userId)) return null;
+  if (![...SAMPLE_PEOPLE, ...SAMPLE_EDITORIAL_STAFF].some((p) => p.id === userId)) return null;
   const contexts = new Map<string | null, UserAccessContext>();
   for (const g of SAMPLE_GRANTS) {
     if (g.subjectUserId !== userId || grantStatus(g) !== 'active') continue;

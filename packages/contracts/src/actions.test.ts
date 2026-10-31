@@ -2,8 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { ACTIONS, ACTION_LIST, isAction, CONFIDENTIAL_ACTIONS, APPROVAL_ACTIONS } from './actions.ts';
 
 describe('actions', () => {
-  it('has exactly 97 actions in the catalogue', () => {
-    expect(Object.keys(ACTIONS)).toHaveLength(97);
+  it('has exactly 113 actions in the catalogue', () => {
+    expect(Object.keys(ACTIONS)).toHaveLength(113);
+  });
+
+  it('contains the sixteen CMS actions (ACC-R-01)', () => {
+    for (const a of [
+      'taxonomy.manage', 'home.manage', 'media.upload', 'media.manage',
+      'poll.manage', 'poll.respond', 'poll.results.read', 'content.metrics.read',
+      'editorial.request.submit', 'editorial.request.manage', 'editorial.brief.manage',
+      'intake.queue.view', 'intake.claim', 'intake.reassign', 'intake.respond',
+      'intake.permission.request',
+    ]) {
+      expect(isAction(a), a).toBe(true);
+    }
+  });
+
+  it('only intake.respond and intake.permission.request join the confidential actions (ACC-R-02)', () => {
+    expect(CONFIDENTIAL_ACTIONS).toContain('intake.respond');
+    expect(CONFIDENTIAL_ACTIONS).toContain('intake.permission.request');
+    for (const a of ['intake.queue.view', 'intake.claim', 'intake.reassign'] as const) {
+      expect(CONFIDENTIAL_ACTIONS).not.toContain(a);
+    }
+    expect(CONFIDENTIAL_ACTIONS).toHaveLength(6);
   });
 
   it('includes the event actions of NS-CALLS-01 (decision record section 7)', () => {

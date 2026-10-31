@@ -1,0 +1,113 @@
+{
+  "nav": {
+    "home": "Home",
+    "explore": "Explore",
+    "saved": "Saved",
+    "myRequests": "My requests",
+    "more": "More"
+  },
+  "home": {
+    "greeting": "Hello, {{name}}",
+    "availableResources": "Available resources",
+    "showMore": "Show more",
+    "showMoreLoading": "Loading more",
+    "showMoreAnnouncement_one": "{{count}} more item loaded",
+    "showMoreAnnouncement_few": "{{count}} more items loaded",
+    "showMoreAnnouncement_other": "{{count}} more items loaded",
+    "empty": {
+      "title": "No resources available yet",
+      "body": "Content is being prepared. Check back soon."
+    }
+  },
+  "card": {
+    "save": "Save",
+    "unsave": "Remove from saved",
+    "article": "Article",
+    "video": "Video",
+    "audio": "Audio",
+    "guide": "Guide",
+    "course": "Course",
+    "qa": "Q&A"
+  },
+  "detail": {
+    "editorialTeam": "Editorial team",
+    "outcome": "What you get",
+    "duration": "Duration",
+    "reviewedBy": "Reviewed by {{name}}",
+    "reviewedOn": "Reviewed on {{date}}",
+    "sources": "Sources",
+    "related": "Related resources",
+    "save": "Save this resource",
+    "unsave": "Remove from saved",
+    "saveDemo": "This is a demonstration. Nothing was saved.",
+    "backToHome": "Back to Home",
+    "cta": {
+      "open_content": "Open",
+      "open_collection": "Browse collection",
+      "suggest_topic": "Suggest a topic",
+      "ask_general_question": "Ask a question",
+      "express_event_interest": "Register interest",
+      "open_service": "Open service",
+      "default": "Continue"
+    }
+  },
+  "saved": {
+    "title": "Saved",
+    "empty": {
+      "title": "No saved items",
+      "body": "Save resources to find them here later."
+    },
+    "unavailable": "This content is no longer available",
+    "remove": "Remove",
+    "removeItem": "Remove {{title}}",
+    "removeUnavailable": "Remove unavailable item saved on {{date}}",
+    "removeDemo": "This is a demonstration. Nothing was removed."
+  },
+  "content": {
+    "unavailable": "This content is not available"
+  },
+  "explore": {
+    "comingSoon": {
+      "title": "Explore",
+      "body": "Browse and filter resources by topic, format and duration. This feature is in development."
+    }
+  },
+  "requests": {
+    "comingSoon": {
+      "title": "My requests",
+      "body": "Submit and track content requests. This feature is in development."
+    }
+  },
+  "prototype": {
+    "group": "Prototype screens"
+  },
+  "renderer": {
+    "transcript": "Transcript",
+    "noteWarning": "Warning",
+    "noteTip": "Tip",
+    "noteDisclaimer": "Disclaimer",
+    "noteDefault": "Note",
+    "checklist": "Checklist",
+    "opensInNewTab": "Opens in a new tab",
+    "downloadPdf": "Download PDF",
+    "imageUnavailable": "Image unavailable"
+  },
+  "duration": {
+    "under_5": "Under 5 min",
+    "5_to_15": "5–15 min",
+    "over_15": "Over 15 min"
+  },
+  "durationFormat": {
+    "minutes": "{{count}} min",
+    "lessThanMinute": "<1 min"
+  },
+  "error": {
+    "contentNotAvailable": "This content is not available.",
+    "invalidContext": "Please switch to a valid context to view this content.",
+    "orgContextExpired": "Your organization access has expired. Please contact your administrator.",
+    "network": "Could not load content. Check your connection and try again.",
+    "saveFailed": "Could not save this resource. Please try again.",
+    "unsaveFailed": "Could not remove this resource from saved items. Please try again.",
+    "unknown": "Something went wrong. Please try again."
+  }
+}

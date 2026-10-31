@@ -28,6 +28,7 @@ export interface MenuTriggerProps {
   children: ReactNode;
   variant?: 'default' | 'quiet';
   className?: string;
+  'aria-label'?: string;
 }
 
 const triggerDefault =
@@ -35,9 +36,10 @@ const triggerDefault =
 const triggerQuiet =
   'inline-flex items-center justify-center min-h-11 px-2 py-2 gap-1.5 rounded-control border-0 bg-transparent text-text-secondary hover:text-primary hover:bg-tint cursor-pointer pointer-coarse:min-h-12';
 
-export function MenuTrigger({ children, variant = 'default', className }: MenuTriggerProps) {
+export function MenuTrigger({ children, variant = 'default', className, 'aria-label': ariaLabel }: MenuTriggerProps) {
   return (
     <BaseMenu.Trigger
+      aria-label={ariaLabel}
       className={cn(
         variant === 'quiet' ? triggerQuiet : triggerDefault,
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
@@ -87,16 +89,22 @@ export interface MenuItemProps {
   children: ReactNode;
   onClick?: () => void;
   className?: string;
+  /** Marks this item as the current selection (`aria-current="true"`). */
+  current?: boolean;
+  disabled?: boolean;
 }
 
-export function MenuItem({ children, onClick, className }: MenuItemProps) {
+export function MenuItem({ children, onClick, className, current, disabled }: MenuItemProps) {
   return (
     <BaseMenu.Item
       onClick={onClick}
+      disabled={disabled}
+      aria-current={current ? 'true' : undefined}
       className={cn(
         'flex items-center min-h-11 px-3 py-2 rounded-small cursor-pointer',
         'data-highlighted:bg-tint',
         'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus',
+        disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
     >

@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Principal, ActiveContext, MeResponse } from '@nestself/contracts';
+import type { Principal, ActiveContext, AvailableContextEntry, MeResponse } from '@nestself/contracts';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { AuthContext } from './auth-context';
@@ -35,12 +35,14 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
   const [effectiveActions, setEffectiveActions] = useState<readonly string[]>(
     [],
   );
+  const [availableContexts, setAvailableContexts] = useState<readonly AvailableContextEntry[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
   const applyMe = useCallback(
-    (data: { principal: Principal; effectiveActions: string[] }) => {
+    (data: { principal: Principal; effectiveActions: string[]; availableContexts: AvailableContextEntry[] }) => {
       setPrincipal(data.principal);
       setEffectiveActions(data.effectiveActions);
+      setAvailableContexts(data.availableContexts);
       setStatus('authenticated');
       setError(null);
     },
@@ -55,6 +57,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
       if (err instanceof ApiError && err.status === 401) {
         setPrincipal(null);
         setEffectiveActions([]);
+        setAvailableContexts([]);
         setStatus('unauthenticated');
         setError(null);
       } else {
@@ -89,6 +92,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
     }
     setPrincipal(null);
     setEffectiveActions([]);
+    setAvailableContexts([]);
     setStatus('unauthenticated');
     queryClient.cancelQueries();
     queryClient.clear();
@@ -97,10 +101,15 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
 
   const switchContext = useCallback(
     async (context: ActiveContext) => {
+      // Ruling 5: cancel in-flight queries first, then switch on the server,
+      // then clear the cache only on success. If the switch fails the old
+      // cache stays so the user is not stranded on an empty screen.
+      await queryClient.cancelQueries();
       const data = await authApi.switchContext(context);
+      queryClient.clear();
       applyMe(data);
     },
-    [authApi, applyMe],
+    [authApi, applyMe, queryClient],
   );
 
   /** One entry per step-up request; concurrent callers share the same entry. */
@@ -135,6 +144,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
       status,
       principal,
       effectiveActions,
+      availableContexts,
       signOut,
       switchContext,
       stepUp,
@@ -145,6 +155,7 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
       status,
       principal,
       effectiveActions,
+      availableContexts,
       signOut,
       switchContext,
       stepUp,

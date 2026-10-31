@@ -23,6 +23,7 @@ import {
   type KeyValueStore,
 } from '../redis/key-value-store.js';
 import { wsTicketKey, WS_TICKET_TTL } from '../redis/redis-keys.js';
+import { defaultContext } from '../authz/personal-context.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 
 export class WsAuthError extends Error {
@@ -188,7 +189,7 @@ export class WsAuthService {
     }
 
     // Default context for ticket/bearer callers (same logic as AuthenticationGuard)
-    const context = this.defaultContext(loaded);
+    const context = defaultContext(loaded);
 
     // Carry the issuing session's authentication strength (never upgrade it).
     return this.assemblePrincipal(loaded, {
@@ -205,7 +206,7 @@ export class WsAuthService {
   }
 
   // -------------------------------------------------------------------------
-  // Shared helpers (copied from AuthenticationGuard to keep it unmodified)
+  // Shared helpers
   // -------------------------------------------------------------------------
 
   private assemblePrincipal(
@@ -232,19 +233,5 @@ export class WsAuthService {
     };
   }
 
-  private defaultContext(loaded: LoadedPrincipal): ActiveContext {
-    if (loaded.staffTemplates.length > 0) {
-      return { kind: 'operations' };
-    }
-    if (loaded.expert) {
-      return { kind: 'expert' };
-    }
-    const activeMembership = loaded.memberships.find(
-      (m) => m.status === 'ACTIVE',
-    );
-    if (activeMembership) {
-      return { kind: 'organization', orgId: activeMembership.orgId };
-    }
-    return { kind: 'personal' };
-  }
+  // defaultContext is now imported from personal-context.ts (ruling 9, T-C1.02).
 }

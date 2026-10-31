@@ -92,6 +92,11 @@ export class SessionService {
     const stored: StoredRecord = {
       userId: input.userId, surface: input.surface,
       population: input.population, context: input.context,
+      // Ruling D: set lastPersonalOrgId at session creation when the
+      // initial context is personal with an orgId.
+      ...(input.context.kind === 'personal' && input.context.orgId
+        ? { lastPersonalOrgId: input.context.orgId }
+        : {}),
       cognito: {
         username: input.cognitoUsername,
         accessToken: this.cipher.encrypt(input.tokens.accessToken),
@@ -185,6 +190,10 @@ export class SessionService {
     const absMs = new Date(stored.absoluteExpiresAt).getTime();
     stored.context = context;
     stored.population = population;
+    // ACC-R-12: track the last orgId used in personal context for sticky resolution.
+    if (context.kind === 'personal' && context.orgId) {
+      stored.lastPersonalOrgId = context.orgId;
+    }
     stored.idleExpiresAt = new Date(Math.min(now + lifetimes.idleSeconds * 1_000, absMs)).toISOString();
     stored.lastActivityAt = new Date(now).toISOString();
     this.reEncryptIfNeeded(stored);
@@ -241,8 +250,13 @@ export class SessionService {
       if (!raw) { await this.store.sRem(userSessionsKey(userId), hash); continue; }
       const stored = JSON.parse(raw) as StoredRecord;
       if (opts?.orgId) {
-        if (stored.context.kind !== 'organization') continue;
-        if (stored.context.orgId !== opts.orgId) continue;
+        // Destroy sessions in any context tied to this org: organization,
+        // personal-with-orgId, or (future) any context variant with orgId.
+        const ctxOrgId =
+          (stored.context.kind === 'organization' || stored.context.kind === 'personal')
+            ? stored.context.orgId
+            : undefined;
+        if (ctxOrgId !== opts.orgId) continue;
       }
       await this.destroyByHash(hash, stored, { revokeTokens: true });
     }

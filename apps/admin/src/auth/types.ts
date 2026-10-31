@@ -2,13 +2,14 @@
  * Shared auth types for the admin app.
  * CLIENT-R-01..04: useAuth() shape.
  */
-import type { Principal, ActiveContext } from '@nestself/contracts';
+import type { Principal, ActiveContext, AvailableContextEntry } from '@nestself/contracts';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 export interface AuthSnapshot {
   principal: Principal | null;
   effectiveActions: readonly string[];
+  availableContexts: readonly AvailableContextEntry[];
 }
 
 export interface AuthContextValue extends AuthSnapshot {

@@ -31,8 +31,8 @@
  */
 import { test, expect } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
+import { WORKSPACE_URL } from '../ports';
 
-const WORKSPACE_URL = 'http://localhost:5173';
 const HR_ADMIN_EMAIL = 'user_ivana@example.com';
 const FIXED_OTP = '123456';
 

@@ -76,6 +76,7 @@ export function makeAuth(overrides: Partial<AuthContextValue> = {}): AuthContext
     stepUp: vi.fn().mockResolvedValue(true),
     refreshPrincipal: vi.fn().mockResolvedValue(undefined),
     error: null,
+    availableContexts: [],
     ...overrides,
   };
 }

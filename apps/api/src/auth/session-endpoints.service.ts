@@ -1,8 +1,8 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { randomBytes, createHash } from 'node:crypto';
- 
+
 import { SessionService } from '../session/session.service.js';
- 
+
 import {
   PrincipalLoader,
 } from '../principal/principal-loader.js';
@@ -15,12 +15,31 @@ import {
   WS_TICKET_TTL,
 } from '../redis/redis-keys.js';
 import { ApiHttpException } from '../common/api-error.js';
+import {
+  resolveDefaultPersonalOrgId,
+  computeAvailableContexts,
+  canEnterContext,
+  resolvePopulation,
+} from '../authz/personal-context.js';
 import type {
   Principal,
   ActiveContext,
   MeResponse,
 } from '@nestself/contracts';
 import { MeResponseBuilder } from './me-response.builder.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Reject a switchContext request with 403 invalid_context (ruling 2). */
+function denyContext(): never {
+  throw new ApiHttpException({
+    status: 403,
+    code: 'invalid_context',
+    message: 'The requested context is not available to this user',
+  });
+}
 
 @Injectable()
 export class SessionEndpointsService {
@@ -47,6 +66,7 @@ export class SessionEndpointsService {
     sessionId: string,
     principal: Principal,
     newContext: ActiveContext,
+    lastPersonalOrgId?: string,
   ): Promise<MeResponse> {
     const loaded = await this.principalLoader.load(principal.userId);
     if (!loaded) {
@@ -57,28 +77,43 @@ export class SessionEndpointsService {
       });
     }
 
-    // The requested context must be backed by a current membership, expert
-    // record or staff grants (AUTHZ-R-32); @Authenticated routes trust it.
-    const contextAllowed =
-      newContext.kind === 'personal' ||
-      (newContext.kind === 'organization' &&
-        loaded.memberships.some(
-          (m) => m.orgId === newContext.orgId && m.status === 'ACTIVE',
-        )) ||
-      (newContext.kind === 'expert' && loaded.expert != null) ||
-      (newContext.kind === 'operations' && loaded.staffTemplates.length > 0);
-    if (!contextAllowed) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'invalid_context',
-        message: 'The requested context is not available to this user',
-      });
+    // C1: compute available contexts once and reuse for both validation and
+    // the response, so switch acceptance is always consistent with the list.
+    const extras = await this.principalLoader.loadAvailableContextExtras(loaded);
+    const now = new Date();
+    const available = computeAvailableContexts(loaded, extras, now);
+
+    // ACC-R-12: resolve personal context orgId before validation.
+    let resolvedContext: ActiveContext = newContext;
+
+    if (newContext.kind === 'personal') {
+      if (newContext.orgId) {
+        resolvedContext = { kind: 'personal', orgId: newContext.orgId };
+      } else {
+        // Resolve default using sticky orgId.
+        const lastUsed = lastPersonalOrgId
+          ?? (principal.context.kind === 'personal' ? principal.context.orgId : undefined);
+        const defaultOrgId = resolveDefaultPersonalOrgId(
+          loaded.memberships,
+          lastUsed,
+          now,
+        );
+        resolvedContext = defaultOrgId
+          ? { kind: 'personal', orgId: defaultOrgId }
+          : { kind: 'personal' };
+      }
+    }
+    // TODO(auth T-2.x, D-05): check second factor at organization context switch
+
+    // C1: validate against available contexts (ruling 3).
+    if (!canEnterContext(available, resolvedContext)) {
+      denyContext();
     }
 
-    const population = this.resolvePopulation(loaded, newContext);
-    await this.sessions.updateContext(sessionId, newContext, population);
+    const population = resolvePopulation(loaded, resolvedContext);
+    await this.sessions.updateContext(sessionId, resolvedContext, population);
 
-    return this.meResponse.build({ ...principal, context: newContext });
+    return this.meResponse.build({ ...principal, context: resolvedContext }, { availableContexts: available });
   }
 
   async signOut(sessionId: string): Promise<void> {
@@ -166,12 +201,4 @@ export class SessionEndpointsService {
     return ticket;
   }
 
-  private resolvePopulation(
-    loaded: { staffTemplates: unknown[]; expert: unknown | null },
-    context: ActiveContext,
-  ): 'employee' | 'expert' | 'staff' {
-    if (loaded.staffTemplates.length > 0) return 'staff';
-    if (loaded.expert && context.kind === 'expert') return 'expert';
-    return 'employee';
-  }
 }

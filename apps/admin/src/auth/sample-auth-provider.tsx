@@ -76,34 +76,40 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const [role, setRole] = useState<SampleRole>(
     initialRole ?? resolveInitialRole,
   );
-  const sample = SAMPLE_PRINCIPALS[role];
+  const baseSample = SAMPLE_PRINCIPALS[role];
+
+  // Context override for sample mode switchContext (ruling 8, T-C1.02).
+  const [contextOverride, setContextOverride] = useState<ActiveContext | null>(null);
+
+  const sample = useMemo(() => {
+    if (!contextOverride) return baseSample;
+    const updatedPrincipal: Principal = { ...baseSample.principal, context: contextOverride };
+    return {
+      principal: updatedPrincipal,
+      effectiveActions: baseSample.effectiveActions,
+      availableContexts: baseSample.availableContexts,
+    };
+  }, [baseSample, contextOverride]);
 
   const signOut = useCallback(async () => {
     setRole('admin');
+    setContextOverride(null);
   }, []);
 
   // Context switching is local: the label and `principal.context` change,
   // the precomputed sample actions do not. Contexts the sample principal
   // could not hold are refused the way the API refuses them.
-  const [switched, setSwitched] = useState<{ role: SampleRole; context: ActiveContext } | null>(null);
-  const switchContext = useCallback(
-    async (context: ActiveContext) => {
-      if (!sampleContextAllowed(sample.principal, context)) {
-        throw new ApiError({
-          status: 403,
-          code: 'invalid_context',
-          message: 'The requested context is not available to this user',
-          requestId: null,
-        });
-      }
-      setSwitched({ role, context });
-    },
-    [sample, role],
-  );
-  const principal = useMemo<Principal>(
-    () => (switched && switched.role === role ? { ...sample.principal, context: switched.context } : sample.principal),
-    [sample, switched, role],
-  );
+  const switchContext = useCallback(async (context: ActiveContext) => {
+    if (!sampleContextAllowed(baseSample.principal, context)) {
+      throw new ApiError({
+        status: 403,
+        code: 'invalid_context',
+        message: 'The requested context is not available to this user',
+        requestId: null,
+      });
+    }
+    setContextOverride(context);
+  }, [baseSample]);
 
   const stepUp = useCallback(async () => {
     // Sample mode has no session to re-authenticate; treat it as verified.
@@ -121,6 +127,7 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const setRoleDirectly = useCallback((newRole: string) => {
     const r = newRole as SampleRole;
     setRole(r);
+    setContextOverride(null);
     if (typeof window !== 'undefined' && import.meta.env.DEV) {
       const url = new URL(window.location.href);
       url.searchParams.set('role', r);
@@ -131,15 +138,16 @@ export function SampleAuthProvider({ children, initialRole }: Props) {
   const authValue = useMemo(
     () => ({
       status: 'authenticated' as const,
-      principal,
+      principal: sample.principal,
       effectiveActions: sample.effectiveActions,
+      availableContexts: sample.availableContexts,
       signOut,
       switchContext,
       stepUp,
       refreshPrincipal,
       error: null,
     }),
-    [principal, sample, signOut, switchContext, stepUp, refreshPrincipal],
+    [sample, signOut, switchContext, stepUp, refreshPrincipal],
   );
 
   const extras = useMemo(

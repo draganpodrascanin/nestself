@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedCmsRouteImport } from './routes/_authenticated/cms'
 import { Route as AuthenticatedContentRouteImport } from './routes/_authenticated/content'
 import { Route as AuthenticatedEventRequestsRouteImport } from './routes/_authenticated/event-requests'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -32,11 +33,16 @@ import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
 import { Route as AuthenticatedWebinarsNewRouteImport } from './routes/_authenticated/webinars/new'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
+import { Route as AuthenticatedCmsResourcesIndexRouteImport } from './routes/_authenticated/cms/resources/index'
+import { Route as AuthenticatedCmsResourcesResourceIdRouteImport } from './routes/_authenticated/cms/resources/$resourceId'
+import { Route as AuthenticatedCmsResourcesNewRouteImport } from './routes/_authenticated/cms/resources/new'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
 import { Route as AuthenticatedOrganizationsOrgIdPeopleRouteImport } from './routes/_authenticated/organizations/$orgId/people'
 import { Route as AuthenticatedWebinarsWebinarIdEditRouteImport } from './routes/_authenticated/webinars/$webinarId.edit'
 import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
+import { Route as AuthenticatedCmsResourcesResourceIdIndexRouteImport } from './routes/_authenticated/cms/resources/$resourceId/index'
+import { Route as AuthenticatedCmsResourcesResourceIdVariantsLocaleRouteImport } from './routes/_authenticated/cms/resources/$resourceId/variants/$locale'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -49,6 +55,11 @@ const PublicRoute = PublicRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCmsRoute = AuthenticatedCmsRouteImport.update({
+  id: '/cms',
+  path: '/cms',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedContentRoute = AuthenticatedContentRouteImport.update({
@@ -165,6 +176,24 @@ const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => PublicRoute,
 } as any)
+const AuthenticatedCmsResourcesIndexRoute =
+  AuthenticatedCmsResourcesIndexRouteImport.update({
+    id: '/resources/',
+    path: '/resources/',
+    getParentRoute: () => AuthenticatedCmsRoute,
+  } as any)
+const AuthenticatedCmsResourcesResourceIdRoute =
+  AuthenticatedCmsResourcesResourceIdRouteImport.update({
+    id: '/resources/$resourceId',
+    path: '/resources/$resourceId',
+    getParentRoute: () => AuthenticatedCmsRoute,
+  } as any)
+const AuthenticatedCmsResourcesNewRoute =
+  AuthenticatedCmsResourcesNewRouteImport.update({
+    id: '/resources/new',
+    path: '/resources/new',
+    getParentRoute: () => AuthenticatedCmsRoute,
+  } as any)
 const AuthenticatedOrganizationsOrgIdIndexRoute =
   AuthenticatedOrganizationsOrgIdIndexRouteImport.update({
     id: '/',
@@ -195,9 +224,22 @@ const AuthenticatedWebinarsWebinarIdLiveRoute =
     path: '/live',
     getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
   } as any)
+const AuthenticatedCmsResourcesResourceIdIndexRoute =
+  AuthenticatedCmsResourcesResourceIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedCmsResourcesResourceIdRoute,
+  } as any)
+const AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute =
+  AuthenticatedCmsResourcesResourceIdVariantsLocaleRouteImport.update({
+    id: '/variants/$locale',
+    path: '/variants/$locale',
+    getParentRoute: () => AuthenticatedCmsResourcesResourceIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
+  '/cms': typeof AuthenticatedCmsRouteWithChildren
   '/content': typeof AuthenticatedContentRoute
   '/event-requests': typeof AuthenticatedEventRequestsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -218,14 +260,20 @@ export interface FileRoutesByFullPath {
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/sso/': typeof AuthenticatedSsoIndexRoute
   '/webinars/': typeof AuthenticatedWebinarsIndexRoute
+  '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
+  '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
+  '/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
+  '/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
+  '/cms': typeof AuthenticatedCmsRouteWithChildren
   '/content': typeof AuthenticatedContentRoute
   '/event-requests': typeof AuthenticatedEventRequestsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -245,16 +293,21 @@ export interface FileRoutesByTo {
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
   '/sso': typeof AuthenticatedSsoIndexRoute
   '/webinars': typeof AuthenticatedWebinarsIndexRoute
+  '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
+  '/cms/resources': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
+  '/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/_public': typeof PublicRouteWithChildren
+  '/_authenticated/cms': typeof AuthenticatedCmsRouteWithChildren
   '/_authenticated/content': typeof AuthenticatedContentRoute
   '/_authenticated/event-requests': typeof AuthenticatedEventRequestsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -276,16 +329,22 @@ export interface FileRoutesById {
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/_authenticated/sso/': typeof AuthenticatedSsoIndexRoute
   '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
+  '/_authenticated/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
+  '/_authenticated/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
   '/_authenticated/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   '/_authenticated/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
+  '/_authenticated/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/_authenticated/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
+  '/_authenticated/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cms'
     | '/content'
     | '/event-requests'
     | '/settings'
@@ -306,14 +365,20 @@ export interface FileRouteTypes {
     | '/organizations/'
     | '/sso/'
     | '/webinars/'
+    | '/cms/resources/$resourceId'
+    | '/cms/resources/new'
     | '/organizations/$orgId/access'
     | '/organizations/$orgId/people'
     | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
+    | '/cms/resources/'
     | '/organizations/$orgId/'
+    | '/cms/resources/$resourceId/'
+    | '/cms/resources/$resourceId/variants/$locale'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cms'
     | '/content'
     | '/event-requests'
     | '/settings'
@@ -333,15 +398,20 @@ export interface FileRouteTypes {
     | '/organizations'
     | '/sso'
     | '/webinars'
+    | '/cms/resources/new'
     | '/organizations/$orgId/access'
     | '/organizations/$orgId/people'
     | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
+    | '/cms/resources'
     | '/organizations/$orgId'
+    | '/cms/resources/$resourceId'
+    | '/cms/resources/$resourceId/variants/$locale'
   id:
     | '__root__'
     | '/_authenticated'
     | '/_public'
+    | '/_authenticated/cms'
     | '/_authenticated/content'
     | '/_authenticated/event-requests'
     | '/_authenticated/settings'
@@ -363,11 +433,16 @@ export interface FileRouteTypes {
     | '/_authenticated/organizations/'
     | '/_authenticated/sso/'
     | '/_authenticated/webinars/'
+    | '/_authenticated/cms/resources/$resourceId'
+    | '/_authenticated/cms/resources/new'
     | '/_authenticated/organizations/$orgId/access'
     | '/_authenticated/organizations/$orgId/people'
     | '/_authenticated/webinars/$webinarId/edit'
     | '/_authenticated/webinars/$webinarId/live'
+    | '/_authenticated/cms/resources/'
     | '/_authenticated/organizations/$orgId/'
+    | '/_authenticated/cms/resources/$resourceId/'
+    | '/_authenticated/cms/resources/$resourceId/variants/$locale'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -396,6 +471,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/cms': {
+      id: '/_authenticated/cms'
+      path: '/cms'
+      fullPath: '/cms'
+      preLoaderRoute: typeof AuthenticatedCmsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/content': {
@@ -538,6 +620,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicInviteTokenRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_authenticated/cms/resources/': {
+      id: '/_authenticated/cms/resources/'
+      path: '/resources'
+      fullPath: '/cms/resources/'
+      preLoaderRoute: typeof AuthenticatedCmsResourcesIndexRouteImport
+      parentRoute: typeof AuthenticatedCmsRoute
+    }
+    '/_authenticated/cms/resources/$resourceId': {
+      id: '/_authenticated/cms/resources/$resourceId'
+      path: '/resources/$resourceId'
+      fullPath: '/cms/resources/$resourceId'
+      preLoaderRoute: typeof AuthenticatedCmsResourcesResourceIdRouteImport
+      parentRoute: typeof AuthenticatedCmsRoute
+    }
+    '/_authenticated/cms/resources/new': {
+      id: '/_authenticated/cms/resources/new'
+      path: '/resources/new'
+      fullPath: '/cms/resources/new'
+      preLoaderRoute: typeof AuthenticatedCmsResourcesNewRouteImport
+      parentRoute: typeof AuthenticatedCmsRoute
+    }
     '/_authenticated/organizations/$orgId/': {
       id: '/_authenticated/organizations/$orgId/'
       path: '/'
@@ -573,8 +676,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdLiveRouteImport
       parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
     }
+    '/_authenticated/cms/resources/$resourceId/': {
+      id: '/_authenticated/cms/resources/$resourceId/'
+      path: '/'
+      fullPath: '/cms/resources/$resourceId/'
+      preLoaderRoute: typeof AuthenticatedCmsResourcesResourceIdIndexRouteImport
+      parentRoute: typeof AuthenticatedCmsResourcesResourceIdRoute
+    }
+    '/_authenticated/cms/resources/$resourceId/variants/$locale': {
+      id: '/_authenticated/cms/resources/$resourceId/variants/$locale'
+      path: '/variants/$locale'
+      fullPath: '/cms/resources/$resourceId/variants/$locale'
+      preLoaderRoute: typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRouteImport
+      parentRoute: typeof AuthenticatedCmsResourcesResourceIdRoute
+    }
   }
 }
+
+interface AuthenticatedCmsResourcesResourceIdRouteChildren {
+  AuthenticatedCmsResourcesResourceIdIndexRoute: typeof AuthenticatedCmsResourcesResourceIdIndexRoute
+  AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute: typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
+}
+
+const AuthenticatedCmsResourcesResourceIdRouteChildren: AuthenticatedCmsResourcesResourceIdRouteChildren =
+  {
+    AuthenticatedCmsResourcesResourceIdIndexRoute:
+      AuthenticatedCmsResourcesResourceIdIndexRoute,
+    AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute:
+      AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute,
+  }
+
+const AuthenticatedCmsResourcesResourceIdRouteWithChildren =
+  AuthenticatedCmsResourcesResourceIdRoute._addFileChildren(
+    AuthenticatedCmsResourcesResourceIdRouteChildren,
+  )
+
+interface AuthenticatedCmsRouteChildren {
+  AuthenticatedCmsResourcesResourceIdRoute: typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
+  AuthenticatedCmsResourcesNewRoute: typeof AuthenticatedCmsResourcesNewRoute
+  AuthenticatedCmsResourcesIndexRoute: typeof AuthenticatedCmsResourcesIndexRoute
+}
+
+const AuthenticatedCmsRouteChildren: AuthenticatedCmsRouteChildren = {
+  AuthenticatedCmsResourcesResourceIdRoute:
+    AuthenticatedCmsResourcesResourceIdRouteWithChildren,
+  AuthenticatedCmsResourcesNewRoute: AuthenticatedCmsResourcesNewRoute,
+  AuthenticatedCmsResourcesIndexRoute: AuthenticatedCmsResourcesIndexRoute,
+}
+
+const AuthenticatedCmsRouteWithChildren =
+  AuthenticatedCmsRoute._addFileChildren(AuthenticatedCmsRouteChildren)
 
 interface AuthenticatedOrganizationsOrgIdRouteChildren {
   AuthenticatedOrganizationsOrgIdAccessRoute: typeof AuthenticatedOrganizationsOrgIdAccessRoute
@@ -616,6 +767,7 @@ const AuthenticatedWebinarsWebinarIdRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedCmsRoute: typeof AuthenticatedCmsRouteWithChildren
   AuthenticatedContentRoute: typeof AuthenticatedContentRoute
   AuthenticatedEventRequestsRoute: typeof AuthenticatedEventRequestsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -637,6 +789,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedCmsRoute: AuthenticatedCmsRouteWithChildren,
   AuthenticatedContentRoute: AuthenticatedContentRoute,
   AuthenticatedEventRequestsRoute: AuthenticatedEventRequestsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,

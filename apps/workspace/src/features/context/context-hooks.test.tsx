@@ -45,7 +45,10 @@ describe('useOrgContext', () => {
 
   it('does not switch back after the picker moved an organization screen to another context', () => {
     const switchContext = vi.fn().mockResolvedValue(undefined);
-    const { result, setPrincipal } = renderWithAuth(() => useOrgContext(false), makeAuth({ principal: HR, switchContext }));
+    // Ruling E: HR defaults to personal; set organization context explicitly
+    // to test the "don't switch back" behavior after picker navigation.
+    const hrInOrg = { ...HR, context: { kind: 'organization' as const, orgId: 'org_sample' } };
+    const { result, setPrincipal } = renderWithAuth(() => useOrgContext(false), makeAuth({ principal: hrInOrg, switchContext }));
     expect(result.current.apiOrgId).toBe('org_sample');
     setPrincipal({ ...HR, context: { kind: 'personal' } });
     expect(switchContext).not.toHaveBeenCalled();

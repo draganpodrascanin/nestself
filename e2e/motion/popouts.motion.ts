@@ -95,6 +95,41 @@ const cases: PopoutCase[] = [
     exit: { duration: MOTION.fast, properties: SCALE_AND_FADE },
   },
   {
+    name: 'editor slash menu',
+    story: 'content-contenteditor--empty',
+    selector: '[role="listbox"]',
+    open: async (page) => {
+      await page.getByRole('textbox', { name: 'Content editor' }).click();
+      await page.keyboard.type('/');
+    },
+    close: escape,
+    enter: { duration: MOTION.standard, properties: SCALE_AND_FADE },
+    exit: { duration: MOTION.fast, properties: SCALE_AND_FADE },
+  },
+  {
+    name: 'editor block menu',
+    story: 'content-contenteditor--with-content',
+    selector: '[role="menu"]',
+    open: async (page) => {
+      await page.getByRole('textbox', { name: 'Content editor' }).getByText('Getting started').click();
+      await page.keyboard.press('ControlOrMeta+/');
+    },
+    close: escape,
+    enter: { duration: MOTION.standard, properties: SCALE_AND_FADE },
+    exit: { duration: MOTION.fast, properties: SCALE_AND_FADE },
+  },
+  {
+    name: 'editor resource picker',
+    story: 'content-blockdialogs--resource-picker-states',
+    selector: '[data-picker-results]',
+    open: async (page) => {
+      await page.getByRole('combobox', { name: 'Content' }).fill('calm');
+    },
+    close: escape,
+    enter: { duration: MOTION.standard, properties: SCALE_AND_FADE },
+    exit: { duration: MOTION.fast, properties: SCALE_AND_FADE },
+  },
+  {
     name: 'toast',
     story: 'feedback-toast--states',
     selector: '[aria-label="Notifications"] [role="dialog"]',

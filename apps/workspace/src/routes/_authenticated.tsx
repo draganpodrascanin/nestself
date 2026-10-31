@@ -1,3 +1,4 @@
+import { Fragment, useState } from 'react';
 import { createFileRoute, Outlet, Link, useMatches, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,6 +12,10 @@ import {
   Users,
   Buildings,
   ShieldCheck,
+  BookmarkSimple,
+  Compass,
+  PaperPlaneTilt,
+  DotsThree,
   UsersThree,
   TreeStructure,
   Briefcase,
@@ -19,7 +24,7 @@ import {
   SlidersHorizontal,
   Presentation,
 } from '@phosphor-icons/react';
-import { AppShell, NavItem } from '@nestself/ui';
+import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
@@ -42,27 +47,32 @@ export const Route = createFileRoute('/_authenticated')({
   component: AuthenticatedLayout,
 });
 
+interface NavEntry {
+  to: string;
+  icon: typeof House;
+  label: string;
+  group?: string;
+}
+
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace', 'calls']);
+  const { t } = useTranslation(['common', 'workspace', 'library', 'calls']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const isActive = (path: string) =>
     matches.some((m) => m.pathname === path || m.pathname.startsWith(path + '/'));
 
+  // Permission checks
+  const canRead = principal
+    ? can(principal, 'content.read', undefined, effectiveActions)
+    : false;
+  const canBookmark = principal
+    ? can(principal, 'content.bookmark', undefined, effectiveActions)
+    : false;
+
   // Appointments only for someone who can hold consultations (an HR-only principal has none).
   const showAppointments = principal ? can(principal, 'consultation.join', undefined, effectiveActions) : false;
-  const appointmentsNav = showAppointments ? [{ to: '/appointments' as const, icon: CalendarCheck, label: t('nav.appointments') }] : [];
-
-  const navItems = [
-    { to: '/' as const, icon: House, label: t('nav.home') },
-    { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    ...appointmentsNav,
-    { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
-    { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
-    { to: '/polls' as const, icon: ChartBar, label: t('nav.polls') },
-    { to: '/settings' as const, icon: Gear, label: t('nav.settings') },
-  ];
 
   const showManager = principal
     ? can(principal, 'events.request', undefined, effectiveActions)
@@ -70,40 +80,61 @@ function AuthenticatedLayout() {
   const showHr = principal
     ? can(principal, 'program.overview', undefined, effectiveActions)
     : false;
-
-  const managerNav = showManager
-    ? [{ to: '/manage' as const, icon: Users, label: t('nav.manage') }]
-    : [];
-
-  // `/hr/access` sits under the `_hr` gate, so it needs `program.overview` too.
   const showAccess =
     showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
-  const hrNav = showHr
-    ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
+  // Build nav items — Explore hidden without content.read, Saved without content.bookmark
+  const coreNavItems: NavEntry[] = [
+    { to: '/', icon: House, label: t('library:nav.home') },
+    ...(isSampleDataMode || canRead
+      ? [{ to: '/explore', icon: Compass, label: t('library:nav.explore') }]
+      : []),
+    ...(canBookmark
+      ? [{ to: '/saved', icon: BookmarkSimple, label: t('library:nav.saved') }]
+      : []),
+    { to: '/requests', icon: PaperPlaneTilt, label: t('library:nav.myRequests') },
+    { to: '/settings', icon: Gear, label: t('common:nav.settings') },
+  ];
+
+  // Prototype screens only in sample mode (CLI-R-05)
+  const prototypeItems: NavEntry[] = isSampleDataMode
+    ? [
+        { to: '/support', icon: Heart, label: t('common:nav.support'), group: t('library:prototype.group') },
+        { to: '/messages', icon: ChatCircleText, label: t('common:nav.messages'), group: t('library:prototype.group') },
+        { to: '/channels', icon: Megaphone, label: t('common:nav.channels'), group: t('library:prototype.group') },
+        { to: '/polls', icon: ChartBar, label: t('common:nav.polls'), group: t('library:prototype.group') },
+      ]
+    : [];
+
+  const managerNav: NavEntry[] = showManager
+    ? [{ to: '/manage', icon: Users, label: t('common:nav.manage') }]
+    : [];
+
+  const hrNav: NavEntry[] = showHr
+    ? [{ to: '/hr', icon: Buildings, label: t('common:nav.hr') }]
     : [];
 
   // `/hr/people` and `/hr/org-units` sit under the `_hr` gate as well.
-  const peopleNav = showHr
-    ? [{ to: '/hr/people' as const, icon: UsersThree, label: t('workspace:people.nav') }]
+  const peopleNav: NavEntry[] = showHr
+    ? [{ to: '/hr/people', icon: UsersThree, label: t('workspace:people.nav') }]
     : [];
 
   const showOrgUnits =
     showHr && principal ? can(principal, 'org_units.manage', undefined, effectiveActions) : false;
-  const orgUnitsNav = showOrgUnits
-    ? [{ to: '/hr/org-units' as const, icon: TreeStructure, label: t('workspace:orgUnits.nav') }]
+  const orgUnitsNav: NavEntry[] = showOrgUnits
+    ? [{ to: '/hr/org-units', icon: TreeStructure, label: t('workspace:orgUnits.nav') }]
     : [];
 
-  const accessNav = showAccess
-    ? [{ to: '/hr/access' as const, icon: ShieldCheck, label: t('workspace:access.nav') }]
+  const accessNav: NavEntry[] = showAccess
+    ? [{ to: '/hr/access', icon: ShieldCheck, label: t('workspace:access.nav') }]
     : [];
 
   // Expert area: an expert record, or the assigned-read action in this context.
   const showCases = principal
     ? principal.expert !== null || can(principal, 'conversation.read.assigned', undefined, effectiveActions)
     : false;
-  const casesNav = showCases
-    ? [{ to: '/cases' as const, icon: Briefcase, label: t('workspace:cases.nav') }]
+  const casesNav: NavEntry[] = showCases
+    ? [{ to: '/cases', icon: Briefcase, label: t('workspace:cases.nav') }]
     : [];
 
   // The participant list, outside the expert context (an expert reads cases there).
@@ -111,26 +142,33 @@ function AuthenticatedLayout() {
     ? principal.context.kind !== 'expert' &&
       can(principal, 'conversation.participate', undefined, effectiveActions)
     : false;
-  const conversationsNav = showConversations
-    ? [{ to: '/conversations' as const, icon: ChatsCircle, label: t('workspace:conversations.nav') }]
+  const conversationsNav: NavEntry[] = showConversations
+    ? [{ to: '/conversations', icon: ChatsCircle, label: t('workspace:conversations.nav') }]
     : [];
 
   // Follow-up approvals (T-CW-1.10): the approver's items, and HR's policy under the `_hr` gate.
   const showApprovals = principal ? can(principal, 'approval.decide', undefined, effectiveActions) : false;
-  const approvalsNav = showApprovals
-    ? [{ to: '/approvals' as const, icon: SealCheck, label: t('nav.approvals') }]
+  const approvalsNav: NavEntry[] = showApprovals
+    ? [{ to: '/approvals', icon: SealCheck, label: t('nav.approvals') }]
     : [];
-  const followUpPolicyNav = showHr
-    ? [{ to: '/follow-up-policy' as const, icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
+  const followUpPolicyNav: NavEntry[] = showHr
+    ? [{ to: '/follow-up-policy', icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
+    : [];
+
+  // Appointments (NS-CALLS-01): a real screen for holders of `consultation.join`.
+  const appointmentsNav: NavEntry[] = showAppointments
+    ? [{ to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments') }]
     : [];
 
   // Webinars (T-CW-2.4): discovery and registration for holders of `event.register`.
-  const webinarsNav = canAttendWebinars(principal, effectiveActions)
-    ? [{ to: '/webinars' as const, icon: Presentation, label: t('calls:webinar.nav') }]
+  const webinarsNav: NavEntry[] = canAttendWebinars(principal, effectiveActions)
+    ? [{ to: '/webinars', icon: Presentation, label: t('calls:webinar.nav') }]
     : [];
 
   const allNavItems = [
-    ...navItems,
+    ...coreNavItems,
+    ...appointmentsNav,
+    ...prototypeItems,
     ...webinarsNav,
     ...conversationsNav,
     ...casesNav,
@@ -143,39 +181,112 @@ function AuthenticatedLayout() {
     ...followUpPolicyNav,
   ];
 
-  /** Bottom bar: at most 5 items. */
-  const bottomBarItems = [
-    { to: '/' as const, icon: House, label: t('nav.home') },
-    { to: '/support' as const, icon: Heart, label: t('nav.support') },
-    ...appointmentsNav,
-    { to: '/messages' as const, icon: ChatCircleText, label: t('nav.messages') },
-    { to: '/channels' as const, icon: Megaphone, label: t('nav.channels') },
-  ];
+  /**
+   * Bottom bar: up to 5 slots.
+   * When overflow items exist (Manage, HR, Access, prototype screens), the
+   * last slot becomes "More" which opens a bottom sheet listing everything
+   * not already in the bar. Settings moves into the sheet in that case.
+   */
+  const overflowItems = allNavItems.filter(
+    (item) => !coreNavItems.slice(0, 4).some((c) => c.to === item.to),
+  );
+  const hasOverflow = overflowItems.length > 1; // >1 because Settings alone is fine
+  const bottomBarItems = hasOverflow ? coreNavItems.slice(0, 4) : coreNavItems.slice(0, 5);
+  // When overflow, include Settings + everything else not in the first 4 core items
+  const moreSheetItems = hasOverflow ? overflowItems : [];
 
-  const renderNavItemList = (
-    items: typeof allNavItems,
-    variant: 'sidebar' | 'bottom' = 'sidebar',
-  ) =>
+  // ---------------------------------------------------------------------------
+  // Sidebar rendering — groups are semantic (`role="group"` + `aria-labelledby`)
+  // ---------------------------------------------------------------------------
+
+  const renderSidebarNav = (items: NavEntry[]) => {
+    const groups: { label: string | null; items: NavEntry[] }[] = [];
+    for (const item of items) {
+      const last = groups[groups.length - 1];
+      const itemGroup = item.group ?? null;
+      if (!last || last.label !== itemGroup) {
+        groups.push({ label: itemGroup, items: [item] });
+      } else {
+        last.items.push(item);
+      }
+    }
+
+    return groups.map((group, gi) => {
+      const navItems = group.items.map((item) => (
+        <NavItem
+          key={item.to}
+          variant="sidebar"
+          href={item.to}
+          icon={item.icon}
+          label={item.label}
+          active={
+            item.to === '/'
+              ? matches[matches.length - 1]?.pathname === '/'
+              : isActive(item.to)
+          }
+          render={(props) => (
+            <Link
+              to={item.to}
+              className={props.className}
+              aria-current={props['aria-current']}
+            >
+              {props.children}
+            </Link>
+          )}
+        />
+      ));
+
+      if (group.label) {
+        const labelId = `nav-group-${gi}`;
+        return (
+          <div key={`group-${gi}`} role="group" aria-labelledby={labelId}>
+            <p id={labelId} className="px-2 pt-4 pb-1 type-metadata text-text-secondary">
+              {group.label}
+            </p>
+            {navItems}
+          </div>
+        );
+      }
+      return <Fragment key={`group-${gi}`}>{navItems}</Fragment>;
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bottom bar rendering — wrapper carries flex-child classes so NavItem can
+  // shrink and truncate at narrow widths (the wrapper was previously a plain
+  // <div> that defeated `flex-1 basis-0 min-w-0`).
+  // ---------------------------------------------------------------------------
+
+  const renderBottomBarItems = (items: NavEntry[]) =>
     items.map((item) => (
-      <NavItem
-        key={item.to}
-        variant={variant}
-        href={item.to}
-        icon={item.icon}
-        label={item.label}
-        active={item.to === '/' ? matches[matches.length - 1]?.pathname === '/' : isActive(item.to)}
-        render={(props) => (
-          <Link to={item.to} className={props.className} aria-current={props['aria-current']}>
-            {props.children}
-          </Link>
-        )}
-      />
+      <div key={item.to} className="flex-1 basis-0 min-w-0">
+        <NavItem
+          variant="bottom"
+          href={item.to}
+          icon={item.icon}
+          label={item.label}
+          active={
+            item.to === '/'
+              ? matches[matches.length - 1]?.pathname === '/'
+              : isActive(item.to)
+          }
+          render={(props) => (
+            <Link
+              to={item.to}
+              className={props.className}
+              aria-current={props['aria-current']}
+            >
+              {props.children}
+            </Link>
+          )}
+        />
+      </div>
     ));
 
   const sidebar = (
-    <nav aria-label={t('nav.menu')} className="gap-1 p-4 flex flex-col">
+    <nav aria-label={t('common:nav.menu')} className="gap-1 p-4 flex flex-col">
       <p className="px-2 py-3 type-label text-primary">NestSelf</p>
-      {renderNavItemList(allNavItems)}
+      {renderSidebarNav(allNavItems)}
     </nav>
   );
 
@@ -194,8 +305,46 @@ function AuthenticatedLayout() {
   );
 
   const bottomBar = (
-    <nav aria-label={t('nav.menu')} className="py-1 flex items-center justify-around">
-      {renderNavItemList(bottomBarItems, 'bottom')}
+    <nav aria-label={t('common:nav.menu')} className="py-1 flex items-center justify-around">
+      {renderBottomBarItems(bottomBarItems)}
+      {hasOverflow ? (
+        <div className="flex-1 basis-0 min-w-0">
+          <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+            <SheetTrigger>
+              <NavItem
+                variant="bottom"
+                href="#more"
+                icon={DotsThree}
+                label={t('library:nav.more')}
+                render={(props) => (
+                  <button type="button" className={props.className}>
+                    {props.children}
+                  </button>
+                )}
+              />
+            </SheetTrigger>
+            <SheetContent
+              title={t('library:nav.more')}
+              side="bottom"
+              closeLabel={t('common:action.close', { defaultValue: 'Close' })}
+            >
+              <nav aria-label={t('library:nav.more')} className="flex flex-col gap-1">
+                {moreSheetItems.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMoreOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-control text-text no-underline hover:bg-tint transition"
+                  >
+                    <item.icon size={20} aria-hidden />
+                    <span className="type-body">{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
+      ) : null}
     </nav>
   );
 

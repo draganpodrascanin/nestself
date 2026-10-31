@@ -165,11 +165,15 @@
       "client_operations": "Операције за клијенте",
       "content_author": "Аутор садржаја",
       "content_publisher": "Издавач садржаја",
+      "content_reviewer": "Рецензент садржаја",
+      "editorial_lead": "Уредник",
       "service_coordinator": "Координатор услуга",
       "support_operator": "Оператер подршке",
       "nestself_finance": "NestSelf финансије",
       "expert": "Стручњак",
       "expert_lead": "Водећи стручњак",
+      "intake_professional": "Професионалац за пријем",
+      "intake_lead": "Водитељ пријема",
       "employer_owner": "Власник послодавца",
       "hr_admin": "ХР администратор",
       "team_manager": "Менаџер тима",
@@ -742,6 +746,13 @@
       "clientIdRequired": "Унеси ИД клијента.",
       "domainInvalid": "Унеси домен као што је еxампле.цом, без @ или https://.",
       "nothingChanged": "Промени бар једно поље."
+    }
+  },
+  "contextSwitcher": {
+    "error": {
+      "org_context_expired": "Ваше чланство у овој организацији је истекло.",
+      "invalid_context": "Овај радни простор вам није доступан.",
+      "unknown": "Није могуће променити радни простор. Покушајте поново."
     }
   }
 }

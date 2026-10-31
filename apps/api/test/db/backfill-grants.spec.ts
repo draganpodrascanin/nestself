@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
 import { SAMPLE_PEOPLE } from '@nestself/sample-data';
-import { extraSampleGrantIds, seed } from '../../src/db/seed/seed-lib.js';
+import { editorialStaffGrantIds, extraSampleGrantIds, seed } from '../../src/db/seed/seed-lib.js';
 import { backfillGrants } from '../../src/db/seed/backfill-grants.js';
 import { grants, memberships, organizations } from '../../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './test-database.js';
@@ -81,8 +81,8 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     await seed(testDb.db);
     await restoreLegacyRoleColumns(testDb);
     // The backfill recreates the legacy-mapped grants only; the explicit
-    // extra templates (the sample HR admin's employer_owner) are not derived.
-    const extraIds = new Set(extraSampleGrantIds());
+    // extra templates (the sample HR admin's employer_owner, the editorial staff) are not derived.
+    const extraIds = new Set([...extraSampleGrantIds(), ...editorialStaffGrantIds()]);
     seeded = (await testDb.db.select().from(grants).orderBy(asc(grants.id))).filter(
       (g) => !extraIds.has(g.id),
     );
@@ -116,8 +116,9 @@ describe.skipIf(!TEST_DB_URL)('backfillGrants', () => {
     for (const g of rows) {
       expect(g.grantedAt).toEqual(NOW);
       expect(g.validFrom).toEqual(NOW);
-      // Org grants: the organization's first HR admin. Platform grants: the user.
-      const expected = g.scopeOrgId ? 'user_ivana' : g.subjectUserId;
+      // Organization A grants: its first HR admin. Organization B has no HR
+      // admin, and platform grants have no organization: the user grants.
+      const expected = g.scopeOrgId === 'org_sample' ? 'user_ivana' : g.subjectUserId;
       expect({ id: g.id, by: g.grantedByUserId }).toEqual({ id: g.id, by: expected });
     }
   });

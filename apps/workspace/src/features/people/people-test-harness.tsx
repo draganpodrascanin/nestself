@@ -111,13 +111,20 @@ export function makeAdminApi(overrides: Partial<Record<keyof OrgAdminApi, unknow
   } as unknown as OrgAdminApi;
 }
 
-export const HR_PRINCIPAL: Principal = SAMPLE_PRINCIPALS.hr_admin.principal;
+// Ruling E: hr_admin defaults to personal context, but the people/HR screens
+// require organization context (useOrgContext switches on mount). The test
+// harness uses the post-switch state so components render without waiting.
+export const HR_PRINCIPAL: Principal = {
+  ...SAMPLE_PRINCIPALS.hr_admin.principal,
+  context: { kind: 'organization', orgId: 'org_sample' },
+};
 
 export function makeAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     status: 'authenticated',
     principal: HR_PRINCIPAL,
     effectiveActions: [...SAMPLE_PRINCIPALS.hr_admin.effectiveActions],
+    availableContexts: [],
     signOut: vi.fn().mockResolvedValue(undefined),
     switchContext: vi.fn().mockResolvedValue(undefined),
     stepUp: vi.fn().mockResolvedValue(true),

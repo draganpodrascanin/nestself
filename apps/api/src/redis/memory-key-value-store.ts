@@ -184,6 +184,27 @@ export class MemoryKeyValueStore implements KeyValueStore {
     };
   }
 
+  async compareAndDelete(key: string, expectedValue: string): Promise<boolean> {
+    const entry = this.getEntry(key);
+    if (!entry || entry.value !== expectedValue) return false;
+    this.data.delete(key);
+    return true;
+  }
+
+  async compareAndSet(
+    key: string,
+    expectedValue: string,
+    newValue: string,
+    opts?: SetOptions,
+  ): Promise<boolean> {
+    const entry = this.getEntry(key);
+    if (!entry || entry.value !== expectedValue) return false;
+    const expiresAt =
+      opts?.ttlSeconds != null ? Date.now() + opts.ttlSeconds * 1000 : entry.expiresAt;
+    this.data.set(key, { value: newValue, expiresAt });
+    return true;
+  }
+
   async ping(): Promise<boolean> {
     return true;
   }

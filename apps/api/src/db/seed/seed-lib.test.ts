@@ -2,10 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import {
-  SAMPLE_APPOINTMENTS,
-  SAMPLE_CALL_SESSIONS,
+  SAMPLE_CATEGORY_IDS,
+  SAMPLE_EDITORIAL_STAFF,
   SAMPLE_GRANTS,
   SAMPLE_PEOPLE,
+  SAMPLE_APPOINTMENTS,
+  SAMPLE_CALL_SESSIONS,
   SAMPLE_WEBINARS,
   SAMPLE_WEBINAR_MESSAGES,
   SAMPLE_WEBINAR_POLLS,
@@ -15,6 +17,7 @@ import { webinarHosts } from '../schema/index.js';
 import { resetTestDatabase, type TestDatabase } from '../../../test/db/test-database.js';
 import {
   EXTRA_SAMPLE_TEMPLATES,
+  editorialStaffGrantIds,
   extraSampleGrantIds,
   sampleApprovalRows,
   sampleAppointmentRow,
@@ -57,6 +60,12 @@ describe('templatesForLegacyRoles', () => {
     );
   });
 
+  it('never derives the editorial templates from the operations role', () => {
+    const operations = keys(null, 'OPERATIONS');
+    expect(operations).not.toContain('content_reviewer');
+    expect(operations).not.toContain('editorial_lead');
+  });
+
   it('accepts lower-case fixture roles', () => {
     expect(keys('hr_admin', null)).toEqual(['employee', 'hr_admin']);
   });
@@ -96,17 +105,51 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     expect(Object.values(EXTRA_SAMPLE_TEMPLATES).flat().every((key) => known.has(key))).toBe(true);
   });
 
-  it('seeds the same 19 grant ids as SAMPLE_GRANTS', () => {
+  it('seeds the expected grant ids from SAMPLE_GRANTS', () => {
     const derived = SAMPLE_PEOPLE.filter((p) => p.orgId || p.platformRole).flatMap((p) =>
       templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => `grant_${p.id}_${tmpl.key}`),
     );
-    const seeded = [...derived, ...extraSampleGrantIds()].sort();
-    // 19 since the platform administrator joined SAMPLE_PEOPLE (platform_owner, T-CW-2.1).
-    expect(seeded).toHaveLength(19);
+    // 19 legacy-derived + 2 extra (employer_owner, approver) + 4 editorial staff (T-CW-2.1 + CMS-EE)
+    const seeded = [...derived, ...extraSampleGrantIds(), ...editorialStaffGrantIds()].sort();
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
   });
 });
 
+describe('SAMPLE_EDITORIAL_STAFF', () => {
+  it('covers the four editorial templates once each', () => {
+    expect(SAMPLE_EDITORIAL_STAFF.map((s) => s.templateKey).sort()).toEqual([
+      'content_author',
+      'content_publisher',
+      'content_reviewer',
+      'editorial_lead',
+    ]);
+    expect(editorialStaffGrantIds().sort()).toEqual(
+      SAMPLE_EDITORIAL_STAFF.map((s) => `grant_${s.id}_${s.templateKey}`).sort(),
+    );
+  });
+
+  it('is never derived from a legacy role', () => {
+    const known = new Set<string>(PERMISSION_TEMPLATES.map((tmpl) => tmpl.key));
+    for (const staff of SAMPLE_EDITORIAL_STAFF) {
+      expect(known.has(staff.templateKey)).toBe(true);
+      expect(SAMPLE_PEOPLE.some((p) => (p.id as string) === staff.id)).toBe(false);
+    }
+  });
+
+  it('gives the reviewer the psychological and general disciplines', () => {
+    const reviewer = SAMPLE_EDITORIAL_STAFF.find((s) => s.templateKey === 'content_reviewer')!;
+    expect([...reviewer.disciplines]).toEqual(['psychological', 'general']);
+  });
+
+  it('assigns author, reviewer and publisher to all six categories', () => {
+    const all = Object.values(SAMPLE_CATEGORY_IDS).sort();
+    expect(all).toHaveLength(6);
+    for (const key of ['content_author', 'content_reviewer', 'content_publisher']) {
+      const staff = SAMPLE_EDITORIAL_STAFF.find((s) => s.templateKey === key)!;
+      expect([...staff.categoryIds].sort()).toEqual(all);
+    }
+  });
+});
 describe('sample appointments and call sessions (T-CW-1.1)', () => {
   it('maps every sample appointment to its UPPER_CASE status', () => {
     const rows = SAMPLE_APPOINTMENTS.map(sampleAppointmentRow);

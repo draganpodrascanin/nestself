@@ -10,7 +10,7 @@ Chromium must be installed for Playwright:
 pnpm exec playwright install chromium
 ```
 
-All three apps must be running (or the test runner starts them via `webServer` config):
+All three apps must be running (or the test runner starts them via `webServer` config). Default ports are below; override them with `E2E_*_PORT` (see `docs/environment.md`, "Running a second worktree"):
 
 - Marketing: `http://localhost:3000`
 - Workspace: `http://localhost:5173`
@@ -192,6 +192,52 @@ pnpm docs:auth:pdf           # docs/auth/implementation.pdf and quick-guide.pdf
 Only fictional people may appear. `SAMPLE_PEOPLE` also holds the owner's real developer account (`user_dragan`), so every shot file starts with `removeDeveloperAccount()` from `e2e/auth/support.ts` (it deletes that account from the disposable database; the next global setup reseeds it), and `shot()` fails when the account's name or address is on screen. Call it at the start of any new shot file.
 
 Add a screenshot by adding a `shot(page, '<name>')` call (`e2e/screenshots/shots.ts`) and embedding `![alt](screenshots/<name>.png)` followed by an `*italic caption*` line in the guide; `docs/auth/pdf/build.mjs` turns that pair into a captioned figure and fails when an image is missing.
+
+## Content suite (`e2e/content/`)
+
+The M1 demonstration journey for the CMS epic (T-C1.15, epic 23.2). Exercises the full content lifecycle: authoring, review, publish, employee discovery, audience isolation and context switching.
+
+### Prerequisites
+
+1. **PostgreSQL** running on port 54329 (same cluster as `apps/api/.env`).
+2. **Redis** on localhost:6379.
+3. **Chromium** installed: `pnpm exec playwright install chromium`.
+
+4. **`TEST_DATABASE_URL`** (or `E2E_DATABASE_URL`) in your shell -- same convention as the auth suite. The content suite uses a `nestself_e2e_<prefix>_content` database, where `<prefix>` is the worktree hash so two checkouts never collide and the `_content` suffix avoids colliding with the auth suite's database. Set `TEST_DATABASE_URL` just as the auth suite documents, for example:
+
+   ```bash
+   export TEST_DATABASE_URL=postgresql://nestself:nestself_dev@localhost:54329/nestself_test
+   ```
+
+No manual database setup is needed: the API webServer command runs `e2e/content/database.ts` (via tsx) first, which drops and recreates the dedicated database on the `TEST_DATABASE_URL` server (or exactly `E2E_DATABASE_URL` when set), then runs migrations and seed. (Playwright starts web servers before `globalSetup`, so the reset cannot live there.) Any non-disposable database name is refused.
+
+### Running
+
+```bash
+pnpm e2e:content
+```
+
+Override ports with `E2E_API_PORT`, `E2E_WORKSPACE_PORT`, `E2E_ADMIN_PORT` (defaults: 4130, 5303, 5304). The suite starts the API (stub mode, fixed OTP, local media storage), the workspace app and the admin app, then runs all specs under `e2e/content/` with a single worker.
+
+Two Playwright projects:
+
+- **content-desktop** (1440x900) -- all tests
+- **content-mobile** (390x844, `isMobile`) -- only `@mobile`-tagged tests (detail, saved, unavailable)
+
+### Screenshots
+
+Screenshots are saved to `docs/cms-ee/manual/screenshots/<role>/<name>.png` as the journey runs. They are overwritten on each run so the user manual uses one consistent set.
+
+### File structure
+
+```
+e2e/content/
+  database.ts      -- run by the API webServer command: drops + recreates nestself_e2e_<prefix>_content, runs migrate + seed
+  helpers.ts       -- sign-in, API-driven CMS workflow, screenshot helpers
+  m1.spec.ts       -- M1 demonstration journey spec
+```
+
+Reports and results are written to `e2e/content-report/` and `e2e/content-results/` (both git-ignored).
 
 ## Consultation journeys (`e2e/calls/`)
 

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./transliterate": "./src/transliterate.ts",
     "./locales/*": "./locales/*"
   },
   "scripts": {

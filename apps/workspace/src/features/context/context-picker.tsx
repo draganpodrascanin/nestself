@@ -26,20 +26,39 @@ export interface ContextPickerProps {
 
 export function ContextPicker({ sampleMode }: ContextPickerProps) {
   const { t } = useTranslation('auth');
-  const { principal, switchContext, refreshPrincipal } = useAuth();
+  const { principal, availableContexts, switchContext, refreshPrincipal } = useAuth();
   const { add: addToast } = useToast();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
 
   if (!principal) return null;
-  const options = contextOptions(principal);
+  const options = contextOptions(availableContexts);
   // One option means there is nothing to choose between.
   if (options.length < 2) return null;
 
-  const label = (option: ContextOption) =>
-    option.key.startsWith('organization:') && 'orgName' in option
-      ? option.orgName
-      : t(`auth:context.picker.option.${option.key as 'personal' | 'expert' | 'operations'}`);
+  // For a personal entry whose org also has an organization entry, show
+  // "Personal" / "Lični" so the two are distinguishable. Otherwise show the
+  // org name (the employee's multi-org case).
+  const orgHasOrgEntry = new Set(
+    options
+      .filter((o) => o.key.startsWith('organization:'))
+      .map((o) => o.key.replace('organization:', '')),
+  );
+
+  const label = (option: ContextOption) => {
+    if (option.key === 'expert' || option.key === 'operations') {
+      return t(`auth:context.picker.option.${option.key}`);
+    }
+    if (option.key.startsWith('personal:') && 'orgName' in option) {
+      const orgId = option.key.replace('personal:', '');
+      // When the same org also has an organization entry, show "Personal"
+      // to distinguish the two; otherwise show the org name.
+      return orgHasOrgEntry.has(orgId)
+        ? t('auth:context.picker.option.personal')
+        : option.orgName;
+    }
+    return 'orgName' in option ? option.orgName : '';
+  };
   const current = options.find((o) => sameContext(o.context, principal.context)) ?? null;
   const currentLabel = current ? label(current) : t('auth:context.picker.none');
   const triggerLabel = t('auth:context.picker.open', { name: currentLabel });

@@ -1,0 +1,500 @@
+/**
+ * Content detail route — shows a single library resource (T-C1.13, 9.13).
+ *
+ * States (9.10):
+ * - loading: skeleton
+ * - 404 content_not_available: neutral "This content is not available" (never reveals a title)
+ * - network error: alert with retry
+ * - populated: title, summary, outcome, duration, reviewer, date, ContentRenderer, save
+ */
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import {
+  Heading,
+  Text,
+  Skeleton,
+  StatusBlock,
+  Alert,
+  Button,
+  Badge,
+  DurationBadge,
+  useToast,
+} from '@nestself/ui';
+import { ContentDetailLayout } from '@nestself/content/render';
+import type {
+  MediaUrlResolver,
+  MediaAssetMeta,
+  ContentRendererLabels,
+  LinkComponentType,
+  ResolvedCta,
+} from '@nestself/content/render';
+import type { LibraryContentDetail } from '@nestself/contracts';
+import { can } from '@nestself/contracts';
+import { ApiError, libraryKeys, savedKeys } from '@nestself/api-client';
+import type { Locale } from '@nestself/i18n';
+import { formatDate } from '@nestself/i18n';
+import { useAuth } from '../../../auth';
+import { isSampleDataMode } from '../../../data-source';
+import { api } from '../../../api';
+import { sampleContentDetail } from '../../../library/sample-library-data';
+import { mapLibraryError, mapSaveError } from '../../../library/map-library-error';
+import { libraryContentDetailOptions, saveItem, unsaveItem } from '../../../library/use-library';
+import { useState } from 'react';
+
+export const Route = createFileRoute('/_authenticated/content/$contentId')({
+  beforeLoad: ({ context }) => {
+    const { principal, effectiveActions } = context.auth;
+    if (
+      !isSampleDataMode &&
+      principal &&
+      !can(principal, 'content.read', undefined, effectiveActions)
+    ) {
+      throw redirect({ to: '/', search: { denied: 'content' } });
+    }
+  },
+  component: ContentDetailPage,
+});
+
+function ContentDetailPage() {
+  const { contentId } = Route.useParams();
+  const { i18n } = useTranslation(['library', 'common']);
+  const locale = (i18n.resolvedLanguage ?? 'en') as Locale;
+
+  if (isSampleDataMode) {
+    return <SampleDetailPage contentId={contentId} locale={locale} />;
+  }
+
+  return <ApiDetailPage contentId={contentId} locale={locale} />;
+}
+
+// ---------------------------------------------------------------------------
+// Sample mode
+// ---------------------------------------------------------------------------
+
+function SampleDetailPage({ contentId, locale }: { contentId: string; locale: string }) {
+  const { t } = useTranslation(['library', 'common']);
+  const detail = sampleContentDetail(contentId, locale, {
+    authorLabel: t('library:detail.editorialTeam'),
+  });
+  const [showSaveDemo, setShowSaveDemo] = useState(false);
+
+  if (!detail) {
+    return (
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:content.unavailable')}
+        </Heading>
+        <StatusBlock
+          state="empty"
+          title={t('library:content.unavailable')}
+          body=""
+        />
+      </div>
+    );
+  }
+
+  return (
+    <DetailView
+      detail={detail}
+      locale={locale}
+      onToggleSave={() => setShowSaveDemo(true)}
+      saveDemoMessage={showSaveDemo ? t('library:detail.saveDemo') : undefined}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// API mode
+// ---------------------------------------------------------------------------
+
+function ApiDetailPage({ contentId, locale }: { contentId: string; locale: string }) {
+  const { t } = useTranslation(['library', 'common']);
+  const { principal } = useAuth();
+  const ctx = principal?.context ?? { kind: 'personal' as const };
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  const { data, isLoading, isError, error, refetch } = useQuery(
+    libraryContentDetailOptions(api, ctx, contentId, locale),
+  );
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveItem(api, contentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.contentDetail(ctx, contentId, locale) });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all(ctx) });
+      void queryClient.invalidateQueries({ queryKey: savedKeys.all(ctx) });
+    },
+    onError: (err) => {
+      toast.add({
+        title: mapSaveError(err, t as Parameters<typeof mapSaveError>[1], 'save'),
+        tone: 'danger',
+      });
+    },
+  });
+
+  const unsaveMutation = useMutation({
+    mutationFn: () => unsaveItem(api, contentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.contentDetail(ctx, contentId, locale) });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all(ctx) });
+      void queryClient.invalidateQueries({ queryKey: savedKeys.all(ctx) });
+    },
+    onError: (err) => {
+      toast.add({
+        title: mapSaveError(err, t as Parameters<typeof mapSaveError>[1], 'unsave'),
+        tone: 'danger',
+      });
+    },
+  });
+
+  if (isLoading) {
+    return <Skeleton lines={5} label={t('common:state.loading')} />;
+  }
+
+  if (isError) {
+    // 404: neutral message, never reveal a title (9.10)
+    if (error instanceof ApiError && error.status === 404) {
+      return (
+        <div className="space-y-6 max-w-reading">
+          <Heading level={1} className="sr-only">
+            {t('library:error.contentNotAvailable')}
+          </Heading>
+          <StatusBlock
+            state="empty"
+            title={t('library:error.contentNotAvailable')}
+            body=""
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:error.contentNotAvailable')}
+        </Heading>
+        <Alert tone="danger">
+          {mapLibraryError(error, t as Parameters<typeof mapLibraryError>[1])}
+          <div className="mt-3">
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              {t('common:action.retry', { defaultValue: 'Try again' })}
+            </Button>
+          </div>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="space-y-6 max-w-reading">
+        <Heading level={1} className="sr-only">
+          {t('library:error.contentNotAvailable')}
+        </Heading>
+        <StatusBlock
+          state="empty"
+          title={t('library:error.contentNotAvailable')}
+          body=""
+        />
+      </div>
+    );
+  }
+
+  const isMutating = saveMutation.isPending || unsaveMutation.isPending;
+
+  const handleToggleSave = () => {
+    if (isMutating) return;
+    if (data.saved) {
+      unsaveMutation.mutate();
+    } else {
+      saveMutation.mutate();
+    }
+  };
+
+  return (
+    <DetailView
+      detail={data}
+      locale={locale}
+      onToggleSave={handleToggleSave}
+      savePending={isMutating}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared detail view
+// ---------------------------------------------------------------------------
+
+const RendererLinkComponent: LinkComponentType = ({ href, children, className }) => {
+  // Internal links (starting with /) use TanStack Router Link (FMT-R-17)
+  if (href.startsWith('/')) {
+    return (
+      <Link to={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={className} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+};
+
+/**
+ * Rendition URL for the reader's locale. The API checks the asset against the
+ * variant in that locale; an <img> request would otherwise send the browser's
+ * Accept-Language instead of the language chosen in the app.
+ */
+function mediaUrlFor(locale: string) {
+  return (assetId: string, rendition: string): string =>
+    // Honour VITE_API_URL (reuse the api-client's base URL)
+    `${api.baseUrl}/api/library/media/${encodeURIComponent(assetId)}/${rendition}?locale=${encodeURIComponent(locale)}`;
+}
+
+interface DetailViewProps {
+  detail: LibraryContentDetail;
+  locale: string;
+  onToggleSave?: () => void;
+  savePending?: boolean;
+  saveDemoMessage?: string;
+}
+
+function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage }: DetailViewProps) {
+  const { t } = useTranslation(['library', 'common']);
+
+  const rendererLabels: ContentRendererLabels = {
+    transcript: t('library:renderer.transcript'),
+    noteWarning: t('library:renderer.noteWarning'),
+    noteTip: t('library:renderer.noteTip'),
+    noteDisclaimer: t('library:renderer.noteDisclaimer'),
+    noteDefault: t('library:renderer.noteDefault'),
+    checklist: t('library:renderer.checklist'),
+    opensInNewTab: t('library:renderer.opensInNewTab'),
+    downloadPdf: t('library:renderer.downloadPdf'),
+    imageUnavailable: t('library:renderer.imageUnavailable'),
+  };
+
+  // Build media metadata with width/height/focalPoint (FMT-R-18)
+  const mediaMeta: Record<string, MediaAssetMeta> = {};
+  for (const m of detail.media) {
+    mediaMeta[m.assetId] = {
+      kind: m.kind as MediaAssetMeta['kind'],
+      renditions: m.renditions.map((r) => r.kind),
+      width: m.width ?? undefined,
+      height: m.height ?? undefined,
+      focalPoint: m.focalPoint ?? undefined,
+    };
+  }
+
+  /** Translated fallback label for a CTA kind when the API label is null. */
+  const ctaLabel = (kind: string, apiLabel?: string | null): string => {
+    if (apiLabel) return apiLabel;
+    // Known CTA kinds get a translated default; unknown kinds fall back
+    const key = `library:detail.cta.${kind}` as const;
+    const translated = t(key, { defaultValue: '' });
+    return translated || t('library:detail.cta.default');
+  };
+
+  /**
+   * Build a workspace href from a CTA kind and target id.
+   *
+   * Only `open_content` has a destination screen at M1. The others
+   * (`open_collection`, `suggest_topic`, `ask_general_question`,
+   * `express_event_interest`, `open_service`) don't: they are omitted
+   * and will be wired when the destination screens are added (M2+).
+   */
+  const ctaHref = (kind: string, targetId: string): string | null => {
+    switch (kind) {
+      case 'open_content':
+        return `/content/${encodeURIComponent(targetId)}`;
+      // M2: open_collection → /explore/collections/<targetId> (T-C2.xx)
+      // M2+: suggest_topic, ask_general_question → TBD request/support screens
+      // M2+: express_event_interest → TBD events screen
+      // M2+: open_service → TBD service screen
+      default:
+        return null;
+    }
+  };
+
+  // Resolve CTA from the body node's attrs (LIB-R-23, FMT-R-27).
+  // ContentRenderer calls this when it encounters a `cta` node in the body.
+  // The API builds `detail.cta` from the same node, so both carry the same data.
+  const resolveCta = (cta: { ctaKind: string; targetId?: string | null; label?: string | null }): ResolvedCta | null => {
+    if (!cta.targetId) return null;
+    const href = ctaHref(cta.ctaKind, cta.targetId);
+    if (!href) return null; // No destination screen for this CTA kind at M1
+    return {
+      kind: 'link' as const,
+      href,
+      label: ctaLabel(cta.ctaKind, cta.label),
+    };
+  };
+
+  // LIB-R-27: replacement link for unavailable content.
+  // TODO(T-C2.xx content-withdrawal): Wire `detail.replacementLink` into a visible
+  // CTA when the withdrawal task adds the replacement data model. The field exists
+  // in the contract but is always null at M1.
+
+  // -- Build the document prop for ContentDetailLayout -----------------------
+  const document = detail.body &&
+    typeof detail.body === 'object' &&
+    'type' in (detail.body as Record<string, unknown>)
+    ? (detail.body as { type: 'doc'; schemaVersion: number; content: unknown[] })
+    : { type: 'doc' as const, schemaVersion: 1, content: [] };
+
+  // Related resources the body places inline render as cards there; the list
+  // after the body holds the rest.
+  const inlineRelated = new Set(
+    (document.content as Array<{ type?: string; attrs?: { contentResourceId?: string } }>)
+      .filter((n) => n.type === 'relatedResource' && n.attrs?.contentResourceId)
+      .map((n) => n.attrs!.contentResourceId!),
+  );
+  const listedRelated = detail.relatedResources.filter((r) => !inlineRelated.has(r.resourceId));
+
+  // -- Reviewer / author metadata -------------------------------------------
+  const authorLabel = detail.reviewerName
+    ? t('library:detail.reviewedBy', { name: detail.reviewerName })
+    : detail.authorName;
+  const dateLabel = detail.reviewerName && detail.reviewedAt
+    ? t('library:detail.reviewedOn', {
+        date: formatDate(new Date(detail.reviewedAt), locale as Locale),
+      })
+    : null;
+
+  return (
+    <ContentDetailLayout
+      className="max-w-reading"
+      // -- Slots --
+      beforeTitle={
+        <Link to="/" className="type-metadata text-text-secondary hover:text-primary no-underline">
+          &larr; {t('library:detail.backToHome')}
+        </Link>
+      }
+      title={detail.title}
+      summary={detail.summary}
+      author={authorLabel}
+      dateLabel={dateLabel}
+      outcomeLabel={t('library:detail.outcome')}
+      outcome={detail.outcome}
+      metaExtra={
+        <>
+          <Badge tone="neutral">{detail.category.label}</Badge>
+          {detail.durationSeconds != null ? (
+            <DurationBadge
+              durationSeconds={detail.durationSeconds}
+              formatLabel={(seconds) => {
+                const minutes = Math.round(seconds / 60);
+                if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+                return t('library:durationFormat.minutes', { count: minutes });
+              }}
+            />
+          ) : detail.durationBand ? (
+            <DurationBadge
+              bandLabel={t(`library:duration.${detail.durationBand}`)}
+              formatLabel={(seconds) => {
+                const minutes = Math.round(seconds / 60);
+                if (minutes < 1) return t('library:durationFormat.lessThanMinute');
+                return t('library:durationFormat.minutes', { count: minutes });
+              }}
+            />
+          ) : null}
+        </>
+      }
+      afterBody={
+        <>
+          {/* Save button */}
+          {onToggleSave ? (
+            <div className="mt-6 pt-4 border-t border-border-subtle">
+              <Button
+                variant="secondary"
+                onClick={onToggleSave}
+                aria-pressed={detail.saved}
+                loading={savePending}
+                disabled={savePending}
+              >
+                {detail.saved
+                  ? t('library:detail.unsave')
+                  : t('library:detail.save')}
+              </Button>
+              {saveDemoMessage ? (
+                <Text className="mt-2 type-metadata text-text-secondary">
+                  {saveDemoMessage}
+                </Text>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Sources */}
+          {detail.sources.length > 0 ? (
+            <section className="mt-6">
+              <Heading level={2} typeRole="sectionTitle" className="mb-2">
+                {t('library:detail.sources')}
+              </Heading>
+              <ul className="list-disc pl-5 space-y-1">
+                {detail.sources.map((source, i) => (
+                  <li key={i}>
+                    {source.url ? (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-info hover:underline"
+                      >
+                        {source.label}
+                      </a>
+                    ) : (
+                      <span>{source.label}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {/* Related resources the body does not place inline */}
+          {listedRelated.length > 0 ? (
+            <section className="mt-6">
+              <Heading level={2} typeRole="sectionTitle" className="mb-2">
+                {t('library:detail.related')}
+              </Heading>
+              <div className="space-y-2">
+                {listedRelated.map((rel) => (
+                  <Link
+                    key={rel.resourceId}
+                    to="/content/$contentId"
+                    params={{ contentId: rel.resourceId }}
+                    className="block p-3 rounded-card border border-border-subtle hover:border-primary transition-colors no-underline"
+                  >
+                    <Text className="font-[var(--font-weight-label)]">{rel.title}</Text>
+                    <Text className="type-metadata text-text-secondary">
+                      {rel.summary}
+                    </Text>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </>
+      }
+      // -- ContentRenderer props --
+      document={document}
+      media={mediaMeta}
+      mediaUrl={mediaUrlFor(locale) as MediaUrlResolver}
+      resolveCta={resolveCta}
+      resolveRelated={(id) => {
+        // A related card renders where the author placed it in the body; the
+        // list below the body shows only the ones the body does not place.
+        const rel = detail.relatedResources.find((r) => r.resourceId === id);
+        if (!rel) return null;
+        return { title: rel.title, href: `/content/${rel.resourceId}`, description: rel.summary };
+      }}
+      resolveInternalLink={(id) => `/content/${id}`}
+      linkComponent={RendererLinkComponent}
+      labels={rendererLabels}
+      documentKey={detail.id}
+    />
+  );
+}

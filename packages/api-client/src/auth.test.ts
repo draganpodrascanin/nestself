@@ -81,14 +81,14 @@ describe('createAuthApi() account methods', () => {
   });
 
   it('updateLocale sends PATCH /api/auth/me/locale with CSRF and parses the principal', async () => {
-    const { auth, last } = setup({ principal: PRINCIPAL, effectiveActions: [] });
+    const { auth, last } = setup({ principal: PRINCIPAL, effectiveActions: [], availableContexts: [] });
     const res = await auth.updateLocale('hu');
     expect(res.principal.locale).toBe('hu');
     expect(last()).toEqual({ url: 'http://x/api/auth/me/locale', method: 'PATCH', csrf: 'tok', body: { locale: 'hu' } });
   });
 
   it('updateDisplayName sends PATCH /api/auth/me/display-name with CSRF', async () => {
-    const { auth, last } = setup({ principal: { ...PRINCIPAL, displayName: 'New Name', initials: 'NN' }, effectiveActions: [] });
+    const { auth, last } = setup({ principal: { ...PRINCIPAL, displayName: 'New Name', initials: 'NN' }, effectiveActions: [], availableContexts: [] });
     const res = await auth.updateDisplayName('New Name');
     expect(res.principal.displayName).toBe('New Name');
     expect(last()).toEqual({

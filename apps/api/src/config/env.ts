@@ -45,6 +45,33 @@ const optionalHexKey64 = z.union([
   hexKey64,
 ]).optional();
 
+/**
+ * A 32-byte key supplied as either hex (64 chars) or base64 (44 chars with
+ * optional trailing '=').  Decoded to a hex string for internal use.
+ * Appendix A: "32 bytes, base64" — hex kept for backward compatibility.
+ */
+const cursorKeyField = z
+  .string()
+  .transform((val, ctx) => {
+    // Try hex first (64 hex chars = 32 bytes)
+    if (/^[0-9a-f]{64}$/i.test(val)) return val.toLowerCase();
+    // Try base64 / base64url
+    try {
+      const buf = Buffer.from(val, 'base64');
+      if (buf.length === 32) return buf.toString('hex');
+    } catch { /* fall through */ }
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'LIBRARY_CURSOR_KEY must decode to exactly 32 bytes (hex or base64)',
+    });
+    return z.NEVER;
+  });
+
+const optionalCursorKey = z.union([
+  z.literal('').transform(() => undefined),
+  cursorKeyField,
+]).optional();
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -123,6 +150,23 @@ export const envSchema = z
       z.string().regex(/^\d{6}$/),
     ]).optional(),
 
+    // Media storage (MED-R-01, MED-R-02)
+    MEDIA_STORAGE: z.enum(['local', 's3']).default('local'),
+    MEDIA_LOCAL_DIR: optionalString,
+    MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().optional(),
+    // Process uploads inside the request when no Redis worker runs (e2e only).
+    MEDIA_PROCESS_INLINE: z.enum(['true', 'false']).default('false'),
+    MEDIA_BUCKET: optionalString,
+    MEDIA_KMS_KEY_ARN: optionalString,
+
+    // Content link host allowlist (FMT-R-06, Appendix A)
+    CONTENT_LINK_HOST_ALLOWLIST: optionalString,
+
+    // Library cursor encryption key (RTE-R-06). Required in production; in
+    // dev/test the key is derived from JWT_SECRET when absent.
+    // Accepts 64 hex chars or 44-char base64, both decoding to 32 bytes.
+    LIBRARY_CURSOR_KEY: optionalCursorKey,
+
     // Deployment stage (set by the compute stack); tags provider resources (D-CW-11)
     STAGE: optionalString.transform((v) => v ?? 'dev'),
 
@@ -167,6 +211,40 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         message: 'JWT_SECRET is required when AUTH_MODE=stub',
         path: ['JWT_SECRET'],
+      });
+    }
+
+    // RTE-R-06: cursor key required in production, must be 32 bytes
+    if (data.NODE_ENV === 'production') {
+      if (!data.LIBRARY_CURSOR_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'LIBRARY_CURSOR_KEY is required when NODE_ENV=production',
+          path: ['LIBRARY_CURSOR_KEY'],
+        });
+      } else if (Buffer.from(data.LIBRARY_CURSOR_KEY, 'hex').length !== 32) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'LIBRARY_CURSOR_KEY must decode to exactly 32 bytes',
+          path: ['LIBRARY_CURSOR_KEY'],
+        });
+      }
+    }
+
+    if (data.MEDIA_PROCESS_INLINE === 'true' && data.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MEDIA_PROCESS_INLINE is a test setting and is not allowed when NODE_ENV=production',
+        path: ['MEDIA_PROCESS_INLINE'],
+      });
+    }
+
+    // MED-R-01: local driver refused in production
+    if (data.MEDIA_STORAGE === 'local' && data.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MEDIA_STORAGE=local is not allowed when NODE_ENV=production',
+        path: ['MEDIA_STORAGE'],
       });
     }
 
@@ -252,6 +330,8 @@ export type AppEnv = Omit<Env, 'VIDEO_FAKE_EVENTS_IN_API'> & {
   resolvedSessionEncryptionKey: string | undefined;
   /** Derived Cognito issuer URL. */
   resolvedCognitoIssuer: string | undefined;
+  /** Resolved library cursor encryption key (64 hex chars = 32 bytes for AES-256-GCM). */
+  resolvedLibraryCursorKey: string;
   /**
    * The fake provider's events and the webinar jobs run in the API process:
    * true with `VIDEO_PROVIDER=none` unless set to `false`, always false with
@@ -280,10 +360,24 @@ export function resolveAppEnv(env: Env): AppEnv {
       ? `https://cognito-idp.${env.COGNITO_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}`
       : undefined);
 
+  // RTE-R-06: library cursor encryption key. In dev/test, derive from JWT_SECRET.
+  let resolvedLibraryCursorKey = env.LIBRARY_CURSOR_KEY;
+  if (!resolvedLibraryCursorKey && env.JWT_SECRET) {
+    resolvedLibraryCursorKey = createHash('sha256')
+      .update(`library-cursor:${env.JWT_SECRET}`)
+      .digest('hex');
+  }
+  if (!resolvedLibraryCursorKey) {
+    throw new Error(
+      'LIBRARY_CURSOR_KEY is required (or JWT_SECRET to derive it)',
+    );
+  }
+
   return {
     ...env,
     resolvedSessionEncryptionKey,
     resolvedCognitoIssuer,
+    resolvedLibraryCursorKey,
     VIDEO_FAKE_EVENTS_IN_API: env.VIDEO_PROVIDER === 'none' && env.VIDEO_FAKE_EVENTS_IN_API !== false,
   };
 }

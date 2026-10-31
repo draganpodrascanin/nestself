@@ -561,5 +561,21 @@
     "back": "Back to my conversations",
     "detailTitle": "Conversation about case {{id}}",
     "detailTitleLoading": "Conversation"
+  },
+  "contextSwitcher": {
+    "label": "Switch workspace",
+    "personal": "My space",
+    "personalWithOrg": "My space · {{orgName}}",
+    "organization": "Manage · {{orgName}}",
+    "expert": "Expert",
+    "operations": "Operations",
+    "switchFailed": "Could not switch workspace. Please try again.",
+    "current": "Current",
+    "switching": "Switching workspace…",
+    "error": {
+      "org_context_expired": "Your membership in this organisation has ended.",
+      "invalid_context": "This workspace is not available to you.",
+      "unknown": "Could not switch workspace. Please try again."
+    }
   }
 }
