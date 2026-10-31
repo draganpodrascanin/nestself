@@ -35,6 +35,8 @@ export interface ShootOptions {
   pad?: number;
   /** The whole page, not only the viewport. */
   fullPage?: boolean;
+  /** Scroll back to the top first (the page header carries the state). */
+  top?: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export interface ShootOptions {
  * given elements (clamped to the viewport) so a detail stays legible in print.
  */
 export async function shoot(page: Page, role: string, name: string, opts: ShootOptions = {}): Promise<void> {
+  if (opts.top) await page.evaluate(() => window.scrollTo(0, 0));
   if (opts.around?.length) await opts.around[0]!.scrollIntoViewIfNeeded();
   await settle(page);
   let clip: { x: number; y: number; width: number; height: number } | undefined;
@@ -60,7 +63,15 @@ export async function shoot(page: Page, role: string, name: string, opts: ShootO
   await page.screenshot({ path: screenshotPath(role, name), clip, fullPage: opts.fullPage });
 }
 
-export const TEST_IMAGE_PATH = path.resolve(import.meta.dirname, '../fixtures/test-image.png');
+/**
+ * The article's photo: generated sample imagery from packages/assets (no
+ * third-party rights, no real people; photos.json), so the manual's
+ * screenshots show a real picture.
+ */
+export const ARTICLE_IMAGE_PATH = path.resolve(
+  import.meta.dirname,
+  '../../packages/assets/photos/employees-break.jpg',
+);
 
 // ---------------------------------------------------------------------------
 // Editor page objects

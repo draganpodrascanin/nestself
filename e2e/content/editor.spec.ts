@@ -15,7 +15,7 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_URL, WORKSPACE_URL, USERS, signInStaff, signInEmployee, switchLanguage } from './helpers';
 import {
-  TEST_IMAGE_PATH,
+  ARTICLE_IMAGE_PATH,
   allNodes,
   blockTypes,
   caretToNewBlockAtEnd,
@@ -337,7 +337,7 @@ test.describe('@editor Editor journey', () => {
 
     const chooser = page.waitForEvent('filechooser');
     await slashInsert(page, 'image', /image/i);
-    await (await chooser).setFiles(TEST_IMAGE_PATH);
+    await (await chooser).setFiles(ARTICLE_IMAGE_PATH);
 
     // Upload and processing states are visible until the image is ready.
     const figure = editor.locator('figure[data-type="image"]').last();
@@ -412,7 +412,9 @@ test.describe('@editor Editor journey', () => {
     await page.getByRole('button', { name: /add source/i }).click();
     await page.getByRole('textbox', { name: /source label/i }).last().fill('Primer izvora (test)');
     await page.getByRole('textbox', { name: /source url/i }).last().fill('https://example.com/izvor');
-    await shoot(page, 'author', 'properties');
+    await shoot(page, 'author', 'properties', {
+      around: [page.getByRole('textbox', { name: /summary/i }), page.getByRole('textbox', { name: /source url/i }).last()],
+    });
 
     await waitForSaved(page);
     const rev = await readRevision(page, resourceId, 'sr-Latn');
@@ -432,7 +434,7 @@ test.describe('@editor Editor journey', () => {
     await page.keyboard.type('Sačuvano automatski');
     await expect(page.getByText(/^saving/i)).toBeVisible();
     await waitForSaved(page);
-    await shoot(page, 'author', 'autosave-saved');
+    await shoot(page, 'author', 'autosave-saved', { top: true });
 
     await page.reload();
     await waitForEditorReady(page);
@@ -574,7 +576,7 @@ test.describe('@editor Editor journey', () => {
       await waitForEditorReady(page);
       await page.getByRole('button', { name: /submit for review/i }).click();
       await expect(page.getByText('Submitted for review', { exact: true }).first()).toBeVisible();
-      if (locale === 'sr-Latn') await shoot(page, 'author', 'submitted');
+      if (locale === 'sr-Latn') await shoot(page, 'author', 'submitted', { top: true });
       expect((await readRevision(page, resourceId, locale)).state).toBe('in_review');
     }
   });
@@ -626,7 +628,7 @@ test.describe('@editor Editor journey', () => {
       await expect(page.getByRole('heading', { name: /edit variant/i })).toBeVisible({ timeout: 20_000 });
       await page.getByRole('button', { name: 'Approve' }).click();
       await expect(page.getByText('Revision approved').first()).toBeVisible();
-      if (locale === 'sr-Latn') await shoot(page, 'reviewer', 'approve');
+      if (locale === 'sr-Latn') await shoot(page, 'reviewer', 'approve', { top: true });
       expect((await readRevision(page, resourceId, locale)).state).toBe('approved');
     }
   });
@@ -647,7 +649,7 @@ test.describe('@editor Editor journey', () => {
 
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Published', { exact: true }).first()).toBeVisible({ timeout: 15_000 });
-    await shoot(page, 'publisher', 'published');
+    await shoot(page, 'publisher', 'published', { top: true });
   });
 
   // ─── 19. The employee reads it ───────────────────────────────────
