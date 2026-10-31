@@ -25,12 +25,15 @@
  * `metadataFailureLabel`, never with the URL (its query may hold a tenant
  * identifier) or the body.
  *
- * `FakeMetadataFetcher` serves documents from a map for stub mode and tests
- * and never touches DNS: hosts resolve from a table, and a host without an
- * entry answers a public documentation address.
+ * `FakeMetadataFetcher` is the stub-mode and test adapter. It never touches
+ * DNS or the network: hosts resolve from a table (a host without an entry
+ * answers a public documentation address), and a URL nothing seeded serves
+ * the fixture metadata `SAMPLE_SAML_METADATA`, so stub-mode SAML connections
+ * get a realistic expiry. A test that needs a failure seeds one.
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { SAMPLE_SAML_METADATA } from '../identity/saml-metadata.fixture.js';
 import { isPublicAddress } from './public-address.js';
 
 /** DI token of the {@link MetadataFetcher}; `IdentityModule` provides it. */
@@ -244,15 +247,18 @@ export class HttpsMetadataFetcher implements MetadataFetcher {
 export const FAKE_PUBLIC_ADDRESS = '203.0.113.10';
 
 /**
- * Stub mode and tests. `responses` maps a URL to the document it serves;
- * `addresses` maps a host name to what it resolves to. The guard is the
- * real `assertPublicHttpsUrl`, so a seeded private or mixed answer is
+ * Stub mode and tests. `responses` maps a URL to the document it serves, or
+ * to the error its fetch throws; a URL without an entry serves
+ * `SAMPLE_SAML_METADATA` (signing certificate until `SIGNING_CERT_NOT_AFTER`), so
+ * stub-mode flows and the e2e suites see a realistic expiry and no fetch
+ * failure. `addresses` maps a host name to what it resolves to. The guard is
+ * the real `assertPublicHttpsUrl`, so a seeded private or mixed answer is
  * refused exactly as the HTTPS fetcher would refuse it, before anything is
  * "fetched". Tests reach the instance of a running app through
  * `app.get(METADATA_FETCHER)`.
  */
 export class FakeMetadataFetcher implements MetadataFetcher {
-  /** URLs that passed the guard and were looked up in `responses`, oldest first. */
+  /** URLs that passed the guard and were answered (a document or a seeded failure), oldest first. */
   readonly fetched: string[] = [];
   readonly lookup: HostLookup = async (hostname) =>
     this.addresses.get(hostname.toLowerCase()) ?? [FAKE_PUBLIC_ADDRESS];
@@ -260,7 +266,7 @@ export class FakeMetadataFetcher implements MetadataFetcher {
   private readonly addresses = new Map<string, string[]>();
 
   constructor(
-    private readonly responses: Map<string, string> = new Map(),
+    private readonly responses: Map<string, string | Error> = new Map(),
     addresses: Map<string, string[]> = new Map(),
   ) {
     for (const [host, list] of addresses) this.setAddresses(host, list);
@@ -271,6 +277,11 @@ export class FakeMetadataFetcher implements MetadataFetcher {
     this.responses.set(url, xml);
   }
 
+  /** From now on a fetch of `url` throws `error` (by default what a missing document gives). */
+  setFailure(url: string, error: Error = new MetadataFetchError('status')): void {
+    this.responses.set(url, error);
+  }
+
   /** What `hostname` resolves to from now on. */
   setAddresses(hostname: string, addresses: string[]): void {
     this.addresses.set(hostname.toLowerCase(), [...addresses]);
@@ -279,9 +290,8 @@ export class FakeMetadataFetcher implements MetadataFetcher {
   async fetchXml(url: string): Promise<string> {
     await assertPublicHttpsUrl(url, this.lookup);
     this.fetched.push(url);
-    const xml = this.responses.get(url);
-    // A URL nobody serves fails like a missing document.
-    if (xml === undefined) throw new MetadataFetchError('status');
-    return xml;
+    const seeded = this.responses.get(url);
+    if (seeded instanceof Error) throw seeded;
+    return seeded ?? SAMPLE_SAML_METADATA;
   }
 }

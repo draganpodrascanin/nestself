@@ -19,7 +19,12 @@ import type {
 } from '../db/repositories/sso.repository.js';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { IdentityProviderError } from '../identity/identity-provider.service.js';
-import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../identity/saml-metadata.fixture.js';
+import {
+  ENCRYPTION_CERT_B64,
+  ENCRYPTION_CERT_NOT_AFTER,
+  SAMPLE_SAML_METADATA,
+  SIGNING_CERT_NOT_AFTER,
+} from '../identity/saml-metadata.fixture.js';
 import { FakeDnsTxtResolver } from './dns-txt-resolver.js';
 import { FakeMetadataFetcher } from './metadata-fetcher.js';
 import { SsoConnectionsService } from './sso-connections.service.js';
@@ -122,10 +127,12 @@ function setup() {
   const dns = new FakeDnsTxtResolver();
   const db = { withOrgScope: vi.fn(async (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
   const store = new MemoryKeyValueStore();
-  // Serves nothing until a test seeds a document; every host is public until a test says otherwise.
-  const fetcher = new FakeMetadataFetcher(new Map());
-  // A refresh whose fetch fails only warns; the tests that care read these calls.
-  const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+  // Serves the fixture metadata unless a test seeds a document or a failure;
+  // every host is public until a test says otherwise.
+  const fetcher = new FakeMetadataFetcher();
+  // Passes through, so a warning nobody expected shows in the output; a test
+  // that seeds a failure silences the one line it expects.
+  const warn = vi.spyOn(Logger.prototype, 'warn');
   const service = new SsoConnectionsService(
     db as never,
     repo as never,
@@ -481,7 +488,7 @@ describe('SsoConnectionsService', () => {
 
     describe('signing-certificate expiry', () => {
       it('stores the expiry read from the metadata fetched from the URL', async () => {
-        ctx.fetcher.setResponse(SAML.metadataUrl!, SAMPLE_SAML_METADATA);
+        // The fake answers the fixture: signing certificate valid until SIGNING_CERT_NOT_AFTER.
         const conn = await connectionIn(ctx, 'DRAFT');
 
         await ctx.service.test(conn.id, ACTOR);
@@ -497,11 +504,11 @@ describe('SsoConnectionsService', () => {
       it('a fetch that fails does not fail the test: the stored expiry stays, the warning names the error only', async () => {
         const conn = await connectionIn(ctx, 'TESTING');
         const stored = new Date('2027-01-01T00:00:00Z');
-        // Nothing serves this URL; its query must not reach the log.
-        await ctx.repo.updateConnection(conn.id, {
-          metadataUrl: 'https://idp.acme.example/metadata?tenant=t-123',
-          certificateExpiresAt: stored,
-        });
+        // This URL fails; its query must not reach the log.
+        const failing = 'https://idp.acme.example/metadata?tenant=t-123';
+        ctx.fetcher.setFailure(failing);
+        ctx.warn.mockImplementation(() => {});
+        await ctx.repo.updateConnection(conn.id, { metadataUrl: failing, certificateExpiresAt: stored });
 
         const res = await ctx.service.test(conn.id, ACTOR);
 
@@ -734,7 +741,13 @@ describe('SsoConnectionsService', () => {
       ]);
       expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(
         conn.id,
-        { metadataUrl: 'https://idp.acme.example/v4', status: 'TESTING', lastTestedAt: null },
+        {
+          metadataUrl: 'https://idp.acme.example/v4',
+          // Re-read from the metadata at the new URL.
+          certificateExpiresAt: SIGNING_CERT_NOT_AFTER,
+          status: 'TESTING',
+          lastTestedAt: null,
+        },
         TX,
         { fromStatus: 'ACTIVE' },
       );
@@ -842,7 +855,6 @@ describe('SsoConnectionsService', () => {
 
       it('a metadata URL change moves it to TESTING too, with the expiry of the fetched metadata', async () => {
         const next = 'https://idp.acme.example/rotated';
-        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
         const conn = await connectionIn(ctx, 'SUSPENDED', new Date());
 
         const res = await ctx.service.update(conn.id, { metadataUrl: next }, ACTOR);
@@ -875,19 +887,22 @@ describe('SsoConnectionsService', () => {
     describe('signing-certificate expiry on a metadata change', () => {
       it('a new metadata URL re-reads the expiry from the fetched document; the derived value is not an audited field', async () => {
         const next = 'https://idp.acme.example/v7';
-        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
+        // The IdP behind the new URL signs with the certificate that expires on ENCRYPTION_CERT_NOT_AFTER.
+        ctx.fetcher.setResponse(
+          next,
+          `<md:EntityDescriptor><md:KeyDescriptor use="signing"><ds:X509Certificate>${ENCRYPTION_CERT_B64}</ds:X509Certificate></md:KeyDescriptor></md:EntityDescriptor>`,
+        );
         const conn = await connectionIn(ctx, 'TESTING');
 
         const res = await ctx.service.update(conn.id, { metadataUrl: next }, ACTOR);
 
-        expect(res.certificateExpiresAt).toBe(SIGNING_CERT_NOT_AFTER.toISOString());
+        expect(res.certificateExpiresAt).toBe(ENCRYPTION_CERT_NOT_AFTER.toISOString());
         expect(ctx.fetcher.fetched).toEqual([next]);
         expect(ctx.events.at(-1)).toMatchObject({ action: 'sso_connection.updated', details: { fields: ['metadataUrl'] } });
       });
 
       it('fetches only after the identity provider accepted the new metadata', async () => {
         const next = 'https://idp.acme.example/v10';
-        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
         const conn = await connectionIn(ctx, 'TESTING');
         vi.mocked(ctx.idp.updateProvider).mockRejectedValueOnce(new IdentityProviderError('bad metadata', 'not_authorized'));
 
@@ -908,6 +923,8 @@ describe('SsoConnectionsService', () => {
         const conn = await connectionIn(ctx, 'TESTING');
         const stored = new Date('2027-03-01T00:00:00Z');
         await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+        ctx.fetcher.setFailure('https://idp.acme.example/v8?tenant=t-9');
+        ctx.warn.mockImplementation(() => {});
 
         const res = await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v8?tenant=t-9' }, ACTOR);
 

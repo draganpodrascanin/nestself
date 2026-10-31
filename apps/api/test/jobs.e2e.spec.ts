@@ -15,7 +15,7 @@ import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, grants, memberships, organizations, ssoConnections } from '../src/db/schema/index.js';
 import type { LoggingMailer } from '../src/email/logging-mailer.js';
 import { Mailer } from '../src/email/mailer.js';
-import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js';
+import { SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js';
 import { MaintenanceJobsService } from '../src/jobs/maintenance-jobs.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { SSO_CERT_ALERT_TTL, ssoCertAlertKey } from '../src/redis/redis-keys.js';
@@ -160,8 +160,8 @@ describe.skipIf(!shouldRun)('Maintenance jobs (e2e)', () => {
   });
 
   it('sso.certificate-expiry reads a metadata-URL connection from its metadata and mails the ops alert once in seven days', async () => {
+    // Stub mode: the URL serves the fixture metadata (signing certificate until SIGNING_CERT_NOT_AFTER).
     const fetcher = app.get<FakeMetadataFetcher>(METADATA_FETCHER);
-    fetcher.setResponse(CERT_METADATA_URL, SAMPLE_SAML_METADATA);
     const mailer = app.get(Mailer) as LoggingMailer;
     const store = app.get<KeyValueStore>(KEY_VALUE_STORE);
     const alerts = () => mailer.sent.filter((m) => m.template === 'ops_certificate_alert');

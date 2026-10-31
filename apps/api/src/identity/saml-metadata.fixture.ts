@@ -1,6 +1,8 @@
 /**
  * Test fixtures: two self-signed certificates (generated with openssl for
  * these tests only, private keys discarded) and SAML metadata using them.
+ * Stub mode serves `SAMPLE_SAML_METADATA` for every metadata URL nothing
+ * seeded (`FakeMetadataFetcher`); it signs nothing and trusts nothing.
  */
 
 /** CN=idp.acme.example, notAfter 2027-11-29T07:18:28Z. */

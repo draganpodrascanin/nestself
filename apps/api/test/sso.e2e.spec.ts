@@ -21,7 +21,7 @@ import { and, eq, like } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
-import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js';
+import { SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js';
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, externalIdentities, grants, organizations } from '../src/db/schema/index.js';
@@ -40,12 +40,6 @@ const NIKOLA_EMAIL = 'user_nikola@example.com';
 const IVANA_EMAIL = 'user_ivana@example.com';
 const TEMP_PASSWORD = 'TempPassword1!';
 const METADATA_URL = 'https://idp.acme.example/metadata';
-/** Every metadata URL a test sign-in or a metadata PATCH below fetches; the fake fetcher serves the fixture there. */
-const SERVED_METADATA_URLS = [
-  METADATA_URL,
-  'https://idp.acme.example/metadata-v2',
-  'https://idp.acme.example/metadata-v3',
-];
 /** Resolves to one public and one private address (Review Focus 4). */
 const MIXED_HOST = 'idp.mixed.example';
 
@@ -86,8 +80,9 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
     dns = app.get<FakeDnsTxtResolver>(DNS_TXT_RESOLVER);
+    // Stub mode: every metadata URL serves the fixture (signing certificate until
+    // SIGNING_CERT_NOT_AFTER); only the hosts below resolve to private addresses.
     metadata = app.get<FakeMetadataFetcher>(METADATA_FETCHER);
-    for (const url of SERVED_METADATA_URLS) metadata.setResponse(url, SAMPLE_SAML_METADATA);
     metadata.setAddresses(MIXED_HOST, ['203.0.113.10', '10.0.0.1']);
     metadata.setAddresses('login.internal.example', ['10.20.30.40']);
     idp.seedUsers([
@@ -270,7 +265,7 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(list.body.items.find((c: { id: string }) => c.id === connectionId)).toMatchObject({
       status: 'TESTING',
       domains: [{ id: domainId, domain: 'acme.example' }],
-      // Read from the metadata the fake fetcher serves at METADATA_URL.
+      // Read from the fixture metadata the stub fetcher serves at METADATA_URL.
       certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString(),
     });
     expect(metadata.fetched).toContain(METADATA_URL);

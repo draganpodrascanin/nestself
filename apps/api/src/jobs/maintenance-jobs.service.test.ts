@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 import { Logger } from '@nestjs/common';
 import { LoggingMailer } from '../email/logging-mailer.js';
 import { MailDeliveryError } from '../email/mailer.js';
-import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../identity/saml-metadata.fixture.js';
+import { SIGNING_CERT_NOT_AFTER } from '../identity/saml-metadata.fixture.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import {
   INVALIDATE_CHANNEL,
@@ -646,9 +646,10 @@ describe('MaintenanceJobsService', () => {
       });
     });
 
+    // The fake fetcher answers every URL with SAMPLE_SAML_METADATA (signing
+    // certificate valid until SIGNING_CERT_NOT_AFTER) unless a test seeds otherwise.
     describe('metadata-URL connections', () => {
       it('fetches the metadata every run and stores the expiry it carries, never asking the identity provider', async () => {
-        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
         ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
 
         const report = await service.checkSsoCertificates(NOW);
@@ -660,7 +661,6 @@ describe('MaintenanceJobsService', () => {
       });
 
       it('replaces a stored expiry with the fetched one (certificates rotate) and rewrites nothing unchanged', async () => {
-        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
         ssoRepo.listActiveConnections.mockResolvedValue([
           // The certificate it was registered with expired; the IdP has rotated to the fixture's.
           urlConnection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) }),
@@ -678,9 +678,7 @@ describe('MaintenanceJobsService', () => {
 
       it('a fetch that throws counts in failed, warns with the error name only and is not retried in the run', async () => {
         const withQuery = `${METADATA_URL}?tenant=t-123`;
-        const fetchXml = vi
-          .spyOn(fetcher, 'fetchXml')
-          .mockRejectedValue(new TypeError(`fetch failed for ${withQuery}: <md:EntityDescriptor>`));
+        fetcher.setFailure(withQuery, new TypeError(`fetch failed for ${withQuery}: <md:EntityDescriptor>`));
         ssoRepo.listActiveConnections.mockResolvedValue([
           urlConnection({ metadataUrl: withQuery, certificateExpiresAt: new Date(NOW.getTime() + 40 * DAY) }),
           connection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: new Date(NOW.getTime() + 5 * DAY) }),
@@ -688,8 +686,8 @@ describe('MaintenanceJobsService', () => {
 
         const report = await service.checkSsoCertificates(NOW);
 
-        expect(fetchXml).toHaveBeenCalledTimes(1);
-        expect(fetchXml).toHaveBeenCalledWith(withQuery);
+        // One attempt, no retry within the run.
+        expect(fetcher.fetched).toEqual([withQuery]);
         expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
         expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
         expect(audit.record).toHaveBeenCalledTimes(1);
@@ -702,7 +700,6 @@ describe('MaintenanceJobsService', () => {
       it('a host that resolves to a public and a private address is counted in failed and nothing is fetched (Review Focus 4)', async () => {
         const mixed = 'https://idp.mixed.example/metadata';
         fetcher.setAddresses('idp.mixed.example', ['203.0.113.10', '10.0.0.1']);
-        fetcher.setResponse(mixed, SAMPLE_SAML_METADATA);
         ssoRepo.listActiveConnections.mockResolvedValue([urlConnection({ metadataUrl: mixed })]);
 
         const report = await service.checkSsoCertificates(LATE);
@@ -717,7 +714,6 @@ describe('MaintenanceJobsService', () => {
 
     describe('ops alert email', () => {
       it('mails one ops_certificate_alert to OPS_ALERT_EMAIL once the audit row is written, for a certificate inside 30 days', async () => {
-        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
         ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
         const send = vi.spyOn(mailer, 'send');
 
@@ -745,7 +741,6 @@ describe('MaintenanceJobsService', () => {
       });
 
       it('a second run on the same day audits and warns again but mails nothing', async () => {
-        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
         ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
 
         await service.checkSsoCertificates(LATE);
