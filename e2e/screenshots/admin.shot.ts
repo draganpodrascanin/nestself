@@ -16,14 +16,15 @@
  * run again. The secret is persisted like admin-sign-in.spec.ts does, so a
  * later `pnpm e2e:auth` against the same process still signs in. In the
  * capture the manual key is masked and the QR code blurred: both are that
- * secret.
+ * secret. The same masked card is also cropped for the staff guide
+ * (`guide-admin-totp-enrol`), since no later file sees Nikola's enrolment.
  */
 import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computeTotp } from '../auth/totp';
 import { removeDeveloperAccount, stagePlatformGrant } from '../auth/support';
-import { ADMIN_URL, MASK, maskText, shot } from './shots';
+import { ADMIN_URL, MASK, maskText, shot, shotOf, signInCard } from './shots';
 
 const STAFF_EMAIL = 'user_nikola@example.com';
 const STAFF_PASSWORD = 'Nestself-dev-1234!';
@@ -69,6 +70,9 @@ test('admin sign-in, enrolment and access pages', async ({ page }) => {
     (img as HTMLElement).style.filter = 'blur(12px)';
   });
   await shot(page, 'admin-totp-enrol');
+  // The staff guide pictures the same masked card on its own: this is
+  // Nikola's one enrolment against the API process (guides.shot.ts runs later).
+  await shotOf(page, signInCard(page), 'guide-admin-totp-enrol');
   await page.getByLabel('Verification code').fill(computeTotp(secret));
   await page.getByRole('button', { name: 'Confirm setup' }).click();
   fs.mkdirSync(path.dirname(TOTP_SECRET_FILE), { recursive: true });
