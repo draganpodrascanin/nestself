@@ -18,6 +18,8 @@ import {
   EMAIL_OTP_MIN_LENGTH,
   InvitationAcceptRequestSchema,
   SSO_SIGN_IN_REASONS,
+  SsoBindResendRequestSchema,
+  SsoBindResendResponseSchema,
   SsoBindStartRequestSchema,
   SsoBindStartResponseSchema,
   SsoBindTokenRequestSchema,
@@ -381,6 +383,22 @@ describe('phase 4 auth contracts', () => {
   it('SsoBindVerifyResponseSchema returns the path to continue on', () => {
     expect(SsoBindVerifyResponseSchema.parse({ returnPath: '/home' })).toEqual({ returnPath: '/home' });
     expect(SsoBindVerifyResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoBindResendRequestSchema requires the challenge token and takes an optional locale', () => {
+    expect(SsoBindResendRequestSchema.parse({ challengeToken: 'tok' })).toEqual({ challengeToken: 'tok' });
+    expect(SsoBindResendRequestSchema.parse({ challengeToken: 'tok', locale: 'sr-Cyrl' }).locale).toBe('sr-Cyrl');
+    expect(SsoBindResendRequestSchema.safeParse({ challengeToken: '' }).success).toBe(false);
+    expect(SsoBindResendRequestSchema.safeParse({}).success).toBe(false);
+    expect(SsoBindResendRequestSchema.safeParse({ challengeToken: 'tok', locale: 'de' }).success).toBe(false);
+  });
+
+  it('SsoBindResendResponseSchema carries the masked address, never empty', () => {
+    expect(SsoBindResendResponseSchema.parse({ emailMasked: 'd***@intesa.example' })).toEqual({
+      emailMasked: 'd***@intesa.example',
+    });
+    expect(SsoBindResendResponseSchema.safeParse({ emailMasked: '' }).success).toBe(false);
+    expect(SsoBindResendResponseSchema.safeParse({}).success).toBe(false);
   });
 
   it('SsoBindTokenRequestSchema takes a non-empty ID token of at most 8192 characters', () => {

@@ -33,6 +33,11 @@
  * Every status change audits `sso_connection.changed { from, to }`
  * (SSO-R-02). Audit details never carry the client secret or the domain
  * verification token.
+ *
+ * `oidcEmailVerifiedClaimRequired` (SSO-R-08) is NestSelf's own rule, not a
+ * provider setting: create stores it as sent (the contract defaults it to
+ * true), a PATCH changes it without a re-test, and both audit its value.
+ * SAML connections store it and ignore it.
  */
 import { Inject, Injectable } from '@nestjs/common';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
@@ -210,6 +215,8 @@ export class SsoConnectionsService {
       attributeMapping: body.attributeMapping ?? null,
       idpInitiatedAllowed: false,
       jitProvisioning: body.jitProvisioning,
+      // OIDC only; stored as sent (the contract defaults it to true) and ignored for SAML.
+      oidcEmailVerifiedClaimRequired: body.oidcEmailVerifiedClaimRequired,
       defaultOrgUnitId: body.defaultOrgUnitId ?? null,
     };
 
@@ -231,6 +238,7 @@ export class SsoConnectionsService {
             protocol: created.protocol,
             cognitoProviderName: created.cognitoProviderName,
             jitProvisioning: created.jitProvisioning,
+            oidcEmailVerifiedClaimRequired: created.oidcEmailVerifiedClaimRequired,
             providerStaged: stage,
           }),
           { tx },
@@ -284,6 +292,8 @@ export class SsoConnectionsService {
     setField('oidcClientId', body.oidcClientId);
     setField('attributeMapping', body.attributeMapping);
     setField('jitProvisioning', body.jitProvisioning);
+    // NestSelf's own rule (SSO-R-08), not a provider field: no re-test.
+    setField('oidcEmailVerifiedClaimRequired', body.oidcEmailVerifiedClaimRequired);
     setField('defaultOrgUnitId', body.defaultOrgUnitId);
     if (body.idpInitiatedAllowed === false) setField('idpInitiatedAllowed', false);
     if (body.oidcClientSecret !== undefined) changedFields.push('oidcClientSecret');
@@ -330,7 +340,12 @@ export class SsoConnectionsService {
         const row = await this.repo.updateConnection(id, patch, tx, { fromStatus: from });
         if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
         if (changedFields.length > 0) {
-          await this.audit.record(this.event('sso_connection.updated', row, actor, { fields: changedFields }), { tx });
+          // The claim switch is a security decision: its new value is recorded, not only its name.
+          const details =
+            patch.oidcEmailVerifiedClaimRequired === undefined
+              ? { fields: changedFields }
+              : { fields: changedFields, oidcEmailVerifiedClaimRequired: patch.oidcEmailVerifiedClaimRequired };
+          await this.audit.record(this.event('sso_connection.updated', row, actor, details), { tx });
         }
         if (to !== from) await this.recordStatusChange(row, actor, from, to, tx);
         return row;

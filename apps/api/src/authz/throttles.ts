@@ -58,3 +58,10 @@ export const SSO_CALLBACK_THROTTLE = { default: { limit: 120, ttl: 60_000 } };
 
 /** Routes of a signed-in session (step-up): 10 a minute per session. */
 export const SESSION_THROTTLE = { default: { limit: 10, ttl: 60_000, getTracker: sessionTracker } };
+
+/**
+ * `POST /auth/sso/bind/start|verify|resend` (the pending binding after an
+ * unverified OIDC email): 10 a minute per IP (the default tracker). The
+ * caller has no session yet.
+ */
+export const SSO_BIND_THROTTLE = { default: { limit: 10, ttl: 60_000 } };

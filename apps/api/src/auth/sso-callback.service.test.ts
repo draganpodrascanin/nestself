@@ -9,8 +9,10 @@ import { Logger } from '@nestjs/common';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { pkceKey } from '../redis/redis-keys.js';
+import { TokenCipher } from '../session/token-cipher.js';
 import { SsoCallbackService, pkceChallenge } from './sso-callback.service.js';
 import { FederatedBindingService } from './federated-binding.service.js';
+import { PendingBindStore, pendingBindId } from './pending-bind-store.js';
 import { InvitationMembershipActivator } from '../invitations/invitation-membership-activator.js';
 
 const PROVIDER = 'org-acme-saml';
@@ -27,6 +29,7 @@ type Conn = {
   protocol: 'SAML' | 'OIDC';
   status: 'DRAFT' | 'TESTING' | 'ACTIVE' | 'SUSPENDED';
   jitProvisioning: boolean;
+  oidcEmailVerifiedClaimRequired: boolean;
   defaultOrgUnitId: string | null;
 };
 
@@ -38,6 +41,7 @@ function connection(overrides: Partial<Conn> = {}): Conn {
     protocol: 'OIDC',
     status: 'ACTIVE',
     jitProvisioning: false,
+    oidcEmailVerifiedClaimRequired: true,
     defaultOrgUnitId: 'unit_1',
     ...overrides,
   };
@@ -120,11 +124,17 @@ function setup(opts: { conn?: Conn | null; domainVerified?: boolean; domainConne
   const binding = new FederatedBindingService(
     idp, sso as never, identities as never, invitations as never, activator, audit as never, memberships as never,
   );
+  const pendingBinds = new PendingBindStore(
+    store,
+    new TokenCipher({ get: (key: string) => (key === 'SESSION_ENCRYPTION_KEY' ? 'ab'.repeat(32) : undefined) } as never),
+  );
   const service = new SsoCallbackService(
     idp, store, dbs as never, sso as never, identities as never, binding,
-    audit as never, principalLoader as never, identity as never, config as never,
+    audit as never, principalLoader as never, identity as never, config as never, pendingBinds,
   );
-  return { service, idp, store, dbs, sso, identities, invitations, memberships, authz, audit, principalLoader, identity, tx };
+  return {
+    service, idp, store, dbs, sso, identities, invitations, memberships, authz, audit, principalLoader, identity, tx, pendingBinds,
+  };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -567,6 +577,35 @@ describe('SsoCallbackService', () => {
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
     });
+
+    it.each([
+      [
+        'a driver error wrapped by Drizzle',
+        Object.assign(new Error('Failed query: insert into "external_identities" params: new@acme.example'), {
+          name: 'DrizzleQueryError',
+          cause: Object.assign(new Error('duplicate key (email)=(new@acme.example)'), { code: '23505' }),
+        }),
+        'SSO identity binding failed: DrizzleQueryError (SQLSTATE 23505)',
+      ],
+      [
+        'a bare driver error',
+        Object.assign(new Error('duplicate key (email)=(new@acme.example)'), { code: '23505' }),
+        'SSO identity binding failed: Error (SQLSTATE 23505)',
+      ],
+      [
+        'an error without a SQLSTATE',
+        Object.assign(new Error('lost new@acme.example'), { cause: { code: 'not a sqlstate new@acme.example' } }),
+        'SSO identity binding failed: Error',
+      ],
+    ])('logs %s by name and SQLSTATE only, never the message or its parameters', async (_label, failure, line) => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      ctx.identities.createExternalIdentity.mockRejectedValue(failure);
+      const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
+      expect(error.mock.calls.map((c) => String(c[0]))).toEqual([line]);
+    });
   });
 
   describe('callback: JIT', () => {
@@ -627,16 +666,93 @@ describe('SsoCallbackService', () => {
   });
 
   describe('callback: email verification (SSO-R-08)', () => {
-    it('OIDC: an unverified email binds nothing and lands on sso_email_unverified with the email', async () => {
+    it('an unverified on-domain OIDC email leaves the pool user in place and redirects with bind=', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
+      const exchange = vi.spyOn(ctx.idp, 'exchangeAuthorizationCode');
+      const { state, code, nonce } = await startAndAuthorize(
+        ctx, { email: 'New@Acme.example', emailVerified: false }, { returnPath: '/people' },
+      );
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+
+      // The redirect carries an opaque handle, never the address.
+      const url = new URL(res.location);
+      expect(url.origin + url.pathname).toBe('http://ws.test/sign-in');
+      expect([...url.searchParams.keys()]).toEqual(['reason', 'bind']);
+      expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+      const handle = url.searchParams.get('bind')!;
+      expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(res.location.toLowerCase()).not.toContain('acme.example');
+      expect(res.session).toBeUndefined();
+      expect(deleteUser).not.toHaveBeenCalled();
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+
+      // The pending binding holds what bind/verify needs, and the exchange's tokens.
+      const exchanged = await exchange.mock.results[0]!.value;
+      expect(await ctx.pendingBinds.take(pendingBindId(handle))).toEqual({
+        connectionId: 'conn_1',
+        providerName: PROVIDER,
+        sub: exchanged.idTokenClaims.sub,
+        username: `${PROVIDER}_idp-subject-1`,
+        email: 'new@acme.example',
+        surface: 'workspace',
+        returnPath: '/people',
+        tokens: {
+          accessToken: exchanged.accessToken,
+          idToken: exchanged.idToken,
+          refreshToken: exchanged.refreshToken,
+          expiresIn: exchanged.expiresIn,
+        },
+        createdAt: expect.any(String),
+      });
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      expect(ctx.audit.record).toHaveBeenCalledWith({
+        action: 'identity.verification_started',
+        actorUserId: null,
+        actorKind: 'SYSTEM',
+        orgId: 'org_sample',
+        recordType: 'external_identity',
+        recordId: PROVIDER,
+        result: 'ALLOWED',
+        ip: META.ip,
+        userAgent: META.userAgent,
+        details: { emailNormalised: 'new@acme.example', connectionId: 'conn_1', emailVerifiedClaim: false },
+      });
+      expect(allAuditDetails(ctx)).not.toContain(handle);
+    });
+
+    it('an unverified address on the admin surface returns to the admin sign-in with its own handle', async () => {
+      const ctx = setup();
+      const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false }, { surface: 'admin' });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(res.location).toMatch(/^http:\/\/admin\.test\/sign-in\?reason=sso_email_unverified&bind=[A-Za-z0-9_-]{43}$/);
+      const handle = new URL(res.location).searchParams.get('bind')!;
+      expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toMatchObject({ surface: 'admin', returnPath: null });
+    });
+
+    it('with oidcEmailVerifiedClaimRequired=false the on-domain address binds like SAML', async () => {
+      const ctx = setup({ conn: connection({ oidcEmailVerifiedClaimRequired: false }) });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false });
       const res = await ctx.service.callback({ code, state }, META, nonce);
-      expect(res.location).toBe('http://ws.test/sign-in?reason=sso_email_unverified&email=new%40acme.example');
-      expect(res.session).toBeUndefined();
-      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
-      expect(deleteUser).toHaveBeenCalled();
+      expect(res.location).toBe('http://ws.test/');
+      expect(res.session).toBeDefined();
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'new@acme.example', emailVerified: true, ssoConnectionId: 'conn_1' }),
+        ctx.tx,
+      );
+      expect(auditActions(ctx)).not.toContain('identity.verification_started');
+    });
+
+    it('with the switch off an off-domain address is still the neutral sso_denied', async () => {
+      const ctx = setup({ conn: connection({ oidcEmailVerifiedClaimRequired: false }), domainVerified: false });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { state, code, nonce } = await startAndAuthorize(ctx, { emailVerified: false });
+      const res = await ctx.service.callback({ code, state }, META, nonce);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
     });
 
     it('SAML: an unverified claim is inferred verified when the domain is verified for the connection', async () => {

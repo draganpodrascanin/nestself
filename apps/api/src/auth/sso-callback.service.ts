@@ -28,6 +28,7 @@
  *      sign-in (`test=<nonce>` from `POST /ops/sso-connections/:id/test`,
  *      single use), and a verified email: the email's domain is a verified
  *      domain of that connection, and for OIDC also `email_verified === true`
+ *      unless the connection's `oidcEmailVerifiedClaimRequired` is off
  *      (SSO-R-08; SAML relies on the domain inference);
  *   3. a pending invitation of the connection's organization (Review Focus 2)
  *      for the same email (lowercased, trimmed, timing-safe: SSO-R-09) binds
@@ -40,12 +41,14 @@
  * Paths 3 to 5 and the checks around them live in `FederatedBindingService`.
  * An address outside the connection's verified domains binds nothing: the
  * orphan is deleted and the user gets the neutral `/sign-in?reason=sso_denied`
- * (the connection does not vouch for that address at all, so the email-code
- * prefill would be wrong). An on-domain OIDC address without
- * `email_verified === true` binds nothing either: the orphan is deleted too
- * (the IdP recreates it on the next sign-in, so nothing is lost and no
- * unbound pool user lingers) and the user lands on
- * `/sign-in?reason=sso_email_unverified` to continue with the email code.
+ * (the connection does not vouch for that address at all). An on-domain OIDC
+ * address without `email_verified === true` binds nothing yet: the pool user
+ * stays, a pending binding (`PendingBindStore`, 15 minutes) keeps what the
+ * binding needs, `identity.verification_started` is recorded, and the user
+ * lands on `/sign-in?reason=sso_email_unverified&bind=<handle>` to confirm
+ * the address with a NestSelf code (`SsoBindService`). The redirect never
+ * carries the address. With the connection's switch off, the address counts
+ * as verified (as for SAML) and paths 3 to 5 run.
  *
  * Success creates the session (`auth.method = 'sso'`, `secondFactor = true`:
  * MFA is delegated to the IdP, 3.4.9) and redirects to the surface origin
@@ -74,10 +77,12 @@ import { PrincipalLoader } from '../principal/principal-loader.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
 import {
   FederatedBindingService,
+  bindingFailureReason,
   domainOf,
   type Binding,
   type RequestMeta,
 } from './federated-binding.service.js';
+import { PendingBindStore } from './pending-bind-store.js';
 import { ssoCallbackUrl, surfaceOrigin } from './sso-start-url.js';
 
 export type Surface = 'workspace' | 'admin';
@@ -154,6 +159,7 @@ export class SsoCallbackService {
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(forwardRef(() => PendingBindStore)) private readonly pendingBinds: PendingBindStore,
   ) {}
 
   /**
@@ -308,16 +314,18 @@ export class SsoCallbackService {
     // SSO-R-08 plus the domain rule: a connection vouches only for addresses
     // of its own verified domains, so a tenant's IdP cannot assert someone
     // else's address and take over that user. OIDC must also assert
-    // `email_verified`; SAML relies on the domain inference.
+    // `email_verified` unless staff turned that requirement off for the
+    // connection; SAML relies on the domain inference.
     const domainVerified = await this.binding.isDomainVerifiedFor(connection, domainOf(email));
     if (!domainVerified) {
       // Off-domain: the connection vouches for nothing here, a neutral denial.
       await this.binding.denyBinding(claims, email, connection, meta, 'email_off_domain');
       return deny();
     }
-    if (connection.protocol === 'OIDC' && claims.emailVerified !== true) {
-      await this.binding.denyBinding(claims, email, connection, meta, 'email_unverified');
-      return { location: this.signInUrl(record.surface, 'sso_email_unverified', email) };
+    // Fails closed: only an explicit `false` lifts the requirement.
+    const claimRequired = connection.oidcEmailVerifiedClaimRequired !== false;
+    if (connection.protocol === 'OIDC' && claims.emailVerified !== true && claimRequired) {
+      return this.openPendingBind(exchanged, email, record, connection, meta);
     }
 
     // 3-4. Invitation or JIT, in one transaction of the connection's tenant.
@@ -327,7 +335,7 @@ export class SsoCallbackService {
         this.binding.bind(tx, connection, claims, email, provider, domainVerified),
       );
     } catch (err) {
-      this.logger.error(`SSO identity binding failed: ${(err as Error).message}`);
+      this.logger.error(`SSO identity binding failed: ${bindingFailureReason(err)}`);
       await this.auditFailed('sso_binding', meta, connection);
       return deny();
     }
@@ -358,6 +366,52 @@ export class SsoCallbackService {
   // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
+
+  /**
+   * SSO-R-08: the provider did not confirm an on-domain address. The pool
+   * user stays (it is not an orphan yet); the binding waits in a pending
+   * record until the user proves the mailbox with a NestSelf code
+   * (`SsoBindService`). The browser carries the opaque handle, never the
+   * address.
+   */
+  private async openPendingBind(
+    exchanged: TokenSet & { idTokenClaims: IdTokenClaims },
+    email: string,
+    record: PkceRecord,
+    connection: SsoConnectionRow,
+    meta: RequestMeta,
+  ): Promise<SsoRedirect> {
+    const claims = exchanged.idTokenClaims;
+    const handle = await this.pendingBinds.open({
+      connectionId: connection.id,
+      providerName: connection.cognitoProviderName,
+      sub: claims.sub,
+      username: claims.username,
+      email,
+      surface: record.surface,
+      returnPath: record.returnPath,
+      tokens: {
+        accessToken: exchanged.accessToken,
+        idToken: exchanged.idToken,
+        refreshToken: exchanged.refreshToken,
+        expiresIn: exchanged.expiresIn,
+      },
+    });
+    await this.audit.record({
+      action: 'identity.verification_started',
+      actorUserId: null,
+      actorKind: 'SYSTEM',
+      orgId: connection.orgId,
+      recordType: 'external_identity',
+      recordId: connection.cognitoProviderName,
+      result: 'ALLOWED',
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      // false or null: whether the provider said no or said nothing (the claim switch question).
+      details: { emailNormalised: email, connectionId: connection.id, emailVerifiedClaim: claims.emailVerified },
+    });
+    return { location: this.signInUrl(record.surface, 'sso_email_unverified', { bind: handle }) };
+  }
 
   private async testNonceIsFor(nonce: string, connectionId: string): Promise<boolean> {
     return this.parseTestRecord(await this.store.get(ssoTestKey(nonce))) === connectionId;
@@ -445,9 +499,10 @@ export class SsoCallbackService {
     await this.audit.record(event).catch(() => {});
   }
 
-  private signInUrl(surface: Surface, reason: SsoSignInReason, email?: string): string {
+  /** The surface's sign-in page with the reason; `bind` is a pending binding's handle. Never an address. */
+  private signInUrl(surface: Surface, reason: SsoSignInReason, extra: { bind?: string } = {}): string {
     const query = new URLSearchParams({ reason });
-    if (email) query.set('email', email);
+    if (extra.bind) query.set('bind', extra.bind);
     return `${surfaceOrigin(this.config, surface)}/sign-in?${query.toString()}`;
   }
 }

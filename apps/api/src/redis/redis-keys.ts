@@ -40,6 +40,13 @@ export const PKCE_TTL = 600;
 /** Single-use staff test sign-in of a TESTING SSO connection (`sso_test:{nonce}`). */
 export const SSO_TEST_TTL = 900;
 
+/**
+ * Pending federated binding after an unverified OIDC email (`ssoPendingBindKey`):
+ * 15 min, so a user whose code (`CHALLENGE_TTL`) expired asks for a new one
+ * without signing in at the identity provider again.
+ */
+export const SSO_PENDING_BIND_TTL = 900;
+
 /** WebSocket ticket: 30 s. */
 export const WS_TICKET_TTL = 30;
 
@@ -140,6 +147,15 @@ export function pkceKey(state: string): string {
 /** `sso_test:{nonce}` -> `{ connectionId }`, issued by `POST /ops/sso-connections/:id/test`. */
 export function ssoTestKey(nonce: string): string {
   return `sso_test:${nonce}`;
+}
+
+/**
+ * `sso_pending_bind:{hash}`: a federated sign-in waiting for the user to
+ * confirm the address with a code (`PendingBindStore`). `hash` is the sha256
+ * of the handle on the sign-in URL; the store never holds the handle.
+ */
+export function ssoPendingBindKey(hash: string): string {
+  return `sso_pending_bind:${hash}`;
 }
 
 /** `ws_ticket:{hash}` */

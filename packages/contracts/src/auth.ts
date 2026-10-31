@@ -126,6 +126,23 @@ export const SsoBindVerifyResponseSchema = z.object({
 export type SsoBindVerifyResponse = z.infer<typeof SsoBindVerifyResponseSchema>;
 
 /**
+ * `POST /auth/sso/bind/resend`: a new code for the challenge of an earlier
+ * `bind/start`, at most one a minute (429 `rate_limited` with `retryAfter`).
+ */
+export const SsoBindResendRequestSchema = z.object({
+  challengeToken: z.string().min(1),
+  /** Language of the code email. */
+  locale: LocaleSchema.optional(),
+});
+export type SsoBindResendRequest = z.infer<typeof SsoBindResendRequestSchema>;
+
+export const SsoBindResendResponseSchema = z.object({
+  /** The address the new code was sent to, masked. */
+  emailMasked: z.string().min(1),
+});
+export type SsoBindResendResponse = z.infer<typeof SsoBindResendResponseSchema>;
+
+/**
  * `POST /auth/sso/bind-token`: the mobile app's Cognito ID token after its
  * own PKCE exchange; the API applies the binding rules of the web callback.
  */

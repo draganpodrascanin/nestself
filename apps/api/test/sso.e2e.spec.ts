@@ -432,6 +432,44 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(JSON.stringify(events)).not.toContain('e2e-oidc-secret-value');
   });
 
+  it('oidcEmailVerifiedClaimRequired defaults to true, and PATCH true -> false -> true stores, answers and audits it', async () => {
+    const created = await post('', {
+      orgId: ORG,
+      slug: 'claim',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.claim.example',
+      oidcClientId: 'client-claim',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.oidcEmailVerifiedClaimRequired).toBe(true);
+    const id = created.body.id as string;
+    const stored = async () => (await app.get(SsoRepository).findConnection(id))!.oidcEmailVerifiedClaimRequired;
+
+    const off = await patch(`/${id}`, { oidcEmailVerifiedClaimRequired: false });
+    expect(off.status).toBe(200);
+    expect(off.body).toMatchObject({ status: 'DRAFT', oidcEmailVerifiedClaimRequired: false });
+    expect(await stored()).toBe(false);
+    const listed = await nikola.agent.get('/api/ops/sso-connections').query({ orgId: ORG });
+    expect(listed.body.items.find((c: { id: string }) => c.id === id).oidcEmailVerifiedClaimRequired).toBe(false);
+
+    const on = await patch(`/${id}`, { oidcEmailVerifiedClaimRequired: true });
+    expect(on.status).toBe(200);
+    expect(on.body.oidcEmailVerifiedClaimRequired).toBe(true);
+    expect(await stored()).toBe(true);
+
+    const updates = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.recordId, id), eq(auditEvents.action, 'sso_connection.updated')));
+    expect(updates.map((e) => e.details)).toEqual(
+      expect.arrayContaining([
+        { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: false },
+        { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: true },
+      ]),
+    );
+    expect(updates).toHaveLength(2);
+  });
+
   it('an unknown connection is 404', async () => {
     const res = await post('/sso_missing/test');
     expect(res.status).toBe(404);

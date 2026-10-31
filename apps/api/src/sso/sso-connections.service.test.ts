@@ -245,6 +245,26 @@ describe('SsoConnectionsService', () => {
     it('refuses a client secret on a SAML connection', async () => {
       await expectApiError(ctx.service.create({ ...SAML, oidcClientSecret: 's' }, ACTOR), 422, 'validation');
     });
+
+    it.each([true, false])('stores oidcEmailVerifiedClaimRequired %s, answers it and audits it', async (required) => {
+      const res = await ctx.service.create(
+        {
+          ...SAML,
+          protocol: 'OIDC',
+          metadataUrl: undefined,
+          oidcIssuer: 'https://login.acme.example',
+          oidcClientId: 'client-1',
+          oidcEmailVerifiedClaimRequired: required,
+        },
+        ACTOR,
+      );
+      expect(ctx.repo.createConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ oidcEmailVerifiedClaimRequired: required }),
+        TX,
+      );
+      expect(res.oidcEmailVerifiedClaimRequired).toBe(required);
+      expect(ctx.events[0]!.details).toMatchObject({ oidcEmailVerifiedClaimRequired: required });
+    });
   });
 
   describe('domains', () => {
@@ -522,6 +542,32 @@ describe('SsoConnectionsService', () => {
       expect(res.status).toBe('ACTIVE');
       expect(res.lastTestedAt).not.toBeNull();
       expect(ctx.events.map((e) => e.action)).not.toContain('sso_connection.deactivated');
+    });
+
+    it('turns oidcEmailVerifiedClaimRequired off and on again without a re-test, auditing each new value', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      vi.mocked(ctx.idp.updateProvider).mockClear();
+
+      const off = await ctx.service.update(conn.id, { oidcEmailVerifiedClaimRequired: false }, ACTOR);
+      expect(off).toMatchObject({ status: 'ACTIVE', oidcEmailVerifiedClaimRequired: false });
+      expect(off.lastTestedAt).not.toBeNull();
+      expect(ctx.repo.connections.get(conn.id)!.oidcEmailVerifiedClaimRequired).toBe(false);
+
+      const on = await ctx.service.update(conn.id, { oidcEmailVerifiedClaimRequired: true }, ACTOR);
+      expect(on.oidcEmailVerifiedClaimRequired).toBe(true);
+
+      // NestSelf's own rule: the identity provider is not touched.
+      expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
+      expect(ctx.events.map((e) => [e.action, e.details])).toEqual([
+        ['sso_connection.updated', { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: false }],
+        ['sso_connection.updated', { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: true }],
+      ]);
+    });
+
+    it('records no switch value when a PATCH leaves the switch alone', async () => {
+      const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+      await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR);
+      expect(ctx.events.map((e) => e.details)).toEqual([{ fields: ['jitProvisioning'] }]);
     });
 
     it('refuses a provider change combined with a suspension with 422', async () => {

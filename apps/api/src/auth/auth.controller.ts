@@ -56,9 +56,16 @@ import { ProfileService } from './profile.service.js';
 import { StepUpService } from './step-up.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { SsoBindService } from './sso-bind.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { RedirectOnThrottle } from '../common/redirect-on-throttle.decorator.js';
-import { SESSION_THROTTLE, SSO_CALLBACK_THROTTLE, SSO_START_THROTTLE } from '../authz/throttles.js';
+import {
+  SESSION_THROTTLE,
+  SSO_BIND_THROTTLE,
+  SSO_CALLBACK_THROTTLE,
+  SSO_START_THROTTLE,
+} from '../authz/throttles.js';
 import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
@@ -77,6 +84,9 @@ import {
   StepUpVerifyRequestSchema,
   SsoStartQuerySchema,
   SsoCallbackQuerySchema,
+  SsoBindStartRequestSchema,
+  SsoBindVerifyRequestSchema,
+  SsoBindResendRequestSchema,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -129,6 +139,7 @@ export class AuthController {
     private readonly profile: ProfileService,
     private readonly stepUp: StepUpService,
     private readonly ssoCallback: SsoCallbackService,
+    private readonly ssoBind: SsoBindService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -189,6 +200,58 @@ export class AuthController {
     );
     // The browser-binding cookie is spent on every outcome.
     this.sendRedirect(res, result, [this.cookies.clearSsoNonce()]);
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/sso/bind/{start,verify,resend} -- pending binding (SSO-R-08)
+  // -----------------------------------------------------------------------
+
+  /**
+   * `{ handle, locale? }` from `/sign-in?reason=sso_email_unverified&bind=`:
+   * mails a code to the address the identity provider asserted and answers
+   * `{ challengeToken, emailMasked }`. 400 `invalid_challenge` for an unknown
+   * or expired handle. The three bind routes allow 10 a minute per IP.
+   */
+  @Public()
+  @Post('sso/bind/start')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindStart(@Req() req: HttpReq, @Body() body: unknown) {
+    return this.ssoBind.start(validate(SsoBindStartRequestSchema, body), extractMeta(req));
+  }
+
+  /**
+   * `{ challengeToken, code }`: binds the identity, sets the session cookies
+   * and answers `{ returnPath }`. 401 `invalid_code` / `invalid_challenge`,
+   * 429 `too_many_attempts`, 403 `sso_denied` when nothing can be bound.
+   */
+  @Public()
+  @Post('sso/bind/verify')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindVerify(
+    @Req() req: HttpReq,
+    @Res({ passthrough: true }) res: HttpRes,
+    @Body() body: unknown,
+  ) {
+    const result = await this.ssoBind.verify(validate(SsoBindVerifyRequestSchema, body), extractMeta(req));
+    const { sessionId, csrfToken, absoluteExpiresAt } = result.session;
+    this.setSessionCookies(res, sessionId, csrfToken, absoluteExpiresAt);
+    return { returnPath: result.returnPath };
+  }
+
+  /**
+   * `{ challengeToken, locale? }`: a new code for the same challenge, at most
+   * one a minute counted from the previous mail (429 `rate_limited` with
+   * `details.retryAfter`). Answers `{ emailMasked }`.
+   */
+  @Public()
+  @Post('sso/bind/resend')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindResend(@Body() body: unknown) {
+    const { challengeToken, locale } = validate(SsoBindResendRequestSchema, body);
+    return this.ssoBind.resend(challengeToken, locale ?? 'sr-Latn');
   }
 
   // -----------------------------------------------------------------------

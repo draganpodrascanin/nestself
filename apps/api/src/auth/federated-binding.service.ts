@@ -2,7 +2,8 @@
  * FederatedBindingService: binds a federated sign-in that has no identity yet
  * to a NestSelf user (D-04 paths 3 to 5, 3.4.5). The web callback
  * (`SsoCallbackService`) uses it, and so do the routes that finish a binding
- * later (the pending binding after an unverified OIDC email).
+ * later (`SsoBindService`: the pending binding after an unverified OIDC
+ * email, whose rows say the address was confirmed `via: 'sso_email_code'`).
  *
  * `bind` runs inside the connection's tenant transaction:
  *   - a pending invitation of the connection's organization (Review Focus 2)
@@ -52,7 +53,29 @@ export type Binding =
 /** Why a federated sign-in bound nothing (`identity.denied` details). */
 export type BindingDenialReason = 'connection_inactive' | 'email_off_domain' | 'email_unverified' | 'no_invitation';
 
+/**
+ * How the address was confirmed when the identity provider did not: the
+ * user entered the code NestSelf mailed to it. Recorded as the `via` of
+ * `identity.linked` and `identity.denied`.
+ */
+export type AddressConfirmation = 'sso_email_code';
+
 const JIT_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === JIT_TEMPLATE_KEY)!;
+
+/** A SQLSTATE: five digits or upper-case letters. */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+
+/**
+ * A failed binding transaction as a reason a log line may carry: the error's
+ * name and the driver's SQLSTATE. Never the message: Drizzle puts the
+ * statement and its parameters there, the address among them.
+ */
+export function bindingFailureReason(err: unknown): string {
+  const name = err instanceof Error ? err.name : 'error';
+  const failure = err as { code?: unknown; cause?: { code?: unknown } } | null | undefined;
+  const code = failure?.cause?.code ?? failure?.code;
+  return typeof code === 'string' && SQLSTATE.test(code) ? `${name} (SQLSTATE ${code})` : name;
+}
 
 /** SSO-R-09: lowercased, trimmed, timing-safe. */
 export function sameEmail(a: string, b: string): boolean {
@@ -80,7 +103,11 @@ export class FederatedBindingService {
     @Inject(forwardRef(() => MembershipsRepository)) private readonly memberships: MembershipsRepository,
   ) {}
 
-  /** Invitation or JIT, in the caller's transaction of the connection's tenant; null when nothing binds. */
+  /**
+   * Invitation or JIT, in the caller's transaction of the connection's
+   * tenant; null when nothing binds. `confirmedBy` is set when NestSelf, not
+   * the identity provider, confirmed the address.
+   */
   async bind(
     tx: DbExecutor,
     connection: SsoConnectionRow,
@@ -88,6 +115,7 @@ export class FederatedBindingService {
     email: string,
     provider: string,
     domainVerified: boolean,
+    confirmedBy?: AddressConfirmation,
   ): Promise<Binding | null> {
     const now = new Date();
 
@@ -97,7 +125,7 @@ export class FederatedBindingService {
     const template = invitation ? invitableTemplateFor(invitation) : null;
     if (invitation && template && invitation.orgId === connection.orgId && sameEmail(invitation.email, email)) {
       const userId = await this.resolveOrCreateUser(email, connection, tx, 'sso_invitation');
-      await this.linkIdentity(tx, userId, claims, email, provider, connection, 'invitation');
+      await this.linkIdentity(tx, userId, claims, email, provider, connection, confirmedBy ?? 'sso_invitation');
       await this.activator.activateInvitationForUser(invitation, template, userId, now, tx);
       return { kind: 'invitation', userId, invitationId: invitation.id, templateKey: invitation.templateKey };
     }
@@ -118,7 +146,7 @@ export class FederatedBindingService {
         },
         { tx },
       );
-      await this.linkIdentity(tx, userId, claims, email, provider, connection, 'jit');
+      await this.linkIdentity(tx, userId, claims, email, provider, connection, confirmedBy ?? 'sso_jit');
       await this.activator.activateMembership(
         {
           userId,
@@ -156,13 +184,17 @@ export class FederatedBindingService {
     return !!row && row.connectionId === connection.id && row.verifiedAt !== null;
   }
 
-  /** SSO-R-10: delete the orphan federated pool user, record `identity.denied`. */
+  /**
+   * SSO-R-10: delete the orphan federated pool user, record `identity.denied`
+   * (with `via` when NestSelf had confirmed the address).
+   */
   async denyBinding(
     claims: IdTokenClaims,
     email: string,
     connection: SsoConnectionRow | null,
     meta: RequestMeta,
     reason: BindingDenialReason,
+    confirmedBy?: AddressConfirmation,
   ): Promise<void> {
     try {
       await this.idp.deleteUser(claims.username);
@@ -186,6 +218,7 @@ export class FederatedBindingService {
         reason,
         connectionId: connection?.id ?? null,
         emailVerifiedClaim: claims.emailVerified,
+        ...(confirmedBy ? { via: confirmedBy } : {}),
       },
     });
   }
@@ -230,7 +263,8 @@ export class FederatedBindingService {
     email: string,
     provider: string,
     connection: SsoConnectionRow,
-    via: 'invitation' | 'jit',
+    /** `identity.linked` details: the binding path, or how NestSelf confirmed the address. */
+    via: 'sso_invitation' | 'sso_jit' | AddressConfirmation,
   ): Promise<void> {
     await this.identities.createExternalIdentity(
       {
@@ -254,7 +288,7 @@ export class FederatedBindingService {
         recordType: 'external_identity',
         recordId: userId,
         result: 'ALLOWED',
-        details: { emailNormalised: email, provider, via: `sso_${via}`, connectionId: connection.id },
+        details: { emailNormalised: email, provider, via, connectionId: connection.id },
       },
       { tx },
     );

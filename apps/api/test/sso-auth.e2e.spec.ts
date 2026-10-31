@@ -29,6 +29,7 @@ import {
   memberships,
   orgUnits,
   organizations,
+  ssoDomains,
   users,
 } from '../src/db/schema/index.js';
 import { SsoRepository, type SsoConnectionPatch } from '../src/db/repositories/sso.repository.js';
@@ -212,6 +213,13 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
 
   async function auditFor(action: string) {
     return testDb.db.select().from(auditEvents).where(eq(auditEvents.action, action));
+  }
+
+  /** The newest code mail to `email` (the logging mailer keeps what it "sent" in test runs). */
+  function lastMailTo(email: string): MailMessage {
+    const mail = (app.get(Mailer) as LoggingMailer).sent.filter((m) => m.to === email).at(-1);
+    if (!mail) throw new Error(`no mail to ${email}`);
+    return mail;
   }
 
   // -------------------------------------------------------------------------
@@ -555,16 +563,6 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       }
     });
 
-    it('unverified OIDC email: no binding, redirect to sso_email_unverified with the address', async () => {
-      const email = 'unverified@acme.example';
-      await invite(email);
-      seedFederated('sub-unverified', email, false);
-      const { callback, location } = await federatedSignIn(email);
-      expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_email_unverified&email=unverified%40acme.example`);
-      expect(sessionCookie(callback)).toBeUndefined();
-      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
-    });
-
     it('a replayed state is answered neutrally with no session (Review Focus 1)', async () => {
       const { agent, callbackUrl } = await federatedSignIn('jovana@acme.example');
       const before = (await auditFor('auth.sign_in.failed')).length;
@@ -736,13 +734,6 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     const stepUp = (who: Federated, path: 'start' | 'resend' | 'verify', body: Record<string, string> = {}) =>
       who.agent.post(`/api/auth/step-up/${path}`).set('X-CSRF-Token', who.csrf).send(body);
 
-    /** The newest code mail to `email` (the logging mailer keeps what it "sent" in test runs). */
-    function lastMailTo(email: string): MailMessage {
-      const mail = (app.get(Mailer) as LoggingMailer).sent.filter((m) => m.to === email).at(-1);
-      if (!mail) throw new Error(`no mail to ${email}`);
-      return mail;
-    }
-
     /** Move the session's authentication time 40 minutes into the past. */
     async function ageSession(sessionId: string) {
       const key = sessionKey(hashSessionId(sessionId));
@@ -846,6 +837,239 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(me.body.principal.auth.lastStepUpAt).toBeNull();
       const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
       expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pending binding after an unverified OIDC email (5.6): a NestSelf code proves the mailbox
+  // -------------------------------------------------------------------------
+
+  describe('pending binding after an unverified OIDC email (5.6)', () => {
+    /** The IdP signs `email` in without `email_verified`: every hop, the redirect and its handle. */
+    async function unverifiedSignIn(email: string, query: Record<string, string> = {}) {
+      seedFederated(`sub-${email}`, email, false);
+      const flow = await federatedSignIn(email, query);
+      const url = new URL(flow.location);
+      return { ...flow, url, handle: url.searchParams.get('bind') ?? '' };
+    }
+
+    const bind = (agent: request.Agent | ReturnType<typeof request>, path: 'start' | 'verify' | 'resend', body: object) =>
+      (agent as request.Agent).post(`/api/auth/sso/bind/${path}`).send(body);
+
+    /** start, then the code the mail carried. */
+    async function startCode(agent: request.Agent, handle: string, email: string) {
+      const start = await bind(agent, 'start', { handle });
+      expect(start.status).toBe(200);
+      return { challengeToken: start.body.challengeToken as string, code: lastMailTo(email).params.code! };
+    }
+
+    it('pending bind end to end: callback -> bind/start -> bind/verify -> session cookie', async () => {
+      const email = 'pending@acme.example';
+      const invitationId = await invite(email);
+      const { agent, callback, url, handle } = await unverifiedSignIn(email, { returnPath: '/people' });
+      expect(url.origin + url.pathname).toBe(`${WORKSPACE}/sign-in`);
+      expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+      expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(sessionCookie(callback)).toBeUndefined();
+      const started = (await auditFor('identity.verification_started')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(started).toHaveLength(1);
+      expect(started[0]).toMatchObject({ orgId: ORG, details: { connectionId, emailVerifiedClaim: false } });
+
+      const start = await bind(agent, 'start', { handle, locale: 'hu' });
+      expect(start.status).toBe(200);
+      expect(start.body).toEqual({ challengeToken: expect.any(String), emailMasked: 'p***@acme.example' });
+      const mail = lastMailTo(email);
+      expect(mail).toMatchObject({ template: 'sso_bind_code', locale: 'hu' });
+
+      const verify = await bind(agent, 'verify', { challengeToken: start.body.challengeToken, code: mail.params.code });
+      expect(verify.status).toBe(200);
+      expect(verify.body).toEqual({ returnPath: '/people' });
+      expect(sessionCookie(verify)).toBeDefined();
+      expect((verify.headers['set-cookie'] as unknown as string[]).some((c) => c.startsWith('nestself_csrf='))).toBe(true);
+
+      const me = await agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const [identity] = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(identity).toMatchObject({ provider: `cognito:${PROVIDER}`, email, emailVerified: true, ssoConnectionId: connectionId });
+      const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
+      expect(inv!.acceptedUserId).toBe(user!.id);
+      const linked = (await auditFor('identity.linked')).filter((e) => e.recordId === user!.id);
+      expect(linked.map((e) => (e.details as { via?: string }).via)).toEqual(['sso_email_code']);
+      const accepted = (await auditFor('invitation.accepted')).filter((e) => e.recordId === invitationId);
+      expect(accepted.map((e) => (e.details as { via?: string }).via)).toEqual(['sso_email_code']);
+
+      // The handle is spent (asked without the new session cookie, which would need the CSRF header).
+      const again = await bind(request(app.getHttpServer()), 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
+
+      // Bound: the next sign-in takes path 1, although the IdP still does not confirm the address.
+      const next = await federatedSignIn(email);
+      expect(next.location).toBe(`${WORKSPACE}/`);
+      expect(sessionCookie(next.callback)).toBeDefined();
+    });
+
+    it('the redirect never carries the address', async () => {
+      const email = 'not.in.the.url@acme.example';
+      await invite(email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const { location, url } = await unverifiedSignIn(email);
+        expect(location).not.toContain('email=');
+        expect(decodeURIComponent(location)).not.toContain(email);
+        expect(decodeURIComponent(location)).not.toContain('acme.example');
+        expect([...url.searchParams.keys()]).toEqual(['reason', 'bind']);
+        // The pool user stays for the code step.
+        expect(deleteUser).not.toHaveBeenCalled();
+        expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      } finally {
+        deleteUser.mockRestore();
+      }
+    });
+
+    it('a connection suspended between the callback and bind/verify answers sso_denied and spends the handle (Review Focus 2)', async () => {
+      const email = 'suspended.meanwhile@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const deniedBefore = await auditFor('identity.denied');
+
+      await setConnection({ status: 'SUSPENDED' });
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
+      }
+
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const denied = (await auditFor('identity.denied')).filter((e) => !deniedBefore.some((b) => b.id === e.id));
+      expect(denied).toHaveLength(1);
+      expect(denied[0]).toMatchObject({
+        orgId: ORG,
+        details: { reason: 'connection_inactive', emailNormalised: email, connectionId, via: 'sso_email_code' },
+      });
+      // Consumed: the handle opens nothing, even with the connection ACTIVE again.
+      const again = await bind(agent, 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
+    });
+
+    it('a domain that lost its verification between the callback and bind/verify answers sso_denied (Review Focus 2)', async () => {
+      const email = 'domain.lost@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const [domain] = await testDb.db.select().from(ssoDomains).where(eq(ssoDomains.domain, 'acme.example'));
+
+      await testDb.db.update(ssoDomains).set({ verifiedAt: null }).where(eq(ssoDomains.id, domain!.id));
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+      } finally {
+        await testDb.db.update(ssoDomains).set({ verifiedAt: domain!.verifiedAt }).where(eq(ssoDomains.id, domain!.id));
+      }
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const denied = (await auditFor('identity.denied')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['connection_inactive']);
+    });
+
+    it('no invitation and JIT off: bind/verify deletes the orphan pool user and answers sso_denied', async () => {
+      const email = 'walkin.pending@acme.example';
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(deleteUser).toHaveBeenCalledWith(`${PROVIDER}_sub-${email}`);
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const denied = (await auditFor('identity.denied')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['no_invitation']);
+    });
+
+    it('a wrong code keeps the pending sign-in; bind/resend after the cooldown mails a code that binds', async () => {
+      const email = 'resend.pending@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code: first } = await startCode(agent, handle, email);
+      const wrong = first.slice(0, -1) + (first.endsWith('0') ? '1' : '0');
+
+      const bad = await bind(agent, 'verify', { challengeToken, code: wrong });
+      expect(bad.status).toBe(401);
+      expect(bad.body.code).toBe('invalid_code');
+
+      // The cooldown starts with the first mail.
+      const early = await bind(agent, 'resend', { challengeToken, locale: 'en' });
+      expect(early.status).toBe(429);
+      expect(early.body.code).toBe('rate_limited');
+      expect(early.body.details.retryAfter).toBeGreaterThan(0);
+
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      try {
+        const resent = await bind(agent, 'resend', { challengeToken, locale: 'en' });
+        expect(resent.status).toBe(200);
+        expect(resent.body).toEqual({ emailMasked: 'r***@acme.example' });
+        const mail = lastMailTo(email);
+        expect(mail).toMatchObject({ template: 'sso_bind_code', locale: 'en' });
+        expect(mail.params.code).not.toBe(first);
+        const verify = await bind(agent, 'verify', { challengeToken, code: mail.params.code });
+        expect(verify.status).toBe(200);
+        expect(sessionCookie(verify)).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('with oidcEmailVerifiedClaimRequired off the callback binds the on-domain address at once', async () => {
+      const email = 'switch.off@acme.example';
+      await invite(email);
+      await setConnection({ oidcEmailVerifiedClaimRequired: false });
+      try {
+        const { location, callback } = await unverifiedSignIn(email);
+        expect(location).toBe(`${WORKSPACE}/`);
+        expect(sessionCookie(callback)).toBeDefined();
+      } finally {
+        await setConnection({ oidcEmailVerifiedClaimRequired: true });
+      }
+    });
+
+    it('bind/start answers 400 invalid_challenge for an unknown handle and 400 validation for a malformed one', async () => {
+      const unknown = await bind(request(app.getHttpServer()), 'start', { handle: 'u'.repeat(43) });
+      expect(unknown.status).toBe(400);
+      expect(unknown.body.code).toBe('invalid_challenge');
+      const malformed = await bind(request(app.getHttpServer()), 'start', { handle: 'short' });
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.code).toBe('validation');
+      const verify = await bind(request(app.getHttpServer()), 'verify', { challengeToken: 'unknown', code: '12345678' });
+      expect(verify.status).toBe(401);
+      expect(verify.body.code).toBe('invalid_challenge');
+    });
+
+    it.each(['start', 'verify', 'resend'] as const)('bind/%s allows 10 requests a minute per IP', async (path) => {
+      const body = path === 'start' ? { handle: 'u'.repeat(43) } : { challengeToken: 'unknown', code: '12345678' };
+      for (let i = 0; i < 10; i++) {
+        expect((await bind(request(app.getHttpServer()), path, body)).status).not.toBe(429);
+      }
+      const refused = await bind(request(app.getHttpServer()), path, body);
+      expect(refused.status).toBe(429);
+      expect(refused.body.code).toBe('rate_limited');
     });
   });
 

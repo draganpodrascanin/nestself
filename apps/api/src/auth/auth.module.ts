@@ -28,6 +28,8 @@ import { IdentityModule } from '../identity/identity.module.js';
 import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
 import { SsoCallbackService } from './sso-callback.service.js';
 import { FederatedBindingService } from './federated-binding.service.js';
+import { PendingBindStore } from './pending-bind-store.js';
+import { SsoBindService } from './sso-bind.service.js';
 import { InvitationMembershipActivator } from '../invitations/invitation-membership-activator.js';
 
 @Module({
@@ -61,7 +63,9 @@ import { InvitationMembershipActivator } from '../invitations/invitation-members
     StepUpService,
     NestselfOtpService,
     FederatedBindingService,
+    PendingBindStore,
     SsoCallbackService,
+    SsoBindService,
     InvitationMembershipActivator,
     AuthorizationGuard,
     AuthorizationService,
