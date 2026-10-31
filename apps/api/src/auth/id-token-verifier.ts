@@ -1,7 +1,7 @@
 /**
- * IdTokenVerifier: checks the Cognito ID token the mobile app presents to
- * `POST /auth/sso/bind-token` after its own PKCE exchange against the hosted
- * UI (phase 4 design 5.7), and answers its normalised claims
+ * MobileIdTokenVerifier: checks the Cognito ID token the mobile app presents
+ * to `POST /auth/sso/bind-token` after its own PKCE exchange against the
+ * hosted UI (phase 4 design 5.7), and answers its normalised claims
  * (`toIdTokenClaims`, the shape the web callback's exchange answers).
  *
  * - `CognitoIdTokenVerifier` (AUTH_MODE=cognito): aws-jwt-verify checks the
@@ -30,13 +30,13 @@ import {
   classifyIdTokenError,
   createCognitoIdTokenVerifier,
   toIdTokenClaims,
-  type IdTokenVerifier as PoolIdTokenVerifier,
+  type IdTokenVerifier,
 } from '../identity/cognito-sso-ops.js';
 
-/** Injection token for the active IdTokenVerifier (chosen by AUTH_MODE, like `BEARER_VERIFIER`). */
+/** Injection token for the active MobileIdTokenVerifier (chosen by AUTH_MODE, like `BEARER_VERIFIER`). */
 export const ID_TOKEN_VERIFIER = Symbol('ID_TOKEN_VERIFIER');
 
-export interface IdTokenVerifier {
+export interface MobileIdTokenVerifier {
   /**
    * Verify the mobile app's ID token and answer its claims. Throws 401
    * `unauthenticated` for a token that fails verification, 503 `unavailable`
@@ -50,8 +50,9 @@ function invalidIdToken(): ApiHttpException {
 }
 
 @Injectable()
-export class CognitoIdTokenVerifier implements IdTokenVerifier {
-  private pool: Promise<PoolIdTokenVerifier> | null = null;
+export class CognitoIdTokenVerifier implements MobileIdTokenVerifier {
+  /** The pool's raw verifier for the mobile client (signature and claims). */
+  private pool: Promise<IdTokenVerifier> | null = null;
   private readonly userPoolId: string;
   private readonly mobileClientId: string;
 
@@ -85,7 +86,7 @@ export class CognitoIdTokenVerifier implements IdTokenVerifier {
 }
 
 @Injectable()
-export class StubIdTokenVerifier implements IdTokenVerifier {
+export class StubIdTokenVerifier implements MobileIdTokenVerifier {
   constructor(private readonly jwt: JwtService) {}
 
   async verify(idToken: string): Promise<IdTokenClaims> {

@@ -199,7 +199,11 @@ function auditEvent(ctx: Ctx, action: string): { details: Record<string, unknown
 }
 
 describe('SsoBindService', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    // The logging mailer reports each code it "sends" at debug level; these tests read `mailer.sent`.
+    vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
+  });
   afterEach(() => vi.useRealTimers());
 
   describe('start', () => {

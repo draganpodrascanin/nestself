@@ -92,7 +92,7 @@ import {
   type RequestMeta,
 } from './federated-binding.service.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
-import { ID_TOKEN_VERIFIER, type IdTokenVerifier } from './id-token-verifier.js';
+import { ID_TOKEN_VERIFIER, type MobileIdTokenVerifier } from './id-token-verifier.js';
 import { NestselfOtpService } from './nestself-otp.service.js';
 import { PendingBindStore, pendingBindId, type TakenPendingBind } from './pending-bind-store.js';
 import { SignInThrottle } from './sign-in-throttle.js';
@@ -165,7 +165,7 @@ export class SsoBindService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
-    @Inject(ID_TOKEN_VERIFIER) private readonly idTokens: IdTokenVerifier,
+    @Inject(ID_TOKEN_VERIFIER) private readonly idTokens: MobileIdTokenVerifier,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -255,7 +255,7 @@ export class SsoBindService {
       throw ssoDenied();
     }
 
-    await this.bindNew(connection, claims, record.email, true, meta, VIA);
+    await this.bindNew(connection, claims, record.email, meta, VIA);
     return this.signIn(record, connection, meta);
   }
 
@@ -311,7 +311,7 @@ export class SsoBindService {
     }
 
     // 3-5.
-    await this.bindNew(connection, claims, email, true, meta);
+    await this.bindNew(connection, claims, email, meta);
   }
 
   // -------------------------------------------------------------------------
@@ -331,15 +331,15 @@ export class SsoBindService {
     connection: SsoConnectionRow,
     claims: IdTokenClaims,
     email: string,
-    domainVerified: boolean,
     meta: RequestMeta,
     confirmedBy?: AddressConfirmation,
   ): Promise<void> {
     const providerName = connection.cognitoProviderName;
     let binding: Binding | null;
     try {
+      // `true`: the domain is verified. Callers have run `isDomainVerifiedFor` for this address first.
       binding = await this.dbs.withOrgScope(connection.orgId, (tx) =>
-        this.binding.bind(tx, connection, claims, email, federatedProvider(providerName), domainVerified, confirmedBy),
+        this.binding.bind(tx, connection, claims, email, federatedProvider(providerName), true, confirmedBy),
       );
     } catch (err) {
       this.logger.error(`SSO identity binding failed: ${bindingFailureReason(err)}`);
