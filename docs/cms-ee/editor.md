@@ -9,6 +9,8 @@ packages/content/src/editor/
   ContentEditor.tsx    — Main editor component (canvas, labels, layout)
   editor-extensions.ts — Full Tiptap extension set (schema, shortcuts, plugins)
   node-views.tsx       — React node views for interactive blocks (Phase B)
+  BlockDialogs.tsx     — Call-to-action and related-resource dialogs, resource picker
+  node-view-labels.ts  — Translated labels and host handlers (upload, search) for node views
   SlashMenu.tsx        — "/" command palette with Floating UI positioning
   EditorBubbleMenu.tsx — Selection toolbar: Bold, Link, Turn Into
   BlockHandle.tsx      — Drag handle: "+", grip, block menu
@@ -48,13 +50,21 @@ Seven custom blocks have interactive React node views, registered via
 
 | Node view | Type | Behaviour |
 |---|---|---|
-| `ProfessionalNoteView` | content | Aside with note kind picker (tip/warning/disclaimer), border colour from tokens |
-| `PracticalStepView` | content | Numbered badge, editable title input, body content |
+| `ProfessionalNoteView` | content | Callout with the renderer's icon and colours; "Note type" is the `@nestself/ui` Select (Tip, Warning, Disclaimer) |
+| `PracticalStepView` | content | Numbered badge, "Step title" input, editable body |
 | `ChecklistView` | content | `<ul>` wrapper |
 | `ChecklistItemView` | content | `<li>` with a real checkbox that toggles `[x]` prefix in the `label` attr |
-| `CtaView` | atom | Button preview, kind select, optional label input (max 100 chars) |
-| `RelatedResourceView` | atom | Resource ID input (text for now; search picker planned) |
-| `ImageView` | atom | Upload placeholder / asset reference, required alt text, optional caption |
+| `CtaView` | atom | Button preview; a click opens the call-to-action dialog for this node |
+| `RelatedResourceView` | atom | Card with the picked resource's title (never the id); a click opens the picker |
+| `ImageView` | atom | Uploading / Processing states, the rendition as an `<img>`, "Alt text" and "Caption"; a failed upload is a visible alert |
+
+### Call-to-action and related-resource dialogs (`BlockDialogs.tsx`)
+
+Both blocks carry a target the schema requires, so they are never inserted half-configured. The slash command and a click on an existing block dispatch `nestself:block-dialog` on `editor.view.dom`; `BlockDialogs` (mounted by `ContentEditor`) opens a `Dialog` from `@nestself/ui` and inserts or updates the node only on confirm. Cancel or Escape leaves the document unchanged.
+
+- **Call to action:** "Action" (Select: Suggest topic, Open content, Open collection, Open service), then the target: a resource picker for content or collections (collections only list resources of type `collection`), a Select of the content capabilities for a service. "Button label" is optional, at most 100 characters. "Done" is refused with a visible field error while a needed target is missing.
+- **Related resource:** a resource picker; choosing a result confirms.
+- **Resource picker:** an ARIA combobox (`aria-activedescendant`, arrow keys, Enter, Escape closes the list only) over the host's `ResourceSearchHandler`. The admin app passes `GET /api/ops/cms/resources?q=`, a title search with LIKE wildcards escaped. Searching, no results and a failed search are shown in the list. The listbox animates through the popover preset.
 
 All node views switch between editable and read-only modes based on
 `editor.isEditable`. They use semantic token classes (`text-text`,
@@ -73,14 +83,15 @@ connects the `ContentEditor` to the CMS API:
 - **API mode**: `createCmsApi(api)` factory from `@nestself/api-client` for
   `getResource`, `saveRevision` (If-Match ETag), `submitRevision`,
   `approveRevision`, `publishNow`, `createNewRevision`.
-- **Autosave**: 5-second debounce, one-in-flight with trailing save
+- **Autosave**: 1-second debounce (`AUTOSAVE_DELAY_MS`), one-in-flight with trailing save
   (`inflightRef`, `trailingRef`), `lockVersionRef` updated on each 200.
-- **Conflict handling**: 409 shows a banner with "Reload server version"
-  and "Keep mine" (overwrite with server's lockVersion).
+- **Conflict handling**: 409 shows an alert with "Reload server version",
+  which loads the server's copy into the editor.
 - **Navigation blocking**: `useBlocker` from TanStack Router with
   `shouldBlockFn` + `enableBeforeUnload`; flush save on unmount.
-- **Title**: Large borderless heading input styled with `type-section-title`
-  (Notion-style; replaces the wrapped `<Field><Input>` from Phase A).
+- **Title and canvas**: a large borderless title (`type-display`) and a borderless
+  writing canvas; the "Body" heading is visually hidden. Empty nodes show translated
+  placeholders ("Type “/” for blocks", "Heading").
 - **Collapsible properties panel**: `Accordion` from `@nestself/ui`
   containing summary, outcome, duration (minutes), sources, proposedAudience.
   Starts collapsed (`defaultValue={[]}`); the author expands to fill.
@@ -108,7 +119,7 @@ connects the `ContentEditor` to the CMS API:
 |---|---|
 | `/` | Open slash command menu |
 | `Mod-B` | Toggle bold |
-| `Mod-K` | Toggle link popover (dispatches `nestself:toggle-link` custom event) |
+| `Mod-K` | Open the link popover for the selection (dispatches `nestself:toggle-link`) |
 | `Mod-/` | Toggle block menu (dispatches `nestself:toggle-block-menu` custom event) |
 | `Mod-Alt-2` | Toggle heading 2 |
 | `Mod-Alt-3` | Toggle heading 3 |
@@ -130,17 +141,25 @@ Toolbar or BlockHandle. Two keyboard shortcuts dispatch custom events on
 `editor.view.dom`:
 
 - **`nestself:toggle-link`** — Fired by `Mod-K` on the Link mark extension.
-  The `Toolbar` component listens for it and toggles the link popover.
+  `EditorBubbleMenu` opens the link popover when text is selected (the legacy
+  `Toolbar` listens too).
 - **`nestself:toggle-block-menu`** — Fired by `Mod-/` on the
   `BlockKeyboardShortcuts` extension. The `BlockHandle` component listens
-  for it, resolves the current block position, and opens the block menu.
+  for it, resolves the current block position, and opens the block menu at
+  that block. The menu renders in a portal: Tiptap hides the hover handle on
+  keydown, so a menu inside it could open invisible.
+- **`nestself:block-dialog`** — Fired by the slash menu and the CTA and
+  related-resource node views; `BlockDialogs` opens the matching dialog.
 
 ## Accessibility
 
-- Slash menu: `role="listbox"` with `aria-activedescendant`, arrow key navigation, Enter to select, Escape to close.
-- Bubble menu: Buttons with `aria-label` and `aria-pressed`.
-- Block handle: Buttons with `aria-label`, block menu with `role="menu"`.
-- All menus animated per the Motion rule (popover preset) with reduced-motion support via `useMotionPreset`.
+- Editor body: `role="textbox"`, `aria-multiline`, named by `labels.editorLabel` ("Content editor").
+- Slash menu: `role="listbox"` named "Filter blocks…", one `role="group"` per group, `aria-activedescendant`, arrows, Enter, Escape (keeps the typed text).
+- Formatting bar: `role="toolbar"` named "Format" with Bold, Link and Turn into; no italic. Escape closes its popovers from anywhere and returns to the selection.
+- Block handle: "Add block" and "Drag or open menu"; the block menu is `role="menu"` and takes focus on open.
+- Dialogs: `Dialog` from `@nestself/ui` (focus trap, Escape, labelled close button); fields are `Field`-labelled.
+- Every label is translated: the admin app passes `labels.nodeView`, `labels.bubbleMenu.format` and the placeholders from `cms.json`.
+- Motion: menus, popovers and the picker list animate in and out through the popover preset; the formatting bar fades by a token transition on the visibility Tiptap sets; dialogs use the dialog and backdrop presets. `e2e/motion/popouts.motion.ts` covers the slash menu, the block menu and the resource picker (stories in `ContentEditor.stories.tsx` and `BlockDialogs.stories.tsx`).
 
 ## Test coverage
 
@@ -149,21 +168,21 @@ Toolbar or BlockHandle. Two keyboard shortcuts dispatch custom events on
 | File | Covers |
 |---|---|
 | `ContentEditor.test.tsx` | Round-trip (insert every block, export, reimport), slash menu insertion, bubble menu bold toggle, keyboard shortcuts (Mod-I swallowed, Mod-K link event, Mod-/ block menu event, Alt-Shift-Arrow block move), markdown shortcut input rules (shipped extension verification), converter cleanup, paste normalization, extension factory configuration |
-| `node-views.test.tsx` | All 7 node view components: rendering, attribute updates via `updateAttributes`, editable vs read-only gating, checkbox toggle |
-| `$locale.test.tsx` (admin) | Route loading, locale tabs, properties accordion (collapsed by default, expand to verify), preview panel, workflow buttons, useBlocker, conflict state, revision badges, borderless title input |
+| `node-views.test.tsx` | Node views: rendering, `updateAttributes`, editable vs read-only, dialog requests from CTA and related cards, labelled image inputs |
+| `BlockDialogs.test.tsx` | Done blocked without a target, confirmed attrs per action, services, cancel, related confirm, picker error / empty / type filter / keyboard |
+| `-locale.test.tsx` (admin) | Sample mode: loading, locale tabs, properties, preview, workflow buttons, derived locale |
+| `-locale.api.test.tsx` (admin) | API mode: load failure, not found, submit failure, return and publish errors inside their dialogs, publish sends the stored audience |
 
 ### Storybook stories
 
 `ContentEditor.stories.tsx`: Empty, WithContent, ReadOnly, CustomLabels,
 AllBlocks (every custom block type), AllBlocksReadOnly.
+`BlockDialogs.stories.tsx`: ResourcePickerStates, CallToAction.
+Storybook (`packages/ui/.storybook/main.ts`) includes the editor stories.
 
 ### E2E (Playwright)
 
-`e2e/content/editor.spec.ts` (`@editor` tag): Author creates resource via
-API, opens editor, expands properties panel, checks locale tabs, toggles
-preview, fills content and submits; reviewer approves; publisher publishes.
-Screenshots saved to `docs/cms-ee/manual/screenshots/{author,reviewer,publisher}/`.
-Run with `pnpm e2e:content -g "@editor"`.
+`e2e/content/editor.spec.ts` (`@editor` tag, 19 serial steps) drives the UI only and reads the stored revision back after each step (`readRevision` in `editor-helpers.ts`): create, canvas, slash menu and node views, markdown shortcuts, formatting bar and links (including Mod-K), block handle (menu, keyboard, drag), image upload, call to action and related resource, properties, reload, conflict, preview widths, other locales, submit, return, resubmit, approve, publish, and the employee's view in English and Serbian. It writes the manual's screenshots at 2x to `docs/cms-ee/manual/screenshots/`, cropped around the detail with `shoot(page, role, name, { around })`. Run with `pnpm e2e:content -g "@editor"`.
 
 ## Tiptap documentation URLs
 
@@ -173,3 +192,4 @@ Run with `pnpm e2e:content -g "@editor"`.
 - Placeholder: https://tiptap.dev/docs/editor/extensions/functionality/placeholder
 - TrailingNode: https://tiptap.dev/docs/editor/extensions/functionality/trailing-node
 - `useEditorState`: https://tiptap.dev/docs/editor/getting-started/install/react
+- Node views with React: https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/react
