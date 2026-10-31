@@ -10,14 +10,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { computeTotp } from '../src/identity/totp.js';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
-import { seed } from '../src/db/seed/seed-lib.js';
-import { externalIdentities, grants, memberships, users } from '../src/db/schema/index.js';
+import { MemberListResponseSchema, OrgUnitListResponseSchema, PERMISSION_TEMPLATES } from '@nestself/contracts';
+import { resolveSampleScope, seed } from '../src/db/seed/seed-lib.js';
+import { auditEvents, externalIdentities, grants, memberships, users } from '../src/db/schema/index.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+import { resetThrottlerStorage } from './throttler-reset.js';
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -491,6 +492,153 @@ describe.skipIf(!shouldRun)('Members & Users (e2e)', () => {
         .from(users)
         .where(eq(users.id, 'user_stefan'));
       expect(user!.suspendedAt).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Member and org-unit lists: program.overview or access.preview
+  //
+  // An employer owner holds access.preview but no HR template, so the access
+  // page needs the lists to answer for access.preview as well.
+  // -----------------------------------------------------------------------
+
+  describe('GET /orgs/:orgId/members and /org-units', () => {
+    const ORG = 'org_sample';
+    const MEMBERS = `/api/orgs/${ORG}/members`;
+    const ORG_UNITS = `/api/orgs/${ORG}/org-units`;
+    const CREATED_AT = new Date('2026-01-01');
+
+    let hrAdmin: Awaited<ReturnType<typeof signInToOrg>>;
+    let ownerOnly: Awaited<ReturnType<typeof signInToOrg>>;
+    let employee: Awaited<ReturnType<typeof signInToOrg>>;
+
+    /** Email-OTP sign-in, then into the organization context. */
+    async function signInToOrg(userId: string) {
+      const session = await signInEmailOtp(`${userId}@example.com`);
+      const context = await session.agent
+        .post('/api/auth/context')
+        .set('X-CSRF-Token', session.csrf)
+        .send({ context: { kind: 'organization', orgId: ORG } });
+      expect(context.status).toBe(200);
+      return session;
+    }
+
+    /** A new active member of the organization who can sign in with an email code. */
+    async function addMember(userId: string, displayName: string, templateKeys: string[]) {
+      const email = `${userId}@example.com`;
+      await testDb.db.insert(users).values({ id: userId, email, displayName });
+      await testDb.db.insert(memberships).values({ userId, orgId: ORG, status: 'ACTIVE', startDate: CREATED_AT });
+      for (const key of templateKeys) {
+        const template = PERMISSION_TEMPLATES.find((t) => t.key === key)!;
+        await testDb.db.insert(grants).values({
+          id: `grant_${userId}_${key}`,
+          subjectUserId: userId,
+          templateKey: key,
+          actions: [...template.actions],
+          scopeType: template.scopeType,
+          ...resolveSampleScope(template.scopeType, ORG, null),
+          grantedByUserId: 'user_ivana',
+          grantedAt: CREATED_AT,
+          validFrom: CREATED_AT,
+        });
+      }
+      idp.seedUsers([{ email }]);
+      const idpUser = await idp.findUserByEmail(email);
+      await testDb.db.insert(externalIdentities).values({
+        userId,
+        provider: 'cognito',
+        subject: idpUser!.sub,
+        cognitoUsername: idpUser!.username,
+        email,
+        emailVerified: true,
+      });
+    }
+
+    beforeAll(async () => {
+      resetThrottlerStorage(app);
+      await addMember('user_owner_only', 'Olga Vlasnik', []);
+      await addMember('user_plain_employee', 'Emil Zaposleni', ['employee']);
+
+      // Ownership moves only through the API: ivana, the seeded owner, hands it to
+      // the new member. She keeps her hr_admin grant; the new owner has no HR template.
+      hrAdmin = await signInToOrg('user_ivana');
+      const transfer = await hrAdmin.agent
+        .post(`/api/orgs/${ORG}/grants/transfer-ownership`)
+        .set('X-CSRF-Token', hrAdmin.csrf)
+        .send({ newOwnerUserId: 'user_owner_only' });
+      expect(transfer.status).toBe(200);
+
+      ownerOnly = await signInToOrg('user_owner_only');
+      employee = await signInToOrg('user_plain_employee');
+    }, 60_000);
+
+    it('the owner has access.preview and no program.overview', async () => {
+      const me = await ownerOnly.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.effectiveActions).toContain('access.preview');
+      expect(me.body.effectiveActions).not.toContain('program.overview');
+    });
+
+    it('an owner without HR rights lists the members: 200', async () => {
+      const res = await ownerOnly.agent.get(MEMBERS);
+
+      expect(res.status).toBe(200);
+      expect(MemberListResponseSchema.parse(res.body)).toEqual(res.body);
+      expect(res.body.items.map((m: { userId: string }) => m.userId)).toEqual(
+        expect.arrayContaining(['user_ivana', 'user_owner_only', 'user_plain_employee']),
+      );
+    });
+
+    it('an owner without HR rights lists the org units: 200', async () => {
+      const res = await ownerOnly.agent.get(ORG_UNITS);
+
+      expect(res.status).toBe(200);
+      expect(OrgUnitListResponseSchema.parse(res.body)).toEqual(res.body);
+      expect(res.body.items.length).toBeGreaterThan(0);
+    });
+
+    it('the owner still cannot change members or org units: 403', async () => {
+      const move = await ownerOnly.agent
+        .patch(`${MEMBERS}/any-membership`)
+        .set('X-CSRF-Token', ownerOnly.csrf)
+        .send({ lineManagerUserId: null });
+      expect(move.status).toBe(403);
+
+      const create = await ownerOnly.agent
+        .post(ORG_UNITS)
+        .set('X-CSRF-Token', ownerOnly.csrf)
+        .send({ parentId: 'ou_any', kind: 'TEAM', name: 'Not allowed' });
+      expect(create.status).toBe(403);
+    });
+
+    it('an HR administrator without an owner grant lists both (program.overview alone is enough)', async () => {
+      const me = await hrAdmin.agent.get('/api/auth/me');
+      expect(me.body.effectiveActions).toContain('program.overview');
+      expect(me.body.effectiveActions).not.toContain('access.preview');
+
+      expect((await hrAdmin.agent.get(MEMBERS)).status).toBe(200);
+      expect((await hrAdmin.agent.get(ORG_UNITS)).status).toBe(200);
+    });
+
+    it('a plain employee is refused both lists: 403, audited under the first action with the alternatives', async () => {
+      for (const path of [MEMBERS, ORG_UNITS]) {
+        const res = await employee.agent.get(path);
+        expect(res.status, path).toBe(403);
+        expect(res.body.code).toBe('forbidden');
+      }
+
+      const denied = await testDb.db
+        .select({ recordType: auditEvents.recordType, details: auditEvents.details })
+        .from(auditEvents)
+        .where(and(eq(auditEvents.action, 'access.denied'), eq(auditEvents.actorUserId, 'user_plain_employee')));
+      expect(denied.map((e) => e.recordType).sort()).toEqual(['membership', 'org_unit']);
+      for (const event of denied) {
+        expect(event.details).toMatchObject({
+          actionAttempted: 'program.overview',
+          alternatives: ['program.overview', 'access.preview'],
+          reason: 'no_matching_grant',
+        });
+      }
     });
   });
 });

@@ -129,6 +129,7 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | `@Public()` | `isPublic` | Bypasses authentication and authorization |
 | `@Authenticated()` | `isAuthenticatedOnly` | Requires valid session/bearer, no authorization check |
 | `@Authorize(action, resolver)` | `authorize` | Requires authentication + passes authorize(principal, action, resource, ctx), then the step-up freshness check when the action has a class |
+| `@Authorize([action, ...], resolver)` | `authorize` | Any of the listed actions: they are evaluated in order and the first that allows decides, and its step-up class applies. When none allows, the denial is audited as `access.denied` under the first action (`actionAttempted`) with the whole list in `details.alternatives`. An empty list throws when the route is declared. |
 | `@CurrentPrincipal()` | param decorator | Extracts `request.principal` |
 
 ### Resource resolvers (`src/authz/resolvers.ts`)
@@ -172,11 +173,11 @@ All routes under the global `/api` prefix.
 | DELETE | /auth/sessions/:sessionId | @Authenticated | default |
 | GET | /health | @Public (reports `database` and `redis`) | default |
 | GET | /orgs/:orgId/programme | @Authorize(program.overview) | default |
-| GET | /orgs/:orgId/org-units | @Authorize(program.overview) | default |
+| GET | /orgs/:orgId/org-units | @Authorize([program.overview, access.preview]) | default |
 | POST | /orgs/:orgId/org-units | @Authorize(org_units.manage) | default |
 | PATCH | /orgs/:orgId/org-units/:unitId | @Authorize(org_units.manage) | default |
 | POST | /orgs/:orgId/org-units/:unitId/move | @Authorize(org_units.manage) | default |
-| GET | /orgs/:orgId/members | @Authorize(program.overview) | default |
+| GET | /orgs/:orgId/members | @Authorize([program.overview, access.preview]) | default |
 | PATCH | /orgs/:orgId/members/:membershipId | @Authorize(people.move) | default |
 | POST | /orgs/:orgId/members/:membershipId/end | @Authorize(people.deactivate) | default |
 | POST | /ops/users/:userId/suspend | @Authorize(people.deactivate) | default |
