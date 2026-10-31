@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
+import { createElement } from 'react';
 import type { FormEvent } from 'react';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -12,8 +13,24 @@ import { resourcesFor } from '@nestself/i18n';
 import { ApiError } from '@nestself/api-client';
 import type { OrgAdminApi } from '@nestself/api-client';
 import type { MemberItem } from '@nestself/contracts';
+import type * as Ui from '@nestself/ui';
+import type { SelectProps } from '@nestself/ui';
 import { MemberPicker } from './member-picker';
 import type { MemberPickerProps } from './member-picker';
+
+// A transparent wrapper around the real `Select` that keeps its latest props, so a
+// test can call `onValueChange` the way Base UI does by itself (see "ignores the null").
+const select = vi.hoisted(() => ({ latest: null as SelectProps | null }));
+vi.mock('@nestself/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof Ui>();
+  return {
+    ...actual,
+    Select: (props: SelectProps) => {
+      select.latest = props;
+      return createElement(actual.Select, props);
+    },
+  };
+});
 
 const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({
@@ -169,6 +186,23 @@ describe('MemberPicker', () => {
     // Only the two choices are reported; the picker never reports a cleared choice.
     expect(onValueChange.mock.calls).toEqual([['user_ana'], ['user_stefan']]);
     expect(trigger()).toHaveTextContent('Stefan Marković');
+  });
+
+  it('ignores the null the Select reports by itself, so a rebuilt list never clears the choice', async () => {
+    const user = userEvent.setup();
+    const { onValueChange } = renderPicker();
+    await pick(user, 'Ana Nikolić');
+
+    // What Base UI does in Chromium when the choices are rebuilt under the selection
+    // (jsdom does not rebuild them the same way, so the test makes the call itself).
+    act(() => {
+      select.latest?.onValueChange?.(null);
+    });
+
+    expect(select.latest?.value).toBe('user_ana');
+    expect(trigger()).toHaveTextContent('Ana Nikolić');
+    // The form is never told that the member was cleared.
+    expect(onValueChange.mock.calls).toEqual([['user_ana']]);
   });
 
   it('says when no member matches and when there are none', async () => {

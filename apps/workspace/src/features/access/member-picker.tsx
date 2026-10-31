@@ -74,11 +74,11 @@ export function MemberPicker({
   const searchFailure = orgId !== null && search !== '' && query.isError ? (accessErrorKey(query.error) ?? 'unknown') : null;
 
   const choose = (userId: string | null) => {
-    // The `Select` reports `null` by itself when its choices are rebuilt under
-    // a selected member (a search replaces the list, and the chosen one moves to
-    // another place in it). This picker never clears a choice, so it ignores that.
+    // Keep: in Chromium (not in jsdom) Base UI's Select reports `null` by itself when its
+    // choices are rebuilt under the selection, e.g. after a pick drops the previously chosen
+    // member. The picker never clears a choice; passing that `null` on wipes the member and the preview.
     if (userId === null) return;
-    setChosen(userId === null ? null : (loaded.find((m) => m.userId === userId) ?? (chosen?.userId === userId ? chosen : null)));
+    setChosen(loaded.find((m) => m.userId === userId) ?? chosen);
     onValueChange(userId);
   };
 

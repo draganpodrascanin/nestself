@@ -89,12 +89,25 @@ async function searchMembers(page: Page, scope: Locator, term: string) {
   expect((await answered).status()).toBe(200);
 }
 
-/** Searches for a member in the effective-access preview, picks them and returns the panel. */
-async function previewFor(page: Page, memberName: string) {
+/**
+ * Searches for a member in the effective-access preview, picks them and returns the panel.
+ * `stillChosen` is who the preview showed before: a new search rebuilds the list under
+ * that choice, and the choice has to survive until the new pick replaces it. After the
+ * pick, the list is rebuilt again (the previous member drops out); Base UI's Select then
+ * reports `null` by itself in Chromium, which must neither clear the field nor the preview.
+ */
+async function previewFor(page: Page, memberName: string, stillChosen?: string) {
   const panel = page.getByRole('region', { name: 'Effective access' });
+  const member = panel.getByRole('combobox', { name: 'Member' });
   await searchMembers(page, panel, memberName.split(' ')[0]!);
-  await panel.getByRole('combobox', { name: 'Member' }).click();
+  if (stillChosen) await expect(member).toHaveText(stillChosen);
+  await member.click();
   await page.getByRole('option', { name: memberName }).click();
+  await expect(member).toHaveText(memberName);
+  // The pick reached the preview: its actions (or "no actions") are shown, not an empty panel.
+  await expect(
+    panel.getByRole('list').first().or(panel.getByText('This member has no actions in this organization.')),
+  ).toBeVisible({ timeout: 10_000 });
   return panel;
 }
 
@@ -149,6 +162,7 @@ test.describe('Workspace HR grant administration', () => {
     await expect(page.getByRole('option', { name: EMPLOYEE_NAME })).toBeVisible();
     await expect(page.getByRole('option', { name: MANAGER_NAME })).toHaveCount(0);
     await page.getByRole('option', { name: EMPLOYEE_NAME }).click();
+    await expect(anaPanel.getByRole('combobox', { name: 'Member' })).toHaveText(EMPLOYEE_NAME);
     await expect(
       anaPanel.getByRole('list', { name: 'content' }).getByText('content.read', { exact: true }),
     ).toBeVisible({ timeout: 10_000 });
@@ -178,7 +192,7 @@ test.describe('Workspace HR grant administration', () => {
 
     // The delegation takes effect for Stefan: his effective access now lists
     // people.invite (the context carries the delegated grant's parent chain).
-    const stefanPanel = await previewFor(page, MANAGER_NAME);
+    const stefanPanel = await previewFor(page, MANAGER_NAME, EMPLOYEE_NAME);
     await expect(stefanPanel.getByText('people.invite', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Owner-driven assignment: team_manager for Ana on one org unit, with the
