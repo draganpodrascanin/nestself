@@ -152,7 +152,7 @@ export class FakeIdentityProvider extends IdentityProviderService {
       throw new IdentityProviderError('User disabled', 'user_disabled');
     }
 
-    this.store.sendOtp(user.email);
+    this.store.sendOtp(user.email, input.locale);
 
     const session = this.createSession(
       user.email,

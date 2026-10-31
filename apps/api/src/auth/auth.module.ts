@@ -14,6 +14,7 @@ import { PasswordResetService } from './password-reset.service.js';
 import { SessionEndpointsService } from './session-endpoints.service.js';
 import { ChallengeStore } from './challenge-store.js';
 import { SignInThrottle } from './sign-in-throttle.js';
+import { StepUpThrottle } from './step-up-throttle.js';
 import { AccessRevocationService } from './access-revocation.service.js';
 import { ProfileService } from './profile.service.js';
 import { StepUpService } from './step-up.service.js';
@@ -52,6 +53,7 @@ import { InvitationMembershipActivator } from '../invitations/invitation-members
     SessionEndpointsService,
     ChallengeStore,
     SignInThrottle,
+    StepUpThrottle,
     AccessRevocationService,
     ProfileService,
     MeResponseBuilder,

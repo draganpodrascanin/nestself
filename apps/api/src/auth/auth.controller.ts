@@ -58,7 +58,7 @@ import { StepUpService } from './step-up.service.js';
 import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { RedirectOnThrottle } from '../common/redirect-on-throttle.decorator.js';
-import { SSO_CALLBACK_THROTTLE, SSO_START_THROTTLE } from '../authz/throttles.js';
+import { SESSION_THROTTLE, SSO_CALLBACK_THROTTLE, SSO_START_THROTTLE } from '../authz/throttles.js';
 import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
@@ -73,6 +73,7 @@ import {
   ContextSwitchRequestSchema,
   ProfileLocaleRequestSchema,
   ProfileDisplayNameRequestSchema,
+  StepUpResendRequestSchema,
   StepUpVerifyRequestSchema,
   SsoStartQuerySchema,
   SsoCallbackQuerySchema,
@@ -385,15 +386,44 @@ export class AuthController {
   // POST /api/auth/step-up/start
   // -----------------------------------------------------------------------
 
+  /**
+   * Mails a code: Cognito's for a native user, a NestSelf one to the
+   * federated identity's address otherwise; 403 `step_up_unavailable` when
+   * there is neither. The three step-up routes allow 10 a minute per session
+   * (bearer: per token family), and wrong codes lock the user (StepUpThrottle).
+   */
   @Authenticated()
   @Post('step-up/start')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle(SESSION_THROTTLE)
   async stepUpStart(
     @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,
   ) {
     return this.stepUp.start(principal, extractMeta(req), req.session?.surface ?? extractSurface(req));
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/step-up/resend
+  // -----------------------------------------------------------------------
+
+  /**
+   * A new code for the challenge of an earlier start, at most one a minute
+   * counted from the previous mail (429 `rate_limited` with
+   * `details.retryAfter`). Answers like start; the Cognito kind answers with a
+   * new challenge token.
+   */
+  @Authenticated()
+  @Post('step-up/resend')
+  @HttpCode(200)
+  @Throttle(SESSION_THROTTLE)
+  async stepUpResend(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+    @Body() body: unknown,
+  ) {
+    const { challengeToken } = validate(StepUpResendRequestSchema, body);
+    return this.stepUp.resend(principal, challengeToken, extractMeta(req));
   }
 
   // -----------------------------------------------------------------------
@@ -403,7 +433,7 @@ export class AuthController {
   @Authenticated()
   @Post('step-up/verify')
   @HttpCode(204)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle(SESSION_THROTTLE)
   async stepUpVerify(
     @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,

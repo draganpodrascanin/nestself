@@ -337,6 +337,26 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
   });
 
   // -----------------------------------------------------------------------
+  // 8b. The code email of the acceptance is written in the requested locale
+  // -----------------------------------------------------------------------
+
+  it('invitation accept passes the locale to the code email', async () => {
+    const email = 'locale-hire@example.com';
+    const created = await createInvitation({ email, templateKey: 'employee' });
+    expect(created.status).toBe(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/invitations/accept')
+      .send({ token: created.body.devToken, locale: 'hu' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('method', 'email_otp');
+    const sent = idp.sentCodes.filter((c) => c.email === email);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toHaveProperty('locale', 'hu');
+  });
+
+  // -----------------------------------------------------------------------
   // 9. Accept with invalid token → 401
   // -----------------------------------------------------------------------
 

@@ -1,21 +1,48 @@
 /**
  * StepUpService: re-authentication before a sensitive action.
  *
- * `start` sends an email code to the user's native Cognito identity and stores
- * a challenge bound to the user. `verify` consumes it, re-authenticates with
- * the identity provider and records the step-up: on the session
+ * `start` mails a code and answers with the challenge token and the masked
+ * address:
+ * - a native user (a `cognito` identity whose pool user still exists) gets
+ *   Cognito's EMAIL_OTP in the principal's locale; the challenge lives in the
+ *   `ChallengeStore`, bound to the user;
+ * - otherwise a federated user gets a code NestSelf issues and mails itself
+ *   (`NestselfOtpService`, purpose `step_up`) to the address of the federated
+ *   identity (the address the employer's IdP asserted on a verified domain,
+ *   never `users.email`), bound to the user and to the session or token family
+ *   that asked. With several federated identities, the one bound to an ACTIVE
+ *   connection wins, else the most recently seen one, else the first;
+ * - anyone else gets 403 `step_up_unavailable`.
+ *
+ * `verify` checks the per-user lock first (`StepUpThrottle`, 429
+ * `too_many_attempts`), then dispatches on the token: a `ChallengeStore`
+ * record is the Cognito kind, any other token goes to the NestSelf store. A
+ * challenge minted for another user is refused with 401 `invalid_challenge`,
+ * audited as `foreign_challenge` and spent. Wrong codes of both kinds count
+ * toward the lock; a success clears it. The step-up lands on the session
  * (`markStepUp`, then `regenerate`) for web callers, or under
- * `stepUpKey(tokenFamily)` for bearer callers. The token set the
- * re-authentication returns is discarded; its refresh token is revoked.
+ * `stepUpKey(tokenFamily)` for bearer callers, and is audited with its
+ * issuer. The token set a Cognito re-authentication returns is discarded; its
+ * refresh token is revoked.
  *
- * Every native user steps up with an email code, `password_totp` users
- * included (Cognito cannot issue SOFTWARE_TOKEN_MFA without a password).
- * Federated users get the same until phase 3 adds the IdP round trip.
+ * `resend` mails a new code at most once per `OTP_RESEND_COOLDOWN_SECONDS`,
+ * counted from the previous mail, the first one included (429 `rate_limited`
+ * with `details.retryAfter`). The Cognito kind starts a new provider
+ * challenge under a new token and spends the old one; the NestSelf kind keeps
+ * its token. Neither resets the wrong codes counted on the challenge.
  *
- * @see 3.6.9, SESS-R-10, SESS-R-18, T-2.6
+ * Every user steps up with an email code, `password_totp` users included
+ * (Cognito cannot issue SOFTWARE_TOKEN_MFA without a password). Federated
+ * users get a NestSelf code rather than an IdP round trip: Cognito forwards
+ * neither `prompt=login` nor SAML `ForceAuthn`, so a fresh `auth_time` would
+ * not prove that the user re-authenticated (phase 4 design, 4.1).
+ *
+ * @see 3.6.9, SESS-R-10, SESS-R-18, SSO-R-17, T-2.6; phase 4 design 5.4
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import type { Principal, StepUpStartResponse } from '@nestself/contracts';
+import { createHash } from 'node:crypto';
+import { LocaleSchema } from '@nestself/contracts';
+import type { Locale, Principal, StepUpStartResponse } from '@nestself/contracts';
 
 import {
   IdentityProviderService,
@@ -24,16 +51,26 @@ import {
 
 import { ChallengeStore, type ChallengeRecord } from './challenge-store.js';
 import { retainAfterWrongCode } from './sign-in.service.js';
+import { NestselfOtpService } from './nestself-otp.service.js';
+import { StepUpThrottle } from './step-up-throttle.js';
 
 import { SessionService } from '../session/session.service.js';
+import { hashSessionId } from '../session/session-helpers.js';
 
-import { IdentityRepository } from '../db/repositories/identity.repository.js';
+import { IdentityRepository, type ExternalIdentityRow } from '../db/repositories/identity.repository.js';
+import { SsoRepository } from '../db/repositories/sso.repository.js';
 
 import { IdentityResolutionService } from './identity-resolution.service.js';
 
 import { AuditWriter } from '../audit/audit-writer.js';
+import { maskEmail } from '../email/mask-email.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
-import { stepUpKey, STEP_UP_BEARER_TTL } from '../redis/redis-keys.js';
+import {
+  OTP_RESEND_COOLDOWN_SECONDS,
+  otpResendKey,
+  stepUpKey,
+  STEP_UP_BEARER_TTL,
+} from '../redis/redis-keys.js';
 import { ApiHttpException, SessionExpiredError } from '../common/api-error.js';
 
 type Meta = { ip: string | null; userAgent: string | null };
@@ -45,12 +82,41 @@ export interface StepUpVerifyResult {
 
 const STEP_UP_METHOD = 'email_otp' as const;
 
+/** The `otpResendKey` purpose of the Cognito kind; NestSelf challenges keep their own (`step_up`). */
+const COGNITO_RESEND_PURPOSE = 'step_up_cognito';
+
+/** Mail language for a principal whose stored locale is not one of the four. */
+const FALLBACK_LOCALE: Locale = 'sr-Latn';
+
 function invalidChallenge(): ApiHttpException {
   return new ApiHttpException({
     status: 401,
     code: 'invalid_challenge',
     message: 'Challenge expired or invalid',
   });
+}
+
+function stepUpUnavailable(): ApiHttpException {
+  return new ApiHttpException({
+    status: 403,
+    code: 'step_up_unavailable',
+    message: 'Step-up is not available for this account',
+  });
+}
+
+function principalLocale(principal: Principal): Locale {
+  const parsed = LocaleSchema.safeParse(principal.locale);
+  return parsed.success ? parsed.data : FALLBACK_LOCALE;
+}
+
+/**
+ * Where the step-up was asked for: the session, by the hash the session store
+ * keys it with (the raw id is never persisted, 3.6.1), or the token family.
+ */
+function stepUpTarget(principal: Principal): string {
+  return principal.sessionId
+    ? `session:${hashSessionId(principal.sessionId)}`
+    : `family:${principal.tokenFamily}`;
 }
 
 @Injectable()
@@ -65,6 +131,9 @@ export class StepUpService {
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identityResolution: IdentityResolutionService,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    @Inject(forwardRef(() => NestselfOtpService)) private readonly otp: NestselfOtpService,
+    @Inject(forwardRef(() => StepUpThrottle)) private readonly throttle: StepUpThrottle,
+    @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
   ) {}
 
   async start(
@@ -73,37 +142,38 @@ export class StepUpService {
     surface: 'workspace' | 'admin',
   ): Promise<StepUpStartResponse> {
     this.assertRecordable(principal);
+    await this.assertNotLocked(principal);
+    const locale = principalLocale(principal);
 
     const identities = await this.identities.findExternalIdentitiesForUser(principal.userId);
     const native = identities.find((i) => i.provider === 'cognito');
-    if (!native) {
-      throw new ApiHttpException({
-        status: 403,
-        code: 'forbidden',
-        message: 'Step-up is not available for this account',
-      });
+    if (native) {
+      const started = await this.startCognitoCode(native.email, locale);
+      if (started) {
+        const challengeToken = await this.challenges.create({
+          kind: 'email_otp',
+          username: started.username,
+          email: native.email,
+          session: started.session,
+          surface,
+          stepUp: { userId: principal.userId },
+        });
+        await this.startResendCooldown(challengeToken);
+        return this.startResponse(challengeToken, native.email);
+      }
+      // The linked pool user is gone; a federated identity can still take the code.
     }
 
-    const started = await this.idp.startEmailOtp({ email: native.email });
-    if (!started) {
-      // The linked pool user is gone; same answer as a missing identity.
-      throw new ApiHttpException({
-        status: 403,
-        code: 'forbidden',
-        message: 'Step-up is not available for this account',
-      });
-    }
-
-    const challengeToken = await this.challenges.create({
-      kind: 'email_otp',
-      username: started.username,
-      email: native.email,
-      session: started.session,
-      surface,
-      stepUp: { userId: principal.userId },
+    const federated = await this.federatedIdentityFor(identities);
+    if (!federated) throw stepUpUnavailable();
+    const { challengeToken, emailMasked } = await this.otp.issue({
+      purpose: 'step_up',
+      email: federated.email,
+      locale,
+      template: 'step_up_code',
+      data: { userId: principal.userId, target: stepUpTarget(principal) },
     });
-    // The masked address arrives with the federated step-up (phase 4, Task 6).
-    return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked: null };
+    return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked };
   }
 
   async verify(
@@ -113,32 +183,15 @@ export class StepUpService {
     meta: Meta,
   ): Promise<StepUpVerifyResult> {
     this.assertRecordable(principal);
+    await this.assertNotLocked(principal);
 
     const challenge = await this.challenges.consume(challengeToken);
-    if (challenge?.stepUp && challenge.stepUp.userId !== principal.userId) {
-      // A step-up challenge minted for someone else: refuse and record it
-      // (never the token or the code).
-      await this.record(principal, 'auth.step_up.failed', meta, {
-        method: STEP_UP_METHOD, reason: 'foreign_challenge',
-      });
-      throw invalidChallenge();
+    if (challenge) {
+      await this.verifyCognito(principal, challengeToken, challenge, response, meta);
+    } else {
+      await this.verifyNestself(principal, challengeToken, response, meta);
     }
-    if (
-      !challenge ||
-      challenge.kind !== 'email_otp' ||
-      challenge.stepUp?.userId !== principal.userId
-    ) {
-      throw invalidChallenge();
-    }
-
-    const refreshToken = await this.reauthenticate(principal, challengeToken, challenge, response, meta);
-    if (refreshToken) {
-      try {
-        await this.idp.revokeRefreshToken(refreshToken);
-      } catch (err) {
-        this.logger.warn(err, 'Failed to revoke the step-up refresh token');
-      }
-    }
+    await this.throttle.reset(principal.userId);
 
     const now = new Date();
     let result: StepUpVerifyResult = {};
@@ -158,8 +211,121 @@ export class StepUpService {
       );
     }
 
-    await this.record(principal, 'auth.step_up.completed', meta, { method: STEP_UP_METHOD });
+    await this.record(principal, 'auth.step_up.completed', meta, {
+      method: STEP_UP_METHOD,
+      issuer: challenge ? 'cognito' : 'nestself',
+    });
     return result;
+  }
+
+  /** A new code for the challenge of an earlier `start`; see the class comment for the two kinds. */
+  async resend(principal: Principal, challengeToken: string, meta: Meta): Promise<StepUpStartResponse> {
+    this.assertRecordable(principal);
+    await this.assertNotLocked(principal);
+    const locale = principalLocale(principal);
+
+    const challenge = await this.challenges.consume(challengeToken);
+    if (!challenge) {
+      const { emailMasked } = await this.otp.resend('step_up', challengeToken, locale);
+      return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked };
+    }
+    await this.assertOwnStepUpChallenge(principal, challenge, meta);
+
+    const cooldown = this.resendCooldownKey(challengeToken);
+    if (await this.store.get(cooldown)) {
+      await this.challenges.put(challengeToken, challenge);
+      throw new ApiHttpException({
+        status: 429,
+        code: 'rate_limited',
+        message: 'Wait before asking for another code',
+        details: { retryAfter: Math.max(1, await this.store.ttl(cooldown)) },
+      });
+    }
+
+    let started: { session: string; username: string } | null;
+    try {
+      started = await this.startCognitoCode(challenge.email, locale);
+    } catch (err) {
+      // No new code went out: the one sent before keeps working.
+      await this.challenges.put(challengeToken, challenge);
+      throw err;
+    }
+    // The pool user is gone: the old challenge cannot complete either.
+    if (!started) throw stepUpUnavailable();
+
+    const next = await this.challenges.create({
+      kind: 'email_otp',
+      username: started.username,
+      email: challenge.email,
+      session: started.session,
+      ...(challenge.surface ? { surface: challenge.surface } : {}),
+      stepUp: { userId: principal.userId },
+      ...(challenge.attempts ? { attempts: challenge.attempts } : {}),
+    });
+    await this.startResendCooldown(next);
+    return this.startResponse(next, challenge.email);
+  }
+
+  private async verifyCognito(
+    principal: Principal,
+    challengeToken: string,
+    challenge: ChallengeRecord,
+    response: string,
+    meta: Meta,
+  ): Promise<void> {
+    await this.assertOwnStepUpChallenge(principal, challenge, meta);
+    const refreshToken = await this.reauthenticate(principal, challengeToken, challenge, response, meta);
+    if (refreshToken) {
+      try {
+        await this.idp.revokeRefreshToken(refreshToken);
+      } catch (err) {
+        this.logger.warn(err, 'Failed to revoke the step-up refresh token');
+      }
+    }
+  }
+
+  /** A NestSelf code: three tries per challenge (`NestselfOtpService`), bound to the user it was minted for. */
+  private async verifyNestself(
+    principal: Principal,
+    challengeToken: string,
+    response: string,
+    meta: Meta,
+  ): Promise<void> {
+    let data: Record<string, string>;
+    try {
+      ({ data } = await this.otp.verify('step_up', challengeToken, response));
+    } catch (err) {
+      // `too_many_attempts` here is the third wrong code on this challenge.
+      if (err instanceof ApiHttpException && (err.code === 'invalid_code' || err.code === 'too_many_attempts')) {
+        await this.throttle.recordFailure(principal.userId);
+        await this.record(principal, 'auth.step_up.failed', meta, { method: STEP_UP_METHOD, reason: err.code });
+      }
+      throw err;
+    }
+    if (data.userId !== principal.userId) {
+      // The code matched, so the challenge is spent for its owner too.
+      await this.recordForeignChallenge(principal, meta);
+      throw invalidChallenge();
+    }
+  }
+
+  /**
+   * Only a step-up challenge of this user goes on. One minted for someone else
+   * is refused and recorded (never the token or the code); a sign-in challenge
+   * is refused as unknown.
+   */
+  private async assertOwnStepUpChallenge(
+    principal: Principal,
+    challenge: ChallengeRecord,
+    meta: Meta,
+  ): Promise<void> {
+    if (challenge.stepUp && challenge.stepUp.userId !== principal.userId) {
+      await this.recordForeignChallenge(principal, meta);
+      throw invalidChallenge();
+    }
+    if (challenge.kind !== 'email_otp' || challenge.stepUp?.userId !== principal.userId) {
+      throw invalidChallenge();
+    }
   }
 
   /**
@@ -189,7 +355,7 @@ export class StepUpService {
     } catch (err) {
       if (err instanceof IdentityProviderError) {
         if (err.code === 'invalid_code') {
-          await retainAfterWrongCode(this.challenges, challengeToken, challenge);
+          await this.countWrongCode(principal, challengeToken, challenge);
         }
         await this.record(principal, 'auth.step_up.failed', meta, {
           method: STEP_UP_METHOD, reason: err.code,
@@ -197,6 +363,65 @@ export class StepUpService {
         throw this.identityResolution.mapIdpError(err);
       }
       throw err;
+    }
+  }
+
+  /** As the sign-in does: count first, and the wrong code that locks the user does not hand the challenge back. */
+  private async countWrongCode(principal: Principal, token: string, challenge: ChallengeRecord): Promise<void> {
+    await this.throttle.recordFailure(principal.userId);
+    if (await this.throttle.isLocked(principal.userId)) return;
+    await retainAfterWrongCode(this.challenges, token, challenge);
+  }
+
+  /** Cognito's EMAIL_OTP; null when the pool user is gone. A provider failure maps to its API error (503 `unavailable`). */
+  private async startCognitoCode(email: string, locale: Locale): Promise<{ session: string; username: string } | null> {
+    try {
+      return await this.idp.startEmailOtp({ email, locale });
+    } catch (err) {
+      if (err instanceof IdentityProviderError) throw this.identityResolution.mapIdpError(err);
+      throw err;
+    }
+  }
+
+  /** The federated identity a NestSelf code goes to: bound to an ACTIVE connection, else the most recently seen, else the first. */
+  private async federatedIdentityFor(identities: ExternalIdentityRow[]): Promise<ExternalIdentityRow | null> {
+    const federated = identities.filter((i) => i.provider.startsWith('cognito:'));
+    for (const identity of federated) {
+      if (!identity.ssoConnectionId) continue;
+      const connection = await this.sso.findConnection(identity.ssoConnectionId);
+      if (connection?.status === 'ACTIVE') return identity;
+    }
+    const seenAt = (identity: ExternalIdentityRow): number =>
+      identity.lastSeenAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    // Strictly later wins, so ties (and identities never seen) keep the first.
+    return federated.reduce<ExternalIdentityRow | null>(
+      (best, identity) => (best === null || seenAt(identity) > seenAt(best) ? identity : best),
+      null,
+    );
+  }
+
+  /** The resend cooldown of a Cognito challenge, keyed by its token's hash; it starts with the first mail. */
+  private resendCooldownKey(challengeToken: string): string {
+    return otpResendKey(COGNITO_RESEND_PURPOSE, createHash('sha256').update(challengeToken).digest('hex'));
+  }
+
+  private async startResendCooldown(challengeToken: string): Promise<void> {
+    await this.store.set(this.resendCooldownKey(challengeToken), '1', {
+      ttlSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+    });
+  }
+
+  private startResponse(challengeToken: string, email: string): StepUpStartResponse {
+    return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked: maskEmail(email) };
+  }
+
+  private async assertNotLocked(principal: Principal): Promise<void> {
+    if (await this.throttle.isLocked(principal.userId)) {
+      throw new ApiHttpException({
+        status: 429,
+        code: 'too_many_attempts',
+        message: 'Too many failed attempts. Try again later.',
+      });
     }
   }
 
@@ -209,6 +434,12 @@ export class StepUpService {
         message: 'Step-up requires a session or a token family',
       });
     }
+  }
+
+  private recordForeignChallenge(principal: Principal, meta: Meta): Promise<void> {
+    return this.record(principal, 'auth.step_up.failed', meta, {
+      method: STEP_UP_METHOD, reason: 'foreign_challenge',
+    });
   }
 
   private async record(

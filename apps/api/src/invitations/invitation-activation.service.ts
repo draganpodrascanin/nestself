@@ -13,7 +13,7 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import type { InvitationAcceptResponse, PermissionTemplateDefinition } from '@nestself/contracts';
+import type { InvitationAcceptResponse, Locale, PermissionTemplateDefinition } from '@nestself/contracts';
 import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
@@ -96,10 +96,12 @@ export class InvitationActivationService {
   // Accept (POST /invitations/accept) -- @Public, API-R-08
   // -----------------------------------------------------------------------
 
+  /** `locale` is the language of the code email the email-OTP path sends; the pool default when absent. */
   async accept(
     token: string,
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
+    locale?: Locale,
   ): Promise<InvitationAcceptResponse> {
     const tokenHash = hashToken(token);
     const now = new Date();
@@ -151,7 +153,7 @@ export class InvitationActivationService {
     // Idempotent: if already accepted, return the same response shape with a
     // fresh challenge (do not create a second membership).
     if (invitation.acceptedAt) {
-      return this.buildSignInResponse(invitation, template, surface, meta);
+      return this.buildSignInResponse(invitation, template, surface, meta, { locale });
     }
 
     // Determine the temporary password for staff/expert populations.
@@ -234,7 +236,7 @@ export class InvitationActivationService {
     await this.principalLoader.invalidateUser(userId, [invitation.orgId]);
 
     // Build sign-in response based on population.
-    return this.buildSignInResponse(invitation, template, surface, meta, tempPassword);
+    return this.buildSignInResponse(invitation, template, surface, meta, { tempPassword, locale });
   }
 
   // -----------------------------------------------------------------------
@@ -344,7 +346,7 @@ export class InvitationActivationService {
    * Uses SignInService to create challenge tokens, keeping the ChallengeStore
    * and throttle logic centralised in AuthModule.
    *
-   * - employee -> email OTP via SignInService.emailOtpStart()
+   * - employee -> email OTP via SignInService.emailOtpStart(), in `locale`
    * - staff/expert/employer_admin -> password with temp password via
    *   SignInService.passwordSignIn(), returning NEW_PASSWORD_REQUIRED challenge
    * (SSO invitations never get here: `accept` answers them first.)
@@ -354,7 +356,7 @@ export class InvitationActivationService {
     template: PermissionTemplateDefinition,
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
-    tempPassword?: string,
+    { tempPassword, locale }: { tempPassword?: string; locale?: Locale } = {},
   ): Promise<InvitationAcceptResponse> {
     const population = template.population;
 
@@ -390,7 +392,7 @@ export class InvitationActivationService {
 
     // Employee population, or fallback: email OTP.
     try {
-      const otpResult = await this.signIn.emailOtpStart(invitation.email, meta);
+      const otpResult = await this.signIn.emailOtpStart(invitation.email, meta, locale);
       return {
         method: 'email_otp',
         challengeToken: otpResult.challengeToken,

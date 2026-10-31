@@ -278,14 +278,26 @@ describe('InvitationActivationService', () => {
       expect(result).toHaveProperty('method', 'email_otp');
       expect(result).toHaveProperty('challengeToken', 'challenge_token_otp');
       expect(identities.createUser).toHaveBeenCalled();
-      expect(signIn.emailOtpStart).toHaveBeenCalledWith(
-        'invitee@example.com',
-        expect.any(Object),
-      );
+      // No locale was requested: the sign-in service falls back to the pool default.
+      expect(signIn.emailOtpStart).toHaveBeenCalledWith('invitee@example.com', meta, undefined);
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'invitation.accepted' }),
       );
       expect(principalLoader.invalidateUser).toHaveBeenCalled();
+    });
+
+    it('passes the requested locale to the code email, on the first and on a repeated acceptance', async () => {
+      const { service, invitations, signIn } = buildService();
+      invitations.findByTokenHash.mockResolvedValueOnce(validInvitation());
+      invitations.findByTokenHash.mockResolvedValueOnce(validInvitation({ acceptedAt: PAST }));
+
+      await service.accept(token, surface, meta, 'hu');
+      await service.accept(token, surface, meta, 'sr-Cyrl');
+
+      expect(signIn.emailOtpStart.mock.calls).toEqual([
+        ['invitee@example.com', meta, 'hu'],
+        ['invitee@example.com', meta, 'sr-Cyrl'],
+      ]);
     });
 
     it('audits the user, identity and membership inside the accept transaction, and the acceptance after it', async () => {

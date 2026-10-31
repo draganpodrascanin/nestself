@@ -159,8 +159,9 @@ All routes under the global `/api` prefix.
 | POST | /auth/password-reset/start | @Public | 10/min |
 | POST | /auth/password-reset/confirm | @Public | 5/min |
 | POST | /auth/context | @Authenticated | default |
-| POST | /auth/step-up/start | @Authenticated | 5/min |
-| POST | /auth/step-up/verify | @Authenticated (204) | 5/min |
+| POST | /auth/step-up/start | @Authenticated | 10/min per session |
+| POST | /auth/step-up/resend | @Authenticated | 10/min per session |
+| POST | /auth/step-up/verify | @Authenticated (204) | 10/min per session |
 | POST | /auth/sign-out | @Authenticated | default |
 | POST | /auth/sign-out-all | @Authenticated | default |
 | POST | /auth/ws-ticket | @Authenticated | 30/min |
@@ -423,6 +424,6 @@ On each message with a `userId`:
 
 ### Not yet implemented
 
-- IdP-initiated SSO, SCIM, federated step-up and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
+- IdP-initiated SSO, SCIM and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
 - Push notifications
 - A step-up screen in the mobile app (the API accepts bearer step-up)

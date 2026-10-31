@@ -59,6 +59,13 @@ describe('FakeIdentityProvider', () => {
       }
     });
 
+    it('records the language the code email was asked for, so tests can assert it', async () => {
+      await provider.startEmailOtp({ email: 'alice@example.com', locale: 'hu' });
+      await provider.startEmailOtp({ email: 'alice@example.com' });
+
+      expect(provider.sentCodes.map((c) => c.locale)).toEqual(['hu', undefined]);
+    });
+
     it('rejects an invalid code', async () => {
       const start = await provider.startEmailOtp({
         email: 'alice@example.com',

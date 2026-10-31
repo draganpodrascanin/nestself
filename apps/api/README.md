@@ -144,7 +144,7 @@ Four global guards are registered via `APP_GUARD` in `app.module.ts`:
 
 Routes use `@Public()`, `@Authenticated()` or `@Authorize(action, resolver)` decorators. A CI test fails on any undecorated route.
 
-Step-up is enforced by `AuthorizationGuard` and by `AuthorizationService.require()` for every action with a step-up class; clients complete it through `POST /auth/step-up/start` and `/verify`.
+Step-up is enforced by `AuthorizationGuard` and by `AuthorizationService.require()` for every action with a step-up class; clients complete it through `POST /auth/step-up/start`, `/resend` and `/verify`. Native users get Cognito's email code, federated users a code NestSelf mails to the address of their federated identity (`src/auth/step-up.service.ts`).
 
 ## Enterprise SSO
 
@@ -154,7 +154,7 @@ Environment: `API_PUBLIC_URL` (public API origin for the start and callback URLs
 
 ## What is still missing
 
-- Enterprise SSO follow-ups: the live IdP test with a pilot employer (T-3.4), federated users on mobile bearer lookups, federated step-up, binding after the email code that follows `sso_email_unverified` (`docs/auth/implementation.md` section 22.14)
+- Enterprise SSO follow-ups: the live IdP test with a pilot employer (T-3.4), federated users on mobile bearer lookups, binding after the email code that follows `sso_email_unverified` (`docs/auth/implementation.md` section 22.14)
 - Remaining nightly jobs: weekly Cognito user export, retention sweeper, audit export to S3 (the SSO certificate-expiry job exists)
 - File delivery and export authorization (T-2.9, T-2.11)
 - Write routes for the confidential domain (they need a `cases` table first) and professional notes

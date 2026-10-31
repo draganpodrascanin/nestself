@@ -34,7 +34,10 @@ import {
 import { SsoRepository, type SsoConnectionPatch } from '../src/db/repositories/sso.repository.js';
 import { NEUTRAL_DELAY_MS } from '../src/auth/neutral-delay.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
-import { ssoTestKey } from '../src/redis/redis-keys.js';
+import { sessionKey, ssoTestKey } from '../src/redis/redis-keys.js';
+import { Mailer, type MailMessage } from '../src/email/mailer.js';
+import type { LoggingMailer } from '../src/email/logging-mailer.js';
+import { hashSessionId } from '../src/session/session-helpers.js';
 import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
@@ -636,6 +639,150 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       const failed = await auditFor('auth.sign_in.failed');
       expect(failed.length).toBe(before + 1);
       expect(failed.some((e) => (e.details as { reason?: string }).reason === 'sso_browser')).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Step-up of a federated user (5.4): a NestSelf code to the identity's address
+  // -------------------------------------------------------------------------
+
+  describe('federated step-up (5.4)', () => {
+    const store = () => app.get<KeyValueStore>(KEY_VALUE_STORE);
+
+    function cookieValue(res: request.Response, name: string): string {
+      const cookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
+      const cookie = cookies.find((c) => c.startsWith(`${name}=`));
+      if (!cookie) throw new Error(`${name} cookie not set`);
+      return cookie.slice(name.length + 1).split(';')[0]!;
+    }
+
+    /** Invited, bound and signed in through the fake IdP: the agent, its CSRF token and session id. */
+    async function signInFederated(email: string) {
+      await invite(email);
+      seedFederated(`sub-${email}`, email);
+      const { agent, callback } = await federatedSignIn(email);
+      return {
+        agent,
+        csrf: cookieValue(callback, 'nestself_csrf'),
+        sessionId: cookieValue(callback, 'nestself_session'),
+      };
+    }
+
+    type Federated = Awaited<ReturnType<typeof signInFederated>>;
+
+    const stepUp = (who: Federated, path: 'start' | 'resend' | 'verify', body: Record<string, string> = {}) =>
+      who.agent.post(`/api/auth/step-up/${path}`).set('X-CSRF-Token', who.csrf).send(body);
+
+    /** The newest code mail to `email` (the logging mailer keeps what it "sent" in test runs). */
+    function lastMailTo(email: string): MailMessage {
+      const mail = (app.get(Mailer) as LoggingMailer).sent.filter((m) => m.to === email).at(-1);
+      if (!mail) throw new Error(`no mail to ${email}`);
+      return mail;
+    }
+
+    /** Move the session's authentication time 40 minutes into the past. */
+    async function ageSession(sessionId: string) {
+      const key = sessionKey(hashSessionId(sessionId));
+      const raw = await store().get(key);
+      expect(raw).not.toBeNull();
+      const ttl = await store().ttl(key);
+      const record = JSON.parse(raw!) as { auth: { time: string } };
+      record.auth.time = new Date(Date.now() - 40 * 60_000).toISOString();
+      await store().set(key, JSON.stringify(record), { ttlSeconds: ttl });
+    }
+
+    it('a federated session steps up with the mailed code and regenerates the session', async () => {
+      const email = 'marija@acme.example';
+      const marija = await signInFederated(email);
+      await ageSession(marija.sessionId);
+
+      const start = await stepUp(marija, 'start');
+      expect(start.status).toBe(200);
+      expect(start.body).toEqual({
+        method: 'email_otp',
+        challengeToken: expect.any(String),
+        ssoStartUrl: null,
+        emailMasked: 'm***@acme.example',
+      });
+      const mail = lastMailTo(email);
+      expect(mail).toMatchObject({ template: 'step_up_code', locale: 'sr-Latn' });
+
+      const verify = await stepUp(marija, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: mail.params.code!,
+      });
+      expect(verify.status).toBe(204);
+      const newSessionId = cookieValue(verify, 'nestself_session');
+      expect(newSessionId).not.toBe(marija.sessionId);
+      expect(cookieValue(verify, 'nestself_csrf')).not.toBe(marija.csrf);
+      // The old session id no longer authenticates; the new one carries the step-up.
+      expect(await store().get(sessionKey(hashSessionId(marija.sessionId)))).toBeNull();
+      const me = await marija.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(Date.now() - new Date(me.body.principal.auth.lastStepUpAt as string).getTime()).toBeLessThan(60_000);
+      const completed = (await auditFor('auth.step_up.completed')).filter(
+        (e) => e.actorUserId === me.body.principal.userId,
+      );
+      expect(completed.map((e) => e.details)).toEqual([{ method: 'email_otp', issuer: 'nestself' }]);
+    });
+
+    it('step-up/resend inside the cooldown answers 429 rate_limited with retryAfter', async () => {
+      const email = 'petar@acme.example';
+      const petar = await signInFederated(email);
+      const start = await stepUp(petar, 'start');
+      expect(start.status).toBe(200);
+      const challengeToken = start.body.challengeToken as string;
+      const firstCode = lastMailTo(email).params.code!;
+
+      // The cooldown starts with the first mail.
+      const refused = await stepUp(petar, 'resend', { challengeToken });
+      expect(refused.status).toBe(429);
+      expect(refused.body).toHaveProperty('code', 'rate_limited');
+      expect(refused.body.details.retryAfter).toBeGreaterThan(0);
+      expect(refused.body.details.retryAfter).toBeLessThanOrEqual(60);
+
+      // 61 seconds later: a new code for the same token; the first one stopped working.
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      try {
+        const renewed = await stepUp(petar, 'resend', { challengeToken });
+        expect(renewed.status).toBe(200);
+        expect(renewed.body).toEqual({
+          method: 'email_otp',
+          challengeToken,
+          ssoStartUrl: null,
+          emailMasked: 'p***@acme.example',
+        });
+        const secondCode = lastMailTo(email).params.code!;
+        expect(secondCode).not.toBe(firstCode);
+
+        const old = await stepUp(petar, 'verify', { challengeToken, response: firstCode });
+        expect(old.status).toBe(401);
+        expect(old.body).toHaveProperty('code', 'invalid_code');
+        const verified = await stepUp(petar, 'verify', { challengeToken, response: secondCode });
+        expect(verified.status).toBe(204);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("another user presenting a federated user's step-up token is refused with invalid_challenge (Review Focus 1)", async () => {
+      const ana = await signInFederated('ana.fed@acme.example');
+      const bojan = await signInFederated('bojan@acme.example');
+      const start = await stepUp(ana, 'start');
+      expect(start.status).toBe(200);
+
+      const res = await stepUp(bojan, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: lastMailTo('ana.fed@acme.example').params.code!,
+      });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+
+      // Nothing was recorded on bojan's session, and the refusal is audited.
+      const me = await bojan.agent.get('/api/auth/me');
+      expect(me.body.principal.auth.lastStepUpAt).toBeNull();
+      const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
+      expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
     });
   });
 
