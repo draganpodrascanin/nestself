@@ -11,6 +11,11 @@ export const PINO_REDACT_PATHS: string[] = [
   'req.headers.authorization',
   'req.headers.cookie',
   'res.headers["set-cookie"]',
+  // URLs that carry secrets in their query: the pending-bind handle
+  // (`/sign-in?...&bind=`) of the SSO callback's redirect, the OAuth state of
+  // the start redirect, and the sign-in page's own address in later requests.
+  'res.headers.location',
+  'req.headers.referer',
 
   // Request body fields
   'req.body.password',
