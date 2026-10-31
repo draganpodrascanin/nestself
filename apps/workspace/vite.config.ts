@@ -56,11 +56,13 @@ export default defineConfig(({ mode }) => {
       contentSecurityPolicyMeta(csp),
     ],
     server: {
-      port: 5173,
+      // VITE_PORT and VITE_API_PROXY_TARGET let a worktree's e2e suite run beside the
+      // main dev servers (playwright.content.config.ts); the defaults are unchanged.
+      port: Number(process.env.VITE_PORT ?? 5173),
       strictPort: true,
       fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] },
       // `ws` carries the call room's Socket.IO connection (/api/ws) to the API.
-      proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true, ws: true } },
+      proxy: { '/api': { target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000', changeOrigin: true, ws: true } },
     },
     preview: {
       headers: {

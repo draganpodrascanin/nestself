@@ -6,7 +6,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { test as setup } from '@playwright/test';
+import { expect, test as setup } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { HR_APPROVER, removeJourneyAppointments, removeJourneyWebinars, setFollowUpPolicy } from './database';
 import { ADMIN_URL, VIEWPORTS, WORKSPACE_URL, clientAddress, signInEmployee, signInExpert, signInOperations, signInWithEmailCode, stateFile } from './journey';
@@ -23,7 +23,18 @@ const SIGN_INS: Array<{ person: Person; label: string; signIn: (page: Page) => P
   { person: 'employee', label: 'employee signs in to the workspace', signIn: signInEmployee },
   { person: 'expert', label: 'expert signs in to the admin app', signIn: signInExpert },
   { person: 'operations', label: 'operations signs in to the admin app', signIn: signInOperations },
-  { person: 'hr', label: 'HR admin signs in to the workspace', signIn: (page) => signInWithEmailCode(page, HR_APPROVER) },
+  {
+    person: 'hr',
+    label: 'HR admin signs in to the workspace and switches to Manage',
+    signIn: async (page) => {
+      await signInWithEmailCode(page, HR_APPROVER);
+      // HR starts in their personal context; the policy and approvals are organization screens.
+      // The picker lists "Personal" and the organisation by name.
+      await page.getByRole('button', { name: /^Working as Personal\. Switch context$/ }).click();
+      await page.getByRole('menu', { name: 'Work as' }).getByRole('menuitem').filter({ hasNotText: /Personal/ }).first().click();
+      await expect(page.getByRole('button', { name: /^Working as (?!Personal\.).+\. Switch context$/ })).toBeVisible({ timeout: 15_000 });
+    },
+  },
 ];
 
 for (const { person, label, signIn } of SIGN_INS) {
