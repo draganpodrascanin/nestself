@@ -78,16 +78,16 @@ export type ImportReasonKey =
   | 'unknown';
 
 /**
- * The per-row reasons of `POST .../invitations/import`. Some are codes and
- * some are English sentences from the service; both map to translated copy
- * under `workspace:people.import.reasons.*`.
+ * The per-row reason codes of `POST .../invitations/import`
+ * (`InvitationImportRowReason`), mapped to translated copy under
+ * `workspace:people.import.reasons.*`; a code without copy gets `unknown`.
  */
 export function importReasonKey(reason: string): ImportReasonKey {
   if (reason === 'owner_exists') return 'ownerExists';
   if (reason === 'duplicate_invitation') return 'duplicateInvitation';
   if (reason === 'already_member') return 'alreadyMember';
-  if (reason.startsWith('Invalid template key')) return 'invalidTemplate';
-  if (reason === 'Duplicate within batch') return 'duplicateInBatch';
-  if (reason.startsWith('Org unit ')) return 'invalidOrgUnit';
+  if (reason === 'invalid_template') return 'invalidTemplate';
+  if (reason === 'duplicate_in_batch') return 'duplicateInBatch';
+  if (reason === 'org_unit_outside_org') return 'invalidOrgUnit';
   return 'unknown';
 }

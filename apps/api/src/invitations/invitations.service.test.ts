@@ -339,17 +339,38 @@ describe('InvitationsService', () => {
       );
 
       expect(result.created).toBe(1);
-      expect(result.errors).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ email: 'owner@example.com' }),
-          expect.objectContaining({ email: 'ops@example.com' }),
-        ]),
-      );
+      expect(result.errors).toEqual([
+        { email: 'owner@example.com', reason: 'invalid_template' },
+        { email: 'ops@example.com', reason: 'invalid_template' },
+      ]);
       expect(invitations.create).toHaveBeenCalledOnce();
       expect(invitations.create).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'ok@example.com', templateKey: 'employee' }),
         expect.anything(),
       );
+    });
+
+    it('reports a repeated address and an org unit of another organization as codes', async () => {
+      // No org unit matches: the unit belongs to another organization.
+      const noOrgUnits = { select: () => ({ from: () => ({ where: async () => [] }) }) };
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'twice@example.com', templateKey: 'employee' },
+            { email: 'twice@example.com', templateKey: 'employee' },
+            { email: 'unit@example.com', templateKey: 'employee', orgUnitId: 'ou_elsewhere' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result.errors).toEqual([
+        { email: 'twice@example.com', reason: 'duplicate_in_batch' },
+        { email: 'unit@example.com', reason: 'org_unit_outside_org' },
+      ]);
     });
   });
 

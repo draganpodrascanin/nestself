@@ -35,9 +35,9 @@ describe('peopleErrorKey (operations)', () => {
 
   it('maps import row reasons, unknown ones included', () => {
     expect(importReasonKey('owner_exists')).toBe('ownerExists');
-    expect(importReasonKey('Invalid template key: x')).toBe('invalidTemplate');
-    expect(importReasonKey('Duplicate within batch')).toBe('duplicateInBatch');
-    expect(importReasonKey('Org unit team_x not found')).toBe('invalidOrgUnit');
+    expect(importReasonKey('invalid_template')).toBe('invalidTemplate');
+    expect(importReasonKey('duplicate_in_batch')).toBe('duplicateInBatch');
+    expect(importReasonKey('org_unit_outside_org')).toBe('invalidOrgUnit');
     expect(importReasonKey('something else')).toBe('unknown');
   });
 });

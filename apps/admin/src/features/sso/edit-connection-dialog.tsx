@@ -19,7 +19,7 @@ import type { SsoConnectionResponse, SsoConnectionUpdateRequest } from '@nestsel
 import type { OpsAdminApi } from '@nestself/api-client';
 import { ssoProblem } from './sso-errors';
 import type { SsoErrorKey, SsoField } from './sso-errors';
-import { isHttpUrl } from './sso-labels';
+import { isHttpsUrl } from './sso-labels';
 import { useUpdateSsoConnection } from './use-sso';
 
 const ID = {
@@ -110,8 +110,8 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
 
   const validate = (patch: SsoConnectionUpdateRequest): FormError[] => {
     const problems: FormError[] = [];
-    if (patch.metadataUrl && !isHttpUrl(patch.metadataUrl)) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
-    if (patch.oidcIssuer !== undefined && (patch.oidcIssuer === null || !isHttpUrl(patch.oidcIssuer))) {
+    if (patch.metadataUrl && !isHttpsUrl(patch.metadataUrl)) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
+    if (patch.oidcIssuer !== undefined && (patch.oidcIssuer === null || !isHttpsUrl(patch.oidcIssuer))) {
       problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
     }
     if (patch.oidcClientId === null) problems.push(problem('oidcClientId', t('admin:sso.errors.clientIdRequired')));

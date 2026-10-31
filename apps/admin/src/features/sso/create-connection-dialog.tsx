@@ -24,7 +24,7 @@ import type { OrganizationResponse, SsoProtocol } from '@nestself/contracts';
 import type { OpsAdminApi, SsoConnectionCreateBody } from '@nestself/api-client';
 import { ssoProblem } from './sso-errors';
 import type { SsoErrorKey, SsoField } from './sso-errors';
-import { isHttpUrl, providerNamePreview } from './sso-labels';
+import { isHttpsUrl, providerNamePreview } from './sso-labels';
 import { useCreateSsoConnection } from './use-sso';
 
 const ID = {
@@ -106,10 +106,10 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
     if (!orgId) problems.push(problem('orgId', t('admin:sso.errors.organizationRequired')));
     if (!SSO_SLUG_PATTERN.test(slug.trim())) problems.push(problem('slug', t('admin:sso.errors.slugPattern')));
     if (protocol === 'SAML') {
-      if (source === 'url' && !isHttpUrl(metadataUrl.trim())) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
+      if (source === 'url' && !isHttpsUrl(metadataUrl.trim())) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
       if (source === 'xml' && !metadataXml.trim()) problems.push(problem('metadataXml', t('admin:sso.errors.metadataXmlRequired')));
     } else {
-      if (!isHttpUrl(oidcIssuer.trim())) problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
+      if (!isHttpsUrl(oidcIssuer.trim())) problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
       if (!oidcClientId.trim()) problems.push(problem('oidcClientId', t('admin:sso.errors.clientIdRequired')));
     }
     return problems;

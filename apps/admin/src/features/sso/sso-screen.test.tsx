@@ -172,6 +172,18 @@ describe('SsoScreen create dialog', () => {
     expect(opsApi.createSsoConnection).not.toHaveBeenCalled();
   });
 
+  it('refuses an http: metadata URL before calling the API', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderScreen();
+    const dialog = await openCreate(user);
+    await choose(user, t('admin:sso.create.organization'), 'Example d.o.o.');
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.slug'), { exact: false }), 'acme');
+    await user.type(within(dialog).getByLabelText(t('admin:sso.create.metadataUrl'), { exact: false }), 'http://idp.acme.test/metadata');
+    await submitCreate(user, dialog);
+    expect(await within(dialog).findAllByText(t('admin:sso.errors.urlInvalid'))).not.toHaveLength(0);
+    expect(opsApi.createSsoConnection).not.toHaveBeenCalled();
+  });
+
   it('previews the provider name from the slug and the protocol', async () => {
     const user = userEvent.setup();
     renderScreen();
@@ -467,6 +479,20 @@ describe('SsoScreen lifecycle', () => {
     await waitFor(() => expect(opsApi.updateSsoConnection).toHaveBeenCalledWith(ACTIVE.id, { metadataUrl: 'https://idp.example.test/v3' }));
     // A warning toast is also announced in the assertive live region.
     expect(await screen.findAllByText(t('admin:sso.edit.backToTesting'))).not.toHaveLength(0);
+  });
+
+  it('refuses an http: metadata URL in the edit dialog before calling the API', async () => {
+    const user = userEvent.setup();
+    const { opsApi } = renderScreen();
+    const detail = await openDetail(user, DRAFT.id);
+    await user.click(within(detail).getByRole('button', { name: t('admin:sso.edit.open') }));
+    const dialog = await screen.findByRole('dialog', { name: t('admin:sso.edit.title') });
+    const url = within(dialog).getByLabelText(t('admin:sso.create.metadataUrl'), { exact: false });
+    await user.clear(url);
+    await user.type(url, 'http://idp.example.test/v2');
+    await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
+    expect(await within(dialog).findAllByText(t('admin:sso.errors.urlInvalid'))).not.toHaveLength(0);
+    expect(opsApi.updateSsoConnection).not.toHaveBeenCalled();
   });
 
   it('shows no back-to-testing warning when editing a DRAFT connection', async () => {

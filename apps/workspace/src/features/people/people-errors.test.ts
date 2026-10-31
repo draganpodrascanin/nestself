@@ -51,9 +51,9 @@ describe('importReasonKey', () => {
     ['owner_exists', 'ownerExists'],
     ['duplicate_invitation', 'duplicateInvitation'],
     ['already_member', 'alreadyMember'],
-    ['Invalid template key: platform_admin', 'invalidTemplate'],
-    ['Duplicate within batch', 'duplicateInBatch'],
-    ['Org unit ou_x does not belong to this organization', 'invalidOrgUnit'],
+    ['invalid_template', 'invalidTemplate'],
+    ['duplicate_in_batch', 'duplicateInBatch'],
+    ['org_unit_outside_org', 'invalidOrgUnit'],
     ['something else', 'unknown'],
   ])('maps %s', (reason, key) => {
     expect(importReasonKey(reason)).toBe(key);

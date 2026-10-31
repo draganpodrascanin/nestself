@@ -12,6 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { InvitationImportResponseSchema } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
@@ -244,6 +245,7 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
       });
 
     expect(res.status).toBe(200);
+    expect(InvitationImportResponseSchema.parse(res.body)).toEqual(res.body);
     expect(res.body.created).toBe(1);
     expect(res.body.errors).toEqual([{ email: 'import-second-owner@example.com', reason: 'owner_exists' }]);
     const stored = await testDb.db
@@ -265,10 +267,9 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
       });
 
     expect(res.status).toBe(200);
+    expect(InvitationImportResponseSchema.parse(res.body)).toEqual(res.body);
     expect(res.body.created).toBe(1);
-    expect(res.body.errors).toEqual([
-      expect.objectContaining({ email: 'import-owner@example.com' }),
-    ]);
+    expect(res.body.errors).toEqual([{ email: 'import-owner@example.com', reason: 'invalid_template' }]);
     const stored = await testDb.db
       .select({ email: invitations.email })
       .from(invitations)

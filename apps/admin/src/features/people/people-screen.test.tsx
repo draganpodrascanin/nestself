@@ -345,7 +345,7 @@ describe('OpsPeopleScreen: invitations', () => {
       const importInvitations = vi.fn().mockResolvedValue({
         created: 1,
         skipped: 0,
-        errors: [{ email: 'bo@example.test', reason: 'Org unit team_x not found in organization' }],
+        errors: [{ email: 'bo@example.test', reason: 'org_unit_outside_org' }],
       });
       renderPeople({ opsApi: makeOpsApi({ importInvitations }) });
       const dialog = await openImport(user);

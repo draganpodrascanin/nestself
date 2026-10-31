@@ -8,6 +8,8 @@ import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   type InvitationCreateRequest,
   type InvitationImportRequest,
+  type InvitationImportResponse,
+  type InvitationImportRowReason,
   type InvitationListQuery,
   type InvitationListResponse,
   type InvitationResponse,
@@ -149,13 +151,13 @@ export class InvitationsService {
     body: InvitationImportRequest,
     actorUserId: string,
     _isProduction: boolean,
-  ) {
+  ): Promise<InvitationImportResponse> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
     const importBatchId = generateToken().slice(0, 16);
 
     // Pre-validate all rows.
-    const errors: Array<{ email: string; reason: string }> = [];
+    const errors: Array<{ email: string; reason: InvitationImportRowReason }> = [];
     const validRows: Array<{
       email: string;
       orgUnitId?: string | undefined;
@@ -169,13 +171,13 @@ export class InvitationsService {
     for (const inv of body.invitations) {
       // Template key check.
       if (!findInvitableTemplate(inv.templateKey)) {
-        errors.push({ email: inv.email, reason: `Invalid template key: ${inv.templateKey}` });
+        errors.push({ email: inv.email, reason: 'invalid_template' });
         continue;
       }
 
       // Intra-batch duplicate.
       if (seenEmails.has(inv.email)) {
-        errors.push({ email: inv.email, reason: 'Duplicate within batch' });
+        errors.push({ email: inv.email, reason: 'duplicate_in_batch' });
         continue;
       }
       seenEmails.add(inv.email);
@@ -202,7 +204,7 @@ export class InvitationsService {
           // Mark all rows referencing this unit as errors.
           const remaining = validRows.filter((r) => r.orgUnitId === ouId);
           for (const r of remaining) {
-            errors.push({ email: r.email, reason: `Org unit ${ouId} does not belong to this organization` });
+            errors.push({ email: r.email, reason: 'org_unit_outside_org' });
           }
           // Remove them from valid list (mutating the iteration is fine; we filter below).
         }
