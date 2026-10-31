@@ -14,6 +14,8 @@ import { MAINTENANCE_SCHEDULES } from './job-scheduler.service.js';
 import { MAINTENANCE_JOB_NAMES, MaintenanceJobsService } from './maintenance-jobs.service.js';
 
 const NOW = new Date('2026-10-23T02:15:00.000Z');
+/** Executor handed out by the mocked `withTransaction`: one transaction per swept row. */
+const TX = { kind: 'job-tx' };
 
 function grant(overrides: Partial<Record<string, unknown>>) {
   return {
@@ -56,6 +58,7 @@ describe('MaintenanceJobsService', () => {
   let store: MemoryKeyValueStore;
   let idp: { revokeRefreshToken: ReturnType<typeof vi.fn>; describeProvider: ReturnType<typeof vi.fn> };
   let ssoRepo: { listActiveConnections: ReturnType<typeof vi.fn>; updateConnection: ReturnType<typeof vi.fn> };
+  let dbs: { withTransaction: ReturnType<typeof vi.fn> };
   let service: MaintenanceJobsService;
 
   beforeEach(() => {
@@ -63,7 +66,7 @@ describe('MaintenanceJobsService', () => {
       findExpiredUnrevokedGrants: vi.fn().mockResolvedValue([]),
       findOrphanedDelegations: vi.fn().mockResolvedValue([]),
       findGrantsWithoutActiveMembership: vi.fn().mockResolvedValue([]),
-      revokeGrants: vi.fn().mockResolvedValue(undefined),
+      revokeGrants: vi.fn().mockImplementation((ids: string[]) => Promise.resolve(ids)),
       findExpiredApprovedEmergencyAccess: vi.fn().mockResolvedValue([]),
       revokeEmergencyAccess: vi.fn().mockImplementation((id: string) => Promise.resolve({ id })),
     };
@@ -76,6 +79,7 @@ describe('MaintenanceJobsService', () => {
       listActiveConnections: vi.fn().mockResolvedValue([]),
       updateConnection: vi.fn().mockImplementation((id: string) => Promise.resolve({ id })),
     };
+    dbs = { withTransaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
     const cipher = {
       encrypt: (v: string) => `enc:${v}`,
       decrypt: (v: string) => ({ plaintext: v.replace(/^enc:/, ''), usedPreviousKey: false }),
@@ -90,6 +94,7 @@ describe('MaintenanceJobsService', () => {
       sessions,
       ssoRepo as never,
       idp as never,
+      dbs as never,
     );
   });
 
@@ -102,7 +107,7 @@ describe('MaintenanceJobsService', () => {
   describe('grants.reconcile', () => {
     it('does nothing when every grant is consistent', async () => {
       const report = await service.reconcileGrants(NOW);
-      expect(report).toEqual({ expired: [], orphanedDelegations: [], withoutMembership: [] });
+      expect(report).toEqual({ expired: [], orphanedDelegations: [], withoutMembership: [], failed: 0 });
       expect(authzRepo.revokeGrants).not.toHaveBeenCalled();
       expect(audit.record).not.toHaveBeenCalled();
       expect(principals.invalidateUser).not.toHaveBeenCalled();
@@ -114,7 +119,7 @@ describe('MaintenanceJobsService', () => {
       ]);
       const report = await service.reconcileGrants(NOW);
       expect(report.expired).toEqual(['g_exp']);
-      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_exp'], { at: NOW, byUserId: null, reason: 'expired' });
+      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_exp'], { at: NOW, byUserId: null, reason: 'expired' }, TX);
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'grant.expired',
@@ -124,6 +129,7 @@ describe('MaintenanceJobsService', () => {
           recordId: 'g_exp',
           details: expect.objectContaining({ reason: 'expired', subjectUserId: 'user_a' }),
         }),
+        { tx: TX },
       );
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_a', ['org_1']);
     });
@@ -138,8 +144,8 @@ describe('MaintenanceJobsService', () => {
       const report = await service.reconcileGrants(NOW);
       expect(report.orphanedDelegations).toEqual(['g_child']);
       expect(report.withoutMembership).toEqual(['g_left']);
-      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_child'], { at: NOW, byUserId: null, reason: 'parent_revoked' });
-      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_left'], { at: NOW, byUserId: null, reason: 'membership_ended' });
+      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_child'], { at: NOW, byUserId: null, reason: 'parent_revoked' }, TX);
+      expect(authzRepo.revokeGrants).toHaveBeenCalledWith(['g_left'], { at: NOW, byUserId: null, reason: 'membership_ended' }, TX);
       const actions = audit.record.mock.calls.map((c) => (c[0] as { action: string }).action);
       expect(actions).toEqual(['grant.delegation_revoked', 'grant.revoked']);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_b', ['org_1']);
@@ -158,6 +164,82 @@ describe('MaintenanceJobsService', () => {
       await service.reconcileGrants(NOW);
       expect(principals.invalidateUser).toHaveBeenCalledTimes(1);
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_a', ['org_1', 'org_2']);
+    });
+
+    it('closes each grant in its own transaction, with its audit row inside it', async () => {
+      authzRepo.findExpiredUnrevokedGrants.mockResolvedValue([grant({ id: 'g1' }), grant({ id: 'g2' })]);
+      const order: string[] = [];
+      dbs.withTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        order.push('begin');
+        const result = await fn(TX);
+        order.push('commit');
+        return result;
+      });
+      authzRepo.revokeGrants.mockImplementation((ids: string[]) => {
+        order.push(`revoke ${ids.join()}`);
+        return Promise.resolve(ids);
+      });
+      audit.record.mockImplementation((event: { recordId: string }) => {
+        order.push(`audit ${event.recordId}`);
+        return Promise.resolve();
+      });
+
+      await service.reconcileGrants(NOW);
+
+      expect(order).toEqual(['begin', 'revoke g1', 'audit g1', 'commit', 'begin', 'revoke g2', 'audit g2', 'commit']);
+    });
+
+    it('continues after one grant fails, counts it as failed and leaves it out of the lists', async () => {
+      authzRepo.findExpiredUnrevokedGrants.mockResolvedValue([
+        grant({ id: 'g1', subjectUserId: 'user_a' }),
+        grant({ id: 'g2', subjectUserId: 'user_b' }),
+        grant({ id: 'g3', subjectUserId: 'user_c' }),
+      ]);
+      authzRepo.revokeGrants.mockImplementation((ids: string[]) =>
+        ids.includes('g2') ? Promise.reject(new Error('deadlock detected')) : Promise.resolve(ids),
+      );
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.reconcileGrants(NOW);
+
+      expect(report).toEqual({ expired: ['g1', 'g3'], orphanedDelegations: [], withoutMembership: [], failed: 1 });
+      expect(audit.record.mock.calls.map((c) => (c[0] as { recordId: string }).recordId)).toEqual(['g1', 'g3']);
+      expect(principals.invalidateUser).not.toHaveBeenCalledWith('user_b', expect.anything());
+      expect(principals.invalidateDelegatees).toHaveBeenCalledWith(['g1', 'g3']);
+      // Logged by id only: no subject, template or error message.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toBe('grant g2 not closed (Error); retried on the next run');
+      warn.mockRestore();
+    });
+
+    it('counts a grant whose audit insert fails as failed: its close rolls back with it', async () => {
+      authzRepo.findOrphanedDelegations.mockResolvedValue([
+        grant({ id: 'g_child_1', parentGrantId: 'g_parent' }),
+        grant({ id: 'g_child_2', parentGrantId: 'g_parent', subjectUserId: 'user_b' }),
+      ]);
+      audit.record.mockRejectedValueOnce(new Error('permission denied for table audit_events'));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.reconcileGrants(NOW);
+
+      expect(report.orphanedDelegations).toEqual(['g_child_2']);
+      expect(report.failed).toBe(1);
+      expect(principals.invalidateUser).toHaveBeenCalledTimes(1);
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_b', ['org_1']);
+      expect(warn.mock.calls[0]![0]).toBe('grant g_child_1 not closed (Error); retried on the next run');
+      warn.mockRestore();
+    });
+
+    it('neither audits nor reports a grant that another path revoked in the meantime', async () => {
+      authzRepo.findExpiredUnrevokedGrants.mockResolvedValue([grant({ id: 'g_raced' })]);
+      authzRepo.revokeGrants.mockResolvedValue([]);
+
+      const report = await service.reconcileGrants(NOW);
+
+      expect(report).toEqual({ expired: [], orphanedDelegations: [], withoutMembership: [], failed: 0 });
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(principals.invalidateUser).not.toHaveBeenCalled();
+      expect(principals.invalidateDelegatees).not.toHaveBeenCalled();
     });
   });
 
@@ -219,21 +301,25 @@ describe('MaintenanceJobsService', () => {
 
       const report = await service.run('emergency.sweep-expired', NOW);
 
-      expect(report).toEqual({ job: 'emergency.sweep-expired', expired: ['ema_1', 'ema_2'] });
+      expect(report).toEqual({ job: 'emergency.sweep-expired', expired: ['ema_1', 'ema_2'], failed: 0 });
       expect(authzRepo.findExpiredApprovedEmergencyAccess).toHaveBeenCalledWith(NOW);
-      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_1', null, NOW);
-      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_2', null, NOW);
+      expect(dbs.withTransaction).toHaveBeenCalledTimes(2);
+      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_1', null, NOW, TX);
+      expect(authzRepo.revokeEmergencyAccess).toHaveBeenCalledWith('ema_2', null, NOW, TX);
       expect(audit.record).toHaveBeenCalledTimes(2);
-      expect(audit.record).toHaveBeenCalledWith({
-        action: 'emergency_access.expired',
-        actorUserId: null,
-        actorKind: 'JOB',
-        recordType: 'emergency_access',
-        recordId: 'ema_1',
-        result: 'ALLOWED',
-        details: { userId: 'user_a', scopeKind: 'CASE', scopeId: 'case_1', job: 'emergency.sweep-expired' },
-        occurredAt: NOW,
-      });
+      expect(audit.record).toHaveBeenCalledWith(
+        {
+          action: 'emergency_access.expired',
+          actorUserId: null,
+          actorKind: 'JOB',
+          recordType: 'emergency_access',
+          recordId: 'ema_1',
+          result: 'ALLOWED',
+          details: { userId: 'user_a', scopeKind: 'CASE', scopeId: 'case_1', job: 'emergency.sweep-expired' },
+          occurredAt: NOW,
+        },
+        { tx: TX },
+      );
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_a');
       expect(principals.invalidateUser).toHaveBeenCalledWith('user_b');
     });
@@ -244,13 +330,55 @@ describe('MaintenanceJobsService', () => {
 
       const report = await service.sweepExpiredEmergencyAccess(NOW);
 
-      expect(report).toEqual({ expired: [] });
+      expect(report).toEqual({ expired: [], failed: 0 });
       expect(audit.record).not.toHaveBeenCalled();
       expect(principals.invalidateUser).not.toHaveBeenCalled();
     });
 
+    it('emergency sweep continues after one row fails and reports it', async () => {
+      authzRepo.findExpiredApprovedEmergencyAccess.mockResolvedValue([
+        emergency('ema_1', 'user_a'),
+        emergency('ema_2', 'user_b'),
+        emergency('ema_3', 'user_c'),
+      ]);
+      authzRepo.revokeEmergencyAccess.mockImplementation((id: string) =>
+        id === 'ema_2' ? Promise.reject(new Error('connection terminated')) : Promise.resolve({ id }),
+      );
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.sweepExpiredEmergencyAccess(NOW);
+
+      expect(report).toEqual({ expired: ['ema_1', 'ema_3'], failed: 1 });
+      expect(dbs.withTransaction).toHaveBeenCalledTimes(3);
+      expect(audit.record.mock.calls.map((c) => (c[0] as { recordId: string }).recordId)).toEqual(['ema_1', 'ema_3']);
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_a');
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_c');
+      expect(principals.invalidateUser).not.toHaveBeenCalledWith('user_b');
+      // Logged by id only: no user, scope or error message.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toBe('emergency access ema_2 not swept (Error); retried on the next run');
+      warn.mockRestore();
+    });
+
+    it('counts a row whose audit insert fails as failed and leaves its user cached', async () => {
+      authzRepo.findExpiredApprovedEmergencyAccess.mockResolvedValue([
+        emergency('ema_1', 'user_a'),
+        emergency('ema_2', 'user_b'),
+      ]);
+      audit.record.mockRejectedValueOnce(new Error('permission denied for table audit_events'));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      const report = await service.sweepExpiredEmergencyAccess(NOW);
+
+      expect(report).toEqual({ expired: ['ema_2'], failed: 1 });
+      expect(principals.invalidateUser).toHaveBeenCalledTimes(1);
+      expect(principals.invalidateUser).toHaveBeenCalledWith('user_b');
+      expect(warn.mock.calls[0]![0]).toBe('emergency access ema_1 not swept (Error); retried on the next run');
+      warn.mockRestore();
+    });
+
     it('reports zero work when nothing has expired', async () => {
-      expect(await service.sweepExpiredEmergencyAccess(NOW)).toEqual({ expired: [] });
+      expect(await service.sweepExpiredEmergencyAccess(NOW)).toEqual({ expired: [], failed: 0 });
       expect(authzRepo.revokeEmergencyAccess).not.toHaveBeenCalled();
     });
   });

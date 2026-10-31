@@ -163,6 +163,7 @@ export class EmergencyService {
           scopeId: created.scopeId,
           durationMinutes: created.requestedDurationMinutes,
         }),
+        { tx },
       );
       return created;
     });
@@ -206,6 +207,7 @@ export class EmergencyService {
           durationMinutes: window,
           expiresAt: approved.expiresAt.toISOString(),
         }),
+        { tx },
       );
       return approved;
     });
@@ -228,6 +230,7 @@ export class EmergencyService {
           scopeKind: pending.scopeKind,
           scopeId: pending.scopeId,
         }),
+        { tx },
       );
     });
     await this.principals.invalidateUser(pending.userId);
@@ -248,6 +251,7 @@ export class EmergencyService {
           scopeKind: revoked.scopeKind,
           scopeId: revoked.scopeId,
         }),
+        { tx },
       );
       return revoked;
     });

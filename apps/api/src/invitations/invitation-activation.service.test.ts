@@ -288,6 +288,28 @@ describe('InvitationActivationService', () => {
       expect(principalLoader.invalidateUser).toHaveBeenCalled();
     });
 
+    it('audits the user, identity and membership inside the accept transaction, and the acceptance after it', async () => {
+      const inv = validInvitation();
+      const { service, invitations, audit, dbs } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      const tx = {
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'membership_1' }]) }),
+        }),
+      };
+      dbs.withOrgScope.mockImplementation(async (_orgId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx));
+
+      await service.accept(token, surface, meta);
+
+      const calls = audit.record.mock.calls as unknown as Array<[{ action: string }, { tx?: unknown }?]>;
+      expect(calls.map(([event, opts]) => [event.action, opts?.tx === tx])).toEqual([
+        ['user.created', true],
+        ['identity.linked', true],
+        ['membership.activated', true],
+        ['invitation.accepted', false],
+      ]);
+    });
+
     it('returns password/new_password challenge for an employer admin template', async () => {
       const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();

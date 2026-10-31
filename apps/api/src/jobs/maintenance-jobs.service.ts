@@ -12,6 +12,7 @@
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 
+import { DbService } from '../db/db.service.js';
 import { AuthorizationRepository, type GrantRow } from '../db/repositories/authorization.repository.js';
 import { AuditRepository } from '../db/repositories/audit.repository.js';
 import { SsoRepository } from '../db/repositories/sso.repository.js';
@@ -50,6 +51,8 @@ export interface GrantReconciliationReport {
   expired: string[];
   orphanedDelegations: string[];
   withoutMembership: string[];
+  /** Grants whose close or audit write threw; rolled back, logged by id and retried on the next run. */
+  failed: number;
 }
 
 export interface StaleFamilyReport {
@@ -60,6 +63,8 @@ export interface StaleFamilyReport {
 
 export interface EmergencySweepReport {
   expired: string[];
+  /** Records whose revoke or audit write threw; rolled back, logged by id and retried on the next run. */
+  failed: number;
 }
 
 export interface SessionTtlReport {
@@ -108,6 +113,7 @@ export class MaintenanceJobsService {
     private readonly sessions: SessionService,
     @Inject(forwardRef(() => SsoRepository)) private readonly ssoRepo: SsoRepository,
     @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
+    @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
   ) {}
 
   /** Run one job by name. */
@@ -144,55 +150,86 @@ export class MaintenanceJobsService {
    * - delegated grants whose parent is revoked are revoked (`parent_revoked`);
    * - organization-scoped grants without an ACTIVE membership are revoked
    *   (`membership_ended`), closing any gap left by a missed cascade.
-   * Every change is audited and the subject's caches are invalidated.
+   * Each grant is closed in its own transaction with its audit row, so one
+   * failing grant is rolled back, logged by id, counted in `failed` and
+   * retried on the next run while the others are closed. Only the grants
+   * this run closed are listed; the subjects' caches are invalidated after
+   * the commits.
    */
   async reconcileGrants(now = new Date()): Promise<GrantReconciliationReport> {
-    const expired = await this.authzRepo.findExpiredUnrevokedGrants(now);
-    await this.closeGrants(expired, now, 'expired', 'grant.expired');
+    const expired = await this.closeGrants(
+      await this.authzRepo.findExpiredUnrevokedGrants(now),
+      now,
+      'expired',
+      'grant.expired',
+    );
+    const orphaned = await this.closeGrants(
+      await this.authzRepo.findOrphanedDelegations(),
+      now,
+      'parent_revoked',
+      'grant.delegation_revoked',
+    );
+    const withoutMembership = await this.closeGrants(
+      await this.authzRepo.findGrantsWithoutActiveMembership(),
+      now,
+      'membership_ended',
+      'grant.revoked',
+    );
 
-    const orphaned = await this.authzRepo.findOrphanedDelegations();
-    await this.closeGrants(orphaned, now, 'parent_revoked', 'grant.delegation_revoked');
-
-    const withoutMembership = await this.authzRepo.findGrantsWithoutActiveMembership();
-    await this.closeGrants(withoutMembership, now, 'membership_ended', 'grant.revoked');
-
-    const report = {
-      expired: expired.map((g) => g.id),
-      orphanedDelegations: orphaned.map((g) => g.id),
-      withoutMembership: withoutMembership.map((g) => g.id),
+    const report: GrantReconciliationReport = {
+      expired: expired.closed,
+      orphanedDelegations: orphaned.closed,
+      withoutMembership: withoutMembership.closed,
+      failed: expired.failed + orphaned.failed + withoutMembership.failed,
     };
     this.logger.log(
-      `grants reconciled: ${report.expired.length} expired, ${report.orphanedDelegations.length} orphaned, ${report.withoutMembership.length} without membership`,
+      `grants reconciled: ${report.expired.length} expired, ${report.orphanedDelegations.length} orphaned, ${report.withoutMembership.length} without membership, ${report.failed} failed`,
     );
     return report;
   }
 
+  /** Close each grant in its own transaction; returns the closed ids and the failure count. */
   private async closeGrants(
     rows: GrantRow[],
     now: Date,
     reason: 'expired' | 'parent_revoked' | 'membership_ended',
     action: 'grant.expired' | 'grant.delegation_revoked' | 'grant.revoked',
-  ): Promise<void> {
-    if (rows.length === 0) return;
-    await this.authzRepo.revokeGrants(
-      rows.map((g) => g.id),
-      { at: now, byUserId: null, reason },
-    );
+  ): Promise<{ closed: string[]; failed: number }> {
+    const closed: GrantRow[] = [];
+    let failed = 0;
     for (const g of rows) {
-      await this.audit.record({
-        action,
-        actorUserId: null,
-        actorKind: 'JOB',
-        orgId: g.scopeOrgId,
-        recordType: 'grant',
-        recordId: g.id,
-        result: 'ALLOWED',
-        details: { reason, subjectUserId: g.subjectUserId, templateKey: g.templateKey, job: 'grants.reconcile' },
-        occurredAt: now,
-      });
+      try {
+        const revoked = await this.dbs.withTransaction(async (tx) => {
+          // Empty when another path revoked it meanwhile: that path audited it.
+          const ids = await this.authzRepo.revokeGrants([g.id], { at: now, byUserId: null, reason }, tx);
+          if (ids.length === 0) return false;
+          await this.audit.record(
+            {
+              action,
+              actorUserId: null,
+              actorKind: 'JOB',
+              orgId: g.scopeOrgId,
+              recordType: 'grant',
+              recordId: g.id,
+              result: 'ALLOWED',
+              details: { reason, subjectUserId: g.subjectUserId, templateKey: g.templateKey, job: 'grants.reconcile' },
+              occurredAt: now,
+            },
+            { tx },
+          );
+          return true;
+        });
+        if (revoked) closed.push(g);
+      } catch (err) {
+        failed += 1;
+        const name = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`grant ${g.id} not closed (${name}); retried on the next run`);
+      }
     }
+    if (closed.length === 0) return { closed: [], failed };
+
     const bySubject = new Map<string, Set<string>>();
-    for (const g of rows) {
+    for (const g of closed) {
       const orgs = bySubject.get(g.subjectUserId) ?? new Set<string>();
       if (g.scopeOrgId) orgs.add(g.scopeOrgId);
       bySubject.set(g.subjectUserId, orgs);
@@ -202,7 +239,9 @@ export class MaintenanceJobsService {
     }
     // Delegatees of the closed grants cache them as ancestors (a grant closed
     // without its tree, e.g. without membership, leaves active children).
-    await this.principals.invalidateDelegatees(rows.map((g) => g.id));
+    const closedIds = closed.map((g) => g.id);
+    await this.principals.invalidateDelegatees(closedIds);
+    return { closed: closedIds, failed };
   }
 
   /**
@@ -211,29 +250,47 @@ export class MaintenanceJobsService {
    * `revokedAt = now` with no revoking user, an `emergency_access.expired`
    * audit event and a cache invalidation. Secondary enforcement only:
    * `findActiveEmergencyAccess` already ignores expired rows on every request.
+   * Each record is revoked in its own transaction with its audit row; one
+   * that throws is rolled back, logged by id, counted in `failed` and retried
+   * on the next run, and the sweep continues with the next record.
    */
   async sweepExpiredEmergencyAccess(now = new Date()): Promise<EmergencySweepReport> {
     const rows = await this.authzRepo.findExpiredApprovedEmergencyAccess(now);
     const expired: string[] = [];
+    let failed = 0;
     for (const row of rows) {
-      // Null when a manual revoke won the race: that path already audited.
-      const revoked = await this.authzRepo.revokeEmergencyAccess(row.id, null, now);
+      let revoked: boolean;
+      try {
+        revoked = await this.dbs.withTransaction(async (tx) => {
+          // Null when a manual revoke won the race: that path already audited.
+          if (!(await this.authzRepo.revokeEmergencyAccess(row.id, null, now, tx))) return false;
+          await this.audit.record(
+            {
+              action: 'emergency_access.expired',
+              actorUserId: null,
+              actorKind: 'JOB',
+              recordType: 'emergency_access',
+              recordId: row.id,
+              result: 'ALLOWED',
+              details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
+              occurredAt: now,
+            },
+            { tx },
+          );
+          return true;
+        });
+      } catch (err) {
+        failed += 1;
+        const name = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`emergency access ${row.id} not swept (${name}); retried on the next run`);
+        continue;
+      }
       if (!revoked) continue;
-      await this.audit.record({
-        action: 'emergency_access.expired',
-        actorUserId: null,
-        actorKind: 'JOB',
-        recordType: 'emergency_access',
-        recordId: row.id,
-        result: 'ALLOWED',
-        details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
-        occurredAt: now,
-      });
       await this.principals.invalidateUser(row.userId);
       expired.push(row.id);
     }
-    this.logger.log(`emergency access swept: ${expired.length} expired`);
-    return { expired };
+    this.logger.log(`emergency access swept: ${expired.length} expired, ${failed} failed`);
+    return { expired, failed };
   }
 
   /**

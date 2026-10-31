@@ -227,6 +227,8 @@ describe('MembersService', () => {
       ['grant.delegation_revoked', 'g-child', 'parent_revoked'],
       ['grant.delegation_revoked', 'g-grandchild', 'parent_revoked'],
     ]);
+    // membership.ended and every grant event commit or roll back with the membership end.
+    expect(audit.record.mock.calls.map((c) => (c as unknown[])[1])).toEqual(Array(5).fill({ tx: 'tx' }));
   });
 
   // ── Audit recorded before revocation ──────────────────────────────────

@@ -57,7 +57,7 @@ import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import type { AuditAction } from '../audit/audit-events.js';
 import { isPublicEmailDomain } from '../auth/constants.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { DbService } from '../db/db.service.js';
+import { DbService, type DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { IdentityResolutionService } from '../auth/identity-resolution.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -233,6 +233,7 @@ export class SsoConnectionsService {
             jitProvisioning: created.jitProvisioning,
             providerStaged: stage,
           }),
+          { tx },
         );
         return created;
       });
@@ -329,9 +330,9 @@ export class SsoConnectionsService {
         const row = await this.repo.updateConnection(id, patch, tx, { fromStatus: from });
         if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
         if (changedFields.length > 0) {
-          await this.audit.record(this.event('sso_connection.updated', row, actor, { fields: changedFields }));
+          await this.audit.record(this.event('sso_connection.updated', row, actor, { fields: changedFields }), { tx });
         }
-        if (to !== from) await this.recordStatusChange(row, actor, from, to);
+        if (to !== from) await this.recordStatusChange(row, actor, from, to, tx);
         return row;
       });
     } catch (err) {
@@ -394,6 +395,7 @@ export class SsoConnectionsService {
             recordType: 'sso_domain',
             recordId: added.id,
           }),
+          { tx },
         );
         return added;
       });
@@ -439,6 +441,7 @@ export class SsoConnectionsService {
           recordType: 'sso_domain',
           recordId: row.id,
         }),
+        { tx },
       );
       return marked;
     });
@@ -481,9 +484,10 @@ export class SsoConnectionsService {
         { fromStatus: conn.status },
       );
       if (!updated) throw connectionState('The connection changed meanwhile; reload and try again');
-      if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING');
+      if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING', tx);
       await this.audit.record(
         this.event('sso_connection.tested', updated, actor, { cognitoProviderName: conn.cognitoProviderName }),
+        { tx },
       );
     });
 
@@ -507,7 +511,7 @@ export class SsoConnectionsService {
     const updated = await this.db.withOrgScope(conn.orgId, async (tx) => {
       const row = await this.repo.updateConnection(conn.id, { status: 'ACTIVE' }, tx, { fromStatus: 'TESTING' });
       if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
-      await this.recordStatusChange(row, actor, 'TESTING', 'ACTIVE');
+      await this.recordStatusChange(row, actor, 'TESTING', 'ACTIVE', tx);
       return row;
     });
     return this.toResponse({ ...updated, domains: conn.domains });
@@ -617,18 +621,20 @@ export class SsoConnectionsService {
     }
   }
 
+  /** Audit a status change inside the transaction that made it. */
   private async recordStatusChange(
     row: SsoConnectionRow,
     actor: Principal,
     from: SsoConnectionStatus,
     to: SsoConnectionStatus,
+    tx: DbExecutor,
   ): Promise<void> {
-    await this.audit.record(this.event('sso_connection.changed', row, actor, { from, to }));
-    if (to === 'ACTIVE') await this.audit.record(this.event('sso_connection.activated', row, actor, { from }));
+    await this.audit.record(this.event('sso_connection.changed', row, actor, { from, to }), { tx });
+    if (to === 'ACTIVE') await this.audit.record(this.event('sso_connection.activated', row, actor, { from }), { tx });
     // Leaving ACTIVE (suspension, or a provider change back to TESTING) stops
     // discovery from routing to the connection: both are a deactivation.
     if (from === 'ACTIVE' && to !== 'ACTIVE') {
-      await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }));
+      await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }), { tx });
     }
   }
 

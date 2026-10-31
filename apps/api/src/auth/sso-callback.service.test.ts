@@ -153,6 +153,13 @@ function allAuditDetails(ctx: Ctx): string {
   return JSON.stringify(ctx.audit.record.mock.calls.map((c) => c[0]));
 }
 
+/** Each audit action with whether it was written through the binding transaction. */
+function auditTransactions(ctx: Ctx): Array<[string, boolean]> {
+  return (ctx.audit.record.mock.calls as unknown as Array<[{ action: string }, { tx?: unknown }?]>).map(
+    ([event, opts]) => [event.action, opts?.tx === ctx.tx],
+  );
+}
+
 describe('SsoCallbackService', () => {
   beforeEach(() => vi.restoreAllMocks());
 
@@ -246,6 +253,29 @@ describe('SsoCallbackService', () => {
         expect.objectContaining({ action: 'auth.sign_in.failed', details: { reason: 'sso_state' } }),
       );
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+    });
+
+    it('answers only once auth.sign_in.failed is written, so the row exists when the redirect leaves', async () => {
+      const ctx = setup();
+      let release!: () => void;
+      ctx.audit.record.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
+      let answered = false;
+      const pending = ctx.service.callback({ code: 'x', state: 'never-issued' }, META, null).then((res) => {
+        answered = true;
+        return res;
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      expect(answered).toBe(false);
+      release();
+      expect(await pending).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+    });
+
+    it('still redirects when the auth.sign_in.failed write fails', async () => {
+      const ctx = setup();
+      ctx.audit.record.mockRejectedValueOnce(new Error('db down'));
+      const res = await ctx.service.callback({ code: 'x', state: 'never-issued' }, META, null);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
     });
 
     it('answers a replayed state the same way: the record was consumed', async () => {
@@ -408,6 +438,19 @@ describe('SsoCallbackService', () => {
       expect(ctx.principalLoader.invalidateUser).toHaveBeenCalledWith('user_new', ['org_sample']);
     });
 
+    it('writes the binding audit rows in the binding transaction and invitation.accepted after it', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
+      expect(auditTransactions(ctx)).toEqual([
+        ['user.created', true],
+        ['identity.linked', true],
+        ['membership.activated', true],
+        ['invitation.accepted', false],
+      ]);
+    });
+
     it('reuses an existing user with the same email', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
@@ -461,6 +504,18 @@ describe('SsoCallbackService', () => {
       expect(ctx.authz.createGrant).toHaveBeenCalledWith(expect.objectContaining({ templateKey: 'employee', scopeOrgId: 'org_sample' }), ctx.tx);
       expect(auditActions(ctx)).toEqual(expect.arrayContaining(['identity.created', 'identity.linked', 'membership.activated']));
       expect(ctx.invitations.accept).not.toHaveBeenCalled();
+    });
+
+    it('writes every JIT audit row in the binding transaction', async () => {
+      const ctx = setup({ conn: connection({ jitProvisioning: true }) });
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
+      expect(auditTransactions(ctx)).toEqual([
+        ['user.created', true],
+        ['identity.created', true],
+        ['identity.linked', true],
+        ['membership.activated', true],
+      ]);
     });
 
     it('does not provision when the domain is not verified for this connection', async () => {

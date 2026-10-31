@@ -259,17 +259,20 @@ export class InvitationsService {
         );
         created++;
 
-        // Audit per created invitation.
-        await this.audit.record({
-          action: 'invitation.created',
-          actorUserId,
-          actorKind: 'USER',
-          orgId,
-          recordType: 'invitation',
-          recordId: row.id,
-          result: 'ALLOWED',
-          details: { emailNormalised: inv.email, templateKey: inv.templateKey, importBatchId },
-        });
+        // Audit per created invitation, in the import transaction.
+        await this.audit.record(
+          {
+            action: 'invitation.created',
+            actorUserId,
+            actorKind: 'USER',
+            orgId,
+            recordType: 'invitation',
+            recordId: row.id,
+            result: 'ALLOWED',
+            details: { emailNormalised: inv.email, templateKey: inv.templateKey, importBatchId },
+          },
+          { tx },
+        );
 
         toMail.push({ email: inv.email, token });
       }

@@ -116,24 +116,28 @@ export class MembersService {
         }
       }
 
-      // (c) Audit: membership.ended first, then grant events.
-      await this.audit.record({
-        action: 'membership.ended',
-        actorUserId,
-        actorKind: 'USER',
-        orgId,
-        recordType: 'membership',
-        recordId: membershipId,
-        result: 'ALLOWED',
-        details: {
-          membershipId,
-          reason: body.reason,
-          revokedGrantIds: allRevokedIds,
+      // (c) Audit: membership.ended first, then grant events, in the same
+      //     transaction: they commit or roll back with the membership end.
+      await this.audit.record(
+        {
+          action: 'membership.ended',
+          actorUserId,
+          actorKind: 'USER',
+          orgId,
+          recordType: 'membership',
+          recordId: membershipId,
+          result: 'ALLOWED',
+          details: {
+            membershipId,
+            reason: body.reason,
+            revokedGrantIds: allRevokedIds,
+          },
         },
-      });
+        { tx },
+      );
 
       for (const evt of auditEvents) {
-        await this.audit.record(evt);
+        await this.audit.record(evt, { tx });
       }
 
       return {

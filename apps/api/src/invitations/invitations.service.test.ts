@@ -352,6 +352,27 @@ describe('InvitationsService', () => {
       );
     });
 
+    it('audits each created invitation inside the import transaction', async () => {
+      const tx = { kind: 'org-tx' };
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(tx));
+      await service.import(
+        'org_sample',
+        { invitations: [{ email: 'a@example.com', templateKey: 'employee' }, { email: 'b@example.com', templateKey: 'employee' }] },
+        'user_ivana',
+        false,
+      );
+
+      expect(audit.record).toHaveBeenCalledTimes(2);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'invitation.created', details: expect.objectContaining({ emailNormalised: 'a@example.com' }) }),
+        { tx },
+      );
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'invitation.created', details: expect.objectContaining({ emailNormalised: 'b@example.com' }) }),
+        { tx },
+      );
+    });
+
     it('reports a repeated address and an org unit of another organization as codes', async () => {
       // No org unit matches: the unit belongs to another organization.
       const noOrgUnits = { select: () => ({ from: () => ({ where: async () => [] }) }) };

@@ -173,18 +173,22 @@ export class InvitationActivationService {
           tx,
         );
 
-        // 2. Audit user.created before side effects (SESS-R-22).
+        // 2. Audit user.created before side effects (SESS-R-22), in this
+        //    transaction: the row rolls back with the user if a later step fails.
         if (userCreated) {
-          await this.audit.record({
-            action: 'user.created',
-            actorUserId: null,
-            actorKind: 'SYSTEM',
-            orgId: invitation.orgId,
-            recordType: 'user',
-            recordId: userId,
-            result: 'ALLOWED',
-            details: { emailNormalised: invitation.email, via: 'invitation' },
-          });
+          await this.audit.record(
+            {
+              action: 'user.created',
+              actorUserId: null,
+              actorKind: 'SYSTEM',
+              orgId: invitation.orgId,
+              recordType: 'user',
+              recordId: userId,
+              result: 'ALLOWED',
+              details: { emailNormalised: invitation.email, via: 'invitation' },
+            },
+            { tx },
+          );
         }
 
         // 3. Ensure identity-provider user exists (with temp password for
@@ -192,16 +196,19 @@ export class InvitationActivationService {
         await this.ensureIdpUser(invitation.email, userId, tx, tempPassword);
 
         // 4. Audit identity.linked.
-        await this.audit.record({
-          action: 'identity.linked',
-          actorUserId: null,
-          actorKind: 'SYSTEM',
-          orgId: invitation.orgId,
-          recordType: 'external_identity',
-          recordId: userId,
-          result: 'ALLOWED',
-          details: { emailNormalised: invitation.email, provider: 'cognito' },
-        });
+        await this.audit.record(
+          {
+            action: 'identity.linked',
+            actorUserId: null,
+            actorKind: 'SYSTEM',
+            orgId: invitation.orgId,
+            recordType: 'external_identity',
+            recordId: userId,
+            result: 'ALLOWED',
+            details: { emailNormalised: invitation.email, provider: 'cognito' },
+          },
+          { tx },
+        );
 
         // 5-7. Membership, default grants, invitation accepted (shared with
         //      the SSO callback).

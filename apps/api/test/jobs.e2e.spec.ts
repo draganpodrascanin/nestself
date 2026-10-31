@@ -127,7 +127,7 @@ describe.skipIf(!shouldRun)('Maintenance jobs (e2e)', () => {
 
   it('grants.reconcile is idempotent', async () => {
     const report = await jobs.run('grants.reconcile', now);
-    expect(report).toEqual({ job: 'grants.reconcile', expired: [], orphanedDelegations: [], withoutMembership: [] });
+    expect(report).toEqual({ job: 'grants.reconcile', expired: [], orphanedDelegations: [], withoutMembership: [], failed: 0 });
   });
 
   it('audit.ensure-partitions creates the coming months as the application role', async () => {

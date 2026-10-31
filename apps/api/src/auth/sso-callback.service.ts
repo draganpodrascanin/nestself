@@ -208,7 +208,7 @@ export class SsoCallbackService {
       if (usable) testNonce = query.test;
     }
     if (!connection || !usable) {
-      this.auditFailed('sso_connection', meta, connection);
+      await this.auditFailed('sso_connection', meta, connection);
       return { location: this.signInUrl(query.surface, 'sso_denied') };
     }
 
@@ -249,7 +249,7 @@ export class SsoCallbackService {
     // Single use: GETDEL, so a replayed state finds nothing (Review Focus 1).
     const record = query.state ? parseRecord(await this.store.getDel(pkceKey(query.state))) : null;
     if (!record) {
-      this.auditFailed('sso_state', meta, null);
+      await this.auditFailed('sso_state', meta, null);
       return { location: this.signInUrl('workspace', 'sso_denied') };
     }
     const deny = () => ({ location: this.signInUrl(record.surface, 'sso_denied') });
@@ -259,12 +259,12 @@ export class SsoCallbackService {
 
     // Login CSRF: the callback must reach the browser that started the flow.
     if (!browserNonceMatches(browserNonce, record.browserNonceHash)) {
-      this.auditFailed('sso_browser', meta, null, record.connection);
+      await this.auditFailed('sso_browser', meta, null, record.connection);
       return deny();
     }
 
     if (query.error || !query.code) {
-      this.auditFailed('sso_idp_error', meta, null, record.connection);
+      await this.auditFailed('sso_idp_error', meta, null, record.connection);
       return deny();
     }
 
@@ -279,7 +279,7 @@ export class SsoCallbackService {
     } catch (err) {
       if (!(err instanceof IdentityProviderError)) throw err;
       this.logger.warn(`SSO code exchange failed (${err.code})`);
-      this.auditFailed('sso_exchange', meta, null, record.connection);
+      await this.auditFailed('sso_exchange', meta, null, record.connection);
       return deny();
     }
 
@@ -287,7 +287,7 @@ export class SsoCallbackService {
     const providerName = claims.identities?.[0]?.providerName ?? null;
     // The code must come from the provider this flow started with.
     if (!providerName || providerName !== record.connection) {
-      this.auditFailed('sso_provider_mismatch', meta, null, record.connection);
+      await this.auditFailed('sso_provider_mismatch', meta, null, record.connection);
       return deny();
     }
 
@@ -302,7 +302,7 @@ export class SsoCallbackService {
       // identity must belong to the organization of the connection that now
       // owns this provider name. Not an orphan, so nothing is deleted.
       if (!connection || !(await this.isMemberOf(existing.userId, connection.orgId))) {
-        this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
+        await this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
         return deny();
       }
       return this.signIn(exchanged, email, record, connection, meta, testConnectionId);
@@ -340,7 +340,7 @@ export class SsoCallbackService {
       );
     } catch (err) {
       this.logger.error(`SSO identity binding failed: ${(err as Error).message}`);
-      this.auditFailed('sso_binding', meta, connection);
+      await this.auditFailed('sso_binding', meta, connection);
       return deny();
     }
 
@@ -395,16 +395,19 @@ export class SsoCallbackService {
     // JIT never runs while the connection is only being tested.
     if (connection.status === 'ACTIVE' && connection.jitProvisioning && domainVerified) {
       const userId = await this.resolveOrCreateUser(email, connection, tx, 'sso_jit');
-      await this.audit.record({
-        action: 'identity.created',
-        actorUserId: null,
-        actorKind: 'SYSTEM',
-        orgId: connection.orgId,
-        recordType: 'external_identity',
-        recordId: userId,
-        result: 'ALLOWED',
-        details: { emailNormalised: email, provider, via: 'sso_jit', connectionId: connection.id },
-      });
+      await this.audit.record(
+        {
+          action: 'identity.created',
+          actorUserId: null,
+          actorKind: 'SYSTEM',
+          orgId: connection.orgId,
+          recordType: 'external_identity',
+          recordId: userId,
+          result: 'ALLOWED',
+          details: { emailNormalised: email, provider, via: 'sso_jit', connectionId: connection.id },
+        },
+        { tx },
+      );
       await this.linkIdentity(tx, userId, claims, email, provider, connection, 'jit');
       await this.activator.activateMembership(
         {
@@ -444,16 +447,19 @@ export class SsoCallbackService {
       },
       tx,
     );
-    await this.audit.record({
-      action: 'user.created',
-      actorUserId: null,
-      actorKind: 'SYSTEM',
-      orgId: connection.orgId,
-      recordType: 'user',
-      recordId: user.id,
-      result: 'ALLOWED',
-      details: { emailNormalised: email, via, connectionId: connection.id },
-    });
+    await this.audit.record(
+      {
+        action: 'user.created',
+        actorUserId: null,
+        actorKind: 'SYSTEM',
+        orgId: connection.orgId,
+        recordType: 'user',
+        recordId: user.id,
+        result: 'ALLOWED',
+        details: { emailNormalised: email, via, connectionId: connection.id },
+      },
+      { tx },
+    );
     return user.id;
   }
 
@@ -478,16 +484,19 @@ export class SsoCallbackService {
       },
       tx,
     );
-    await this.audit.record({
-      action: 'identity.linked',
-      actorUserId: null,
-      actorKind: 'SYSTEM',
-      orgId: connection.orgId,
-      recordType: 'external_identity',
-      recordId: userId,
-      result: 'ALLOWED',
-      details: { emailNormalised: email, provider, via: `sso_${via}`, connectionId: connection.id },
-    });
+    await this.audit.record(
+      {
+        action: 'identity.linked',
+        actorUserId: null,
+        actorKind: 'SYSTEM',
+        orgId: connection.orgId,
+        recordType: 'external_identity',
+        recordId: userId,
+        result: 'ALLOWED',
+        details: { emailNormalised: email, provider, via: `sso_${via}`, connectionId: connection.id },
+      },
+      { tx },
+    );
   }
 
   private async testNonceIsFor(nonce: string, connectionId: string): Promise<boolean> {
@@ -548,7 +557,7 @@ export class SsoCallbackService {
     } catch (err) {
       // A suspended or deactivated user, or an identity removed meanwhile.
       this.logger.warn(`SSO session creation refused: ${(err as Error).message}`);
-      this.auditFailed('sso_session', meta, connection, record.connection);
+      await this.auditFailed('sso_session', meta, connection, record.connection);
       return { location: this.signInUrl(record.surface, 'sso_denied') };
     }
 
@@ -603,12 +612,16 @@ export class SsoCallbackService {
     });
   }
 
-  private auditFailed(
+  /**
+   * Awaited, so the row exists before the redirect leaves; a failed write is
+   * swallowed (logged by the writer), because the redirect must still go out.
+   */
+  private async auditFailed(
     reason: string,
     meta: RequestMeta,
     connection: SsoConnectionRow | null,
     providerName?: string,
-  ): void {
+  ): Promise<void> {
     const event: AuditEventInput = {
       action: 'auth.sign_in.failed',
       actorUserId: null,
@@ -621,7 +634,7 @@ export class SsoCallbackService {
       userAgent: meta.userAgent,
       details: { reason },
     };
-    this.audit.record(event).catch(() => {});
+    await this.audit.record(event).catch(() => {});
   }
 
   private signInUrl(surface: Surface, reason: SsoSignInReason, email?: string): string {

@@ -145,6 +145,7 @@ describe('EmergencyService', () => {
           recordType: 'emergency_access',
           details: { purpose: 'p'.repeat(500), scopeKind: 'CASE', scopeId: 'case_1', durationMinutes: 30 },
         }),
+        { tx: 'tx' },
       );
       expect(ctx.principals.invalidateUser).toHaveBeenCalledWith('user_nikola');
     });
@@ -176,6 +177,7 @@ describe('EmergencyService', () => {
       });
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'emergency_access.approved', actorUserId: 'user_admin_test', recordId: 'ema_1' }),
+        { tx: 'tx' },
       );
       expect(warn).toHaveBeenCalledWith(
         { action: 'emergency_access.approved', emergencyAccessId: 'ema_1' },
@@ -210,6 +212,7 @@ describe('EmergencyService', () => {
       expect(ctx.authzRepo.deleteEmergencyRequest).toHaveBeenCalledWith('ema_1', 'tx');
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'emergency_access.denied', actorUserId: 'user_admin_test', recordId: 'ema_1' }),
+        { tx: 'tx' },
       );
       expect(ctx.principals.invalidateUser).toHaveBeenCalledWith('user_nikola');
     });
@@ -229,6 +232,7 @@ describe('EmergencyService', () => {
       expect(res.revokedAt).toBe(NOW.toISOString());
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'emergency_access.revoked', actorUserId: 'user_admin_test', recordId: 'ema_1' }),
+        { tx: 'tx' },
       );
       expect(ctx.principals.invalidateUser).toHaveBeenCalledWith('user_nikola');
     });

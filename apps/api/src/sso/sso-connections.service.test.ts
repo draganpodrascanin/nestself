@@ -108,7 +108,14 @@ function setup() {
   // mapIdpError uses none of the service's collaborators.
   const identity = Object.create(IdentityResolutionService.prototype) as IdentityResolutionService;
   const events: AuditEventInput[] = [];
-  const audit = { record: vi.fn(async (e: AuditEventInput) => void events.push(e)) };
+  /** The executor each event was written through (`undefined`: the pool). */
+  const eventExecutors: unknown[] = [];
+  const audit = {
+    record: vi.fn(async (e: AuditEventInput, opts?: { tx?: unknown }) => {
+      events.push(e);
+      eventExecutors.push(opts?.tx);
+    }),
+  };
   const dns = new FakeDnsTxtResolver();
   const db = { withOrgScope: vi.fn(async (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
   const store = new MemoryKeyValueStore();
@@ -124,7 +131,7 @@ function setup() {
     { testStartOrigin: 'http://ws.test', spMetadata: SP },
     store,
   );
-  return { repo, idp, events, dns, db, service, store };
+  return { repo, idp, events, eventExecutors, dns, db, service, store };
 }
 
 const SAML: SsoConnectionCreateRequest = {
@@ -161,6 +168,7 @@ async function connectionIn(ctx: Ctx, status: 'DRAFT' | 'TESTING' | 'ACTIVE' | '
   await ctx.repo.updateConnection(created.id, { status, lastTestedAt });
   vi.mocked(ctx.idp.createProvider).mockClear();
   ctx.events.length = 0;
+  ctx.eventExecutors.length = 0;
   return created;
 }
 
@@ -547,6 +555,32 @@ describe('SsoConnectionsService', () => {
       expect(ctx.repo.createConnection).toHaveBeenCalledWith(expect.anything(), TX);
       expect(ctx.repo.addDomain).toHaveBeenCalledWith(expect.anything(), TX);
       expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(conn.id, { status: 'ACTIVE' }, TX, { fromStatus: 'TESTING' });
+    });
+
+    it('every audit row is written through the transaction of the change it describes', async () => {
+      const conn = await ctx.service.create(SAML, ACTOR);
+      const d = await ctx.service.addDomain(conn.id, 'acme.example', ACTOR);
+      ctx.dns.setTxt(d.txtRecordName, [d.txtRecordValue]);
+      await ctx.service.verifyDomain(conn.id, d.id, ACTOR);
+      await ctx.service.test(conn.id, ACTOR);
+      await ctx.repo.updateConnection(conn.id, { lastTestedAt: new Date() });
+      await ctx.service.activate(conn.id, ACTOR);
+      await ctx.service.update(conn.id, { status: 'SUSPENDED' }, ACTOR);
+      await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR);
+
+      expect(ctx.events.map((e) => e.action)).toEqual([
+        'sso_connection.created',
+        'sso_domain.added',
+        'sso_domain.verified',
+        'sso_connection.changed',
+        'sso_connection.tested',
+        'sso_connection.changed',
+        'sso_connection.activated',
+        'sso_connection.changed',
+        'sso_connection.deactivated',
+        'sso_connection.updated',
+      ]);
+      expect(ctx.eventExecutors).toEqual(ctx.events.map(() => TX));
     });
 
     it('a status that changed meanwhile answers 409 and records nothing', async () => {

@@ -272,7 +272,7 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     expect(before!.revokedAt).toBeNull();
 
     const report = await app.get(MaintenanceJobsService).run('emergency.sweep-expired');
-    expect(report).toEqual({ job: 'emergency.sweep-expired', expired: [accessId] });
+    expect(report).toEqual({ job: 'emergency.sweep-expired', expired: [accessId], failed: 0 });
 
     const [after] = await testDb.db.select().from(emergencyAccess).where(eq(emergencyAccess.id, accessId));
     expect(after!.revokedAt).not.toBeNull();

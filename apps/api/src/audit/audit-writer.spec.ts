@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AuditWriter, hashIp, parseUserAgentFamily, sanitizeDetails } from './audit-writer.js';
+import { Logger } from '@nestjs/common';
+import { AuditWriter, hashIp, parseUserAgentFamily, sanitizeDetails, type AuditEventInput } from './audit-writer.js';
 import { createHash } from 'node:crypto';
 
 // ---------------------------------------------------------------------------
@@ -202,6 +203,62 @@ describe('AuditWriter', () => {
       });
       const row = repo.insertEvent.mock.calls[0]![0];
       expect(row.userAgentFamily).toBe('unknown');
+    });
+  });
+
+  describe('record() in the caller\'s transaction', () => {
+    const event: AuditEventInput = {
+      action: 'grant.created',
+      actorUserId: 'u1',
+      actorKind: 'USER',
+      orgId: 'org_1',
+      recordType: 'grant',
+      recordId: 'g1',
+      result: 'ALLOWED',
+      details: { templateKey: 'team_manager', token: 'never stored' },
+    };
+    const fakeTx = { kind: 'caller-tx' } as never;
+
+    /** strictMode stays false: the transaction path must not depend on it. */
+    function lenientWriter() {
+      const repo = makeRepoMock();
+      return { writer: new AuditWriter(repo as never), repo };
+    }
+
+    it('inserts through the given executor and lets its error propagate', async () => {
+      const { writer, repo } = lenientWriter();
+      repo.insertEvent.mockRejectedValueOnce(new Error('boom'));
+      await expect(writer.record(event, { tx: fakeTx })).rejects.toThrow('boom');
+      expect(repo.insertEvent).toHaveBeenCalledWith(expect.anything(), fakeTx);
+    });
+
+    it('builds the same row as without an executor and reads retention on the pool', async () => {
+      const { writer, repo } = lenientWriter();
+      const occurredAt = new Date('2026-01-15T12:00:00Z');
+      await writer.record({ ...event, occurredAt }, { tx: fakeTx });
+      await writer.record({ ...event, occurredAt });
+
+      const [inTx, onPool] = repo.insertEvent.mock.calls;
+      expect(inTx![0]).toEqual(onPool![0]);
+      expect(inTx![0]).toMatchObject({ action: 'grant.created', category: 'AUTHORIZATION', details: { templateKey: 'team_manager' } });
+      expect(inTx![0].details).not.toHaveProperty('token');
+      // The retention policies are read once, through the pool: never through the caller's executor.
+      expect(repo.findRetentionPolicies).toHaveBeenCalledTimes(1);
+      expect(repo.findRetentionPolicies).toHaveBeenCalledWith();
+    });
+
+    it('still swallows without an executor: logged, on the pool, never thrown', async () => {
+      const { writer, repo } = lenientWriter();
+      repo.insertEvent.mockRejectedValueOnce(new Error('boom'));
+      const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+      try {
+        await expect(writer.record(event)).resolves.toBeUndefined();
+        expect(repo.insertEvent).toHaveBeenCalledTimes(1);
+        expect(repo.insertEvent.mock.calls[0]).toHaveLength(1);
+        expect(error).toHaveBeenCalledWith(expect.any(Error), 'Failed to write audit event: grant.created');
+      } finally {
+        error.mockRestore();
+      }
     });
   });
 });
