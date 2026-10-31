@@ -462,7 +462,7 @@ export class SsoCallbackService {
       );
     } catch (err) {
       // A suspended or deactivated user, or an identity removed meanwhile.
-      this.logger.warn(`SSO session creation refused: ${(err as Error).message}`);
+      this.logger.warn(`SSO session creation refused: ${bindingFailureReason(err)}`);
       await this.auditFailed('sso_session', meta, connection, record.connection);
       return { location: this.signInUrl(record.surface, 'sso_denied') };
     }

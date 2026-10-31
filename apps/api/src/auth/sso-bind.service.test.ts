@@ -397,6 +397,8 @@ describe('SsoBindService', () => {
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
       expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toBeNull();
       expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'connection_inactive' });
+      // Nothing was bound, so the pool user is an orphan and goes (SSO-R-10).
+      expect(ctx.deleteUser).toHaveBeenCalledWith(USERNAME);
       expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
     });
 
@@ -481,16 +483,17 @@ describe('SsoBindService', () => {
       expect(line).not.toContain(EMAIL);
     });
 
-    it('a refused session (suspended user) answers sso_denied', async () => {
+    it('a refused session (suspended user) answers sso_denied and logs the error by name only', async () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
-      ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('Account is suspended or deactivated'));
-      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error(`Account ${EMAIL} is suspended`));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
       const { handle } = await openPending(ctx);
 
       await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
 
       expect(auditEvent(ctx, 'auth.sign_in.failed').details).toEqual({ reason: 'sso_session' });
+      expect(warn.mock.calls.map((c) => String(c[0]))).toEqual(['SSO session creation refused: Error']);
     });
 
     it('no audit row carries the handle, the challenge token, the code or a token', async () => {

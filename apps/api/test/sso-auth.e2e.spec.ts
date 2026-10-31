@@ -1073,6 +1073,10 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
         (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
       );
       expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['connection_inactive']);
+      // Consumed: the handle opens nothing, even with the domain verified again.
+      const again = await bind(agent, 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
     });
 
     it('no invitation and JIT off: bind/verify deletes the orphan pool user and answers sso_denied', async () => {

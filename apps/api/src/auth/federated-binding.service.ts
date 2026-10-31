@@ -68,9 +68,10 @@ const JIT_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === JIT_TEMPLATE_KEY
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 
 /**
- * A failed binding transaction as a reason a log line may carry: the error's
- * name and the driver's SQLSTATE. Never the message: Drizzle puts the
- * statement and its parameters there, the address among them.
+ * An error of the federated sign-in (a failed binding transaction, a refused
+ * session) as a reason a log line may carry: the error's name and the
+ * driver's SQLSTATE. Never the message: Drizzle puts the statement and its
+ * parameters there, the address among them, and other errors may name it too.
  */
 export function bindingFailureReason(err: unknown): string {
   const name = err instanceof Error ? err.name : 'error';

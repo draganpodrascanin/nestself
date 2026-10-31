@@ -479,13 +479,15 @@ describe('SsoCallbackService', () => {
       expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
     });
 
-    it('redirects neutrally when session creation is refused (suspended user)', async () => {
+    it('redirects neutrally when session creation is refused (suspended user), logging the error by name only', async () => {
       const ctx = setup();
       ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
-      ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('suspended'));
+      ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('Account new@acme.example is suspended'));
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
       const { state, code, nonce } = await startAndAuthorize(ctx);
       const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(warn.mock.calls.map((c) => String(c[0]))).toEqual(['SSO session creation refused: Error']);
     });
   });
 
@@ -574,6 +576,7 @@ describe('SsoCallbackService', () => {
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       ctx.identities.createExternalIdentity.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
       const { state, code, nonce } = await startAndAuthorize(ctx);
       const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
