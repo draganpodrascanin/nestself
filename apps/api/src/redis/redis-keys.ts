@@ -28,6 +28,12 @@ export const ORG_TREE_TTL = 300;
 /** OTP record: 10 min. */
 export const OTP_TTL = 600;
 
+/**
+ * Time between two NestSelf-sent codes on one challenge: a resend is refused
+ * for this long after the last code went out (`otpResendKey`).
+ */
+export const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
 /** Challenge record: 5 min. */
 export const CHALLENGE_TTL = 300;
 
@@ -111,6 +117,14 @@ export function orgTreeKey(orgId: string): string {
 /** `otp:{purpose}:{hash}` */
 export function otpKey(purpose: string, hash: string): string {
   return `otp:${purpose}:${hash}`;
+}
+
+/**
+ * `otp_resend:{purpose}:{hash}`: exists while a resend of the code of that
+ * challenge is refused. `hash` is the one of the challenge's `otpKey`.
+ */
+export function otpResendKey(purpose: string, hash: string): string {
+  return `otp_resend:${purpose}:${hash}`;
 }
 
 /** `challenge:{challengeToken}` */

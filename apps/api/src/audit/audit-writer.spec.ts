@@ -257,6 +257,16 @@ describe('sanitizeDetails', () => {
     expect(result).toEqual({ reason: 'sso_state' });
   });
 
+  it('removes the pending-bind handle and the challenge tokens, which are bearer secrets for their lifetime', () => {
+    const result = sanitizeDetails({
+      handle: 'h',
+      challengeToken: 'c',
+      reason: 'sso_bind',
+      nested: { handle: 'h', challengeToken: 'c', connectionId: 'conn_1' },
+    });
+    expect(result).toEqual({ reason: 'sso_bind', nested: { connectionId: 'conn_1' } });
+  });
+
   it('truncates strings over 500 characters', () => {
     const longStr = 'a'.repeat(600);
     const result = sanitizeDetails({ info: longStr });

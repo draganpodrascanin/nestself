@@ -59,6 +59,22 @@ describe('pino-redaction', () => {
     expect(output).toContain('visible');
   });
 
+  it('redacts the pending-bind handle and challenge tokens in bodies and nested objects', () => {
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          req: { body: { handle: 'handle_1', challengeToken: 'chal_1', code: '12345678' } },
+          nested: { handle: 'handle_2', challengeToken: 'chal_2', safe: 'visible' },
+        },
+        'test',
+      );
+    });
+    for (const v of ['handle_1', 'chal_1', 'handle_2', 'chal_2', '12345678']) {
+      expect(output).not.toContain(v);
+    }
+    expect(output).toContain('visible');
+  });
+
   it('redacts req.headers.authorization', () => {
     const output = captureLog((logger) => {
       logger.info(

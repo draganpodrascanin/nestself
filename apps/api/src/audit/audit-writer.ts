@@ -57,6 +57,11 @@ const FORBIDDEN_KEYS = new Set([
   'nonce',
   'testNonce',
   'browserNonce',
+  // Email-code flows (step-up of a federated user, pending SSO binding): the
+  // handle of a pending binding and the challenge token are bearer secrets
+  // for as long as they live.
+  'handle',
+  'challengeToken',
   'cookie',
   'authorization',
   'body',

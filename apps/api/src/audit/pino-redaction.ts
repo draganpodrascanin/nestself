@@ -33,6 +33,7 @@ export const PINO_REDACT_PATHS: string[] = [
   'req.body.voucherCode',
   'req.body.oidcClientSecret',
   'req.body.verificationToken',
+  'req.body.handle',
 
   // Wildcard paths for nested objects
   '*.password',
@@ -49,6 +50,8 @@ export const PINO_REDACT_PATHS: string[] = [
   '*.professionalNote',
   '*.oidcClientSecret',
   '*.verificationToken',
+  '*.challengeToken',
+  '*.handle',
 ];
 
 export const PINO_REDACT_CONFIG = {

@@ -17,6 +17,7 @@ import { SignInThrottle } from './sign-in-throttle.js';
 import { AccessRevocationService } from './access-revocation.service.js';
 import { ProfileService } from './profile.service.js';
 import { StepUpService } from './step-up.service.js';
+import { NestselfOtpService } from './nestself-otp.service.js';
 import { AuthorizationGuard } from '../authz/authorization.guard.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { ContextLoader } from '../authz/context-loader.js';
@@ -55,6 +56,7 @@ import { InvitationMembershipActivator } from '../invitations/invitation-members
     ProfileService,
     MeResponseBuilder,
     StepUpService,
+    NestselfOtpService,
     SsoCallbackService,
     InvitationMembershipActivator,
     AuthorizationGuard,
@@ -72,6 +74,7 @@ import { InvitationMembershipActivator } from '../invitations/invitation-members
     ContextLoader,
     AccessRevocationService,
     InvitationMembershipActivator,
+    NestselfOtpService,
   ],
 })
 export class AuthModule {}
