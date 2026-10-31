@@ -25,9 +25,12 @@
  *   TXT record shows) and creates a draft OIDC connection `org-acmeid-oidc`
  *   with its client secret staged.
  * The create dialog is captured open (the organisation found with the search
- * field, the OIDC protocol, the verified-email-claim switch) and cancelled;
- * the workspace discovery answer is real, but its start URL is swapped for
- * `javascript:void(0)` so the interstitial stays on screen.
+ * field, the OIDC protocol, the verified-email-claim switch) and cancelled, in
+ * a 1280x1500 frame because the whole OIDC form does not fit in 800 px; the
+ * workspace discovery answer is real, but its start URL is swapped for
+ * `javascript:void(0)` so the interstitial stays on screen. The pending
+ * domain's verification token and the test link's single-use nonce are
+ * masked in their captures (`maskText`).
  *
  * Once the admin pages are captured, Nikola completes the OIDC draft
  * (`acmeid.example`, activation) and starts its test from the page: the
@@ -49,7 +52,7 @@ import {
   signInWithPassword,
   stagePlatformGrant,
 } from '../auth/support';
-import { ADMIN_URL, WORKSPACE_URL, pick, shot } from './shots';
+import { ADMIN_URL, MASK, WORKSPACE_URL, maskText, pick, shot } from './shots';
 
 const ORG = 'org_sample';
 const ORG_NAME = 'Example d.o.o.';
@@ -127,6 +130,8 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   const domains = detail.getByRole('heading', { level: 3, name: 'Domains' });
   await expect(detail.getByText('_nestself-verify.eu.acme.example')).toBeVisible();
   await expect(detail.getByText('urn:amazon:cognito:sp:eu-central-1_EXAMPLE')).toBeVisible();
+  // The record value carries the domain's verification token: masked in the capture.
+  await maskText(detail, /(nestself-domain-verification=)[0-9a-f]+/g, `$1${MASK}`);
   await domains.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await shot(page, 'admin-sso-connection-detail');
 
@@ -179,8 +184,11 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   await expect(oidcDetail.getByText('Single use, valid 15 minutes.')).toBeVisible();
   const oidcStartUrl = (await testLink.getAttribute('href')) ?? '';
   expect(new URL(oidcStartUrl).searchParams.get('test')).toMatch(/^[A-Za-z0-9_-]{43}$/);
-  // The toast closes itself; the capture is of the panel.
+  // The toast closes itself; the capture is of the panel, with the link's
+  // single-use nonce masked (the tester below still opens the real link).
   await expect(page.getByRole('region', { name: 'Notifications' })).toBeEmpty({ timeout: 15_000 });
+  // Four bullets: the full mask would wrap the link onto a second line.
+  await maskText(oidcDetail, /(test=)[A-Za-z0-9_-]+/g, `$1${MASK.slice(0, 4)}`);
   await oidcDetail.evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await shot(page, 'admin-sso-test-link');
 

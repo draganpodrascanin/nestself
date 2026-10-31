@@ -3,7 +3,11 @@
  *
  * Every PNG lands in docs/auth/screenshots/ at the viewport size of the
  * `screenshots` project (1280x800, light, deviceScaleFactor 1, reduced
- * motion). Only the fictional sample people of packages/sample-data appear.
+ * motion); a capture that needs more height sets its own viewport and says
+ * why. Only the fictional sample people of packages/sample-data appear, and
+ * no capture shows a token, code, nonce or secret: where a screen displays
+ * one (an authenticator key, a single-use test link, a DNS verification
+ * token), the shot masks it first (`maskText`) and the guide's caption says so.
  */
 import * as path from 'node:path';
 import { expect } from '@playwright/test';
@@ -34,6 +38,36 @@ export async function shot(page: Page, name: string): Promise<void> {
     animations: 'disabled',
     caret: 'hide',
   });
+}
+
+/** What a masked secret shows instead in a guide screenshot. */
+export const MASK = '••••••••';
+
+/**
+ * Replaces every match of `pattern` in the text under `scope` (in the page,
+ * not in the app's state) before a capture, so a secret the screen displays
+ * stays out of the PNG. Use a pattern with the `g` flag; `$1` and the like
+ * work as in `String.prototype.replace`.
+ */
+export async function maskText(scope: Locator, pattern: RegExp, replacement: string): Promise<void> {
+  const masked = await scope.evaluate(
+    (root, { source, flags, replacement: with_ }) => {
+      const regex = new RegExp(source, flags);
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let count = 0;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.nodeValue ?? '';
+        const next = text.replace(regex, with_);
+        if (next !== text) {
+          node.nodeValue = next;
+          count += 1;
+        }
+      }
+      return count;
+    },
+    { source: pattern.source, flags: pattern.flags, replacement },
+  );
+  expect(masked, `maskText: nothing matched ${String(pattern)}`).toBeGreaterThan(0);
 }
 
 /** Opens a select (inside a dialog or a region) and picks an option; the popup is portalled. */

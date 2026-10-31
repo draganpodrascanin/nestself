@@ -133,7 +133,7 @@ git commit -m "feat(contracts,api): phase 4 contracts; cases table, binding conn
 - Test: `apps/api/src/invitations/invitations.service.test.ts` (import sends after the transaction resolves; none when it throws)
 
 **Interfaces:**
-- Produces: `export type MailTemplate = 'invitation' | 'step_up_code' | 'sso_bind_code' | 'ops_certificate_alert'`; `export interface MailMessage { to: string; locale: Locale; template: MailTemplate; params: Record<string, string> }`; `export abstract class Mailer { abstract send(message: MailMessage): Promise<void> }`; `export class LoggingMailer extends Mailer { readonly sent: MailMessage[] }` (keeps `sent` only when `NODE_ENV === 'test'` or `AUTH_MODE === 'stub'`; logs subject and recipient domain, never the body); `export class SesMailer extends Mailer` with options `{ fromEmail: string; region: string; client?: Pick<SESClient, 'send'> }`; `export function renderMail(message: MailMessage): { subject: string; text: string; html: string }` (placeholders `{{name}}` replaced from `params`, HTML-escaped in `html`; unknown locale falls back to `sr-Latn`); `EMAIL_TEMPLATES: Record<MailTemplate, Record<Locale, { subject: string; text: string }>>` with params: invitation `{ link, organizationName, inviterDisplayName }`; step_up_code and sso_bind_code `{ code, minutes }`; ops_certificate_alert `{ organizationName, providerName, expiresAt, daysLeft, adminUrl }` (English only is acceptable for the ops alert: all four keys present, same copy); `export function maskEmail(email: string): string` → first character, `***`, `@`, domain (`d***@intesa.example`; a one-character local part becomes `*@`).
+- Produces: `export type MailTemplate = 'invitation' | 'step_up_code' | 'sso_bind_code' | 'ops_certificate_alert'`; `export interface MailMessage { to: string; locale: Locale; template: MailTemplate; params: Record<string, string> }`; `export abstract class Mailer { abstract send(message: MailMessage): Promise<void> }`; `export class LoggingMailer extends Mailer { readonly sent: MailMessage[] }` (keeps `sent` only when `NODE_ENV === 'test'` or `AUTH_MODE === 'stub'`; logs subject and recipient domain, never the body); `export class SesMailer extends Mailer` with options `{ fromEmail: string; region: string; client?: Pick<SESClient, 'send'> }`; `export function renderMail(message: MailMessage): { subject: string; text: string; html: string }` (placeholders `{{name}}` replaced from `params`, HTML-escaped in `html`; unknown locale falls back to `sr-Latn`); `EMAIL_TEMPLATES: Record<MailTemplate, Record<Locale, { subject: string; text: string }>>` with params: invitation `{ link, organizationName, inviterDisplayName }`; step_up_code and sso_bind_code `{ code, minutes }`; ops_certificate_alert `{ organizationName, providerName, expiresAt, daysLeft, adminUrl }` (English only is acceptable for the ops alert: all four keys present, same copy); `export function maskEmail(email: string): string` → first character, `***`, `@`, domain (`d***@acme.example`; a one-character local part becomes `*@`).
 - `EmailModule` is `@Global()`, provides `Mailer` (SES when `SES_FROM_EMAIL` is set and `NODE_ENV !== 'test'`, region `COGNITO_REGION ?? 'eu-central-1'`, else `LoggingMailer`), exports `Mailer`.
 - `InvitationMailer.send(input)` keeps its signature and calls `mailer.send({ to: input.email, locale: 'sr-Latn', template: 'invitation', params: { link: \`${workspaceUrl}/invitations/${token}\`, organizationName, inviterDisplayName } })`.
 
@@ -156,7 +156,7 @@ it('substitutes params and escapes html', () => {
   expect(out.text).toContain('12345678'); expect(out.html).not.toContain('<script');
 });
 // ses-mailer.test.ts: SendEmailCommand input has Source=fromEmail, Destination.ToAddresses=[to], Subject/Text/Html from renderMail
-// mask-email.test.ts: 'dragan@intesa.example' -> 'd***@intesa.example'; 'a@b.c' -> '*@b.c'
+// mask-email.test.ts: 'daria@acme.example' -> 'd***@acme.example'; 'a@b.c' -> '*@b.c'
 // invitations.service.test.ts: import -> mailer.send called only after withOrgScope resolves; a throwing transaction sends nothing
 ```
 
@@ -194,7 +194,7 @@ git commit -m "feat(api): shared mailer with SES and logging adapters; invitatio
 - [ ] **Step 1: Write the failing tests** (`MemoryKeyValueStore`, `LoggingMailer`, fake timers):
 
 ```ts
-it('issues an 8-digit code, mails it in the locale and masks the address', ...) // mailer.sent[0].template === 'step_up_code', params.code matches /^\d{8}$/, emailMasked 'd***@intesa.example'
+it('issues an 8-digit code, mails it in the locale and masks the address', ...) // mailer.sent[0].template === 'step_up_code', params.code matches /^\d{8}$/, emailMasked 'd***@acme.example'
 it('verifies once and deletes the record', ...)         // second verify -> invalid_challenge
 it('keeps the record for two wrong codes and locks on the third', ...) // invalid_code, invalid_code, too_many_attempts; then invalid_challenge
 it('refuses a token of another purpose', ...)            // issued step_up, verified as sso_bind -> invalid_challenge

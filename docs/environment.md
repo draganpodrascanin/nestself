@@ -15,7 +15,7 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `TEST_DATABASE_URL` | Integration tests only: a server and base name the suites may drop and recreate databases under (`<name>_<prefix>_schema`, `<name>_<prefix>_auth` ...) | unset (suites skip) |
 | `TEST_DATABASE_PREFIX` | Integration tests only: the `<prefix>` in test database names (letters, digits, underscores) | first 8 hex characters of the SHA-1 of the repository root path |
 | `E2E_DATABASE_URL` | `pnpm e2e:auth` only: the database the stub API uses; dropped, recreated, migrated and seeded on every run, so it must name a `nestself_e2e_*` or `nestself_test_*` database (others are refused) | `nestself_e2e_<prefix>` on the `TEST_DATABASE_URL` server |
-| `TRUST_PROXY_HOPS` | Trusted proxy depth for client IP extraction (set to 1 or more behind a load balancer) | `0` |
+| `TRUST_PROXY_HOPS` | How many proxies stand in front of the API: the client address every throttle counts is taken from `X-Forwarded-For` that many entries from the right (`main.ts` sets Express's `trust proxy`). 0 on a laptop; 2 in AWS (CloudFront, then the load balancer), set by the compute stack. Safe only while the load balancer admits CloudFront alone (`CDK-setup.md` section 8) | `0` |
 
 ### Authentication mode
 
@@ -24,7 +24,7 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `AUTH_MODE` | `stub` (fake identity provider, in-memory store allowed) or `cognito` (real pool, Redis required). `stub` is refused when `NODE_ENV=production` | `stub` |
 | `JWT_SECRET` | Stub mode only: signs the legacy bearer tokens; at least 32 characters. Removed after cutover | `change-me-...` |
 | `JWT_EXPIRES_IN` | Stub mode only: legacy token lifetime | `1h` |
-| `FAKE_IDP_FIXED_OTP` | Stub mode only: a six-digit code the fake provider always accepts (handy for Playwright) | unset |
+| `FAKE_IDP_FIXED_OTP` | Stub mode only: a six-digit code the fake provider always accepts (handy for Playwright); it also fixes the codes NestSelf mails itself (an SSO user's step-up, the confirm-email step of an SSO sign-in), which are never logged | unset |
 
 ### Redis and sessions
 
@@ -50,7 +50,7 @@ All variables are listed in `.env.example` at the repository root; each app has 
 | `COGNITO_WEB_CLIENT_ID` | Confidential web app client used by the BFF |
 | `COGNITO_WEB_CLIENT_SECRET` | Its client secret (Secrets Manager `nestself-<stage>/cognito/web-client-secret`) |
 | `COGNITO_MOBILE_CLIENT_ID` | Public mobile app client; bearer tokens must carry this client id |
-| `COGNITO_DOMAIN` | Hosted sign-in domain (`https://nestself-dev.auth.eu-central-1.amazoncognito.com` in dev) |
+| `COGNITO_DOMAIN` | Hosted sign-in domain (`https://nestself-dev.auth.eu-central-1.amazoncognito.com` in dev, the custom `https://auth.<stage domain>` on staging and production); the SAML ACS URL employers register derives from it |
 | `COGNITO_ISSUER` | Optional; derived from region and pool id when absent |
 
 The API process also needs AWS credentials (task role in ECS, `AWS_PROFILE` or access keys locally) for the Cognito admin calls and, if `SES_FROM_EMAIL` is set, for SES. The IAM actions are listed in `CDK-setup.md`.
@@ -62,10 +62,11 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `MARKETING_URL` | Origin of the marketing app (CORS) | `http://localhost:3000` |
-| `WORKSPACE_URL` | Origin of the workspace app (CORS, CSRF, WebSocket handshake) | `http://localhost:5173` |
+| `WORKSPACE_URL` | Origin of the workspace app (CORS, CSRF, WebSocket handshake; the base of invitation links) | `http://localhost:5173` |
 | `ADMIN_URL` | Origin of the admin app (CORS, CSRF, WebSocket handshake) | `http://localhost:5174` |
-| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, invitation links, mobile and direct SSO callers). Browser SSO redirects use the surface's own origin instead (`docs/auth/implementation.md` §18, §22.3). Required with `AUTH_MODE=cognito` | unset |
-| `SES_FROM_EMAIL` | Enables the SES invitation mailer; without it invitation links are logged | unset |
+| `API_PUBLIC_URL` | Public URL of the API when it is served under a different origin (CSRF origin check, mobile and direct SSO callers; in AWS the workspace origin, whose `/api/*` path reaches the API). Browser SSO redirects use the surface's own origin instead (`docs/auth/implementation.md` §18, §22.3). Required with `AUTH_MODE=cognito` | unset |
+| `SES_FROM_EMAIL` | The verified SES sender. Set (and with `NODE_ENV` other than `test`), the API sends every mail of its own through SES: invitations, the codes NestSelf issues and the ops alert (`docs/auth/implementation.md` section 23). Unset, nothing is sent and the log records only the template, the locale and the recipient's domain, never the address, the link or the code. The compute stack sets each stage's sender | unset |
+| `OPS_ALERT_EMAIL` | The operations mailbox for alerts, today the SSO certificate-expiry notice of the nightly job (English, at most one mail per connection in 7 days). Unset, the job audits and logs only. In AWS it comes from `-c opsAlertEmail` | unset |
 
 ### Worker process
 
@@ -84,7 +85,7 @@ These AWS variables are not declared in `envSchema` and reach the SDK only becau
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `EXPO_PUBLIC_API_URL` | Base URL for API requests from the mobile app | `http://localhost:4000` |
+| `EXPO_PUBLIC_API_URL` | Base URL for API requests from the mobile app; for a stage, its `API_PUBLIC_URL` (the workspace origin, whose `/api/*` path reaches the API) | `http://localhost:4000` |
 | `EXPO_PUBLIC_DATA_SOURCE` | `sample` or `api`, same behaviour as the web apps | `sample` |
 | `EXPO_PUBLIC_COGNITO_REGION` | Pool region (api mode) | unset |
 | `EXPO_PUBLIC_COGNITO_USER_POOL_ID` | User pool id (api mode) | unset |
@@ -116,5 +117,5 @@ Docker Compose services (Postgres, Redis and optionally the API) are defined in 
 - The `DATABASE_URL` default matches the Docker Compose service in `docker/docker-compose.yml` (user `nestself`, password `nestself_dev`, database `nestself` on port 5432). For Docker deployments, `DATABASE_URL` should use the `nestself_api` login role (created by `docker/initdb/01-app-role.sql`). Migrations run as the database owner, not as `nestself_api`.
 - `GET /api/health` (public) checks `database` and `redis` and answers 503 when either is down. `redis.mode` is `redis` for a real connection and `memory` when `REDIS_URL` is absent and the in-memory store is in use, in which case `up` says nothing about Redis.
 - The API seed script (`pnpm --filter @nestself/api db:seed`) refuses to run when `NODE_ENV` is `production`. `db:backfill-grants` uses the same `DATABASE_URL` and only works on a database at migration `0004` (see `apps/api/README.md`).
-- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables.
+- Auth phase 2 (step-up, grant administration, confidential domain, emergency access) added no environment variables. Auth phase 4 added `OPS_ALERT_EMAIL`; in AWS the compute stack now sets `NODE_ENV=production` on every stage (so no `devToken` and no Swagger off a developer machine), `TRUST_PROXY_HOPS=2`, `SES_FROM_EMAIL` and, from `-c opsAlertEmail`, `OPS_ALERT_EMAIL` (`CDK-setup.md` section 8).
 - Integration tests use `TEST_DATABASE_URL` to create and drop per-suite databases; the test environment ignores `.env` for everything else so a developer's `REDIS_URL` never leaks into a test run. Each database is named `<base>_<prefix>_<suffix>` (`testDatabaseName` in `apps/api/test/db/test-database-name.ts`): the prefix is `TEST_DATABASE_PREFIX` or a hash of the repository root, so two git worktrees running the same suite against one server never drop each other's database. Names longer than PostgreSQL's 63-byte limit shorten the base. `pnpm e2e:auth` uses the same prefix for its own database, `nestself_e2e_<prefix>` (or `E2E_DATABASE_URL`), and never the `DATABASE_URL` in `.env`; see `e2e/README.md`.

@@ -258,7 +258,7 @@ Every `cdk` command (synth, diff, deploy of any stack) constructs the auth stack
 
 ### 8.1 The hosted zone and its id
 
-The security-baseline stack creates the zone (`staging.nestself.rs`, `nestself.rs` in production). If it does not exist yet, deploy that stack first. The auth and compute stacks are only synthesized by this command, so the values you do not have yet can be placeholders:
+The security-baseline stack creates the zone (`staging.nestself.rs`, `nestself.rs` in production). If it does not exist yet, deploy that stack first, into an account that exists and is bootstrapped (section 9, step 1, for staging; the same for production). The auth and compute stacks are only synthesized by this command, so the values you do not have yet can be placeholders:
 
 ```bash
 pnpm --filter @nestself/cdk exec cdk deploy NestSelf-staging-SecurityBaseline \
@@ -289,7 +289,7 @@ Create that CNAME in the zone (the ACM console's "Create records in Route 53" bu
 
 ### 8.3 An A record at the parent name
 
-Cognito refuses a custom domain whose parent domain does not resolve; an SOA record does not count. The parent of `auth.staging.nestself.rs` is `staging.nestself.rs`, the apex of the staging zone (`nestself.rs` for production). Create an A record there before the auth stack is deployed. Cognito only checks that the name resolves, so any address will do until the real record exists (CDK does not create the apex, `app.` or `admin.` records yet):
+Cognito refuses a custom domain unless its parent name resolves to an A record. The parent of `auth.staging.nestself.rs` is `staging.nestself.rs`, the apex of the staging zone (`nestself.rs` for production). Create an A record there before the auth stack is deployed. Any address will do until the real record exists (CDK does not create the apex, `app.` or `admin.` records yet):
 
 ```bash
 aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batch \
@@ -297,6 +297,13 @@ aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batc
 ```
 
 If the name already resolves (for example the production apex once the public site is live), there is nothing to do.
+
+The placeholder is created by hand, outside any stack. When a stack later manages the apex record (a marketing distribution, which does not exist yet), delete the placeholder just before that stack's deploy, or the deploy fails because the record already exists:
+
+```bash
+aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batch \
+  '{"Changes":[{"Action":"DELETE","ResourceRecordSet":{"Name":"staging.nestself.rs","Type":"A","TTL":300,"ResourceRecords":[{"Value":"198.51.100.1"}]}}]}'
+```
 
 ### 8.4 The CloudFront prefix list id
 
@@ -327,7 +334,7 @@ What the stacks do with the values:
 
 1. Open `https://auth.staging.nestself.rs/login?response_type=code&client_id=<WEB_CLIENT_ID>&redirect_uri=<one of the web callback URLs>`: the sign-in page loads with the new certificate. Re-run `node infra/cdk/scripts/env-from-outputs.mjs staging` to get `COGNITO_DOMAIN=https://auth.staging.nestself.rs`.
 2. The load balancer must not answer anyone but CloudFront. `curl -m 10 http://<AlbDnsName>/api/health` (the `AlbDnsName` output of the compute stack) has to time out, while `https://<WorkspaceDistributionDomain>/api/health` (edge stack output) answers.
-3. The prefix list admits the addresses of every CloudFront distribution, not only yours. That is enough for the `X-Forwarded-For` depth the API relies on, because the load balancer is off the open internet. A secret origin header checked by a listener rule would also exclude other accounts' distributions; it is not part of these stacks.
+3. Know the residual risk: the prefix list admits the addresses of every CloudFront distribution, not only ours. Any AWS account can point a distribution of its own at the load balancer's DNS name and reach the API without passing our edge WAF, and whether such a distribution's `X-Forwarded-For` would carry the client address at the depth the API trusts is not confirmed. A secret origin header that our distributions add and a listener rule checks would close both; it is not part of these stacks and is listed as a follow-up in `docs/auth/implementation.md` section 21.
 
 ### 8.7 The auth domain is final before the first employer
 
@@ -355,10 +362,10 @@ The mobile client already exists in the auth stack; nothing new is deployed. For
 ```bash
 node infra/cdk/scripts/env-from-outputs.mjs <stage> --mobile >> apps/mobile/.env.local
 echo "EXPO_PUBLIC_DATA_SOURCE=api" >> apps/mobile/.env.local
-echo "EXPO_PUBLIC_API_URL=https://api.<stage domain>" >> apps/mobile/.env.local
+echo "EXPO_PUBLIC_API_URL=https://app.<stage domain>" >> apps/mobile/.env.local
 ```
 
-This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `EXPO_PUBLIC_COGNITO_CLIENT_ID`, `EXPO_PUBLIC_COGNITO_DOMAIN` and `EXPO_PUBLIC_COGNITO_ISSUER`. They are public values; the mobile client has no secret. In EAS put the same variables in the build profile. The callback scheme `nestself://auth/callback` is already registered on the mobile client.
+The app reaches the API the way the workspace does, through the workspace distribution's `/api/*` path: `EXPO_PUBLIC_API_URL` is the stage's `API_PUBLIC_URL` (`apiPublicUrl` in `infra/cdk/lib/config.ts`). No `api.` name exists, and the load balancer would refuse a direct request anyway (section 8). This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `EXPO_PUBLIC_COGNITO_CLIENT_ID`, `EXPO_PUBLIC_COGNITO_DOMAIN` and `EXPO_PUBLIC_COGNITO_ISSUER`. They are public values; the mobile client has no secret. In EAS put the same variables in the build profile. The callback scheme `nestself://auth/callback` is already registered on the mobile client.
 
 ## 11. Environment variables at a glance
 
@@ -394,5 +401,5 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | `cdk-nag` errors during synth | A stack change violates a rule; add a documented suppression in the stack or fix the resource. CI synthesizes with `-c platform=true` so platform stacks stay reviewed |
 | `auth custom domain needs context authCertificateArn and hostedZoneId` | Staging and production construct the auth stack on every `cdk` command; pass both values (section 8). An empty value counts as missing |
 | `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId` | Every command with `-c platform=true` on staging or production needs the prefix list id (section 8.4) |
-| Deploying the auth stack fails creating `AWS::Cognito::UserPoolDomain` | The certificate is not in us-east-1 or is not `ISSUED` yet (section 8.2), or the parent domain has no A record (an SOA record does not count; section 8.3) |
+| Deploying the auth stack fails creating `AWS::Cognito::UserPoolDomain` | The certificate is not in us-east-1 or is not `ISSUED` yet (section 8.2), or the parent name does not resolve to an A record (section 8.3) |
 | `curl http://<AlbDnsName>/api/health` times out on staging or production | Expected: the load balancer answers CloudFront only (section 8). Test through the CloudFront distribution domain |

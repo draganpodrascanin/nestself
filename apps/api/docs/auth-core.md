@@ -120,7 +120,7 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | 1 | `AuthenticationGuard` | Session cookie path or bearer token path. Attaches `request.principal`, `request.session`, `request.authMeta`, `request.csrfToken`. `@Public()` bypasses. |
 | 2 | `CsrfGuard` | Double-submit CSRF check. Only enforces when session cookie is present. Safe methods (GET/HEAD/OPTIONS) pass. |
 | 3 | `AuthorizationGuard` | Reads `@Authorize()` metadata, resolves resource, calls `authorize()`. `@Public()` and `@Authenticated()` bypass. Non-disclosure: 404 when no org visibility, 403 when visible but denied (AUTHZ-R-61). |
-| 4 | `ThrottlerGuard` | @nestjs/throttler, default 60 req/min. |
+| 4 | `AppThrottlerGuard` | @nestjs/throttler, 60 req/min per client IP unless the route sets its own (`src/authz/throttles.ts`); counters in Redis when `REDIS_URL` is set (`KeyValueThrottlerStorage`); a route marked `@RedirectOnThrottle()` answers a refusal with a 302 to the workspace `/sign-in?reason=sso_rate_limited`. |
 
 ### Decorators
 
@@ -152,22 +152,22 @@ All routes under the global `/api` prefix.
 
 | Method | Path | Decorator | Throttle |
 |--------|------|-----------|----------|
-| POST | /auth/discover | @Public | 10/min |
-| POST | /auth/email-otp/start | @Public | 10/min |
-| POST | /auth/email-otp/verify | @Public | 5/min |
-| POST | /auth/password | @Public | 10/min |
-| POST | /auth/challenge | @Public | 5/min |
-| POST | /auth/totp/enrol | @Public | 5/min |
-| POST | /auth/totp/confirm | @Authenticated | 5/min |
-| POST | /auth/password-reset/start | @Public | 10/min |
-| POST | /auth/password-reset/confirm | @Public | 5/min |
+| POST | /auth/discover | @Public | default (wrong codes are bounded per address by `SignInThrottle`) |
+| POST | /auth/email-otp/start | @Public | default |
+| POST | /auth/email-otp/verify | @Public | default |
+| POST | /auth/password | @Public | default |
+| POST | /auth/challenge | @Public | default |
+| POST | /auth/totp/enrol | @Public | default |
+| POST | /auth/totp/confirm | @Authenticated | default |
+| POST | /auth/password-reset/start | @Public | default |
+| POST | /auth/password-reset/confirm | @Public | default |
 | POST | /auth/context | @Authenticated | default |
 | POST | /auth/step-up/start | @Authenticated | 10/min per session |
 | POST | /auth/step-up/resend | @Authenticated | 10/min per session |
 | POST | /auth/step-up/verify | @Authenticated (204) | 10/min per session |
 | POST | /auth/sign-out | @Authenticated | default |
 | POST | /auth/sign-out-all | @Authenticated | default |
-| POST | /auth/ws-ticket | @Authenticated | 30/min |
+| POST | /auth/ws-ticket | @Authenticated | default |
 | GET | /auth/me | @Authenticated | default |
 | PATCH | /auth/me/locale | @Authenticated | default |
 | PATCH | /auth/me/display-name | @Authenticated | default |
@@ -219,8 +219,12 @@ All routes under the global `/api` prefix.
 | GET | /professional/conversations/:id | @Authenticated; `require(conversation.read.assigned)` | default |
 | GET | /professional/me/conversations/:id | @Authenticated; `require(conversation.participate)` | default |
 | GET | /professional/intake/:id | @Authenticated; `require(conversation.read.assigned)` | default |
-| GET | /auth/sso/start | @Public (302 to the identity provider) | 10/min |
-| GET | /auth/sso/callback | @Public (always 302) | 10/min |
+| GET | /auth/sso/start | @Public, @RedirectOnThrottle (302 to the identity provider) | 60/min per IP and connection |
+| GET | /auth/sso/callback | @Public, @RedirectOnThrottle (always 302) | 120/min per IP |
+| POST | /auth/sso/bind/start | @Public (pending binding: mails the confirm-email code) | 10/min per IP |
+| POST | /auth/sso/bind/verify | @Public (binds, sets the session cookies) | 10/min per IP |
+| POST | /auth/sso/bind/resend | @Public | 10/min per IP |
+| POST | /auth/sso/bind-token | @Public (mobile federated binding, 204) | 10/min per IP |
 | GET | /auth/sso/_fake/authorize | @Public; registered only with `AUTH_MODE=stub` | default |
 | GET | /ops/sso-connections | @Authorize(sso.manage), operationsResource | default |
 | POST | /ops/sso-connections | @Authorize(sso.manage), operationsResource | 10/min |
@@ -231,7 +235,7 @@ All routes under the global `/api` prefix.
 | POST | /ops/sso-connections/:id/activate | @Authorize(sso.manage), operationsResource | 10/min |
 | GET | /invitations/:token/preview | @Public | 10/min |
 | POST | /invitations/accept | @Public | 10/min |
-| POST | /leads/* (3 routes) | @Public | default |
+| POST | /leads/* (3 routes) | @Public | 5/min |
 
 ### Organization owner (owner model, 2026-10-24)
 
@@ -427,6 +431,6 @@ On each message with a `userId`:
 
 ### Not yet implemented
 
-- IdP-initiated SSO, SCIM and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
+- IdP-initiated SSO and SCIM (SP-initiated SSO is built, federated mobile users included; `docs/auth/implementation.md` section 22)
 - Push notifications
 - A step-up screen in the mobile app (the API accepts bearer step-up)

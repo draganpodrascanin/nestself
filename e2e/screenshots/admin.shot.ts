@@ -14,14 +14,16 @@
  * process (the fake identity provider keeps authenticator state in memory).
  * If the authenticator screen appears instead, an API was reused: stop it and
  * run again. The secret is persisted like admin-sign-in.spec.ts does, so a
- * later `pnpm e2e:auth` against the same process still signs in.
+ * later `pnpm e2e:auth` against the same process still signs in. In the
+ * capture the manual key is masked and the QR code blurred: both are that
+ * secret.
  */
 import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computeTotp } from '../auth/totp';
 import { removeDeveloperAccount, stagePlatformGrant } from '../auth/support';
-import { ADMIN_URL, shot } from './shots';
+import { ADMIN_URL, MASK, maskText, shot } from './shots';
 
 const STAFF_EMAIL = 'user_nikola@example.com';
 const STAFF_PASSWORD = 'Nestself-dev-1234!';
@@ -57,9 +59,16 @@ test('admin sign-in, enrolment and access pages', async ({ page }) => {
   ).toBe(true);
   const manualKey = page.getByText(/Or enter this key manually:/);
   await expect(manualKey).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('img, svg[role="img"], canvas').first()).toBeVisible();
-  await shot(page, 'admin-totp-enrol');
+  const qrCode = page.getByRole('img', { name: 'QR code for your authenticator app' });
+  await expect(qrCode).toBeVisible();
   const secret = (await manualKey.textContent())!.split(':').pop()!.trim();
+  // The key and the QR code that carries it are the authenticator secret: masked
+  // and blurred in the capture (shots.ts), as the guide's caption says.
+  await maskText(manualKey, new RegExp(secret, 'g'), MASK);
+  await qrCode.evaluate((img) => {
+    (img as HTMLElement).style.filter = 'blur(12px)';
+  });
+  await shot(page, 'admin-totp-enrol');
   await page.getByLabel('Verification code').fill(computeTotp(secret));
   await page.getByRole('button', { name: 'Confirm setup' }).click();
   fs.mkdirSync(path.dirname(TOTP_SECRET_FILE), { recursive: true });
