@@ -24,13 +24,16 @@
  *   activates the connection, adds `eu.acme.example` (left pending, so its
  *   TXT record shows) and creates a draft OIDC connection `org-acmeid-oidc`
  *   with its client secret staged.
- * The create dialog is captured open and cancelled; the workspace
- * discovery answer is real, but its start URL is swapped for
+ * The create dialog is captured open (the organisation found with the search
+ * field, the OIDC protocol, the verified-email-claim switch) and cancelled;
+ * the workspace discovery answer is real, but its start URL is swapped for
  * `javascript:void(0)` so the interstitial stays on screen.
  *
  * Once the admin pages are captured, Nikola completes the OIDC draft
- * (`acmeid.example`, a test sign-in by `it.tester@acmeid.example`,
- * activation), and `maria@acmeid.example` signs in through it with the fake
+ * (`acmeid.example`, activation) and starts its test from the page: the
+ * Test sign-in button mints the single-use link and shows it with its note
+ * (captured), and `it.tester@acmeid.example` signs in through that very link.
+ * `maria@acmeid.example` then signs in through the connection with the fake
  * identity provider asserting her address unverified: the page she lands on
  * is the confirm-email step with the masked address (the stub API mailed a
  * code to nobody; nothing is bound until a code is entered, and none is).
@@ -127,18 +130,34 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   await domains.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await shot(page, 'admin-sso-connection-detail');
 
-  // The create dialog, filled in and cancelled (nothing is created).
+  // The create dialog, filled in and cancelled (nothing is created). The
+  // organisation is found with the search field (a server-side prefix match,
+  // debounced) and picked from the matches.
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole('button', { name: 'New connection' }).click();
   const dialog = page.getByRole('dialog', { name: 'New SSO connection' });
   await expect(dialog).toBeVisible();
+  const searched = page.waitForResponse((r) => r.url().includes('/api/ops/organizations') && r.url().includes('search=Exa'));
+  await dialog.getByRole('searchbox', { name: 'Search organisations' }).fill('Exa');
+  await searched;
   await pick(page, dialog, 'Organisation', ORG_NAME);
+  await dialog.getByRole('radio', { name: 'OIDC' }).click();
   await dialog.getByLabel('Slug').fill('acmeuk');
-  await dialog.getByLabel('Metadata URL').fill('https://idp.acme.example/uk/metadata');
-  await dialog.getByRole('heading', { name: 'New SSO connection' }).scrollIntoViewIfNeeded();
+  await dialog.getByLabel('Issuer URL').fill('https://login.acme.example/uk');
+  await dialog.getByLabel('Client ID').fill('nestself-sample-client-uk');
+  // The dialog scrolls inside the 800 px viewport, which would cut the claim
+  // switch off below the search field: this one capture lifts the height cap
+  // and takes a taller frame, so the whole OIDC form is in it.
+  await page.setViewportSize({ width: 1280, height: 1500 });
+  await dialog.evaluate((el) => {
+    el.style.maxHeight = 'none';
+  });
+  await expect(dialog.getByRole('switch', { name: 'Require a verified email claim from the provider' })).toBeVisible();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await shot(page, 'admin-sso-create-connection');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // Nikola completes the OIDC draft for the confirm-email capture.
   const oidcId = draft.body.id as string;
@@ -146,12 +165,29 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   expect(oidcDomain.status, JSON.stringify(oidcDomain.body)).toBe(201);
   const oidcVerified = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/domains/${oidcDomain.body.id}/verify`);
   expect(oidcVerified.status, JSON.stringify(oidcVerified.body)).toBe(200);
-  const oidcTested = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/test`);
-  expect(oidcTested.status, JSON.stringify(oidcTested.body)).toBe(200);
+
+  // The test starts from the page: the button mints the single-use link and
+  // shows it with its note, for staff to open or copy (it opens no tab itself).
+  await page.goto(`${ADMIN_URL}/sso`);
+  const oidcRow = page.getByTestId(`sso-row-${oidcId}`);
+  await expect(oidcRow).toContainText('1 of 1 verified', { timeout: 15_000 });
+  await oidcRow.getByRole('button', { name: 'Details' }).click();
+  const oidcDetail = page.getByRole('region', { name: 'Connection org-acmeid-oidc' });
+  await oidcDetail.getByRole('button', { name: 'Test sign-in' }).click();
+  const testLink = oidcDetail.getByRole('link', { name: 'Open the test sign-in' });
+  await expect(testLink).toBeVisible({ timeout: 15_000 });
+  await expect(oidcDetail.getByText('Single use, valid 15 minutes.')).toBeVisible();
+  const oidcStartUrl = (await testLink.getAttribute('href')) ?? '';
+  expect(new URL(oidcStartUrl).searchParams.get('test')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  // The toast closes itself; the capture is of the panel.
+  await expect(page.getByRole('region', { name: 'Notifications' })).toBeEmpty({ timeout: 15_000 });
+  await oidcDetail.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await shot(page, 'admin-sso-test-link');
+
   const oidcTester = await browser.newContext();
   await signInAtIdpAs(oidcTester, OIDC_TESTER);
   const oidcTesterPage = await oidcTester.newPage();
-  await oidcTesterPage.goto(oidcTested.body.startUrl as string);
+  await oidcTesterPage.goto(oidcStartUrl);
   await expect(oidcTesterPage).toHaveURL(new RegExp(`^${WORKSPACE_URL}/(\\?.*)?$`), { timeout: 15_000 });
   await oidcTester.close();
   const oidcActivated = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/activate`);
