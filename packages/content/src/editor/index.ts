@@ -26,7 +26,10 @@ export { EditorBubbleMenu } from './EditorBubbleMenu.tsx';
 export type { BubbleMenuLabels, EditorBubbleMenuProps } from './EditorBubbleMenu.tsx';
 
 // Block handle
-export { BlockHandleComponent } from './BlockHandle.tsx';
+export { BlockHandleComponent, dropLineAt, moveBlock } from './BlockHandle.tsx';
+export { BlockPicker, filterBlockItems } from './BlockPicker.tsx';
+export type { BlockPickerProps } from './BlockPicker.tsx';
+export { applyBlockPick, appliesInPlace } from './block-pick.ts';
 export type { BlockHandleLabels, BlockHandleProps } from './BlockHandle.tsx';
 
 // Node views

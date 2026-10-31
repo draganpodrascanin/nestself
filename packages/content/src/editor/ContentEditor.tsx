@@ -5,7 +5,8 @@
  * happens through:
  * - **Slash menu** (`/` command to insert blocks)
  * - **Bubble menu** (on text selection: bold, link, turn into)
- * - **Block handle** (drag grip + add on hover; block menu)
+ * - **Block handle** ("+" opens the block picker for the hovered block, the
+ *   grip drags it or opens the block menu)
  * - **Placeholders** (empty paragraph shows "Type '/' for blocks")
  * - **Markdown shortcuts** (## , ### , - , 1. , > , --- )
  *
@@ -251,13 +252,11 @@ export function ContentEditor({
           '[&_ul]:pl-6 [&_ul]:list-disc [&_ol]:pl-6 [&_ol]:list-decimal',
           '[&_blockquote]:border-l-2 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:text-text-secondary',
           '[&_a]:text-primary [&_a]:underline',
-          '[&_figure[data-type="image"]]:my-4 [&_figure[data-type="image"]]:rounded-control [&_figure[data-type="image"]]:border [&_figure[data-type="image"]]:border-border-subtle [&_figure[data-type="image"]]:bg-tint [&_figure[data-type="image"]]:p-4 [&_figure[data-type="image"]]:text-center [&_figure[data-type="image"]]:text-text-secondary',
-          '[&_aside[data-type="professionalNote"]]:my-4 [&_aside[data-type="professionalNote"]]:rounded-control [&_aside[data-type="professionalNote"]]:border [&_aside[data-type="professionalNote"]]:border-border-subtle [&_aside[data-type="professionalNote"]]:bg-info-surface [&_aside[data-type="professionalNote"]]:p-4',
-          '[&_aside[data-note-kind="warning"]]:bg-warning-surface',
-          '[&_div[data-type="practicalStep"]]:my-4 [&_div[data-type="practicalStep"]]:rounded-control [&_div[data-type="practicalStep"]]:border [&_div[data-type="practicalStep"]]:border-border-subtle [&_div[data-type="practicalStep"]]:bg-tint [&_div[data-type="practicalStep"]]:p-4',
+          // Block node views style themselves (node-views.tsx); the canvas only
+          // spaces them and dims the one being dragged.
+          '[&_figure[data-type="image"]]:my-4',
           '[&_ul[data-type="checklist"]]:list-none [&_ul[data-type="checklist"]]:pl-0',
-          '[&_div[data-type="cta"]]:my-4 [&_div[data-type="cta"]]:rounded-control [&_div[data-type="cta"]]:border [&_div[data-type="cta"]]:border-primary [&_div[data-type="cta"]]:bg-accent-soft [&_div[data-type="cta"]]:p-4 [&_div[data-type="cta"]]:text-center [&_div[data-type="cta"]]:font-[var(--font-weight-label)]',
-          '[&_div[data-type="relatedResource"]]:my-4 [&_div[data-type="relatedResource"]]:rounded-control [&_div[data-type="relatedResource"]]:border [&_div[data-type="relatedResource"]]:border-border-subtle [&_div[data-type="relatedResource"]]:bg-tint [&_div[data-type="relatedResource"]]:p-3',
+          '[&_[data-dragging=true]]:opacity-40 [&_[data-dragging=true]]:transition-opacity [&_[data-dragging=true]]:duration-[var(--motion-fast)]',
         ].join(' '),
         role: 'textbox',
         'aria-multiline': 'true',
@@ -328,7 +327,12 @@ export function ContentEditor({
 
       {/* Block handle (drag + add on hover) */}
       {editor && editable ? (
-        <BlockHandleComponent editor={editor} labels={labels.blockHandle} />
+        <BlockHandleComponent
+          editor={editor}
+          labels={labels.blockHandle}
+          items={slashMenuItems}
+          pickerLabels={labels.slashMenu}
+        />
       ) : null}
 
       {/* Call-to-action and related-resource dialogs */}

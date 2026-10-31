@@ -206,11 +206,14 @@ author = [
            f"anything else is refused."),
          fig(["author/bubble-menu", "author/link-popover"], "Left: the formatting bar. Right: an <code>http://</code> address is refused.", "pair")),
     step("Move and change blocks",
-         p(f"Hover a block: {ui('editor.block.add')} (+) adds one below, and the grip moves the block when you drag it. "
-           f"Click the grip for {ui('editor.bubble.turnInto')}, {ui('editor.block.duplicate')}, {ui('editor.block.delete')}, "
-           f"{ui('editor.block.moveUp')} and {ui('editor.block.moveDown')}. From the keyboard: {k('Ctrl', '/')} "
-           f"({k('Cmd', '/')} on a Mac) opens that menu, {k('Alt', 'Shift', '↑')} and {k('Alt', 'Shift', '↓')} move the block."),
-         fig("author/block-menu", "The block menu, opened from the grip.")),
+         p(f"Hover a block: {ui('editor.block.add')} (+) and a grip appear on its left. The + offers the same block types "
+           f"as {k('/')}: pick one to turn that line into a heading, list or quote; an image, note or call to action "
+           f"replaces an empty line or goes below a filled one. Drag the grip to move the block up or down; a line shows "
+           f"where it lands. Click the grip for {ui('editor.bubble.turnInto')}, {ui('editor.block.duplicate')}, "
+           f"{ui('editor.block.delete')}, {ui('editor.block.moveUp')} and {ui('editor.block.moveDown')}. From the keyboard: "
+           f"{k('Ctrl', '/')} ({k('Cmd', '/')} on a Mac) opens that menu, {k('Alt', 'Shift', '↑')} and {k('Alt', 'Shift', '↓')} move the block."),
+         fig(["author/block-picker", "author/block-menu"], "Left: the + offers the block types for that line. Right: the block menu, opened from the grip.", "pair")
+         + fig("author/block-drag", "Dragging a block: it dims, and the line shows where it lands.")),
     step("Add an image",
          p(f"Choose {ui('editor.toolbar.image')} in the block menu and pick a file, or drop or paste one. The block shows "
            f"{q('editor.image.uploading')} and {q('editor.image.processing')} until the image is ready. "
@@ -301,6 +304,8 @@ chapter("employee", 5, "Read it as an employee", "", "Employee · workspace app"
 keys_table = '''<table class="data">
 <thead><tr><th>Keys</th><th>Where</th><th>What it does</th></tr></thead><tbody>
 <tr><td><kbd>/</kbd></td><td>Body</td><td>Opens the block menu</td></tr>
+<tr><td>+ (on hover)</td><td>Any block</td><td>Offers the block types for that line</td></tr>
+<tr><td>Grip (drag)</td><td>Any block</td><td>Moves the block where the line shows</td></tr>
 <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> <kbd>Esc</kbd></td><td>Block menu</td><td>Move, insert, close</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd> (<kbd>Cmd</kbd>+<kbd>B</kbd>)</td><td>Selection</td><td>Bold</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>Cmd</kbd>+<kbd>K</kbd>)</td><td>Selection</td><td>Link</td></tr>

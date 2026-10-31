@@ -441,7 +441,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
             value={alt}
             onChange={(e) => updateAttributes({ alt: e.target.value })}
             placeholder={labels.imageAlt}
-            className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
+            className="type-metadata rounded-control border border-border-subtle bg-surface px-2 py-1 text-text placeholder:text-text-secondary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
           />
           <input
             type="text"
@@ -449,7 +449,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
             value={caption}
             onChange={(e) => updateAttributes({ caption: e.target.value || null })}
             placeholder={labels.imageCaption}
-            className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
+            className="type-metadata rounded-control border border-border-subtle bg-surface px-2 py-1 text-text placeholder:text-text-secondary focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
           />
         </div>
       ) : (

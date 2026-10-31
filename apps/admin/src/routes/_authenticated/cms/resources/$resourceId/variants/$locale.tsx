@@ -522,6 +522,15 @@ function VariantEditorReady({
 
   // ─── Editor state (initialized from the loaded revision) ──────────
   const [title, setTitle] = useState(initialRevision.title ?? '');
+  // The title wraps like a heading: size the field to its text (a fallback
+  // for browsers without `field-sizing: content`).
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [title]);
   const [summary, setSummary] = useState(initialRevision.summary ?? '');
   const [outcome, setOutcome] = useState(initialRevision.outcome ?? '');
   const [duration, setDuration] = useState<string>(
@@ -1334,20 +1343,30 @@ function VariantEditorReady({
           <div className="flex gap-6">
             {/* Main editor column */}
             <div className="flex-1 min-w-0 flex flex-col gap-6">
+              {/* The writing sheet: title, properties and body on one white
+                  card, with a left gutter the block handle sits in. */}
+              <div
+                data-testid="writing-sheet"
+                className="mx-auto flex w-full max-w-[52rem] flex-col gap-6 rounded-control border border-border-subtle bg-surface py-10 pr-10 pl-16 shadow-low"
+              >
               {/* Title — large borderless heading input (Notion-style) */}
               {isDerivedLocale ? (
                 <p className="w-full p-0 type-display text-text">{displayTitle}</p>
               ) : (
-                <input
+                <textarea
                   id="title"
-                  type="text"
+                  ref={titleRef}
+                  rows={1}
                   value={title}
                   onChange={(e) => { setTitle(e.target.value); handleFieldChange(); }}
+                  // One field, many lines: a long title wraps inside the sheet
+                  // instead of being cut off, and Enter never adds a line.
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                   placeholder={t('cms:editor.titlePlaceholder')}
                   readOnly={!editable}
                   aria-label={t('cms:editor.titleField')}
                   aria-required
-                  className="w-full border-0 bg-transparent p-0 type-display text-text placeholder:text-text-secondary focus:outline-none"
+                  className="field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent p-0 type-display text-text placeholder:text-text-secondary focus:outline-none"
                 />
               )}
 
@@ -1357,7 +1376,7 @@ function VariantEditorReady({
                   multiple
                   value={propsOpen}
                   onValueChange={setPropsOpen}
-                  className="rounded-control border border-border-subtle px-4"
+                  className="border-y border-border-subtle"
                 >
                   <AccordionItem
                     value="properties"
@@ -1457,7 +1476,7 @@ function VariantEditorReady({
 
               {/* sr-Cyrl read-only metadata */}
               {isDerivedLocale ? (
-                <div className="flex flex-col gap-4 rounded-control border border-border-subtle px-4 py-3">
+                <div className="flex flex-col gap-4 border-y border-border-subtle py-4">
                   <p className="type-label text-text-secondary">{t('cms:editor.summary')}</p>
                   <p className="type-body text-text">{displaySummary || '-'}</p>
                   <p className="type-label text-text-secondary">{t('cms:editor.outcome')}</p>
@@ -1528,10 +1547,11 @@ function VariantEditorReady({
                   ) : null}
                 </div>
               </div>
+              </div>
 
               {/* Actions */}
               {!isDerivedLocale ? (
-                <div className="flex gap-3">
+                <div className="mx-auto flex w-full max-w-[52rem] gap-3">
                   {canWrite && editable ? (
                     <Button variant="primary" onClick={handleSubmit}>
                       {t('cms:editor.submit')}

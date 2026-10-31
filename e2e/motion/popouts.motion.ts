@@ -97,10 +97,22 @@ const cases: PopoutCase[] = [
   {
     name: 'editor slash menu',
     story: 'content-contenteditor--empty',
-    selector: '[role="listbox"]',
+    selector: '[data-block-picker]',
     open: async (page) => {
       await page.getByRole('textbox', { name: 'Content editor' }).click();
       await page.keyboard.type('/');
+    },
+    close: escape,
+    enter: { duration: MOTION.standard, properties: SCALE_AND_FADE },
+    exit: { duration: MOTION.fast, properties: SCALE_AND_FADE },
+  },
+  {
+    name: 'editor block picker',
+    story: 'content-contenteditor--with-content',
+    selector: '[data-block-picker]',
+    open: async (page) => {
+      await page.getByRole('textbox', { name: 'Content editor' }).getByText('Getting started').hover();
+      await page.getByRole('button', { name: 'Add block' }).click();
     },
     close: escape,
     enter: { duration: MOTION.standard, properties: SCALE_AND_FADE },

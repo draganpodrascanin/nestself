@@ -1,25 +1,22 @@
 /**
  * Slash command menu for the Notion-style content editor (T-C1.12).
  *
- * Opened by typing '/' in an empty paragraph. Provides a filtered list of
- * block types grouped by category. Positioned via Tiptap Suggestion's
- * `mount` API with Floating UI.
- *
- * Keyboard: Arrow keys navigate, Enter inserts, Escape closes, typing filters.
- * Accessibility: listbox with aria-activedescendant.
- * Animation: popover preset per the Motion rule.
- * Colour: semantic tokens only (no hex literals).
+ * Opened by typing '/' in a paragraph. The list itself is `BlockPicker`
+ * (shared with the "+" block handle); this file wires it to Tiptap's
+ * Suggestion plugin, positioned through its `mount` API with Floating UI,
+ * and defines the items.
  */
 'use client';
 
 import { openBlockDialog } from './BlockDialogs.tsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
-import { m, AnimatePresence, MotionFeatures, useMotionPreset } from '@nestself/ui';
+import { AnimatePresence, MotionFeatures } from '@nestself/ui';
+import { BlockPicker, filterBlockItems } from './BlockPicker.tsx';
 import { openImagePicker } from './node-views.tsx';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +29,12 @@ export interface SlashMenuItem {
   hint?: string;
   icon: React.ReactNode;
   group: string;
+  /**
+   * True for items that add a block (image, note, step, call to action,
+   * related resource) rather than re-type the current one. The "+" handle
+   * uses it to decide whether a pick replaces the hovered block or follows it.
+   */
+  insert?: boolean;
   command: (props: { editor: SuggestionProps['editor']; range: SuggestionProps['range'] }) => void;
 }
 
@@ -42,204 +45,6 @@ export interface SlashMenuLabels {
   groupLists: string;
   groupBlocks: string;
   groupMedia: string;
-}
-
-// ---------------------------------------------------------------------------
-// Slash menu popup (rendered via portal, receives native keyboard events
-// forwarded from the Suggestion plugin's onKeyDown handler)
-// ---------------------------------------------------------------------------
-
-interface SlashMenuPopupProps {
-  items: SlashMenuItem[];
-  query: string;
-  labels: SlashMenuLabels;
-  onSelect: (item: SlashMenuItem) => void;
-  onClose: () => void;
-  position: { x: number; y: number };
-  /** Ref for forwarding native keyboard events from the Suggestion plugin. */
-  keydownHandlerRef: React.MutableRefObject<((event: KeyboardEvent) => boolean) | null>;
-}
-
-function SlashMenuPopup({
-  items,
-  query,
-  labels,
-  onSelect,
-  onClose,
-  position,
-  keydownHandlerRef,
-}: SlashMenuPopupProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
-  const popoverMotion = useMotionPreset('popover');
-
-  // Filter items by query
-  const filtered = useMemo(() => {
-    if (!query) return items;
-    const q = query.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q) || (item.hint && item.hint.toLowerCase().includes(q)),
-    );
-  }, [items, query]);
-
-  // Group items
-  const groups = useMemo(() => {
-    const map = new Map<string, SlashMenuItem[]>();
-    for (const item of filtered) {
-      const group = map.get(item.group) ?? [];
-      group.push(item);
-      map.set(item.group, group);
-    }
-    return map;
-  }, [filtered]);
-
-  // Flatten for keyboard navigation
-  const flatItems = useMemo(() => {
-    const result: SlashMenuItem[] = [];
-    for (const [, group] of groups) {
-      result.push(...group);
-    }
-    return result;
-  }, [groups]);
-
-  // Reset the active index when the filter changes (adjusting state during
-  // render, https://react.dev/learn/you-might-not-need-an-effect).
-  const [indexQuery, setIndexQuery] = useState(query);
-  if (indexQuery !== query) {
-    setIndexQuery(query);
-    setActiveIndex(0);
-  }
-
-  // Derive a clamped index from the raw state (no setState during render)
-  const safeIndex = flatItems.length > 0 ? Math.min(activeIndex, flatItems.length - 1) : 0;
-
-  // Register the native keyboard handler so Suggestion's onKeyDown can forward
-  // events; it is re-registered whenever the values it reads change.
-  useEffect(() => {
-    keydownHandlerRef.current = (event: KeyboardEvent): boolean => {
-      const flat = flatItems;
-      const idx = safeIndex;
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setActiveIndex((i) => (flat.length > 0 ? (i + 1) % flat.length : 0));
-        return true;
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setActiveIndex((i) => (flat.length > 0 ? (i - 1 + flat.length) % flat.length : 0));
-        return true;
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        const item = flat[idx];
-        if (item) onSelect(item);
-        return true;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return true;
-      }
-      return false;
-    };
-
-    return () => {
-      keydownHandlerRef.current = null;
-    };
-  }, [keydownHandlerRef, flatItems, safeIndex, onSelect, onClose]);
-
-  // Scroll active into view
-  useEffect(() => {
-    const active = listRef.current?.querySelector('[data-active="true"]');
-    active?.scrollIntoView({ block: 'nearest' });
-  }, [safeIndex]);
-
-  // Group label mapping
-  const groupLabel = useCallback(
-    (key: string) => {
-      switch (key) {
-        case 'text':
-          return labels.groupText;
-        case 'lists':
-          return labels.groupLists;
-        case 'blocks':
-          return labels.groupBlocks;
-        case 'media':
-          return labels.groupMedia;
-        default:
-          return key;
-      }
-    },
-    [labels],
-  );
-
-  // Mounted inside the hook's AnimatePresence (useSlashMenu), so closing
-  // plays the exit before the menu unmounts.
-  return (
-    <m.div
-      {...popoverMotion}
-      role="listbox"
-      aria-label={labels.placeholder}
-      aria-activedescendant={flatItems[safeIndex]?.id}
-      ref={listRef}
-      className="w-72 max-h-80 fixed z-[var(--z-dropdown)] overflow-y-auto rounded-control border border-border-subtle bg-surface shadow-menu"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-      }}
-    >
-      {flatItems.length === 0 ? (
-        <div className="px-3 py-4 text-center type-metadata text-text-secondary">
-          {labels.empty}
-        </div>
-      ) : (
-        Array.from(groups.entries()).map(([group, groupItems]) => (
-          <div key={group} role="group" aria-label={groupLabel(group)}>
-            <div className="px-3 pt-2 pb-1 type-metadata font-[var(--font-weight-label)] text-text-secondary">
-              {groupLabel(group)}
-            </div>
-            {groupItems.map((item) => {
-              const flatIdx = flatItems.indexOf(item);
-              const isActive = flatIdx === safeIndex;
-              return (
-                <button
-                  key={item.id}
-                  id={item.id}
-                  role="option"
-                  type="button"
-                  aria-selected={isActive}
-                  data-active={isActive}
-                  className={[
-                    'gap-3 px-3 py-2 flex w-full items-center text-left',
-                    'transition-colors duration-[var(--motion-fast)] ease-standard',
-                    'hover:bg-tint focus-visible:outline-none',
-                    isActive ? 'bg-tint' : '',
-                  ].join(' ')}
-                  onMouseEnter={() => setActiveIndex(flatIdx)}
-                  onMouseDown={(e) => e.preventDefault()} // Prevent focus steal
-                  onClick={() => onSelect(item)}
-                >
-                  <span className="h-8 w-8 flex shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface text-text-secondary">
-                    {item.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate type-body text-text">{item.label}</span>
-                    {item.hint ? (
-                      <span className="block truncate type-metadata text-text-secondary">
-                        {item.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ))
-      )}
-    </m.div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -331,15 +136,7 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
 
   const suggestionConfig: Partial<SuggestionOptions> = useMemo(
     () => ({
-      items: ({ query }: { query: string }) => {
-        if (!query) return items;
-        const q = query.toLowerCase();
-        return items.filter(
-          (item) =>
-            item.label.toLowerCase().includes(q) ||
-            (item.hint && item.hint.toLowerCase().includes(q)),
-        );
-      },
+      items: ({ query }: { query: string }) => filterBlockItems(items, query),
 
       render: () => {
         return {
@@ -445,7 +242,7 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
           <MotionFeatures>
             <AnimatePresence>
               {state.isOpen && state.position ? (
-                <SlashMenuPopup
+                <BlockPicker
                   key="slash-menu"
                   items={items}
                   query={state.query}
@@ -623,6 +420,7 @@ export function createSlashMenuItems(
     },
     {
       id: 'slash-note',
+      insert: true,
       label: l.note,
       hint: l.noteHint,
       icon: icon(ICON_NOTE),
@@ -642,6 +440,7 @@ export function createSlashMenuItems(
     },
     {
       id: 'slash-step',
+      insert: true,
       label: l.step,
       hint: l.stepHint,
       icon: icon(ICON_STEP),
@@ -661,6 +460,7 @@ export function createSlashMenuItems(
     },
     {
       id: 'slash-cta',
+      insert: true,
       label: l.cta,
       hint: l.ctaHint,
       icon: icon(ICON_CTA),
@@ -673,6 +473,7 @@ export function createSlashMenuItems(
     },
     {
       id: 'slash-related',
+      insert: true,
       label: l.related,
       hint: l.relatedHint,
       icon: icon(ICON_RELATED),
@@ -684,6 +485,7 @@ export function createSlashMenuItems(
     },
     {
       id: 'slash-image',
+      insert: true,
       label: l.image,
       hint: l.imageHint,
       icon: icon(ICON_IMAGE),
