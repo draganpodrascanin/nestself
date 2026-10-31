@@ -166,5 +166,49 @@ describe('createAuthApi() account methods', () => {
     await auth.invitationAccept('inv-1');
     expect(last().body).toEqual({ token: 'inv-1' });
   });
+
+  const HANDLE = 'h'.repeat(43);
+  const BIND_STARTED = { challengeToken: 'tok-b', emailMasked: 'm***@acme.example' };
+
+  it('ssoBindStart posts the handle and the locale to /api/auth/sso/bind/start and parses the challenge', async () => {
+    const { auth, last } = setup(BIND_STARTED);
+    await expect(auth.ssoBindStart(HANDLE, 'sr-Latn')).resolves.toEqual(BIND_STARTED);
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/start',
+      method: 'POST',
+      csrf: 'tok',
+      body: { handle: HANDLE, locale: 'sr-Latn' },
+    });
+  });
+
+  it('ssoBindStart sends only the handle when no locale is given, and rejects an answer without the masked address', async () => {
+    const ok = setup(BIND_STARTED);
+    await ok.auth.ssoBindStart(HANDLE);
+    expect(ok.last().body).toEqual({ handle: HANDLE });
+    const bad = setup({ challengeToken: 'tok-b' });
+    await expect(bad.auth.ssoBindStart(HANDLE)).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('ssoBindVerify posts the challenge token and the code and parses the return path', async () => {
+    const { auth, last } = setup({ returnPath: '/people' });
+    await expect(auth.ssoBindVerify('tok-b', '123456')).resolves.toEqual({ returnPath: '/people' });
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/verify',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-b', code: '123456' },
+    });
+  });
+
+  it('ssoBindResend posts the challenge token and the locale and parses the masked address', async () => {
+    const { auth, last } = setup({ emailMasked: 'm***@acme.example' });
+    await expect(auth.ssoBindResend('tok-b', 'hu')).resolves.toEqual({ emailMasked: 'm***@acme.example' });
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/resend',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-b', locale: 'hu' },
+    });
+  });
 });
 

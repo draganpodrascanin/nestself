@@ -14,8 +14,11 @@ const searchSchema = z.object({
   step: z.enum(['totp_enrol', 'new_password']).optional(),
   /** Set by the API's SSO callback when a federated sign-in could not finish. */
   reason: z.enum(SSO_SIGN_IN_REASONS).optional().catch(undefined),
-  /** The address the identity provider asserted (sso_email_unverified only). */
-  email: z.string().email().optional().catch(undefined),
+  /**
+   * With `reason=sso_email_unverified`: the opaque handle of the pending
+   * sign-in (never the address), sent back to `POST /auth/sso/bind/start`.
+   */
+  bind: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/).optional().catch(undefined),
 });
 
 export const Route = createFileRoute('/_public/sign-in')({
@@ -24,6 +27,6 @@ export const Route = createFileRoute('/_public/sign-in')({
 });
 
 function SignInRoute() {
-  const { return: returnPath, reason, email } = Route.useSearch();
-  return <SignInPage returnPath={returnPath} reason={reason} email={email} />;
+  const { return: returnPath, reason, bind } = Route.useSearch();
+  return <SignInPage returnPath={returnPath} reason={reason} bind={bind} />;
 }

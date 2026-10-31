@@ -2,7 +2,9 @@
  * Screenshots of enterprise SSO for the auth guides: the admin SSO page
  * (list, a connection's detail with a pending domain's DNS record, the
  * create dialog) and what an employee of that employer sees on the
- * workspace sign-in (the redirect interstitial and the denied message).
+ * workspace sign-in (the redirect interstitial, the denied message, and the
+ * confirm-email step after an OIDC provider that did not confirm the
+ * address).
  *
  * Runs after admin.shot.ts (files run in name order), which enrolled Nikola's
  * authenticator against this API process; `signInWithPassword` answers the
@@ -20,14 +22,23 @@
  *   on the stub API), starts the test, and the tester completes the
  *   single-use test sign-in through the fake identity provider; Nikola then
  *   activates the connection, adds `eu.acme.example` (left pending, so its
- *   TXT record shows) and creates a draft OIDC connection `org-acmeid-oidc`.
+ *   TXT record shows) and creates a draft OIDC connection `org-acmeid-oidc`
+ *   with its client secret staged.
  * The create dialog is captured open and cancelled; the workspace
  * discovery answer is real, but its start URL is swapped for
  * `javascript:void(0)` so the interstitial stays on screen.
+ *
+ * Once the admin pages are captured, Nikola completes the OIDC draft
+ * (`acmeid.example`, a test sign-in by `it.tester@acmeid.example`,
+ * activation), and `maria@acmeid.example` signs in through it with the fake
+ * identity provider asserting her address unverified: the page she lands on
+ * is the confirm-email step with the masked address (the stub API mailed a
+ * code to nobody; nothing is bound until a code is entered, and none is).
  */
 import { test, expect } from '@playwright/test';
 import { SAMPLE_SAML_METADATA } from '../../apps/api/src/identity/saml-metadata.fixture.ts';
 import {
+  createOidcConnection,
   pageApi,
   removeDeveloperAccount,
   signInAtIdpAs,
@@ -40,6 +51,9 @@ import { ADMIN_URL, WORKSPACE_URL, pick, shot } from './shots';
 const ORG = 'org_sample';
 const ORG_NAME = 'Example d.o.o.';
 const TESTER = 'it.tester@acme.example';
+/** The OIDC connection's test sign-in (an address the IdP confirms) and the employee whose address it does not. */
+const OIDC_TESTER = 'it.tester@acmeid.example';
+const MARIA = 'maria@acmeid.example';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -47,12 +61,14 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   await removeDeveloperAccount();
   await stagePlatformGrant('grant_user_nikola_platform_owner_screenshots', 'user_nikola', 'platform_owner');
 
-  // Ivana invites the person who completes the test sign-in.
+  // Ivana invites the people who complete the test sign-ins, and Maria.
   const hr = await browser.newContext();
   const hrPage = await hr.newPage();
   await signInWithEmailCode(hrPage, WORKSPACE_URL, 'user_ivana@example.com');
-  const invited = await pageApi(hrPage, 'POST', `/api/orgs/${ORG}/invitations`, { email: TESTER, templateKey: 'employee' });
-  expect([201, 409], JSON.stringify(invited.body)).toContain(invited.status);
+  for (const email of [TESTER, OIDC_TESTER, MARIA]) {
+    const invited = await pageApi(hrPage, 'POST', `/api/orgs/${ORG}/invitations`, { email, templateKey: 'employee' });
+    expect([201, 409], JSON.stringify(invited.body)).toContain(invited.status);
+  }
   await hr.close();
 
   // Nikola sets up, tests and activates the SAML connection.
@@ -85,13 +101,12 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   expect(activated.status, JSON.stringify(activated.body)).toBe(200);
   const pending = await pageApi(page, 'POST', `/api/ops/sso-connections/${id}/domains`, { domain: 'eu.acme.example' });
   expect(pending.status, JSON.stringify(pending.body)).toBe(201);
-  const draft = await pageApi(page, 'POST', '/api/ops/sso-connections', {
-    orgId: ORG,
-    slug: 'acmeid',
-    protocol: 'OIDC',
-    oidcIssuer: 'https://login.acme.example',
-    oidcClientId: 'nestself-sample-client',
-  });
+  // A draft with its client secret staged, so it can be tested after the captures.
+  const draft = await createOidcConnection(
+    page,
+    { orgId: ORG, slug: 'acmeid', oidcIssuer: 'https://login.acme.example', oidcClientId: 'nestself-sample-client' },
+    'sample-acmeid-secret',
+  );
   expect(draft.status, JSON.stringify(draft.body)).toBe(201);
 
   // The list.
@@ -124,6 +139,23 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   await shot(page, 'admin-sso-create-connection');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
+
+  // Nikola completes the OIDC draft for the confirm-email capture.
+  const oidcId = draft.body.id as string;
+  const oidcDomain = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/domains`, { domain: 'acmeid.example' });
+  expect(oidcDomain.status, JSON.stringify(oidcDomain.body)).toBe(201);
+  const oidcVerified = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/domains/${oidcDomain.body.id}/verify`);
+  expect(oidcVerified.status, JSON.stringify(oidcVerified.body)).toBe(200);
+  const oidcTested = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/test`);
+  expect(oidcTested.status, JSON.stringify(oidcTested.body)).toBe(200);
+  const oidcTester = await browser.newContext();
+  await signInAtIdpAs(oidcTester, OIDC_TESTER);
+  const oidcTesterPage = await oidcTester.newPage();
+  await oidcTesterPage.goto(oidcTested.body.startUrl as string);
+  await expect(oidcTesterPage).toHaveURL(new RegExp(`^${WORKSPACE_URL}/(\\?.*)?$`), { timeout: 15_000 });
+  await oidcTester.close();
+  const oidcActivated = await pageApi(page, 'POST', `/api/ops/sso-connections/${oidcId}/activate`);
+  expect(oidcActivated.status, JSON.stringify(oidcActivated.body)).toBe(200);
   await staff.close();
 
   // An employee on acme.example: the real discovery answer is `sso`. Its
@@ -152,4 +184,17 @@ test('enterprise SSO: admin connections page and the employee sign-in', async ({
   await expect(ws.getByRole('alert').getByText(/Your organisation has not enabled your account yet\./)).toBeVisible();
   await shot(ws, 'workspace-sign-in-sso-denied');
   await employee.close();
+
+  // Maria signs in through the OIDC connection; the identity provider does
+  // not confirm her address, so the sign-in waits for the email code.
+  const maria = await browser.newContext();
+  await signInAtIdpAs(maria, MARIA, { emailVerified: false });
+  const mariaPage = await maria.newPage();
+  await mariaPage.goto(`${WORKSPACE_URL}/sign-in`);
+  await mariaPage.getByLabel('Email address').fill(MARIA);
+  await mariaPage.getByRole('button', { name: 'Continue' }).click();
+  await expect(mariaPage.getByRole('heading', { level: 1, name: 'Confirm your email address' })).toBeVisible({ timeout: 20_000 });
+  await expect(mariaPage.getByText(/did not confirm m\*\*\*@acmeid\.example/)).toBeVisible({ timeout: 10_000 });
+  await shot(mariaPage, 'workspace-sign-in-sso-confirm-email');
+  await maria.close();
 });

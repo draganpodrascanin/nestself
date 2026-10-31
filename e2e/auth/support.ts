@@ -232,12 +232,39 @@ export async function pageApi(page: Page, method: string, path: string, body?: u
 }
 
 /**
+ * Creates an OIDC connection with its client secret, which registers the
+ * provider at once (a staged registration). An API process reused from an
+ * earlier run still has that provider in the fake IdP and answers the staged
+ * create with 409; the row is then created without the secret, and the test
+ * step updates the provider the fake kept.
+ */
+export async function createOidcConnection(
+  page: Page,
+  body: { orgId: string; slug: string; oidcIssuer: string; oidcClientId: string },
+  clientSecret: string,
+): Promise<{ status: number; body: ApiBody }> {
+  const connection = { ...body, protocol: 'OIDC' };
+  const staged = await pageApi(page, 'POST', '/api/ops/sso-connections', { ...connection, oidcClientSecret: clientSecret });
+  if (staged.status !== 409) return staged;
+  return pageApi(page, 'POST', '/api/ops/sso-connections', connection);
+}
+
+/**
  * The employer IdP "signs in" `email`: the 302 from `/api/auth/sso/start` to
  * the fake authorize hop gets `as=<email>` appended. Playwright does not
  * route redirected requests, so the start request is fetched here without
  * following the redirect and answered with the amended Location.
+ *
+ * `emailVerified: false` also appends `email_verified=false`: an address the
+ * fake identity provider first meets that way is created unverified, as an
+ * OIDC provider that does not confirm it would assert it (an address it
+ * already knows keeps the state it had).
  */
-export async function signInAtIdpAs(context: BrowserContext, email: string): Promise<void> {
+export async function signInAtIdpAs(
+  context: BrowserContext,
+  email: string,
+  options: { emailVerified?: boolean } = {},
+): Promise<void> {
   await context.route((url) => url.pathname === '/api/auth/sso/start', async (route) => {
     const response = await route.fetch({ maxRedirects: 0 });
     const location = response.headers()['location'];
@@ -246,7 +273,10 @@ export async function signInAtIdpAs(context: BrowserContext, email: string): Pro
       return;
     }
     const target = new URL(location);
-    if (target.pathname === '/api/auth/sso/_fake/authorize') target.searchParams.set('as', email);
+    if (target.pathname === '/api/auth/sso/_fake/authorize') {
+      target.searchParams.set('as', email);
+      if (options.emailVerified === false) target.searchParams.set('email_verified', 'false');
+    }
     // Keep the API's headers: the browser-binding cookie must reach the browser.
     await route.fulfill({ response, headers: { ...response.headers(), location: target.toString() } });
   });

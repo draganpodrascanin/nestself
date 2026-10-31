@@ -8,6 +8,8 @@
  *   works; 111111 triggers the invalid-code error so that state is reviewable.
  * - user_milica@example.com / user_nikola@example.com -> password -> totp.
  * - Unknown addresses behave like employees (email_otp).
+ * - There is no federated sign-in with sample data, so no sign-in is ever
+ *   waiting for an email code: the confirm-email step says the link expired.
  */
 import { ApiError } from '@nestself/api-client';
 import type { AuthApi } from '@nestself/api-client';
@@ -23,6 +25,16 @@ const SAMPLE_STEP_UP: Resolved<'stepUpStart'> = {
   ssoStartUrl: null,
   emailMasked: null,
 };
+
+/** What the API answers for a handle it does not know. */
+async function noPendingSignIn(): Promise<never> {
+  throw new ApiError({
+    status: 400,
+    code: 'invalid_challenge',
+    message: 'Challenge expired or invalid',
+    requestId: null,
+  });
+}
 
 export function createSampleAuthApi(): AuthApi {
   return {
@@ -50,6 +62,10 @@ export function createSampleAuthApi(): AuthApi {
       // Any other 6-digit code succeeds
       return {} as Resolved<'emailOtpVerify'>;
     },
+
+    ssoBindStart: noPendingSignIn,
+    ssoBindVerify: noPendingSignIn,
+    ssoBindResend: noPendingSignIn,
 
     password: async () =>
       // Password users always proceed to TOTP challenge

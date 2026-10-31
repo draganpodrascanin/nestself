@@ -20,6 +20,9 @@ import {
   InvitationAcceptResponseSchema,
   PasswordResetStartResponseSchema,
   PasswordResetConfirmResponseSchema,
+  SsoBindStartResponseSchema,
+  SsoBindVerifyResponseSchema,
+  SsoBindResendResponseSchema,
 } from '@nestself/contracts';
 import type { ActiveContext, Locale } from '@nestself/contracts';
 import type { ApiClient } from './client';
@@ -61,6 +64,39 @@ export function createAuthApi(client: ApiClient) {
       client.request('/api/auth/email-otp/verify', {
         ...jsonPost({ challengeToken, code }),
         schema: MeResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind/start — a federated sign-in whose address the
+     * identity provider did not confirm (`/sign-in?bind=<handle>`): mails a
+     * code to that address, written in `locale` when given. 400
+     * `invalid_challenge` when the handle is unknown or has expired.
+     */
+    ssoBindStart: (handle: string, locale?: Locale) =>
+      client.request('/api/auth/sso/bind/start', {
+        ...jsonPost({ handle, locale }),
+        schema: SsoBindStartResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind/verify — confirms the code: binds the identity,
+     * sets the session cookies and answers where to continue. 403
+     * `sso_denied` when the organisation does not take the sign-in.
+     */
+    ssoBindVerify: (challengeToken: string, code: string) =>
+      client.request('/api/auth/sso/bind/verify', {
+        ...jsonPost({ challengeToken, code }),
+        schema: SsoBindVerifyResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind/resend — a new code for the same challenge, at most
+     * one a minute (429 `rate_limited` with `details.retryAfter`).
+     */
+    ssoBindResend: (challengeToken: string, locale?: Locale) =>
+      client.request('/api/auth/sso/bind/resend', {
+        ...jsonPost({ challengeToken, locale }),
+        schema: SsoBindResendResponseSchema,
       }),
 
     /** POST /auth/password — password sign-in (may require a second step). */

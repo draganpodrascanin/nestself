@@ -36,12 +36,28 @@
  * Re-runs: global setup reseeds the database; the fake IdP may still know
  * `org-acme-saml` from a previous run against the same API process, which the
  * test step handles (it updates an existing provider).
+ *
+ * The second journey is an OIDC provider that does not confirm the address
+ * (SSO-R-08; Entra ID omits `email_verified` by default):
+ * 1. Ivana invites `it.tester@acmeid.example` and `maria@acmeid.example`.
+ * 2. Nikola creates the OIDC connection `org-acmeid-oidc` with its client
+ *    secret (`createOidcConnection`: a staged registration, or the provider
+ *    the fake IdP kept from an earlier run against the same API process),
+ *    verifies `acmeid.example`, tests it with the tester (an address the IdP
+ *    confirms) and activates it.
+ * 3. Maria signs in on the workspace; the fake IdP asserts her address with
+ *    `email_verified=false`. The callback keeps the sign-in pending and sends
+ *    her to `/sign-in?reason=sso_email_unverified&bind=<handle>`, never with
+ *    the address. The page names the masked address, she types the code
+ *    NestSelf mailed (the stub API fixes it to `123456`) and lands on the
+ *    workspace home.
  */
 import { test, expect } from '@playwright/test';
 import {
   ADMIN_URL,
   FIXED_OTP,
   WORKSPACE_URL,
+  createOidcConnection,
   pageApi as api,
   signInAtIdpAs,
   signInWithEmailCode,
@@ -54,6 +70,9 @@ const TESTER = 'it.tester@acme.example';
 const INVITED = 'invited@acme.example';
 /** Bound through an hr_admin invitation; display name `it.admin`. */
 const IT_ADMIN = 'it.admin@acme.example';
+/** The OIDC journey: the tester's address is confirmed by the IdP, Maria's is not. */
+const OIDC_TESTER = 'it.tester@acmeid.example';
+const MARIA = 'maria@acmeid.example';
 
 test.describe('Federated sign-in through the identity provider', () => {
   test.beforeAll(async () => {
@@ -184,5 +203,84 @@ test.describe('Federated sign-in through the identity provider', () => {
     expect(stubbed).toBe(true);
     await adminPage.unrouteAll({ behavior: 'ignoreErrors' });
     await admin.close();
+  });
+
+  test('an OIDC provider that does not confirm the address: the employee confirms it with an email code', async ({ browser }) => {
+    // 1. Ivana invites the tester and the employee.
+    const hr = await browser.newContext();
+    const hrPage = await hr.newPage();
+    await signInWithEmailCode(hrPage, WORKSPACE_URL, 'user_ivana@example.com');
+    for (const email of [OIDC_TESTER, MARIA]) {
+      const res = await api(hrPage, 'POST', `/api/orgs/${ORG}/invitations`, { email, templateKey: 'employee' });
+      expect([201, 409], `invite ${email}: ${JSON.stringify(res.body)}`).toContain(res.status);
+    }
+    await hr.close();
+
+    // 2. Nikola creates, tests and activates the OIDC connection.
+    const staff = await browser.newContext();
+    const staffPage = await staff.newPage();
+    await signInWithPassword(staffPage, ADMIN_URL, 'user_nikola');
+    const created = await createOidcConnection(
+      staffPage,
+      { orgId: ORG, slug: 'acmeid', oidcIssuer: 'https://idp.acmeid.example', oidcClientId: 'client' },
+      'e2e-acmeid-secret',
+    );
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.oidcEmailVerifiedClaimRequired).toBe(true);
+    const id = created.body.id as string;
+    const domain = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/domains`, { domain: 'acmeid.example' });
+    expect(domain.status, JSON.stringify(domain.body)).toBe(201);
+    const verified = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/domains/${domain.body.id}/verify`);
+    expect(verified.status, JSON.stringify(verified.body)).toBe(200);
+    const tested = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/test`);
+    expect(tested.status, JSON.stringify(tested.body)).toBe(200);
+
+    const tester = await browser.newContext();
+    await signInAtIdpAs(tester, OIDC_TESTER);
+    const testerPage = await tester.newPage();
+    await testerPage.goto(tested.body.startUrl as string);
+    await expect(testerPage).toHaveURL(new RegExp(`^${WORKSPACE_URL}/(\\?.*)?$`), { timeout: 15_000 });
+    await tester.close();
+
+    const activated = await api(staffPage, 'POST', `/api/ops/sso-connections/${id}/activate`);
+    expect(activated.status, JSON.stringify(activated.body)).toBe(200);
+    expect(activated.body.status).toBe('ACTIVE');
+    await staff.close();
+
+    // 3. Maria: discovery -> IdP without email_verified -> the confirm-email step -> home.
+    const employee = await browser.newContext();
+    await signInAtIdpAs(employee, MARIA, { emailVerified: false });
+    const page = await employee.newPage();
+    const started = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/auth/sso/bind/start',
+    );
+    await page.goto(`${WORKSPACE_URL}/sign-in`);
+    await page.getByLabel('Email address').fill(MARIA);
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Confirm your email address' })).toBeVisible({ timeout: 20_000 });
+    const url = new URL(page.url());
+    expect(url.pathname).toBe('/sign-in');
+    expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+    expect(url.searchParams.get('bind')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(url.searchParams.has('email')).toBe(false);
+    expect(decodeURIComponent(page.url())).not.toContain('acmeid.example');
+    expect((await started).status()).toBe(200);
+    await expect(
+      page.getByText("Your organisation's sign-in did not confirm m***@acmeid.example. Enter the code we sent there."),
+    ).toBeVisible();
+
+    const confirmed = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/auth/sso/bind/verify',
+    );
+    await page.getByLabel('Verification code').fill(FIXED_OTP);
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    const verify = await confirmed;
+    expect(verify.status()).toBe(200);
+    expect(await verify.json()).toEqual({ returnPath: '/' });
+
+    await expect(page).toHaveURL(new RegExp(`^${WORKSPACE_URL}/(\\?.*)?$`), { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /maria/i })).toBeVisible({ timeout: 15_000 });
+    await employee.close();
   });
 });
