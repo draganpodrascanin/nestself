@@ -16,6 +16,8 @@ export type SignInErrorKey =
   | 'error.network'
   | 'error.ssoDenied'
   | 'error.ssoEmailUnverifiedMobile'
+  | 'error.ssoRateLimited'
+  | 'error.unavailable'
   | 'error.unknown';
 
 export function signInErrorKey(err: unknown): SignInErrorKey {
@@ -40,6 +42,10 @@ export function signInErrorKey(err: unknown): SignInErrorKey {
     if (err.code === 'sso_denied') return 'error.ssoDenied';
     // The OIDC provider did not confirm the address: confirm it once on the web.
     if (err.code === 'sso_email_unverified') return 'error.ssoEmailUnverifiedMobile';
+    // 429: the per-IP throttle of the sign-in routes (bind-token allows 10 a minute).
+    if (err.code === 'rate_limited') return 'error.ssoRateLimited';
+    // 503: the API could not reach the identity provider (for bind-token, the pool's signing keys).
+    if (err.code === 'unavailable') return 'error.unavailable';
   }
   return 'error.unknown';
 }
