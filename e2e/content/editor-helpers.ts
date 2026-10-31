@@ -101,7 +101,9 @@ const DOC_END = process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End'
  */
 export async function caretToNewBlockAtEnd(page: Page): Promise<void> {
   const editor = editorBody(page);
-  await editor.click();
+  // Click the last block, not the editor's centre: the centre can land on a
+  // node view's own input (a step title), which would take the typed text.
+  await editor.locator(':scope > :last-child').click();
   await page.keyboard.press(DOC_END);
   const lastText = await editor.evaluate((el) => el.lastElementChild?.textContent ?? '');
   if (lastText.trim() !== '') await page.keyboard.press('Enter');

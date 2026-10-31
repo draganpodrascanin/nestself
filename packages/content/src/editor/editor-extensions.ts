@@ -20,6 +20,7 @@
 import { type Extensions, Extension, InputRule, Mark, Node, textblockTypeInputRule, wrappingInputRule } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { TextSelection } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -945,6 +946,51 @@ const ResourceSearchExtension = Extension.create<{ handler?: ResourceSearchHandl
 // ProseMirror recreates the view with the correct wrapper tag / attribute.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Dragging block: marks the block a handle drag is moving, as a node
+// decoration (`data-dragging="true"`), so the mark survives view redraws and
+// the canvas can dim it. The block handle sets it through the plugin meta.
+// ---------------------------------------------------------------------------
+
+export interface DraggingBlockState {
+  /** Start position of the block in flight, or null. */
+  pos: number | null;
+}
+
+export const draggingBlockKey = new PluginKey<DraggingBlockState>('draggingBlock');
+
+export const DraggingBlock = Extension.create({
+  name: 'draggingBlock',
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<DraggingBlockState>({
+        key: draggingBlockKey,
+        state: {
+          init: () => ({ pos: null }),
+          apply(tr, value) {
+            const meta = tr.getMeta(draggingBlockKey) as DraggingBlockState | undefined;
+            if (meta) return meta;
+            if (value.pos !== null && tr.docChanged) return { pos: tr.mapping.map(value.pos) };
+            return value;
+          },
+        },
+        props: {
+          decorations(state) {
+            const pos = draggingBlockKey.getState(state)?.pos ?? null;
+            if (pos === null) return null;
+            const node = state.doc.nodeAt(pos);
+            if (!node) return null;
+            return DecorationSet.create(state.doc, [
+              Decoration.node(pos, pos + node.nodeSize, { 'data-dragging': 'true' }),
+            ]);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 const singleItemListViewsKey = new PluginKey('singleItemListViews');
 
 const SingleItemListViews = Extension.create({
@@ -1081,6 +1127,7 @@ export function createEditorExtensions(
     SingleItemListViews,
     ItalicMark,
     BlockKeyboardShortcuts,
+    DraggingBlock,
     Link,
     SectionHeading,
     Quote,

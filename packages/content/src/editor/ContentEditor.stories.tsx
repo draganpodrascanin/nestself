@@ -206,7 +206,7 @@ function EditorWrapper(props: ContentEditorProps) {
   );
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-3xl pl-14">
       <ContentEditor {...props} initialDocument={doc} onChange={setDoc} />
       <details className="mt-4">
         <summary className="type-metadata text-text-secondary cursor-pointer">

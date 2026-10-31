@@ -13,7 +13,9 @@ packages/content/src/editor/
   node-view-labels.ts  — Translated labels and host handlers (upload, search) for node views
   SlashMenu.tsx        — "/" command palette with Floating UI positioning
   EditorBubbleMenu.tsx — Selection toolbar: Bold, Link, Turn Into
-  BlockHandle.tsx      — Drag handle: "+", grip, block menu
+  BlockHandle.tsx      — Block handle: "+" (block picker), grip (drag, block menu), drop line
+  BlockPicker.tsx      — The grouped, filterable block list shared by "/" and "+"
+  block-pick.ts        — Applies a picker choice to the hovered block (re-type in place or insert below)
   Toolbar.tsx          — Legacy permanent toolbar (kept for backward compat)
   converters.ts        — ContentDocument ↔ Tiptap JSON (strips extraneous attrs)
   paste-handler.ts     — Paste normalization (FMT-R-12)
@@ -151,15 +153,23 @@ Toolbar or BlockHandle. Two keyboard shortcuts dispatch custom events on
 - **`nestself:block-dialog`** — Fired by the slash menu and the CTA and
   related-resource node views; `BlockDialogs` opens the matching dialog.
 
+## Block handle
+
+`@tiptap/extension-drag-handle-react` positions the handle (`left-start` of the hovered top-level block) and reports the block through `onNodeChange`; the pair is visible while the plugin shows it and fades on the fast token (the plugin's `visibility: hidden` is cleared before paint so the exit plays; its `pointer-events: none` keeps the fading pair inert).
+
+- **"+"** opens `BlockPicker` in standalone mode (own filter input) anchored to the button. `applyBlockPick(editor, pos, item)` runs the item's slash command with a collapsed range: a text type (paragraph, heading, list, quote) re-types a text block in place; an insertable (`item.insert`: image, note, step, call to action, related resource) replaces an empty paragraph and otherwise lands in a fresh paragraph after the block. Text types after an atom (image, CTA, related) also start a new block below.
+- **Grip:** `mousedown` starts a synthetic drag (works with CDP mouse events, unlike HTML5 drag and drop). Past 5 px the handle locks, the block is marked through the `DraggingBlock` decoration and `dropLineAt()` places a 2 px `bg-primary` line above or below the block under the pointer (pointer clamped into the editor, so the gutter works). `mouseup` calls `moveBlock(editor, from, insertPos)`. A click without travel opens the block menu.
+- The writing sheet in the admin editor (`data-testid="writing-sheet"`) is a white card with a 4 rem left gutter for the handle; Storybook's `EditorWrapper` has the same gutter.
+
 ## Accessibility
 
 - Editor body: `role="textbox"`, `aria-multiline`, named by `labels.editorLabel` ("Content editor").
 - Slash menu: `role="listbox"` named "Filter blocks…", one `role="group"` per group, `aria-activedescendant`, arrows, Enter, Escape (keeps the typed text).
 - Formatting bar: `role="toolbar"` named "Format" with Bold, Link and Turn into; no italic. Escape closes its popovers from anywhere and returns to the selection.
-- Block handle: "Add block" and "Drag or open menu"; the block menu is `role="menu"` and takes focus on open.
+- Block handle: "Add block" opens the block picker, a `combobox` input (named "Filter blocks…", focused on open) controlling the same `listbox` as the slash menu; "Drag or open menu" opens the `role="menu"` block menu, which takes focus on open. The pair fades in beside the hovered block and out when the pointer leaves (`data-block-handle[data-visible]`).
 - Dialogs: `Dialog` from `@nestself/ui` (focus trap, Escape, labelled close button); fields are `Field`-labelled.
 - Every label is translated: the admin app passes `labels.nodeView`, `labels.bubbleMenu.format` and the placeholders from `cms.json`.
-- Motion: menus, popovers and the picker list animate in and out through the popover preset; the formatting bar fades by a token transition on the visibility Tiptap sets; dialogs use the dialog and backdrop presets. `e2e/motion/popouts.motion.ts` covers the slash menu, the block menu and the resource picker (stories in `ContentEditor.stories.tsx` and `BlockDialogs.stories.tsx`).
+- Motion: menus, popovers and the picker list animate in and out through the popover preset; the drop line fades through the backdrop preset and the dragged block dims through a node decoration (`data-dragging`, `DraggingBlock` extension); the formatting bar fades by a token transition on the visibility Tiptap sets; dialogs use the dialog and backdrop presets. `e2e/motion/popouts.motion.ts` covers the slash menu, the "+" block picker, the block menu and the resource picker (stories in `ContentEditor.stories.tsx` and `BlockDialogs.stories.tsx`).
 
 ## Test coverage
 
@@ -182,7 +192,7 @@ Storybook (`packages/ui/.storybook/main.ts`) includes the editor stories.
 
 ### E2E (Playwright)
 
-`e2e/content/editor.spec.ts` (`@editor` tag, 19 serial steps) drives the UI only and reads the stored revision back after each step (`readRevision` in `editor-helpers.ts`): create, canvas, slash menu and node views, markdown shortcuts, formatting bar and links (including Mod-K), block handle (menu, keyboard, drag), image upload, call to action and related resource, properties, reload, conflict, preview widths, other locales, submit, return, resubmit, approve, publish, and the employee's view in English and Serbian. It writes the manual's screenshots at 2x to `docs/cms-ee/manual/screenshots/`, cropped around the detail with `shoot(page, role, name, { around })`. Run with `pnpm e2e:content -g "@editor"`.
+`e2e/content/editor.spec.ts` (`@editor` tag, 19 serial steps) drives the UI only and reads the stored revision back after each step (`readRevision` in `editor-helpers.ts`): create, canvas, slash menu and node views, markdown shortcuts, formatting bar and links (including Mod-K), block handle (hover, "+" picker, menu, keyboard, drag with the drop line), image upload, call to action and related resource, properties, reload, conflict, preview widths, other locales, submit, return, resubmit, approve, publish, and the employee's view in English and Serbian. It writes the manual's screenshots at 2x to `docs/cms-ee/manual/screenshots/`, cropped around the detail with `shoot(page, role, name, { around })`. Run with `pnpm e2e:content -g "@editor"`.
 
 ## Tiptap documentation URLs
 

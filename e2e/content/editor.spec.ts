@@ -264,7 +264,7 @@ test.describe('@editor Editor journey', () => {
   });
 
   // ─── 6. Block handle: menu, keyboard, drag ───────────────────────
-  test('6 block handle duplicates, deletes and moves blocks @editor', async ({ page }) => {
+  test('6 block handle re-types, duplicates, deletes and moves blocks @editor', async ({ page }) => {
     await signInStaff(page, USERS.author);
     await page.goto(editorUrl());
     await waitForEditorReady(page);
@@ -272,15 +272,49 @@ test.describe('@editor Editor journey', () => {
     const order = async () =>
       blockTypes((await readRevision(page, resourceId, 'sr-Latn')).body).join(',');
 
-    // Hovering a block shows the "+" and the grip; the grip opens the block menu.
-    const quote = editor.locator('blockquote', { hasText: 'Mali koraci' });
-    await quote.hover();
-    // "+" opens the slash menu on a new block below; Esc closes it.
+    // Hovering a block shows the "+" and the grip beside its first line, in
+    // the sheet's gutter.
+    const intro = editor.locator('p', { hasText: 'Stres na poslu često' });
+    await intro.hover();
+    const handle = page.locator('[data-block-handle]');
+    await expect(handle).toHaveAttribute('data-visible', 'true');
+    const [handleBox, sheetBox, introBox] = await Promise.all([
+      handle.boundingBox(),
+      page.getByTestId('writing-sheet').boundingBox(),
+      intro.boundingBox(),
+    ]);
+    expect(handleBox!.x).toBeGreaterThan(sheetBox!.x);
+    expect(handleBox!.x + handleBox!.width).toBeLessThanOrEqual(introBox!.x + 1);
+    expect(Math.abs(handleBox!.y - introBox!.y)).toBeLessThan(8);
+    // Leaving the editor hides it again.
+    await page.mouse.move(5, 5);
+    await expect(handle).toHaveAttribute('data-visible', 'false');
+
+    // "+" offers the block types for that line; Heading 3 re-types it in place.
+    await intro.hover();
     await page.getByRole('button', { name: 'Add block' }).click();
-    await expect(slashMenu(page)).toBeVisible();
+    const picker = page.getByRole('listbox', { name: /filter blocks/i });
+    await expect(picker).toBeVisible();
+    await expect(page.getByRole('combobox', { name: /filter blocks/i })).toBeFocused();
+    await shoot(page, 'author', 'block-picker', { around: [picker, handle], pad: 24 });
+    await page.keyboard.type('head');
+    await picker.getByRole('option', { name: /heading 3/i }).click();
+    await expect(picker).toBeHidden();
+    await expect(editor.locator('h3', { hasText: 'Stres na poslu često' })).toBeVisible();
+    // ...and back to a paragraph; Escape closes the picker without a change.
+    await editor.locator('h3', { hasText: 'Stres na poslu često' }).hover();
+    await page.getByRole('button', { name: 'Add block' }).click();
+    await picker.getByRole('option', { name: /^paragraph/i }).click();
+    await expect(editor.locator('p', { hasText: 'Stres na poslu često' })).toBeVisible();
+    await intro.hover();
+    await page.getByRole('button', { name: 'Add block' }).click();
+    await expect(picker).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(slashMenu(page)).toBeHidden();
-    await page.keyboard.press('Backspace'); // the typed "/"
+    await expect(picker).toBeHidden();
+    await expect(editor.locator('p', { hasText: 'Stres na poslu često' })).toBeVisible();
+
+    // The grip opens the block menu.
+    const quote = editor.locator('blockquote', { hasText: 'Mali koraci' });
     await quote.hover();
     await page.getByRole('button', { name: 'Drag or open menu' }).click();
     const blockMenu = page.getByRole('menu');
@@ -311,7 +345,8 @@ test.describe('@editor Editor journey', () => {
     await waitForSaved(page);
     expect(await order()).toBe(before);
 
-    // Dragging the grip moves the block below the next one.
+    // Dragging the grip moves the block: the block dims and a drop line
+    // shows where it lands (below the checklist).
     const step = editor.locator('[data-type="practicalStep"]');
     // .first() disambiguates: test 4's [] shortcut added a second checklist.
     const checklist = editor.locator('[data-type="checklist"]').first();
@@ -322,7 +357,13 @@ test.describe('@editor Editor journey', () => {
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(to.x + 40, to.y + to.height - 2, { steps: 12 });
+    const dropLine = page.locator('[data-drop-line]');
+    await expect(dropLine).toBeVisible();
+    await expect(editor.locator('[data-dragging="true"]')).toHaveCount(1);
+    await shoot(page, 'author', 'block-drag', { around: [step, checklist, handle], pad: 24 });
     await page.mouse.up();
+    await expect(dropLine).toBeHidden();
+    await expect(editor.locator('[data-dragging="true"]')).toHaveCount(0);
     await waitForSaved(page);
     const types = blockTypes((await readRevision(page, resourceId, 'sr-Latn')).body);
     expect(types.indexOf('practicalStep')).toBeGreaterThan(types.indexOf('checklist'));
