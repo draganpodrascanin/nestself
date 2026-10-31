@@ -1,14 +1,16 @@
 /**
  * SsoCallbackService unit tests with the real fake identity provider, the
- * in-memory key-value store and repository fakes: start, every callback
- * resolution path of D-04, Review Focus 1, 2 and 4, the test flag.
+ * in-memory key-value store, the real FederatedBindingService and repository
+ * fakes: start, every callback resolution path of D-04, Review Focus 1, 2
+ * and 4, the test flag.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { pkceKey } from '../redis/redis-keys.js';
-import { SsoCallbackService, pkceChallenge, sameEmail } from './sso-callback.service.js';
+import { SsoCallbackService, pkceChallenge } from './sso-callback.service.js';
+import { FederatedBindingService } from './federated-binding.service.js';
 import { InvitationMembershipActivator } from '../invitations/invitation-membership-activator.js';
 
 const PROVIDER = 'org-acme-saml';
@@ -115,9 +117,12 @@ function setup(opts: { conn?: Conn | null; domainVerified?: boolean; domainConne
     get: vi.fn((key: string, fallback?: string) =>
       ({ API_PUBLIC_URL: API, WORKSPACE_URL: 'http://ws.test/', ADMIN_URL: 'http://admin.test', AUTH_MODE: 'stub' })[key] ?? fallback),
   };
+  const binding = new FederatedBindingService(
+    idp, sso as never, identities as never, invitations as never, activator, audit as never, memberships as never,
+  );
   const service = new SsoCallbackService(
-    idp, store, dbs as never, sso as never, identities as never, invitations as never, activator,
-    audit as never, principalLoader as never, identity as never, config as never, memberships as never,
+    idp, store, dbs as never, sso as never, identities as never, binding,
+    audit as never, principalLoader as never, identity as never, config as never,
   );
   return { service, idp, store, dbs, sso, identities, invitations, memberships, authz, audit, principalLoader, identity, tx };
 }
@@ -799,12 +804,5 @@ describe('SsoCallbackService review fixes', () => {
       expect(res.location).toContain('reason=sso_denied');
       expect(ctx.invitations.accept).not.toHaveBeenCalled();
     });
-  });
-});
-
-describe('sameEmail (SSO-R-09)', () => {
-  it('compares lowercased and trimmed', () => {
-    expect(sameEmail(' A@Acme.Example ', 'a@acme.example')).toBe(true);
-    expect(sameEmail('a@acme.example', 'b@acme.example')).toBe(false);
   });
 });

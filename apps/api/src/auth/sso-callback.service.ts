@@ -37,6 +37,7 @@
  *      with the `employee` grant;
  *   5. else denied: the orphan federated pool user is deleted (SSO-R-10),
  *      `identity.denied`, neutral `/sign-in?reason=sso_denied`.
+ * Paths 3 to 5 and the checks around them live in `FederatedBindingService`.
  * An address outside the connection's verified domains binds nothing: the
  * orphan is deleted and the user gets the neutral `/sign-in?reason=sso_denied`
  * (the connection does not vouch for that address at all, so the email-code
@@ -57,7 +58,6 @@ import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { SsoCallbackQuery, SsoSignInReason, SsoStartQuery } from '@nestself/contracts';
-import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import {
   IdentityProviderError,
   IdentityProviderService,
@@ -66,23 +66,21 @@ import {
 } from '../identity/identity-provider.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { PKCE_TTL, pkceKey, ssoTestKey } from '../redis/redis-keys.js';
-import { DbService, type DbExecutor } from '../db/db.service.js';
+import { DbService } from '../db/db.service.js';
 import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
-import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
-import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
-import {
-  InvitationMembershipActivator,
-  JIT_TEMPLATE_KEY,
-  invitableTemplateFor,
-} from '../invitations/invitation-membership-activator.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
+import {
+  FederatedBindingService,
+  domainOf,
+  type Binding,
+  type RequestMeta,
+} from './federated-binding.service.js';
 import { ssoCallbackUrl, surfaceOrigin } from './sso-start-url.js';
 
 export type Surface = 'workspace' | 'admin';
-export type RequestMeta = { ip: string | null; userAgent: string | null };
 
 /** What `pkce:{state}` holds. Never logged or audited. */
 export interface PkceRecord {
@@ -104,18 +102,9 @@ export interface SsoRedirect {
   browserNonce?: string;
 }
 
-const JIT_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === JIT_TEMPLATE_KEY)!;
-
 /** PKCE S256: base64url(SHA-256(verifier)). */
 export function pkceChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
-}
-
-/** SSO-R-09: lowercased, trimmed, timing-safe. */
-export function sameEmail(a: string, b: string): boolean {
-  const x = createHash('sha256').update(a.trim().toLowerCase()).digest();
-  const y = createHash('sha256').update(b.trim().toLowerCase()).digest();
-  return timingSafeEqual(x, y);
 }
 
 function sha256Hex(value: string): string {
@@ -128,10 +117,6 @@ function browserNonceMatches(nonce: string | null, expectedHash: string): boolea
   const actual = Buffer.from(sha256Hex(nonce), 'hex');
   const expected = Buffer.from(expectedHash, 'hex');
   return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-function domainOf(email: string): string {
-  return email.slice(email.lastIndexOf('@') + 1);
 }
 
 function parseRecord(raw: string | null): PkceRecord | null {
@@ -154,8 +139,6 @@ function parseRecord(raw: string | null): PkceRecord | null {
   }
 }
 
-type Binding = { kind: 'invitation'; userId: string; invitationId: string; templateKey: string | null } | { kind: 'jit'; userId: string };
-
 @Injectable()
 export class SsoCallbackService {
   private readonly logger = new Logger(SsoCallbackService.name);
@@ -166,13 +149,11 @@ export class SsoCallbackService {
     @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
     @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
-    @Inject(forwardRef(() => InvitationsRepository)) private readonly invitations: InvitationsRepository,
-    @Inject(forwardRef(() => InvitationMembershipActivator)) private readonly activator: InvitationMembershipActivator,
+    @Inject(forwardRef(() => FederatedBindingService)) private readonly binding: FederatedBindingService,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
     @Inject(ConfigService) private readonly config: ConfigService,
-    @Inject(forwardRef(() => MembershipsRepository)) private readonly memberships: MembershipsRepository,
   ) {}
 
   /**
@@ -307,7 +288,7 @@ export class SsoCallbackService {
       if (
         !connection ||
         existing.ssoConnectionId !== connection.id ||
-        !(await this.isMemberOf(existing.userId, connection.orgId))
+        !(await this.binding.isMemberOf(existing.userId, connection.orgId))
       ) {
         await this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
         return deny();
@@ -320,7 +301,7 @@ export class SsoCallbackService {
     const usable =
       connection && (connection.status === 'ACTIVE' || (isTest && connection.status === 'TESTING'));
     if (!usable) {
-      await this.denyBinding(claims, email, connection, meta, 'connection_inactive');
+      await this.binding.denyBinding(claims, email, connection, meta, 'connection_inactive');
       return deny();
     }
 
@@ -328,14 +309,14 @@ export class SsoCallbackService {
     // of its own verified domains, so a tenant's IdP cannot assert someone
     // else's address and take over that user. OIDC must also assert
     // `email_verified`; SAML relies on the domain inference.
-    const domainVerified = await this.isDomainVerifiedFor(connection, domainOf(email));
+    const domainVerified = await this.binding.isDomainVerifiedFor(connection, domainOf(email));
     if (!domainVerified) {
       // Off-domain: the connection vouches for nothing here, a neutral denial.
-      await this.denyBinding(claims, email, connection, meta, 'email_off_domain');
+      await this.binding.denyBinding(claims, email, connection, meta, 'email_off_domain');
       return deny();
     }
     if (connection.protocol === 'OIDC' && claims.emailVerified !== true) {
-      await this.denyBinding(claims, email, connection, meta, 'email_unverified');
+      await this.binding.denyBinding(claims, email, connection, meta, 'email_unverified');
       return { location: this.signInUrl(record.surface, 'sso_email_unverified', email) };
     }
 
@@ -343,7 +324,7 @@ export class SsoCallbackService {
     let binding: Binding | null;
     try {
       binding = await this.dbs.withOrgScope(connection.orgId, (tx) =>
-        this.bind(tx, connection, claims, email, provider, domainVerified),
+        this.binding.bind(tx, connection, claims, email, provider, domainVerified),
       );
     } catch (err) {
       this.logger.error(`SSO identity binding failed: ${(err as Error).message}`);
@@ -353,7 +334,7 @@ export class SsoCallbackService {
 
     // 5. Nothing to bind to.
     if (!binding) {
-      await this.denyBinding(claims, email, connection, meta, 'no_invitation');
+      await this.binding.denyBinding(claims, email, connection, meta, 'no_invitation');
       return deny();
     }
 
@@ -378,135 +359,6 @@ export class SsoCallbackService {
   // Internals
   // -------------------------------------------------------------------------
 
-  private async bind(
-    tx: DbExecutor,
-    connection: SsoConnectionRow,
-    claims: IdTokenClaims,
-    email: string,
-    provider: string,
-    domainVerified: boolean,
-  ): Promise<Binding | null> {
-    const now = new Date();
-
-    // Only the connection's organization (Review Focus 2): the lookup is
-    // scoped to it and RLS keeps other tenants' invitations out of reach.
-    const invitation = await this.invitations.findPendingByEmailAndOrg(email, connection.orgId, now, tx);
-    const template = invitation ? invitableTemplateFor(invitation) : null;
-    if (invitation && template && invitation.orgId === connection.orgId && sameEmail(invitation.email, email)) {
-      const userId = await this.resolveOrCreateUser(email, connection, tx, 'sso_invitation');
-      await this.linkIdentity(tx, userId, claims, email, provider, connection, 'invitation');
-      await this.activator.activateInvitationForUser(invitation, template, userId, now, tx);
-      return { kind: 'invitation', userId, invitationId: invitation.id, templateKey: invitation.templateKey };
-    }
-
-    // JIT never runs while the connection is only being tested.
-    if (connection.status === 'ACTIVE' && connection.jitProvisioning && domainVerified) {
-      const userId = await this.resolveOrCreateUser(email, connection, tx, 'sso_jit');
-      await this.audit.record(
-        {
-          action: 'identity.created',
-          actorUserId: null,
-          actorKind: 'SYSTEM',
-          orgId: connection.orgId,
-          recordType: 'external_identity',
-          recordId: userId,
-          result: 'ALLOWED',
-          details: { emailNormalised: email, provider, via: 'sso_jit', connectionId: connection.id },
-        },
-        { tx },
-      );
-      await this.linkIdentity(tx, userId, claims, email, provider, connection, 'jit');
-      await this.activator.activateMembership(
-        {
-          userId,
-          orgId: connection.orgId,
-          orgUnitId: connection.defaultOrgUnitId,
-          template: JIT_TEMPLATE,
-          // No inviter: the grant is recorded as the provisioned user's own,
-          // the audit row says it came from the connection.
-          grantedByUserId: userId,
-          emailNormalised: email,
-          now,
-          details: { via: 'sso_jit', connectionId: connection.id },
-        },
-        tx,
-      );
-      return { kind: 'jit', userId };
-    }
-
-    return null;
-  }
-
-  private async resolveOrCreateUser(
-    email: string,
-    connection: SsoConnectionRow,
-    tx: DbExecutor,
-    via: string,
-  ): Promise<string> {
-    const existing = await this.identities.findUserByEmail(email, tx);
-    if (existing) return existing.id;
-    const user = await this.identities.createUser(
-      {
-        email,
-        displayName: email.split('@')[0] ?? email,
-        locale: 'sr-Latn',
-        emailVerifiedAt: new Date(),
-      },
-      tx,
-    );
-    await this.audit.record(
-      {
-        action: 'user.created',
-        actorUserId: null,
-        actorKind: 'SYSTEM',
-        orgId: connection.orgId,
-        recordType: 'user',
-        recordId: user.id,
-        result: 'ALLOWED',
-        details: { emailNormalised: email, via, connectionId: connection.id },
-      },
-      { tx },
-    );
-    return user.id;
-  }
-
-  private async linkIdentity(
-    tx: DbExecutor,
-    userId: string,
-    claims: IdTokenClaims,
-    email: string,
-    provider: string,
-    connection: SsoConnectionRow,
-    via: 'invitation' | 'jit',
-  ): Promise<void> {
-    await this.identities.createExternalIdentity(
-      {
-        userId,
-        provider,
-        subject: claims.sub,
-        cognitoUsername: claims.username,
-        email,
-        emailVerified: true,
-        ssoConnectionId: connection.id,
-        lastSeenAt: new Date(),
-      },
-      tx,
-    );
-    await this.audit.record(
-      {
-        action: 'identity.linked',
-        actorUserId: null,
-        actorKind: 'SYSTEM',
-        orgId: connection.orgId,
-        recordType: 'external_identity',
-        recordId: userId,
-        result: 'ALLOWED',
-        details: { emailNormalised: email, provider, via: `sso_${via}`, connectionId: connection.id },
-      },
-      { tx },
-    );
-  }
-
   private async testNonceIsFor(nonce: string, connectionId: string): Promise<boolean> {
     return this.parseTestRecord(await this.store.get(ssoTestKey(nonce))) === connectionId;
   }
@@ -523,22 +375,6 @@ export class SsoCallbackService {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * The user has an ACTIVE membership in the organization; system-context
-   * read. An invited (not yet bound) or ended membership does not vouch for a
-   * federated sign-in, whichever connection bound the identity.
-   */
-  private async isMemberOf(userId: string, orgId: string): Promise<boolean> {
-    const rows = await this.memberships.findByUserId(userId);
-    return rows.some((m) => m.orgId === orgId && m.status === 'ACTIVE');
-  }
-
-  /** The email's domain is a verified domain of this connection. */
-  private async isDomainVerifiedFor(connection: SsoConnectionRow, domain: string): Promise<boolean> {
-    const row = await this.sso.findDomainByName(domain);
-    return !!row && row.connectionId === connection.id && row.verifiedAt !== null;
   }
 
   private async signIn(
@@ -582,40 +418,6 @@ export class SsoCallbackService {
         absoluteExpiresAt: session.absoluteExpiresAt,
       },
     };
-  }
-
-  /** SSO-R-10: delete the orphan federated pool user, record `identity.denied`. */
-  private async denyBinding(
-    claims: IdTokenClaims,
-    email: string,
-    connection: SsoConnectionRow | null,
-    meta: RequestMeta,
-    reason: 'connection_inactive' | 'email_off_domain' | 'email_unverified' | 'no_invitation',
-  ): Promise<void> {
-    try {
-      await this.idp.deleteUser(claims.username);
-    } catch (err) {
-      this.logger.warn(
-        `Could not delete the orphan federated user (${err instanceof IdentityProviderError ? err.code : 'error'})`,
-      );
-    }
-    await this.audit.record({
-      action: 'identity.denied',
-      actorUserId: null,
-      actorKind: 'SYSTEM',
-      orgId: connection?.orgId ?? null,
-      recordType: 'external_identity',
-      recordId: connection?.cognitoProviderName ?? 'unknown',
-      result: 'DENIED',
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: {
-        emailNormalised: email,
-        reason,
-        connectionId: connection?.id ?? null,
-        emailVerifiedClaim: claims.emailVerified,
-      },
-    });
   }
 
   /**
