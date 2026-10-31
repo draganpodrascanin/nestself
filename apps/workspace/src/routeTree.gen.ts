@@ -24,6 +24,7 @@ import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedChannelsChannelIdRouteImport } from './routes/_authenticated/channels/$channelId'
 import { Route as AuthenticatedConversationsIndexRouteImport } from './routes/_authenticated/conversations/index'
 import { Route as AuthenticatedConversationsIdRouteImport } from './routes/_authenticated/conversations/$id'
+import { Route as AuthenticatedHrAccessRouteImport } from './routes/_authenticated/hr/access'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as AuthenticatedMessagesThreadIdRouteImport } from './routes/_authenticated/messages/$threadId'
 import { Route as AuthenticatedPollsIndexRouteImport } from './routes/_authenticated/polls/index'
@@ -33,7 +34,6 @@ import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$
 import { Route as AuthenticatedExpertCasesIndexRouteImport } from './routes/_authenticated/_expert/cases/index'
 import { Route as AuthenticatedExpertCasesIdRouteImport } from './routes/_authenticated/_expert/cases/$id'
 import { Route as AuthenticatedHrHrIndexRouteImport } from './routes/_authenticated/_hr/hr/index'
-import { Route as AuthenticatedHrHrAccessRouteImport } from './routes/_authenticated/_hr/hr/access'
 import { Route as AuthenticatedHrHrEligibilityRouteImport } from './routes/_authenticated/_hr/hr/eligibility'
 import { Route as AuthenticatedHrHrEventsRouteImport } from './routes/_authenticated/_hr/hr/events'
 import { Route as AuthenticatedHrHrOrgUnitsRouteImport } from './routes/_authenticated/_hr/hr/org-units'
@@ -119,6 +119,11 @@ const AuthenticatedConversationsIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedConversationsRouteRoute,
   } as any)
+const AuthenticatedHrAccessRoute = AuthenticatedHrAccessRouteImport.update({
+  id: '/hr/access',
+  path: '/hr/access',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedMessagesIndexRoute =
   AuthenticatedMessagesIndexRouteImport.update({
     id: '/messages/',
@@ -168,11 +173,6 @@ const AuthenticatedExpertCasesIdRoute =
 const AuthenticatedHrHrIndexRoute = AuthenticatedHrHrIndexRouteImport.update({
   id: '/hr/',
   path: '/hr/',
-  getParentRoute: () => AuthenticatedHrRoute,
-} as any)
-const AuthenticatedHrHrAccessRoute = AuthenticatedHrHrAccessRouteImport.update({
-  id: '/hr/access',
-  path: '/hr/access',
   getParentRoute: () => AuthenticatedHrRoute,
 } as any)
 const AuthenticatedHrHrEligibilityRoute =
@@ -231,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof PublicSignInRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/hr/access': typeof AuthenticatedHrAccessRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
@@ -240,7 +241,6 @@ export interface FileRoutesByFullPath {
   '/polls/': typeof AuthenticatedPollsIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
   '/cases/$id': typeof AuthenticatedExpertCasesIdRoute
-  '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
@@ -260,6 +260,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof PublicSignInRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/hr/access': typeof AuthenticatedHrAccessRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
   '/invite/$token': typeof PublicInviteTokenRoute
@@ -269,7 +270,6 @@ export interface FileRoutesByTo {
   '/polls': typeof AuthenticatedPollsIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
   '/cases/$id': typeof AuthenticatedExpertCasesIdRoute
-  '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
@@ -296,6 +296,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/_authenticated/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/_authenticated/hr/access': typeof AuthenticatedHrAccessRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
@@ -305,7 +306,6 @@ export interface FileRoutesById {
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
   '/_authenticated/_expert/cases/$id': typeof AuthenticatedExpertCasesIdRoute
-  '/_authenticated/_hr/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/_authenticated/_hr/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
   '/_authenticated/_hr/hr/events': typeof AuthenticatedHrHrEventsRoute
   '/_authenticated/_hr/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
@@ -328,6 +328,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/channels/$channelId'
     | '/conversations/$id'
+    | '/hr/access'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
@@ -337,7 +338,6 @@ export interface FileRouteTypes {
     | '/polls/'
     | '/support/'
     | '/cases/$id'
-    | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/org-units'
@@ -357,6 +357,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/channels/$channelId'
     | '/conversations/$id'
+    | '/hr/access'
     | '/messages/$threadId'
     | '/support/$area'
     | '/invite/$token'
@@ -366,7 +367,6 @@ export interface FileRouteTypes {
     | '/polls'
     | '/support'
     | '/cases/$id'
-    | '/hr/access'
     | '/hr/eligibility'
     | '/hr/events'
     | '/hr/org-units'
@@ -392,6 +392,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/channels/$channelId'
     | '/_authenticated/conversations/$id'
+    | '/_authenticated/hr/access'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
     | '/_public/invite/$token'
@@ -401,7 +402,6 @@ export interface FileRouteTypes {
     | '/_authenticated/polls/'
     | '/_authenticated/support/'
     | '/_authenticated/_expert/cases/$id'
-    | '/_authenticated/_hr/hr/access'
     | '/_authenticated/_hr/hr/eligibility'
     | '/_authenticated/_hr/hr/events'
     | '/_authenticated/_hr/hr/org-units'
@@ -526,6 +526,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConversationsIdRouteImport
       parentRoute: typeof AuthenticatedConversationsRouteRoute
     }
+    '/_authenticated/hr/access': {
+      id: '/_authenticated/hr/access'
+      path: '/hr/access'
+      fullPath: '/hr/access'
+      preLoaderRoute: typeof AuthenticatedHrAccessRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/messages/': {
       id: '/_authenticated/messages/'
       path: '/messages'
@@ -587,13 +594,6 @@ declare module '@tanstack/react-router' {
       path: '/hr'
       fullPath: '/hr/'
       preLoaderRoute: typeof AuthenticatedHrHrIndexRouteImport
-      parentRoute: typeof AuthenticatedHrRoute
-    }
-    '/_authenticated/_hr/hr/access': {
-      id: '/_authenticated/_hr/hr/access'
-      path: '/hr/access'
-      fullPath: '/hr/access'
-      preLoaderRoute: typeof AuthenticatedHrHrAccessRouteImport
       parentRoute: typeof AuthenticatedHrRoute
     }
     '/_authenticated/_hr/hr/eligibility': {
@@ -685,7 +685,6 @@ const AuthenticatedExpertRouteWithChildren =
   AuthenticatedExpertRoute._addFileChildren(AuthenticatedExpertRouteChildren)
 
 interface AuthenticatedHrRouteChildren {
-  AuthenticatedHrHrAccessRoute: typeof AuthenticatedHrHrAccessRoute
   AuthenticatedHrHrEligibilityRoute: typeof AuthenticatedHrHrEligibilityRoute
   AuthenticatedHrHrEventsRoute: typeof AuthenticatedHrHrEventsRoute
   AuthenticatedHrHrOrgUnitsRoute: typeof AuthenticatedHrHrOrgUnitsRoute
@@ -695,7 +694,6 @@ interface AuthenticatedHrRouteChildren {
 }
 
 const AuthenticatedHrRouteChildren: AuthenticatedHrRouteChildren = {
-  AuthenticatedHrHrAccessRoute: AuthenticatedHrHrAccessRoute,
   AuthenticatedHrHrEligibilityRoute: AuthenticatedHrHrEligibilityRoute,
   AuthenticatedHrHrEventsRoute: AuthenticatedHrHrEventsRoute,
   AuthenticatedHrHrOrgUnitsRoute: AuthenticatedHrHrOrgUnitsRoute,
@@ -734,6 +732,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedChannelsChannelIdRoute: typeof AuthenticatedChannelsChannelIdRoute
+  AuthenticatedHrAccessRoute: typeof AuthenticatedHrAccessRoute
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
@@ -752,6 +751,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedChannelsChannelIdRoute: AuthenticatedChannelsChannelIdRoute,
+  AuthenticatedHrAccessRoute: AuthenticatedHrAccessRoute,
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,

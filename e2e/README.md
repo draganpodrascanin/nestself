@@ -128,7 +128,7 @@ Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5
 
 ### HR grant administration journey
 
-`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. Since the owner model of 2026-10-24 gave `employer_owner` `access.grant` and `access.revoke`, it then assigns `team_manager` to Ana on the Product unit and revokes that same grant (found by the id in the create response) with a reason. Repeated delegations are accepted, so a run against a database that was not reset adds one more delegated row; the test only requires at least one. Ownership transfer is not run (it would move Ivana's owner grant away); component tests and the API e2e suite cover it. The session is fresh, so no step-up dialog appears; the dialog is covered by component tests and the API e2e suite.
+`hr-access.spec.ts` follows the sample HR admin through `/hr/access`. It opens the screen with a deep link (which also proves the route guards wait for the session), checks the grant table, previews Ana Nikolić's effective access (`content.read`), delegates `people.invite` from her HR administrator grant to Stefan Marković by choosing options with the pointer inside the dialog, and finds `people.invite` in Stefan's effective-access preview. Since the owner model of 2026-10-24 gave `employer_owner` `access.grant` and `access.revoke`, it then assigns `team_manager` to Ana on the Product unit and revokes that same grant (found by the id in the create response) with a reason. Repeated delegations are accepted, so a run against a database that was not reset adds one more delegated row; the test only requires at least one. A second test is the employer owner without HR rights: Ivana hands the ownership to Stefan Marković, who then signs in with `access.preview` (the owner template) and no `program.overview`. His navigation offers Access and no "Employer space", the deep link `/hr/access` opens, the grant table names people and the org unit of his own manager grant (so the members, org units and grants were read with his session), and the effective-access preview works. He hands the ownership back to Ivana, so the run ends with the seed's single owner and his navigation loses Access. The transfer dialog's error and step-up paths are covered by component tests and the API e2e suite; the session is fresh, so no step-up dialog appears in either test.
 
 ### Journeys for the account, people, operations and expert screens
 
@@ -140,7 +140,7 @@ Outside CI, Playwright reuses whatever already listens on ports 4000, 5173 and 5
 
 All five are safe to re-run (the fake identity provider may still know `org-acme-saml` or `org-acmeid-oidc` from an earlier run against the same API process; the test step then updates the first, and `createOidcConnection` creates the second without its secret): global setup reseeds the database, and the names they create carry the run's timestamp. The staging helper (`stagePlatformGrant` in `support.ts`) also deletes the user's cached principal from the Redis in `REDIS_URL`, because Redis outlives the API process and a principal cached by a previous run would hide the new grant.
 
-`pnpm e2e:auth` runs twelve tests in total: four in `workspace-sign-in.spec.ts`, two in `sso-sign-in.spec.ts` and one each in `account.spec.ts`, `admin-ops.spec.ts`, `admin-sign-in.spec.ts`, `expert-cases.spec.ts`, `hr-access.spec.ts` and `hr-people.spec.ts`.
+`pnpm e2e:auth` runs fourteen tests in total: five in `workspace-sign-in.spec.ts` (one of them answers `/auth/me` with a 500 and checks the "could not load your account" screen and its Try again), two each in `sso-sign-in.spec.ts` and `hr-access.spec.ts`, and one each in `account.spec.ts`, `admin-ops.spec.ts`, `admin-sign-in.spec.ts`, `expert-cases.spec.ts` and `hr-people.spec.ts`.
 
 ### File structure
 
@@ -153,7 +153,7 @@ e2e/auth/
   support.ts                    -- sign-in helpers, persisted authenticator secrets, e2e database staging, SSO page helpers
   workspace-sign-in.spec.ts     -- employee email-code, sign-out, guards, error
   admin-sign-in.spec.ts         -- staff password + TOTP enrol / challenge
-  hr-access.spec.ts             -- HR admin: grant table, access preview, delegation, assign and revoke
+  hr-access.spec.ts             -- HR admin: grant table, access preview, delegation, assign and revoke; owner without HR rights
   account.spec.ts               -- display name, sessions, sign out everywhere
   hr-people.spec.ts             -- invite and revoke, move a member, add and rename an org unit
   admin-ops.spec.ts             -- organizations, people tab, emergency access with two staff, user lookup

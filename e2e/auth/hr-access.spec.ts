@@ -9,12 +9,18 @@
  * Covered: the grant table, the effective-access preview, delegating part
  * of her own hr_admin grant, and (since the owner model of 2026-10-24 gave
  * employer_owner `access.grant` and `access.revoke`) assigning team_manager
- * to Ana and revoking it again with a reason. Ownership transfer is not run
- * here: it would move the seeded owner grant away from Ivana and break the
- * next run. It is covered by the component tests in
- * `apps/workspace/src/features/access/access-screen.test.tsx` and the API e2e.
+ * to Ana and revoking it again with a reason.
  *
- * The session is fresh, so no step-up dialog fires in this journey.
+ * The second journey is the employer owner who holds no HR template: Ivana
+ * hands the ownership to Stefan, who has `access.preview` (owner template)
+ * but not `program.overview`. He sees Access in the navigation and no HR area,
+ * opens `/hr/access` and the page reads the organization's members, org units
+ * and grants with his session. He then hands the ownership back, so the rest
+ * of the run (and the seed's single owner) is as it was. The component tests
+ * in `apps/workspace/src/features/access/access-screen.test.tsx` cover the
+ * transfer dialog itself and the API e2e the authorization.
+ *
+ * The session is fresh, so no step-up dialog fires in these journeys.
  *
  * The screen is opened with a full page load (a deep link): the guards wait
  * for the session before deciding, and the Access nav item appears because
@@ -34,16 +40,18 @@ import type { Locator, Page } from '@playwright/test';
 
 const WORKSPACE_URL = 'http://localhost:5173';
 const HR_ADMIN_EMAIL = 'user_ivana@example.com';
+const MANAGER_EMAIL = 'user_stefan@example.com';
 const FIXED_OTP = '123456';
 
+const HR_ADMIN_NAME = 'Ivana Jovanović';
 const EMPLOYEE_NAME = 'Ana Nikolić';
 const MANAGER_NAME = 'Stefan Marković';
 /** A seeded org unit of org_sample (packages/sample-data, org-units.ts). */
 const ORG_UNIT_NAME = 'Product';
 
-async function signIn(page: Page) {
+async function signIn(page: Page, email = HR_ADMIN_EMAIL) {
   await page.goto(`${WORKSPACE_URL}/sign-in`);
-  await page.getByLabel('Email address').fill(HR_ADMIN_EMAIL);
+  await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible({
     timeout: 10_000,
@@ -67,6 +75,24 @@ async function previewFor(page: Page, memberName: string) {
   await panel.getByRole('combobox', { name: 'Member' }).click();
   await page.getByRole('option', { name: memberName }).click();
   return panel;
+}
+
+/** Ends the session through the account menu and waits for the sign-in page. */
+async function signOut(page: Page) {
+  await page.getByRole('button', { name: /^Account menu for / }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/sign-in(\?|$)/, { timeout: 10_000 });
+}
+
+/** The owner, on the Access page, hands the ownership to `memberName` (a fresh session needs no step-up). */
+async function transferOwnershipTo(page: Page, memberName: string) {
+  await page.getByRole('button', { name: 'Transfer ownership', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Transfer ownership' });
+  await expect(dialog).toBeVisible();
+  await pick(page, dialog, 'New owner', memberName);
+  await dialog.getByRole('button', { name: 'Transfer ownership', exact: true }).click();
+  await expect(page.getByText('Ownership transferred.')).toBeVisible({ timeout: 10_000 });
+  await expect(dialog).toBeHidden();
 }
 
 test.describe('Workspace HR grant administration', () => {
@@ -168,5 +194,59 @@ test.describe('Workspace HR grant administration', () => {
     await expect(createdRow).toContainText('Revoked', { timeout: 10_000 });
     await expect(createdRow.getByRole('button', { name: /^Revoke/ })).toHaveCount(0);
     await expect(anaManagerRows.filter({ hasText: 'Revoked' })).toHaveCount(revokedBefore + 1);
+  });
+
+  test('an employer owner without HR rights reaches Access and the page reads the organization with that session', async ({
+    page,
+  }) => {
+    // Ivana hands the ownership to Stefan, the team manager.
+    await signIn(page);
+    await page.goto(`${WORKSPACE_URL}/hr/access`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Access management' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await transferOwnershipTo(page, MANAGER_NAME);
+    await signOut(page);
+
+    // Stefan owns the organization but holds no HR template: the navigation
+    // offers Access (access.preview) and not the HR area (program.overview).
+    await signIn(page, MANAGER_EMAIL);
+    await expect(page.getByRole('link', { name: 'Access', exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('link', { name: 'Employer space' })).toHaveCount(0);
+
+    // A full page load on the deep link, the guards waiting for his session.
+    await page.goto(`${WORKSPACE_URL}/hr/access`);
+    await expect(page).toHaveURL(/\/hr\/access$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Access management' })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // The page read the grants, the members and the org units with his session:
+    // the rows name people (members) and the org unit of his own manager grant.
+    const table = page.getByRole('table', { name: 'Grants in your organization' });
+    await expect(table).toBeVisible({ timeout: 15_000 });
+    await expect(
+      table.getByRole('row').filter({ hasText: 'Employer owner' }).filter({ hasText: MANAGER_NAME }).filter({ hasText: 'Active' }),
+    ).toHaveCount(1);
+    await expect(
+      table.getByRole('row').filter({ hasText: 'HR administrator' }).filter({ hasText: HR_ADMIN_NAME }).first(),
+    ).toBeVisible();
+    await expect(
+      table.getByRole('row').filter({ hasText: 'Team manager' }).filter({ hasText: MANAGER_NAME }).first(),
+    ).toContainText(ORG_UNIT_NAME);
+    await expect(page.getByText('Members could not be loaded')).toHaveCount(0);
+    await expect(page.getByText('Org units could not be loaded')).toHaveCount(0);
+    await expect(page.getByText('Access could not be loaded')).toHaveCount(0);
+
+    // The effective-access preview lists the members and reads one's access.
+    const anaPanel = await previewFor(page, EMPLOYEE_NAME);
+    await expect(
+      anaPanel.getByRole('list', { name: 'content' }).getByText('content.read', { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Stefan hands the ownership back: the run ends as it began, and the
+    // navigation follows his new effective actions.
+    await transferOwnershipTo(page, HR_ADMIN_NAME);
+    await expect(page.getByRole('link', { name: 'Access', exact: true })).toHaveCount(0, { timeout: 10_000 });
   });
 });

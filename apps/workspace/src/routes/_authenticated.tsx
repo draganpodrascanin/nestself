@@ -68,15 +68,15 @@ function AuthenticatedLayout() {
     ? [{ to: '/manage' as const, icon: Users, label: t('nav.manage') }]
     : [];
 
-  // `/hr/access` sits under the `_hr` gate, so it needs `program.overview` too.
-  const showAccess =
-    showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
+  // `/hr/access` sits outside the `_hr` gate: an employer owner holds
+  // `access.preview` without `program.overview`.
+  const showAccess = principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
   const hrNav = showHr
     ? [{ to: '/hr' as const, icon: Buildings, label: t('nav.hr') }]
     : [];
 
-  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate as well.
+  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate (`program.overview`).
   const peopleNav = showHr
     ? [{ to: '/hr/people' as const, icon: UsersThree, label: t('workspace:people.nav') }]
     : [];
