@@ -262,6 +262,9 @@ export class SsoConnectionsService {
     let to = body.status && body.status !== from ? body.status : from;
 
     if (to !== from) this.assertPatchTransition(conn, to);
+    // Only a move into DRAFT (TESTING -> DRAFT) is a reset. A PATCH on a DRAFT
+    // keeps it DRAFT, and keeps or stages its provider (syncStagedProvider).
+    const reset = to === 'DRAFT' && from !== 'DRAFT';
 
     const protocolChange = body.protocol !== undefined && body.protocol !== conn.protocol;
     if (protocolChange && from !== 'DRAFT') {
@@ -273,7 +276,7 @@ export class SsoConnectionsService {
     if (body.oidcClientSecret !== undefined && (body.protocol ?? conn.protocol) !== 'OIDC') {
       throw secretNotApplicable();
     }
-    if (body.oidcClientSecret !== undefined && to === 'DRAFT') {
+    if (body.oidcClientSecret !== undefined && reset) {
       throw validation('A reset to DRAFT removes the provider; send the client secret in a separate request', {
         field: 'oidcClientSecret',
       });
@@ -319,7 +322,7 @@ export class SsoConnectionsService {
     }
 
     // Identity provider first: a refused configuration leaves the row unchanged.
-    if (to === 'DRAFT') {
+    if (reset) {
       await this.callIdp(() => this.idp.deleteProvider(conn.cognitoProviderName));
     } else if (REGISTERED_STATUSES.has(from)) {
       if (providerChanged) {
@@ -332,7 +335,7 @@ export class SsoConnectionsService {
     if (to !== from) patch.status = to;
     if (protocolChange) patch.cognitoProviderName = name;
     // A reset or a provider change while TESTING or ACTIVE invalidates the last test sign-in.
-    if (to === 'DRAFT' || ((from === 'TESTING' || from === 'ACTIVE') && providerChanged)) patch.lastTestedAt = null;
+    if (reset || ((from === 'TESTING' || from === 'ACTIVE') && providerChanged)) patch.lastTestedAt = null;
 
     let updated: SsoConnectionRow;
     try {

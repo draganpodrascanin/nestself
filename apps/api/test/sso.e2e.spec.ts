@@ -470,6 +470,30 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(updates).toHaveLength(2);
   });
 
+  it('a client secret PATCHed onto a DRAFT OIDC connection stages the provider: 200, still DRAFT', async () => {
+    const created = await post('', {
+      orgId: ORG,
+      slug: 'stage',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.stage.example',
+      oidcClientId: 'client-stage',
+    });
+    expect(created.status).toBe(201);
+    expect(await idp.listProviders()).not.toContain('org-stage-oidc');
+
+    const res = await patch(`/${created.body.id as string}`, { oidcClientSecret: 'e2e-staged-secret' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'DRAFT', cognitoProviderName: 'org-stage-oidc' });
+    expect(JSON.stringify(res.body)).not.toContain('e2e-staged-secret');
+    expect(await idp.listProviders()).toContain('org-stage-oidc');
+    expect(await idp.describeProvider('org-stage-oidc')).toMatchObject({ name: 'org-stage-oidc', protocol: 'OIDC' });
+
+    // Another field on the staged DRAFT keeps the registration.
+    const switched = await patch(`/${created.body.id as string}`, { oidcEmailVerifiedClaimRequired: false });
+    expect(switched.status).toBe(200);
+    expect(await idp.listProviders()).toContain('org-stage-oidc');
+  });
+
   it('an unknown connection is 404', async () => {
     const res = await post('/sso_missing/test');
     expect(res.status).toBe(404);

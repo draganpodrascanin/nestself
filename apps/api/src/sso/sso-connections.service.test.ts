@@ -452,6 +452,70 @@ describe('SsoConnectionsService', () => {
       expect(ctx.events.find((e) => e.action === 'sso_connection.changed')?.details).toEqual({ from: 'TESTING', to: 'DRAFT' });
     });
 
+    describe('a PATCH on a DRAFT is not a reset: it stages the provider', () => {
+      const OIDC_DRAFT: SsoConnectionCreateRequest = {
+        ...SAML,
+        protocol: 'OIDC',
+        metadataUrl: undefined,
+        oidcIssuer: 'https://login.acme.example',
+        oidcClientId: 'client-1',
+      };
+
+      it('a client secret sent to a DRAFT OIDC connection stages the provider with it, and a new one updates it', async () => {
+        const conn = await ctx.service.create(OIDC_DRAFT, ACTOR);
+        expect(await ctx.idp.listProviders()).toEqual([]);
+
+        const res = await ctx.service.update(conn.id, { oidcClientSecret: 'staged-secret' }, ACTOR);
+
+        expect(res).toMatchObject({ status: 'DRAFT', lastTestedAt: null });
+        expect(ctx.idp.createProvider).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'org-acme-oidc', oidcClientSecret: 'staged-secret' }),
+        );
+        expect(await ctx.idp.listProviders()).toEqual(['org-acme-oidc']);
+
+        await ctx.service.update(conn.id, { oidcClientSecret: 'rotated-secret' }, ACTOR);
+        expect(ctx.idp.updateProvider).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'org-acme-oidc', oidcClientSecret: 'rotated-secret' }),
+        );
+        expect(ctx.idp.deleteProvider).not.toHaveBeenCalled();
+        expect(ctx.events.filter((e) => e.action === 'sso_connection.updated').map((e) => e.details)).toEqual([
+          { fields: ['oidcClientSecret'] },
+          { fields: ['oidcClientSecret'] },
+        ]);
+        expect(JSON.stringify(ctx.events)).not.toMatch(/staged-secret|rotated-secret/);
+      });
+
+      it('the claim switch on a staged DRAFT keeps the staged provider', async () => {
+        const conn = await ctx.service.create({ ...OIDC_DRAFT, oidcClientSecret: 'staged-secret' }, ACTOR);
+        expect(await ctx.idp.listProviders()).toEqual(['org-acme-oidc']);
+
+        const res = await ctx.service.update(conn.id, { oidcEmailVerifiedClaimRequired: false }, ACTOR);
+
+        expect(res).toMatchObject({ status: 'DRAFT', oidcEmailVerifiedClaimRequired: false });
+        expect(ctx.idp.deleteProvider).not.toHaveBeenCalled();
+        expect(await ctx.idp.listProviders()).toEqual(['org-acme-oidc']);
+      });
+
+      it('a provider field changed on a staged DRAFT updates the staged provider', async () => {
+        const conn = await ctx.service.create({ ...OIDC_DRAFT, oidcClientSecret: 'staged-secret' }, ACTOR);
+
+        await ctx.service.update(conn.id, { oidcIssuer: 'https://login2.acme.example' }, ACTOR);
+
+        expect(ctx.idp.updateProvider).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'org-acme-oidc', oidcIssuer: 'https://login2.acme.example' }),
+        );
+        expect(ctx.idp.deleteProvider).not.toHaveBeenCalled();
+        expect(await ctx.idp.listProviders()).toEqual(['org-acme-oidc']);
+      });
+
+      it('TESTING -> DRAFT is still a reset: the provider goes and so does lastTestedAt', async () => {
+        const conn = await connectionIn(ctx, 'TESTING', new Date());
+        const res = await ctx.service.update(conn.id, { status: 'DRAFT' }, ACTOR);
+        expect(res).toMatchObject({ status: 'DRAFT', lastTestedAt: null });
+        expect(ctx.idp.deleteProvider).toHaveBeenCalledWith('org-acme-saml');
+      });
+    });
+
     it('refuses a protocol change after TESTING with 422 (SSO-R-03)', async () => {
       const conn = await connectionIn(ctx, 'TESTING');
       await expectApiError(ctx.service.update(conn.id, { protocol: 'OIDC' }, ACTOR), 422, 'validation');
