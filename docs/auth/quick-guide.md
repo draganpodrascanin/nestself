@@ -185,6 +185,7 @@ Every auth capability of the API has a screen in the web apps since 2026-10-25 (
 | Access screens | `apps/workspace/src/features/access/`, `apps/admin/src/features/access/` |
 | Settings, people, org units, organizations, emergency, expert screens | `apps/{workspace,admin}/src/features/` (`account`, `context`, `people`, `org-units`, `organizations`, `users`, `emergency`, `cases`); the full map is `implementation.md` section 3.1 |
 | Browser journeys and screenshots | `e2e/auth/`, `e2e/screenshots/`, `e2e/README.md` |
+| How each role uses the product, step by step | `docs/auth/guides/README.md` (one tutorial PDF per role) |
 | Enterprise SSO | `apps/api/src/sso/`, `apps/api/src/auth/sso-callback.service.ts`, `federated-binding.service.ts`, `sso-bind.service.ts`, `discover.service.ts`, `apps/api/src/identity/cognito-sso-ops.ts`, `apps/admin/src/features/sso/`, `implementation.md` section 22 |
 | Email and the codes NestSelf sends | `apps/api/src/email/`, `apps/api/src/auth/nestself-otp.service.ts`, `implementation.md` sections 6 and 23 |
 | Phase 2 to 4 status and what is left | `docs/tasks/auth/phase-2-readiness.md`, `implementation.md` section 21 |
