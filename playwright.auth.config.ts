@@ -107,6 +107,8 @@ export default defineConfig({
         COGNITO_DOMAIN: 'https://auth.nestself.example',
         SESSION_COOKIE_INSECURE_DEV: 'true',
         NODE_ENV: 'development',
+        // The stub stack never reaches S3; a developer's `.env` with MEDIA_STORAGE=s3 must not stop the API.
+        MEDIA_STORAGE: 'local',
       },
     },
     {
