@@ -13,7 +13,9 @@ import ts from 'typescript';
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
 const UI_SRC = join(REPO_ROOT, 'packages/ui/src');
 const MOTION_DIR = join(UI_SRC, 'motion');
-const SCANNED_DIRS = [UI_SRC, ...['marketing', 'workspace', 'admin'].map((app) => join(REPO_ROOT, 'apps', app, 'src'))];
+/** Feature packages built on @nestself/ui; the call client is held to the same rule (CW-R-91). */
+const PACKAGE_DIRS = ['video'].map((name) => join(REPO_ROOT, 'packages', name, 'src'));
+const SCANNED_DIRS = [UI_SRC, ...PACKAGE_DIRS, ...['marketing', 'workspace', 'admin'].map((app) => join(REPO_ROOT, 'apps', app, 'src'))];
 
 /** Base UI modules whose popups mount, unmount or hide. */
 const POPUP_MODULES = new Set([
@@ -246,9 +248,10 @@ export function checkSource(file: string, text: string): Violation[] {
 }
 
 describe('motion contract', () => {
-  it('every popout, overlay, toast and collapsible in packages/ui and the web apps is animated on tokens', () => {
+  it('every popout, overlay, toast and collapsible in packages/ui, packages/video and the web apps is animated on tokens', () => {
     const files = SCANNED_DIRS.flatMap((dir) => collectSources(dir));
     expect(files.length).toBeGreaterThan(50);
+    for (const dir of PACKAGE_DIRS) expect(files.some((file) => file.startsWith(dir)), relative(REPO_ROOT, dir)).toBe(true);
     const cssFiles = SCANNED_DIRS.flatMap((dir) => collectSources(dir, /\.css$/));
     const violations = [
       ...files.flatMap((file) => checkSource(file, readFileSync(file, 'utf-8'))),

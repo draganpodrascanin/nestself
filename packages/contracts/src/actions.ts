@@ -128,6 +128,10 @@ export const ACTIONS = {
   'event.invite': 'event.invite',
   'event.register': 'event.register',
   'event.present': 'event.present',
+  // Webinar occurrences: create, edit, publish, cancel, attendance (NS-CALLS-01)
+  'event.manage': 'event.manage',
+  // Live webinar moderation: messages, hands, the floor, polls, recording stop (NS-CALLS-01)
+  'event.moderate': 'event.moderate',
   'logistics.view': 'logistics.view',
   'delivery.confirm': 'delivery.confirm',
 

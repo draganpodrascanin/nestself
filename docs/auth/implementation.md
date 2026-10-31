@@ -2,7 +2,7 @@
 
 How identity, sessions, authorization, the data layer and the clients fit together, where each piece lives in the repository, and how to work on it. The companion `quick-guide.md` gives the one-page version and the reasoning; `docs/tasks/auth/auth-strategy.md` is the full specification (requirement ids such as `D-06` or `AUTHZ-R-61` below refer to it).
 
-Last updated 2026-10-25 on branch `feat/auth-sso`, after auth phase 3, enterprise SSO (plan: `docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`; section 22). Before that: auth phase 2 (plan: `docs/superpowers/plans/2026-10-24-auth-phase-2.md`; status per task: `docs/tasks/auth/phase-2-readiness.md`), the organization owner model (plan: `docs/superpowers/plans/2026-10-24-auth-owner-model.md`) and the UI-completeness plan (`docs/superpowers/plans/2026-10-25-auth-ui-completeness.md`), which gave every auth capability of the API a screen in the web apps. The screenshots are of the real screens, taken by `pnpm docs:auth:screenshots` against the stub API and the seeded sample people (section 19).
+Last updated 2026-10-25 on branch `feat/auth-sso`, after auth phase 3, enterprise SSO (plan: `docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`; section 22). Before that: auth phase 2 (plan: `docs/superpowers/plans/2026-10-24-auth-phase-2.md`; status per task: `docs/tasks/auth/phase-2-readiness.md`), the organization owner model (plan: `docs/superpowers/plans/2026-10-24-auth-owner-model.md`) and the UI-completeness plan (`docs/superpowers/plans/2026-10-25-auth-ui-completeness.md`), which gave every auth capability of the API a screen in the web apps. The screenshots are of the real screens, taken by `pnpm docs:auth:screenshots` against the stub API and the seeded sample people (section 19). Section 23 (consultation calls and video) was added on `feat/calls-p0`.
 
 ## Contents
 
@@ -28,6 +28,7 @@ Last updated 2026-10-25 on branch `feat/auth-sso`, after auth phase 3, enterpris
 20. [Recipes](#20-recipes)
 21. [Known gaps and next steps](#21-known-gaps-and-next-steps)
 22. [Enterprise SSO](#22-enterprise-sso)
+23. [Consultation calls and video](#23-consultation-calls-and-video-ns-calls-01)
 
 ## 1. The system in one picture
 
@@ -110,6 +111,7 @@ Switching to a real Cognito pool is described in section 17.
 | `apps/api/src/grants/` | Grant administration: `grants.controller.ts` (`/orgs/:orgId/grants`), `approval-authorities.controller.ts`, `ops-grants.controller.ts` (`/ops/grants`, `/ops/orgs/:orgId/grants`, `/ops/users/:userId/access`), `grants.service.ts`, `approval-authorities.service.ts`, `grant-rules.ts` (template, scope, condition and delegation-bound rules), `grant-mapper.ts` |
 | `apps/api/src/professional/` | Confidential-domain reads under `/professional/*`; `professional-records.ts` holds the resource shape and the response views shared with emergency reads |
 | `apps/api/src/emergency/` | Emergency access request, approval, denial, revocation and record reads under `/ops/emergency-access/*` |
+| `apps/api/src/appointments/`, `calls/`, `video/` | Appointment routes and `AppointmentNonDisclosureFilter`, consultation call routes, and the `VideoProvider` contract with its Chime and fake adapters (section 23) |
 | `apps/api/src/sso/` | Enterprise SSO connection management (section 22): `sso-connections.controller.ts` (`/ops/sso-connections`), `sso-connections.service.ts` (lifecycle, domains), `provider-name.ts`, `dns-txt-resolver.ts` (authoritative and fake TXT lookups), `sso.module.ts` |
 | `apps/api/src/auth/sso-callback.service.ts`, `discover.service.ts`, `fake-sso-authorize.controller.ts`, `constants.ts` | Federated sign-in: start, callback and identity resolution; home-realm discovery; the stub-only fake authorize hop; the public email domains |
 | `apps/api/src/identity/cognito-sso-ops.ts`, `fake-sso-store.ts`, `saml-metadata.ts` | Cognito provider and app-client operations, token exchange and ID-token verification; the fake provider's SSO state; SAML certificate expiry |
@@ -276,6 +278,8 @@ Cognito access tokens carry `auth_time` but not the method, so `CognitoBearerVer
 **Deciding.** `authorize(principal, action, resource, ctx)` (`src/authz/authorize.ts`) is pure and ordered: user state (suspended or deactivated denies everything), context validity (`context.ts`), confidential hard deny, assignments, grants with scope matching through the closure-table ancestor set (`scope.ts`), conditions (`conditions.ts`), validity window, self-approval rule, delegation envelope (`delegation.ts`). It returns `{ allowed, grantIds, assignmentIds, denialReason, explanation[] }`; `explain.ts`, `authorize-many.ts` and `effective-access.ts` build on it. `ContextLoader` (`context-loader.ts`) assembles the `AuthorizationContext` (grants, assignments, ancestor ids, organization settings, emergency access for confidential actions, which is never cached). Step 5 matches only grants whose `subjectUserId` is the principal's own; the ancestors loaded for a delegated grant serve `validateDelegation` and never lend their actions to the delegatee. The golden table `golden-table.json` (150 tuples, including the `CONF-DENY-01` to `06` confidential hard-deny rows and the `DELEG-ALLOW-01`, `DELEG-DENY-01` to `03` delegation rows) and fast-check property tests (`authorize.property.test.ts`) pin the behaviour: no cross-organization allow, delegation never exceeds the delegator, expired never allows, confidential never allowed by administrative scopes.
 
 **Using it outside a guard.** `AuthorizationService.require(principal, action, resource)` is for service-layer checks whose resource needs row data a static resolver cannot load (the confidential domain and emergency record reads, section 11). It audits denials like the guard, maps them to 403 or 404 the same way, and applies the same step-up check. `effectiveActions(principal)` fills `effectiveActions` in every `MeResponse` through `MeResponseBuilder` (`src/auth/me-response.builder.ts`): sign-in completion, `GET /auth/me`, `POST /auth/context` (for the new context) and the two profile updates. Before 2026-10-24 every response carried an empty list, so every action-gated screen was unreachable in api mode. An action counts when any current grant allows it, and an `org_unit` grant is evaluated at its own unit, so team-scoped templates such as `team_manager` appear. Clients get the same answer client-side as a hint through `can()` in `packages/contracts/src/principal.ts`; it is never the enforcement.
+
+**Assignment-scoped grants in `effectiveActions`.** `effectiveActions` answers "may hold somewhere", which is what UI gating needs; every per-resource decision stays with `authorize()`. An assignment-scoped grant (`assigned_cases`, `assigned_practice`, `assigned_queues`, `assigned_clients`, `assigned_collections`) without a fixed `scopeRefId` reaches a resource only through an assignment, so `effective-access.ts` also evaluates it at the target of each of the principal's assignments, and the engine itself decides which assignment kind the scope accepts (CASE or SUPPORT_CASE for `assigned_cases`, PRACTICE_GROUP for `assigned_practice`, QUEUE for `assigned_queues`) and whether the assignment is current. The grant's dates, the context and the conditions that do not depend on a resource still apply; a grant with a `scopeRefId` is evaluated at that reference only, as before. Until 2026-10-25 the synthetic resource of such a grant carried no target, so the seeded expert's `/auth/me` listed none of the `expert` template's actions and the admin app hid the consultation routes from her (DEF-3); she now gets them while she holds at least one current CASE assignment.
 
 **Step-up.** `STEP_UP_CLASS_BY_ACTION` (`packages/contracts/src/authorization.ts`) puts sensitive actions into five classes, each with a maximum age in `STEP_UP_MAX_AGE_SECONDS`:
 
@@ -454,7 +458,7 @@ The delegated grant is stored with `templateKey: null`. Strategy AUTHZ-R-13 says
 
 ## 13. WebSockets
 
-`NestSelfIoAdapter` (`src/ws/nestself-io.adapter.ts`, installed in `main.ts`) serves Socket.IO under `/api/ws`. The handshake middleware (`ws-auth.service.ts`) checks the `Origin` against the allowed surfaces, then authenticates either the web session cookie (same code path as HTTP) or a mobile ticket from `POST /auth/ws-ticket`: 30-second TTL, hashed, consumed atomically with `GETDEL` (`ws_ticket:{hash}`). The gateway (`events.gateway.ts`) exposes `subscribe { room, action, resource }` and `unsubscribe`; each subscription runs `authorize()` (`subscription-authorizer.ts`) and denied rooms emit `subscribe:denied`. `ws-invalidation.service.ts` listens on the `invalidate` channel and, for connected sockets of that user, reloads the principal, disconnects suspended or deactivated users and leaves rooms whose grants are gone (`subscription:revoked`). `ws-connection-registry.ts` tracks sockets per user.
+`NestSelfIoAdapter` (`src/ws/nestself-io.adapter.ts`, installed in `main.ts`) serves Socket.IO under `/api/ws`. The handshake middleware (`ws-auth.service.ts`) checks the `Origin` against the allowed surfaces, then authenticates either the web session cookie (same code path as HTTP) or a mobile ticket from `POST /auth/ws-ticket`: 30-second TTL, hashed, consumed atomically with `GETDEL` (`ws_ticket:{hash}`). The gateway (`events.gateway.ts`) exposes `subscribe { room }` and `unsubscribe`. `action` and `resource` are optional and ignored: only the room names in the table at the top of `ws-messages.ts` are served, and `SubscriptionAuthorizer.authorizeRoom` derives the action and the resource from the room on the server (a feature module resolves its own room kind through `RoomAccessRegistry`; `call:{sessionId}` admits the appointment's expert and employee only) before it runs `authorize()`; denied rooms emit `subscribe:denied { room, reason }`. Server-side events go through `RoomEmitter`, which checks each payload against `ROOM_EVENTS` and publishes it on the `room_events` channel; `room-event-relay.ts` in every API task emits it to that task's sockets, so the worker and every API task reach every subscriber. `ws-invalidation.service.ts` listens on the `invalidate` channel and, for connected sockets of that user, reloads the principal, disconnects suspended or deactivated users and leaves rooms whose grants are gone (`subscription:revoked`). `ws-connection-registry.ts` tracks sockets per user.
 
 ## 14. Background jobs
 
@@ -584,6 +588,7 @@ Validated in `apps/api/src/config/env.ts`; documented in `docs/environment.md`.
 | `FAKE_IDP_FIXED_OTP` | Stub mode: an always-accepted six-digit code |
 | `FAKE_DNS_TXT_AUTOVERIFY` | Stub mode, `true`/`false`: the fake DNS resolver answers every pending SSO domain with its expected TXT value (the Playwright stack sets it); ignored with `AUTH_MODE=cognito`, which always queries the authoritative name server |
 | `TEST_DATABASE_URL` | Integration tests; suites create `<name>_schema`, `<name>_auth`, ... databases |
+| `VIDEO_PROVIDER`, `CHIME_REGION`, `CHIME_EVENTS_QUEUE_URL`, `CHIME_EVENTS_QUEUE_ARN`, `RECORDINGS_BUCKET`, `VIDEO_SMOKE_ENABLED`, `STAGE` | Video provider (`none` by default) and its AWS resources; `chime` requires the region, queue and bucket (section 23) |
 | `AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, `AWS_SESSION_TOKEN`, `HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS` | Not declared in `envSchema`, but passed through to `process.env` for the AWS SDK and the HTTP stack; see the merge in `validateEnv` and section 17.1 |
 
 Anything not declared in `envSchema` is still forwarded to `process.env`, because `validateEnv` returns `{ ...config, ...appEnv }`. Removing that spread re-breaks every library that reads `process.env` directly instead of through `ConfigService`.
@@ -608,7 +613,7 @@ Redis keys and TTLs are listed in `apps/api/src/redis/redis-keys.ts`.
 | `health.e2e.spec.ts`, `jobs.e2e.spec.ts` | Health with database and Redis; the maintenance jobs |
 | `sso.e2e.spec.ts` | SSO connection lifecycle, domains and their verification, provider-name rules, `idpInitiatedAllowed`, the OIDC secret and the verification token kept out of responses and audit rows, non-staff 403 (section 22.12) |
 | `sso-auth.e2e.spec.ts` | Home-realm discovery and its timing, `/auth/sso/start` and `returnPath`, every callback path, the verified-domain rule, login CSRF with two agents, single-use test links |
-| `db/schema.spec.ts` | Seven migrations, partitions, append-only triggers, RLS on all seventeen tenant tables (`sso_domains` since `0006`), the seed's stale-grant cleanup |
+| `db/schema.spec.ts` | Sixteen migrations, partitions, append-only triggers, RLS on all thirty-four tenant tables (`sso_domains` since `0006`, the appointment, call and webinar tables since `0007` to `0012`), the seed's stale-grant cleanup |
 | `db/sso-repository.spec.ts` | `SsoRepository` as the application role: uniqueness, active-for-domain, the job listings, tenant-scoped writes refused across organizations |
 | `db/authorization-repository.spec.ts` | Grant repository methods, delegation walks and emergency access queries under RLS |
 | `db/backfill-grants.spec.ts` | The legacy role backfill and the `0005` guard |
@@ -880,3 +885,53 @@ Everything above runs against the fake identity provider. Before the first real 
 - **Audit outside the binding transaction.** As elsewhere (section 21), audit rows are written through the writer's own connection.
 - **SES alert email** for expiring certificates; **custom Cognito domain** (`auth.<domain>`) for staging and production; **IdP-initiated** sign-in (with the replay cache and risk acceptance); **SCIM** provisioning.
 - **Admin screen.** Organisation names come from the first page (25) of `GET /ops/organizations`, so the create dialog lists only those and the list shows an id for the rest; a protocol change (allowed in `DRAFT`) and the `TESTING → DRAFT` reset are not offered in the UI; a failed create or edit keeps the OIDC secret in the mutation's variables while the dialog stays mounted; a test link opened through the fallback after the tab did open spends a second nonce.
+
+## 23. Consultation calls and video (NS-CALLS-01)
+
+Code: `apps/api/src/appointments/`, `apps/api/src/calls/` and `apps/api/src/video/`. Decisions (`D-CW-*`) are in `docs/tasks/calls-webinars/02-decisions.md`, rules (`CW-R-*`) in `06-implementation-guidelines.md` there, and the environment variables in `docs/environment.md` ("Video").
+
+### 23.1 Who can do what today
+
+- **NestSelf operations create appointments.** `POST /orgs/:orgId/appointments` needs `bookings.coordinate` through `operationsOrgResource('appointment')`: a web session in the operations context and, for `client_operations`, a CLIENT assignment to that organization. `service_coordinator` (queue scope) and `platform_owner` (no `bookings.coordinate`) cannot create yet. The employee must be an active member (409 `subject_not_member`) and the engine must allow the expert `consultation.join` on the planned appointment, `categories` condition included (400 `validation` on `expertUserId`). The appointment starts `confirmed`, the expert gets a CASE assignment on its id, and `appointment.created` is audited.
+- **The employee** reads, joins, signals and cancels a `confirmed` appointment (`appointment.cancel`, `employee` template; any other status answers 409 `appointment_not_joinable`), and gives feedback once per session after joining.
+- **The expert** reads, joins, ends the call for everyone, sends "running late" and records the outcome (`delivery.record`). The expert cannot cancel: only the `employee` template holds `appointment.cancel`, so the route answers 404 (guidelines 4.5 and CALL-27 say either party; the code follows the templates table).
+- **Employer-scoped principals** (employer owner, HR, team manager, reporting user) get 404 on every appointment and call route, the list and diagnostics included (CALL-17, D-CW-30).
+- **Support** reads diagnostics with `diagnostic.read`, audited (23.4).
+- **A cancel keeps the expert's CASE assignment**, so the expert can still read the appointment and an allow decision alone proves nothing about joining. The join paths check the status themselves: join and signal require `confirmed`, end requires an active session, and the outcome requires a transition the current status allows.
+
+### 23.2 Join authorization
+
+`POST /appointments/:id/join` is `@Authorize(ACTIONS['consultation.join'], appointmentResource)`. The resolver loads the appointment (404 when missing) and returns `{ type: 'appointment', id, orgId, ownerId: employeeUserId, category: serviceCategory }`, so the engine allows the employee through `own` and the expert, in the expert context, through `assigned_cases` with the CASE assignment and the `categories` condition. `CallsService` then requires the caller to be the appointment's expert or employee (404 otherwise, even when a grant allowed the action), the status to be `confirmed` (409 `appointment_not_joinable`) and the time to be inside the window, 15 minutes before the start to 10 minutes after the end (403 `join_window_closed`). End, outcome, feedback and signal use the same resolver and participant check. `POST /calls/:sessionId/client-events` uses `callSessionResource`, which resolves the session to its appointment, and stores events only for a participant of that session.
+
+`AppointmentNonDisclosureFilter`, on both controllers, turns every 403 `forbidden` and `context_mismatch` into 404 `not_found`; the guard has already audited `access.denied`. The exception is `ParticipantForbiddenException`: a participant asking for the other participant's step (the employee ending the call or sending "running late", the expert giving feedback) keeps 403 `forbidden`, because it discloses nothing new. `session_required`, `step_up_required` and domain errors keep their status.
+
+### 23.3 Join tokens
+
+The join response carries the Chime meeting and attendee, including `JoinToken`, a credential with no clock expiry (D-CW-08):
+
+- The route sets `Cache-Control: no-store` and allows 20 requests per minute.
+- The credentials are cached in Redis as plain JSON under `call:{sessionId}:participant:{participantId}` until `endsAt + 15 minutes`, so a rejoin gets the same ones; ending the call deletes every entry. They pass through the contract schemas first, which drop `EventIngestionUrl`, `MeetingArn` and `TenantIds`.
+- No table has a column for them: `call_sessions` and `call_participants` keep provider ids only.
+- `PINO_REDACT_PATHS` redacts `joinToken` and `JoinToken` up to three levels deep, and `locationText`. The Chime adapter logs the operation, ids and latency, never a response, and keeps the provider's error message out of logs and responses.
+- `joinToken` and `credentials` are forbidden audit detail keys, matched after lower-casing and dropping separators, so `join_token` is caught too. Call audit details carry identifiers only.
+- `ExternalUserId` is the `call_participants.id`, never a user id, name or email; `TenantIds` is the encoded organization id (the webinar id for webinars).
+
+### 23.4 Diagnostics
+
+`GET /ops/calls/:sessionId/diagnostics` is `@Authorize(ACTIONS['diagnostic.read'], operationsResource('call', ...))`, so it needs a web session in the operations context (bearer callers get 403 `session_required`). Only `support_operator` holds `diagnostic.read`, at `assigned_cases` scope, so the caller also needs a SUPPORT_CASE (or CASE) assignment whose target is the session id; D-CW-28 also names `support.troubleshoot`, which the route does not accept. The response holds exactly the fields of auth strategy 4.7.5: `DIAGNOSTICS_RESPONSE_FIELDS` and `DIAGNOSTICS_PARTICIPANT_FIELDS` in `packages/contracts/src/calls.ts`, parsed through strict schemas in `toDiagnosticsResponse` (`call-mapper.ts`), so an extra field fails the request instead of reaching support. It carries no user id, participant id, name, service category or location text. Each view is audited as `call.diagnostics.viewed` (CONTENT_ACCESS) with `{ sessionId, viewedByUserId }`.
+
+### 23.5 Recording consent schema
+
+`call_consents` (`src/db/schema/calls.ts`, migration `0008_calls.sql`) is shaped for per-participant, per-session, timestamped and revocable consent: `session_id`, `participant_id` and the nullable `org_id`, each a foreign key with `ON DELETE restrict`; `consent_type` (`RECORDING` or `TRANSCRIPTION`, upper case like every database enum, where the guidelines write lower case); `given_at`; `revoked_at`; `created_at`. It has an index on `session_id`, forced RLS with the calls tenant policy (a null organization is visible in every tenant context) and a seven-year retention row. Nothing writes it: consultations and workshops are not recorded (D-CW-19, D-CW-34), no appointment route starts a recording, and the `video-api` policy has no media-pipeline action. A later epic may enable consultation recording after the DPIA.
+
+### 23.6 Serbian launch checklist
+
+The launch market is Serbia; Hungarian is a language, not a jurisdiction (D-CW-38). Section 10 of `docs/tasks/calls-webinars/02-decisions.md` lists the legal items. They gate the production launch, not development:
+
+1. DPIA under ZZPL Art. 54 (and GDPR Art. 35 for the processor), run alongside development.
+2. Webinar recording notice at registration, in the confirmation email and in the lobby; an attendee given the floor is told their voice is recorded.
+3. Product copy says "encrypted in transit and at rest" and claims nothing stronger (LAW-07).
+4. Expert confidentiality: psychologists' professional secrecy, and an employer never learns a diagnosis, which is why the follow-up approval item carries no category.
+5. Client-company network note: `*.chime.aws` on UDP 3478 and TCP 443, `*.sdkassets.chime.aws` on TCP 443.
+
+The crisis block (`CrisisBlock` in `@nestself/video`, T-CW-1.4) lists Serbian hotlines only. Hungarian hotlines, and the Hungarian legal items (LAW-19 to LAW-25), come with a later Hungarian launch.

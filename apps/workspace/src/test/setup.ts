@@ -6,7 +6,7 @@ afterEach(() => {
   cleanup();
 });
 
-// Polyfill window.matchMedia for jsdom (required by motion / Base UI)
+// Polyfill window.matchMedia for jsdom (required by motion / Base UI and @nestself/video)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({

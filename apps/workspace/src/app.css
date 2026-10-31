@@ -2,3 +2,4 @@
 @import "@nestself/ui/styles.css";
 @source "../../../packages/ui/src";
 @source "../../../packages/content/src/render";
+@source "../../../packages/video/src";

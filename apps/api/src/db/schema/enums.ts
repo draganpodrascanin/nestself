@@ -280,3 +280,95 @@ export const eventRequestStatus = pgEnum('event_request_status', [
   'SELECTED',
   'CLOSED',
 ]);
+
+// ─── Consultations and webinars (NS-CALLS-01) ────────────────────────────
+
+/**
+ * Appointment lifecycle [D-CW-02, D-CW-37]. The contract spellings are lower
+ * case (`proposed`, `confirmed`); the appointments repository maps them
+ * (CW-R-19a).
+ */
+export const appointmentStatus = pgEnum('appointment_status', [
+  'PROPOSED',
+  'AWAITING_APPROVAL',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELED',
+  'DECLINED',
+  'NO_SHOW',
+]);
+
+/** Follow-up approval item lifecycle [D-CW-37]; the table arrives with the approval flow. */
+export const appointmentApprovalStatus = pgEnum('appointment_approval_status', [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'EXPIRED',
+]);
+
+/** Call session lifecycle [D-CW-07, guidelines 4.9]: PENDING -> CREATING -> ACTIVE -> ENDED, or CREATING -> FAILED. */
+export const callSessionStatus = pgEnum('call_session_status', [
+  'PENDING',
+  'CREATING',
+  'ACTIVE',
+  'ENDED',
+  'FAILED',
+]);
+
+/**
+ * What closed an ENDED call session [D-CW-09, T-CW-1.2]: the expert's "end for
+ * everyone", the provider's own `MeetingEnded` (Chime ends an empty meeting,
+ * OPS-03), or the `calls.cleanup` and `calls.reconcile` jobs. Only a
+ * `PROVIDER` end leaves the appointment free for a new session inside the
+ * join window (`call_sessions_appointment_id_live_idx`).
+ */
+export const callSessionEndReason = pgEnum('call_session_end_reason', ['EXPERT', 'PROVIDER', 'CLEANUP', 'RECONCILE']);
+
+/** Role of a participant in a call session [D-CW-10]. */
+export const callParticipantRole = pgEnum('call_participant_role', [
+  'EXPERT',
+  'EMPLOYEE',
+  'PRESENTER',
+  'MODERATOR',
+  'ATTENDEE',
+  'FACILITATOR',
+  'PARTICIPANT',
+]);
+
+/** Format of a real-time session; selects the meeting features [D-CW-10]. */
+export const callFormat = pgEnum('call_format', ['CONSULTATION', 'WEBINAR', 'WORKSHOP']);
+
+/** Delivery outcome the expert records; no free text exists beside it [D-CW-25, CW-R-21]. */
+export const callOutcomeStatus = pgEnum('call_outcome_status', [
+  'COMPLETED',
+  'NO_SHOW_EMPLOYEE',
+  'NO_SHOW_EXPERT',
+  'TECHNICAL_FAILURE',
+  'CANCELED',
+]);
+
+/** Webinar occurrence lifecycle [D-CW-17, decision record section 7]: DRAFT -> PUBLISHED -> LIVE -> ENDED, or CANCELED. */
+export const webinarStatus = pgEnum('webinar_status', ['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELED']);
+
+/** Who wrote a webinar chat message [D-CW-35]: a host to everyone, or an attendee (message or question) to the hosts. */
+export const webinarMessageKind = pgEnum('webinar_message_kind', ['HOST', 'ATTENDEE', 'QUESTION']);
+
+/** Webinar chat moderation state [D-CW-35, CW-R-103]: attendee messages start PENDING; host messages are PUBLISHED. */
+export const webinarMessageStatus = pgEnum('webinar_message_status', ['PENDING', 'PUBLISHED', 'ANSWERED', 'DISMISSED']);
+
+/**
+ * Webinar recording pipeline [D-CW-18, D-CW-34]: `webinars.recording_status`
+ * and `webinar_recordings.status` (T-CW-2.1); the pipeline that moves them
+ * arrives with T-CW-2.5.
+ */
+export const recordingStatus = pgEnum('recording_status', [
+  'SCHEDULED',
+  'RECORDING',
+  'PROCESSING',
+  'READY',
+  'HANDED_OFF',
+  'FAILED',
+]);
+
+/** Consent kinds of `call_consents`, schema only in this epic [D-CW-19, CW-R-79b]. */
+export const callConsentType = pgEnum('call_consent_type', ['RECORDING', 'TRANSCRIPTION']);

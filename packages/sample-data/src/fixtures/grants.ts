@@ -112,4 +112,18 @@ const EDITORIAL_GRANTS: SampleGrant[] = SAMPLE_EDITORIAL_STAFF.map((staff): Samp
   };
 });
 
-export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT, ...EDITORIAL_GRANTS];
+const APPROVER_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === 'approver');
+
+/**
+ * The sample HR admin also approves follow-ups (T-CW-1.5): the approver
+ * template has no legacy role either, so it is explicit too; her approval
+ * authority is `SAMPLE_APPROVAL_AUTHORITIES`.
+ */
+const APPROVER_GRANT: SampleGrant = {
+  ...OWNER_GRANT,
+  id: 'grant_user_ivana_approver',
+  templateKey: 'approver',
+  actions: [...(APPROVER_TEMPLATE?.actions ?? [])],
+};
+
+export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT, ...EDITORIAL_GRANTS, APPROVER_GRANT];

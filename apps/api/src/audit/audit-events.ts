@@ -68,6 +68,7 @@ export const AUDIT_ACTIONS = [
   'sso_domain.added',
   'sso_domain.verified',
   'data.erasure.requested',
+  // CMS media and editorial workflow (CMS-EE)
   'media.uploaded',
   'media.rejected',
   'media.updated',
@@ -76,6 +77,57 @@ export const AUDIT_ACTIONS = [
   'content.approved',
   'content.changes_requested',
   'publication.created',
+  // Consultations and webinars (NS-CALLS-01, decision record section 7)
+  'appointment.created',
+  'appointment.canceled',
+  'appointment.completed',
+  'appointment.no_show',
+  'appointment.follow_up.proposed',
+  'appointment.confirmed',
+  'appointment.declined',
+  'appointment.times_suggested',
+  'appointment.approval.requested',
+  'appointment.approval.approved',
+  'appointment.approval.rejected',
+  'appointment.approval.expired',
+  'appointment.approval.missing_approver',
+  'org.follow_up_policy.changed',
+  'call.session.created',
+  'call.joined',
+  'call.ended',
+  'call.outcome.recorded',
+  'call.feedback.submitted',
+  'call.diagnostics.viewed',
+  'call.ticket.issued',
+  'call.problem.reported',
+  'webinar.created',
+  'webinar.updated',
+  'webinar.published',
+  'webinar.canceled',
+  'webinar.started',
+  'webinar.ended',
+  'webinar.registered',
+  'webinar.unregistered',
+  'webinar.joined',
+  'webinar.message.submitted',
+  'webinar.message.published',
+  'webinar.message.answered',
+  'webinar.message.dismissed',
+  'webinar.floor.given',
+  'webinar.floor.taken',
+  // WBN-26 (T-CW-2.1): a host mutes the floor holder, asks them to unmute, and the attendee consents.
+  'webinar.floor.muted',
+  'webinar.floor.unmute_requested',
+  'webinar.floor.unmuted',
+  'webinar.poll.opened',
+  'webinar.poll.closed',
+  'webinar.recording.started',
+  'webinar.recording.stopped',
+  'webinar.recording.ready',
+  'webinar.recording.handed_off',
+  'webinar.recording.failed',
+  'webinar.attendance.viewed',
+  'webinar.certificate.issued',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -110,6 +162,28 @@ function resolveCategory(action: AuditAction): AuditCategory {
   if (action.startsWith('sso_domain.')) return 'ADMIN';
   if (action === 'data.erasure.requested') return 'ADMIN';
   if (action.startsWith('media.')) return 'CONTENT_ACCESS';
+  if (action === 'publication.created') return 'CONTENT_ACCESS';
+  // NS-CALLS-01 (guidelines 7.5, CW-R-27a, CW-R-33b): completion and no-show
+  // and the outcome feed settlement; joins and tickets prove who was in the
+  // room; messages, the floor and recordings are content access.
+  if (action === 'appointment.completed' || action === 'appointment.no_show') return 'FINANCIAL';
+  if (action.startsWith('appointment.')) return 'ADMIN';
+  if (action === 'org.follow_up_policy.changed') return 'ADMIN';
+  if (action === 'call.outcome.recorded') return 'FINANCIAL';
+  if (action === 'call.joined' || action === 'call.ticket.issued') return 'SECURITY';
+  if (action === 'call.diagnostics.viewed' || action === 'call.problem.reported') return 'CONTENT_ACCESS';
+  if (action.startsWith('call.')) return 'ADMIN';
+  if (action === 'webinar.joined') return 'SECURITY';
+  // Per-registrant presence is personal data, read like the call diagnostics (WBN-33, T-CW-2.5).
+  if (action === 'webinar.attendance.viewed') return 'CONTENT_ACCESS';
+  if (
+    action.startsWith('webinar.message.') ||
+    action.startsWith('webinar.floor.') ||
+    action.startsWith('webinar.recording.')
+  ) {
+    return 'CONTENT_ACCESS';
+  }
+  if (action.startsWith('webinar.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

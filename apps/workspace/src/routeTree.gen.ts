@@ -15,24 +15,26 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedExpertRouteImport } from './routes/_authenticated/_expert'
 import { Route as AuthenticatedHrRouteImport } from './routes/_authenticated/_hr'
 import { Route as AuthenticatedManagerRouteImport } from './routes/_authenticated/_manager'
-import { Route as AuthenticatedAppointmentsRouteImport } from './routes/_authenticated/appointments'
 import { Route as AuthenticatedConversationsRouteRouteImport } from './routes/_authenticated/conversations/route'
-import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
-import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
+import { Route as CallAppointmentIdRouteImport } from './routes/call/$appointmentId'
+import { Route as AuthenticatedHrFollowUpPolicyRouteImport } from './routes/_authenticated/_hr/follow-up-policy'
+import { Route as AuthenticatedAppointmentsIndexRouteImport } from './routes/_authenticated/appointments/index'
+import { Route as AuthenticatedAppointmentsAppointmentIdRouteImport } from './routes/_authenticated/appointments/$appointmentId'
+import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelsChannelIdRouteImport } from './routes/_authenticated/channels/$channelId'
-import { Route as AuthenticatedContentContentIdRouteImport } from './routes/_authenticated/content/$contentId'
 import { Route as AuthenticatedConversationsIndexRouteImport } from './routes/_authenticated/conversations/index'
 import { Route as AuthenticatedConversationsIdRouteImport } from './routes/_authenticated/conversations/$id'
-import { Route as AuthenticatedExploreIndexRouteImport } from './routes/_authenticated/explore/index'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as AuthenticatedMessagesThreadIdRouteImport } from './routes/_authenticated/messages/$threadId'
 import { Route as AuthenticatedPollsIndexRouteImport } from './routes/_authenticated/polls/index'
 import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
 import { Route as AuthenticatedSupportAreaRouteImport } from './routes/_authenticated/support/$area'
+import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authenticated/webinars/index'
+import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedExpertCasesIndexRouteImport } from './routes/_authenticated/_expert/cases/index'
 import { Route as AuthenticatedExpertCasesIdRouteImport } from './routes/_authenticated/_expert/cases/$id'
@@ -44,6 +46,7 @@ import { Route as AuthenticatedHrHrOrgUnitsRouteImport } from './routes/_authent
 import { Route as AuthenticatedHrHrPeopleRouteImport } from './routes/_authenticated/_hr/hr/people'
 import { Route as AuthenticatedHrHrReportsRouteImport } from './routes/_authenticated/_hr/hr/reports'
 import { Route as AuthenticatedManagerManageIndexRouteImport } from './routes/_authenticated/_manager/manage/index'
+import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
 import { Route as AuthenticatedManagerManageEventsNewRouteImport } from './routes/_authenticated/_manager/manage/events.new'
 import { Route as AuthenticatedManagerManagePollsNewRouteImport } from './routes/_authenticated/_manager/manage/polls.new'
 
@@ -72,28 +75,12 @@ const AuthenticatedManagerRoute = AuthenticatedManagerRouteImport.update({
   id: '/_manager',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAppointmentsRoute =
-  AuthenticatedAppointmentsRouteImport.update({
-    id: '/appointments',
-    path: '/appointments',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedConversationsRouteRoute =
   AuthenticatedConversationsRouteRouteImport.update({
     id: '/conversations',
     path: '/conversations',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedRequestsRoute = AuthenticatedRequestsRouteImport.update({
-  id: '/requests',
-  path: '/requests',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSavedRoute = AuthenticatedSavedRouteImport.update({
-  id: '/saved',
-  path: '/saved',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -109,6 +96,35 @@ const PublicSignInRoute = PublicSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => PublicRoute,
 } as any)
+const CallAppointmentIdRoute = CallAppointmentIdRouteImport.update({
+  id: '/call/$appointmentId',
+  path: '/call/$appointmentId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedHrFollowUpPolicyRoute =
+  AuthenticatedHrFollowUpPolicyRouteImport.update({
+    id: '/follow-up-policy',
+    path: '/follow-up-policy',
+    getParentRoute: () => AuthenticatedHrRoute,
+  } as any)
+const AuthenticatedAppointmentsIndexRoute =
+  AuthenticatedAppointmentsIndexRouteImport.update({
+    id: '/appointments/',
+    path: '/appointments/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAppointmentsAppointmentIdRoute =
+  AuthenticatedAppointmentsAppointmentIdRouteImport.update({
+    id: '/appointments/$appointmentId',
+    path: '/appointments/$appointmentId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedApprovalsIndexRoute =
+  AuthenticatedApprovalsIndexRouteImport.update({
+    id: '/approvals/',
+    path: '/approvals/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
     id: '/channels/',
@@ -119,12 +135,6 @@ const AuthenticatedChannelsChannelIdRoute =
   AuthenticatedChannelsChannelIdRouteImport.update({
     id: '/channels/$channelId',
     path: '/channels/$channelId',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedContentContentIdRoute =
-  AuthenticatedContentContentIdRouteImport.update({
-    id: '/content/$contentId',
-    path: '/content/$contentId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedConversationsIndexRoute =
@@ -138,12 +148,6 @@ const AuthenticatedConversationsIdRoute =
     id: '/$id',
     path: '/$id',
     getParentRoute: () => AuthenticatedConversationsRouteRoute,
-  } as any)
-const AuthenticatedExploreIndexRoute =
-  AuthenticatedExploreIndexRouteImport.update({
-    id: '/explore/',
-    path: '/explore/',
-    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedMessagesIndexRoute =
   AuthenticatedMessagesIndexRouteImport.update({
@@ -172,6 +176,18 @@ const AuthenticatedSupportAreaRoute =
   AuthenticatedSupportAreaRouteImport.update({
     id: '/support/$area',
     path: '/support/$area',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWebinarsIndexRoute =
+  AuthenticatedWebinarsIndexRouteImport.update({
+    id: '/webinars/',
+    path: '/webinars/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWebinarsWebinarIdRoute =
+  AuthenticatedWebinarsWebinarIdRouteImport.update({
+    id: '/webinars/$webinarId',
+    path: '/webinars/$webinarId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
@@ -235,6 +251,12 @@ const AuthenticatedManagerManageIndexRoute =
     path: '/manage/',
     getParentRoute: () => AuthenticatedManagerRoute,
   } as any)
+const AuthenticatedWebinarsWebinarIdLiveRoute =
+  AuthenticatedWebinarsWebinarIdLiveRouteImport.update({
+    id: '/live',
+    path: '/live',
+    getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
+  } as any)
 const AuthenticatedManagerManageEventsNewRoute =
   AuthenticatedManagerManageEventsNewRouteImport.update({
     id: '/manage/events/new',
@@ -251,24 +273,26 @@ const AuthenticatedManagerManagePollsNewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/conversations': typeof AuthenticatedConversationsRouteRouteWithChildren
-  '/appointments': typeof AuthenticatedAppointmentsRoute
-  '/requests': typeof AuthenticatedRequestsRoute
-  '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
+  '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
-  '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/appointments/': typeof AuthenticatedAppointmentsIndexRoute
+  '/approvals/': typeof AuthenticatedApprovalsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/conversations/': typeof AuthenticatedConversationsIndexRoute
-  '/explore/': typeof AuthenticatedExploreIndexRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/polls/': typeof AuthenticatedPollsIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
+  '/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/cases/$id': typeof AuthenticatedExpertCasesIdRoute
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
@@ -276,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cases/': typeof AuthenticatedExpertCasesIndexRoute
   '/hr/': typeof AuthenticatedHrHrIndexRoute
   '/manage/': typeof AuthenticatedManagerManageIndexRoute
@@ -284,24 +309,26 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
-  '/appointments': typeof AuthenticatedAppointmentsRoute
-  '/requests': typeof AuthenticatedRequestsRoute
-  '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
+  '/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
+  '/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
-  '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/invite/$token': typeof PublicInviteTokenRoute
+  '/appointments': typeof AuthenticatedAppointmentsIndexRoute
+  '/approvals': typeof AuthenticatedApprovalsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/conversations': typeof AuthenticatedConversationsIndexRoute
-  '/explore': typeof AuthenticatedExploreIndexRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/polls': typeof AuthenticatedPollsIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
+  '/webinars': typeof AuthenticatedWebinarsIndexRoute
   '/cases/$id': typeof AuthenticatedExpertCasesIdRoute
   '/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
@@ -309,6 +336,7 @@ export interface FileRoutesByTo {
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cases': typeof AuthenticatedExpertCasesIndexRoute
   '/hr': typeof AuthenticatedHrHrIndexRoute
   '/manage': typeof AuthenticatedManagerManageIndexRoute
@@ -323,25 +351,27 @@ export interface FileRoutesById {
   '/_authenticated/_expert': typeof AuthenticatedExpertRouteWithChildren
   '/_authenticated/_hr': typeof AuthenticatedHrRouteWithChildren
   '/_authenticated/_manager': typeof AuthenticatedManagerRouteWithChildren
-  '/_authenticated/appointments': typeof AuthenticatedAppointmentsRoute
-  '/_authenticated/requests': typeof AuthenticatedRequestsRoute
-  '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/sign-in': typeof PublicSignInRoute
+  '/call/$appointmentId': typeof CallAppointmentIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/_hr/follow-up-policy': typeof AuthenticatedHrFollowUpPolicyRoute
+  '/_authenticated/appointments/$appointmentId': typeof AuthenticatedAppointmentsAppointmentIdRoute
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
-  '/_authenticated/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/_authenticated/conversations/$id': typeof AuthenticatedConversationsIdRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
+  '/_authenticated/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/_public/invite/$token': typeof PublicInviteTokenRoute
+  '/_authenticated/appointments/': typeof AuthenticatedAppointmentsIndexRoute
+  '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/conversations/': typeof AuthenticatedConversationsIndexRoute
-  '/_authenticated/explore/': typeof AuthenticatedExploreIndexRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/polls/': typeof AuthenticatedPollsIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
+  '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
   '/_authenticated/_expert/cases/$id': typeof AuthenticatedExpertCasesIdRoute
   '/_authenticated/_hr/hr/access': typeof AuthenticatedHrHrAccessRoute
   '/_authenticated/_hr/hr/eligibility': typeof AuthenticatedHrHrEligibilityRoute
@@ -349,6 +379,7 @@ export interface FileRoutesById {
   '/_authenticated/_hr/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/_authenticated/_hr/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/_authenticated/_hr/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/_expert/cases/': typeof AuthenticatedExpertCasesIndexRoute
   '/_authenticated/_hr/hr/': typeof AuthenticatedHrHrIndexRoute
   '/_authenticated/_manager/manage/': typeof AuthenticatedManagerManageIndexRoute
@@ -360,24 +391,26 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/conversations'
-    | '/appointments'
-    | '/requests'
-    | '/saved'
     | '/settings'
     | '/reset-password'
     | '/sign-in'
+    | '/call/$appointmentId'
+    | '/follow-up-policy'
+    | '/appointments/$appointmentId'
     | '/channels/$channelId'
-    | '/content/$contentId'
     | '/conversations/$id'
     | '/messages/$threadId'
     | '/support/$area'
+    | '/webinars/$webinarId'
     | '/invite/$token'
+    | '/appointments/'
+    | '/approvals/'
     | '/channels/'
     | '/conversations/'
-    | '/explore/'
     | '/messages/'
     | '/polls/'
     | '/support/'
+    | '/webinars/'
     | '/cases/$id'
     | '/hr/access'
     | '/hr/eligibility'
@@ -385,6 +418,7 @@ export interface FileRouteTypes {
     | '/hr/org-units'
     | '/hr/people'
     | '/hr/reports'
+    | '/webinars/$webinarId/live'
     | '/cases/'
     | '/hr/'
     | '/manage/'
@@ -393,24 +427,26 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/appointments'
-    | '/requests'
-    | '/saved'
     | '/settings'
     | '/reset-password'
     | '/sign-in'
+    | '/call/$appointmentId'
+    | '/follow-up-policy'
+    | '/appointments/$appointmentId'
     | '/channels/$channelId'
-    | '/content/$contentId'
     | '/conversations/$id'
     | '/messages/$threadId'
     | '/support/$area'
+    | '/webinars/$webinarId'
     | '/invite/$token'
+    | '/appointments'
+    | '/approvals'
     | '/channels'
     | '/conversations'
-    | '/explore'
     | '/messages'
     | '/polls'
     | '/support'
+    | '/webinars'
     | '/cases/$id'
     | '/hr/access'
     | '/hr/eligibility'
@@ -418,6 +454,7 @@ export interface FileRouteTypes {
     | '/hr/org-units'
     | '/hr/people'
     | '/hr/reports'
+    | '/webinars/$webinarId/live'
     | '/cases'
     | '/hr'
     | '/manage'
@@ -431,25 +468,27 @@ export interface FileRouteTypes {
     | '/_authenticated/_expert'
     | '/_authenticated/_hr'
     | '/_authenticated/_manager'
-    | '/_authenticated/appointments'
-    | '/_authenticated/requests'
-    | '/_authenticated/saved'
     | '/_authenticated/settings'
     | '/_public/reset-password'
     | '/_public/sign-in'
+    | '/call/$appointmentId'
     | '/_authenticated/'
+    | '/_authenticated/_hr/follow-up-policy'
+    | '/_authenticated/appointments/$appointmentId'
     | '/_authenticated/channels/$channelId'
-    | '/_authenticated/content/$contentId'
     | '/_authenticated/conversations/$id'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
+    | '/_authenticated/webinars/$webinarId'
     | '/_public/invite/$token'
+    | '/_authenticated/appointments/'
+    | '/_authenticated/approvals/'
     | '/_authenticated/channels/'
     | '/_authenticated/conversations/'
-    | '/_authenticated/explore/'
     | '/_authenticated/messages/'
     | '/_authenticated/polls/'
     | '/_authenticated/support/'
+    | '/_authenticated/webinars/'
     | '/_authenticated/_expert/cases/$id'
     | '/_authenticated/_hr/hr/access'
     | '/_authenticated/_hr/hr/eligibility'
@@ -457,6 +496,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_hr/hr/org-units'
     | '/_authenticated/_hr/hr/people'
     | '/_authenticated/_hr/hr/reports'
+    | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/_expert/cases/'
     | '/_authenticated/_hr/hr/'
     | '/_authenticated/_manager/manage/'
@@ -467,6 +507,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   PublicRoute: typeof PublicRouteWithChildren
+  CallAppointmentIdRoute: typeof CallAppointmentIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -513,32 +554,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedManagerRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/appointments': {
-      id: '/_authenticated/appointments'
-      path: '/appointments'
-      fullPath: '/appointments'
-      preLoaderRoute: typeof AuthenticatedAppointmentsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/conversations': {
       id: '/_authenticated/conversations'
       path: '/conversations'
       fullPath: '/conversations'
       preLoaderRoute: typeof AuthenticatedConversationsRouteRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/requests': {
-      id: '/_authenticated/requests'
-      path: '/requests'
-      fullPath: '/requests'
-      preLoaderRoute: typeof AuthenticatedRequestsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/saved': {
-      id: '/_authenticated/saved'
-      path: '/saved'
-      fullPath: '/saved'
-      preLoaderRoute: typeof AuthenticatedSavedRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
@@ -562,6 +582,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicSignInRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/call/$appointmentId': {
+      id: '/call/$appointmentId'
+      path: '/call/$appointmentId'
+      fullPath: '/call/$appointmentId'
+      preLoaderRoute: typeof CallAppointmentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/_hr/follow-up-policy': {
+      id: '/_authenticated/_hr/follow-up-policy'
+      path: '/follow-up-policy'
+      fullPath: '/follow-up-policy'
+      preLoaderRoute: typeof AuthenticatedHrFollowUpPolicyRouteImport
+      parentRoute: typeof AuthenticatedHrRoute
+    }
+    '/_authenticated/appointments/': {
+      id: '/_authenticated/appointments/'
+      path: '/appointments'
+      fullPath: '/appointments/'
+      preLoaderRoute: typeof AuthenticatedAppointmentsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/appointments/$appointmentId': {
+      id: '/_authenticated/appointments/$appointmentId'
+      path: '/appointments/$appointmentId'
+      fullPath: '/appointments/$appointmentId'
+      preLoaderRoute: typeof AuthenticatedAppointmentsAppointmentIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/approvals/': {
+      id: '/_authenticated/approvals/'
+      path: '/approvals'
+      fullPath: '/approvals/'
+      preLoaderRoute: typeof AuthenticatedApprovalsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
       path: '/channels'
@@ -574,13 +629,6 @@ declare module '@tanstack/react-router' {
       path: '/channels/$channelId'
       fullPath: '/channels/$channelId'
       preLoaderRoute: typeof AuthenticatedChannelsChannelIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/content/$contentId': {
-      id: '/_authenticated/content/$contentId'
-      path: '/content/$contentId'
-      fullPath: '/content/$contentId'
-      preLoaderRoute: typeof AuthenticatedContentContentIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/conversations/': {
@@ -596,13 +644,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/conversations/$id'
       preLoaderRoute: typeof AuthenticatedConversationsIdRouteImport
       parentRoute: typeof AuthenticatedConversationsRouteRoute
-    }
-    '/_authenticated/explore/': {
-      id: '/_authenticated/explore/'
-      path: '/explore'
-      fullPath: '/explore/'
-      preLoaderRoute: typeof AuthenticatedExploreIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/messages/': {
       id: '/_authenticated/messages/'
@@ -637,6 +678,20 @@ declare module '@tanstack/react-router' {
       path: '/support/$area'
       fullPath: '/support/$area'
       preLoaderRoute: typeof AuthenticatedSupportAreaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/webinars/': {
+      id: '/_authenticated/webinars/'
+      path: '/webinars'
+      fullPath: '/webinars/'
+      preLoaderRoute: typeof AuthenticatedWebinarsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/webinars/$webinarId': {
+      id: '/_authenticated/webinars/$webinarId'
+      path: '/webinars/$webinarId'
+      fullPath: '/webinars/$webinarId'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_public/invite/$token': {
@@ -716,6 +771,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedManagerManageIndexRouteImport
       parentRoute: typeof AuthenticatedManagerRoute
     }
+    '/_authenticated/webinars/$webinarId/live': {
+      id: '/_authenticated/webinars/$webinarId/live'
+      path: '/live'
+      fullPath: '/webinars/$webinarId/live'
+      preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdLiveRouteImport
+      parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
+    }
     '/_authenticated/_manager/manage/events/new': {
       id: '/_authenticated/_manager/manage/events/new'
       path: '/manage/events/new'
@@ -763,6 +825,7 @@ const AuthenticatedExpertRouteWithChildren =
   AuthenticatedExpertRoute._addFileChildren(AuthenticatedExpertRouteChildren)
 
 interface AuthenticatedHrRouteChildren {
+  AuthenticatedHrFollowUpPolicyRoute: typeof AuthenticatedHrFollowUpPolicyRoute
   AuthenticatedHrHrAccessRoute: typeof AuthenticatedHrHrAccessRoute
   AuthenticatedHrHrEligibilityRoute: typeof AuthenticatedHrHrEligibilityRoute
   AuthenticatedHrHrEventsRoute: typeof AuthenticatedHrHrEventsRoute
@@ -773,6 +836,7 @@ interface AuthenticatedHrRouteChildren {
 }
 
 const AuthenticatedHrRouteChildren: AuthenticatedHrRouteChildren = {
+  AuthenticatedHrFollowUpPolicyRoute: AuthenticatedHrFollowUpPolicyRoute,
   AuthenticatedHrHrAccessRoute: AuthenticatedHrHrAccessRoute,
   AuthenticatedHrHrEligibilityRoute: AuthenticatedHrHrEligibilityRoute,
   AuthenticatedHrHrEventsRoute: AuthenticatedHrHrEventsRoute,
@@ -803,25 +867,40 @@ const AuthenticatedManagerRouteChildren: AuthenticatedManagerRouteChildren = {
 const AuthenticatedManagerRouteWithChildren =
   AuthenticatedManagerRoute._addFileChildren(AuthenticatedManagerRouteChildren)
 
+interface AuthenticatedWebinarsWebinarIdRouteChildren {
+  AuthenticatedWebinarsWebinarIdLiveRoute: typeof AuthenticatedWebinarsWebinarIdLiveRoute
+}
+
+const AuthenticatedWebinarsWebinarIdRouteChildren: AuthenticatedWebinarsWebinarIdRouteChildren =
+  {
+    AuthenticatedWebinarsWebinarIdLiveRoute:
+      AuthenticatedWebinarsWebinarIdLiveRoute,
+  }
+
+const AuthenticatedWebinarsWebinarIdRouteWithChildren =
+  AuthenticatedWebinarsWebinarIdRoute._addFileChildren(
+    AuthenticatedWebinarsWebinarIdRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedConversationsRouteRoute: typeof AuthenticatedConversationsRouteRouteWithChildren
   AuthenticatedExpertRoute: typeof AuthenticatedExpertRouteWithChildren
   AuthenticatedHrRoute: typeof AuthenticatedHrRouteWithChildren
   AuthenticatedManagerRoute: typeof AuthenticatedManagerRouteWithChildren
-  AuthenticatedAppointmentsRoute: typeof AuthenticatedAppointmentsRoute
-  AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
-  AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAppointmentsAppointmentIdRoute: typeof AuthenticatedAppointmentsAppointmentIdRoute
   AuthenticatedChannelsChannelIdRoute: typeof AuthenticatedChannelsChannelIdRoute
-  AuthenticatedContentContentIdRoute: typeof AuthenticatedContentContentIdRoute
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
+  AuthenticatedWebinarsWebinarIdRoute: typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
+  AuthenticatedAppointmentsIndexRoute: typeof AuthenticatedAppointmentsIndexRoute
+  AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
-  AuthenticatedExploreIndexRoute: typeof AuthenticatedExploreIndexRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPollsIndexRoute: typeof AuthenticatedPollsIndexRoute
   AuthenticatedSupportIndexRoute: typeof AuthenticatedSupportIndexRoute
+  AuthenticatedWebinarsIndexRoute: typeof AuthenticatedWebinarsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -830,20 +909,22 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedExpertRoute: AuthenticatedExpertRouteWithChildren,
   AuthenticatedHrRoute: AuthenticatedHrRouteWithChildren,
   AuthenticatedManagerRoute: AuthenticatedManagerRouteWithChildren,
-  AuthenticatedAppointmentsRoute: AuthenticatedAppointmentsRoute,
-  AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
-  AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAppointmentsAppointmentIdRoute:
+    AuthenticatedAppointmentsAppointmentIdRoute,
   AuthenticatedChannelsChannelIdRoute: AuthenticatedChannelsChannelIdRoute,
-  AuthenticatedContentContentIdRoute: AuthenticatedContentContentIdRoute,
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,
+  AuthenticatedWebinarsWebinarIdRoute:
+    AuthenticatedWebinarsWebinarIdRouteWithChildren,
+  AuthenticatedAppointmentsIndexRoute: AuthenticatedAppointmentsIndexRoute,
+  AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
-  AuthenticatedExploreIndexRoute: AuthenticatedExploreIndexRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPollsIndexRoute: AuthenticatedPollsIndexRoute,
   AuthenticatedSupportIndexRoute: AuthenticatedSupportIndexRoute,
+  AuthenticatedWebinarsIndexRoute: AuthenticatedWebinarsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
@@ -868,6 +949,7 @@ const PublicRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   PublicRoute: PublicRouteWithChildren,
+  CallAppointmentIdRoute: CallAppointmentIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -14,6 +14,13 @@ import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { SAMPLE_CATEGORY_IDS, SAMPLE_EDITORIAL_STAFF } from '@nestself/sample-data';
 import {
   assignments,
+  appointmentApprovals,
+  appointments,
+  approvalAuthorities,
+  callFeedback,
+  callOutcomes,
+  callParticipants,
+  callSessions,
   channels,
   conversationMessages,
   conversations,
@@ -25,6 +32,10 @@ import {
   posts,
   ssoConnections,
   ssoDomains,
+  webinarMessages,
+  webinarPollResults,
+  webinarRegistrations,
+  webinars,
 } from '../../src/db/schema/index.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
 
@@ -49,8 +60,8 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    // 0000 through 0007 = 8 migrations (SSO domains at 0006, CMS at 0007)
-    expect(Number(rows[0]!.n)).toBe(8);
+    // 0000 through 0016 = 17 migrations (calls at 0007-0015, CMS at 0016)
+    expect(Number(rows[0]!.n)).toBe(17);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -183,9 +194,14 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         `SELECT relname, relrowsecurity AS rls, relforcerowsecurity AS forced FROM pg_class
          WHERE relname IN ('org_units','memberships','grants','approval_authorities','invitations','sso_connections','channels','event_requests',
                            'posts','polls','poll_options','poll_votes','org_unit_closure',
-                           'conversations','conversation_messages','intake_records','sso_domains')`,
+                           'conversations','conversation_messages','intake_records','appointments',
+                           'call_sessions','call_participants','call_events','call_client_events',
+                           'call_outcomes','call_feedback','call_consents','appointment_approvals',
+                           'webinars','webinar_hosts','webinar_registrations','webinar_messages',
+                           'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings',
+                           'sso_domains')`,
       );
-      expect(rows).toHaveLength(17);
+      expect(rows).toHaveLength(34);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -379,6 +395,222 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(row!.verifiedAt).toBeNull();
     });
 
+    it('appointments are isolated by tenant (CW-R-19)', async () => {
+      const appointment = {
+        expertUserId: 'rls_user',
+        employeeUserId: 'rls_user',
+        startsAt: new Date('2026-11-10T15:00:00Z'),
+        endsAt: new Date('2026-11-10T15:50:00Z'),
+        serviceCategory: 'psychological',
+      };
+      await owner.db.insert(appointments).values([
+        { ...appointment, id: 'rls_appt_a', orgId: 'rls_org_a' },
+        { ...appointment, id: 'rls_appt_b', orgId: 'rls_org_b' },
+      ]);
+
+      const fromB = await withOrgScope(app.db, 'rls_org_b', (tx) =>
+        tx
+          .select({ id: appointments.id })
+          .from(appointments)
+          .where(inArray(appointments.id, ['rls_appt_a', 'rls_appt_b'])),
+      );
+      expect(fromB.map((a) => a.id)).toEqual(['rls_appt_b']);
+
+      const err = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(appointments).values({ ...appointment, id: 'rls_appt_leak', orgId: 'rls_org_b' }),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // Status defaults to CONFIRMED; an appointment must end after it starts.
+      const [stored] = await owner.db.select().from(appointments).where(eq(appointments.id, 'rls_appt_a'));
+      expect(stored).toMatchObject({ status: 'CONFIRMED', timeZone: 'Europe/Belgrade', followUpOf: null });
+      await expect(
+        owner.db
+          .insert(appointments)
+          .values({ ...appointment, id: 'rls_appt_reversed', orgId: 'rls_org_a', endsAt: appointment.startsAt }),
+      ).rejects.toThrow();
+    });
+
+    it('call tables are isolated by tenant and keep no join token (T-CW-1.1, D-CW-25)', async () => {
+      const session = {
+        format: 'CONSULTATION' as const,
+        startsAt: new Date('2026-11-10T15:00:00Z'),
+        endsAt: new Date('2026-11-10T15:50:00Z'),
+      };
+      await owner.db.insert(callSessions).values([
+        { ...session, id: 'rls_call_a', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' },
+        { ...session, id: 'rls_call_b', appointmentId: 'rls_appt_b', orgId: 'rls_org_b' },
+      ]);
+      await owner.db.insert(callParticipants).values([
+        { id: 'rls_part_a', sessionId: 'rls_call_a', orgId: 'rls_org_a', userId: 'rls_user', role: 'EMPLOYEE' },
+        { id: 'rls_part_b', sessionId: 'rls_call_b', orgId: 'rls_org_b', userId: 'rls_user', role: 'EMPLOYEE' },
+      ]);
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', async (tx) => ({
+        sessions: await tx.select({ id: callSessions.id }).from(callSessions),
+        participants: await tx.select({ id: callParticipants.id }).from(callParticipants),
+      }));
+      expect(fromA.sessions.map((r) => r.id)).toEqual(['rls_call_a']);
+      expect(fromA.participants.map((r) => r.id)).toEqual(['rls_part_a']);
+
+      const leak = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(callFeedback).values({ sessionId: 'rls_call_b', orgId: 'rls_org_b', userId: 'rls_user', score: 4 }),
+      ).catch((e: unknown) => e);
+      expect(leak).toBeInstanceOf(Error);
+      const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // A consultation session needs its appointment and organization; one live session per appointment.
+      await expect(
+        owner.db.insert(callSessions).values({ ...session, id: 'rls_call_orphan', orgId: 'rls_org_a' }),
+      ).rejects.toThrow();
+      await expect(
+        owner.db.insert(callSessions).values({ ...session, id: 'rls_call_dup', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' }),
+      ).rejects.toThrow();
+      // A failed session does not block the next one.
+      await owner.db.update(callSessions).set({ status: 'FAILED' }).where(eq(callSessions.id, 'rls_call_a'));
+      await owner.db
+        .insert(callSessions)
+        .values({ ...session, id: 'rls_call_retry', appointmentId: 'rls_appt_a', orgId: 'rls_org_a' });
+
+      // Feedback scores stay within 1 to 5; one outcome per session.
+      await expect(
+        owner.db.insert(callFeedback).values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', userId: 'rls_user', score: 6 }),
+      ).rejects.toThrow();
+      await owner.db
+        .insert(callOutcomes)
+        .values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', status: 'COMPLETED', recordedByUserId: 'rls_user' });
+      await expect(
+        owner.db
+          .insert(callOutcomes)
+          .values({ sessionId: 'rls_call_a', orgId: 'rls_org_a', status: 'CANCELED', recordedByUserId: 'rls_user' }),
+      ).rejects.toThrow();
+
+      // CW-R-13: no call column can hold a join token or credentials.
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name LIKE 'call\\_%'`,
+      );
+      expect(rows.length).toBeGreaterThan(40);
+      for (const { column_name } of rows) {
+        expect(column_name, column_name).not.toMatch(/token|credential|secret/);
+      }
+    });
+
+    it('webinar tables keep platform-wide occurrences visible and organisation rows isolated (T-CW-2.1, D-CW-25)', async () => {
+      const base = {
+        title: { en: 'Webinar' },
+        audiencePolicy: { type: 'all_eligible' as const },
+        startsAt: new Date('2026-11-20T15:00:00Z'),
+        endsAt: new Date('2026-11-20T16:00:00Z'),
+        timeZone: 'Europe/Belgrade',
+        createdByUserId: 'rls_user',
+      };
+      await owner.db.insert(webinars).values([
+        { ...base, id: 'rls_webinar_all', orgId: null },
+        { ...base, id: 'rls_webinar_a', orgId: 'rls_org_a', audiencePolicy: { type: 'organization', orgIds: ['rls_org_a'] } },
+        { ...base, id: 'rls_webinar_b', orgId: 'rls_org_b', audiencePolicy: { type: 'organization', orgIds: ['rls_org_b'] } },
+      ]);
+      await owner.db.insert(webinarRegistrations).values([
+        { id: 'rls_reg_all_a', webinarId: 'rls_webinar_all', orgId: 'rls_org_a', userId: 'rls_user', registeredAt: base.startsAt },
+        { id: 'rls_reg_b', webinarId: 'rls_webinar_b', orgId: 'rls_org_b', userId: 'rls_user', registeredAt: base.startsAt },
+      ]);
+
+      // Every webinar is recorded (D-CW-34): the column starts SCHEDULED and there is no recording switch.
+      const [created] = await owner.db.select().from(webinars).where(eq(webinars.id, 'rls_webinar_all'));
+      expect(created).toMatchObject({ status: 'DRAFT', recordingStatus: 'SCHEDULED', capacity: 250, chatPolicy: 'moderated' });
+      expect(Object.keys(created!)).not.toContain('recordingPolicy');
+
+      const fromA = await withOrgScope(app.db, 'rls_org_a', async (tx) => ({
+        webinars: await tx.select({ id: webinars.id }).from(webinars),
+        registrations: await tx.select({ id: webinarRegistrations.id }).from(webinarRegistrations),
+      }));
+      expect(fromA.webinars.map((r) => r.id).sort()).toEqual(['rls_webinar_a', 'rls_webinar_all']);
+      // A registration carries the registrant's organisation, even for an occurrence open to all.
+      expect(fromA.registrations.map((r) => r.id)).toEqual(['rls_reg_all_a']);
+
+      const leak = await withOrgScope(app.db, 'rls_org_a', (tx) =>
+        tx.insert(webinarMessages).values({
+          webinarId: 'rls_webinar_b',
+          orgId: 'rls_org_b',
+          authorUserId: 'rls_user',
+          kind: 'ATTENDEE',
+          text: 'leak',
+        }),
+      ).catch((e: unknown) => e);
+      expect(leak).toBeInstanceOf(Error);
+      const cause = (leak as Error & { cause?: Error }).cause ?? (leak as Error);
+      expect(cause.message).toMatch(/row-level security policy/);
+
+      // A registration always carries the registrant's organisation (migration 0014): no platform-wide registration.
+      await expect(
+        owner.db
+          .insert(webinarRegistrations)
+          .values({ webinarId: 'rls_webinar_all', orgId: null as unknown as string, userId: 'rls_user', registeredAt: base.startsAt }),
+      ).rejects.toThrow();
+      const { rows: policies } = await owner.pool.query<{ qual: string }>(
+        `SELECT qual FROM pg_policies WHERE tablename = 'webinar_registrations'`,
+      );
+      expect(policies.map((p) => p.qual).join(' ')).not.toMatch(/IS NULL/);
+
+      // One registration per person and occurrence (CW-R-24a); capacity within 1 to 1,000; host posts are published.
+      await expect(
+        owner.db
+          .insert(webinarRegistrations)
+          .values({ webinarId: 'rls_webinar_b', orgId: 'rls_org_b', userId: 'rls_user', registeredAt: base.startsAt }),
+      ).rejects.toThrow();
+      await expect(owner.db.insert(webinars).values({ ...base, id: 'rls_webinar_huge', capacity: 1001 })).rejects.toThrow();
+      await expect(
+        owner.db
+          .insert(webinarMessages)
+          .values({ webinarId: 'rls_webinar_all', authorUserId: 'rls_user', kind: 'HOST', status: 'PENDING', text: 'x' }),
+      ).rejects.toThrow();
+
+      // CW-R-24: a vote row names the poll and the option, never the voter or a time.
+      const { rows: voteColumns } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'webinar_poll_results' ORDER BY column_name`,
+      );
+      expect(voteColumns.map((r) => r.column_name)).toEqual(['id', 'option_id', 'org_id', 'poll_id']);
+      expect(Object.keys(webinarPollResults)).not.toContain('userId');
+    });
+
+    it('0013: a webinar session names an existing occurrence; a message can lose its author (T-CW-2.5, D-CW-29)', async () => {
+      const window = { startsAt: new Date('2026-11-20T15:00:00Z'), endsAt: new Date('2026-11-20T16:00:00Z') };
+      await expect(
+        owner.db.insert(callSessions).values({ ...window, id: 'rls_ws_ghost', format: 'WEBINAR', webinarId: 'no_such_webinar' }),
+      ).rejects.toThrow();
+      await owner.db
+        .insert(callSessions)
+        .values({ ...window, id: 'rls_ws_all', format: 'WEBINAR', webinarId: 'rls_webinar_all', orgId: null });
+
+      // The 12-month anonymisation removes the author link and keeps the message.
+      await owner.db
+        .insert(webinarMessages)
+        .values({ id: 'rls_msg_anon', webinarId: 'rls_webinar_all', authorUserId: 'rls_user', kind: 'ATTENDEE', text: 'kept' });
+      await owner.db.update(webinarMessages).set({ authorUserId: null }).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      const [anon] = await owner.db.select().from(webinarMessages).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      expect(anon).toMatchObject({ authorUserId: null, text: 'kept' });
+      // Leave the seed assertions below their own webinar session.
+      await owner.db.delete(webinarMessages).where(eq(webinarMessages.id, 'rls_msg_anon'));
+      await owner.db.delete(callSessions).where(eq(callSessions.id, 'rls_ws_all'));
+
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'webinar_recordings' ORDER BY column_name`,
+      );
+      expect(rows.map((r) => r.column_name)).toEqual(
+        expect.arrayContaining([
+          'provider_pipeline_arn',
+          'concatenation_pipeline_id',
+          'concatenated_key',
+          'handoff_status',
+          'handoff_location',
+          'failure_reason',
+          'failed_at',
+        ]),
+      );
+    });
+
     it('the tenant setting does not leak out of the transaction', async () => {
       await withOrgScope(app.db, 'rls_org_a', async () => undefined);
       const rows = await app.db.select({ id: orgUnits.id }).from(orgUnits);
@@ -400,6 +632,87 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
          )`,
       );
       expect(rows).toEqual([]);
+    });
+
+    it('seeds the sample appointments and the consultation call session (T-CW-1.1)', async () => {
+      // Earlier tests in this file add their own rows, so the counts are lower bounds.
+      const counts = await seed(owner.db);
+      expect(counts.appointments).toBeGreaterThanOrEqual(5);
+      expect(counts.callFeedback).toBeGreaterThanOrEqual(1);
+
+      const appointmentRows = await owner.db
+        .select({ id: appointments.id, status: appointments.status })
+        .from(appointments)
+        .where(inArray(appointments.id, ['appt_sample_completed', 'appt_sample_upcoming']));
+      expect(appointmentRows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        { id: 'appt_sample_completed', status: 'COMPLETED' },
+        { id: 'appt_sample_upcoming', status: 'CONFIRMED' },
+      ]);
+
+      const [session] = await owner.db
+        .select()
+        .from(callSessions)
+        .where(eq(callSessions.id, 'call_session_sample_consultation'));
+      expect(session).toMatchObject({ format: 'CONSULTATION', status: 'ENDED', appointmentId: 'appt_sample_completed' });
+      // The webinar session of the ended sample webinar (T-CW-2.1).
+      const webinarSessions = await owner.db.select().from(callSessions).where(eq(callSessions.format, 'WEBINAR'));
+      expect(webinarSessions.map((s) => [s.id, s.webinarId])).toEqual([['call_session_sample_webinar', 'webinar_sample_ended']]);
+
+      const [outcome] = await owner.db
+        .select()
+        .from(callOutcomes)
+        .where(eq(callOutcomes.sessionId, 'call_session_sample_consultation'));
+      expect(outcome).toMatchObject({ status: 'COMPLETED', recordedByUserId: 'user_milica' });
+      const roles = await owner.db
+        .select({ role: callParticipants.role })
+        .from(callParticipants)
+        .where(eq(callParticipants.sessionId, 'call_session_sample_consultation'));
+      expect(roles.map((r) => r.role).sort()).toEqual(['EMPLOYEE', 'EXPERT']);
+
+      // T-CW-1.5: the sample approver's authority and pending item for the awaiting_approval follow-up.
+      const [approval] = await owner.db
+        .select()
+        .from(appointmentApprovals)
+        .where(eq(appointmentApprovals.id, 'approval_sample_follow_up_awaiting'));
+      expect(approval).toMatchObject({
+        appointmentId: 'appt_sample_follow_up_awaiting',
+        approverUserId: 'user_ivana',
+        status: 'PENDING',
+        orgId: 'org_sample',
+      });
+      const [authority] = await owner.db
+        .select()
+        .from(approvalAuthorities)
+        .where(eq(approvalAuthorities.id, 'approval_authority_sample_ivana'));
+      expect(authority).toMatchObject({ userId: 'user_ivana', orgUnitId: 'ou_root', includeDescendants: true });
+      const [approverGrant] = await owner.db.select().from(grants).where(eq(grants.id, 'grant_user_ivana_approver'));
+      expect(approverGrant).toMatchObject({ templateKey: 'approver', scopeOrgId: 'org_sample' });
+    });
+
+    it('seeds the sample webinars, their chat and the poll with anonymous votes (T-CW-2.1)', async () => {
+      const counts = await seed(owner.db);
+      expect(counts.webinars).toBeGreaterThanOrEqual(2);
+      expect(counts.webinarMessages).toBeGreaterThanOrEqual(5);
+      expect(counts.webinarPollResults).toBeGreaterThanOrEqual(2);
+
+      const rows = await owner.db
+        .select({ id: webinars.id, orgId: webinars.orgId, status: webinars.status, recordingStatus: webinars.recordingStatus })
+        .from(webinars)
+        .where(inArray(webinars.id, ['webinar_sample_upcoming', 'webinar_sample_ended']));
+      expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        { id: 'webinar_sample_ended', orgId: 'org_sample', status: 'ENDED', recordingStatus: 'SCHEDULED' },
+        { id: 'webinar_sample_upcoming', orgId: null, status: 'PUBLISHED', recordingStatus: 'SCHEDULED' },
+      ]);
+      const pending = await owner.db
+        .select({ id: webinarMessages.id })
+        .from(webinarMessages)
+        .where(eq(webinarMessages.status, 'PENDING'));
+      expect(pending.map((m) => m.id)).toContain('webinar_message_sample_5');
+      const registrations = await owner.db
+        .select({ userId: webinarRegistrations.userId })
+        .from(webinarRegistrations)
+        .where(eq(webinarRegistrations.webinarId, 'webinar_sample_ended'));
+      expect(registrations.map((r) => r.userId).sort()).toEqual(['user_ana', 'user_jovan']);
     });
 
     it('is idempotent (run twice, row counts equal)', async () => {

@@ -81,6 +81,19 @@ export const SAMPLE_PEOPLE = [
     portrait: null,
     sample: true as const,
   },
+  {
+    // Fictional NestSelf platform administrator (the `admin` sample session):
+    // the seed derives the platform_owner grant, so this person can moderate
+    // a webinar open to every eligible organisation (T-CW-2.1, D-CW-17).
+    id: 'user_admin',
+    displayName: 'Platform Admin',
+    initials: 'PA',
+    orgId: null,
+    orgRole: null,
+    platformRole: 'admin' as const,
+    portrait: null,
+    sample: true as const,
+  },
 ] as const;
 
 export const SAMPLE_SESSIONS: Record<OrgRole | PlatformRole, Session> = {

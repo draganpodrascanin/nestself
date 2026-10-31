@@ -7,6 +7,12 @@ import type * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import type * as kms from 'aws-cdk-lib/aws-kms';
 import type { Construct } from 'constructs';
 import type { StageConfig } from './config.js';
+import type { WebApp } from './web-security-headers.js';
+import {
+  WEB_APP_PERMISSIONS_POLICY,
+  webAppContentSecurityPolicy,
+  webAppInlineScriptHashes,
+} from './web-security-headers.js';
 
 export interface EdgeStackProps extends cdk.StackProps {
   readonly config: StageConfig;
@@ -16,8 +22,8 @@ export interface EdgeStackProps extends cdk.StackProps {
 
 /**
  * NestSelfEdgeStack: CloudFront distributions for workspace and admin SPAs
- * with S3 origins (OAC), API behaviours forwarding to the ALB, response
- * headers policy and WAF web ACLs.
+ * with S3 origins (OAC), API behaviours forwarding to the ALB, per-app
+ * response headers policies (CSP, HSTS, Permissions-Policy) and WAF web ACLs.
  *
  * WAF for CloudFront must be in us-east-1. Because crossRegionReferences
  * requires lookups and breaks offline synth, we create the WAF ACL in the
@@ -73,11 +79,24 @@ export class NestSelfEdgeStack extends cdk.Stack {
       autoDeleteObjects: config.removalPolicy === 'destroy',
     });
 
-    // ── Response headers policy ──────────────────────────────────
-    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
-      this, 'SecurityHeaders', {
-        responseHeadersPolicyName: `nestself-${stage}-security-headers`,
+    // ── Response headers policies (one per app) ──────────────────
+    // The Content-Security-Policy header is the source of truth in deployed
+    // stages; the <meta> tag the Vite build injects is the fallback for
+    // `vite preview` and other static hosts (docs/web/csp.md, T-CW-1.5).
+    // `/api/*` goes through the app's own distribution, so the app origin is
+    // the API origin for connect-src.
+    const webAppHeaders = (app: WebApp, constructId: string, appUrl: string) =>
+      new cloudfront.ResponseHeadersPolicy(this, constructId, {
+        responseHeadersPolicyName: `nestself-${stage}-${app}-security-headers`,
+        comment: `nestself-${stage} ${app} SPA security headers`,
         securityHeadersBehavior: {
+          contentSecurityPolicy: {
+            contentSecurityPolicy: webAppContentSecurityPolicy({
+              inlineScriptHashes: webAppInlineScriptHashes(app),
+              apiOrigin: new URL(appUrl).origin,
+            }),
+            override: true,
+          },
           strictTransportSecurity: {
             accessControlMaxAge: cdk.Duration.seconds(63072000),
             includeSubdomains: true,
@@ -95,8 +114,14 @@ export class NestSelfEdgeStack extends cdk.Stack {
           },
           xssProtection: { protection: true, modeBlock: true, override: true },
         },
-      },
-    );
+        customHeadersBehavior: {
+          customHeaders: [
+            { header: 'Permissions-Policy', value: WEB_APP_PERMISSIONS_POLICY, override: true },
+          ],
+        },
+      });
+    const workspaceHeaders = webAppHeaders('workspace', 'WorkspaceSecurityHeaders', config.workspaceUrl);
+    const adminHeaders = webAppHeaders('admin', 'AdminSecurityHeaders', config.adminUrl);
 
     // ── WAF web ACL (optional, context-driven) ───────────────────
     // CloudFront WAF must be in us-east-1. For offline synth in eu-central-1
@@ -133,7 +158,7 @@ export class NestSelfEdgeStack extends cdk.Stack {
             this.workspaceBucket,
           ),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          responseHeadersPolicy,
+          responseHeadersPolicy: workspaceHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         additionalBehaviors: {
@@ -143,7 +168,7 @@ export class NestSelfEdgeStack extends cdk.Stack {
             allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
             cachePolicy: apiCachePolicy,
             originRequestPolicy: apiOriginRequestPolicy,
-            responseHeadersPolicy,
+            responseHeadersPolicy: workspaceHeaders,
           },
           '/api/ws*': {
             origin: albOrigin,
@@ -182,7 +207,7 @@ export class NestSelfEdgeStack extends cdk.Stack {
             this.adminBucket,
           ),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          responseHeadersPolicy,
+          responseHeadersPolicy: adminHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         additionalBehaviors: {
@@ -192,7 +217,7 @@ export class NestSelfEdgeStack extends cdk.Stack {
             allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
             cachePolicy: apiCachePolicy,
             originRequestPolicy: apiOriginRequestPolicy,
-            responseHeadersPolicy,
+            responseHeadersPolicy: adminHeaders,
           },
           '/api/ws*': {
             origin: albOrigin,

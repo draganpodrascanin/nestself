@@ -1,0 +1,759 @@
+import { describe, expect, it } from 'vitest';
+import { AUTH_ERROR_CODES } from './auth.ts';
+import {
+  API_ERROR_CODES,
+  ApiErrorCodeSchema,
+  CALL_ERROR_CODES,
+  CALL_FEEDBACK_COMMENT_MAX_LENGTH,
+  CALL_FORMATS,
+  CALL_JOIN_WINDOW_AFTER_MINUTES,
+  CALL_JOIN_WINDOW_BEFORE_MINUTES,
+  CALL_OUTCOME_STATUSES,
+  CALL_PARTICIPANT_ROLES,
+  CALL_ROOM_CLOSE_AFTER_MINUTES,
+  CALL_SESSION_STATUSES,
+  CALL_TICKET_TTL_SECONDS,
+  CALL_SIGNAL_ETA_MAX_MINUTES,
+  CALL_SIGNAL_TYPES,
+  CLIENT_EVENT_BATCH_MAX,
+  CLIENT_EVENT_NAMES,
+  CALL_LOCATION_TEXT_MAX_LENGTH,
+  CALL_PROBLEM_CATEGORIES,
+  CallProblemReportRequestSchema,
+  PROBLEM_REPORT_LIST_DEFAULT_LIMIT,
+  PROBLEM_REPORT_LIST_MAX_LIMIT,
+  ProblemReportListQuerySchema,
+  ProblemReportListResponseSchema,
+  DIAGNOSTICS_PROBLEM_REPORT_FIELDS,
+  CallFeedbackRequestSchema,
+  CallJoinRequestSchema,
+  CallLocationResponseSchema,
+  CallSignalPayloadSchema,
+  CallSignalRequestSchema,
+  ClientEventBatchRequestSchema,
+  CallFormatSchema,
+  CallJoinResponseSchema,
+  CallOutcomeRequestSchema,
+  CallOutcomeStatusSchema,
+  CallParticipantRoleSchema,
+  CallSessionStatusSchema,
+  ClientEventRequestSchema,
+  DIAGNOSTICS_PARTICIPANT_FIELDS,
+  DIAGNOSTICS_RESPONSE_FIELDS,
+  DiagnosticsResponseSchema,
+  RECORDING_STATUSES,
+  REMINDER_OFFSETS_MINUTES,
+  RecordingStatusSchema,
+  VIDEO_PROVIDER_NAMES,
+  VideoProviderNameSchema,
+  WEBINAR_HOST_JOIN_BEFORE_MINUTES,
+  WEBINAR_MESSAGE_KINDS,
+  WEBINAR_MESSAGE_STATUSES,
+  WEBINAR_SINGLE_MEETING_CAPACITY,
+  WORKSHOP_CAPACITY,
+  WebinarMessageKindSchema,
+  WebinarMessageStatusSchema,
+  CALL_ROOM_EVENT_NAMES,
+  CALL_ROOM_EVENT_PAYLOAD_SCHEMAS,
+  CallLocationSharedPayloadSchema,
+  CallParticipantJoinedPayloadSchema,
+  CallParticipantLeftPayloadSchema,
+  CallRoomEventNameSchema,
+  CallSessionEndedPayloadSchema,
+  FollowUpConfirmedPayloadSchema,
+  FollowUpDeclinedPayloadSchema,
+  FollowUpProposedPayloadSchema,
+  TimesSuggestedPayloadSchema,
+  callRoomName,
+  type CallRoomEventName,
+  type CallRoomEventPayload,
+} from './calls.ts';
+import { FOLLOW_UP_DURATION_MAX_MINUTES, FOLLOW_UP_MAX_SUGGESTED_WINDOWS } from './appointments.ts';
+import * as entry from './index.ts';
+
+function issuePaths(result: { success: boolean; error?: { issues: { path: PropertyKey[] }[] } }) {
+  return (result.error?.issues ?? []).map((i) => i.path.join('.'));
+}
+
+describe('call constants (decision record section 7)', () => {
+  it('have the canonical values', () => {
+    expect(CALL_JOIN_WINDOW_BEFORE_MINUTES).toBe(15);
+    expect(CALL_JOIN_WINDOW_AFTER_MINUTES).toBe(10);
+    expect(CALL_ROOM_CLOSE_AFTER_MINUTES).toBe(15);
+    expect(WEBINAR_HOST_JOIN_BEFORE_MINUTES).toBe(30);
+    expect(WEBINAR_SINGLE_MEETING_CAPACITY).toBe(250);
+    expect(WORKSHOP_CAPACITY).toBe(25);
+    expect(REMINDER_OFFSETS_MINUTES).toEqual([1440, 60]);
+    expect(CALL_TICKET_TTL_SECONDS).toBe(30);
+  });
+});
+
+describe('call enums', () => {
+  const cases = [
+    ['call_session_status', CALL_SESSION_STATUSES, CallSessionStatusSchema, ['pending', 'creating', 'active', 'ended', 'failed']],
+    [
+      'call_participant_role',
+      CALL_PARTICIPANT_ROLES,
+      CallParticipantRoleSchema,
+      ['expert', 'employee', 'presenter', 'moderator', 'attendee', 'facilitator', 'participant'],
+    ],
+    ['call_format', CALL_FORMATS, CallFormatSchema, ['consultation', 'webinar', 'workshop']],
+    [
+      'call_outcome_status',
+      CALL_OUTCOME_STATUSES,
+      CallOutcomeStatusSchema,
+      ['completed', 'no_show_employee', 'no_show_expert', 'technical_failure', 'canceled'],
+    ],
+    [
+      'recording_status',
+      RECORDING_STATUSES,
+      RecordingStatusSchema,
+      ['scheduled', 'recording', 'processing', 'ready', 'handed_off', 'failed'],
+    ],
+    ['webinar_message_kind', WEBINAR_MESSAGE_KINDS, WebinarMessageKindSchema, ['host', 'attendee', 'question']],
+    [
+      'webinar_message_status',
+      WEBINAR_MESSAGE_STATUSES,
+      WebinarMessageStatusSchema,
+      ['pending', 'published', 'answered', 'dismissed'],
+    ],
+  ] as const;
+
+  for (const [name, values, schema, expected] of cases) {
+    it(`${name} has the canonical values and rejects others`, () => {
+      expect(values).toEqual(expected);
+      for (const v of values) expect(schema.safeParse(v).success, v).toBe(true);
+      expect(schema.safeParse(values[0].toUpperCase()).success).toBe(false);
+      expect(schema.safeParse('unknown').success).toBe(false);
+    });
+  }
+
+  it('video provider names match the VIDEO_PROVIDER env values', () => {
+    expect(VIDEO_PROVIDER_NAMES).toEqual(['none', 'chime']);
+    expect(VideoProviderNameSchema.safeParse('chime').success).toBe(true);
+    expect(VideoProviderNameSchema.safeParse('fake').success).toBe(false);
+  });
+});
+
+describe('CALL_ERROR_CODES (CW-R-27)', () => {
+  it('contains every canonical error code', () => {
+    expect(CALL_ERROR_CODES).toEqual([
+      'join_window_closed',
+      'appointment_not_joinable',
+      'appointment_not_proposed',
+      'approval_not_pending',
+      'approver_missing',
+      'follow_up_not_allowed',
+      'video_provider_unavailable',
+      'webinar_full',
+      'webinar_not_open',
+      'registration_closed',
+      'already_registered',
+      'not_eligible',
+      'floor_not_available',
+      'recording_not_allowed',
+      'capacity_above_limit',
+      'invalid_ticket',
+      'not_editable',
+    ]);
+  });
+
+  it('has no duplicates and no overlap with AUTH_ERROR_CODES', () => {
+    expect(new Set(CALL_ERROR_CODES).size).toBe(CALL_ERROR_CODES.length);
+    const auth = new Set<string>(AUTH_ERROR_CODES);
+    for (const code of CALL_ERROR_CODES) expect(auth.has(code), code).toBe(false);
+  });
+
+  it('is merged with AUTH_ERROR_CODES into API_ERROR_CODES', () => {
+    expect(API_ERROR_CODES).toEqual([...AUTH_ERROR_CODES, ...CALL_ERROR_CODES]);
+    expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);
+    expect(ApiErrorCodeSchema.safeParse('join_window_closed').success).toBe(true);
+    expect(ApiErrorCodeSchema.safeParse('step_up_required').success).toBe(true);
+    expect(ApiErrorCodeSchema.safeParse('not_a_code').success).toBe(false);
+  });
+});
+
+describe('CallJoinResponseSchema', () => {
+  const valid = {
+    sessionId: 'sess_1',
+    participantId: 'part_1',
+    role: 'employee',
+    format: 'consultation',
+    startsAt: '2026-11-03T09:00:00.000Z',
+    endsAt: '2026-11-03T09:50:00.000Z',
+    meeting: {
+      MeetingId: 'meeting-1',
+      MediaRegion: 'eu-central-1',
+      MediaPlacement: {
+        AudioHostUrl: 'audio.example:3478',
+        AudioFallbackUrl: 'wss://audio.example:443/calls/meeting-1',
+        SignalingUrl: 'wss://signal.example/control/meeting-1',
+        TurnControlUrl: 'https://turn.example/v2/turn_sessions',
+      },
+    },
+    attendee: {
+      AttendeeId: 'attendee-1',
+      ExternalUserId: 'part_1',
+      JoinToken: 'fake-join-token-part_1',
+    },
+  };
+
+  it('accepts a valid join response', () => {
+    expect(CallJoinResponseSchema.parse(valid)).toEqual(valid);
+  });
+
+  it('rejects missing session, credential and media fields', () => {
+    for (const field of ['sessionId', 'participantId', 'role', 'format', 'startsAt', 'endsAt', 'meeting', 'attendee']) {
+      const input: Record<string, unknown> = { ...valid };
+      delete input[field];
+      expect(issuePaths(CallJoinResponseSchema.safeParse(input)), field).toEqual([field]);
+    }
+    const noToken = { ...valid, attendee: { AttendeeId: 'attendee-1', ExternalUserId: 'part_1' } };
+    expect(issuePaths(CallJoinResponseSchema.safeParse(noToken))).toEqual(['attendee.JoinToken']);
+    const noSignal = {
+      ...valid,
+      meeting: { ...valid.meeting, MediaPlacement: { ...valid.meeting.MediaPlacement, SignalingUrl: undefined } },
+    };
+    expect(issuePaths(CallJoinResponseSchema.safeParse(noSignal))).toEqual(['meeting.MediaPlacement.SignalingUrl']);
+  });
+
+  it('accepts a media placement without the deprecated TurnControlUrl', () => {
+    const { TurnControlUrl: _, ...placement } = valid.meeting.MediaPlacement;
+    const withoutTurn = { ...valid, meeting: { ...valid.meeting, MediaPlacement: placement } };
+    const parsed = CallJoinResponseSchema.parse(withoutTurn);
+    expect(parsed.meeting.MediaPlacement).not.toHaveProperty('TurnControlUrl');
+    const emptyTurn = {
+      ...valid,
+      meeting: { ...valid.meeting, MediaPlacement: { ...placement, TurnControlUrl: '' } },
+    };
+    expect(issuePaths(CallJoinResponseSchema.safeParse(emptyTurn))).toEqual(['meeting.MediaPlacement.TurnControlUrl']);
+  });
+
+  it('drops the provider event ingestion URL (D-CW-13)', () => {
+    const withIngestion = {
+      ...valid,
+      meeting: {
+        ...valid.meeting,
+        MediaPlacement: { ...valid.meeting.MediaPlacement, EventIngestionUrl: 'https://data.example/client-events' },
+      },
+    };
+    const parsed = CallJoinResponseSchema.parse(withIngestion);
+    expect(parsed.meeting.MediaPlacement).not.toHaveProperty('EventIngestionUrl');
+  });
+});
+
+describe('CallOutcomeRequestSchema (CW-R-21)', () => {
+  it('accepts every outcome status', () => {
+    for (const status of CALL_OUTCOME_STATUSES) {
+      expect(CallOutcomeRequestSchema.parse({ status })).toEqual({ status });
+    }
+  });
+
+  it('rejects a missing or unknown status', () => {
+    expect(issuePaths(CallOutcomeRequestSchema.safeParse({}))).toEqual(['status']);
+    expect(issuePaths(CallOutcomeRequestSchema.safeParse({ status: 'partial' }))).toEqual(['status']);
+  });
+
+  it('rejects free text alongside the status', () => {
+    expect(CallOutcomeRequestSchema.safeParse({ status: 'completed', notes: 'went well' }).success).toBe(false);
+  });
+});
+
+describe('CallFeedbackRequestSchema (CW-R-22)', () => {
+  it('accepts a score from 1 to 5 with an optional comment', () => {
+    for (const score of [1, 2, 3, 4, 5]) {
+      expect(CallFeedbackRequestSchema.parse({ score })).toEqual({ score });
+    }
+    expect(CallFeedbackRequestSchema.parse({ score: 4, comment: '  Helpful.  ' })).toEqual({
+      score: 4,
+      comment: 'Helpful.',
+    });
+    expect(CallFeedbackRequestSchema.parse({ score: 4, comment: null })).toEqual({ score: 4, comment: null });
+  });
+
+  it('rejects a missing, fractional or out-of-range score', () => {
+    for (const score of [undefined, 0, 6, 3.5]) {
+      expect(issuePaths(CallFeedbackRequestSchema.safeParse({ score })), String(score)).toEqual(['score']);
+    }
+  });
+
+  it('caps the comment at 2000 characters', () => {
+    expect(CALL_FEEDBACK_COMMENT_MAX_LENGTH).toBe(2000);
+    const long = 'a'.repeat(CALL_FEEDBACK_COMMENT_MAX_LENGTH + 1);
+    expect(issuePaths(CallFeedbackRequestSchema.safeParse({ score: 3, comment: long }))).toEqual(['comment']);
+  });
+});
+
+describe('ClientEventRequestSchema (D-CW-13)', () => {
+  it('names the Chime client events and the 30-second stats aggregate', () => {
+    expect(CLIENT_EVENT_NAMES).toEqual([
+      'meetingStartSucceeded',
+      'meetingStartFailed',
+      'meetingFailed',
+      'meetingReconnected',
+      'audioInputFailed',
+      'videoInputFailed',
+      'signalingDropped',
+      'connectionStats',
+    ]);
+  });
+
+  it('accepts a start event and a stats aggregate', () => {
+    const start = { eventName: 'meetingStartSucceeded', durationMs: 2300, browser: 'Chrome 130', os: 'macOS 15' };
+    expect(ClientEventRequestSchema.parse(start)).toEqual(start);
+    const stats = {
+      eventName: 'connectionStats',
+      metrics: { rtt: 42, jitter: 3.5, packetLoss: 0.01, outgoingBitrate: 1_200_000 },
+    };
+    expect(ClientEventRequestSchema.parse(stats)).toEqual(stats);
+    const deviceFailure = { eventName: 'audioInputFailed', deviceError: 'NotAllowedError' };
+    expect(ClientEventRequestSchema.parse(deviceFailure)).toEqual(deviceFailure);
+  });
+
+  it('rejects a missing or unknown event name', () => {
+    expect(issuePaths(ClientEventRequestSchema.safeParse({}))).toEqual(['eventName']);
+    expect(issuePaths(ClientEventRequestSchema.safeParse({ eventName: 'chatMessage' }))).toEqual(['eventName']);
+  });
+
+  it('rejects device labels, names and content (only error names are allowed)', () => {
+    expect(
+      ClientEventRequestSchema.safeParse({ eventName: 'audioInputFailed', deviceLabel: 'MacBook Pro Microphone' }).success,
+    ).toBe(false);
+    expect(
+      issuePaths(
+        ClientEventRequestSchema.safeParse({ eventName: 'audioInputFailed', deviceError: 'Could not start MacBook Pro Microphone' }),
+      ),
+    ).toEqual(['deviceError']);
+    expect(
+      ClientEventRequestSchema.safeParse({ eventName: 'connectionStats', metrics: { rtt: 40, speaker: 'Ana' } }).success,
+    ).toBe(false);
+  });
+
+  it('rejects negative metrics and a packet-loss fraction above 1', () => {
+    expect(issuePaths(ClientEventRequestSchema.safeParse({ eventName: 'connectionStats', metrics: { rtt: -1 } }))).toEqual([
+      'metrics.rtt',
+    ]);
+    expect(
+      issuePaths(ClientEventRequestSchema.safeParse({ eventName: 'connectionStats', metrics: { packetLoss: 1.5 } })),
+    ).toEqual(['metrics.packetLoss']);
+    expect(issuePaths(ClientEventRequestSchema.safeParse({ eventName: 'meetingStartSucceeded', durationMs: -5 }))).toEqual([
+      'durationMs',
+    ]);
+  });
+});
+
+describe('ClientEventBatchRequestSchema (D-CW-13, CW-R-80)', () => {
+  it('accepts a bounded batch of client events', () => {
+    const batch = { events: [{ eventName: 'meetingStartSucceeded', durationMs: 1800 }, { eventName: 'signalingDropped' }] };
+    expect(ClientEventBatchRequestSchema.parse(batch)).toEqual(batch);
+  });
+
+  it('rejects an empty batch, an oversized batch and any field beside the events', () => {
+    expect(issuePaths(ClientEventBatchRequestSchema.safeParse({ events: [] }))).toEqual(['events']);
+    const many = Array.from({ length: CLIENT_EVENT_BATCH_MAX + 1 }, () => ({ eventName: 'connectionStats' }));
+    expect(issuePaths(ClientEventBatchRequestSchema.safeParse({ events: many }))).toEqual(['events']);
+    expect(ClientEventBatchRequestSchema.safeParse({ events: [{ eventName: 'meetingFailed' }], userName: 'Ana' }).success).toBe(
+      false,
+    );
+    expect(
+      issuePaths(ClientEventBatchRequestSchema.safeParse({ events: [{ eventName: 'meetingFailed', deviceLabel: 'Mic' }] })),
+    ).toEqual(['events.0']);
+  });
+});
+
+describe('CallSignalRequestSchema and CallSignalPayloadSchema (D-CW-27, CW-R-35)', () => {
+  it('names the three quick signals', () => {
+    expect(CALL_SIGNAL_TYPES).toEqual(['running_late', 'cannot_hear', 'cannot_see']);
+  });
+
+  it('accepts each signal, with an ETA only for running late', () => {
+    expect(CallSignalRequestSchema.parse({ type: 'cannot_hear' })).toEqual({ type: 'cannot_hear' });
+    expect(CallSignalRequestSchema.parse({ type: 'cannot_see' })).toEqual({ type: 'cannot_see' });
+    expect(CallSignalRequestSchema.parse({ type: 'running_late', etaMinutes: 5 })).toEqual({
+      type: 'running_late',
+      etaMinutes: 5,
+    });
+    expect(CallSignalRequestSchema.parse({ type: 'running_late' })).toEqual({ type: 'running_late' });
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'cannot_hear', etaMinutes: 5 }))).toEqual(['etaMinutes']);
+  });
+
+  it('rejects an unknown signal, a free-text message and an ETA out of range', () => {
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'chat' }))).toEqual(['type']);
+    expect(CallSignalRequestSchema.safeParse({ type: 'cannot_hear', message: 'hello' }).success).toBe(false);
+    expect(issuePaths(CallSignalRequestSchema.safeParse({ type: 'running_late', etaMinutes: 0 }))).toEqual(['etaMinutes']);
+    expect(
+      issuePaths(CallSignalRequestSchema.safeParse({ type: 'running_late', etaMinutes: CALL_SIGNAL_ETA_MAX_MINUTES + 1 })),
+    ).toEqual(['etaMinutes']);
+  });
+
+  it('emits only the signal type, the ETA and the sender role: no name, no user id', () => {
+    const payload = { type: 'running_late', etaMinutes: 5, fromRole: 'expert' };
+    expect(CallSignalPayloadSchema.parse(payload)).toEqual(payload);
+    expect(CallSignalPayloadSchema.safeParse({ ...payload, userId: 'user_milica' }).success).toBe(false);
+    expect(CallSignalPayloadSchema.safeParse({ ...payload, displayName: 'Milica' }).success).toBe(false);
+  });
+});
+
+describe('call room events (D-CW-16, D-CW-37, CW-R-36)', () => {
+  const START = '2026-11-25T15:00:00.000Z';
+  const END = '2026-11-25T15:50:00.000Z';
+
+  /** One valid payload per event: ids, roles, statuses and times only. */
+  const VALID: { [E in CallRoomEventName]: CallRoomEventPayload<E> } = {
+    'call.participant.joined': { participantId: 'participant_1', role: 'employee' },
+    'call.participant.left': { participantId: 'participant_1', role: 'expert' },
+    'call.session.ended': { sessionId: 'session_1', endedAt: END },
+    'call.signal': { type: 'cannot_hear', fromRole: 'employee' },
+    'call.location.shared': { sessionId: 'session_1' },
+    'appointment.follow_up.proposed': {
+      appointmentId: 'appt_1',
+      followUpId: 'appt_2',
+      startsAt: START,
+      durationMinutes: 50,
+    },
+    'appointment.follow_up.confirmed': { appointmentId: 'appt_1', followUpId: 'appt_2', status: 'confirmed' },
+    'appointment.follow_up.declined': { appointmentId: 'appt_1', followUpId: 'appt_2' },
+    'appointment.times_suggested': {
+      appointmentId: 'appt_1',
+      followUpId: 'appt_2',
+      windows: [{ startsAt: START, endsAt: END }],
+    },
+  };
+
+  it('names the call room after the session (decision record section 7)', () => {
+    expect(callRoomName('session_1')).toBe('call:session_1');
+  });
+
+  it('lists the canonical call room events, plus the content-free location event', () => {
+    expect(CALL_ROOM_EVENT_NAMES).toEqual([
+      'call.participant.joined',
+      'call.participant.left',
+      'call.session.ended',
+      'call.signal',
+      'call.location.shared',
+      'appointment.follow_up.proposed',
+      'appointment.follow_up.confirmed',
+      'appointment.follow_up.declined',
+      'appointment.times_suggested',
+    ]);
+    expect(CallRoomEventNameSchema.options).toEqual([...CALL_ROOM_EVENT_NAMES]);
+    expect(Object.keys(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS)).toEqual([...CALL_ROOM_EVENT_NAMES]);
+  });
+
+  it('maps each event to its payload schema', () => {
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.participant.joined']).toBe(CallParticipantJoinedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.participant.left']).toBe(CallParticipantLeftPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.session.ended']).toBe(CallSessionEndedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.signal']).toBe(CallSignalPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['call.location.shared']).toBe(CallLocationSharedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.proposed']).toBe(FollowUpProposedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.confirmed']).toBe(FollowUpConfirmedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.follow_up.declined']).toBe(FollowUpDeclinedPayloadSchema);
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS['appointment.times_suggested']).toBe(TimesSuggestedPayloadSchema);
+  });
+
+  it.each(CALL_ROOM_EVENT_NAMES)('%s accepts its payload unchanged', (event) => {
+    expect(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event].parse(VALID[event])).toEqual(VALID[event]);
+  });
+
+  it.each(CALL_ROOM_EVENT_NAMES)('%s refuses a name, an email, a location text, a token or a note', (event) => {
+    const schema = CALL_ROOM_EVENT_PAYLOAD_SCHEMAS[event];
+    for (const extra of [
+      { displayName: 'Milica' },
+      { email: 'milica@example.com' },
+      { locationText: 'Home office' },
+      { joinToken: 'secret' },
+      { note: 'See you soon' },
+    ]) {
+      expect(schema.safeParse({ ...VALID[event], ...extra }).success).toBe(false);
+    }
+  });
+
+  it('carries the joining and leaving participant as an id and a role', () => {
+    expect(issuePaths(CallParticipantJoinedPayloadSchema.safeParse({ participantId: '', role: 'expert' }))).toEqual([
+      'participantId',
+    ]);
+    expect(issuePaths(CallParticipantLeftPayloadSchema.safeParse({ participantId: 'p', role: 'host' }))).toEqual(['role']);
+  });
+
+  it('dates the end of the session as an ISO instant', () => {
+    expect(issuePaths(CallSessionEndedPayloadSchema.safeParse({ sessionId: 'session_1', endedAt: 'today' }))).toEqual([
+      'endedAt',
+    ]);
+  });
+
+  it('keeps the follow-up proposal within the proposable durations', () => {
+    const proposal = VALID['appointment.follow_up.proposed'];
+    expect(FollowUpProposedPayloadSchema.safeParse({ ...proposal, durationMinutes: 0 }).success).toBe(false);
+    expect(
+      FollowUpProposedPayloadSchema.safeParse({ ...proposal, durationMinutes: FOLLOW_UP_DURATION_MAX_MINUTES + 1 }).success,
+    ).toBe(false);
+    expect(issuePaths(FollowUpProposedPayloadSchema.safeParse({ ...proposal, startsAt: 'soon' }))).toEqual(['startsAt']);
+  });
+
+  it('confirms a follow-up as confirmed or awaiting approval only', () => {
+    const confirmed = VALID['appointment.follow_up.confirmed'];
+    expect(FollowUpConfirmedPayloadSchema.parse({ ...confirmed, status: 'awaiting_approval' }).status).toBe(
+      'awaiting_approval',
+    );
+    expect(issuePaths(FollowUpConfirmedPayloadSchema.safeParse({ ...confirmed, status: 'declined' }))).toEqual(['status']);
+  });
+
+  it('suggests one to three windows that end after they start', () => {
+    const suggested = VALID['appointment.times_suggested'];
+    const window = { startsAt: START, endsAt: END };
+    expect(TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [] }).success).toBe(false);
+    expect(
+      TimesSuggestedPayloadSchema.safeParse({
+        ...suggested,
+        windows: Array.from({ length: FOLLOW_UP_MAX_SUGGESTED_WINDOWS + 1 }, () => window),
+      }).success,
+    ).toBe(false);
+    expect(
+      issuePaths(TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [{ startsAt: END, endsAt: START }] })),
+    ).toEqual(['windows.0.endsAt']);
+    expect(
+      TimesSuggestedPayloadSchema.safeParse({ ...suggested, windows: [{ ...window, label: 'after work' }] }).success,
+    ).toBe(false);
+  });
+
+  it('is exported from the package entry for the clients', () => {
+    expect(entry.CALL_ROOM_EVENT_PAYLOAD_SCHEMAS).toBe(CALL_ROOM_EVENT_PAYLOAD_SCHEMAS);
+    expect(entry.callRoomName).toBe(callRoomName);
+  });
+});
+
+describe('CallLocationResponseSchema (CALL-34)', () => {
+  it('carries the shared location or null and nothing else', () => {
+    expect(CallLocationResponseSchema.parse({ locationText: 'Novi Sad' })).toEqual({ locationText: 'Novi Sad' });
+    expect(CallLocationResponseSchema.parse({ locationText: null })).toEqual({ locationText: null });
+    expect(issuePaths(CallLocationResponseSchema.safeParse({}))).toEqual(['locationText']);
+    expect(CallLocationResponseSchema.safeParse({ locationText: null, userId: 'user_jovan' }).success).toBe(false);
+    expect(
+      issuePaths(CallLocationResponseSchema.safeParse({ locationText: 'a'.repeat(CALL_LOCATION_TEXT_MAX_LENGTH + 1) })),
+    ).toEqual(['locationText']);
+  });
+});
+
+describe('CallJoinRequestSchema (CALL-34)', () => {
+  it('accepts an empty body and an optional location text', () => {
+    expect(CallJoinRequestSchema.parse({})).toEqual({});
+    expect(CallJoinRequestSchema.parse({ locationText: '  Novi Sad, at home  ' })).toEqual({
+      locationText: 'Novi Sad, at home',
+    });
+  });
+
+  it('rejects an empty or overlong location text and unknown fields', () => {
+    expect(issuePaths(CallJoinRequestSchema.safeParse({ locationText: '   ' }))).toEqual(['locationText']);
+    expect(
+      issuePaths(CallJoinRequestSchema.safeParse({ locationText: 'a'.repeat(CALL_LOCATION_TEXT_MAX_LENGTH + 1) })),
+    ).toEqual(['locationText']);
+    expect(CallJoinRequestSchema.safeParse({ deviceLabel: 'Mic' }).success).toBe(false);
+  });
+});
+
+describe('DiagnosticsResponseSchema (D-CW-28, CW-R-86)', () => {
+  const participant = {
+    role: 'employee',
+    joinedAt: '2026-11-03T09:01:00.000Z',
+    leftAt: '2026-11-03T09:49:00.000Z',
+    reconnectCount: 1,
+    qualityMetrics: { rtt: 40, jitter: 2, packetLoss: 0.002, outgoingBitrate: 900_000 },
+    errorCodes: ['signalingDropped'],
+    browser: 'Firefox 132',
+    os: 'Windows 11',
+  };
+  const valid = {
+    sessionId: 'sess_1',
+    appointmentId: 'appt_1',
+    webinarId: null,
+    startedAt: '2026-11-03T09:00:30.000Z',
+    endedAt: '2026-11-03T09:50:00.000Z',
+    status: 'ended',
+    provider: 'chime',
+    providerMeetingId: 'meeting-1',
+    participants: [participant],
+    problemReports: [{ category: 'audio', reportedAt: '2026-11-03T09:52:00.000Z', role: 'employee' }],
+  };
+
+  it('allowlists exactly the 4.7.5 fields and the CALL-16 problem reports', () => {
+    expect(DIAGNOSTICS_RESPONSE_FIELDS).toEqual([
+      'sessionId',
+      'appointmentId',
+      'webinarId',
+      'startedAt',
+      'endedAt',
+      'status',
+      'provider',
+      'providerMeetingId',
+      'participants',
+      'problemReports',
+    ]);
+    expect(DIAGNOSTICS_PROBLEM_REPORT_FIELDS).toEqual(['category', 'reportedAt', 'role']);
+    expect(DIAGNOSTICS_PARTICIPANT_FIELDS).toEqual([
+      'role',
+      'joinedAt',
+      'leftAt',
+      'reconnectCount',
+      'qualityMetrics',
+      'errorCodes',
+      'browser',
+      'os',
+    ]);
+    expect(Object.keys(DiagnosticsResponseSchema.shape)).toEqual([...DIAGNOSTICS_RESPONSE_FIELDS]);
+  });
+
+  it('accepts a valid diagnostics payload, including a session that never started', () => {
+    expect(DiagnosticsResponseSchema.parse(valid)).toEqual(valid);
+    const pending = {
+      ...valid,
+      startedAt: null,
+      endedAt: null,
+      status: 'pending',
+      providerMeetingId: null,
+      participants: [
+        { ...participant, joinedAt: null, leftAt: null, reconnectCount: 0, qualityMetrics: null, errorCodes: [], browser: null, os: null },
+      ],
+    };
+    expect(DiagnosticsResponseSchema.parse(pending)).toEqual(pending);
+  });
+
+  it('lists no problem report when none was given (the base DTO omits the field)', () => {
+    const { problemReports: _omitted, ...base } = valid;
+    expect(DiagnosticsResponseSchema.parse(base)).toEqual({ ...base, problemReports: [] });
+  });
+
+  it('rejects each missing field', () => {
+    for (const field of DIAGNOSTICS_RESPONSE_FIELDS.filter((f) => f !== 'problemReports')) {
+      const input: Record<string, unknown> = { ...valid };
+      delete input[field];
+      expect(issuePaths(DiagnosticsResponseSchema.safeParse(input)), field).toEqual([field]);
+    }
+    for (const field of DIAGNOSTICS_PARTICIPANT_FIELDS) {
+      const p: Record<string, unknown> = { ...participant };
+      delete p[field];
+      expect(issuePaths(DiagnosticsResponseSchema.safeParse({ ...valid, participants: [p] })), field).toEqual([
+        `participants.0.${field}`,
+      ]);
+    }
+  });
+
+  it('rejects any field outside the allowlist, at both levels', () => {
+    for (const extra of ['serviceCategory', 'employeeUserId', 'notes', 'joinToken']) {
+      expect(DiagnosticsResponseSchema.safeParse({ ...valid, [extra]: 'x' }).success, extra).toBe(false);
+    }
+    for (const extra of ['userId', 'displayName', 'email', 'deviceLabel']) {
+      expect(
+        DiagnosticsResponseSchema.safeParse({ ...valid, participants: [{ ...participant, [extra]: 'x' }] }).success,
+        extra,
+      ).toBe(false);
+    }
+    for (const extra of ['note', 'userId', 'summary', 'browser']) {
+      expect(
+        DiagnosticsResponseSchema.safeParse({ ...valid, problemReports: [{ ...valid.problemReports[0], [extra]: 'x' }] })
+          .success,
+        extra,
+      ).toBe(false);
+    }
+  });
+});
+
+describe('CallProblemReportRequestSchema (CALL-16, D-CW-04)', () => {
+  const summary = {
+    durationMs: 1_800_000,
+    reconnectCount: 2,
+    metrics: { rtt: 120, jitter: 25, packetLoss: 0.04, outgoingBitrate: 400_000 },
+    browser: 'Chrome 130',
+    os: 'macOS 15',
+  };
+
+  it('names the four fixed categories', () => {
+    expect(CALL_PROBLEM_CATEGORIES).toEqual(['audio', 'video', 'connection', 'other']);
+  });
+
+  it('accepts a category with the connection summary, or with an empty summary', () => {
+    const report = { category: 'audio', summary };
+    expect(CallProblemReportRequestSchema.parse(report)).toEqual(report);
+    expect(CallProblemReportRequestSchema.parse({ category: 'other', summary: {} })).toEqual({
+      category: 'other',
+      summary: {},
+    });
+  });
+
+  it('rejects a free-text note, an unknown category and anything in the summary beyond the metadata', () => {
+    expect(CallProblemReportRequestSchema.safeParse({ category: 'audio', summary, note: 'It echoed' }).success).toBe(false);
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ category: 'echo', summary }))).toEqual(['category']);
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ summary }))).toEqual(['category']);
+    for (const extra of ['deviceLabel', 'displayName', 'message']) {
+      expect(
+        CallProblemReportRequestSchema.safeParse({ category: 'video', summary: { ...summary, [extra]: 'x' } }).success,
+        extra,
+      ).toBe(false);
+    }
+    expect(issuePaths(CallProblemReportRequestSchema.safeParse({ category: 'video', summary: { reconnectCount: -1 } }))).toEqual([
+      'summary.reconnectCount',
+    ]);
+  });
+});
+
+describe('package entry', () => {
+  it('re-exports the appointment and call contracts', () => {
+    expect(entry.CALL_ERROR_CODES).toBe(CALL_ERROR_CODES);
+    expect(entry.API_ERROR_CODES).toBe(API_ERROR_CODES);
+    expect(entry.DiagnosticsResponseSchema).toBe(DiagnosticsResponseSchema);
+    expect(entry.CALL_JOIN_WINDOW_BEFORE_MINUTES).toBe(15);
+    expect(entry.AppointmentSchema).toBeDefined();
+    expect(entry.FollowUpSuggestTimesRequestSchema).toBeDefined();
+    expect(entry.APPOINTMENT_STATUS_TRANSITIONS).toBeDefined();
+  });
+
+  it('leaves the VideoProvider name to the API adapter class (decision record section 7)', () => {
+    expect(entry.VideoProviderNameSchema).toBe(VideoProviderNameSchema);
+    expect('VideoProviderSchema' in entry).toBe(false);
+    expect('VIDEO_PROVIDERS' in entry).toBe(false);
+  });
+});
+
+describe('Problem report listing for support (T-CW-1.5, CALL-16 criterion 5)', () => {
+  const item = {
+    sessionId: 'sess_1',
+    appointmentId: 'appt_1',
+    reportedAt: '2026-11-10T09:40:00.000Z',
+    role: 'employee',
+    category: 'audio',
+    summary: { durationMs: 600_000, reconnectCount: 1, metrics: { rtt: 220 }, browser: 'Chrome 130', os: 'macOS 15' },
+  };
+
+  it('pages with a cursor and bounded limits, filtered by organization and time', () => {
+    expect(ProblemReportListQuerySchema.parse({})).toEqual({ limit: PROBLEM_REPORT_LIST_DEFAULT_LIMIT });
+    expect(
+      ProblemReportListQuerySchema.parse({
+        orgId: 'org_1',
+        from: '2026-11-01T00:00:00.000Z',
+        to: '2026-11-30T00:00:00.000Z',
+        limit: '20',
+        cursor: 'abc',
+      }),
+    ).toEqual({ orgId: 'org_1', from: '2026-11-01T00:00:00.000Z', to: '2026-11-30T00:00:00.000Z', limit: 20, cursor: 'abc' });
+    expect(issuePaths(ProblemReportListQuerySchema.safeParse({ limit: PROBLEM_REPORT_LIST_MAX_LIMIT + 1 }))).toEqual(['limit']);
+    expect(
+      issuePaths(ProblemReportListQuerySchema.safeParse({ from: '2026-11-30T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' })),
+    ).toEqual(['to']);
+  });
+
+  it('lists ids, time, role, category and the connection summary only: no names', () => {
+    const page = { items: [item], nextCursor: null };
+    expect(ProblemReportListResponseSchema.parse(page)).toEqual(page);
+    for (const extra of ['userId', 'displayName', 'note', 'orgId']) {
+      expect(ProblemReportListResponseSchema.safeParse({ items: [{ ...item, [extra]: 'x' }], nextCursor: null }).success, extra).toBe(
+        false,
+      );
+    }
+    expect(
+      ProblemReportListResponseSchema.safeParse({
+        items: [{ ...item, summary: { ...item.summary, deviceLabel: 'Mic' } }],
+        nextCursor: null,
+      }).success,
+    ).toBe(false);
+  });
+});

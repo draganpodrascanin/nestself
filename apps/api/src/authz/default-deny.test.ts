@@ -8,7 +8,7 @@
  *
  * @see T-1.6, AUTHZ-R-49
  */
-import { describe, it, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
   DiscoveryModule,
@@ -99,6 +99,188 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
         violations.map((v) => `  - ${v}`).join('\n'),
       );
     }
+  });
+
+  it('covers the appointments controller: every route is @Authorize() except the @Authenticated() list, read, cancel and expert lookup (CW-R-87)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const wrapper = discovery
+      .getControllers()
+      .find((w) => w.instance?.constructor.name === 'AppointmentsController');
+    expect(wrapper, 'AppointmentsController is registered').toBeDefined();
+
+    const instance = wrapper!.instance as object;
+    const prototype = Object.getPrototypeOf(instance) as object;
+    const policies: Record<string, string> = {};
+    for (const methodName of scanner.getAllMethodNames(prototype)) {
+      const handler = (prototype as Record<string, unknown>)[methodName];
+      if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+      const targets = [handler, instance.constructor];
+      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+      const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+      policies[methodName] = isPublic
+        ? 'public'
+        : authenticated
+          ? 'authenticated'
+          : (authorize?.action ?? 'none');
+    }
+
+    expect(policies).toEqual({
+      list: 'authenticated',
+      get: 'authenticated',
+      expertCandidates: 'authenticated',
+      create: 'bookings.coordinate',
+      cancel: 'authenticated',
+      // Follow-ups (T-CW-1.9, guidelines 7.1).
+      proposeFollowUp: 'appointment.propose',
+      confirmFollowUp: 'consultation.join',
+      suggestTimes: 'consultation.join',
+      scheduleFollowUp: 'appointment.propose',
+      declineFollowUp: 'consultation.join',
+    });
+  });
+
+  it('covers the calls controller: every route is @Authorize() with its canonical action (T-CW-1.1, CW-R-87)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const wrapper = discovery.getControllers().find((w) => w.instance?.constructor.name === 'CallsController');
+    expect(wrapper, 'CallsController is registered').toBeDefined();
+
+    const instance = wrapper!.instance as object;
+    const prototype = Object.getPrototypeOf(instance) as object;
+    const policies: Record<string, string> = {};
+    for (const methodName of scanner.getAllMethodNames(prototype)) {
+      const handler = (prototype as Record<string, unknown>)[methodName];
+      if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+      const targets = [handler, instance.constructor];
+      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+      const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+      policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+    }
+
+    expect(policies).toEqual({
+      join: 'consultation.join',
+      end: 'consultation.join',
+      outcome: 'delivery.record',
+      feedback: 'consultation.join',
+      signal: 'consultation.join',
+      location: 'consultation.join',
+      clientEvents: 'consultation.join',
+      problemReport: 'consultation.join',
+      problemReportQueue: 'diagnostic.read',
+      diagnostics: 'diagnostic.read',
+    });
+  });
+
+  it('covers the webinar controllers: canonical actions, and @Authenticated() where the service decides (T-CW-2.1, CW-R-31a)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const policiesOf = (controller: string): Record<string, string> => {
+      const wrapper = discovery.getControllers().find((w) => w.instance?.constructor.name === controller);
+      expect(wrapper, `${controller} is registered`).toBeDefined();
+      const instance = wrapper!.instance as object;
+      const prototype = Object.getPrototypeOf(instance) as object;
+      const policies: Record<string, string> = {};
+      for (const methodName of scanner.getAllMethodNames(prototype)) {
+        const handler = (prototype as Record<string, unknown>)[methodName];
+        if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+        const targets = [handler, instance.constructor];
+        const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+        const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+        const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+        policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+      }
+      return policies;
+    };
+
+    expect(policiesOf('WebinarsController')).toEqual({
+      list: 'event.register',
+      // Attendee, registrant, host or moderating staff: decided in the service.
+      get: 'authenticated',
+      register: 'event.register',
+      unregister: 'event.register',
+      // Hosts and registered attendees (WBN-07, WBN-16).
+      join: 'authenticated',
+      // event.present or event.moderate on the occurrence, checked in the service (CW-R-31a).
+      start: 'authenticated',
+      end: 'authenticated',
+      // Attendees (event.register) and hosts (WBN-37) alike.
+      createMessage: 'authenticated',
+      listMessages: 'authenticated',
+      publishMessage: 'event.moderate',
+      answerMessage: 'event.moderate',
+      dismissMessage: 'event.moderate',
+      raiseHand: 'event.register',
+      lowerHand: 'event.register',
+      // event.moderate or event.present (WBN-25).
+      giveFloor: 'authenticated',
+      takeFloor: 'authenticated',
+      // WBN-26: hosts mute and ask (decided in the service); the attendee unmutes their own floor.
+      muteFloor: 'authenticated',
+      requestUnmute: 'authenticated',
+      unmuteFloor: 'event.register',
+      createPoll: 'event.moderate',
+      openPoll: 'event.moderate',
+      closePoll: 'event.moderate',
+      vote: 'event.register',
+      // Poll state for registrants and hosts, results for hosts after the close: decided in the service.
+      listPolls: 'authenticated',
+      pollResults: 'authenticated',
+      // The moderator's early stop (T-CW-2.5); the status for hosts and operations, decided in the service.
+      stopRecording: 'event.moderate',
+      recordingStatus: 'authenticated',
+    });
+
+    expect(policiesOf('WebinarsOpsController')).toEqual({
+      // The admin index (an addition to the canonical routes): manage or moderate, in the service.
+      list: 'authenticated',
+      // The occurrence form's lookups and the detail: event.manage (or event.moderate for the detail), in the service.
+      hostCandidates: 'authenticated',
+      get: 'authenticated',
+      organisations: 'authenticated',
+      units: 'event.manage',
+      create: 'event.manage',
+      update: 'event.manage',
+      publish: 'event.manage',
+      cancel: 'event.manage',
+      // event.manage or event.moderate (WBN-33), in the service.
+      attendance: 'authenticated',
+    });
   });
 
   it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {

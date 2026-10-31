@@ -15,8 +15,11 @@
     "check": "node scripts/check-locales.mjs",
     "build:cyrillic": "node scripts/transliterate.mjs --write"
   },
-  "dependencies": { "i18next": "catalog:" },
+  "dependencies": {
+    "i18next": "catalog:"
+  },
   "devDependencies": {
+    "@nestself/contracts": "workspace:*",
     "@nestself/eslint-config": "workspace:*",
     "@nestself/typescript-config": "workspace:*",
     "@types/node": "catalog:",
