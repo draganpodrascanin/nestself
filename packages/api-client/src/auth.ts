@@ -99,6 +99,20 @@ export function createAuthApi(client: ApiClient) {
         schema: SsoBindResendResponseSchema,
       }),
 
+    /**
+     * POST /auth/sso/bind-token — the mobile app's federated sign-in: the ID
+     * token of its own hosted-UI exchange, once, before anything else; the API
+     * binds the identity under the web's rules (204). 403 `sso_denied` when
+     * the organisation does not take the sign-in, 403 `sso_email_unverified`
+     * when the address has to be confirmed on the web first.
+     */
+    ssoBindToken: (idToken: string) =>
+      client.request('/api/auth/sso/bind-token', {
+        ...jsonPost({ idToken }),
+        schema: z.undefined(),
+        expectBody: false,
+      }),
+
     /** POST /auth/password — password sign-in (may require a second step). */
     password: (email: string, password: string) =>
       client.request('/api/auth/password', {

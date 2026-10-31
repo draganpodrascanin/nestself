@@ -19,6 +19,7 @@ export class StubBearerVerifier implements BearerVerifier {
       const payload = await this.jwt.verifyAsync<{
         userId?: string;
         sub?: string;
+        username?: unknown;
         displayName?: string;
         email?: string;
       }>(token);
@@ -33,6 +34,8 @@ export class StubBearerVerifier implements BearerVerifier {
       return {
         userId,
         sub: payload.sub ?? userId,
+        // As the Cognito verifier passes it: the guard reads a federated user's provider from it.
+        username: typeof payload.username === 'string' ? payload.username : undefined,
         originJti: null,
         authMethod: 'email_otp',
         authTime: Math.floor(Date.now() / 1000),

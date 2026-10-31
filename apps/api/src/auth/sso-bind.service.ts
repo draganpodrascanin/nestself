@@ -47,7 +47,25 @@
  * no log line carries the handle, the challenge token, the code, a token or,
  * in a log line, the address.
  *
- * @see docs/superpowers/specs/2026-10-30-auth-phase-4-pilot-readiness-design.md section 5.6
+ * `bindToken` is the mobile app's binding (5.7). The app runs its own PKCE
+ * exchange against the hosted UI, so the callback, and with it every binding
+ * rule, never ran; the app presents the ID token once, before anything else.
+ * After the token is verified (`ID_TOKEN_VERIFIER`: the mobile client's ID
+ * tokens only) the callback's rules apply: an identity that exists takes
+ * path 1 (`existingIdentityUsable`; a refusal is 403 `sso_denied` with
+ * `sso_provider_mismatch`, nothing deleted), and a new binding needs an
+ * ACTIVE connection (there is no staff test on mobile), an address on a
+ * verified domain of it and, for OIDC, `email_verified === true` unless the
+ * connection's claim switch is off. An unconfirmed OIDC address answers 403
+ * `sso_email_unverified` and keeps the pool user without opening a pending
+ * binding: the person confirms the address once on the web, where the
+ * callback finds no identity and runs the pending flow, and the app's next
+ * sign-in takes path 1. Nothing to bind: the orphan is deleted, 403
+ * `sso_denied`. Success answers nothing: the app keeps its own tokens and
+ * the bearer path resolves the identity from then on. No audit row or log
+ * line carries the ID token.
+ *
+ * @see docs/superpowers/specs/2026-10-30-auth-phase-4-pilot-readiness-design.md sections 5.6 and 5.7
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import type {
@@ -55,6 +73,7 @@ import type {
   SsoBindResendResponse,
   SsoBindStartRequest,
   SsoBindStartResponse,
+  SsoBindTokenRequest,
   SsoBindVerifyRequest,
 } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
@@ -68,10 +87,12 @@ import {
   FederatedBindingService,
   bindingFailureReason,
   domainOf,
+  type AddressConfirmation,
   type Binding,
   type RequestMeta,
 } from './federated-binding.service.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
+import { ID_TOKEN_VERIFIER, type IdTokenVerifier } from './id-token-verifier.js';
 import { NestselfOtpService } from './nestself-otp.service.js';
 import { PendingBindStore, pendingBindId, type TakenPendingBind } from './pending-bind-store.js';
 import { SignInThrottle } from './sign-in-throttle.js';
@@ -96,6 +117,15 @@ function invalidChallenge(status: 400 | 401): ApiHttpException {
 
 function ssoDenied(): ApiHttpException {
   return new ApiHttpException({ status: 403, code: 'sso_denied', message: 'The federated sign-in was not bound' });
+}
+
+/** Mobile: the OIDC provider did not confirm the address; the person confirms it once on the web. */
+function emailUnverified(): ApiHttpException {
+  return new ApiHttpException({
+    status: 403,
+    code: 'sso_email_unverified',
+    message: 'The identity provider did not confirm the email address; sign in on the web first',
+  });
 }
 
 /** What email-code sign-in answers for a locked address (`SignInThrottle`); the bind routes share the lock. */
@@ -135,6 +165,7 @@ export class SsoBindService {
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
     @Inject(forwardRef(() => PrincipalLoader)) private readonly principalLoader: PrincipalLoader,
     @Inject(forwardRef(() => IdentityResolutionService)) private readonly identity: IdentityResolutionService,
+    @Inject(ID_TOKEN_VERIFIER) private readonly idTokens: IdTokenVerifier,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -224,35 +255,7 @@ export class SsoBindService {
       throw ssoDenied();
     }
 
-    let binding: Binding | null;
-    try {
-      binding = await this.dbs.withOrgScope(connection.orgId, (tx) =>
-        this.binding.bind(tx, connection, claims, record.email, federatedProvider(record.providerName), true, VIA),
-      );
-    } catch (err) {
-      this.logger.error(`SSO identity binding failed: ${bindingFailureReason(err)}`);
-      await this.auditFailed('sso_binding', meta, connection, record.providerName);
-      throw ssoDenied();
-    }
-    if (!binding) {
-      await this.binding.denyBinding(claims, record.email, connection, meta, 'no_invitation', VIA);
-      throw ssoDenied();
-    }
-
-    if (binding.kind === 'invitation') {
-      await this.audit.record({
-        action: 'invitation.accepted',
-        actorUserId: binding.userId,
-        actorKind: 'USER',
-        orgId: connection.orgId,
-        recordType: 'invitation',
-        recordId: binding.invitationId,
-        result: 'ALLOWED',
-        details: { emailNormalised: record.email, templateKey: binding.templateKey, via: VIA, connectionId: connection.id },
-      });
-    }
-    await this.principalLoader.invalidateUser(binding.userId, [connection.orgId]);
-
+    await this.bindNew(connection, claims, record.email, true, meta, VIA);
     return this.signIn(record, connection, meta);
   }
 
@@ -265,8 +268,108 @@ export class SsoBindService {
   }
 
   // -------------------------------------------------------------------------
+  // POST /auth/sso/bind-token (the mobile app, 5.7)
+  // -------------------------------------------------------------------------
+
+  async bindToken(body: SsoBindTokenRequest, meta: RequestMeta): Promise<void> {
+    const claims = await this.idTokens.verify(body.idToken);
+    const providerName = claims.identities?.[0]?.providerName ?? null;
+    if (!providerName) {
+      // A native user's token: nothing federated to bind, and its pool user is no orphan.
+      await this.auditFailed('sso_provider_mismatch', meta, null, 'sso');
+      throw ssoDenied();
+    }
+    const email = claims.email.trim().toLowerCase();
+    const connection = await this.sso.findConnectionByProviderName(providerName);
+
+    // 1. Bound already (on the web, or by an earlier bind-token): path 1, as the callback runs it.
+    const existing = await this.identities.findExternalIdentity(federatedProvider(providerName), claims.sub);
+    if (existing) {
+      if (!(await this.binding.existingIdentityUsable(existing, connection))) {
+        await this.auditFailed('sso_provider_mismatch', meta, connection, providerName);
+        throw ssoDenied();
+      }
+      return;
+    }
+
+    // 2. A new binding needs an ACTIVE connection (no staff test on mobile) and an address on one
+    //    of its verified domains: a tenant's IdP may assert any address.
+    if (!connection || connection.status !== 'ACTIVE') {
+      await this.binding.denyBinding(claims, email, connection, meta, 'connection_inactive');
+      throw ssoDenied();
+    }
+    if (!(await this.binding.isDomainVerifiedFor(connection, domainOf(email)))) {
+      await this.binding.denyBinding(claims, email, connection, meta, 'email_off_domain');
+      throw ssoDenied();
+    }
+    // SSO-R-08, failing closed like the callback. No pending binding here: the pool user stays,
+    // and the web's callback opens one when the person signs in there.
+    const claimRequired = connection.oidcEmailVerifiedClaimRequired !== false;
+    if (connection.protocol === 'OIDC' && claims.emailVerified !== true && claimRequired) {
+      await this.auditFailed('sso_email_unverified', meta, connection, providerName);
+      throw emailUnverified();
+    }
+
+    // 3-5.
+    await this.bindNew(connection, claims, email, true, meta);
+  }
+
+  // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
+
+  /**
+   * Paths 3 to 5 for a connection that vouches for the address: an invitation
+   * of its organization, else JIT (`FederatedBindingService.bind`), in one
+   * transaction of its tenant, then `invitation.accepted` and the principal
+   * cache. A failing transaction is the neutral 403 `sso_denied` with the
+   * pool user kept, as in the callback; nothing to bind to deletes the
+   * orphan (`no_invitation`). `confirmedBy`: NestSelf confirmed the address
+   * with a mailed code.
+   */
+  private async bindNew(
+    connection: SsoConnectionRow,
+    claims: IdTokenClaims,
+    email: string,
+    domainVerified: boolean,
+    meta: RequestMeta,
+    confirmedBy?: AddressConfirmation,
+  ): Promise<void> {
+    const providerName = connection.cognitoProviderName;
+    let binding: Binding | null;
+    try {
+      binding = await this.dbs.withOrgScope(connection.orgId, (tx) =>
+        this.binding.bind(tx, connection, claims, email, federatedProvider(providerName), domainVerified, confirmedBy),
+      );
+    } catch (err) {
+      this.logger.error(`SSO identity binding failed: ${bindingFailureReason(err)}`);
+      await this.auditFailed('sso_binding', meta, connection, providerName);
+      throw ssoDenied();
+    }
+    if (!binding) {
+      await this.binding.denyBinding(claims, email, connection, meta, 'no_invitation', confirmedBy);
+      throw ssoDenied();
+    }
+
+    if (binding.kind === 'invitation') {
+      await this.audit.record({
+        action: 'invitation.accepted',
+        actorUserId: binding.userId,
+        actorKind: 'USER',
+        orgId: connection.orgId,
+        recordType: 'invitation',
+        recordId: binding.invitationId,
+        result: 'ALLOWED',
+        details: {
+          emailNormalised: email,
+          templateKey: binding.templateKey,
+          via: confirmedBy ?? 'sso',
+          connectionId: connection.id,
+        },
+      });
+    }
+    await this.principalLoader.invalidateUser(binding.userId, [connection.orgId]);
+  }
 
   /**
    * The session from the stored token set, for a sign-in that bound or found

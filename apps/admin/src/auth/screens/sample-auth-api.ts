@@ -66,6 +66,8 @@ export function createSampleAuthApi(): AuthApi {
     ssoBindStart: noPendingSignIn,
     ssoBindVerify: noPendingSignIn,
     ssoBindResend: noPendingSignIn,
+    // The mobile app's binding; the web never calls it.
+    ssoBindToken: noPendingSignIn,
 
     password: async () =>
       // Password users always proceed to TOTP challenge

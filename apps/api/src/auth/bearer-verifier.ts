@@ -8,6 +8,12 @@
 export interface BearerPayload {
   userId: string;
   sub: string;
+  /**
+   * The pool username (the access token's `username` claim): a federated
+   * user's is `<cognitoProviderName>_<IdP subject>`, a native user's is the
+   * email address. The guard reads the provider from it (5.7).
+   */
+  username?: string;
   originJti: string | null;
   authMethod: 'email_otp' | 'sso';
   authTime: number;

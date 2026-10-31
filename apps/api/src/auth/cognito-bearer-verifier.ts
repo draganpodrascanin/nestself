@@ -97,6 +97,8 @@ export class CognitoBearerVerifier implements BearerVerifier {
     return {
       userId: '', // Will be resolved by auth guard via ExternalIdentity lookup
       sub,
+      // The pool username names a federated user's provider (5.7).
+      username: typeof claims['username'] === 'string' ? claims['username'] : undefined,
       originJti,
       authMethod: 'email_otp',
       authTime,

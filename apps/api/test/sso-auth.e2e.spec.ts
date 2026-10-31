@@ -9,6 +9,12 @@
  * Connections are seeded through `SsoRepository` (the staff lifecycle over
  * HTTP is `sso.e2e.spec.ts`).
  *
+ * The mobile app's federated sign-in (phase 4 design 5.7, Review Focus 3):
+ * `POST /auth/sso/bind-token` with the ID token of the app's own exchange
+ * (signed with the stub JWT secret, as the stub ID-token verifier checks), and
+ * the bearer path with `BEARER_VERIFIER` overridden to answer what the
+ * Cognito access-token verifier would.
+ *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
 import 'dotenv/config';
@@ -16,10 +22,14 @@ import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { IdentityProviderService, decodeJwtClaims } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { s256 } from '../src/identity/fake-sso-store.js';
+import { BEARER_VERIFIER, type BearerPayload, type BearerVerifier } from '../src/auth/bearer-verifier.js';
+import { ApiHttpException } from '../src/common/api-error.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
   auditEvents,
@@ -68,6 +78,22 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   let unitId: string;
   const jwtSecret = randomBytes(32).toString('hex');
 
+  /**
+   * Stands in for `CognitoBearerVerifier`: a bearer token is accepted when a
+   * test registered what the pool's access-token verifier would answer for
+   * it (`poolBearer`); anything else is refused as the real one refuses it.
+   */
+  const poolBearers = new Map<string, BearerPayload>();
+  const bearerVerifier: BearerVerifier = {
+    async verify(token) {
+      const payload = poolBearers.get(token);
+      if (!payload) {
+        throw new ApiHttpException({ status: 401, code: 'unauthenticated', message: 'Invalid or expired bearer token' });
+      }
+      return payload;
+    },
+  };
+
   beforeAll(async () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'ssoauth');
     await seed(testDb.db);
@@ -84,7 +110,10 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     delete process.env.FAKE_DNS_TXT_AUTOVERIFY;
 
     const { AppModule } = await import('../src/app.module.js');
-    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(BEARER_VERIFIER)
+      .useValue(bearerVerifier)
+      .compile();
     const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
 
     app = moduleFixture.createNestApplication();
@@ -1229,6 +1258,234 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
         expect((await bind(request(app.getHttpServer()), path, body)).status).not.toBe(429);
       }
       const refused = await bind(request(app.getHttpServer()), path, body);
+      expect(refused.status).toBe(429);
+      expect(refused.body.code).toBe('rate_limited');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Mobile (5.7): bind-token, and the bearer of a federated user
+  // -------------------------------------------------------------------------
+
+  describe('federated users on mobile (5.7)', () => {
+    /**
+     * The mobile app's own PKCE exchange against the hosted UI, in the fake:
+     * Cognito creates (or finds) the federated pool user of `email`. The app
+     * holds that user's ID token, Cognito-shaped as the fake issues it and
+     * signed with the stub JWT secret as the stub ID-token verifier checks.
+     */
+    async function mobileExchange(email: string, emailVerified: boolean | null = true) {
+      const subject = `sub-${email}`;
+      seedFederated(subject, email, emailVerified);
+      const verifier = randomBytes(32).toString('base64url');
+      const code = idp.issueAuthorizationCode(PROVIDER, subject, s256(verifier));
+      const exchanged = await idp.exchangeAuthorizationCode({ code, codeVerifier: verifier, redirectUri: 'nestself://auth/callback' });
+      const { exp: _exp, iat: _iat, ...claims } = decodeJwtClaims(exchanged.idToken) as Record<string, unknown>;
+      return {
+        subject,
+        poolSub: exchanged.idTokenClaims.sub,
+        username: exchanged.idTokenClaims.username,
+        idToken: app.get(JwtService).sign(claims),
+      };
+    }
+
+    /** A bearer token the overridden verifier answers for as the pool would: this `sub`, this pool `username`. */
+    function poolBearer(sub: string, username: string): string {
+      const token = randomBytes(24).toString('base64url');
+      poolBearers.set(token, {
+        userId: '',
+        sub,
+        username,
+        originJti: randomBytes(8).toString('hex'),
+        authMethod: 'email_otp',
+        authTime: Math.floor(Date.now() / 1000),
+      });
+      return token;
+    }
+
+    const bindToken = (idToken: string) =>
+      request(app.getHttpServer()).post('/api/auth/sso/bind-token').send({ idToken });
+    const meWith = (bearer: string) =>
+      request(app.getHttpServer()).get('/api/auth/me').set('Authorization', `Bearer ${bearer}`);
+    const ofEmail = (email: string) => (e: { details: unknown }) =>
+      (e.details as { emailNormalised?: string }).emailNormalised === email;
+
+    it('bind-token binds an invited mobile user and a later bearer call resolves', async () => {
+      const email = 'mobile.invited@acme.example';
+      const invitationId = await invite(email);
+      const mobile = await mobileExchange(email);
+      const bearer = poolBearer(mobile.poolSub, mobile.username);
+
+      // What this task fixes: the federated pool user's bearer resolves to nobody before the binding.
+      expect((await meWith(bearer)).status).toBe(401);
+
+      const res = await bindToken(mobile.idToken);
+      expect(res.status).toBe(204);
+      expect(res.text).toBe('');
+      // No web session: the app keeps signing in with its own tokens.
+      expect(res.headers['set-cookie']).toBeUndefined();
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const rows = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(rows).toEqual([
+        expect.objectContaining({
+          provider: `cognito:${PROVIDER}`,
+          subject: mobile.poolSub,
+          cognitoUsername: mobile.username,
+          email,
+          emailVerified: true,
+          ssoConnectionId: connectionId,
+        }),
+      ]);
+      const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
+      expect(inv!.acceptedUserId).toBe(user!.id);
+      const accepted = (await auditFor('invitation.accepted')).filter((e) => e.recordId === invitationId);
+      expect(accepted.map((e) => (e.details as { via?: string }).via)).toEqual(['sso']);
+
+      const me = await meWith(bearer);
+      expect(me.status).toBe(200);
+      expect(me.body.principal.userId).toBe(user!.id);
+      // MFA delegated to the identity provider, as for a federated web session.
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+      expect(me.body.principal.memberships).toContainEqual(expect.objectContaining({ orgId: ORG, status: 'ACTIVE' }));
+
+      // The app sends the ID token again (a retry): path 1, nothing bound twice.
+      expect((await bindToken(mobile.idToken)).status).toBe(204);
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id))).toHaveLength(1);
+    });
+
+    it('bind-token without an invitation deletes the orphan and answers sso_denied', async () => {
+      const email = 'mobile.walkin@acme.example';
+      const mobile = await mobileExchange(email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const res = await bindToken(mobile.idToken);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('sso_denied');
+        // SSO-R-10: the orphan federated pool user goes.
+        expect(deleteUser).toHaveBeenCalledWith(mobile.username);
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const denied = (await auditFor('identity.denied')).filter(ofEmail(email));
+      expect(denied).toEqual([
+        expect.objectContaining({ orgId: ORG, details: expect.objectContaining({ reason: 'no_invitation', connectionId }) }),
+      ]);
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.subject, mobile.poolSub))).toHaveLength(0);
+    });
+
+    it('bind-token with an unverified OIDC email answers sso_email_unverified and keeps the pool user', async () => {
+      const email = 'mobile.unconfirmed@acme.example';
+      await invite(email);
+      // Entra ID by default: no email_verified claim at all.
+      const mobile = await mobileExchange(email, null);
+      expect(decodeJwtClaims(mobile.idToken)).not.toHaveProperty('email_verified');
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const res = await bindToken(mobile.idToken);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('sso_email_unverified');
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+      }
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const failed = (await auditFor('auth.sign_in.failed')).filter(
+        (e) => (e.details as { reason?: string }).reason === 'sso_email_unverified',
+      );
+      expect(failed).toEqual([expect.objectContaining({ orgId: ORG, recordId: PROVIDER, result: 'DENIED' })]);
+      // No pending binding on mobile: the person confirms the address on the web.
+      expect((await auditFor('identity.verification_started')).filter(ofEmail(email))).toHaveLength(0);
+
+      // On the web the callback finds no identity, keeps the same pool user and opens the pending binding.
+      const web = await federatedSignIn(email);
+      const handle = new URL(web.location).searchParams.get('bind')!;
+      expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      const start = await web.agent.post('/api/auth/sso/bind/start').send({ handle });
+      expect(start.status).toBe(200);
+      const verify = await web.agent
+        .post('/api/auth/sso/bind/verify')
+        .send({ challengeToken: start.body.challengeToken, code: lastMailTo(email).params.code });
+      expect(verify.status).toBe(200);
+
+      // Back in the app: path 1 binds nothing new, although the provider still does not confirm the address.
+      const again = await mobileExchange(email, null);
+      expect(again.poolSub).toBe(mobile.poolSub);
+      expect((await bindToken(again.idToken)).status).toBe(204);
+      const me = await meWith(poolBearer(again.poolSub, again.username));
+      expect(me.status).toBe(200);
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+    });
+
+    it('a federated bearer resolves only through the connection its identity was bound through (Review Focus 3)', async () => {
+      const email = 'mobile.bound@acme.example';
+      await invite(email);
+      const mobile = await mobileExchange(email);
+      expect((await bindToken(mobile.idToken)).status).toBe(204);
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+
+      // An identity under OTHER_ORG's provider name that was bound through ORG's connection (a
+      // provider name that changed hands), for a user who is an ACTIVE member of OTHER_ORG too:
+      // only the binding connection refuses.
+      const movedSub = `pool-sub-${randomBytes(6).toString('hex')}`;
+      await testDb.db.insert(externalIdentities).values({
+        userId: user!.id,
+        provider: `cognito:${OTHER_PROVIDER}`,
+        subject: movedSub,
+        cognitoUsername: `${OTHER_PROVIDER}_idp-moved`,
+        email,
+        emailVerified: true,
+        ssoConnectionId: connectionId,
+      });
+      await testDb.db.insert(memberships).values({ userId: user!.id, orgId: OTHER_ORG, status: 'ACTIVE', startDate: new Date() });
+
+      const failedBefore = await auditFor('auth.sign_in.failed');
+      const presented = [
+        // The identity of ORG's connection, presented under OTHER_ORG's provider name.
+        [mobile.poolSub, `${OTHER_PROVIDER}_${mobile.subject}`],
+        // The identity under OTHER_ORG's provider name, bound through ORG's connection.
+        [movedSub, `${OTHER_PROVIDER}_idp-moved`],
+      ] as const;
+      for (const [sub, username] of presented) {
+        const res = await meWith(poolBearer(sub, username));
+        expect(res.status).toBe(401);
+        expect(res.body.code).toBe('unauthenticated');
+        expect(res.body.principal).toBeUndefined();
+      }
+      const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+      expect(failed).toHaveLength(2);
+      for (const row of failed) {
+        expect(row).toMatchObject({ orgId: OTHER_ORG, recordId: OTHER_PROVIDER, result: 'DENIED', details: { reason: 'sso_provider_mismatch' } });
+      }
+
+      // Under its own provider name the same account resolves.
+      const own = await meWith(poolBearer(mobile.poolSub, mobile.username));
+      expect(own.status).toBe(200);
+      expect(own.body.principal.userId).toBe(user!.id);
+    });
+
+    it('bind-token answers 401 for a token the verifier refuses and 400 for a malformed body', async () => {
+      const jwt = app.get(JwtService);
+      const accessToken = jwt.sign({ sub: 'pool-sub-x', token_use: 'access', username: `${PROVIDER}_x` });
+      const unsigned = `${Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url')}.${Buffer.from(
+        JSON.stringify({ sub: 'pool-sub-x', token_use: 'id', identities: [{ providerName: PROVIDER, userId: 'x' }] }),
+      ).toString('base64url')}.`;
+      for (const idToken of [accessToken, unsigned, 'not-a-jwt']) {
+        const res = await bindToken(idToken);
+        expect(res.status).toBe(401);
+        expect(res.body.code).toBe('unauthenticated');
+      }
+      const malformed = await request(app.getHttpServer()).post('/api/auth/sso/bind-token').send({});
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.code).toBe('validation');
+    });
+
+    it('bind-token allows 10 requests a minute per IP', async () => {
+      for (let i = 0; i < 10; i++) {
+        expect((await bindToken('not-a-jwt')).status).not.toBe(429);
+      }
+      const refused = await bindToken('not-a-jwt');
       expect(refused.status).toBe(429);
       expect(refused.body.code).toBe('rate_limited');
     });

@@ -64,20 +64,21 @@ export interface CognitoSsoConfig {
 
 /**
  * aws-jwt-verify checks the RS256 signature against the pool JWKS (cached
- * per `kid`), `iss` (the pool), `aud` (the web client), `token_use = id` and
- * `exp`. Imported lazily so stub mode never loads it. `jwks` pre-loads the
- * key set instead of downloading it (tests).
+ * per `kid`), `iss` (the pool), `aud` (`clientId`: the web client for the
+ * callback's exchange, the mobile client for `bind-token`), `token_use = id`
+ * and `exp`. Imported lazily so stub mode never loads it. `jwks` pre-loads
+ * the key set instead of downloading it (tests).
  */
 export async function createCognitoIdTokenVerifier(
   userPoolId: string,
-  webClientId: string,
+  clientId: string,
   jwks?: Jwks,
 ): Promise<IdTokenVerifier> {
   const { CognitoJwtVerifier } = await import('aws-jwt-verify');
   const verifier = CognitoJwtVerifier.create({
     userPoolId,
     tokenUse: 'id',
-    clientId: webClientId,
+    clientId,
   });
   if (jwks) verifier.cacheJwks(jwks);
   return {

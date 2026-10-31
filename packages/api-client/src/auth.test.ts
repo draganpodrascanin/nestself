@@ -212,3 +212,52 @@ describe('createAuthApi() account methods', () => {
   });
 });
 
+describe('createAuthApi().ssoBindToken (the mobile app, bearer mode)', () => {
+  interface BearerCall {
+    url: string;
+    method: string;
+    authorization: string | null;
+    body: unknown;
+  }
+
+  /** A bearer-mode client with no stored token yet (the app has not kept the new tokens). */
+  function bearerApi(answer: () => Response) {
+    const calls: BearerCall[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      calls.push({
+        url: String(input),
+        method: init?.method ?? 'GET',
+        authorization: new Headers(init?.headers).get('Authorization'),
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      });
+      return answer();
+    };
+    const client = createApiClient({ baseUrl: 'http://x', mode: 'bearer', getToken: () => null, fetchImpl });
+    return { auth: createAuthApi(client), calls };
+  }
+
+  it('posts the ID token to /api/auth/sso/bind-token and resolves on 204 without a body', async () => {
+    const { auth, calls } = bearerApi(() => new Response(null, { status: 204 }));
+    await expect(auth.ssoBindToken('header.payload.signature')).resolves.toBeUndefined();
+    expect(calls).toEqual([
+      {
+        url: 'http://x/api/auth/sso/bind-token',
+        method: 'POST',
+        authorization: null,
+        body: { idToken: 'header.payload.signature' },
+      },
+    ]);
+  });
+
+  it.each(['sso_denied', 'sso_email_unverified'])('rejects with the API code %s of a refused binding', async (code) => {
+    const { auth } = bearerApi(
+      () =>
+        new Response(JSON.stringify({ status: 403, code, message: 'refused', requestId: null }), {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    await expect(auth.ssoBindToken('header.payload.signature')).rejects.toMatchObject({ status: 403, code });
+  });
+});
+

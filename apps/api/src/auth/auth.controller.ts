@@ -87,6 +87,7 @@ import {
   SsoBindStartRequestSchema,
   SsoBindVerifyRequestSchema,
   SsoBindResendRequestSchema,
+  SsoBindTokenRequestSchema,
 } from '@nestself/contracts';
 
 // ---------------------------------------------------------------------------
@@ -252,6 +253,26 @@ export class AuthController {
   async ssoBindResend(@Body() body: unknown) {
     const { challengeToken, locale } = validate(SsoBindResendRequestSchema, body);
     return this.ssoBind.resend(challengeToken, locale ?? 'sr-Latn');
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/sso/bind-token -- the mobile app's federated binding (5.7)
+  // -----------------------------------------------------------------------
+
+  /**
+   * `{ idToken }`: the Cognito ID token of the mobile app's own exchange,
+   * once after sign-in; binds the federated identity under the callback's
+   * rules and answers 204. 401 `unauthenticated` for a token that fails
+   * verification, 403 `sso_email_unverified` when the OIDC provider did not
+   * confirm the address (confirm it once on the web), 403 `sso_denied` when
+   * nothing can be bound. 10 a minute per IP.
+   */
+  @Public()
+  @Post('sso/bind-token')
+  @HttpCode(204)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindToken(@Req() req: HttpReq, @Body() body: unknown): Promise<void> {
+    await this.ssoBind.bindToken(validate(SsoBindTokenRequestSchema, body), extractMeta(req));
   }
 
   // -----------------------------------------------------------------------

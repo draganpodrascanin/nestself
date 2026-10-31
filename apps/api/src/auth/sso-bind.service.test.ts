@@ -4,10 +4,12 @@
  * PendingBindStore over the in-memory key-value store, the real
  * FederatedBindingService and fake identity provider, and repository fakes.
  * Covers Review Focus 2 (a connection or domain that stopped vouching between
- * the callback and the code).
+ * the callback and the code), and the mobile app's `bindToken` (5.7) with the
+ * real stub ID-token verifier.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { ApiHttpException } from '../common/api-error.js';
 import { LoggingMailer } from '../email/logging-mailer.js';
 import { MailDeliveryError } from '../email/mailer.js';
@@ -18,6 +20,7 @@ import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { throttleKey } from '../redis/redis-keys.js';
 import { TokenCipher } from '../session/token-cipher.js';
 import { FederatedBindingService } from './federated-binding.service.js';
+import { StubIdTokenVerifier } from './id-token-verifier.js';
 import { NestselfOtpService } from './nestself-otp.service.js';
 import { PendingBindStore, pendingBindId } from './pending-bind-store.js';
 import { SignInThrottle } from './sign-in-throttle.js';
@@ -29,6 +32,8 @@ const SUB = '5f0c2f4e-0000-4000-8000-000000000001';
 const USERNAME = `${PROVIDER}_idp-maria`;
 const META = { ip: '127.0.0.1', userAgent: 'vitest' };
 const KEY = 'ab'.repeat(32);
+/** Signs the mobile ID tokens the stub verifier accepts (stub mode's JWT secret). */
+const STUB_JWT = new JwtService({ secret: 'stub-jwt-secret-'.padEnd(40, 'x'), signOptions: { expiresIn: '1h' } });
 
 type Conn = {
   id: string;
@@ -130,7 +135,7 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
   const throttle = new SignInThrottle(store);
   const service = new SsoBindService(
     otp, pendingBinds, throttle, store, sso as never, identities as never, dbs as never, binding, audit as never,
-    principalLoader as never, identity as never,
+    principalLoader as never, identity as never, new StubIdTokenVerifier(STUB_JWT),
   );
   return {
     service, store, pendingBinds, mailer, idp, sso, dbs, tx, identities, identityRows, invitations, memberships, audit,
@@ -730,6 +735,265 @@ describe('SsoBindService', () => {
       expect(err.code).toBe('rate_limited');
       expect(err.details?.retryAfter).toBeGreaterThan(0);
       expect(ctx.mailer.sent).toHaveLength(1);
+    });
+  });
+
+  describe('bindToken: the mobile app presents its ID token (5.7)', () => {
+    /** The mobile app's ID token after its own exchange (Cognito's claims), signed as the stub verifier checks. */
+    function mobileIdToken(overrides: Record<string, unknown> = {}): string {
+      return STUB_JWT.sign({
+        sub: SUB,
+        token_use: 'id',
+        auth_time: Math.floor(Date.now() / 1000),
+        email: EMAIL,
+        email_verified: true,
+        'cognito:username': USERNAME,
+        identities: [{ userId: 'idp-maria', providerName: PROVIDER, providerType: 'OIDC', primary: 'true' }],
+        ...overrides,
+      });
+    }
+    const bindToken = (ctx: Ctx, idToken = mobileIdToken()) => ctx.service.bindToken({ idToken }, META);
+    const activeMember = [{ userId: 'user_known', orgId: 'org_sample', status: 'ACTIVE' }];
+
+    /** Nothing was bound and no session or pending binding was opened (`open`: a spy on `PendingBindStore.open`). */
+    function expectNothingBound(ctx: Ctx, open: unknown) {
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+      expect(open).not.toHaveBeenCalled();
+    }
+
+    it('binds an invited user through the invitation and answers nothing (the app keeps its own tokens)', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+
+      await expect(bindToken(ctx)).resolves.toBeUndefined();
+
+      expect(ctx.dbs.withOrgScope).toHaveBeenCalledWith('org_sample', expect.any(Function));
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user_new',
+          provider: `cognito:${PROVIDER}`,
+          subject: SUB,
+          cognitoUsername: USERNAME,
+          email: EMAIL,
+          emailVerified: true,
+          ssoConnectionId: 'conn_1',
+        }),
+        ctx.tx,
+      );
+      expect(ctx.invitations.accept).toHaveBeenCalledWith('inv_1', expect.any(Date), 'user_new', ctx.tx);
+      expect(auditEvent(ctx, 'identity.linked').details).toEqual({
+        emailNormalised: EMAIL,
+        provider: `cognito:${PROVIDER}`,
+        via: 'sso_invitation',
+        connectionId: 'conn_1',
+      });
+      expect(auditEvent(ctx, 'invitation.accepted')).toMatchObject({
+        actorUserId: 'user_new',
+        orgId: 'org_sample',
+        recordId: 'inv_1',
+        details: { emailNormalised: EMAIL, templateKey: 'employee', via: 'sso', connectionId: 'conn_1' },
+      });
+      expect(ctx.principalLoader.invalidateUser).toHaveBeenCalledWith('user_new', ['org_sample']);
+      // No web session: the app signs in with its own bearer tokens.
+      expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('provisions JIT when the connection allows it', async () => {
+      const ctx = setup({ conn: connection({ jitProvisioning: true }) });
+
+      await expect(bindToken(ctx)).resolves.toBeUndefined();
+
+      expect(auditActions(ctx)).toEqual(['user.created', 'identity.created', 'identity.linked', 'membership.activated']);
+      expect(auditEvent(ctx, 'identity.linked').details).toMatchObject({ via: 'sso_jit' });
+      expect(ctx.principalLoader.invalidateUser).toHaveBeenCalledWith('user_new', ['org_sample']);
+    });
+
+    it('an IdP account bound already (on the web, or by an earlier bind-token) passes through path 1: nothing bound again', async () => {
+      // Even while the OIDC provider still does not confirm the address: the binding is what vouches.
+      const ctx = setup();
+      ctx.identityRows.push({ provider: `cognito:${PROVIDER}`, subject: SUB, userId: 'user_known', ssoConnectionId: 'conn_1' });
+      ctx.memberships.findByUserId.mockResolvedValue(activeMember);
+      const open = vi.spyOn(ctx.pendingBinds, 'open');
+
+      await expect(bindToken(ctx, mobileIdToken({ email_verified: undefined }))).resolves.toBeUndefined();
+
+      expect(ctx.identities.findExternalIdentity).toHaveBeenCalledWith(`cognito:${PROVIDER}`, SUB);
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expectNothingBound(ctx, open);
+      expect(ctx.audit.record).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['bound through another connection', 'conn_other', activeMember],
+      ['with no binding connection', null, activeMember],
+      ['whose user is no ACTIVE member of the organization', 'conn_1', []],
+    ])('path 1 refuses an identity %s: 403 sso_denied, sso_provider_mismatch, nothing deleted', async (_label, ssoConnectionId, rows) => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      ctx.identityRows.push({ provider: `cognito:${PROVIDER}`, subject: SUB, userId: 'user_known', ssoConnectionId });
+      ctx.memberships.findByUserId.mockResolvedValue(rows);
+      const open = vi.spyOn(ctx.pendingBinds, 'open');
+
+      await expectRefused(bindToken(ctx), 403, 'sso_denied');
+
+      expectNothingBound(ctx, open);
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(auditActions(ctx)).toEqual(['auth.sign_in.failed']);
+      expect(auditEvent(ctx, 'auth.sign_in.failed')).toMatchObject({
+        orgId: 'org_sample',
+        recordId: PROVIDER,
+        result: 'DENIED',
+        ip: META.ip,
+        details: { reason: 'sso_provider_mismatch' },
+      });
+    });
+
+    it('a token without an identities claim (a native user) answers sso_denied and deletes nothing', async () => {
+      const ctx = setup();
+      const open = vi.spyOn(ctx.pendingBinds, 'open');
+
+      await expectRefused(bindToken(ctx, mobileIdToken({ identities: undefined, 'cognito:username': EMAIL })), 403, 'sso_denied');
+
+      expectNothingBound(ctx, open);
+      expect(ctx.identities.findExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(auditActions(ctx)).toEqual(['auth.sign_in.failed']);
+      expect(auditEvent(ctx, 'auth.sign_in.failed')).toMatchObject({ orgId: null, details: { reason: 'sso_provider_mismatch' } });
+    });
+
+    it.each([
+      ['in TESTING (no staff test on mobile)', { conn: connection({ status: 'TESTING' }) }],
+      ['SUSPENDED', { conn: connection({ status: 'SUSPENDED' }) }],
+      ['in DRAFT', { conn: connection({ status: 'DRAFT' }) }],
+      ['that does not exist', { conn: null }],
+    ])('a new binding through a connection %s is denied: orphan deleted, connection_inactive', async (_label, opts) => {
+      const ctx = setup(opts as { conn: Conn | null });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const open = vi.spyOn(ctx.pendingBinds, 'open');
+
+      await expectRefused(bindToken(ctx), 403, 'sso_denied');
+
+      expectNothingBound(ctx, open);
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).toHaveBeenCalledWith(USERNAME);
+      expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ emailNormalised: EMAIL, reason: 'connection_inactive' });
+      expect(auditEvent(ctx, 'identity.denied').details).not.toHaveProperty('via');
+    });
+
+    it.each([
+      ['lost its verification', { connectionId: 'conn_1', verifiedAt: null, domain: 'acme.example' }],
+      ['belongs to another connection', { connectionId: 'conn_other', verifiedAt: new Date(), domain: 'acme.example' }],
+    ])('an address whose domain %s binds nothing: orphan deleted, email_off_domain', async (_label, domain) => {
+      const ctx = setup({ domain });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+
+      await expectRefused(bindToken(ctx), 403, 'sso_denied');
+
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).toHaveBeenCalledWith(USERNAME);
+      expect(auditEvent(ctx, 'identity.denied').details).toMatchObject({ reason: 'email_off_domain' });
+    });
+
+    it.each([
+      ['email_verified false', { email_verified: false }],
+      ['no email_verified claim at all (Entra ID)', { email_verified: undefined }],
+    ])('an OIDC address the provider did not confirm (%s) answers sso_email_unverified and keeps the pool user', async (_label, claim) => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const open = vi.spyOn(ctx.pendingBinds, 'open');
+
+      await expectRefused(bindToken(ctx, mobileIdToken(claim)), 403, 'sso_email_unverified');
+
+      // Confirmed once on the web, where the callback finds no identity and opens the pending binding.
+      expectNothingBound(ctx, open);
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(ctx.mailer.sent).toHaveLength(0);
+      expect(auditActions(ctx)).toEqual(['auth.sign_in.failed']);
+      expect(auditEvent(ctx, 'auth.sign_in.failed')).toMatchObject({
+        orgId: 'org_sample',
+        recordId: PROVIDER,
+        details: { reason: 'sso_email_unverified' },
+      });
+    });
+
+    it.each([
+      ["the connection's claim switch is off", connection({ oidcEmailVerifiedClaimRequired: false })],
+      ['the connection is SAML (the domain inference vouches)', connection({ protocol: 'SAML' })],
+    ])('an unconfirmed address binds when %s', async (_label, conn) => {
+      const ctx = setup({ conn });
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+
+      await expect(bindToken(ctx, mobileIdToken({ email_verified: undefined }))).resolves.toBeUndefined();
+
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledTimes(1);
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('no invitation and JIT off: the orphan is deleted and the answer is sso_denied (no_invitation)', async () => {
+      const ctx = setup();
+
+      await expectRefused(bindToken(ctx), 403, 'sso_denied');
+
+      expect(ctx.deleteUser).toHaveBeenCalledWith(USERNAME);
+      expect(auditEvent(ctx, 'identity.denied')).toMatchObject({
+        orgId: 'org_sample',
+        result: 'DENIED',
+        details: { emailNormalised: EMAIL, reason: 'no_invitation', connectionId: 'conn_1' },
+      });
+      expect(ctx.principalLoader.invalidateUser).not.toHaveBeenCalled();
+    });
+
+    it('a failing binding transaction answers sso_denied, keeps the pool user and logs the failure by name only', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const failure = Object.assign(new Error(`Failed query: insert ... params: ${EMAIL}`), {
+        name: 'DrizzleQueryError',
+        cause: Object.assign(new Error(`duplicate key ${EMAIL}`), { code: '23505' }),
+      });
+      ctx.identities.createExternalIdentity.mockRejectedValue(failure);
+      const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+
+      await expectRefused(bindToken(ctx), 403, 'sso_denied');
+
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(auditEvent(ctx, 'auth.sign_in.failed')).toMatchObject({ orgId: 'org_sample', details: { reason: 'sso_binding' } });
+      expect(auditActions(ctx)).not.toContain('invitation.accepted');
+      expect(error.mock.calls.map((c) => String(c[0]))).toEqual(['SSO identity binding failed: DrizzleQueryError (SQLSTATE 23505)']);
+    });
+
+    it.each([
+      ['an access token', () => mobileIdToken({ token_use: 'access' })],
+      ['a token signed with another secret', () => new JwtService({ secret: 'y'.repeat(40) }).sign({ sub: SUB, token_use: 'id' })],
+      ['not a JWT', () => 'not-a-jwt'],
+    ])('%s answers 401 unauthenticated and touches nothing', async (_label, token) => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+
+      await expectRefused(bindToken(ctx, token()), 401, 'unauthenticated');
+
+      expect(ctx.sso.findConnectionByProviderName).not.toHaveBeenCalled();
+      expect(ctx.identities.findExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(ctx.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('no audit row carries the ID token, bound or denied', async () => {
+      const bound = setup();
+      bound.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const denied = setup();
+      const idToken = mobileIdToken();
+
+      await bindToken(bound, idToken);
+      await expectRefused(bindToken(denied, idToken), 403, 'sso_denied');
+
+      for (const ctx of [bound, denied]) {
+        expect(ctx.audit.record).toHaveBeenCalled();
+        expect(JSON.stringify(ctx.audit.record.mock.calls)).not.toContain(idToken);
+      }
     });
   });
 });
