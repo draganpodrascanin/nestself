@@ -140,9 +140,11 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | `operationsResource(type, idFn?)` | `/ops/*` without an organization | Requires a web session (403 `session_required` for bearer callers, API-R-28) and the operations context (403 `context_mismatch`); returns `{ type, id? }` |
 | `operationsOrgResource(type)` | `/ops/orgs/:orgId/*` | The same session and context checks (shared `assertOperationsSession`), then the route `:orgId` (404 `not_found` without it); returns `{ type, orgId }`, so the engine applies the `assigned_clients` scope through the CLIENT assignment |
 
-Routes whose resource needs row data (confidential conversations and intakes, emergency record reads) are `@Authenticated()` and call `AuthorizationService.require(principal, action, resource)` after loading the row; `require()` audits denials, maps them to 403 or 404 like the guard and runs the same step-up check (`assertStepUpFresh` in `step-up-freshness.ts`).
+Routes whose resource needs row data (confidential conversations and intakes, emergency record reads) are `@Authenticated()` and call `AuthorizationService.require(principal, action, resource)` after loading the row; `require()` audits denials, maps them to 403 or 404 like the guard and runs the same step-up check (`assertStepUpFresh` in `step-up-freshness.ts`). `require(principal, action, resource, { denyAs: 'not_found' })` answers every denial as the 404 `not_found` of a missing record (the audit row is unchanged); the `/professional/*` single-record reads pass it, because the row is loaded before the decision and a 403 would confirm that the record exists. A stale step-up is not a denial and stays 403 `step_up_required`.
 
-Staff (any principal with a staff template) always count as having organization visibility, so a denied operations caller gets 403, not 404.
+The emergency record read checks the caller's own access record before it loads the record: unknown or someone else's is 404, one that is not active (pending, revoked, expired) is 403 `emergency_not_active`, answered the same for any record id. Then the record (404) and whether the access covers it (404, like a missing one), then the engine. The two refusals the engine no longer sees are audited as `access.denied` (`details.reason` `emergency_not_active` or `outside_emergency_scope`, identifiers only).
+
+Staff (any principal with a staff template) always count as having organization visibility, so a denied operations caller gets 403, not 404, except on the confidential reads above.
 
 ### Route table
 

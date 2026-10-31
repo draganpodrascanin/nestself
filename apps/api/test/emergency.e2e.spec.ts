@@ -21,7 +21,7 @@ import type { FakeIdentityProvider } from '../src/identity/fake-identity-provide
 import { computeTotp } from '../src/identity/totp.js';
 import { MaintenanceJobsService } from '../src/jobs/maintenance-jobs.service.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { auditEvents, emergencyAccess, externalIdentities, grants, users } from '../src/db/schema/index.js';
+import { auditEvents, cases, conversations, emergencyAccess, externalIdentities, grants, users } from '../src/db/schema/index.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
@@ -31,6 +31,7 @@ const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const shouldRun = !!TEST_DB_URL;
 
 const BASE = '/api/ops/emergency-access';
+const ORG = 'org_sample';
 /** Fixed TOTP secret for the staff users of this suite (base32). */
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 const APPROVER_ID = 'user_admin_test';
@@ -152,7 +153,23 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
   let requester: Awaited<ReturnType<typeof signInStaff>>;
   let approver: Awaited<ReturnType<typeof signInStaff>>;
   let accessId: string;
-  const record = (id = accessId) => `${BASE}/${id}/records/conversation/${SAMPLE_CASE.conversation.id}`;
+  const record = (id = accessId, recordId: string = SAMPLE_CASE.conversation.id) =>
+    `${BASE}/${id}/records/conversation/${recordId}`;
+
+  /** Everything a caller can tell from an error answer: the status and the body, minus the per-request id. */
+  function visibleError(res: request.Response) {
+    const { requestId: _requestId, ...body } = res.body as Record<string, unknown>;
+    return { httpStatus: res.status, ...body };
+  }
+
+  /** The `access.denied` rows written for reads under one emergency access record, by reason. */
+  async function deniedReads(id: string, reason: string) {
+    const rows = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'access.denied'), eq(auditEvents.recordId, id)));
+    return rows.filter((r) => (r.details as { reason?: string }).reason === reason);
+  }
 
   it('nikola requests access to one case: 201, pending with a provisional window, audited', async () => {
     requester = await signInStaff('user_nikola@example.com');
@@ -182,11 +199,36 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     expect(audited!.details).toMatchObject({ purpose: PURPOSE, scopeKind: 'CASE', scopeId: SAMPLE_CASE.id });
   });
 
-  it('a pending request grants nothing', async () => {
+  it('a pending request grants nothing, and answers before the record is looked up', async () => {
     const res = await requester.agent.get(record());
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('forbidden');
+    expect(res.body.code).toBe('emergency_not_active');
     expect(res.body).not.toHaveProperty('content');
+
+    // The record is never consulted: an id that does not exist gets the same answer.
+    const missing = await requester.agent.get(record(accessId, 'conv_missing'));
+    expect(visibleError(missing)).toEqual(visibleError(res));
+
+    // Both refusals are audited as denials, naming the requested record by id only.
+    const audited = await deniedReads(accessId, 'emergency_not_active');
+    expect(audited.map((r) => r.details)).toEqual(
+      expect.arrayContaining([
+        {
+          actionAttempted: 'records.read.emergency',
+          reason: 'emergency_not_active',
+          emergencyAccessId: accessId,
+          recordType: 'conversation',
+          recordId: SAMPLE_CASE.conversation.id,
+        },
+        {
+          actionAttempted: 'records.read.emergency',
+          reason: 'emergency_not_active',
+          emergencyAccessId: accessId,
+          recordType: 'conversation',
+          recordId: 'conv_missing',
+        },
+      ]),
+    );
   });
 
   it('nikola cannot approve his own request: 403 self_approval_denied', async () => {
@@ -246,6 +288,47 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     expect(other.status).toBe(404);
   });
 
+  it('a record outside the scope of the access answers 404 like a missing one, and is audited', async () => {
+    await testDb.db.insert(cases).values({ id: 'case_test_outside', orgId: ORG });
+    await testDb.db.insert(conversations).values({
+      id: 'conv_test_outside',
+      orgId: ORG,
+      caseId: 'case_test_outside',
+      employeeUserId: 'user_jovan',
+      expertUserId: 'user_milica',
+    });
+
+    const outside = await requester.agent.get(record(accessId, 'conv_test_outside'));
+    const missing = await requester.agent.get(record(accessId, 'conv_test_missing'));
+
+    // Not 403: the answer must not say that the record exists.
+    expect(outside.status).toBe(404);
+    expect(outside.body).toMatchObject({ code: 'not_found', message: 'Resource not found' });
+    expect(outside.body).not.toHaveProperty('content');
+    expect(visibleError(outside)).toEqual(visibleError(missing));
+
+    // The attempt is a denial like any other: one audit row for the record that exists, none for the one that does not.
+    const audited = await deniedReads(accessId, 'outside_emergency_scope');
+    expect(audited).toHaveLength(1);
+    expect(audited[0]).toMatchObject({
+      orgId: ORG,
+      actorUserId: 'user_nikola',
+      details: {
+        actionAttempted: 'records.read.emergency',
+        emergencyAccessId: accessId,
+        recordType: 'conversation',
+        recordId: 'conv_test_outside',
+      },
+    });
+
+    // Only the read inside the scope was used.
+    const used = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.action, 'emergency_access.used'), eq(auditEvents.recordId, accessId)));
+    expect(used).toHaveLength(1);
+  });
+
   it('the read needs a restricted-class step-up: a 20-minute-old session gets 403 step_up_required', async () => {
     const stale = await signInStaff('user_nikola@example.com');
     await ageSession(stale.sessionId);
@@ -262,12 +345,15 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
       .set({ expiresAt: new Date(Date.now() - 60_000) })
       .where(eq(emergencyAccess.id, accessId));
 
-    // The engine refuses (403 forbidden, not the service's emergency_not_active):
-    // expiry is evaluated from the row on every request (AUTHZ-R-46).
+    // Expiry is evaluated from the row on every request (AUTHZ-R-46): the
+    // caller's own access record answers first, before the engine or the
+    // record is consulted, so the same 403 comes back for an id that does not exist.
     const res = await requester.agent.get(record());
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('forbidden');
+    expect(res.body.code).toBe('emergency_not_active');
     expect(res.body).not.toHaveProperty('content');
+    const missing = await requester.agent.get(record(accessId, 'conv_missing'));
+    expect(visibleError(missing)).toEqual(visibleError(res));
     const [before] = await testDb.db.select().from(emergencyAccess).where(eq(emergencyAccess.id, accessId));
     expect(before!.revokedAt).toBeNull();
 
@@ -306,6 +392,7 @@ describe.skipIf(!shouldRun)('Emergency access (e2e)', () => {
     expect(revoke.body.revokedAt).not.toBeNull();
     const after = await requester.agent.get(`${BASE}/${revoked.body.id}/records/conversation/${SAMPLE_CASE.conversation.id}`);
     expect(after.status).toBe(403);
+    expect(after.body.code).toBe('emergency_not_active');
 
     const actions = (
       await testDb.db

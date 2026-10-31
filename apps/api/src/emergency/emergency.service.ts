@@ -11,10 +11,14 @@
  *   `action: 'emergency_access.approved'` feeds the CloudWatch metric filter.
  * - Denial deletes the pending row; revocation sets `revokedAt`.
  * - A read names the emergency access record and one conversation or
- *   intake record. The engine decides (`records.read.emergency`, expiry and
- *   scope evaluated from the database row on every request); the named
- *   record must itself be the active one covering the read. Every read is
- *   audited as `emergency_access.used` with identifiers only, never content.
+ *   intake record. The caller's own access record answers first (unknown or
+ *   someone else's: 404; not active: 403 `emergency_not_active`), before any
+ *   record is looked up; then the record (404) and whether the access covers
+ *   it (404, like a missing one). Neither the state of the access nor its
+ *   scope lets a caller probe record ids. Then the engine decides
+ *   (`records.read.emergency`, expiry and scope evaluated from the database
+ *   row on every request). Every read is audited as `emergency_access.used`
+ *   with identifiers only, never content; a refused one as `access.denied`.
  *
  * Every write is audited and invalidates the requester's principal caches.
  */
@@ -262,6 +266,12 @@ export class EmergencyService {
   /**
    * One restricted record under the caller's own emergency access record.
    * There is deliberately no list or bulk variant (CONF-R-09).
+   *
+   * The order is the point: the access record is checked before the record is
+   * looked up, and the record is checked against the access before the engine
+   * sees it. A pending, revoked or expired access therefore answers the same
+   * for every id, and a record outside the scope answers like a missing one;
+   * a "forbidden" for an existing record would confirm that it exists.
    */
   async readRecord(
     principal: Principal,
@@ -272,16 +282,23 @@ export class EmergencyService {
     assertOperationsSession(principal);
     const access = await this.authzRepo.findEmergencyAccess(emergencyAccessId);
     if (!access || access.userId !== principal.userId) throw notFound();
+    if (!isActive(access, new Date())) {
+      await this.auditDeniedRead(principal, access, 'emergency_not_active', recordType, recordId);
+      throw notActive(403);
+    }
 
     const { resource, content } =
       recordType === 'conversation'
         ? await this.loadConversation(recordId)
         : await this.loadIntake(recordId);
+    if (!covers(access, resource)) {
+      await this.auditDeniedRead(principal, access, 'outside_emergency_scope', recordType, recordId, resource.orgId);
+      throw notFound();
+    }
 
     // The engine evaluates approval, expiry, revocation and scope from the
     // database row (never the sweeper alone, AUTHZ-R-46).
     await this.authz.require(principal, 'records.read.emergency', resource);
-    if (!isActive(access, new Date()) || !covers(access, resource)) throw notActive(403);
 
     const body = await content();
     await this.audit.record({
@@ -296,6 +313,34 @@ export class EmergencyService {
       details: { emergencyAccessId: access.id, recordType, recordId },
     });
     return { emergencyAccessId: access.id, recordType, recordId, content: body };
+  }
+
+  /**
+   * A read the named access does not allow is a denial like any other:
+   * `access.denied` with identifiers only, never content. These refusals are
+   * answered before the engine is asked, so the row the engine writes for a
+   * denial (which they used to get) is written here. `orgId` is known only
+   * once the record was loaded.
+   */
+  private async auditDeniedRead(
+    principal: Principal,
+    access: EmergencyAccessRow,
+    reason: 'emergency_not_active' | 'outside_emergency_scope',
+    recordType: EmergencyRecordType,
+    recordId: string,
+    orgId?: string,
+  ): Promise<void> {
+    await this.audit.record({
+      action: 'access.denied',
+      actorUserId: principal.userId,
+      actorKind: 'USER',
+      orgId: orgId ?? null,
+      recordType: 'emergency_access',
+      recordId: access.id,
+      result: 'DENIED',
+      sessionId: principal.sessionId ?? null,
+      details: { actionAttempted: 'records.read.emergency', reason, emergencyAccessId: access.id, recordType, recordId },
+    });
   }
 
   /** The row decides the resource; content is read only after authorization. */

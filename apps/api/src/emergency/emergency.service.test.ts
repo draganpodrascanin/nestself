@@ -300,7 +300,7 @@ describe('EmergencyService', () => {
       expect(res.content).toEqual({ id: 'intake_1', caseId: 'case_1', orgId: 'org_1', body: 'Sample intake (fixture)', createdAt: NOW });
     });
 
-    it('propagates the engine denial (expired, revoked, out of scope) without reading content or auditing use', async () => {
+    it('propagates an engine denial without reading content or auditing use', async () => {
       ctx.authz.require.mockRejectedValue(new ApiHttpException({ status: 403, code: 'forbidden', message: 'Access denied' }));
       await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 403, 'forbidden');
       expect(ctx.professional.listMessages).not.toHaveBeenCalled();
@@ -319,17 +319,124 @@ describe('EmergencyService', () => {
       expect(ctx.authz.require).not.toHaveBeenCalled();
     });
 
-    it('answers 403 emergency_not_active when the named record is not the one that covers the read', async () => {
-      // Another active record lets the engine allow, but the path names a pending one.
-      ctx.authzRepo.findEmergencyAccess.mockResolvedValueOnce(row());
-      await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 403, 'emergency_not_active');
+    describe('the caller\'s own access record decides before any record is looked up', () => {
+      const inactive: Array<[string, () => ReturnType<typeof row>]> = [
+        ['pending', () => row()],
+        ['revoked', () => row({ ...ACTIVE, revokedAt: NOW })],
+        ['expired', () => row({ ...ACTIVE, expiresAt: minutes(-1) })],
+      ];
 
-      // An active record whose scope is a different case.
-      ctx.authzRepo.findEmergencyAccess.mockResolvedValueOnce({ ...ACTIVE, scopeId: 'case_other' });
-      await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 403, 'emergency_not_active');
+      it.each(inactive)('answers 403 emergency_not_active when the access is %s, without touching the record', async (_state, make) => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue(make());
 
-      expect(ctx.professional.listMessages).not.toHaveBeenCalled();
-      expect(ctx.audit.record).not.toHaveBeenCalled();
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 403, 'emergency_not_active');
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'intake', 'intake_1'), 403, 'emergency_not_active');
+
+        expect(ctx.professional.findConversation).not.toHaveBeenCalled();
+        expect(ctx.professional.findIntake).not.toHaveBeenCalled();
+        expect(ctx.professional.listMessages).not.toHaveBeenCalled();
+        expect(ctx.authz.require).not.toHaveBeenCalled();
+      });
+
+      it('answers an inactive access the same whether or not the record exists, so the id cannot be probed', async () => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue(row());
+        ctx.professional.findConversation.mockResolvedValue(null);
+        ctx.professional.findIntake.mockResolvedValue(null);
+
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_missing'), 403, 'emergency_not_active');
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'intake', 'intake_missing'), 403, 'emergency_not_active');
+      });
+
+      it('still answers 404 for an access that is not the caller\'s, whatever its state', async () => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue({ ...row(), userId: 'user_other' });
+
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 404, 'not_found');
+        expect(ctx.professional.findConversation).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('a record outside the scope of the access', () => {
+      const outsideScope: Array<[string, () => ReturnType<typeof row>]> = [
+        ['a CASE scope on another case', () => row({ ...ACTIVE, scopeKind: 'CASE', scopeId: 'case_other' })],
+        ['a USER_RECORDS scope on another person', () => row({ ...ACTIVE, scopeKind: 'USER_RECORDS', scopeId: 'user_other' })],
+      ];
+
+      it.each(outsideScope)('answers 404 not_found, as for a missing record, under %s', async (_scope, make) => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue(make());
+
+        const outside = await ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1').catch((e: unknown) => e);
+        ctx.professional.findConversation.mockResolvedValueOnce(null);
+        const missing = await ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_x').catch((e: unknown) => e);
+
+        for (const err of [outside, missing]) {
+          expect(err).toBeInstanceOf(ApiHttpException);
+          expect(err).toMatchObject({ code: 'not_found', message: 'Resource not found' });
+          expect((err as ApiHttpException).getStatus()).toBe(404);
+        }
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'intake', 'intake_1'), 404, 'not_found');
+
+        expect(ctx.authz.require).not.toHaveBeenCalled();
+        expect(ctx.professional.listMessages).not.toHaveBeenCalled();
+      });
+    });
+
+    it('reads a record that a USER_RECORDS scope covers through its owner', async () => {
+      ctx.authzRepo.findEmergencyAccess.mockResolvedValue(row({ ...ACTIVE, scopeKind: 'USER_RECORDS', scopeId: 'user_jovan' }));
+
+      const res = await ctx.service.readRecord(REQUESTER, 'ema_1', 'intake', 'intake_1');
+
+      expect(res).toMatchObject({ emergencyAccessId: 'ema_1', recordType: 'intake', recordId: 'intake_1' });
+    });
+
+    describe('a read the access does not allow is still audited as a denial, with identifiers only', () => {
+      const denial = (reason: string, orgId: string | null) => ({
+        action: 'access.denied',
+        actorUserId: 'user_nikola',
+        actorKind: 'USER',
+        orgId,
+        recordType: 'emergency_access',
+        recordId: 'ema_1',
+        result: 'DENIED',
+        sessionId: 'sess_n',
+        details: {
+          actionAttempted: 'records.read.emergency',
+          reason,
+          emergencyAccessId: 'ema_1',
+          recordType: 'conversation',
+          recordId: 'conv_1',
+        },
+      });
+
+      it('an inactive access: reason emergency_not_active, no organisation (the record was not looked up)', async () => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue(row());
+
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 403, 'emergency_not_active');
+
+        expect(ctx.audit.record).toHaveBeenCalledOnce();
+        expect(ctx.audit.record).toHaveBeenCalledWith(denial('emergency_not_active', null));
+      });
+
+      it('a record outside the scope: reason outside_emergency_scope, with the record\'s organisation', async () => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValue(row({ ...ACTIVE, scopeId: 'case_other' }));
+
+        await expectApiError(ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1'), 404, 'not_found');
+
+        expect(ctx.audit.record).toHaveBeenCalledOnce();
+        expect(ctx.audit.record).toHaveBeenCalledWith(denial('outside_emergency_scope', 'org_1'));
+        expect(JSON.stringify(ctx.audit.record.mock.calls)).not.toContain('Sample');
+      });
+
+      it('writes no emergency_access.used row for either', async () => {
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValueOnce(row());
+        await ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1').catch(() => undefined);
+        ctx.authzRepo.findEmergencyAccess.mockResolvedValueOnce(row({ ...ACTIVE, scopeId: 'case_other' }));
+        await ctx.service.readRecord(REQUESTER, 'ema_1', 'conversation', 'conv_1').catch(() => undefined);
+
+        expect(ctx.audit.record.mock.calls.map((call: unknown[]) => (call[0] as { action: string }).action)).toEqual([
+          'access.denied',
+          'access.denied',
+        ]);
+      });
     });
 
     it('rejects a caller outside the operations context', async () => {

@@ -174,6 +174,17 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     return agent;
   }
 
+  /** Everything a caller can tell from an error answer: the status and the body, minus the per-request id. */
+  function visibleError(res: request.Response) {
+    const { requestId: _requestId, ...body } = res.body as Record<string, unknown>;
+    return { httpStatus: res.status, ...body };
+  }
+
+  async function countDenials(): Promise<number> {
+    const rows = await testDb.db.select({ id: auditEvents.id }).from(auditEvents).where(eq(auditEvents.action, 'access.denied'));
+    return rows.length;
+  }
+
   const expectedMessages = SAMPLE_CASE.conversation.messages.map((m) => ({
     id: m.id,
     authorUserId: m.authorUserId,
@@ -242,9 +253,10 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     expect(own.status).toBe(200);
     expect(own.body.messages).toEqual(expectedMessages);
 
+    // Not 403: "it exists and you may not read it" would tell a caller that the record exists.
     const expertRoute = await jovan.get(CONV);
-    expect(expertRoute.status).toBe(403);
-    expect(expertRoute.body.code).toBe('forbidden');
+    expect(expertRoute.status).toBe(404);
+    expect(expertRoute.body.code).toBe('not_found');
   });
 
   it('a platform_owner grant does not reach the conversation', async () => {
@@ -254,8 +266,11 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     // assignment step (no_matching_assignment) before grants are matched;
     // the exclusion of platform and other administrative scopes is proven by
     // the golden rows CONF-DENY-01/02/05/06. Staff templates count as
-    // organization visibility, so require() answers 403, not 404.
-    expect(res.status).toBe(403);
+    // organization visibility, which would make a plain require() answer 403,
+    // but a confidential read answers every denial as 404, like a missing
+    // record, so staff cannot probe for ids either.
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('not_found');
     expect(res.body).not.toHaveProperty('messages');
 
     const [denied] = await testDb.db
@@ -268,7 +283,8 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
   it('an hr_admin is denied and the denial is audited without content', async () => {
     const ivana = await signInMember('user_ivana');
     const res = await ivana.get(CONV);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('not_found');
     expect(res.body).not.toHaveProperty('messages');
 
     const rows = await testDb.db
@@ -288,6 +304,42 @@ describe.skipIf(!shouldRun)('Professional confidential domain (e2e)', () => {
     for (const body of [...SAMPLE_CASE.conversation.messages.map((m) => m.body), SAMPLE_CASE.intake.body]) {
       expect(serialized).not.toContain(body);
     }
+  });
+
+  it('a denied read is indistinguishable from a missing record on every route, and is still audited', async () => {
+    const missing = {
+      assigned: '/api/professional/conversations/conv_missing',
+      own: '/api/professional/me/conversations/conv_missing',
+      intake: '/api/professional/intake/intake_missing',
+    };
+    const jovan = await signInMember('user_jovan');
+    const ivana = await signInMember('user_ivana');
+    const nikola = await signInStaff('user_nikola', { kind: 'operations' });
+
+    // Each caller can see the organisation (a member or staff), so a plain
+    // require() would answer 403 here. Every one of them is refused.
+    const denied: Array<[label: string, agent: request.Agent, existing: string, absent: string]> = [
+      ['the participant on the assigned-expert route', jovan, CONV, missing.assigned],
+      ['the participant on the intake route', jovan, INTAKE, missing.intake],
+      ['an hr_admin on the assigned-expert route', ivana, CONV, missing.assigned],
+      ['an hr_admin on the participant route', ivana, MY_CONV, missing.own],
+      ['an hr_admin on the intake route', ivana, INTAKE, missing.intake],
+      ['platform staff on the assigned-expert route', nikola, CONV, missing.assigned],
+      ['platform staff on the participant route', nikola, MY_CONV, missing.own],
+      ['platform staff on the intake route', nikola, INTAKE, missing.intake],
+    ];
+
+    const before = await countDenials();
+    for (const [label, agent, existing, absent] of denied) {
+      const refused = await agent.get(existing);
+      const absentRecord = await agent.get(absent);
+
+      expect(absentRecord.status, label).toBe(404);
+      expect(absentRecord.body, label).toMatchObject({ code: 'not_found', message: 'Resource not found' });
+      expect(visibleError(refused), label).toEqual(visibleError(absentRecord));
+    }
+    // A missing id is answered before any decision; each refusal wrote exactly one access.denied row.
+    expect(await countDenials()).toBe(before + denied.length);
   });
 
   const expectedSummary = {
