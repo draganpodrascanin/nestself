@@ -12,10 +12,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DragHandle } from '@tiptap/extension-drag-handle-react';
 import type { Editor } from '@tiptap/core';
 import type { Node as PmNode } from '@tiptap/pm/model';
-import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { TextSelection } from '@tiptap/pm/state';
 import {
   m,
   AnimatePresence,
@@ -109,9 +110,14 @@ interface BlockMenuProps {
   pos: number;
   node: PmNode | null;
   labels: BlockHandleLabels;
+  /**
+   * Viewport position of the menu. It renders in a portal, outside the hover
+   * handle, which Tiptap hides on keydown and when the pointer leaves.
+   */
+  fixedAt: { x: number; y: number } | null;
 }
 
-function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps) {
+function BlockMenu({ open, onClose, editor, pos, node, labels, fixedAt }: BlockMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const popoverMotion = useMotionPreset('popover');
 
@@ -127,13 +133,11 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open, onClose]);
 
-  // Focus first button when menu opens
+  // Focus the first item as the menu mounts (not a frame later, which would
+  // take focus back from an item the user already moved to).
   useEffect(() => {
     if (!open) return;
-    requestAnimationFrame(() => {
-      const firstButton = menuRef.current?.querySelector<HTMLButtonElement>('button');
-      firstButton?.focus();
-    });
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
   }, [open]);
 
   const handleTurnInto = useCallback(
@@ -246,14 +250,15 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
 
   const [showTurnInto, setShowTurnInto] = useState(false);
 
-  return (
+  const menu = (
     <MotionFeatures>
       <AnimatePresence>
         {open ? (
           <m.div
             ref={menuRef}
             {...popoverMotion}
-            className="absolute left-0 top-full z-[var(--z-dropdown)] mt-1 w-48 rounded-control border border-border-subtle bg-surface py-1 shadow-menu"
+            className="fixed z-[var(--z-dropdown)] w-48 rounded-control border border-border-subtle bg-surface py-1 shadow-menu"
+            style={fixedAt ? { left: fixedAt.x, top: fixedAt.y } : undefined}
             role="menu"
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -368,6 +373,7 @@ function BlockMenu({ open, onClose, editor, pos, node, labels }: BlockMenuProps)
       </AnimatePresence>
     </MotionFeatures>
   );
+  return typeof document === 'undefined' ? null : createPortal(menu, document.body);
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +485,8 @@ function useSyntheticDrag(
 
 export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Where the menu opens: under the grip, or at the block for Mod+/.
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const [currentNode, setCurrentNode] = useState<PmNode | null>(null);
   const [currentPos, setCurrentPos] = useState(0);
 
@@ -507,6 +515,8 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
         if (node) {
           setCurrentNode(node);
           setCurrentPos(pos);
+          const rect = (editor.view.nodeDOM(pos) as HTMLElement | null)?.getBoundingClientRect();
+          setMenuAnchor(rect ? { x: rect.left, y: rect.top + Math.min(rect.height, 28) } : null);
           setMenuOpen((prev) => !prev);
         }
       }
@@ -534,8 +544,10 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
   // Refs that the synthetic drag hook reads (avoids stale closures)
   const nodeRef = useRef<PmNode | null>(currentNode);
   const posRef = useRef(currentPos);
-  nodeRef.current = currentNode;
-  posRef.current = currentPos;
+  useEffect(() => {
+    nodeRef.current = currentNode;
+    posRef.current = currentPos;
+  }, [currentNode, currentPos]);
 
   const { onGripMouseDown, isDragging } = useSyntheticDrag(editor, nodeRef, posRef);
 
@@ -571,9 +583,13 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
         <button
           type="button"
           aria-label={labels.dragBlock}
-          onClick={() => {
+          onClick={(e) => {
             // Only open the menu if we weren't dragging
-            if (!isDragging.current) setMenuOpen((o) => !o);
+            if (!isDragging.current) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
+              setMenuOpen((o) => !o);
+            }
           }}
           onMouseDown={onGripMouseDown}
           className="flex h-6 w-6 cursor-grab items-center justify-center rounded-control text-text-secondary hover:bg-tint hover:text-text transition-colors duration-[var(--motion-fast)] ease-standard focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
@@ -581,16 +597,17 @@ export function BlockHandleComponent({ editor, labels }: BlockHandleProps) {
           <IconDragGrip />
         </button>
 
-        {/* Block menu */}
-        <BlockMenu
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          editor={editor}
-          pos={currentPos}
-          node={currentNode}
-          labels={labels}
-        />
       </div>
+      {/* Block menu (portal), from the grip or from Mod+/ */}
+      <BlockMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        editor={editor}
+        pos={currentPos}
+        node={currentNode}
+        labels={labels}
+        fixedAt={menuAnchor}
+      />
     </DragHandle>
   );
 }

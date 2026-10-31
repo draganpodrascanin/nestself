@@ -12,24 +12,14 @@
  */
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { openBlockDialog } from './BlockDialogs.tsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
-import {
-  m,
-  AnimatePresence,
-  MotionFeatures,
-  useMotionPreset,
-} from '@nestself/ui';
+import { m, AnimatePresence, MotionFeatures, useMotionPreset } from '@nestself/ui';
 import { openImagePicker } from './node-views.tsx';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +55,7 @@ interface SlashMenuPopupProps {
   labels: SlashMenuLabels;
   onSelect: (item: SlashMenuItem) => void;
   onClose: () => void;
-  position: { x: number; y: number } | null;
+  position: { x: number; y: number };
   /** Ref for forwarding native keyboard events from the Suggestion plugin. */
   keydownHandlerRef: React.MutableRefObject<((event: KeyboardEvent) => boolean) | null>;
 }
@@ -89,8 +79,7 @@ function SlashMenuPopup({
     const q = query.toLowerCase();
     return items.filter(
       (item) =>
-        item.label.toLowerCase().includes(q) ||
-        (item.hint && item.hint.toLowerCase().includes(q)),
+        item.label.toLowerCase().includes(q) || (item.hint && item.hint.toLowerCase().includes(q)),
     );
   }, [items, query]);
 
@@ -114,29 +103,23 @@ function SlashMenuPopup({
     return result;
   }, [groups]);
 
-  // Reset active index when items change (e.g. filter narrows the list)
-  useEffect(() => {
+  // Reset the active index when the filter changes (adjusting state during
+  // render, https://react.dev/learn/you-might-not-need-an-effect).
+  const [indexQuery, setIndexQuery] = useState(query);
+  if (indexQuery !== query) {
+    setIndexQuery(query);
     setActiveIndex(0);
-  }, [query]);
+  }
 
   // Derive a clamped index from the raw state (no setState during render)
   const safeIndex = flatItems.length > 0 ? Math.min(activeIndex, flatItems.length - 1) : 0;
 
-  // Keep refs up to date so the native keyboard handler uses fresh values
-  const flatItemsRef = useRef(flatItems);
-  flatItemsRef.current = flatItems;
-  const safeIndexRef = useRef(safeIndex);
-  safeIndexRef.current = safeIndex;
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  // Register the native keyboard handler so Suggestion's onKeyDown can forward events
+  // Register the native keyboard handler so Suggestion's onKeyDown can forward
+  // events; it is re-registered whenever the values it reads change.
   useEffect(() => {
     keydownHandlerRef.current = (event: KeyboardEvent): boolean => {
-      const flat = flatItemsRef.current;
-      const idx = safeIndexRef.current;
+      const flat = flatItems;
+      const idx = safeIndex;
 
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -151,12 +134,12 @@ function SlashMenuPopup({
       if (event.key === 'Enter') {
         event.preventDefault();
         const item = flat[idx];
-        if (item) onSelectRef.current(item);
+        if (item) onSelect(item);
         return true;
       }
       if (event.key === 'Escape') {
         event.preventDefault();
-        onCloseRef.current();
+        onClose();
         return true;
       }
       return false;
@@ -165,7 +148,7 @@ function SlashMenuPopup({
     return () => {
       keydownHandlerRef.current = null;
     };
-  }, [keydownHandlerRef]);
+  }, [keydownHandlerRef, flatItems, safeIndex, onSelect, onClose]);
 
   // Scroll active into view
   useEffect(() => {
@@ -192,77 +175,70 @@ function SlashMenuPopup({
     [labels],
   );
 
-  if (!position) return null;
-
-  return createPortal(
-    <MotionFeatures>
-      <AnimatePresence>
-        <m.div
-          {...popoverMotion}
-          role="listbox"
-          aria-label={labels.placeholder}
-          aria-activedescendant={flatItems[safeIndex]?.id}
-          ref={listRef}
-          className="fixed z-[var(--z-dropdown)] w-72 max-h-80 overflow-y-auto rounded-control border border-border-subtle bg-surface shadow-menu"
-          style={{
-            left: `${position.x}px`,
-            top: `${position.y}px`,
-          }}
-        >
-          {flatItems.length === 0 ? (
-            <div className="px-3 py-4 text-center type-metadata text-text-secondary">
-              {labels.empty}
+  // Mounted inside the hook's AnimatePresence (useSlashMenu), so closing
+  // plays the exit before the menu unmounts.
+  return (
+    <m.div
+      {...popoverMotion}
+      role="listbox"
+      aria-label={labels.placeholder}
+      aria-activedescendant={flatItems[safeIndex]?.id}
+      ref={listRef}
+      className="w-72 max-h-80 fixed z-[var(--z-dropdown)] overflow-y-auto rounded-control border border-border-subtle bg-surface shadow-menu"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+      }}
+    >
+      {flatItems.length === 0 ? (
+        <div className="px-3 py-4 text-center type-metadata text-text-secondary">
+          {labels.empty}
+        </div>
+      ) : (
+        Array.from(groups.entries()).map(([group, groupItems]) => (
+          <div key={group} role="group" aria-label={groupLabel(group)}>
+            <div className="px-3 pt-2 pb-1 type-metadata font-[var(--font-weight-label)] text-text-secondary">
+              {groupLabel(group)}
             </div>
-          ) : (
-            Array.from(groups.entries()).map(([group, groupItems]) => (
-              <div key={group} role="group" aria-label={groupLabel(group)}>
-                <div className="px-3 pt-2 pb-1 type-metadata text-text-secondary font-[var(--font-weight-label)]">
-                  {groupLabel(group)}
-                </div>
-                {groupItems.map((item) => {
-                  const flatIdx = flatItems.indexOf(item);
-                  const isActive = flatIdx === safeIndex;
-                  return (
-                    <button
-                      key={item.id}
-                      id={item.id}
-                      role="option"
-                      type="button"
-                      aria-selected={isActive}
-                      data-active={isActive}
-                      className={[
-                        'flex w-full items-center gap-3 px-3 py-2 text-left',
-                        'transition-colors duration-[var(--motion-fast)] ease-standard',
-                        'hover:bg-tint focus-visible:outline-none',
-                        isActive ? 'bg-tint' : '',
-                      ].join(' ')}
-                      onMouseEnter={() => setActiveIndex(flatIdx)}
-                      onMouseDown={(e) => e.preventDefault()} // Prevent focus steal
-                      onClick={() => onSelect(item)}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface text-text-secondary">
-                        {item.icon}
+            {groupItems.map((item) => {
+              const flatIdx = flatItems.indexOf(item);
+              const isActive = flatIdx === safeIndex;
+              return (
+                <button
+                  key={item.id}
+                  id={item.id}
+                  role="option"
+                  type="button"
+                  aria-selected={isActive}
+                  data-active={isActive}
+                  className={[
+                    'gap-3 px-3 py-2 flex w-full items-center text-left',
+                    'transition-colors duration-[var(--motion-fast)] ease-standard',
+                    'hover:bg-tint focus-visible:outline-none',
+                    isActive ? 'bg-tint' : '',
+                  ].join(' ')}
+                  onMouseEnter={() => setActiveIndex(flatIdx)}
+                  onMouseDown={(e) => e.preventDefault()} // Prevent focus steal
+                  onClick={() => onSelect(item)}
+                >
+                  <span className="h-8 w-8 flex shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface text-text-secondary">
+                    {item.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate type-body text-text">{item.label}</span>
+                    {item.hint ? (
+                      <span className="block truncate type-metadata text-text-secondary">
+                        {item.hint}
                       </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block type-body text-text truncate">
-                          {item.label}
-                        </span>
-                        {item.hint ? (
-                          <span className="block type-metadata text-text-secondary truncate">
-                            {item.hint}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </m.div>
-      </AnimatePresence>
-    </MotionFeatures>,
-    document.body,
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))
+      )}
+    </m.div>
   );
 }
 
@@ -292,9 +268,7 @@ export interface SlashMenuExtensionOptions {
  * Creates the slash menu Tiptap extension. This is a low-level extension;
  * the React hook `useSlashMenu` handles the UI lifecycle.
  */
-export function createSlashMenuExtension(
-  suggestionConfig: Partial<SuggestionOptions>,
-) {
+export function createSlashMenuExtension(suggestionConfig: Partial<SuggestionOptions>) {
   return Extension.create({
     name: 'slashMenu',
 
@@ -464,17 +438,28 @@ export function useSlashMenu({ items, labels }: UseSlashMenuOptions) {
     }
   }, [state.editor]);
 
-  const popup = state.isOpen ? (
-    <SlashMenuPopup
-      items={items}
-      query={state.query}
-      labels={labels}
-      onSelect={handleSelect}
-      onClose={handleClose}
-      position={state.position}
-      keydownHandlerRef={keydownHandlerRef}
-    />
-  ) : null;
+  const popup =
+    typeof document === 'undefined'
+      ? null
+      : createPortal(
+          <MotionFeatures>
+            <AnimatePresence>
+              {state.isOpen && state.position ? (
+                <SlashMenuPopup
+                  key="slash-menu"
+                  items={items}
+                  query={state.query}
+                  labels={labels}
+                  onSelect={handleSelect}
+                  onClose={handleClose}
+                  position={state.position}
+                  keydownHandlerRef={keydownHandlerRef}
+                />
+              ) : null}
+            </AnimatePresence>
+          </MotionFeatures>,
+          document.body,
+        );
 
   return { suggestionConfig, popup, isOpen: state.isOpen };
 }
@@ -493,9 +478,10 @@ function icon(d: string) {
 }
 
 // Phosphor icon paths
-const ICON_TEXT =
-  'M208,56V200a8,8,0,0,1-16,0V136H64v64a8,8,0,0,1-16,0V56a8,8,0,0,1,16,0v64H192V56a8,8,0,0,1,16,0Z';
-const ICON_H2 = ICON_TEXT;
+const ICON_H2 =
+  'M152,56V176a8,8,0,0,1-16,0V124H48v52a8,8,0,0,1-16,0V56a8,8,0,0,1,16,0v52h88V56a8,8,0,0,1,16,0Zm88,144H208l33.55-44.74a32,32,0,1,0-55.73-29.93,8,8,0,1,0,15.08,5.34,16.28,16.28,0,0,1,2.32-4.3,16,16,0,1,1,25.54,19.27L185.6,203.2A8,8,0,0,0,192,216h48a8,8,0,0,0,0-16Z';
+const ICON_PARAGRAPH =
+  'M208,56V88a8,8,0,0,1-16,0V64H136V192h24a8,8,0,0,1,0,16H96a8,8,0,0,1,0-16h24V64H64V88a8,8,0,0,1-16,0V56a8,8,0,0,1,8-8H200A8,8,0,0,1,208,56Z';
 const ICON_H3 =
   'M152,56V200a8,8,0,0,1-16,0V136H56v64a8,8,0,0,1-16,0V56a8,8,0,0,1,16,0v64h80V56a8,8,0,0,1,16,0Zm71.77,68.32a36,36,0,0,0-52-10.47,8,8,0,0,0,9.34,13,20,20,0,1,1,13.13,35.2H184a8,8,0,0,0,0,16h10.23A20,20,0,1,1,181.11,213.5a8,8,0,1,0-9.34,13,36,36,0,0,0,52-10.47,35.27,35.27,0,0,0,0-36.4A36.64,36.64,0,0,0,223.77,124.32Z';
 const ICON_BULLET =
@@ -556,7 +542,7 @@ export function createSlashMenuItems(
       id: 'slash-paragraph',
       label: l.paragraph,
       hint: l.paragraphHint,
-      icon: icon(ICON_TEXT),
+      icon: icon(ICON_PARAGRAPH),
       group: 'text',
       command: ({ editor, range }) => {
         editor.chain().focus().deleteRange(range).setNode('paragraph').run();
@@ -569,12 +555,7 @@ export function createSlashMenuItems(
       icon: icon(ICON_H2),
       group: 'text',
       command: ({ editor, range }) => {
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .setNode('sectionHeading', { level: 2 })
-          .run();
+        editor.chain().focus().deleteRange(range).setNode('sectionHeading', { level: 2 }).run();
       },
     },
     {
@@ -584,12 +565,7 @@ export function createSlashMenuItems(
       icon: icon(ICON_H3),
       group: 'text',
       command: ({ editor, range }) => {
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .setNode('sectionHeading', { level: 3 })
-          .run();
+        editor.chain().focus().deleteRange(range).setNode('sectionHeading', { level: 3 }).run();
       },
     },
     {
@@ -659,9 +635,7 @@ export function createSlashMenuItems(
           .insertContent({
             type: 'professionalNote',
             attrs: { noteKind: 'tip' },
-            content: [
-              { type: 'paragraph' },
-            ],
+            content: [{ type: 'paragraph' }],
           })
           .run();
       },
@@ -680,9 +654,7 @@ export function createSlashMenuItems(
           .insertContent({
             type: 'practicalStep',
             attrs: { stepNumber: 1, title: '' },
-            content: [
-              { type: 'paragraph' },
-            ],
+            content: [{ type: 'paragraph' }],
           })
           .run();
       },
@@ -694,15 +666,9 @@ export function createSlashMenuItems(
       icon: icon(ICON_CTA),
       group: 'blocks',
       command: ({ editor, range }) => {
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .insertContent({
-            type: 'cta',
-            attrs: { ctaKind: 'suggest_topic', targetId: null, label: null },
-          })
-          .run();
+        // The block is inserted only once its dialog is confirmed.
+        editor.chain().focus().deleteRange(range).run();
+        openBlockDialog(editor, { type: 'cta', pos: null });
       },
     },
     {
@@ -712,15 +678,8 @@ export function createSlashMenuItems(
       icon: icon(ICON_RELATED),
       group: 'blocks',
       command: ({ editor, range }) => {
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .insertContent({
-            type: 'relatedResource',
-            attrs: { contentResourceId: null },
-          })
-          .run();
+        editor.chain().focus().deleteRange(range).run();
+        openBlockDialog(editor, { type: 'related', pos: null });
       },
     },
     {

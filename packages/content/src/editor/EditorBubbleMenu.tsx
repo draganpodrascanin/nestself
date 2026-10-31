@@ -28,6 +28,8 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface BubbleMenuLabels {
+  /** Accessible name of the formatting toolbar. */
+  format: string;
   bold: string;
   link: string;
   linkUrl: string;
@@ -132,11 +134,21 @@ function LinkPopover({
   const inputRef = useRef<HTMLInputElement>(null);
   const popoverMotion = useMotionPreset('popover');
 
-  // Focus the input when mounting (key-based remount resets state)
-  useEffect(() => {
+  // Start empty each time the popover opens (adjusting state during render).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+      setUrl('');
+      setError(null);
     }
+  }
+
+  // Focus the input as the popover mounts. Not a frame later: an Escape in
+  // between would close the popover first, and the late focus would then land
+  // on the exiting input and drop to the page.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
   }, [open]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -352,6 +364,39 @@ export function EditorBubbleMenu({ editor, labels }: EditorBubbleMenuProps) {
     editor.chain().focus().unsetMark('link').run();
   }, [editor]);
 
+  // Mod-K (the Link mark's shortcut) opens the link popover for a selection.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onToggle = () => {
+      if (editor.state.selection.empty) return;
+      setTurnIntoOpen(false);
+      setLinkOpen((o) => !o);
+    };
+    dom.addEventListener('nestself:toggle-link', onToggle);
+    return () => dom.removeEventListener('nestself:toggle-link', onToggle);
+  }, [editor]);
+
+  // Escape closes an open popover wherever focus is (Mod-K opens the link
+  // popover while the caret is still in the editor).
+  useEffect(() => {
+    if (!linkOpen && !turnIntoOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLinkOpen(false);
+      setTurnIntoOpen(false);
+      // Back to the editor with the selection, and keep the bar for it:
+      // moving focus out of the popover can otherwise leave the bar hidden.
+      editor.view.focus();
+      if (!editor.state.selection.empty) {
+        editor.view.dispatch(editor.state.tr.setMeta(bubbleMenuPluginKey, 'show'));
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [linkOpen, turnIntoOpen, editor]);
+
   // Close popovers on click outside
   useEffect(() => {
     if (!linkOpen && !turnIntoOpen) return;
@@ -372,12 +417,11 @@ export function EditorBubbleMenu({ editor, labels }: EditorBubbleMenuProps) {
     <BubbleMenu
       editor={editor}
       pluginKey={bubbleMenuPluginKey}
-      className="relative flex items-center gap-0.5 rounded-control border border-border-subtle bg-surface px-1 py-0.5 shadow-menu"
-      options={{
-        element: undefined,
-      }}
+      // Tiptap shows and hides this element by visibility and opacity; the
+      // transition fades both ways (visibility flips after the fade-out).
+      className="relative flex items-center gap-0.5 rounded-control border border-border-subtle bg-surface px-1 py-0.5 shadow-menu transition-[opacity,visibility] duration-[var(--motion-standard)] ease-standard"
     >
-      <div ref={menuRef} role="toolbar" aria-label="Format" className="flex items-center gap-0.5">
+      <div ref={menuRef} role="toolbar" aria-label={labels.format} className="flex items-center gap-0.5">
         {/* Bold */}
         <BubbleButton
           label={labels.bold}
@@ -414,9 +458,8 @@ export function EditorBubbleMenu({ editor, labels }: EditorBubbleMenuProps) {
           <IconChevronDown />
         </BubbleButton>
 
-        {/* Link popover (key forces remount to reset url/error state) */}
+        {/* Link popover (stays mounted so its exit animates) */}
         <LinkPopover
-          key={linkOpen ? 'link-open' : 'link-closed'}
           open={linkOpen}
           onClose={() => setLinkOpen(false)}
           onInsert={handleInsertLink}
