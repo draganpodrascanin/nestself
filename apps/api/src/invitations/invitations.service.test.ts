@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { hashToken } from './invitation-token.js';
 import { InvitationsService } from './invitations.service.js';
 
 // ---------------------------------------------------------------------------
@@ -371,6 +373,143 @@ describe('InvitationsService', () => {
         { email: 'twice@example.com', reason: 'duplicate_in_batch' },
         { email: 'unit@example.com', reason: 'org_unit_outside_org' },
       ]);
+    });
+  });
+
+  // -- emails are sent after the commit -----------------------------------------
+
+  describe('invitation emails', () => {
+    const CREATED_ROW = {
+      id: 'inv_1',
+      email: 'one@example.com',
+      orgId: 'org_sample',
+      orgUnitId: null,
+      templateKey: 'employee',
+      tokenHash: 'hash',
+      expiresAt: new Date('2099-01-01'),
+      revokedAt: null,
+      acceptedAt: null,
+      invitedByUserId: 'user_ivana',
+      importBatchId: null,
+      createdAt: new Date(),
+    };
+    const TWO_ROWS = {
+      invitations: [
+        { email: 'one@example.com', templateKey: 'employee' },
+        { email: 'two@example.com', templateKey: 'employee' },
+      ],
+    };
+
+    type Mail = { email: string; token: string; organizationName: string; inviterDisplayName: string };
+    const mailed = (): Mail[] => mailer.send.mock.calls.map(([input]) => input as Mail);
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('import sends the emails only after the transaction has resolved', async () => {
+      const events: string[] = [];
+      let sentBeforeCommit = -1;
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => {
+        const result = await fn({});
+        // The callback is done but the transaction has not committed yet.
+        sentBeforeCommit = mailer.send.mock.calls.length;
+        events.push('commit');
+        return result;
+      });
+      mailer.send.mockImplementation(async () => {
+        events.push('mail');
+      });
+
+      const result = await service.import('org_sample', TWO_ROWS, 'user_ivana', false);
+
+      expect(result.created).toBe(2);
+      expect(sentBeforeCommit).toBe(0);
+      expect(events).toEqual(['commit', 'mail', 'mail']);
+    });
+
+    it('import mails each created invitation its own token, with the organization and inviter names', async () => {
+      await service.import('org_sample', TWO_ROWS, 'user_ivana', false);
+
+      expect(mailed()).toHaveLength(2);
+      expect(mailed().map((m) => m.email)).toEqual(['one@example.com', 'two@example.com']);
+      expect(mailed()[0]).toMatchObject({ organizationName: 'Example d.o.o.', inviterDisplayName: 'Ivana Jovanović' });
+      expect(new Set(mailed().map((m) => m.token)).size).toBe(2);
+      // The token in the email is the one whose hash was stored.
+      mailed().forEach((m, i) => {
+        expect(invitations.create).toHaveBeenNthCalledWith(
+          i + 1,
+          expect.objectContaining({ email: m.email, tokenHash: hashToken(m.token) }),
+          expect.anything(),
+        );
+      });
+    });
+
+    it('import mails only the rows it created', async () => {
+      invitations.findPendingByEmailAndOrg.mockImplementation(async (email: string) =>
+        email === 'one@example.com' ? { id: 'existing' } : null,
+      );
+
+      const result = await service.import('org_sample', TWO_ROWS, 'user_ivana', false);
+
+      expect(result.errors).toEqual([{ email: 'one@example.com', reason: 'duplicate_invitation' }]);
+      expect(mailed().map((m) => m.email)).toEqual(['two@example.com']);
+    });
+
+    it('import sends nothing when the transaction fails after a row was created', async () => {
+      invitations.create
+        .mockResolvedValueOnce(CREATED_ROW)
+        .mockRejectedValueOnce(new Error('connection lost'));
+
+      await expect(service.import('org_sample', TWO_ROWS, 'user_ivana', false)).rejects.toThrow('connection lost');
+
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it('import still answers when an email cannot be sent, and logs the failure', async () => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      mailer.send.mockRejectedValue(new Error('MessageRejected'));
+
+      const result = await service.import('org_sample', TWO_ROWS, 'user_ivana', false);
+
+      expect(result).toMatchObject({ created: 2, skipped: 0, errors: [] });
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(2));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('MessageRejected'));
+    });
+
+    it('create sends the email only after the transaction has resolved', async () => {
+      let sentBeforeCommit = -1;
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => {
+        const result = await fn({});
+        sentBeforeCommit = mailer.send.mock.calls.length;
+        return result;
+      });
+
+      const result = await service.create(
+        'org_sample',
+        { email: 'new@example.com', templateKey: 'employee' },
+        'user_ivana',
+        false,
+      );
+
+      expect(sentBeforeCommit).toBe(0);
+      expect(mailer.send).toHaveBeenCalledOnce();
+      expect(mailed()[0]).toEqual({
+        email: 'new@example.com',
+        token: result['devToken'],
+        organizationName: 'Example d.o.o.',
+        inviterDisplayName: 'Ivana Jovanović',
+      });
+    });
+
+    it('create sends nothing when the transaction fails', async () => {
+      invitations.create.mockRejectedValue(new Error('connection lost'));
+
+      await expect(
+        service.create('org_sample', { email: 'new@example.com', templateKey: 'employee' }, 'user_ivana', false),
+      ).rejects.toThrow('connection lost');
+
+      expect(mailer.send).not.toHaveBeenCalled();
     });
   });
 

@@ -19,6 +19,7 @@ import { SessionModule } from './session/session.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { PrincipalModule } from './principal/principal.module.js';
 import { PINO_REDACT_CONFIG } from './audit/pino-redaction.js';
+import { EmailModule } from './email/email.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { MembersModule } from './members/members.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -74,6 +75,7 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     AuthModule,
     ProgrammeModule,
     LeadsModule,
+    EmailModule,
     InvitationsModule,
     MembersModule,
     UsersModule,

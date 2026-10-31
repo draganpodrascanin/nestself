@@ -1,15 +1,17 @@
 /**
- * Invitation email sending abstraction [D-03, D-29].
+ * Invitation email sending [D-03, D-29].
  *
- * `InvitationMailer` is the abstract DI token. The default implementation
- * (`LoggingInvitationMailer`) logs the invitation link at debug level
- * in non-production and never logs the raw token in production.
+ * A thin caller of the shared {@link Mailer} port: it builds the activation
+ * link from the workspace origin and hands the `invitation` template over.
+ * Whether the mail goes out through SES or into the log is the port's
+ * business (`EmailModule`); the token appears only in the link, never in logs.
  *
- * TODO(D-29): Add a real SES implementation that sends the templated email.
+ * The invitation carries no locale yet, so it is sent in the platform default
+ * (`sr-Latn`); the template exists in all four locales for when it does.
  */
-import { Injectable, Logger } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Mailer } from '../email/mailer.js';
 
 export interface InvitationMailInput {
   email: string;
@@ -18,34 +20,27 @@ export interface InvitationMailInput {
   inviterDisplayName: string;
 }
 
-export abstract class InvitationMailer {
-  abstract send(input: InvitationMailInput): Promise<void>;
-}
-
 @Injectable()
-export class LoggingInvitationMailer extends InvitationMailer {
-  private readonly logger = new Logger(LoggingInvitationMailer.name);
+export class InvitationMailer {
   private readonly workspaceUrl: string;
-  private readonly isProduction: boolean;
 
-  constructor(config: ConfigService) {
-    super();
+  constructor(
+    @Inject(Mailer) private readonly mailer: Mailer,
+    @Inject(ConfigService) config: ConfigService,
+  ) {
     this.workspaceUrl = config.get<string>('WORKSPACE_URL') ?? 'http://localhost:5173';
-    this.isProduction = config.get<string>('NODE_ENV') === 'production';
   }
 
   async send(input: InvitationMailInput): Promise<void> {
-    if (this.isProduction) {
-      // Never log the token in production (D-03).
-      this.logger.debug(
-        `Invitation email for ${input.email} to ${input.organizationName} (token redacted)`,
-      );
-      return;
-    }
-
-    const link = `${this.workspaceUrl}/invitations/${input.token}`;
-    this.logger.debug(
-      `Invitation link for ${input.email}: ${link}`,
-    );
+    await this.mailer.send({
+      to: input.email,
+      locale: 'sr-Latn',
+      template: 'invitation',
+      params: {
+        link: `${this.workspaceUrl}/invitations/${input.token}`,
+        organizationName: input.organizationName,
+        inviterDisplayName: input.inviterDisplayName,
+      },
+    });
   }
 }

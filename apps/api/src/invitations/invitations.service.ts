@@ -23,7 +23,7 @@ import { SsoRepository } from '../db/repositories/sso.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { generateToken, hashToken } from './invitation-token.js';
-import { InvitationMailer } from './invitation-mailer.js';
+import { InvitationMailer, type InvitationMailInput } from './invitation-mailer.js';
 import { orgUnits } from '../db/schema/index.js';
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../db/db.service.js';
@@ -128,16 +128,9 @@ export class InvitationsService {
       details: { emailNormalised: body.email, templateKey: body.templateKey },
     });
 
-    // Send email (fire-and-forget).
+    // The transaction has committed: the invitation exists, so it may be mailed.
     const names = await this.mailNames(orgId, actorUserId);
-    this.mailer
-      .send({
-        email: body.email,
-        token,
-        organizationName: names.organizationName,
-        inviterDisplayName: names.inviterDisplayName,
-      })
-      .catch((err) => this.logger.warn(`Failed to send invitation email: ${String(err)}`));
+    this.sendInvitationEmail({ email: body.email, token, ...names });
 
     return this.toResponse(row, isProduction ? undefined : token);
   }
@@ -193,6 +186,9 @@ export class InvitationsService {
     let created = 0;
     let skipped = 0;
     const names = await this.mailNames(orgId, actorUserId);
+    // Collected inside the transaction, mailed after it: an email must not
+    // outlive a rollback (a failure on a later row undoes the earlier ones).
+    const toMail: Array<Pick<InvitationMailInput, 'email' | 'token'>> = [];
 
     await this.dbs.withOrgScope(orgId, async (tx) => {
       // Validate org units upfront (deduplicated).
@@ -275,17 +271,14 @@ export class InvitationsService {
           details: { emailNormalised: inv.email, templateKey: inv.templateKey, importBatchId },
         });
 
-        // Fire-and-forget email.
-        this.mailer
-          .send({
-            email: inv.email,
-            token,
-            organizationName: names.organizationName,
-            inviterDisplayName: names.inviterDisplayName,
-          })
-          .catch((err) => this.logger.warn(`Failed to send invitation email: ${String(err)}`));
+        toMail.push({ email: inv.email, token });
       }
     });
+
+    // The transaction has committed: the invitations exist, so they may be mailed.
+    for (const { email, token } of toMail) {
+      this.sendInvitationEmail({ email, token, ...names });
+    }
 
     return { created, skipped, errors };
   }
@@ -355,6 +348,18 @@ export class InvitationsService {
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
+
+  /**
+   * Fire-and-forget, and only after the transaction that created the
+   * invitation has committed. A mail that cannot be sent is logged and does
+   * not fail the request: the invitation stands, and an administrator can
+   * revoke it and invite again.
+   */
+  private sendInvitationEmail(input: InvitationMailInput): void {
+    this.mailer
+      .send(input)
+      .catch((err) => this.logger.warn(`Failed to send invitation email: ${String(err)}`));
+  }
 
   /** Display names for the invitation email; falls back to ids when unknown. */
   private async mailNames(

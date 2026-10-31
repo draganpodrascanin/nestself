@@ -1,9 +1,10 @@
 /**
  * InvitationsModule — invitation creation, import, revocation, preview and
  * acceptance (T-1.5). Controllers and services are added by the feature.
+ *
+ * Emails go through the global `EmailModule`'s `Mailer` (SES or logging).
  */
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { InvitationsController } from './invitations.controller.js';
@@ -11,34 +12,11 @@ import { InvitationActivationController } from './invitation-activation.controll
 import { OpsInvitationsController } from './ops-invitations.controller.js';
 import { InvitationsService } from './invitations.service.js';
 import { InvitationActivationService } from './invitation-activation.service.js';
-import {
-  InvitationMailer,
-  LoggingInvitationMailer,
-} from './invitation-mailer.js';
-import { SesInvitationMailer } from './ses-invitation-mailer.js';
+import { InvitationMailer } from './invitation-mailer.js';
 
 @Module({
   imports: [AuthModule, IdentityModule],
   controllers: [InvitationsController, InvitationActivationController, OpsInvitationsController],
-  providers: [
-    InvitationsService,
-    InvitationActivationService,
-    {
-      // SES when a verified sender is configured (D-29); otherwise log the link.
-      provide: InvitationMailer,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): InvitationMailer => {
-        const fromEmail = config.get<string>('SES_FROM_EMAIL');
-        if (fromEmail && config.get<string>('NODE_ENV') !== 'test') {
-          return new SesInvitationMailer({
-            fromEmail,
-            region: config.get<string>('COGNITO_REGION') ?? 'eu-central-1',
-            workspaceUrl: config.get<string>('WORKSPACE_URL') ?? 'http://localhost:5173',
-          });
-        }
-        return new LoggingInvitationMailer(config);
-      },
-    },
-  ],
+  providers: [InvitationsService, InvitationActivationService, InvitationMailer],
 })
 export class InvitationsModule {}

@@ -163,6 +163,19 @@ describe('envSchema', () => {
       envSchema.safeParse({ ...baseEnv, FAKE_IDP_FIXED_OTP: 'abcdef' }).success,
     ).toBe(false);
   });
+
+  it.each(['SES_FROM_EMAIL', 'OPS_ALERT_EMAIL'] as const)('%s is an optional email address', (key) => {
+    const absent = envSchema.parse(baseEnv);
+    expect(absent[key]).toBeUndefined();
+
+    const empty = envSchema.parse({ ...baseEnv, [key]: '' });
+    expect(empty[key]).toBeUndefined();
+
+    const set = envSchema.parse({ ...baseEnv, [key]: 'ops@nestself.example' });
+    expect(set[key]).toBe('ops@nestself.example');
+
+    expect(envSchema.safeParse({ ...baseEnv, [key]: 'not-an-address' }).success).toBe(false);
+  });
 });
 
 describe('resolveAppEnv', () => {
