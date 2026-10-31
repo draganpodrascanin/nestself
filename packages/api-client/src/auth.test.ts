@@ -210,6 +210,57 @@ describe('createAuthApi() account methods', () => {
       body: { challengeToken: 'tok-b', locale: 'hu' },
     });
   });
+
+  describe('me', () => {
+    const meResponse = () =>
+      new Response(JSON.stringify({ principal: PRINCIPAL, effectiveActions: ['content.read'] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    /** A cookie-mode client whose fetch keeps the `signal` of every request and answers like `/auth/me`. */
+    function meApi(respond: (signal: AbortSignal | null | undefined) => Promise<Response> = async () => meResponse()) {
+      const signals: Array<AbortSignal | null | undefined> = [];
+      const fetchImpl: typeof fetch = async (_input, init) => {
+        signals.push(init?.signal);
+        return respond(init?.signal);
+      };
+      return { auth: createAuthApi(createApiClient({ baseUrl: 'http://x', mode: 'cookie', fetchImpl })), signals };
+    }
+
+    it('passes the abort signal to the request, so the page can give up on an API that does not answer', async () => {
+      const { auth, signals } = meApi();
+      const controller = new AbortController();
+
+      await expect(auth.me({ signal: controller.signal })).resolves.toMatchObject({ effectiveActions: ['content.read'] });
+
+      expect(signals).toHaveLength(1);
+      expect(signals[0]).toBe(controller.signal);
+    });
+
+    it('sends no signal when none is given', async () => {
+      const { auth, signals } = meApi();
+
+      await auth.me();
+
+      expect(signals).toEqual([undefined]);
+    });
+
+    it('rejects an aborted request as a network failure (status 0), which is not a signed-out answer', async () => {
+      const { auth } = meApi(
+        (signal) =>
+          new Promise<Response>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+          }),
+      );
+      const controller = new AbortController();
+
+      const pending = auth.me({ signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toMatchObject({ status: 0, code: 'network' });
+    });
+  });
 });
 
 describe('createAuthApi().ssoBindToken (the mobile app, bearer mode)', () => {

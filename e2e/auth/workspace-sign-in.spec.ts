@@ -88,6 +88,50 @@ test.describe('Workspace auth guards', () => {
     // URL should contain /sign-in and a return parameter.
     await expect(page).toHaveURL(/\/sign-in/);
   });
+
+  test('a session that cannot be loaded shows an error state, not the sign-in page, and Try again opens the page', async ({
+    page,
+  }) => {
+    // A real session, so that "signed out" and "unknown" can be told apart.
+    await page.goto(`${WORKSPACE_URL}/sign-in`);
+    await page.getByLabel('Email address').fill(EMPLOYEE_EMAIL);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible({ timeout: 10_000 });
+    await page.getByLabel('Verification code').fill(FIXED_OTP);
+    await page.getByRole('button', { name: 'Verify' }).click();
+    await expect(page.getByRole('heading', { name: /Jovan/i })).toBeVisible({ timeout: 15_000 });
+
+    // The next page load cannot read the session: /auth/me answers 500 (any
+    // failure other than 401 is the same to the app: the session is unknown).
+    let failing = true;
+    await page.route('**/api/auth/me', (route) =>
+      failing
+        ? route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'internal_error', message: 'Database exploded' }),
+          })
+        : route.fallback(),
+    );
+    await page.goto(`${WORKSPACE_URL}/settings`);
+
+    // A visible, translated state with a way out; neither a blank page nor a
+    // sign-out, and never the API's own message.
+    await expect(page.getByText('We could not load your account')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Check your connection and try again.')).toBeVisible();
+    await expect(page.getByText('Database exploded')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/settings$/);
+
+    // The API answers again: Try again asks it, opens the page and gives the
+    // shell the session (the account menu names the user).
+    failing = false;
+    await page.getByRole('button', { name: 'Try again' }).click();
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /^Account menu for Jovan/ })).toBeVisible();
+    await expect(page.getByText('We could not load your account')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/settings$/);
+  });
 });
 
 test.describe('Workspace sign-in error handling', () => {

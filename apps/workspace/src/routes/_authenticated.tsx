@@ -18,7 +18,7 @@ import {
 } from '@phosphor-icons/react';
 import { AppShell, NavItem } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth, resolveRouteAuth } from '../auth';
+import { useAuth, resolveRouteAuth, AuthenticatedErrorComponent } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { UserMenu } from '../features/account/user-menu';
 import { ContextPicker } from '../features/context/context-picker';
@@ -35,6 +35,8 @@ export const Route = createFileRoute('/_authenticated')({
     }
   },
   component: AuthenticatedLayout,
+  // The session could not be loaded (not a 401): a retry screen, not a sign-out.
+  errorComponent: AuthenticatedErrorComponent,
 });
 
 function AuthenticatedLayout() {

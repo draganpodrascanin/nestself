@@ -82,7 +82,7 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('name').textContent).toBe('none');
   });
 
-  it('keeps previous state on non-401 error', async () => {
+  it('keeps the principal and reports status error when a refresh fails with something other than 401', async () => {
     let callCount = 0;
     const client = createMockClient(() => {
       callCount++;
@@ -101,9 +101,44 @@ describe('AuthProvider', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('authenticated');
-      expect(screen.getByTestId('name').textContent).toBe('Jovan Petrović');
+      expect(screen.getByTestId('status').textContent).toBe('error');
     });
+    expect(screen.getByTestId('name').textContent).toBe('Jovan Petrović');
+  });
+
+  it.each([
+    ['an error answer', () => Promise.reject(makeApiError(500, 'internal_error'))],
+    ['no connection', () => Promise.reject(makeApiError(0, 'network'))],
+    ['an answer that is not a session', () => Promise.reject(makeApiError(200, 'invalid_response'))],
+  ])('becomes error, not unauthenticated, when the first /auth/me fails with %s', async (_label, fail) => {
+    renderProvider(createMockClient(fail));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('none');
+  });
+
+  it('recovers when the next refresh succeeds, asking /auth/me again with a timeout', async () => {
+    const requestFn = vi
+      .fn<(path: string, init?: RequestInit) => Promise<unknown>>()
+      .mockRejectedValueOnce(makeApiError(500, 'internal_error'))
+      .mockResolvedValue(sampleMe);
+    renderProvider(createMockClient(requestFn as (...args: unknown[]) => Promise<unknown>));
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('Jovan Petrović');
+    expect(requestFn).toHaveBeenCalledTimes(2);
+    expect(requestFn.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('refetches on window focus', async () => {

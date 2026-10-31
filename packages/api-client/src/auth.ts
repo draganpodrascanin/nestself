@@ -127,11 +127,16 @@ export function createAuthApi(client: ApiClient) {
         schema: PasswordResponseSchema,
       }),
 
-    /** GET /auth/me — current principal and effective actions. */
-    me: () =>
+    /**
+     * GET /auth/me — current principal and effective actions. `signal` aborts
+     * the request; an aborted request rejects like any other network failure
+     * (`ApiError` with status 0), never as a 401.
+     */
+    me: (init?: { signal?: AbortSignal }) =>
       client.request('/api/auth/me', {
         method: 'GET',
         schema: MeResponseSchema,
+        ...(init?.signal ? { signal: init.signal } : {}),
       }),
 
     /** POST /auth/context — switch active context (CLIENT-R-04). */

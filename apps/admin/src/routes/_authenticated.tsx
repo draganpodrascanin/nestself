@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth, resolveRouteAuth } from '../auth';
+import { useAuth, resolveRouteAuth, AuthenticatedErrorComponent } from '../auth';
 import { isSampleDataMode } from '../data-source';
 import { ApiStatus } from './__root';
 import { UserMenu } from '../features/account/user-menu';
@@ -139,4 +139,6 @@ export const Route = createFileRoute('/_authenticated')({
     }
   },
   component: AuthenticatedLayout,
+  // The session could not be loaded (not a 401): a retry screen, not a sign-out.
+  errorComponent: AuthenticatedErrorComponent,
 });

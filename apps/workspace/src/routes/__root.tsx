@@ -50,6 +50,9 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   return <AuthProvider client={api}>{children}</AuthProvider>;
 }
 
+const sameActions = (a: readonly string[], b: readonly string[]) =>
+  a === b || (a.length === b.length && a.every((action, i) => action === b[i]));
+
 /**
  * Syncs auth state into the router context so `beforeLoad` gates
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
@@ -57,13 +60,19 @@ function AuthWrapper({ children }: { children: ReactNode }) {
 function AuthRouterSync({ children }: { children: ReactNode }) {
   const { principal, effectiveActions, status } = useAuth();
   const router = useRouter();
-  const settled = status !== 'loading';
+  // A failed `/auth/me` (`error`) is no result: with an empty context the
+  // guards would read it as "signed out" and redirect to /sign-in instead of
+  // asking again (route-auth.ts) and showing the account error screen.
+  const settled = status === 'authenticated' || status === 'unauthenticated';
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
+    // Compared by content: the provider's empty list is never the router's, and
+    // an invalidation that changes nothing would re-run the guards (and show the
+    // account error screen afresh) for no reason.
     if (
       currentAuth.principal !== principal ||
-      currentAuth.effectiveActions !== effectiveActions ||
+      !sameActions(currentAuth.effectiveActions, effectiveActions) ||
       currentAuth.settled !== settled
     ) {
       router.update({

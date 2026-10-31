@@ -7,6 +7,7 @@ import i18next from 'i18next';
 import type { Resource } from 'i18next';
 import { resourcesFor } from '@nestself/i18n';
 import { SAMPLE_PRINCIPALS } from '@nestself/sample-data';
+import { ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { EMAIL_OTP_MAX_LENGTH } from '@nestself/contracts';
 import { AuthProvider } from './auth-provider';
@@ -20,6 +21,104 @@ const sampleMe = {
 function createMockClient(requestImpl: (...args: unknown[]) => Promise<unknown>): ApiClient {
   return { request: requestImpl } as unknown as ApiClient;
 }
+
+function SessionState() {
+  const { status, principal } = useAuth();
+  return (
+    <div>
+      <span data-testid="status">{status}</span>
+      <span data-testid="name">{principal?.displayName ?? 'none'}</span>
+    </div>
+  );
+}
+
+function renderSession(client: ApiClient) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider client={client}>
+        <SessionState />
+      </AuthProvider>
+    </QueryClientProvider>,
+  );
+}
+
+function makeApiError(status: number, code: string): ApiError {
+  return new ApiError({ status, code, message: `HTTP ${status}`, requestId: null });
+}
+
+describe('AuthProvider session state', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('becomes unauthenticated on 401 from /auth/me', async () => {
+    renderSession(createMockClient(() => Promise.reject(makeApiError(401, 'unauthenticated'))));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('unauthenticated');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('none');
+  });
+
+  it('keeps the principal and reports status error when a refresh fails with something other than 401', async () => {
+    let callCount = 0;
+    const client = createMockClient(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(sampleMe);
+      return Promise.reject(new Error('Server error'));
+    });
+    renderSession(client);
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('Platform Admin');
+  });
+
+  it.each([
+    ['an error answer', () => Promise.reject(makeApiError(500, 'internal_error'))],
+    ['no connection', () => Promise.reject(makeApiError(0, 'network'))],
+    ['an answer that is not a session', () => Promise.reject(makeApiError(200, 'invalid_response'))],
+  ])('becomes error, not unauthenticated, when the first /auth/me fails with %s', async (_label, fail) => {
+    renderSession(createMockClient(fail));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('none');
+  });
+
+  it('recovers when the next refresh succeeds, asking /auth/me again with a timeout', async () => {
+    const requestFn = vi
+      .fn<(path: string, init?: RequestInit) => Promise<unknown>>()
+      .mockRejectedValueOnce(makeApiError(500, 'internal_error'))
+      .mockResolvedValue(sampleMe);
+    renderSession(createMockClient(requestFn as (...args: unknown[]) => Promise<unknown>));
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('Platform Admin');
+    expect(requestFn).toHaveBeenCalledTimes(2);
+    expect(requestFn.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
 
 const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({

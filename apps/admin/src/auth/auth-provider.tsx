@@ -2,6 +2,10 @@
  * Real-mode AuthProvider -- uses cookie-based auth with the API.
  * CLIENT-R-01..04, CLIENT-R-28
  *
+ * `GET /auth/me` on mount and on window focus: 200 -> authenticated; 401 ->
+ * unauthenticated; other -> status `error`: the session is unknown, the
+ * previous principal is kept and `error` is exposed.
+ *
  * `stepUp()` opens the step-up dialog rendered here, so every screen gets it.
  */
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -11,7 +15,7 @@ import type { Principal, ActiveContext, MeResponse } from '@nestself/contracts';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import type { ApiClient } from '@nestself/api-client';
 import { AuthContext } from './auth-context';
-import { initialMe, releaseInitialMe } from './route-auth';
+import { ME_TIMEOUT_MS, initialMe, releaseInitialMe } from './route-auth';
 import { StepUpDialog } from './step-up-dialog';
 import type { AuthStatus } from './types';
 
@@ -49,7 +53,9 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
 
   const loadPrincipal = useCallback(async (request?: Promise<MeResponse>) => {
     try {
-      const data = await (request ?? authApi.me());
+      // A refresh gives up after the same time as the first load, so "Try
+      // again" on the account error screen never waits on a hung API.
+      const data = await (request ?? authApi.me({ signal: AbortSignal.timeout(ME_TIMEOUT_MS) }));
       applyMe(data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -58,8 +64,11 @@ export function AuthProvider({ client, children, onUnauthenticated }: Props) {
         setStatus('unauthenticated');
         setError(null);
       } else {
-        // Keep previous state, expose error
+        // Not a signed-out answer, so the session is unknown: keep the
+        // principal the screens already have and report the failure. The next
+        // refresh (window focus, "Try again") settles it either way.
         setError(err instanceof Error ? err : new Error(String(err)));
+        setStatus('error');
       }
     }
   }, [authApi, applyMe]);
