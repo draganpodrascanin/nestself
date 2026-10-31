@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, gt, ilike, inArray, isNull, or } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
+import { likePrefix } from '../like-pattern.js';
 import { memberships, orgUnitClosure } from '../schema/index.js';
 import { users } from '../schema/index.js';
 
@@ -125,7 +126,8 @@ export class MembershipsRepository {
     }
 
     if (opts.search) {
-      const pattern = `${opts.search}%`;
+      // A literal prefix: `%`, `_` and `\` in the term match themselves.
+      const pattern = likePrefix(opts.search);
       conditions.push(
         or(
           ilike(users.displayName, pattern),
