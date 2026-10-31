@@ -101,7 +101,7 @@ function serve(routes: Record<string, () => Response | Promise<Response>>): Sent
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, search: url.search, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: expert.principal, effectiveActions: expert.effectiveActions }));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: expert.principal, effectiveActions: expert.effectiveActions, availableContexts: [expert.principal.context] }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
