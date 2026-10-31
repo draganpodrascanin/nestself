@@ -215,6 +215,11 @@ describe('NestSelfComputeStack -- staging', () => {
     });
   });
 
+  // Staging runs the service at zero tasks today; when it is switched on it must not start in development mode.
+  it('runs the marketing container in production mode', () => {
+    expectEnvironment(template, 'nestself-staging-marketing', 'marketing', { NODE_ENV: 'production' });
+  });
+
   it('sets API service desired count from config.apiMinTasks', () => {
     template.hasResourceProperties('AWS::ECS::Service', {
       ServiceName: 'nestself-staging-api',
@@ -276,6 +281,10 @@ describe('NestSelfComputeStack -- production', () => {
     template.hasResourceProperties('AWS::ECR::Repository', {
       ImageScanningConfiguration: { ScanOnPush: true },
     });
+  });
+
+  it('runs the marketing container in production mode', () => {
+    expectEnvironment(template, 'nestself-production-marketing', 'marketing', { NODE_ENV: 'production' });
   });
 
   it.each([

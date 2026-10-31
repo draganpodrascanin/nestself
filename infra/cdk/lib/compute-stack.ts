@@ -281,7 +281,7 @@ export class NestSelfComputeStack extends cdk.Stack {
       containerName: 'marketing',
       image: ecs.ContainerImage.fromEcrRepository(this.marketingRepo, 'latest'),
       portMappings: [{ containerPort: 3000 }],
-      environment: { NODE_ENV: isProd ? 'production' : 'development', HOSTNAME: '0.0.0.0', PORT: '3000' },
+      environment: { NODE_ENV: 'production', HOSTNAME: '0.0.0.0', PORT: '3000' },
       logging: ecs.LogDrivers.awsLogs({
         logGroup: new logs.LogGroup(this, 'MarketingLogGroup', {
           logGroupName: `/ecs/nestself-${stage}-marketing`,
