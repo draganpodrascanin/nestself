@@ -1,8 +1,11 @@
 /**
- * Identity module: provides IdentityProviderService.
+ * Identity module: provides IdentityProviderService and the SAML metadata
+ * fetcher (`METADATA_FETCHER`).
  *
- * When AUTH_MODE=cognito, the Cognito adapter is used.
- * Otherwise the FakeIdentityProvider is used for local development.
+ * When AUTH_MODE=cognito, the Cognito adapter and the HTTPS metadata fetcher
+ * are used. Otherwise the FakeIdentityProvider and the FakeMetadataFetcher
+ * (no DNS, no network; tests reach it through `app.get(METADATA_FETCHER)`)
+ * are used for local development.
  *
  * @see D-12, D-36, T-1.15
  */
@@ -13,6 +16,12 @@ import { IdentityProviderService } from './identity-provider.service.js';
 import { CognitoIdentityProvider } from './cognito-identity-provider.js';
 import { FakeIdentityProvider } from './fake-identity-provider.js';
 import { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from '@nestself/sample-data';
+import {
+  FakeMetadataFetcher,
+  HttpsMetadataFetcher,
+  METADATA_FETCHER,
+  type MetadataFetcher,
+} from '../sso/metadata-fetcher.js';
 
 @Module({
   providers: [
@@ -51,7 +60,13 @@ import { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from '@nestself/sampl
         return fake;
       },
     },
+    {
+      provide: METADATA_FETCHER,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): MetadataFetcher =>
+        config.get<string>('AUTH_MODE', 'stub') === 'cognito' ? new HttpsMetadataFetcher() : new FakeMetadataFetcher(),
+    },
   ],
-  exports: [IdentityProviderService],
+  exports: [IdentityProviderService, METADATA_FETCHER],
 })
 export class IdentityModule {}

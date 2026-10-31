@@ -1,15 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { Logger } from '@nestjs/common';
+import { LoggingMailer } from '../email/logging-mailer.js';
+import { MailDeliveryError } from '../email/mailer.js';
+import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../identity/saml-metadata.fixture.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import {
   INVALIDATE_CHANNEL,
+  SSO_CERT_ALERT_TTL,
   mobileFamilyKey,
   revokedFamilyKey,
   sessionKey,
+  ssoCertAlertKey,
   userMobileFamiliesKey,
   userSessionsKey,
 } from '../redis/redis-keys.js';
 import { SessionService } from '../session/session.service.js';
+import { FakeMetadataFetcher } from '../sso/metadata-fetcher.js';
 import { MAINTENANCE_SCHEDULES } from './job-scheduler.service.js';
 import { MAINTENANCE_JOB_NAMES, MaintenanceJobsService } from './maintenance-jobs.service.js';
 
@@ -59,6 +65,11 @@ describe('MaintenanceJobsService', () => {
   let idp: { revokeRefreshToken: ReturnType<typeof vi.fn>; describeProvider: ReturnType<typeof vi.fn> };
   let ssoRepo: { listActiveConnections: ReturnType<typeof vi.fn>; updateConnection: ReturnType<typeof vi.fn> };
   let dbs: { withTransaction: ReturnType<typeof vi.fn> };
+  let organizations: { findById: ReturnType<typeof vi.fn> };
+  let fetcher: FakeMetadataFetcher;
+  let mailer: LoggingMailer;
+  /** What the job reads through ConfigService. */
+  let env: Record<string, string | undefined>;
   let service: MaintenanceJobsService;
 
   beforeEach(() => {
@@ -80,6 +91,10 @@ describe('MaintenanceJobsService', () => {
       updateConnection: vi.fn().mockImplementation((id: string) => Promise.resolve({ id })),
     };
     dbs = { withTransaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
+    organizations = { findById: vi.fn(async (id: string) => ({ id, name: 'Acme d.o.o.' })) };
+    fetcher = new FakeMetadataFetcher(new Map());
+    mailer = new LoggingMailer({ keepSent: true });
+    env = { OPS_ALERT_EMAIL: 'ops@nestself.example', ADMIN_URL: 'https://admin.nestself.example' };
     const cipher = {
       encrypt: (v: string) => `enc:${v}`,
       decrypt: (v: string) => ({ plaintext: v.replace(/^enc:/, ''), usedPreviousKey: false }),
@@ -95,6 +110,10 @@ describe('MaintenanceJobsService', () => {
       ssoRepo as never,
       idp as never,
       dbs as never,
+      organizations as never,
+      fetcher,
+      mailer,
+      { get: (key: string) => env[key] } as never,
     );
   });
 
@@ -474,7 +493,25 @@ describe('MaintenanceJobsService', () => {
 
   describe('sso.certificate-expiry', () => {
     const DAY = 24 * 60 * 60 * 1000;
+    const METADATA_URL = 'https://idp.acme.example/metadata';
+    /** 12 days and 4 hours before the fixture's signing certificate expires. */
+    const LATE = new Date(SIGNING_CERT_NOT_AFTER.getTime() - 12 * DAY - 4 * 3_600_000);
+    let warn: MockInstance;
 
+    beforeEach(() => {
+      warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      // The run summary, and the logging mailer's line for every mail.
+      vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+      vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    });
+
+    const warnings = () => warn.mock.calls.map((call) => String(call[0]));
+
+    /** An ACTIVE SAML connection registered from metadata XML, unless overridden. */
     function connection(overrides: Partial<Record<string, unknown>>) {
       return {
         id: 'sso_1',
@@ -482,11 +519,16 @@ describe('MaintenanceJobsService', () => {
         protocol: 'SAML',
         cognitoProviderName: 'org-acme-saml',
         status: 'ACTIVE',
-        metadataUrl: 'https://idp.acme.example/metadata',
+        metadataUrl: null,
         metadataXml: '<EntityDescriptor>secret-free but never logged</EntityDescriptor>',
         certificateExpiresAt: null,
         ...overrides,
       } as never;
+    }
+
+    /** An ACTIVE SAML connection registered from a metadata URL. */
+    function urlConnection(overrides: Partial<Record<string, unknown>> = {}) {
+      return connection({ metadataUrl: METADATA_URL, metadataXml: null, ...overrides });
     }
 
     it('is a maintenance job scheduled nightly at 03:00', () => {
@@ -497,11 +539,10 @@ describe('MaintenanceJobsService', () => {
     it('audits and warns about a certificate that expires within 30 days, as a job', async () => {
       const expiresAt = new Date(NOW.getTime() + 12 * DAY + 3_600_000);
       ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: expiresAt })]);
-      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 
       const report = await service.run('sso.certificate-expiry', NOW);
 
-      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, failed: 0 });
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, alerted: 1, failed: 0 });
       expect(audit.record).toHaveBeenCalledTimes(1);
       expect(audit.record).toHaveBeenCalledWith({
         action: 'sso_connection.changed',
@@ -524,19 +565,17 @@ describe('MaintenanceJobsService', () => {
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]![0]).toContain('org-acme-saml');
       expect(warn.mock.calls[0]![0]).not.toContain('EntityDescriptor');
-      warn.mockRestore();
     });
 
     it('treats an already expired certificate as expiring with negative days left', async () => {
       const expiresAt = new Date(NOW.getTime() - 2 * DAY);
       ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: expiresAt })]);
-      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
       const report = await service.checkSsoCertificates(NOW);
-      expect(report.expiring).toBe(1);
+      expect(report).toMatchObject({ expiring: 1, alerted: 1 });
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ details: expect.objectContaining({ daysLeft: -2 }) }),
       );
-      vi.restoreAllMocks();
+      expect(mailer.sent[0]?.params).toMatchObject({ daysLeft: '-2', expiresAt: expiresAt.toISOString() });
     });
 
     it('does not audit a certificate that expires in more than 30 days', async () => {
@@ -545,28 +584,28 @@ describe('MaintenanceJobsService', () => {
         connection({ id: 'sso_2', certificateExpiresAt: new Date(NOW.getTime() + 365 * DAY) }),
       ]);
       const report = await service.checkSsoCertificates(NOW);
-      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, failed: 0 });
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, alerted: 0, failed: 0 });
       expect(audit.record).not.toHaveBeenCalled();
+      expect(mailer.sent).toEqual([]);
     });
 
-    it('refreshes a missing SAML expiry from the identity provider, then checks it', async () => {
+    it('refreshes a missing expiry of a metadata-XML connection from the identity provider, then checks it', async () => {
       const expiresAt = new Date(NOW.getTime() + 5 * DAY);
       ssoRepo.listActiveConnections.mockResolvedValue([connection({})]);
       idp.describeProvider.mockResolvedValue({ name: 'org-acme-saml', protocol: 'SAML', certificateExpiresAt: expiresAt });
-      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 
       const report = await service.checkSsoCertificates(NOW);
 
       expect(idp.describeProvider).toHaveBeenCalledWith('org-acme-saml');
       expect(ssoRepo.updateConnection).toHaveBeenCalledWith('sso_1', { certificateExpiresAt: expiresAt });
-      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 1, expiring: 1, failed: 0 });
-      vi.restoreAllMocks();
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 1, expiring: 1, alerted: 1, failed: 0 });
+      expect(fetcher.fetched).toEqual([]);
     });
 
-    it('leaves the expiry unset when the provider reports none, and never asks for OIDC connections', async () => {
+    it('leaves the expiry unset when the provider reports none, and never asks or fetches for OIDC connections', async () => {
       ssoRepo.listActiveConnections.mockResolvedValue([
         connection({}),
-        connection({ id: 'sso_oidc', protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc' }),
+        connection({ id: 'sso_oidc', protocol: 'OIDC', cognitoProviderName: 'org-acme-oidc', metadataUrl: METADATA_URL }),
       ]);
       idp.describeProvider.mockResolvedValue({ name: 'org-acme-saml', protocol: 'SAML', certificateExpiresAt: null });
 
@@ -574,8 +613,9 @@ describe('MaintenanceJobsService', () => {
 
       expect(idp.describeProvider).toHaveBeenCalledTimes(1);
       expect(idp.describeProvider).toHaveBeenCalledWith('org-acme-saml');
+      expect(fetcher.fetched).toEqual([]);
       expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
-      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, failed: 0 });
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 0, alerted: 0, failed: 0 });
     });
 
     it('counts a provider failure, warns, and continues with the next connection', async () => {
@@ -585,16 +625,14 @@ describe('MaintenanceJobsService', () => {
         connection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: expiresAt }),
       ]);
       idp.describeProvider.mockRejectedValue(new Error('Cognito unavailable'));
-      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 
       const report = await service.checkSsoCertificates(NOW);
 
-      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, failed: 1 });
+      expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
       expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
       expect(audit.record).toHaveBeenCalledTimes(1);
       expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }));
-      expect(warn.mock.calls.map((c) => String(c[0])).some((m) => m.includes('org-acme-saml'))).toBe(true);
-      warn.mockRestore();
+      expect(warnings().some((m) => m.includes('org-acme-saml'))).toBe(true);
     });
 
     it('reports zero work when no connection is active', async () => {
@@ -603,7 +641,186 @@ describe('MaintenanceJobsService', () => {
         scanned: 0,
         refreshed: 0,
         expiring: 0,
+        alerted: 0,
         failed: 0,
+      });
+    });
+
+    describe('metadata-URL connections', () => {
+      it('fetches the metadata every run and stores the expiry it carries, never asking the identity provider', async () => {
+        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(fetcher.fetched).toEqual([METADATA_URL]);
+        expect(ssoRepo.updateConnection).toHaveBeenCalledWith('sso_1', { certificateExpiresAt: SIGNING_CERT_NOT_AFTER });
+        expect(idp.describeProvider).not.toHaveBeenCalled();
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 1, expiring: 0, alerted: 0, failed: 0 });
+      });
+
+      it('replaces a stored expiry with the fetched one (certificates rotate) and rewrites nothing unchanged', async () => {
+        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
+        ssoRepo.listActiveConnections.mockResolvedValue([
+          // The certificate it was registered with expired; the IdP has rotated to the fixture's.
+          urlConnection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) }),
+          urlConnection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: SIGNING_CERT_NOT_AFTER }),
+        ]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(fetcher.fetched).toEqual([METADATA_URL, METADATA_URL]);
+        expect(ssoRepo.updateConnection).toHaveBeenCalledTimes(1);
+        expect(ssoRepo.updateConnection).toHaveBeenCalledWith('sso_1', { certificateExpiresAt: SIGNING_CERT_NOT_AFTER });
+        expect(report).toMatchObject({ scanned: 2, refreshed: 1, expiring: 0, alerted: 0, failed: 0 });
+        expect(audit.record).not.toHaveBeenCalled();
+      });
+
+      it('a fetch that throws counts in failed, warns with the error name only and is not retried in the run', async () => {
+        const withQuery = `${METADATA_URL}?tenant=t-123`;
+        const fetchXml = vi
+          .spyOn(fetcher, 'fetchXml')
+          .mockRejectedValue(new TypeError(`fetch failed for ${withQuery}: <md:EntityDescriptor>`));
+        ssoRepo.listActiveConnections.mockResolvedValue([
+          urlConnection({ metadataUrl: withQuery, certificateExpiresAt: new Date(NOW.getTime() + 40 * DAY) }),
+          connection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: new Date(NOW.getTime() + 5 * DAY) }),
+        ]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(fetchXml).toHaveBeenCalledTimes(1);
+        expect(fetchXml).toHaveBeenCalledWith(withQuery);
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
+        expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+        expect(audit.record).toHaveBeenCalledTimes(1);
+        expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }));
+        const failure = warnings().find((m) => m.includes('org-acme-saml'))!;
+        expect(failure).toContain('(TypeError)');
+        expect(failure).not.toMatch(/tenant|idp\.acme\.example|https:|EntityDescriptor/);
+      });
+
+      it('a host that resolves to a public and a private address is counted in failed and nothing is fetched (Review Focus 4)', async () => {
+        const mixed = 'https://idp.mixed.example/metadata';
+        fetcher.setAddresses('idp.mixed.example', ['203.0.113.10', '10.0.0.1']);
+        fetcher.setResponse(mixed, SAMPLE_SAML_METADATA);
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection({ metadataUrl: mixed })]);
+
+        const report = await service.checkSsoCertificates(LATE);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 0, alerted: 0, failed: 1 });
+        expect(fetcher.fetched).toEqual([]);
+        expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+        expect(mailer.sent).toEqual([]);
+        expect(warnings()).toEqual([expect.stringContaining('(MetadataUrlError: private_address)')]);
+      });
+    });
+
+    describe('ops alert email', () => {
+      it('mails one ops_certificate_alert to OPS_ALERT_EMAIL once the audit row is written, for a certificate inside 30 days', async () => {
+        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
+        const send = vi.spyOn(mailer, 'send');
+
+        const report = await service.checkSsoCertificates(LATE);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 1, expiring: 1, alerted: 1, failed: 0 });
+        expect(mailer.sent).toEqual([
+          {
+            to: 'ops@nestself.example',
+            locale: 'en',
+            template: 'ops_certificate_alert',
+            params: {
+              organizationName: 'Acme d.o.o.',
+              providerName: 'org-acme-saml',
+              expiresAt: SIGNING_CERT_NOT_AFTER.toISOString(),
+              daysLeft: '12',
+              adminUrl: 'https://admin.nestself.example/sso',
+            },
+          },
+        ]);
+        expect(organizations.findById).toHaveBeenCalledWith('org_1');
+        expect(audit.record.mock.invocationCallOrder[0]!).toBeLessThan(send.mock.invocationCallOrder[0]!);
+        expect(SSO_CERT_ALERT_TTL).toBe(7 * 24 * 3600);
+        expect(await store.ttl(ssoCertAlertKey('sso_1'))).toBeGreaterThan(SSO_CERT_ALERT_TTL - 5);
+      });
+
+      it('a second run on the same day audits and warns again but mails nothing', async () => {
+        fetcher.setResponse(METADATA_URL, SAMPLE_SAML_METADATA);
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
+
+        await service.checkSsoCertificates(LATE);
+        const second = await service.checkSsoCertificates(LATE);
+
+        expect(second).toMatchObject({ expiring: 1, alerted: 0, failed: 0 });
+        expect(mailer.sent).toHaveLength(1);
+        expect(audit.record).toHaveBeenCalledTimes(2);
+        expect(warnings().filter((m) => m.includes('signing certificate expires on'))).toHaveLength(2);
+      });
+
+      it('mails again once the seven days are over', async () => {
+        // The in-memory store expires keys by the clock.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) })]);
+
+        await service.checkSsoCertificates(NOW);
+        vi.setSystemTime(Date.now() + SSO_CERT_ALERT_TTL * 1000 - 60_000);
+        expect(await service.checkSsoCertificates(NOW)).toMatchObject({ alerted: 0 });
+        vi.setSystemTime(Date.now() + 61_000);
+        expect(await service.checkSsoCertificates(NOW)).toMatchObject({ alerted: 1 });
+
+        expect(mailer.sent).toHaveLength(2);
+      });
+
+      it('a send that fails releases the key, counts the connection in failed, and the next run mails', async () => {
+        ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) })]);
+        vi.spyOn(mailer, 'send').mockRejectedValueOnce(new MailDeliveryError({ name: 'Throttling', httpStatus: 400 }));
+
+        const first = await service.checkSsoCertificates(NOW);
+
+        expect(first).toMatchObject({ expiring: 1, alerted: 0, failed: 1 });
+        expect(await store.get(ssoCertAlertKey('sso_1'))).toBeNull();
+        expect(warnings()).toContainEqual(expect.stringMatching(/org-acme-saml: expiry alert not sent \(Throttling\)/));
+
+        const second = await service.checkSsoCertificates(NOW);
+        expect(second).toMatchObject({ alerted: 1, failed: 0 });
+        expect(mailer.sent).toHaveLength(1);
+      });
+
+      it('an audit row that is not written sends no mail', async () => {
+        ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) })]);
+        audit.record.mockRejectedValueOnce(new Error('insert failed'));
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(report).toMatchObject({ expiring: 0, alerted: 0, failed: 1 });
+        expect(mailer.sent).toEqual([]);
+        expect(await store.get(ssoCertAlertKey('sso_1'))).toBeNull();
+      });
+
+      it('without OPS_ALERT_EMAIL: audits as before, says once per run that alerts are off, and sets no key', async () => {
+        delete env['OPS_ALERT_EMAIL'];
+        ssoRepo.listActiveConnections.mockResolvedValue([
+          connection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) }),
+          connection({ id: 'sso_2', cognitoProviderName: 'org-beta-saml', certificateExpiresAt: new Date(NOW.getTime() + 5 * DAY) }),
+        ]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 2, alerted: 0, failed: 0 });
+        expect(audit.record).toHaveBeenCalledTimes(2);
+        expect(mailer.sent).toEqual([]);
+        expect(warnings().filter((m) => m.includes('OPS_ALERT_EMAIL'))).toEqual([
+          'SSO certificate alert mail is off (OPS_ALERT_EMAIL is not set): 2 expiring connection(s) audited and logged only',
+        ]);
+        expect(await store.get(ssoCertAlertKey('sso_1'))).toBeNull();
+        expect(await store.get(ssoCertAlertKey('sso_2'))).toBeNull();
+      });
+
+      it('without OPS_ALERT_EMAIL and nothing expiring, says nothing about alerts', async () => {
+        delete env['OPS_ALERT_EMAIL'];
+        ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: new Date(NOW.getTime() + 90 * DAY) })]);
+        await service.checkSsoCertificates(NOW);
+        expect(warn).not.toHaveBeenCalled();
       });
     });
   });

@@ -45,7 +45,7 @@ The server listens on port 4000 by default. Copy `.env.example` to `.env` and ad
 | `grants.reconcile` | 02:15 | Closes expired grants, orphaned delegations and grants of ended memberships; invalidates subjects and delegatees |
 | `mobile.prune-stale-families` | 02:30 | Denylists mobile token families unseen for 30 days |
 | `sessions.reconcile-ttl` | 02:45 | Destroys session records past their absolute expiry and revokes their refresh tokens |
-| `sso.certificate-expiry` | 03:00 | Fills a missing SAML certificate expiry from the identity provider; audits `sso_connection.changed` (reason `certificate_expiring`) and warns for certificates that expire within 30 days |
+| `sso.certificate-expiry` | 03:00 | Reads the SAML certificate expiry from the fetched metadata of metadata-URL connections (https, public hosts only) and fills a missing one of metadata-XML connections from the identity provider; audits `sso_connection.changed` (reason `certificate_expiring`) and warns for certificates that expire within 30 days, and mails `OPS_ALERT_EMAIL` at most once a week per connection |
 | `emergency.sweep-expired` | every 15 minutes | Closes approved emergency access whose window has passed |
 
 The worker (`src/worker/main.ts`) boots the same `AppModule` as the API, so it needs the API's configuration (identity provider, session encryption key, database) plus `REDIS_URL`; without Redis it exits with an error.

@@ -1,11 +1,12 @@
 /**
  * SsoConnectionsService unit tests: lifecycle transitions (3.4.1), domain
  * verification (3.4.4), provider registration and audit details. The
- * repository is an in-memory stand-in; the identity provider is the real
- * in-memory fake.
+ * repository is an in-memory stand-in; the identity provider and the
+ * metadata fetcher are the real in-memory fakes.
  */
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Principal, SsoConnectionCreateRequest } from '@nestself/contracts';
 import { ApiHttpException } from '../common/api-error.js';
 import type { AuditEventInput } from '../audit/audit-writer.js';
@@ -18,7 +19,9 @@ import type {
 } from '../db/repositories/sso.repository.js';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { IdentityProviderError } from '../identity/identity-provider.service.js';
+import { SAMPLE_SAML_METADATA, SIGNING_CERT_NOT_AFTER } from '../identity/saml-metadata.fixture.js';
 import { FakeDnsTxtResolver } from './dns-txt-resolver.js';
+import { FakeMetadataFetcher } from './metadata-fetcher.js';
 import { SsoConnectionsService } from './sso-connections.service.js';
 
 const ACTOR = { userId: 'user_nikola', sessionId: 'sess_1' } as Principal;
@@ -119,6 +122,10 @@ function setup() {
   const dns = new FakeDnsTxtResolver();
   const db = { withOrgScope: vi.fn(async (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => fn(TX)) };
   const store = new MemoryKeyValueStore();
+  // Serves nothing until a test seeds a document; every host is public until a test says otherwise.
+  const fetcher = new FakeMetadataFetcher(new Map());
+  // A refresh whose fetch fails only warns; the tests that care read these calls.
+  const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
   const service = new SsoConnectionsService(
     db as never,
     repo as never,
@@ -130,8 +137,9 @@ function setup() {
     dns,
     { testStartOrigin: 'http://ws.test', spMetadata: SP },
     store,
+    fetcher,
   );
-  return { repo, idp, events, eventExecutors, dns, db, service, store };
+  return { repo, idp, events, eventExecutors, dns, db, service, store, fetcher, warn };
 }
 
 const SAML: SsoConnectionCreateRequest = {
@@ -142,6 +150,17 @@ const SAML: SsoConnectionCreateRequest = {
   idpInitiatedAllowed: false,
   jitProvisioning: false,
   oidcEmailVerifiedClaimRequired: true,
+};
+
+/** A SAML connection registered from pasted metadata XML (no URL). */
+const SAML_XML: SsoConnectionCreateRequest = { ...SAML, metadataUrl: undefined, metadataXml: SAMPLE_SAML_METADATA };
+
+const OIDC: SsoConnectionCreateRequest = {
+  ...SAML,
+  protocol: 'OIDC',
+  metadataUrl: undefined,
+  oidcIssuer: 'https://login.acme.example',
+  oidcClientId: 'client-1',
 };
 
 async function expectApiError(promise: Promise<unknown>, status: number, code: string): Promise<ApiHttpException> {
@@ -159,12 +178,25 @@ async function expectApiError(promise: Promise<unknown>, status: number, code: s
 
 type Ctx = ReturnType<typeof setup>;
 
-/** A connection with one verified domain, in the given status. */
-async function connectionIn(ctx: Ctx, status: 'DRAFT' | 'TESTING' | 'ACTIVE' | 'SUSPENDED', lastTestedAt: Date | null = null) {
-  const created = await ctx.service.create(SAML, ACTOR);
+/** A SAML connection (from the metadata URL unless `body` says otherwise) with one verified domain, in the given status. */
+async function connectionIn(
+  ctx: Ctx,
+  status: 'DRAFT' | 'TESTING' | 'ACTIVE' | 'SUSPENDED',
+  lastTestedAt: Date | null = null,
+  body: SsoConnectionCreateRequest = SAML,
+) {
+  const created = await ctx.service.create(body, ACTOR);
   const domain = await ctx.service.addDomain(created.id, 'acme.example', ACTOR);
   await ctx.repo.markDomainVerified(domain.id, new Date());
-  if (status !== 'DRAFT') await ctx.idp.createProvider({ name: created.cognitoProviderName, protocol: 'SAML', metadataUrl: SAML.metadataUrl, attributeMapping: {} });
+  if (status !== 'DRAFT') {
+    await ctx.idp.createProvider({
+      name: created.cognitoProviderName,
+      protocol: 'SAML',
+      ...(body.metadataUrl ? { metadataUrl: body.metadataUrl } : {}),
+      ...(body.metadataXml ? { metadataXml: body.metadataXml } : {}),
+      attributeMapping: {},
+    });
+  }
   await ctx.repo.updateConnection(created.id, { status, lastTestedAt });
   vi.mocked(ctx.idp.createProvider).mockClear();
   ctx.events.length = 0;
@@ -176,6 +208,9 @@ describe('SsoConnectionsService', () => {
   let ctx: Ctx;
   beforeEach(() => {
     ctx = setup();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('create', () => {
@@ -264,6 +299,58 @@ describe('SsoConnectionsService', () => {
       );
       expect(res.oidcEmailVerifiedClaimRequired).toBe(required);
       expect(ctx.events[0]!.details).toMatchObject({ oidcEmailVerifiedClaimRequired: required });
+    });
+
+    describe('metadata URL and issuer must point at a public host (spec 5.8)', () => {
+      it('refuses a metadata URL whose host resolves to a private address with 422 validation, field metadataUrl', async () => {
+        ctx.fetcher.setAddresses('idp.internal.example', ['10.0.0.5']);
+        const err = await expectApiError(
+          ctx.service.create({ ...SAML, metadataUrl: 'https://idp.internal.example/metadata' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(err.details).toEqual({ field: 'metadataUrl', reason: 'private_address' });
+        expect(ctx.repo.createConnection).not.toHaveBeenCalled();
+        expect(ctx.events).toEqual([]);
+      });
+
+      it('refuses a metadata URL whose host resolves to a public and a private address (Review Focus 4)', async () => {
+        ctx.fetcher.setAddresses('idp.mixed.example', ['203.0.113.10', '10.0.0.1']);
+        const err = await expectApiError(
+          ctx.service.create({ ...SAML, metadataUrl: 'https://idp.mixed.example/metadata' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(err.details).toEqual({ field: 'metadataUrl', reason: 'private_address' });
+        expect(ctx.repo.createConnection).not.toHaveBeenCalled();
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
+
+      it('refuses an OIDC issuer on a private host with 422, field oidcIssuer, before staging the provider', async () => {
+        ctx.fetcher.setAddresses('login.internal.example', ['192.168.10.4']);
+        const err = await expectApiError(
+          ctx.service.create({ ...OIDC, oidcIssuer: 'https://login.internal.example', oidcClientSecret: 's' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(err.details).toEqual({ field: 'oidcIssuer', reason: 'private_address' });
+        expect(ctx.idp.createProvider).not.toHaveBeenCalled();
+        expect(ctx.repo.createConnection).not.toHaveBeenCalled();
+      });
+
+      it('checks the scheme itself as well: an http URL that got past the contract is 422, reason scheme', async () => {
+        const err = await expectApiError(
+          ctx.service.create({ ...SAML, metadataUrl: 'http://idp.acme.example/metadata' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(err.details).toEqual({ field: 'metadataUrl', reason: 'scheme' });
+      });
+
+      it('accepts a public host and fetches nothing at create', async () => {
+        await expect(ctx.service.create(SAML, ACTOR)).resolves.toMatchObject({ status: 'DRAFT', certificateExpiresAt: null });
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
     });
   });
 
@@ -390,6 +477,74 @@ describe('SsoConnectionsService', () => {
       vi.mocked(ctx.idp.createProvider).mockRejectedValueOnce(new IdentityProviderError('down', 'unavailable', true));
       await expectApiError(ctx.service.test(conn.id, ACTOR), 503, 'unavailable');
       expect(ctx.repo.connections.get(conn.id)?.status).toBe('DRAFT');
+    });
+
+    describe('signing-certificate expiry', () => {
+      it('stores the expiry read from the metadata fetched from the URL', async () => {
+        ctx.fetcher.setResponse(SAML.metadataUrl!, SAMPLE_SAML_METADATA);
+        const conn = await connectionIn(ctx, 'DRAFT');
+
+        await ctx.service.test(conn.id, ACTOR);
+
+        expect(ctx.fetcher.fetched).toEqual([SAML.metadataUrl]);
+        expect(ctx.repo.connections.get(conn.id)).toMatchObject({
+          status: 'TESTING',
+          certificateExpiresAt: SIGNING_CERT_NOT_AFTER,
+        });
+        expect(ctx.warn).not.toHaveBeenCalled();
+      });
+
+      it('a fetch that fails does not fail the test: the stored expiry stays, the warning names the error only', async () => {
+        const conn = await connectionIn(ctx, 'TESTING');
+        const stored = new Date('2027-01-01T00:00:00Z');
+        // Nothing serves this URL; its query must not reach the log.
+        await ctx.repo.updateConnection(conn.id, {
+          metadataUrl: 'https://idp.acme.example/metadata?tenant=t-123',
+          certificateExpiresAt: stored,
+        });
+
+        const res = await ctx.service.test(conn.id, ACTOR);
+
+        expect(new URL(res.startUrl).searchParams.get('connection')).toBe('org-acme-saml');
+        expect(ctx.repo.connections.get(conn.id)).toMatchObject({ status: 'TESTING', certificateExpiresAt: stored });
+        expect(ctx.events.map((e) => e.action)).toEqual(['sso_connection.tested']);
+        expect(ctx.warn).toHaveBeenCalledTimes(1);
+        const line = String(ctx.warn.mock.calls[0]![0]);
+        expect(line).toContain('org-acme-saml');
+        expect(line).toContain('MetadataFetchError: status');
+        expect(line).not.toMatch(/tenant|idp\.acme\.example|https:/);
+      });
+
+      it('reads the expiry of a metadata-XML connection from the XML, fetching nothing', async () => {
+        const conn = await connectionIn(ctx, 'DRAFT', null, SAML_XML);
+        await ctx.service.test(conn.id, ACTOR);
+        expect(ctx.fetcher.fetched).toEqual([]);
+        expect(ctx.repo.connections.get(conn.id)?.certificateExpiresAt).toEqual(SIGNING_CERT_NOT_AFTER);
+      });
+
+      it('an OIDC connection has no signing certificate: test clears an expiry left from its SAML draft', async () => {
+        const conn = await ctx.service.create({ ...OIDC, oidcClientSecret: 's' }, ACTOR);
+        const d = await ctx.service.addDomain(conn.id, 'acme.example', ACTOR);
+        await ctx.repo.markDomainVerified(d.id, new Date());
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: new Date('2027-01-01T00:00:00Z') });
+
+        await ctx.service.test(conn.id, ACTOR);
+
+        expect(ctx.repo.connections.get(conn.id)?.certificateExpiresAt).toBeNull();
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
+
+      it('refuses a metadata URL whose host now resolves to a private address with 422, before registering', async () => {
+        const conn = await connectionIn(ctx, 'DRAFT');
+        ctx.fetcher.setAddresses('idp.acme.example', ['203.0.113.10', '10.0.0.1']);
+
+        const err = await expectApiError(ctx.service.test(conn.id, ACTOR), 422, 'validation');
+
+        expect(err.details).toEqual({ field: 'metadataUrl', reason: 'private_address' });
+        expect(ctx.idp.createProvider).not.toHaveBeenCalled();
+        expect(ctx.repo.connections.get(conn.id)?.status).toBe('DRAFT');
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
     });
   });
 
@@ -643,6 +798,172 @@ describe('SsoConnectionsService', () => {
       );
       expect(ctx.repo.connections.get(conn.id)?.status).toBe('ACTIVE');
       expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
+    });
+
+    describe('a provider change on a SUSPENDED connection (SSO-R-01)', () => {
+      it('moves it to TESTING, clears lastTestedAt and re-reads the expiry from the new metadata XML', async () => {
+        const conn = await connectionIn(ctx, 'SUSPENDED', new Date(), {
+          ...SAML_XML,
+          metadataXml: '<md:EntityDescriptor>previous metadata</md:EntityDescriptor>',
+        });
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: new Date('2026-11-01T00:00:00Z') });
+
+        const res = await ctx.service.update(conn.id, { metadataXml: SAMPLE_SAML_METADATA }, ACTOR);
+
+        expect(res).toMatchObject({
+          status: 'TESTING',
+          lastTestedAt: null,
+          certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString(),
+        });
+        expect(ctx.idp.updateProvider).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'org-acme-saml', metadataXml: SAMPLE_SAML_METADATA }),
+        );
+        expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(
+          conn.id,
+          {
+            metadataXml: SAMPLE_SAML_METADATA,
+            certificateExpiresAt: SIGNING_CERT_NOT_AFTER,
+            status: 'TESTING',
+            lastTestedAt: null,
+          },
+          TX,
+          { fromStatus: 'SUSPENDED' },
+        );
+        // It was not routable while suspended, so leaving SUSPENDED is no deactivation.
+        expect(ctx.events.map((e) => [e.action, e.details])).toEqual([
+          ['sso_connection.updated', { fields: ['metadataXml'] }],
+          ['sso_connection.changed', { from: 'SUSPENDED', to: 'TESTING' }],
+        ]);
+        expect(ctx.fetcher.fetched).toEqual([]);
+        // Reactivation needs a new test sign-in against the new configuration.
+        await expectApiError(ctx.service.update(conn.id, { status: 'ACTIVE' }, ACTOR), 409, 'sso_connection_state');
+        await expectApiError(ctx.service.activate(conn.id, ACTOR), 409, 'sso_connection_state');
+      });
+
+      it('a metadata URL change moves it to TESTING too, with the expiry of the fetched metadata', async () => {
+        const next = 'https://idp.acme.example/rotated';
+        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
+        const conn = await connectionIn(ctx, 'SUSPENDED', new Date());
+
+        const res = await ctx.service.update(conn.id, { metadataUrl: next }, ACTOR);
+
+        expect(res).toMatchObject({ status: 'TESTING', lastTestedAt: null, certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString() });
+        expect(ctx.fetcher.fetched).toEqual([next]);
+      });
+
+      it('refuses a provider change combined with a status change with 422 and changes nothing', async () => {
+        const conn = await connectionIn(ctx, 'SUSPENDED', new Date());
+        await expectApiError(
+          ctx.service.update(conn.id, { status: 'ACTIVE', metadataUrl: 'https://idp.acme.example/v6' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(ctx.repo.connections.get(conn.id)).toMatchObject({ status: 'SUSPENDED', metadataUrl: SAML.metadataUrl });
+        expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
+        expect(ctx.events).toEqual([]);
+      });
+
+      it('settings that are not provider fields keep it SUSPENDED with its test sign-in', async () => {
+        const conn = await connectionIn(ctx, 'SUSPENDED', new Date());
+        const res = await ctx.service.update(conn.id, { jitProvisioning: true }, ACTOR);
+        expect(res.status).toBe('SUSPENDED');
+        expect(res.lastTestedAt).not.toBeNull();
+        expect(ctx.events.map((e) => e.action)).toEqual(['sso_connection.updated']);
+      });
+    });
+
+    describe('signing-certificate expiry on a metadata change', () => {
+      it('a new metadata URL re-reads the expiry from the fetched document; the derived value is not an audited field', async () => {
+        const next = 'https://idp.acme.example/v7';
+        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
+        const conn = await connectionIn(ctx, 'TESTING');
+
+        const res = await ctx.service.update(conn.id, { metadataUrl: next }, ACTOR);
+
+        expect(res.certificateExpiresAt).toBe(SIGNING_CERT_NOT_AFTER.toISOString());
+        expect(ctx.fetcher.fetched).toEqual([next]);
+        expect(ctx.events.at(-1)).toMatchObject({ action: 'sso_connection.updated', details: { fields: ['metadataUrl'] } });
+      });
+
+      it('fetches only after the identity provider accepted the new metadata', async () => {
+        const next = 'https://idp.acme.example/v10';
+        ctx.fetcher.setResponse(next, SAMPLE_SAML_METADATA);
+        const conn = await connectionIn(ctx, 'TESTING');
+        vi.mocked(ctx.idp.updateProvider).mockRejectedValueOnce(new IdentityProviderError('bad metadata', 'not_authorized'));
+
+        await expectApiError(ctx.service.update(conn.id, { metadataUrl: next }, ACTOR), 422, 'validation');
+
+        expect(ctx.fetcher.fetched).toEqual([]);
+        expect(ctx.repo.connections.get(conn.id)?.metadataUrl).toBe(SAML.metadataUrl);
+      });
+
+      it('a metadata change on a DRAFT re-reads the expiry as well', async () => {
+        const draft = await ctx.service.create(SAML, ACTOR);
+        const res = await ctx.service.update(draft.id, { metadataUrl: null, metadataXml: SAMPLE_SAML_METADATA }, ACTOR);
+        expect(res).toMatchObject({ status: 'DRAFT', certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString() });
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
+
+      it('metadata that cannot be fetched does not fail the PATCH: the stored expiry stays, the warning names the error only', async () => {
+        const conn = await connectionIn(ctx, 'TESTING');
+        const stored = new Date('2027-03-01T00:00:00Z');
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+
+        const res = await ctx.service.update(conn.id, { metadataUrl: 'https://idp.acme.example/v8?tenant=t-9' }, ACTOR);
+
+        expect(res).toMatchObject({
+          metadataUrl: 'https://idp.acme.example/v8?tenant=t-9',
+          certificateExpiresAt: stored.toISOString(),
+          lastTestedAt: null,
+        });
+        expect(ctx.idp.updateProvider).toHaveBeenCalledWith(
+          expect.objectContaining({ metadataUrl: 'https://idp.acme.example/v8?tenant=t-9' }),
+        );
+        expect(ctx.warn).toHaveBeenCalledTimes(1);
+        const line = String(ctx.warn.mock.calls[0]![0]);
+        expect(line).toContain('MetadataFetchError: status');
+        expect(line).not.toMatch(/tenant|idp\.acme\.example|https:/);
+      });
+
+      it('a PATCH that leaves the metadata alone fetches nothing and keeps the expiry, even when it changes the provider', async () => {
+        const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+        const stored = new Date('2027-03-01T00:00:00Z');
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+        const res = await ctx.service.update(conn.id, { jitProvisioning: true, attributeMapping: { email: 'mail' } }, ACTOR);
+        expect(res).toMatchObject({ status: 'TESTING', certificateExpiresAt: stored.toISOString() });
+        expect(ctx.fetcher.fetched).toEqual([]);
+      });
+    });
+
+    describe('metadata URL and issuer must point at a public host (spec 5.8)', () => {
+      it('refuses a metadata URL whose host resolves to a public and a private address with 422, field metadataUrl (Review Focus 4)', async () => {
+        const conn = await connectionIn(ctx, 'ACTIVE', new Date());
+        ctx.fetcher.setAddresses('idp.mixed.example', ['203.0.113.10', '10.0.0.1']);
+
+        const err = await expectApiError(
+          ctx.service.update(conn.id, { metadataUrl: 'https://idp.mixed.example/metadata' }, ACTOR),
+          422,
+          'validation',
+        );
+
+        expect(err.details).toEqual({ field: 'metadataUrl', reason: 'private_address' });
+        expect(ctx.repo.connections.get(conn.id)).toMatchObject({ status: 'ACTIVE', metadataUrl: SAML.metadataUrl });
+        expect(ctx.idp.updateProvider).not.toHaveBeenCalled();
+        expect(ctx.fetcher.fetched).toEqual([]);
+        expect(ctx.events).toEqual([]);
+      });
+
+      it('refuses an OIDC issuer on a private host with 422, field oidcIssuer', async () => {
+        const conn = await ctx.service.create(OIDC, ACTOR);
+        ctx.fetcher.setAddresses('login2.acme.example', ['127.0.0.1']);
+        const err = await expectApiError(
+          ctx.service.update(conn.id, { oidcIssuer: 'https://login2.acme.example' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(err.details).toEqual({ field: 'oidcIssuer', reason: 'private_address' });
+        expect(ctx.repo.connections.get(conn.id)?.oidcIssuer).toBe(OIDC.oidcIssuer);
+      });
     });
 
     it('clearing the metadata of a registered connection is refused with 422 and nothing changes', async () => {

@@ -54,6 +54,13 @@ export const SSO_PENDING_BIND_TTL = 900;
  */
 export const BEARER_MISMATCH_AUDIT_TTL = 600;
 
+/**
+ * SSO signing-certificate expiry alert to `OPS_ALERT_EMAIL`: at most one
+ * mail per connection in 7 days (`ssoCertAlertKey`). The nightly job audits
+ * and logs an expiring certificate every night regardless.
+ */
+export const SSO_CERT_ALERT_TTL = 7 * 24 * 3600;
+
 /** WebSocket ticket: 30 s. */
 export const WS_TICKET_TTL = 30;
 
@@ -182,6 +189,15 @@ export function ssoBindStartKey(hash: string): string {
  */
 export function bearerMismatchAuditedKey(connectionId: string, subHash: string): string {
   return `bearer_mismatch_audited:${connectionId}:${subHash}`;
+}
+
+/**
+ * `sso_cert_alert:{connectionId}`: the certificate-expiry alert for this SSO
+ * connection was mailed; while the key lives (`SSO_CERT_ALERT_TTL`) the
+ * nightly job mails no other. Deleted again when the mail could not be sent.
+ */
+export function ssoCertAlertKey(connectionId: string): string {
+  return `sso_cert_alert:${connectionId}`;
 }
 
 /** `ws_ticket:{hash}` */
