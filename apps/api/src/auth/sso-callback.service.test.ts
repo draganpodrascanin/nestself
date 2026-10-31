@@ -4,6 +4,7 @@
  * resolution path of D-04, Review Focus 1, 2 and 4, the test flag.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import { pkceKey } from '../redis/redis-keys.js';
@@ -206,16 +207,35 @@ describe('SsoCallbackService', () => {
       expect(res.session).toBeDefined();
     });
 
+    it('sends an unknown connection to the neutral sign-in error with one debug line and no audit row', async () => {
+      // The row would name no tenant, and rotating connection values (one
+      // throttle bucket each) would let one client write rows without bound.
+      const ctx = setup({ conn: null });
+      const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
+      const res = await ctx.service.start({ connection: 'org-nope-saml', surface: 'workspace' }, META);
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(ctx.audit.record).not.toHaveBeenCalled();
+      expect(debug).toHaveBeenCalledTimes(1);
+      expect(String(debug.mock.calls[0]![0])).toContain('org-nope-saml');
+    });
+
     it.each([
-      ['unknown', null],
       ['SUSPENDED', connection({ status: 'SUSPENDED' })],
       ['DRAFT', connection({ status: 'DRAFT' })],
       ['TESTING without the test flag', connection({ status: 'TESTING' })],
-    ])('sends a %s connection to the neutral sign-in error', async (_label, conn) => {
+    ])('sends a %s connection to the neutral sign-in error and audits it for its organization', async (_label, conn) => {
       const ctx = setup({ conn });
       const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace' }, META);
-      expect(res.location).toBe('http://ws.test/sign-in?reason=sso_denied');
-      expect(res.session).toBeUndefined();
+      expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'auth.sign_in.failed',
+          orgId: 'org_sample',
+          recordId: PROVIDER,
+          details: { reason: 'sso_connection' },
+        }),
+      );
     });
 
     it('lets a staff test sign-in start on a TESTING connection with the issued nonce', async () => {
@@ -231,6 +251,9 @@ describe('SsoCallbackService', () => {
       const ctx = setup({ conn: connection({ status: 'TESTING' }) });
       const res = await ctx.service.start({ connection: PROVIDER, surface: 'workspace', test: await nonceFor(ctx) }, META);
       expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'auth.sign_in.failed', orgId: 'org_sample', details: { reason: 'sso_connection' } }),
+      );
     });
 
     it('sets a browser-binding nonce whose hash (not the nonce) is in the record', async () => {

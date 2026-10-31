@@ -189,14 +189,24 @@ export class SsoCallbackService {
 
   async start(query: SsoStartQuery, meta: RequestMeta): Promise<SsoRedirect> {
     const connection = await this.sso.findConnectionByProviderName(query.connection);
+    if (!connection) {
+      // Not audited: the row would name no tenant, and the start throttle
+      // counts per connection value, so one client rotating made-up names
+      // could write rows without bound. The schema bounds the value to
+      // [A-Za-z0-9_-]{1,32}, so it is safe to log.
+      this.logger.debug(`SSO start for unknown connection ${query.connection}: neutral redirect`);
+      return { location: this.signInUrl(query.surface, 'sso_denied') };
+    }
     let testNonce: string | null = null;
-    let usable = connection?.status === 'ACTIVE';
-    if (connection?.status === 'TESTING' && query.test) {
+    let usable = connection.status === 'ACTIVE';
+    if (connection.status === 'TESTING' && query.test) {
       // Only with the nonce `POST /ops/sso-connections/:id/test` issued for it.
       usable = await this.testNonceIsFor(query.test, connection.id);
       if (usable) testNonce = query.test;
     }
-    if (!connection || !usable) {
+    if (!usable) {
+      // An existing connection that is not usable (DRAFT, SUSPENDED, TESTING
+      // without a valid nonce): audited for its organization.
       await this.auditFailed('sso_connection', meta, connection);
       return { location: this.signInUrl(query.surface, 'sso_denied') };
     }

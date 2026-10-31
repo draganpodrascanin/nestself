@@ -681,6 +681,18 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect((await start(PROVIDER)).headers.location).toBe(RATE_LIMITED);
     });
 
+    it('61 starts with distinct unknown connections from one IP: neutral redirects, no 429, no audit rows', async () => {
+      // Each value is its own bucket, so the throttle never refuses these; an
+      // audit row per unknown name would let one client write rows without bound.
+      const before = (await auditFor('auth.sign_in.failed')).length;
+      for (let i = 0; i < 61; i++) {
+        const res = await start(`org-unknown${i}-oidc`);
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      }
+      expect((await auditFor('auth.sign_in.failed')).length).toBe(before);
+    });
+
     it('the 61st start of one connection redirects to /sign-in?reason=sso_rate_limited', async () => {
       await spendStarts(PROVIDER, 60);
       expectRateLimitedRedirect(await start(PROVIDER));
