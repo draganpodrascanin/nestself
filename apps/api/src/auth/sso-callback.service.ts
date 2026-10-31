@@ -296,11 +296,7 @@ export class SsoCallbackService {
       // this provider name (a null binding matches none), and its user must
       // be an ACTIVE member of that connection's organization. Not an
       // orphan, so nothing is deleted.
-      if (
-        !connection ||
-        existing.ssoConnectionId !== connection.id ||
-        !(await this.binding.isMemberOf(existing.userId, connection.orgId))
-      ) {
+      if (!(await this.binding.existingIdentityUsable(existing, connection))) {
         await this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
         return deny();
       }

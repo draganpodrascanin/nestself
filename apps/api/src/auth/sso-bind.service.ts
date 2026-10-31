@@ -11,8 +11,15 @@
  *   masked address. The pending binding stays: a code lives 5 minutes, the
  *   handle 15, so a user whose code expired asks for a new one from the same
  *   screen. An unknown or expired handle is 400 `invalid_challenge`.
- * - `verify` checks the code, then takes the pending binding (single use),
- *   reloads the connection and binds exactly as the callback does
+ * - `verify` checks the code, then takes the pending binding (single use).
+ *   An IdP account that has an identity by now (another tab or a retry bound
+ *   it, or a direct sign-in after the claim switch went off) signs in through
+ *   path 1 exactly as the callback runs it
+ *   (`FederatedBindingService.existingIdentityUsable`); a refusal there is
+ *   the neutral 403 `sso_denied` with
+ *   `auth.sign_in.failed { reason: 'sso_provider_mismatch' }`, and that pool
+ *   user is never deleted. Otherwise `verify` reloads the connection and
+ *   binds exactly as the callback does
  *   (`FederatedBindingService`: an invitation of the connection's
  *   organization, else JIT, never JIT while TESTING), in that organization's
  *   transaction. The session is created from the token set of the original
@@ -46,6 +53,7 @@ import { ApiHttpException } from '../common/api-error.js';
 import type { IdTokenClaims } from '../identity/identity-provider.service.js';
 import { DbService } from '../db/db.service.js';
 import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
+import { IdentityRepository } from '../db/repositories/identity.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import {
@@ -99,6 +107,7 @@ export class SsoBindService {
     @Inject(forwardRef(() => NestselfOtpService)) private readonly otp: NestselfOtpService,
     @Inject(forwardRef(() => PendingBindStore)) private readonly pendingBinds: PendingBindStore,
     @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
+    @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
     @Inject(forwardRef(() => FederatedBindingService)) private readonly binding: FederatedBindingService,
     @Inject(forwardRef(() => AuditWriter)) private readonly audit: AuditWriter,
@@ -134,6 +143,21 @@ export class SsoBindService {
     const record = data.pendingBindId ? await this.pendingBinds.take(data.pendingBindId) : null;
     if (!record) throw invalidChallenge(401);
 
+    // 1. The IdP account was bound since the record was opened (two tabs, a
+    //    retry, a direct sign-in after the claim switch went off): path 1, as
+    //    the callback runs it. Its pool user is not an orphan, so nothing on
+    //    this branch deletes it, and nothing is bound twice.
+    const existing = await this.identities.findExternalIdentity(federatedProvider(record.providerName), record.sub);
+    if (existing) {
+      const owner = await this.sso.findConnectionByProviderName(record.providerName);
+      if (!(await this.binding.existingIdentityUsable(existing, owner))) {
+        await this.auditFailed('sso_provider_mismatch', meta, owner, record.providerName);
+        throw ssoDenied();
+      }
+      return this.signIn(record, owner, meta);
+    }
+
+    // 2-5. A new binding.
     const claims = claimsOf(record);
     const loaded = await this.sso.findConnection(record.connectionId);
     const connection = loaded && (await this.stillVouches(loaded, record)) ? loaded : null;
@@ -150,7 +174,7 @@ export class SsoBindService {
       );
     } catch (err) {
       this.logger.error(`SSO identity binding failed: ${bindingFailureReason(err)}`);
-      await this.auditFailed('sso_binding', meta, connection);
+      await this.auditFailed('sso_binding', meta, connection, record.providerName);
       throw ssoDenied();
     }
     if (!binding) {
@@ -172,35 +196,7 @@ export class SsoBindService {
     }
     await this.principalLoader.invalidateUser(binding.userId, [connection.orgId]);
 
-    let session;
-    try {
-      session = await this.identity.resolveIdentityAndCreateSession(
-        record.tokens,
-        record.email,
-        record.surface,
-        meta,
-        false,
-        true,
-        record.providerName,
-      );
-    } catch (err) {
-      // A suspended or deactivated user: bound, but not signed in.
-      this.logger.warn(`SSO session creation refused: ${(err as Error).message}`);
-      await this.auditFailed('sso_session', meta, connection);
-      throw ssoDenied();
-    }
-
-    // A staff test sign-in that bound and signed in marks the connection tested, as the callback does.
-    if (connection.status === 'TESTING' && record.testSignIn) {
-      await this.dbs.withOrgScope(connection.orgId, (tx) =>
-        this.sso.updateConnection(connection.id, { lastTestedAt: new Date() }, tx, { fromStatus: 'TESTING' }),
-      );
-    }
-
-    return {
-      returnPath: record.returnPath ?? '/',
-      session: { sessionId: session.sessionId, csrfToken: session.csrfToken, absoluteExpiresAt: session.absoluteExpiresAt },
-    };
+    return this.signIn(record, connection, meta);
   }
 
   // -------------------------------------------------------------------------
@@ -216,6 +212,47 @@ export class SsoBindService {
   // -------------------------------------------------------------------------
 
   /**
+   * The session from the stored token set, for a sign-in that bound or found
+   * its identity. A staff test sign-in that got this far marks its TESTING
+   * connection tested, as the callback's `signIn` does (for an existing
+   * identity too, whatever else the connection's status).
+   */
+  private async signIn(
+    record: TakenPendingBind,
+    connection: SsoConnectionRow | null,
+    meta: RequestMeta,
+  ): Promise<SsoBindVerifyResult> {
+    let session;
+    try {
+      session = await this.identity.resolveIdentityAndCreateSession(
+        record.tokens,
+        record.email,
+        record.surface,
+        meta,
+        false,
+        true,
+        record.providerName,
+      );
+    } catch (err) {
+      // A suspended or deactivated user: bound, but not signed in.
+      this.logger.warn(`SSO session creation refused: ${(err as Error).message}`);
+      await this.auditFailed('sso_session', meta, connection, record.providerName);
+      throw ssoDenied();
+    }
+
+    if (connection?.status === 'TESTING' && connection.id === record.connectionId && record.testSignIn) {
+      await this.dbs.withOrgScope(connection.orgId, (tx) =>
+        this.sso.updateConnection(connection.id, { lastTestedAt: new Date() }, tx, { fromStatus: 'TESTING' }),
+      );
+    }
+
+    return {
+      returnPath: record.returnPath ?? '/',
+      session: { sessionId: session.sessionId, csrfToken: session.csrfToken, absoluteExpiresAt: session.absoluteExpiresAt },
+    };
+  }
+
+  /**
    * The connection may still bind this sign-in: ACTIVE (or TESTING for a
    * staff test sign-in), the same provider, the domain verified for it.
    */
@@ -229,15 +266,20 @@ export class SsoBindService {
   }
 
   /** Awaited; a failed write is swallowed (logged by the writer), the answer must still go out. */
-  private async auditFailed(reason: string, meta: RequestMeta, connection: SsoConnectionRow): Promise<void> {
+  private async auditFailed(
+    reason: string,
+    meta: RequestMeta,
+    connection: SsoConnectionRow | null,
+    providerName: string,
+  ): Promise<void> {
     await this.audit
       .record({
         action: 'auth.sign_in.failed',
         actorUserId: null,
         actorKind: 'USER',
-        orgId: connection.orgId,
+        orgId: connection?.orgId ?? null,
         recordType: 'auth_attempt',
-        recordId: connection.cognitoProviderName,
+        recordId: connection?.cognitoProviderName ?? providerName,
         result: 'DENIED',
         ip: meta.ip,
         userAgent: meta.userAgent,

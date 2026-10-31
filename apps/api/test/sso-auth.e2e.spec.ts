@@ -915,6 +915,65 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       expect(sessionCookie(next.callback)).toBeDefined();
     });
 
+    it('two pending sign-ins of one IdP account: the second code signs in through the identity the first one bound', async () => {
+      const email = 'two.tabs@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      expect(second.handle).not.toBe(first.handle);
+      const firstCode = await startCode(first.agent, first.handle, email);
+      const secondCode = await startCode(second.agent, second.handle, email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        expect((await bind(first.agent, 'verify', firstCode)).status).toBe(200);
+        const verify = await bind(second.agent, 'verify', secondCode);
+        expect(verify.status).toBe(200);
+        expect(sessionCookie(verify)).toBeDefined();
+        expect((await second.agent.get('/api/auth/me')).status).toBe(200);
+        // Nothing deleted, nothing bound twice: the pool user and its sub stay those of the one identity.
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id))).toHaveLength(1);
+      expect((await auditFor('identity.linked')).filter((e) => e.recordId === user!.id)).toHaveLength(1);
+      expect(
+        (await auditFor('identity.denied')).some((e) => (e.details as { emailNormalised?: string }).emailNormalised === email),
+      ).toBe(false);
+    });
+
+    it('a pending sign-in whose identity was moved to another connection meanwhile is refused without deleting the pool user', async () => {
+      const email = 'moved.pending@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      const firstCode = await startCode(first.agent, first.handle, email);
+      const secondCode = await startCode(second.agent, second.handle, email);
+      expect((await bind(first.agent, 'verify', firstCode)).status).toBe(200);
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const other = await repo.findConnectionByProviderName(OTHER_PROVIDER);
+      const bindTo = (ssoConnectionId: string) =>
+        testDb.db.update(externalIdentities).set({ ssoConnectionId }).where(eq(externalIdentities.userId, user!.id));
+      await bindTo(other!.id);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const failedBefore = await auditFor('auth.sign_in.failed');
+        const verify = await bind(second.agent, 'verify', secondCode);
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+        expect(deleteUser).not.toHaveBeenCalled();
+        const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+        expect(failed).toHaveLength(1);
+        expect(failed[0]).toMatchObject({ orgId: ORG, recordId: PROVIDER, details: { reason: 'sso_provider_mismatch' } });
+      } finally {
+        deleteUser.mockRestore();
+        await bindTo(connectionId);
+      }
+    });
+
     it('the redirect never carries the address', async () => {
       const email = 'not.in.the.url@acme.example';
       await invite(email);

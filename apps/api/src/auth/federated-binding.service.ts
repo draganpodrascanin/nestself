@@ -18,8 +18,10 @@
  * writes are audited in the same transaction.
  *
  * `denyBinding` deletes the orphan federated pool user (SSO-R-10) and records
- * `identity.denied`. `isDomainVerifiedFor` and `isMemberOf` are the checks the
- * callers run around a binding.
+ * `identity.denied`; it is for sign-ins without an identity only.
+ * `existingIdentityUsable` is path 1 for those with one (the callback and the
+ * email-code binding both use it), and `isDomainVerifiedFor` is the domain
+ * check the callers run before a binding.
  *
  * @see D-04, SSO-R-08..11
  */
@@ -33,7 +35,7 @@ import {
 } from '../identity/identity-provider.service.js';
 import type { DbExecutor } from '../db/db.service.js';
 import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
-import { IdentityRepository } from '../db/repositories/identity.repository.js';
+import { IdentityRepository, type ExternalIdentityRow } from '../db/repositories/identity.repository.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
 import { AuditWriter } from '../audit/audit-writer.js';
@@ -169,13 +171,26 @@ export class FederatedBindingService {
   }
 
   /**
-   * The user has an ACTIVE membership in the organization; system-context
-   * read. An invited (not yet bound) or ended membership does not vouch for a
-   * federated sign-in, whichever connection bound the identity.
+   * Path 1 (D-04): an existing federated identity may sign in through the
+   * connection that now owns its provider name, provided that connection
+   * exists, the identity was bound through that very connection
+   * (`ssoConnectionId`; null matches none) and its user is an ACTIVE member
+   * of the connection's organization. A provider name reused by another
+   * organization would otherwise hand it the first organization's pool users
+   * (Cognito keeps them, with their `sub`). The membership is read only when
+   * the binding matches. Callers answer a refusal with the neutral denial and
+   * `auth.sign_in.failed { reason: 'sso_provider_mismatch' }`, and never
+   * delete the pool user: it is not an orphan.
    */
-  async isMemberOf(userId: string, orgId: string): Promise<boolean> {
-    const rows = await this.memberships.findByUserId(userId);
-    return rows.some((m) => m.orgId === orgId && m.status === 'ACTIVE');
+  async existingIdentityUsable(
+    existing: Pick<ExternalIdentityRow, 'userId' | 'ssoConnectionId'>,
+    connection: SsoConnectionRow | null,
+  ): Promise<boolean> {
+    return (
+      !!connection &&
+      existing.ssoConnectionId === connection.id &&
+      (await this.isMemberOf(existing.userId, connection.orgId))
+    );
   }
 
   /** The email's domain is a verified domain of this connection. */
@@ -221,6 +236,16 @@ export class FederatedBindingService {
         ...(confirmedBy ? { via: confirmedBy } : {}),
       },
     });
+  }
+
+  /**
+   * The user has an ACTIVE membership in the organization; system-context
+   * read. An invited (not yet bound) or ended membership does not vouch for a
+   * federated sign-in, whichever connection bound the identity.
+   */
+  private async isMemberOf(userId: string, orgId: string): Promise<boolean> {
+    const rows = await this.memberships.findByUserId(userId);
+    return rows.some((m) => m.orgId === orgId && m.status === 'ACTIVE');
   }
 
   private async resolveOrCreateUser(

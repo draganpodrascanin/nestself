@@ -80,6 +80,7 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
     opts.domain === undefined ? { connectionId: 'conn_1', verifiedAt: new Date(), domain: 'acme.example' } : opts.domain;
   const sso = {
     findConnection: vi.fn(async (id: string) => (conn && conn.id === id ? { ...conn, domains: [] } : null)),
+    findConnectionByProviderName: vi.fn(async (name: string) => (conn && conn.cognitoProviderName === name ? conn : null)),
     findDomainByName: vi.fn(async (name: string) => (name === 'acme.example' ? domain : null)),
     updateConnection: vi.fn().mockResolvedValue({}),
   };
@@ -89,10 +90,18 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
     }),
   };
   const dbs = { withOrgScope: vi.fn(async (_org: string, fn: (t: unknown) => Promise<unknown>) => fn(tx)) };
+  /** `external_identities` as the binding writes it: a later lookup finds what an earlier verify bound. */
+  const identityRows: Array<{ provider: string; subject: string; userId: string; ssoConnectionId: string | null }> = [];
   const identities = {
+    findExternalIdentity: vi.fn(async (provider: string, subject: string) =>
+      identityRows.find((r) => r.provider === provider && r.subject === subject) ?? null,
+    ),
     findUserByEmail: vi.fn().mockResolvedValue(null),
     createUser: vi.fn().mockResolvedValue({ id: 'user_new' }),
-    createExternalIdentity: vi.fn().mockResolvedValue({}),
+    createExternalIdentity: vi.fn(async (row: (typeof identityRows)[number]) => {
+      identityRows.push(row);
+      return row;
+    }),
   };
   const invitations = {
     findPendingByEmailAndOrg: vi.fn().mockResolvedValue(null),
@@ -115,10 +124,12 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
   };
   const deleteUser = vi.spyOn(idp, 'deleteUser').mockResolvedValue();
   const service = new SsoBindService(
-    otp, pendingBinds, sso as never, dbs as never, binding, audit as never, principalLoader as never, identity as never,
+    otp, pendingBinds, sso as never, identities as never, dbs as never, binding, audit as never,
+    principalLoader as never, identity as never,
   );
   return {
-    service, store, pendingBinds, mailer, idp, sso, dbs, tx, identities, invitations, audit, principalLoader, identity, deleteUser,
+    service, store, pendingBinds, mailer, idp, sso, dbs, tx, identities, identityRows, invitations, memberships, audit,
+    principalLoader, identity, deleteUser,
   };
 }
 
@@ -486,6 +497,101 @@ describe('SsoBindService', () => {
       for (const secret of [handle, pendingBindId(handle), challengeToken, code, tokens.accessToken, tokens.idToken, tokens.refreshToken!]) {
         expect(dump).not.toContain(secret);
       }
+    });
+  });
+
+  describe('verify: the IdP account was bound meanwhile (path 1)', () => {
+    /** An identity of the pending sign-in's IdP account, as an earlier binding wrote it. */
+    function seedIdentity(ctx: Ctx, ssoConnectionId: string | null = 'conn_1') {
+      ctx.identityRows.push({ provider: `cognito:${PROVIDER}`, subject: SUB, userId: 'user_known', ssoConnectionId });
+    }
+    const activeMember = [{ userId: 'user_known', orgId: 'org_sample', status: 'ACTIVE' }];
+
+    it('two pending sign-ins of one IdP account: the second code signs in through the identity the first one bound', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      // Two tabs (or a retry while the first mail was slow): two handles for the same account.
+      const first = await openPending(ctx);
+      const second = await openPending(ctx);
+      const firstCode = await startAndReadCode(ctx, first.handle);
+      const secondCode = await startAndReadCode(ctx, second.handle);
+
+      await ctx.service.verify(firstCode, META);
+      // The first verify bound the identity and activated the membership; the invitation is spent.
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(null);
+      ctx.memberships.findByUserId.mockResolvedValue([{ userId: 'user_new', orgId: 'org_sample', status: 'ACTIVE' }]);
+      const result = await ctx.service.verify(secondCode, META);
+
+      expect(result).toEqual({
+        returnPath: '/people',
+        session: { sessionId: 'sess_1', csrfToken: 'csrf_1', absoluteExpiresAt: new Date('2026-11-01') },
+      });
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledTimes(1);
+      expect(ctx.identityRows).toHaveLength(1);
+      expect(auditActions(ctx).filter((a) => a === 'identity.linked')).toHaveLength(1);
+      expect(auditActions(ctx).filter((a) => a === 'invitation.accepted')).toHaveLength(1);
+      expect(auditActions(ctx)).not.toContain('identity.denied');
+      expect(ctx.identity.resolveIdentityAndCreateSession).toHaveBeenCalledTimes(2);
+      expect(await ctx.pendingBinds.peek(pendingBindId(second.handle))).toBeNull();
+    });
+
+    it('an identity bound through this connection signs in even while the connection is SUSPENDED (as path 1 does)', async () => {
+      const ctx = setup({ conn: connection({ status: 'SUSPENDED' }) });
+      seedIdentity(ctx);
+      ctx.memberships.findByUserId.mockResolvedValue(activeMember);
+      const { handle, tokens } = await openPending(ctx);
+
+      const result = await ctx.service.verify(await startAndReadCode(ctx, handle), META);
+
+      expect(result.session.sessionId).toBe('sess_1');
+      expect(ctx.identity.resolveIdentityAndCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ idToken: tokens.idToken }), EMAIL, 'workspace', META, false, true, PROVIDER,
+      );
+      expect(ctx.dbs.withOrgScope).not.toHaveBeenCalled();
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.audit.record).not.toHaveBeenCalled();
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('a staff test record whose account was bound meanwhile still marks the TESTING connection tested', async () => {
+      const ctx = setup({ conn: connection({ status: 'TESTING' }) });
+      seedIdentity(ctx);
+      ctx.memberships.findByUserId.mockResolvedValue(activeMember);
+      const { handle } = await openPending(ctx, { testSignIn: true });
+
+      await ctx.service.verify(await startAndReadCode(ctx, handle), META);
+
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.sso.updateConnection).toHaveBeenCalledWith(
+        'conn_1', { lastTestedAt: expect.any(Date) }, ctx.tx, { fromStatus: 'TESTING' },
+      );
+    });
+
+    it.each([
+      ['bound through another connection', 'conn_other', activeMember],
+      ['with no binding connection', null, activeMember],
+      ['whose user is no ACTIVE member of the organization', 'conn_1', []],
+    ])('an identity %s is refused without deleting anything (sso_provider_mismatch)', async (_label, ssoConnectionId, rows) => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      seedIdentity(ctx, ssoConnectionId);
+      ctx.memberships.findByUserId.mockResolvedValue(rows);
+      const { handle } = await openPending(ctx);
+
+      await expectRefused(ctx.service.verify(await startAndReadCode(ctx, handle), META), 403, 'sso_denied');
+
+      expect(ctx.deleteUser).not.toHaveBeenCalled();
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+      expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+      expect(auditActions(ctx)).toEqual(['auth.sign_in.failed']);
+      expect(auditEvent(ctx, 'auth.sign_in.failed')).toMatchObject({
+        orgId: 'org_sample',
+        recordId: PROVIDER,
+        result: 'DENIED',
+        details: { reason: 'sso_provider_mismatch' },
+      });
+      expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toBeNull();
     });
   });
 

@@ -258,16 +258,32 @@ describe('FederatedBindingService', () => {
       ctx.sso.findDomainByName.mockResolvedValue(row as never);
       expect(await ctx.service.isDomainVerifiedFor(connection() as never, 'acme.example')).toBe(expected);
     });
+  });
+
+  describe('existingIdentityUsable (path 1)', () => {
+    const bound = (ssoConnectionId: string | null = 'conn_1') => ({ userId: 'user_known', ssoConnectionId });
 
     it.each([
-      ['ACTIVE in the organization', [{ orgId: 'org_sample', status: 'ACTIVE' }], true],
-      ['INVITED in the organization', [{ orgId: 'org_sample', status: 'INVITED' }], false],
-      ['ENDED in the organization', [{ orgId: 'org_sample', status: 'ENDED' }], false],
-      ['ACTIVE elsewhere only', [{ orgId: 'org_other', status: 'ACTIVE' }], false],
-    ])('isMemberOf: %s', async (_label, rows, expected) => {
+      ['an ACTIVE member of the connection organization', [{ orgId: 'org_sample', status: 'ACTIVE' }], true],
+      ['an INVITED member', [{ orgId: 'org_sample', status: 'INVITED' }], false],
+      ['an ENDED member', [{ orgId: 'org_sample', status: 'ENDED' }], false],
+      ['an ACTIVE member elsewhere only', [{ orgId: 'org_other', status: 'ACTIVE' }], false],
+    ])('an identity bound through the connection, for %s', async (_label, rows, expected) => {
       const ctx = setup();
       ctx.memberships.findByUserId.mockResolvedValue(rows);
-      expect(await ctx.service.isMemberOf('user_known', 'org_sample')).toBe(expected);
+      expect(await ctx.service.existingIdentityUsable(bound(), connection() as never)).toBe(expected);
+      expect(ctx.memberships.findByUserId).toHaveBeenCalledWith('user_known');
+    });
+
+    it.each([
+      ['bound through another connection', bound('conn_other'), connection()],
+      ['with no binding connection', bound(null), connection()],
+      ['when no connection owns the provider name any more', bound(), null],
+    ])('refuses an identity %s without reading memberships', async (_label, identity, conn) => {
+      const ctx = setup();
+      ctx.memberships.findByUserId.mockResolvedValue([{ orgId: 'org_sample', status: 'ACTIVE' }]);
+      expect(await ctx.service.existingIdentityUsable(identity, conn as never)).toBe(false);
+      expect(ctx.memberships.findByUserId).not.toHaveBeenCalled();
     });
   });
 });
