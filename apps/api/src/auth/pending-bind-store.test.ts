@@ -83,6 +83,20 @@ describe('PendingBindStore', () => {
     expect(await pendingBinds.peek(id)).toBeNull();
   });
 
+  it('take hands the tokens over with the lifetime they have left, never less than nothing', async () => {
+    const { pendingBinds } = setup();
+    const fresh = await pendingBinds.open(input({ tokens: { ...createFakeTokenSet('sub-1', 'u'), expiresIn: 900 } }));
+    const shortLived = await pendingBinds.open(input({ tokens: { ...createFakeTokenSet('sub-2', 'v'), expiresIn: 300 } }));
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 600_000 });
+    try {
+      // The session counts its access-token expiry from now: it must not get the 900 s of the exchange.
+      expect((await pendingBinds.take(pendingBindId(fresh)))!.tokens.expiresIn).toBe(300);
+      expect((await pendingBinds.take(pendingBindId(shortLived)))!.tokens.expiresIn).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps a missing refresh token as null', async () => {
     const { pendingBinds } = setup();
     const tokens = { ...createFakeTokenSet('sub-1', 'u'), refreshToken: null };
@@ -97,6 +111,11 @@ describe('PendingBindStore', () => {
     expect(await pendingBinds.peek('broken')).toBeNull();
     await store.set(ssoPendingBindKey('not-json'), 'nope', { ttlSeconds: 60 });
     expect(await pendingBinds.take('not-json')).toBeNull();
+    // A whole record whose creation time is not a time (its tokens' age would be unknown).
+    const id = pendingBindId(await pendingBinds.open(input()));
+    const record = JSON.parse((await store.get(ssoPendingBindKey(id)))!) as Record<string, unknown>;
+    await store.set(ssoPendingBindKey(id), JSON.stringify({ ...record, createdAt: 'yesterday' }), { ttlSeconds: 60 });
+    expect(await pendingBinds.take(id)).toBeNull();
   });
 
   it('take answers null, with a warning, when the tokens no longer decrypt (key rotated out)', async () => {

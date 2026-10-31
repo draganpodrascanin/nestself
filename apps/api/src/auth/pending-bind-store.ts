@@ -73,6 +73,7 @@ function parse(raw: string | null): PendingBind | null {
     (r.surface !== 'workspace' && r.surface !== 'admin') ||
     (r.returnPath !== null && !isString(r.returnPath)) ||
     !isString(r.createdAt) ||
+    !Number.isFinite(Date.parse(r.createdAt)) ||
     !t ||
     !isString(t.accessToken) ||
     !isString(t.idToken) ||
@@ -137,10 +138,13 @@ export class PendingBindStore {
   /**
    * Takes the pending binding out of the store (single use) with its tokens
    * decrypted; null when unknown, expired, already taken or unreadable.
+   * `expiresIn` is what the tokens have left: they are as old as the record,
+   * and a session counts their expiry from the moment it is created.
    */
   async take(id: string): Promise<TakenPendingBind | null> {
     const record = parse(await this.store.getDel(ssoPendingBindKey(id)));
     if (!record) return null;
+    const ageSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(record.createdAt)) / 1000));
     try {
       const refreshToken = this.cipher.decrypt(record.tokens.refreshToken).plaintext;
       return {
@@ -149,7 +153,7 @@ export class PendingBindStore {
           accessToken: this.cipher.decrypt(record.tokens.accessToken).plaintext,
           idToken: this.cipher.decrypt(record.tokens.idToken).plaintext,
           refreshToken: refreshToken || null,
-          expiresIn: record.tokens.expiresIn,
+          expiresIn: Math.max(0, record.tokens.expiresIn - ageSeconds),
         },
       };
     } catch {
