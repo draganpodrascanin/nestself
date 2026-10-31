@@ -130,7 +130,7 @@ Values the stacks cannot create are passed as CDK context (`-c name=value`, read
 
 | Key | Read by | Meaning | Without it |
 |---|---|---|---|
-| `authCertificateArn` | auth stack, when `authDomainName` is set (staging, production) | ARN of the ACM certificate for `auth.<stage domain>`, issued in us-east-1 (Cognito serves the domain through CloudFront) | `auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md` |
+| `authCertificateArn` | auth stack, when `authDomainName` is set (staging, production) | ARN of the ACM certificate for `auth.<stage domain>`, issued in us-east-1 (Cognito serves the domain through CloudFront); an ACM ARN of another region is refused at synth (`acmCertificateRegion` in `lib/auth-stack.ts`), a value that is no ACM ARN (the `pending` placeholder) is left to the deployer | `auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md` |
 | `hostedZoneId` | auth stack, same condition | Id of the Route 53 hosted zone named `domainName` (`staging.nestself.rs`, `nestself.rs`); the A and AAAA aliases for the auth domain go there | the same error |
 | `cloudfrontOriginPrefixListId` | compute stack, when `trustProxyHops` is above 0 | Id of the managed prefix list `com.amazonaws.global.cloudfront.origin-facing` in eu-central-1 | `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId; see CDK-setup.md` |
 | `opsAlertEmail` | compute stack, optional | Becomes `OPS_ALERT_EMAIL` of the api, worker and migrate tasks (SSO certificate expiry alerts); the API refuses to start on a malformed address | the variable is not set and the API only logs the alert |

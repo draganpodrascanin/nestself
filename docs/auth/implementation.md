@@ -556,7 +556,7 @@ Unit tests (`maintenance-jobs.service.test.ts`) use mocked repositories, a mocke
 - In sample mode the screens read `SAMPLE_GRANTS` and disable every mutation with a note.
 - The grant table recomputes each row's status on every render, so a grant created a moment ago shows Active, not Scheduled.
 
-The dialog, the helpers, `route-auth.ts`, `session-unavailable.tsx`, `sso-bind-screen.tsx` and the access screens exist once per app, because a shared package would need an install.
+The dialog, the helpers, `route-auth.ts`, `session-unavailable.tsx`, `sso-bind-screen.tsx` and the access screens exist once per app, because a shared package would need an install. Five of them are byte-identical in both apps by check, so a change goes into both copies: `auth/session-unavailable.tsx`, `auth/route-auth.ts`, `auth/step-up-dialog.tsx`, `auth/screens/sso-bind-screen.tsx` and `use-debounced.ts` (workspace `features/access/`, admin `src/`), compared by `apps/workspace/scripts/check-web-parity.mjs` in `pnpm check`.
 
 **Popups inside dialogs.** In `@nestself/ui`, Select and Menu popups opened inside a Dialog, AlertDialog or Sheet layer above it: the dialog's portal element sets `--z-popup` to one above `--z-dialog` (`src/lib/layers.ts`). Before 2026-10-24 the popup sat below the dialog and a pointer could not choose an option.
 

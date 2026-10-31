@@ -18,6 +18,15 @@ export interface AuthStackProps extends cdk.StackProps {
   readonly config: StageConfig;
 }
 
+/**
+ * The region of an ACM certificate ARN (`arn:<partition>:acm:<region>:<account>:certificate/<id>`),
+ * or null for anything else, such as the `pending` placeholder of a first synth (CDK-setup.md 8.1).
+ */
+export function acmCertificateRegion(arn: string): string | null {
+  const match = /^arn:aws[a-z-]*:acm:([a-z0-9-]+):\d{12}:certificate\/.+$/.exec(arn);
+  return match ? match[1]! : null;
+}
+
 export class NestSelfAuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
   public readonly webClient: cognito.UserPoolClient;
@@ -104,6 +113,14 @@ export class NestSelfAuthStack extends cdk.Stack {
       if (!certificateArn || !hostedZoneId) {
         throw new Error(
           'auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md',
+        );
+      }
+      // A certificate in any other region would fail only at deploy time, when Cognito creates the
+      // domain; refuse it at synth, while the fix is still a context value.
+      const certificateRegion = acmCertificateRegion(certificateArn);
+      if (certificateRegion !== null && certificateRegion !== 'us-east-1') {
+        throw new Error(
+          `auth custom domain needs its certificate in us-east-1 (Cognito serves the domain through CloudFront), but authCertificateArn is in ${certificateRegion}; see CDK-setup.md section 8`,
         );
       }
 

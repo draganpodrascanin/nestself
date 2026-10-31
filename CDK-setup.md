@@ -249,7 +249,7 @@ The values are CDK context (`-c name=value`). A stage that lacks one does not sy
 
 | Context key | Read by | Value | Error without it |
 | --- | --- | --- | --- |
-| `authCertificateArn` | auth stack, staging and production | ARN of the ACM certificate for the auth domain, issued in **us-east-1** (8.2) | `auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md` |
+| `authCertificateArn` | auth stack, staging and production | ARN of the ACM certificate for the auth domain, issued in **us-east-1** (8.2); an ACM ARN of another region is refused at synth with `auth custom domain needs its certificate in us-east-1 (Cognito serves the domain through CloudFront), but authCertificateArn is in <region>; see CDK-setup.md section 8` | `auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md` |
 | `hostedZoneId` | auth stack, staging and production | Id of the Route 53 hosted zone of the stage domain (8.1) | the same |
 | `cloudfrontOriginPrefixListId` | compute stack, with `-c platform=true` | Id of the AWS managed prefix list `com.amazonaws.global.cloudfront.origin-facing` in eu-central-1 (8.4) | `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId; see CDK-setup.md` |
 | `opsAlertEmail` | compute stack, optional | Mailbox for operational alerts such as an expiring SSO certificate (`OPS_ALERT_EMAIL`); a malformed address stops the API from starting | none: the API logs the alert and sends no mail |
@@ -401,5 +401,6 @@ The app reaches the API the way the workspace does, through the workspace distri
 | `cdk-nag` errors during synth | A stack change violates a rule; add a documented suppression in the stack or fix the resource. CI synthesizes with `-c platform=true` so platform stacks stay reviewed |
 | `auth custom domain needs context authCertificateArn and hostedZoneId` | Staging and production construct the auth stack on every `cdk` command; pass both values (section 8). An empty value counts as missing |
 | `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId` | Every command with `-c platform=true` on staging or production needs the prefix list id (section 8.4) |
-| Deploying the auth stack fails creating `AWS::Cognito::UserPoolDomain` | The certificate is not in us-east-1 or is not `ISSUED` yet (section 8.2), or the parent name does not resolve to an A record (section 8.3) |
+| `auth custom domain needs its certificate in us-east-1 (Cognito serves the domain through CloudFront), but authCertificateArn is in <region>` | The ARN names a certificate in another region; request one in us-east-1 (section 8.2) and pass its ARN |
+| Deploying the auth stack fails creating `AWS::Cognito::UserPoolDomain` | The certificate is not `ISSUED` yet (section 8.2), or the parent name does not resolve to an A record (section 8.3); a certificate outside us-east-1 is refused at synth already |
 | `curl http://<AlbDnsName>/api/health` times out on staging or production | Expected: the load balancer answers CloudFront only (section 8). Test through the CloudFront distribution domain |

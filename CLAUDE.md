@@ -57,7 +57,7 @@ After the initial `pnpm install`, no worker runs `pnpm install`, `pnpm add`, `pn
 - **Unit and component tests**: colocated next to the source file as `*.test.ts` or `*.test.tsx`, run by Vitest (`pnpm test`).
 - **End-to-end tests**: in `e2e/` at the repo root, run by Playwright (`pnpm e2e`). See `e2e/README.md`.
 - **Motion tests**: real-browser animation checks in `e2e/motion/`, run by Playwright against Storybook (`pnpm e2e:motion`).
-- **Check scripts** (token smoke, locale parity, motion contract): run by `pnpm check`.
+- **Check scripts** (token smoke, locale parity, motion contract, web parity of the copies the workspace and admin apps share): run by `pnpm check`.
 
 ## How to add a component
 

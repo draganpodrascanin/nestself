@@ -129,7 +129,7 @@ Individual commands:
 pnpm lint        # ESLint across all packages
 pnpm typecheck   # tsc --noEmit across all packages
 pnpm test        # Vitest across all packages
-pnpm check       # token smoke check + locale parity check
+pnpm check       # token smoke, locale parity, motion contract, content and web parity checks
 pnpm build       # production builds
 ```
 

@@ -26,8 +26,9 @@ export const PLATFORM_CONTEXT = {
 /**
  * The feature flag `cdk.json` sets for `UserPoolDomainTarget`: it reads the alias target from the
  * domain's CloudFrontDistribution attribute instead of adding a Lambda-backed custom resource.
+ * `testApp` sets it itself, so `auth-stack.test.ts` asserts that `cdk.json` still carries it.
  */
-const USER_POOL_DOMAIN_TARGET_FLAG =
+export const USER_POOL_DOMAIN_TARGET_FLAG =
   '@aws-cdk/aws-route53-targets:userPoolDomainNameMethodWithoutCustomResource';
 
 /** An app that synthesizes the way `cdk synth` does for the flags that matter here, plus the given context. */

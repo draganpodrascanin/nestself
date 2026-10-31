@@ -26,6 +26,10 @@
     },
     "@nestself/api#build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "@nestself/api#test": { "dependsOn": ["topo"], "env": ["CI", "TEST_DATABASE_URL", "REDIS_URL"] },
-    "@nestself/api#dev": { "persistent": true, "cache": false }
+    "@nestself/api#dev": { "persistent": true, "cache": false },
+    "@nestself/workspace#check": {
+      "dependsOn": ["topo"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/admin/src/**"]
+    }
   }
 }
