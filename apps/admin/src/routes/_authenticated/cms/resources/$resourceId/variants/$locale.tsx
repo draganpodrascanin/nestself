@@ -96,6 +96,11 @@ const RETURN_COMMENT_ID = 'return-comment';
 
 type AudienceEntries = NonNullable<RevisionUpdateRequest['proposedAudience']>;
 type AudienceChoice = 'all_eligible' | 'saved';
+
+/** The reading-time field holds minutes; the API stores seconds. */
+function minutesField(seconds: number | null | undefined): string {
+  return seconds != null ? String(Math.round(seconds / 60)) : '';
+}
 const ALL_ELIGIBLE: AudienceEntries = [{ kind: 'all_eligible', includeDescendants: true }];
 
 function isAllEligible(entries: AudienceEntries): boolean {
@@ -520,7 +525,7 @@ function VariantEditorReady({
   const [summary, setSummary] = useState(initialRevision.summary ?? '');
   const [outcome, setOutcome] = useState(initialRevision.outcome ?? '');
   const [duration, setDuration] = useState<string>(
-    initialRevision.durationSeconds != null ? String(Math.round(initialRevision.durationSeconds / 60)) : '',
+    minutesField(initialRevision.durationSeconds),
   );
   // The audience stored on the revision, kept so a save never rewrites it.
   const savedAudience = useMemo<AudienceEntries | null>(() => {
@@ -1128,7 +1133,7 @@ function VariantEditorReady({
       setTitle(newRev.title ?? '');
       setSummary(newRev.summary ?? '');
       setOutcome(newRev.outcome ?? '');
-      setDuration(newRev.durationSeconds != null ? String(newRev.durationSeconds) : '');
+      setDuration(minutesField(newRev.durationSeconds));
       setBodyDoc((newRev.body as unknown as ContentDocument) ?? EMPTY_DOCUMENT);
       setRevisionState(newRev.state);
       toast.add({ title: t('cms:editor.newRevision'), tone: 'success' });
@@ -1143,7 +1148,7 @@ function VariantEditorReady({
     if (conflict.serverTitle != null) setTitle(conflict.serverTitle);
     if (conflict.serverSummary != null) setSummary(conflict.serverSummary);
     if (conflict.serverOutcome != null) setOutcome(conflict.serverOutcome);
-    if (conflict.serverDurationSeconds != null) setDuration(String(conflict.serverDurationSeconds));
+    if (conflict.serverDurationSeconds != null) setDuration(minutesField(conflict.serverDurationSeconds));
     if (conflict.serverBody != null) {
       setBodyDoc(conflict.serverBody);
       editorHandleRef.current?.setContent(conflict.serverBody);
