@@ -95,6 +95,17 @@ describe('LoggingMailer', () => {
     expect(mailer.sent).toEqual([]);
   });
 
+  it('renders the message before it records or logs it, so a misnamed param fails in development and tests', async () => {
+    const mailer = new LoggingMailer({ keepSent: true });
+
+    await expect(
+      mailer.send({ ...CODE_MAIL, params: { code: '12345678', minute: '5' } }),
+    ).rejects.toThrow(/step_up_code.*minutes/);
+
+    expect(mailer.sent).toEqual([]);
+    expect(debug).not.toHaveBeenCalled();
+  });
+
   it('logs the template, the locale and the recipient domain at debug level', async () => {
     await new LoggingMailer().send(CODE_MAIL);
 

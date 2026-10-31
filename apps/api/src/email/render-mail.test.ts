@@ -89,17 +89,108 @@ describe('renderMail', () => {
     expect(out.html).toContain('https://app.example.test/invitations/tok_123');
   });
 
-  it('replaces a missing param with an empty string', () => {
+  it('links a value that starts with https:// in the html and leaves the text as written', () => {
+    const link = 'https://app.example.test/invitations/tok_123';
+    const out = renderMail({
+      to: 'a@b.c',
+      locale: 'en',
+      template: 'invitation',
+      params: FULL_PARAMS.invitation,
+    });
+
+    expect(out.html).toContain(
+      `<p>Open this link to activate your access: <a href="${link}">${link}</a></p>`,
+    );
+    expect(out.text).toContain(`Open this link to activate your access: ${link}`);
+    expect(out.text).not.toContain('<a');
+    expect(out.subject).not.toContain('<a');
+  });
+
+  it('escapes both the href and the text of a linked value', () => {
+    const link = 'https://app.example.test/x?a=1&b="2"<i>\'';
+    const out = renderMail({
+      to: 'a@b.c',
+      locale: 'en',
+      template: 'invitation',
+      params: { ...FULL_PARAMS.invitation, link },
+    });
+
+    const escaped = 'https://app.example.test/x?a=1&amp;b=&quot;2&quot;&lt;i&gt;&#39;';
+    expect(out.html).toContain(`<a href="${escaped}">${escaped}</a>`);
+    expect(out.html).not.toContain('<i>');
+  });
+
+  it.each([
+    ['a scheme other than https', 'http://app.example.test/invitations/tok_123'],
+    ['a javascript: url', 'javascript:alert(1)'],
+    ['a value that only contains https://', 'see https://evil.example/login'],
+    ['an upper-case scheme', 'HTTPS://app.example.test/invitations/tok_123'],
+    ['plain words', 'Ivana'],
+  ])('does not link %s', (_label, value) => {
+    const out = renderMail({
+      to: 'a@b.c',
+      locale: 'en',
+      template: 'invitation',
+      params: { ...FULL_PARAMS.invitation, inviterDisplayName: value },
+    });
+
+    // The activation link is the only anchor: the value under test is not a link.
+    expect(out.html.match(/<a[ >]/g)).toHaveLength(1);
+  });
+
+  it('throws when a placeholder has no param, naming the template and the placeholder', () => {
+    expect(() =>
+      renderMail({
+        to: 'a@b.c',
+        locale: 'en',
+        template: 'step_up_code',
+        params: { code: '12345678' },
+      }),
+    ).toThrow(/step_up_code.*minutes/);
+  });
+
+  it('throws for a misnamed param, because the param the template wants is then missing', () => {
+    expect(() =>
+      renderMail({
+        to: 'a@b.c',
+        locale: 'sr-Latn',
+        template: 'invitation',
+        params: {
+          link: 'https://app.example.test/invitations/tok_123',
+          inviterDisplayName: 'Ivana',
+          organisationName: 'Intesa d.o.o.', // sic: the template wants `organizationName`
+        },
+      }),
+    ).toThrow(/invitation.*organizationName/);
+  });
+
+  it('never puts a param value into the error', () => {
+    let message = '';
+    try {
+      renderMail({
+        to: 'dragan@intesa.example',
+        locale: 'en',
+        template: 'step_up_code',
+        params: { code: '87654321' },
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    expect(message).not.toBe('');
+    expect(message).not.toContain('87654321');
+    expect(message).not.toContain('dragan');
+  });
+
+  it('accepts an empty string as a value: only an absent param is an error', () => {
     const out = renderMail({
       to: 'a@b.c',
       locale: 'en',
       template: 'step_up_code',
-      params: { code: '12345678' },
+      params: { code: '', minutes: '5' },
     });
 
-    expect(out.text).toContain('12345678');
-    expect(out.text).not.toContain('{{');
-    expect(out.text).not.toContain('undefined');
+    expect(out.text).toContain('Your verification code is . It expires in 5 minutes.');
   });
 
   it('keeps the subject on a single line', () => {

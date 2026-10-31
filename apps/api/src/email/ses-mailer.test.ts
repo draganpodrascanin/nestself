@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { SendEmailCommand } from '@aws-sdk/client-ses';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MailMessage } from './mailer.js';
+import { MailDeliveryError, type MailMessage } from './mailer.js';
 import { renderMail } from './render-mail.js';
 import { SesMailer } from './ses-mailer.js';
 
@@ -97,11 +97,91 @@ describe('SesMailer', () => {
     expect(input.Message.Body.Html.Charset).toBe('UTF-8');
   });
 
-  it('propagates SES failures so the caller can log them', async () => {
-    const send = vi.fn().mockRejectedValue(new Error('MessageRejected'));
+  describe('when SES refuses the mail', () => {
+    /** What the SDK throws: the message quotes the recipient's address. */
+    function sesFailure(httpStatusCode?: number): Error {
+      return Object.assign(
+        new Error(
+          'Email address is not verified. The following identities failed the check in region EU-CENTRAL-1: invitee@example.test',
+        ),
+        {
+          name: 'MessageRejected',
+          ...(httpStatusCode === undefined ? {} : { $metadata: { httpStatusCode } }),
+        },
+      );
+    }
+
+    async function failureOf(failure: unknown): Promise<MailDeliveryError> {
+      const send = vi.fn().mockRejectedValue(failure);
+      const mailer = new SesMailer({ ...OPTIONS, client: { send } });
+      const error: unknown = await mailer.send(INVITATION).then(
+        () => undefined,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(MailDeliveryError);
+      return error as MailDeliveryError;
+    }
+
+    it('rethrows a MailDeliveryError that carries the SDK error name and the HTTP status', async () => {
+      const error = await failureOf(sesFailure(400));
+
+      expect(error.name).toBe('MessageRejected');
+      expect(error.httpStatus).toBe(400);
+      expect(String(error)).toBe('MessageRejected: The mail could not be delivered');
+    });
+
+    it('never carries the SDK message, so logging String(error) cannot leak the recipient', async () => {
+      const error = await failureOf(sesFailure(400));
+
+      const everything = [
+        String(error),
+        error.message,
+        error.stack ?? '',
+        JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      ].join('\n');
+      expect(everything).not.toContain('invitee@example.test');
+      expect(everything).not.toContain('not verified');
+      expect(error.cause).toBeUndefined();
+    });
+
+    it('leaves the HTTP status out when the SDK gave none', async () => {
+      const error = await failureOf(sesFailure());
+
+      expect(error.httpStatus).toBeUndefined();
+    });
+
+    it.each([
+      ['a string', 'invitee@example.test could not be reached'],
+      [
+        'an error whose name is free text',
+        Object.assign(new Error('x'), { name: 'failed for invitee@example.test' }),
+      ],
+      ['nothing', undefined],
+    ])('keeps a failure that is %s from reaching the error', async (_label, failure) => {
+      const error = await failureOf(failure);
+
+      expect(error.name).toBe('MailDeliveryError');
+      expect(String(error)).not.toContain('invitee@example.test');
+    });
+
+    it('does not log the failure itself: the caller decides', async () => {
+      await failureOf(sesFailure(400));
+
+      expect(log).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not wrap an error from rendering: a missing param is a bug, not a delivery failure', async () => {
+    const send = vi.fn().mockResolvedValue({});
     const mailer = new SesMailer({ ...OPTIONS, client: { send } });
 
-    await expect(mailer.send(INVITATION)).rejects.toThrow('MessageRejected');
+    await expect(
+      mailer.send({
+        ...INVITATION,
+        params: { link: 'https://app.example.test/invitations/tok_123' },
+      }),
+    ).rejects.toThrow(/invitation.*organizationName/);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('logs the template and the recipient domain, never the address, the code or the link', async () => {

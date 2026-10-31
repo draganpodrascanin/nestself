@@ -4,7 +4,8 @@
  *
  * It logs the template, the locale and the recipient's domain at debug level,
  * and nothing else: not the address, and not the params, which hold the codes
- * and the activation links.
+ * and the activation links. It renders every message first (and discards the
+ * result), so a message the SES adapter could not render fails here too.
  *
  * It also keeps every message in `sent`, so unit tests, the API e2e suites and
  * the Playwright journeys (stub mode) can read the code or link that "arrived",
@@ -14,6 +15,7 @@
 import { Logger } from '@nestjs/common';
 import { emailDomain } from './mask-email.js';
 import { Mailer, type MailMessage } from './mailer.js';
+import { renderMail } from './render-mail.js';
 
 /** The two settings that decide whether sent mail is kept. */
 export interface MailEnvironment {
@@ -47,6 +49,9 @@ export class LoggingMailer extends Mailer {
   }
 
   async send(message: MailMessage): Promise<void> {
+    // Render as the SES adapter would, so a template whose param is missing or
+    // misnamed fails here, in development and in tests, not only in production.
+    renderMail(message);
     if (this.keepSent) this.sent.push(message);
     this.logger.debug(
       `Mail not delivered (logging mailer): template=${message.template} locale=${message.locale} recipientDomain=${emailDomain(message.to)}`,
