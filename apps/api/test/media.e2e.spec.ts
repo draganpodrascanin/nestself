@@ -678,6 +678,22 @@ describe.skipIf(!shouldRun)('Media (e2e)', () => {
       expect((res.body as Buffer).length).toBe(100);
     });
 
+    it('?locale= from the app wins over the browser\'s Accept-Language', async () => {
+      // The asset belongs to the sr-Latn variant. An <img> request from a
+      // browser set to English sends Accept-Language: en.
+      const english = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/original`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('Accept-Language', 'en-GB,en;q=0.9');
+      expect(english.status).toBe(404);
+
+      const chosen = await jovanSession.agent
+        .get(`${LIBRARY}/${readyAssetId}/original?locale=sr-Latn`)
+        .set('x-csrf-token', jovanSession.csrf)
+        .set('Accept-Language', 'en-GB,en;q=0.9');
+      expect(chosen.status).toBe(200);
+    });
+
     it('employee from other org → 404 (not 403)', async () => {
       const res = await markoSession.agent
         .get(`${LIBRARY}/${readyAssetId}/original`)

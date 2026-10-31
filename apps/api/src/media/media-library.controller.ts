@@ -55,6 +55,7 @@ const assetIdParam = (req: Record<string, unknown>): string | undefined => {
  */
 interface HttpReq {
   headers: Record<string, string | string[] | undefined>;
+  query?: Record<string, unknown>;
 }
 
 /**
@@ -120,10 +121,13 @@ export class MediaLibraryController {
     const membership = principal.memberships.find((m) => m.orgId === ctx.orgId);
     if (!membership) throw NOT_AVAILABLE;
 
-    // I5: Parse Accept-Language with the shared parser (locale-header.ts)
+    // The reader's locale: `?locale=` from the app (an <img> request carries
+    // the browser's Accept-Language, not the language the reader chose in
+    // the app), else Accept-Language. I5: one shared parser (locale-header.ts).
     const rawHeader = req.headers['accept-language'];
+    const queryLocale = typeof req.query?.['locale'] === 'string' ? req.query['locale'] : undefined;
     const readerLocale = parseAcceptLanguageLocale(
-      Array.isArray(rawHeader) ? rawHeader[0] : rawHeader,
+      queryLocale ?? (Array.isArray(rawHeader) ? rawHeader[0] : rawHeader),
     );
 
     // Build reader context

@@ -243,9 +243,15 @@ const RendererLinkComponent: LinkComponentType = ({ href, children, className })
   );
 };
 
-function mediaUrl(assetId: string, rendition: string): string {
-  // Honour VITE_API_URL (reuse the api-client's base URL)
-  return `${api.baseUrl}/api/library/media/${encodeURIComponent(assetId)}/${rendition}`;
+/**
+ * Rendition URL for the reader's locale. The API checks the asset against the
+ * variant in that locale; an <img> request would otherwise send the browser's
+ * Accept-Language instead of the language chosen in the app.
+ */
+function mediaUrlFor(locale: string) {
+  return (assetId: string, rendition: string): string =>
+    // Honour VITE_API_URL (reuse the api-client's base URL)
+    `${api.baseUrl}/api/library/media/${encodeURIComponent(assetId)}/${rendition}?locale=${encodeURIComponent(locale)}`;
 }
 
 interface DetailViewProps {
@@ -476,7 +482,7 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
       // -- ContentRenderer props --
       document={document}
       media={mediaMeta}
-      mediaUrl={mediaUrl as MediaUrlResolver}
+      mediaUrl={mediaUrlFor(locale) as MediaUrlResolver}
       resolveCta={resolveCta}
       resolveRelated={(id) => {
         // A related card renders where the author placed it in the body; the

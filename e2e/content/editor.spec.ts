@@ -670,7 +670,12 @@ test.describe('@editor Editor journey', () => {
     await expect(page.getByText('Ako stres traje nedeljama, razgovarajte sa stručnjakom.')).toBeVisible();
     await expect(page.getByText('Kratka pauza za disanje')).toBeVisible();
     await expect(page.getByText('Podesite podsetnik')).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Osoba za stolom pravi kratku pauzu' })).toBeVisible();
+    const image = page.getByRole('img', { name: 'Osoba za stolom pravi kratku pauzu' });
+    await expect(image).toBeVisible();
+    // The rendition loads (the API checks the asset against the reader's language).
+    await expect
+      .poll(() => image.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
     await expect(page.getByRole('link', { name: 'Pročitajte i ovo' })).toBeVisible();
     await expect(page.getByRole('link', { name: SEEDED_RESOURCE })).toBeVisible();
     await expect(page.getByRole('link', { name: 'vodiču' })).toHaveAttribute(
