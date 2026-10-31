@@ -12,6 +12,7 @@ import { WsInvalidationService } from './ws-invalidation.service.js';
 
 function createMocks() {
   const store = {
+    kind: 'memory' as const,
     subscribe: vi.fn().mockResolvedValue(vi.fn()),
     getDel: vi.fn(),
     get: vi.fn(),
