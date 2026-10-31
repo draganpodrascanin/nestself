@@ -389,6 +389,7 @@
         "invalidTemplate": "Ez a sablon nem használható meghívókhoz.",
         "duplicateInBatch": "Ez az e-mail-cím többször szerepel az importálásban.",
         "invalidOrgUnit": "A szervezeti egység nem ehhez a szervezethez tartozik.",
+        "ssoDomainClaimed": "Az e-mail-cím olyan szervezethez tartozik, amely a saját identitásszolgáltatóján keresztül jelentkezik be.",
         "ownerExists": "A szervezetnek már van tulajdonosa.",
         "duplicateInvitation": "Ehhez az e-mail-címhez már van függő meghívó.",
         "alreadyMember": "Ez a személy már aktív tag.",

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ApiError } from '@nestself/api-client';
+import { INVITATION_IMPORT_ROW_REASONS } from '@nestself/contracts';
+import { locales, resources } from '@nestself/i18n';
 import { StepUpCancelledError } from '../../auth';
 import { importReasonKey, peopleErrorKey, validationFields } from './people-errors';
 
@@ -38,6 +40,27 @@ describe('peopleErrorKey (operations)', () => {
     expect(importReasonKey('invalid_template')).toBe('invalidTemplate');
     expect(importReasonKey('duplicate_in_batch')).toBe('duplicateInBatch');
     expect(importReasonKey('org_unit_outside_org')).toBe('invalidOrgUnit');
+    expect(importReasonKey('sso_domain_claimed')).toBe('ssoDomainClaimed');
+    expect(importReasonKey('duplicate_invitation')).toBe('duplicateInvitation');
+    expect(importReasonKey('already_member')).toBe('alreadyMember');
     expect(importReasonKey('something else')).toBe('unknown');
+  });
+
+  it.each(['constructor', 'toString', '__proto__', ''])('gives the fallback to %j, not something from Object.prototype', (reason) => {
+    expect(importReasonKey(reason)).toBe('unknown');
+  });
+
+  it('gives every reason of the contract its own copy, never the fallback', () => {
+    const keys = INVITATION_IMPORT_ROW_REASONS.map(importReasonKey);
+    expect(keys).not.toContain('unknown');
+    expect(new Set(keys).size).toBe(INVITATION_IMPORT_ROW_REASONS.length);
+  });
+
+  it.each(locales)('has copy in %s for every reason of the contract and for the fallback', (locale) => {
+    const copy: Record<string, unknown> = resources[locale].admin.people.import.reasons;
+    for (const key of [...INVITATION_IMPORT_ROW_REASONS.map(importReasonKey), 'unknown']) {
+      expect(copy[key], `${locale}: people.import.reasons.${key}`).toEqual(expect.any(String));
+      expect(copy[key]).not.toBe('');
+    }
   });
 });

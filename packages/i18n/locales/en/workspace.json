@@ -393,6 +393,7 @@
         "invalidTemplate": "This template cannot be used for invitations.",
         "duplicateInBatch": "This email address appears more than once in the import.",
         "invalidOrgUnit": "The org unit does not belong to this organization.",
+        "ssoDomainClaimed": "The address belongs to an organisation that signs in through its own identity provider.",
         "ownerExists": "The organization already has an owner.",
         "duplicateInvitation": "A pending invitation already exists for this email address.",
         "alreadyMember": "This person is already an active member.",

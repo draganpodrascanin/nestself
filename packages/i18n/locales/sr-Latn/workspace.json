@@ -393,6 +393,7 @@
         "invalidTemplate": "Ovaj šablon se ne može koristiti za pozivnice.",
         "duplicateInBatch": "Ova imejl adresa se pojavljuje više puta u uvozu.",
         "invalidOrgUnit": "Organizaciona jedinica ne pripada ovoj organizaciji.",
+        "ssoDomainClaimed": "Imejl adresa pripada organizaciji koja se prijavljuje preko sopstvenog provajdera identiteta.",
         "ownerExists": "Organizacija već ima vlasnika.",
         "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
         "alreadyMember": "Ova osoba je već aktivan član.",

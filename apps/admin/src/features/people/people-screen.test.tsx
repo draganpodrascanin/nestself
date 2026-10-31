@@ -364,6 +364,39 @@ describe('OpsPeopleScreen: invitations', () => {
       expect(within(dialog).getByText(t('admin:people.import.reasons.invalidOrgUnit'))).toBeInTheDocument();
     });
 
+    it('counts skipped rows and lists the refused ones with their own coded reason', async () => {
+      const user = userEvent.setup();
+      // As the API answers: every row is created, skipped (already a member or
+      // invited: a count, not a table row) or refused with a coded reason.
+      const importInvitations = vi.fn().mockResolvedValue({
+        created: 1,
+        skipped: 2,
+        errors: [
+          { email: 'dev@acme.example', reason: 'sso_domain_claimed' },
+          { email: 'twice@example.test', reason: 'duplicate_in_batch' },
+          { email: 'x@example.test', reason: 'Something the server said' },
+        ],
+      });
+      renderPeople({ opsApi: makeOpsApi({ importInvitations }) });
+      const dialog = await openImport(user);
+      await paste(
+        user,
+        dialog,
+        'email,template\nana@example.test,employee\nivan@example.test,employee\ncleo@example.test,employee\ndev@acme.example,employee\ntwice@example.test,employee\nx@example.test,employee',
+      );
+      await user.click(within(dialog).getByRole('button', { name: t('admin:people.import.submit') }));
+
+      // 1 created + 2 skipped + 3 not imported = the 6 rows sent.
+      expect(await within(dialog).findByText(t('admin:people.import.resultSummary', { created: 1, skipped: 2, failed: 3 }))).toBeInTheDocument();
+      const table = within(dialog).getByRole('region', { name: t('admin:people.import.errorsCaption') });
+      const rowOf = (email: string) => within(table).getByText(email).closest('tr')!;
+      expect(rowOf('dev@acme.example')).toHaveTextContent(t('admin:people.import.reasons.ssoDomainClaimed'));
+      expect(rowOf('twice@example.test')).toHaveTextContent(t('admin:people.import.reasons.duplicateInBatch'));
+      expect(rowOf('x@example.test')).toHaveTextContent(t('admin:people.import.reasons.unknown'));
+      expect(within(table).queryByText('ivan@example.test')).not.toBeInTheDocument();
+      expect(screen.queryByText('Something the server said')).not.toBeInTheDocument();
+    });
+
     it.each([
       ['forbidden', 403, 'forbidden'],
       ['rate_limited', 429, 'rateLimited'],
