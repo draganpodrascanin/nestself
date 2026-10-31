@@ -677,6 +677,54 @@ describe('NestselfOtpService', () => {
       expect(ctx.mailer.sent).toHaveLength(1);
     });
 
+    it('hands the data the challenge was issued with to the accept check, and resends when it agrees', async () => {
+      const { challengeToken } = await ctx.service.issue(INPUT);
+      secondsLater(OTP_RESEND_COOLDOWN_SECONDS);
+      const accept = vi.fn(() => true);
+
+      await expect(ctx.service.resend('step_up', challengeToken, 'en', accept)).resolves.toEqual({
+        emailMasked: 'd***@intesa.example',
+      });
+
+      expect(accept).toHaveBeenCalledWith(INPUT.data);
+      expect(ctx.mailer.sent).toHaveLength(2);
+    });
+
+    it('a resend the accept check refuses changes nothing: invalid_challenge, no mail, the record and the cooldown as they were', async () => {
+      drawNext(11111111);
+      const { challengeToken } = await ctx.service.issue(INPUT);
+      const key = otpKey('step_up', sha256(challengeToken));
+      const cooldown = otpResendKey('step_up', sha256(challengeToken));
+      await expectRefused(ctx.service.verify('step_up', challengeToken, '99999999'), 401, 'invalid_code');
+      const before = await ctx.store.get(key);
+      secondsLater(20);
+
+      // Inside the cooldown the check comes first: invalid_challenge, not rate_limited.
+      await expectRefused(
+        ctx.service.resend('step_up', challengeToken, 'en', () => false),
+        401,
+        'invalid_challenge',
+      );
+      expect(ctx.mailer.sent).toHaveLength(1);
+      expect(await ctx.store.get(key)).toBe(before);
+      expect(await ctx.store.ttl(cooldown)).toBe(OTP_RESEND_COOLDOWN_SECONDS - 20);
+
+      // After the cooldown: refused again, and no cooldown is started.
+      secondsLater(OTP_RESEND_COOLDOWN_SECONDS);
+      await expectRefused(
+        ctx.service.resend('step_up', challengeToken, 'en', () => false),
+        401,
+        'invalid_challenge',
+      );
+      expect(ctx.mailer.sent).toHaveLength(1);
+      expect(await ctx.store.get(cooldown)).toBeNull();
+      // The code sent first still works, with the attempts it had.
+      expect(await ctx.store.get(key)).toBe(before);
+      await expect(ctx.service.verify('step_up', challengeToken, '11111111')).resolves.toMatchObject({
+        email: EMAIL,
+      });
+    });
+
     it('refuses a resend after the challenge time is over', async () => {
       const { challengeToken } = await ctx.service.issue(INPUT);
 

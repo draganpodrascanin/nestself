@@ -19,7 +19,9 @@
  * record is the Cognito kind, any other token goes to the NestSelf store. A
  * challenge minted for another user is refused with 401 `invalid_challenge`,
  * audited as `foreign_challenge` and spent. Wrong codes of both kinds count
- * toward the lock; a success clears it. The step-up lands on the session
+ * toward the lock; a success clears it. The third wrong code on a NestSelf
+ * challenge ends that challenge with 401 `invalid_challenge`, not the 429 of
+ * the lock. The step-up lands on the session
  * (`markStepUp`, then `regenerate`) for web callers, or under
  * `stepUpKey(tokenFamily)` for bearer callers, and is audited with its
  * issuer. The token set a Cognito re-authentication returns is discarded; its
@@ -29,7 +31,9 @@
  * counted from the previous mail, the first one included (429 `rate_limited`
  * with `details.retryAfter`). The Cognito kind starts a new provider
  * challenge under a new token and spends the old one; the NestSelf kind keeps
- * its token. Neither resets the wrong codes counted on the challenge.
+ * its token. Neither resets the wrong codes counted on the challenge. Another
+ * user's challenge of either kind is refused, audited as `foreign_challenge`
+ * and not resent.
  *
  * Every user steps up with an email code, `password_totp` users included
  * (Cognito cannot issue SOFTWARE_TOKEN_MFA without a password). Federated
@@ -225,10 +229,7 @@ export class StepUpService {
     const locale = principalLocale(principal);
 
     const challenge = await this.challenges.consume(challengeToken);
-    if (!challenge) {
-      const { emailMasked } = await this.otp.resend('step_up', challengeToken, locale);
-      return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked };
-    }
+    if (!challenge) return this.resendNestself(principal, challengeToken, locale, meta);
     await this.assertOwnStepUpChallenge(principal, challenge, meta);
 
     const cooldown = this.resendCooldownKey(challengeToken);
@@ -266,6 +267,31 @@ export class StepUpService {
     return this.startResponse(next, challenge.email);
   }
 
+  /**
+   * A NestSelf challenge keeps its token. One minted for another user is not
+   * resent (the record goes back untouched) and is recorded like a foreign
+   * Cognito challenge.
+   */
+  private async resendNestself(
+    principal: Principal,
+    challengeToken: string,
+    locale: Locale,
+    meta: Meta,
+  ): Promise<StepUpStartResponse> {
+    let foreign = false;
+    const ownChallenge = (data: Record<string, string>): boolean => {
+      foreign = data.userId !== principal.userId;
+      return !foreign;
+    };
+    try {
+      const { emailMasked } = await this.otp.resend('step_up', challengeToken, locale, ownChallenge);
+      return { method: STEP_UP_METHOD, challengeToken, ssoStartUrl: null, emailMasked };
+    } catch (err) {
+      if (foreign) await this.recordForeignChallenge(principal, meta);
+      throw err;
+    }
+  }
+
   private async verifyCognito(
     principal: Principal,
     challengeToken: string,
@@ -284,7 +310,12 @@ export class StepUpService {
     }
   }
 
-  /** A NestSelf code: three tries per challenge (`NestselfOtpService`), bound to the user it was minted for. */
+  /**
+   * A NestSelf code: three tries per challenge (`NestselfOtpService`), bound to
+   * the user it was minted for. The third wrong code ends that challenge only,
+   * so it answers 401 `invalid_challenge` (ask for a new one) rather than the
+   * 429 of the per-user lock.
+   */
   private async verifyNestself(
     principal: Principal,
     challengeToken: string,
@@ -295,10 +326,11 @@ export class StepUpService {
     try {
       ({ data } = await this.otp.verify('step_up', challengeToken, response));
     } catch (err) {
-      // `too_many_attempts` here is the third wrong code on this challenge.
+      // `too_many_attempts` from `otp.verify` is the third wrong code on this challenge.
       if (err instanceof ApiHttpException && (err.code === 'invalid_code' || err.code === 'too_many_attempts')) {
         await this.throttle.recordFailure(principal.userId);
         await this.record(principal, 'auth.step_up.failed', meta, { method: STEP_UP_METHOD, reason: err.code });
+        if (err.code === 'too_many_attempts') throw invalidChallenge();
       }
       throw err;
     }

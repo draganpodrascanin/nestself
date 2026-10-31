@@ -605,6 +605,38 @@ describe('StepUpService', () => {
       expect(ctx.sessions.markStepUp).not.toHaveBeenCalled();
     });
 
+    it('a NestSelf challenge out of tries answers invalid_challenge, not the lockout, and its wrong codes still count', async () => {
+      const { token, code } = await startNestself(ctx);
+      for (let i = 0; i < 2; i++) {
+        await expect(ctx.service.verify(SESSION_PRINCIPAL, token, wrongCode(code), META)).rejects.toMatchObject({
+          code: 'invalid_code',
+        });
+      }
+
+      // The third wrong code ends this challenge only: a new one can be asked for at once.
+      await expect(ctx.service.verify(SESSION_PRINCIPAL, token, wrongCode(code), META)).rejects.toMatchObject({
+        status: 401,
+        code: 'invalid_challenge',
+      });
+      expect(ctx.audit.record).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          action: 'auth.step_up.failed',
+          details: { method: 'email_otp', reason: 'too_many_attempts' },
+        }),
+      );
+      await expect(ctx.service.verify(SESSION_PRINCIPAL, token, code, META)).rejects.toMatchObject({
+        code: 'invalid_challenge',
+      });
+
+      // Three failures so far: two more lock the user.
+      await expect(ctx.service.start(SESSION_PRINCIPAL, META, 'workspace')).resolves.toHaveProperty('challengeToken');
+      await wrongCognitoCodes(2);
+      await expect(ctx.service.start(SESSION_PRINCIPAL, META, 'workspace')).rejects.toMatchObject({
+        status: 429,
+        code: 'too_many_attempts',
+      });
+    });
+
     it('a locked user cannot start or resend: 429, and nothing is sent', async () => {
       const { token } = await startNestself(ctx);
       await wrongCognitoCodes(5);
@@ -759,11 +791,34 @@ describe('StepUpService', () => {
       await expect(ctx.service.verify(SESSION_PRINCIPAL, token, second, META)).resolves.toHaveProperty('session');
     });
 
-    it('an unknown token answers invalid_challenge', async () => {
+    it("NestSelf kind: another user's challenge is refused, audited and not resent; its owner can still verify", async () => {
+      const { token, code } = await startNestself(ctx, OTHER_PRINCIPAL);
+      secondsLater(61);
+
+      await expect(ctx.service.resend(SESSION_PRINCIPAL, token, META)).rejects.toMatchObject({
+        status: 401,
+        code: 'invalid_challenge',
+      });
+
+      expect(ctx.mailer.sent).toHaveLength(1);
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'auth.step_up.failed',
+          actorUserId: 'user-1',
+          result: 'DENIED',
+          details: { method: 'email_otp', reason: 'foreign_challenge' },
+        }),
+      );
+      await expect(ctx.service.verify(OTHER_PRINCIPAL, token, code, META)).resolves.toHaveProperty('session');
+    });
+
+    it('an unknown token answers invalid_challenge and is not recorded as foreign', async () => {
       await expect(ctx.service.resend(SESSION_PRINCIPAL, 'a-token-nobody-issued', META)).rejects.toMatchObject({
         status: 401,
         code: 'invalid_challenge',
       });
+      expect(ctx.audit.record).not.toHaveBeenCalled();
     });
   });
 });

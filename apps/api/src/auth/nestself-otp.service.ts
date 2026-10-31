@@ -12,7 +12,8 @@
  * - `resend` mails a new code for the same challenge: same token, same
  *   deadline, same attempts (a resend never resets the budget), and at most one
  *   mail per `OTP_RESEND_COOLDOWN_SECONDS`, counted from the last mail, the
- *   first one included.
+ *   first one included. An optional `accept` check on the issued data lets the
+ *   caller refuse a challenge that is not its own.
  *
  * Storage: `otp:{purpose}:{sha256(token)}` holds the record for `CHALLENGE_TTL`.
  * It keeps `sha256(token:code)`, never the code: a copy of the store cannot be
@@ -181,15 +182,26 @@ export class NestselfOtpService {
    * Mails a new code for the same challenge. The old code stops working; the
    * token, the deadline and the attempts are unchanged. Refused with 429
    * `rate_limited` while the cooldown of the previous mail runs.
+   *
+   * `accept` is shown the data the challenge was issued with (the caller's
+   * binding, as `verify` returns it) before anything else happens. When it
+   * says no, the challenge goes back as it was, nothing is mailed, the
+   * cooldown is not touched, and the answer is 401 `invalid_challenge`, as
+   * for an unknown token.
    */
   async resend(
     purpose: OtpPurpose,
     challengeToken: string,
     locale: Locale,
+    accept?: (data: Record<string, string>) => boolean,
   ): Promise<{ emailMasked: string }> {
     const hash = sha256(challengeToken);
     const record = await this.take(purpose, hash);
     if (!record) throw invalidChallenge();
+    if (accept && !accept(record.data)) {
+      await this.save(purpose, hash, record);
+      throw invalidChallenge();
+    }
 
     // One atomic step both checks and starts the cooldown, so two resends at
     // once cannot both pass.

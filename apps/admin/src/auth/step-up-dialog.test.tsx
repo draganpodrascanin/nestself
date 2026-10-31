@@ -346,6 +346,25 @@ describe('StepUpDialog', () => {
     expect(onVerified).toHaveBeenCalledTimes(1);
   });
 
+  it('a resend refused with rate_limited counts down from retryAfter before offering it again', async () => {
+    vi.useFakeTimers();
+    renderDialog(
+      makeAuthApi({ stepUpResend: vi.fn().mockRejectedValue(apiError(429, 'rate_limited', { retryAfter: 30 })) }),
+    );
+    await settle();
+    secondsPass(60);
+
+    fireEvent.click(resendButton());
+    await settle();
+
+    expect(resendButton()).toBeDisabled();
+    expect(screen.getByText(t('auth:otp.resendCountdown', { seconds: 30 }))).toBeInTheDocument();
+    secondsPass(29);
+    expect(resendButton()).toBeDisabled();
+    secondsPass(1);
+    expect(resendButton()).toBeEnabled();
+  });
+
   it('does not start twice when the button is clicked twice quickly', async () => {
     const second = pending<ReturnType<typeof challenge>>();
     const stepUpStart = vi

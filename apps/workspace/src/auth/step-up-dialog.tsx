@@ -11,7 +11,8 @@
  *   starts a new one at once.
  * - "Send a new code" asks for a new code for the same challenge
  *   (`POST /auth/step-up/resend`), at most once a minute counted from the
- *   last code, as the server enforces; a countdown says how long is left.
+ *   last code, as the server enforces; a countdown says how long is left. A
+ *   resend the server refuses as too soon counts down from the wait it names.
  * - One request at a time: start, resend and verify never overlap (a verify
  *   during a resend would find the challenge taken), and Cancel waits for a
  *   verify in flight. An answer that arrives after the dialog was closed
@@ -50,6 +51,13 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 /** Answers after which the server no longer has the challenge. */
 const DEAD_CHALLENGE_CODES = new Set(['invalid_challenge', 'expired_code', 'too_many_attempts']);
+
+/** Seconds a `rate_limited` answer asks to wait (`details.retryAfter`), else null. */
+function retryAfterSeconds(err: unknown): number | null {
+  if (!(err instanceof ApiError) || err.code !== 'rate_limited') return null;
+  const retryAfter = err.details?.retryAfter;
+  return typeof retryAfter === 'number' && retryAfter > 0 ? Math.ceil(retryAfter) : null;
+}
 
 function stepUpErrorMessage(err: unknown, t: TFunction<['auth', 'common']>): string {
   if (err instanceof ApiError) {
@@ -133,7 +141,11 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
         setCode('');
         setError(null);
       } catch (err) {
-        if (opening === openingRef.current) fail(err);
+        if (opening !== openingRef.current) return;
+        fail(err);
+        // Too soon for another code: offer it again when the server allows one.
+        const retryAfter = retryAfterSeconds(err);
+        if (retryAfter) setCountdown(retryAfter);
       } finally {
         if (opening === openingRef.current) {
           busyRef.current = false;
