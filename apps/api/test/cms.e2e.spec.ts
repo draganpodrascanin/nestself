@@ -355,6 +355,37 @@ describe.skipIf(!shouldRun)('CMS (e2e)', () => {
     expect(Array.isArray(listRes.body.items)).toBe(true);
   });
 
+  it('searches resources by title and returns the newest sr-Latn title', async () => {
+    const katarina = await signInOps(KATARINA);
+    const createRes = await katarina.agent
+      .post(`${OPS_CMS}/resources`)
+      .set('x-csrf-token', katarina.csrf)
+      .send({
+        type: 'article',
+        primaryCategoryId: CATEGORY_STRESS,
+        reviewPolicy: 'professional',
+        reviewDiscipline: 'psychological',
+        locale: 'sr-Latn',
+        title: 'Pretraga 100% naslova',
+      });
+    expect(createRes.status).toBe(201);
+    const resourceId = createRes.body.id as string;
+
+    const found = await katarina.agent.get(`${OPS_CMS}/resources`).query({ q: '100% nas' });
+    expect(found.status).toBe(200);
+    const item = (found.body.items as Array<{ id: string; title: string | null }>).find((i) => i.id === resourceId);
+    expect(item?.title).toBe('Pretraga 100% naslova');
+
+    // A LIKE wildcard in q matches literally: '_' is not "any character".
+    const literal = await katarina.agent.get(`${OPS_CMS}/resources`).query({ q: 'Pretraga_100' });
+    expect(literal.status).toBe(200);
+    expect((literal.body.items as Array<{ id: string }>).some((i) => i.id === resourceId)).toBe(false);
+
+    const none = await katarina.agent.get(`${OPS_CMS}/resources`).query({ q: 'no-such-title-xyz' });
+    expect(none.status).toBe(200);
+    expect(none.body.items).toEqual([]);
+  });
+
   // ─── If-Match editing ────────────────────────────────────────────
 
   it('returns 409 content_revision_locked when editing a submitted revision', async () => {

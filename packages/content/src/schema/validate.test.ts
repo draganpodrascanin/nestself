@@ -600,3 +600,26 @@ describe('validateContentDocument — href hardening (T-C1.06)', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe('validateContentDocument — link host allowlist (FMT-R-06)', () => {
+  const withLink = (href: string) => ({
+    type: 'doc',
+    schemaVersion: 1,
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'link', marks: [{ type: 'link', attrs: { href } }] }] },
+    ],
+  });
+  const codes = (r: ValidationResult) => (r.ok ? [] : r.errors.map((e) => e.code));
+
+  it('an empty list refuses every external host', () => {
+    expect(codes(validateContentDocument(withLink('https://example.com/a'), { linkHostAllowlist: [] }))).toContain('content_invalid_link');
+  });
+
+  it('an omitted list skips the host check (the server applies its own list)', () => {
+    expect(codes(validateContentDocument(withLink('https://example.com/a')))).not.toContain('content_invalid_link');
+  });
+
+  it('an omitted list still refuses non-https links', () => {
+    expect(codes(validateContentDocument(withLink('http://example.com/a')))).toContain('content_invalid_link');
+  });
+});

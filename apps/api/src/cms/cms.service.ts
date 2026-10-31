@@ -169,12 +169,14 @@ export class CmsService {
     }
 
     if (query.q) {
-      // Title search: match resources that have a revision title containing q
+      // Title search: resources with a revision title containing q. LIKE
+      // wildcards in q are escaped so they match literally.
+      const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
       const titleSearch = this.dbService.db
         .select({ resourceId: contentVariants.contentResourceId })
         .from(contentVariants)
         .innerJoin(contentRevisions, eq(contentRevisions.contentVariantId, contentVariants.id))
-        .where(ilike(contentRevisions.title, `%${query.q}%`));
+        .where(ilike(contentRevisions.title, pattern));
       conditions.push(inArray(contentResources.id, titleSearch));
     }
 
@@ -203,7 +205,8 @@ export class CmsService {
     const items = rows.slice(0, limit);
     const nextCursor = rows.length > limit ? rows[limit]!.id : null;
 
-    // Enrich items with titles from revisions (sr-Latn preferred).
+    // Enrich items with the title of each resource's newest revision,
+    // preferring the sr-Latn variant.
     const resourceIds = items.map((r) => r.id);
     if (resourceIds.length > 0) {
       const titleRows = await this.dbService.db
@@ -214,17 +217,24 @@ export class CmsService {
         })
         .from(contentVariants)
         .innerJoin(contentRevisions, eq(contentRevisions.contentVariantId, contentVariants.id))
-        .where(inArray(contentVariants.contentResourceId, resourceIds));
+        .where(inArray(contentVariants.contentResourceId, resourceIds))
+        .orderBy(desc(contentRevisions.revisionNumber));
 
-      const titleMap = new Map<string, string>();
-      for (const t of titleRows) {
-        if (!titleMap.has(t.resourceId) || t.locale === 'sr-Latn') {
-          titleMap.set(t.resourceId, t.title);
-        }
+      // resourceId -> locale -> newest title (rows arrive newest first)
+      const titles = new Map<string, Map<string, string>>();
+      for (const row of titleRows) {
+        const byLocale = titles.get(row.resourceId) ?? new Map<string, string>();
+        if (!byLocale.has(row.locale)) byLocale.set(row.locale, row.title);
+        titles.set(row.resourceId, byLocale);
       }
+      const titleOf = (id: string): string | null => {
+        const byLocale = titles.get(id);
+        if (!byLocale) return null;
+        return byLocale.get('sr-Latn') ?? byLocale.values().next().value ?? null;
+      };
 
       return {
-        items: items.map((r) => ({ ...r, title: titleMap.get(r.id) ?? null })),
+        items: items.map((r) => ({ ...r, title: titleOf(r.id) })),
         nextCursor,
       };
     }
