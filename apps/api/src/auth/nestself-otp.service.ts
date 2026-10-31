@@ -239,6 +239,19 @@ export class NestselfOtpService {
     return { emailMasked: maskEmail(record.email) };
   }
 
+  /**
+   * The address and data of a live challenge, left in place (a caller that
+   * must know whose code it is checking before `verify` consumes or counts
+   * it); null when it is unknown, taken, of another purpose or past its
+   * deadline.
+   */
+  async peek(purpose: OtpPurpose, challengeToken: string): Promise<{ email: string; data: Record<string, string> } | null> {
+    const raw = await this.store.get(otpKey(purpose, sha256(challengeToken)));
+    if (!raw) return null;
+    const record = JSON.parse(raw) as OtpRecord;
+    return record.expiresAt > Date.now() ? { email: record.email, data: record.data } : null;
+  }
+
   /** Takes the record out of the store (GETDEL); null when it is unknown, taken or past its deadline. */
   private async take(purpose: OtpPurpose, hash: string): Promise<OtpRecord | null> {
     const raw = await this.store.getDel(otpKey(purpose, hash));

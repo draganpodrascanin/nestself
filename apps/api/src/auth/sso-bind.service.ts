@@ -10,7 +10,15 @@
  *   to the asserted address and answers with the challenge token and the
  *   masked address. The pending binding stays: a code lives 5 minutes, the
  *   handle 15, so a user whose code expired asks for a new one from the same
- *   screen. An unknown or expired handle is 400 `invalid_challenge`.
+ *   screen, at most once a minute per pending binding (429 `rate_limited`
+ *   with `details.retryAfter`; a refused mail frees the slot). An unknown or
+ *   expired handle is 400 `invalid_challenge`.
+ * - The address shares the email-code sign-in lock (`SignInThrottle`, five
+ *   failures in 15 minutes): a locked address gets no code and has no code
+ *   checked (429 `too_many_attempts`, as sign-in answers), every wrong code
+ *   counts against it, and a sign-in through the code clears it. The step
+ *   stops an IdP from asserting an address it does not own, so guessing must
+ *   be no cheaper here than in sign-in.
  * - `verify` checks the code, then takes the pending binding (single use).
  *   An IdP account that has an identity by now (another tab or a retry bound
  *   it, or a direct sign-in after the claim switch went off) signs in through
@@ -66,6 +74,9 @@ import {
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
 import { NestselfOtpService } from './nestself-otp.service.js';
 import { PendingBindStore, pendingBindId, type TakenPendingBind } from './pending-bind-store.js';
+import { SignInThrottle } from './sign-in-throttle.js';
+import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
+import { OTP_RESEND_COOLDOWN_SECONDS, ssoBindStartKey } from '../redis/redis-keys.js';
 
 /** The mail language when the page sent none. */
 const DEFAULT_LOCALE: Locale = 'sr-Latn';
@@ -87,6 +98,15 @@ function ssoDenied(): ApiHttpException {
   return new ApiHttpException({ status: 403, code: 'sso_denied', message: 'The federated sign-in was not bound' });
 }
 
+/** What email-code sign-in answers for a locked address (`SignInThrottle`); the bind routes share the lock. */
+function addressLocked(): ApiHttpException {
+  return new ApiHttpException({
+    status: 429,
+    code: 'too_many_attempts',
+    message: 'Too many failed attempts. Try again later.',
+  });
+}
+
 /** The ID-token claims the binding needs, rebuilt from the pending record (the address is now confirmed). */
 function claimsOf(record: TakenPendingBind): IdTokenClaims {
   return {
@@ -106,6 +126,8 @@ export class SsoBindService {
   constructor(
     @Inject(forwardRef(() => NestselfOtpService)) private readonly otp: NestselfOtpService,
     @Inject(forwardRef(() => PendingBindStore)) private readonly pendingBinds: PendingBindStore,
+    @Inject(forwardRef(() => SignInThrottle)) private readonly throttle: SignInThrottle,
+    @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
     @Inject(forwardRef(() => SsoRepository)) private readonly sso: SsoRepository,
     @Inject(forwardRef(() => IdentityRepository)) private readonly identities: IdentityRepository,
     @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
@@ -123,14 +145,35 @@ export class SsoBindService {
     const id = pendingBindId(body.handle);
     const record = await this.pendingBinds.peek(id);
     if (!record) throw invalidChallenge(400);
-    // The challenge names the record by its id, never by the handle.
-    return this.otp.issue({
-      purpose: 'sso_bind',
-      email: record.email,
-      locale: body.locale ?? DEFAULT_LOCALE,
-      template: 'sso_bind_code',
-      data: { pendingBindId: id },
-    });
+    if (await this.throttle.isLocked(record.email)) throw addressLocked();
+
+    // One code per pending sign-in a minute: a reload or a second tab cannot
+    // mail the address faster. Taken atomically, so two starts cannot both pass.
+    const slot = ssoBindStartKey(id);
+    const free = await this.store.set(slot, '1', { ttlSeconds: OTP_RESEND_COOLDOWN_SECONDS, onlyIfAbsent: true });
+    if (!free) {
+      throw new ApiHttpException({
+        status: 429,
+        code: 'rate_limited',
+        message: 'Wait before asking for another code',
+        details: { retryAfter: Math.max(1, await this.store.ttl(slot)) },
+      });
+    }
+    try {
+      // The challenge names the record by its id, never by the handle.
+      return await this.otp.issue({
+        purpose: 'sso_bind',
+        email: record.email,
+        locale: body.locale ?? DEFAULT_LOCALE,
+        template: 'sso_bind_code',
+        data: { pendingBindId: id },
+      });
+    } catch (err) {
+      // No code went out (as far as we know): the next start may try at once,
+      // as `issue` leaves no resend cooldown behind for a refused mail.
+      await this.store.del(slot);
+      throw err;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -138,7 +181,21 @@ export class SsoBindService {
   // -------------------------------------------------------------------------
 
   async verify(body: SsoBindVerifyRequest, meta: RequestMeta): Promise<SsoBindVerifyResult> {
-    const { data } = await this.otp.verify('sso_bind', body.challengeToken, body.code);
+    // Whose code this is, before the code is checked: a locked address checks
+    // none, and every wrong one counts against the address, as in sign-in.
+    const challenge = await this.otp.peek('sso_bind', body.challengeToken);
+    if (!challenge) throw invalidChallenge(401);
+    if (await this.throttle.isLocked(challenge.email)) throw addressLocked();
+    let data: Record<string, string>;
+    try {
+      ({ data } = await this.otp.verify('sso_bind', body.challengeToken, body.code));
+    } catch (err) {
+      // `too_many_attempts` is the third wrong code on the challenge: a wrong code too.
+      if (err instanceof ApiHttpException && (err.code === 'invalid_code' || err.code === 'too_many_attempts')) {
+        await this.throttle.recordFailure(challenge.email);
+      }
+      throw err;
+    }
     // Single use: a second code for the same handle finds nothing.
     const record = data.pendingBindId ? await this.pendingBinds.take(data.pendingBindId) : null;
     if (!record) throw invalidChallenge(401);
@@ -239,6 +296,8 @@ export class SsoBindService {
       await this.auditFailed('sso_session', meta, connection, record.providerName);
       throw ssoDenied();
     }
+    // Signed in with the mailed code: the address's failures are cleared, as a sign-in clears them.
+    await this.throttle.reset(record.email);
 
     if (connection?.status === 'TESTING' && connection.id === record.connectionId && record.testSignIn) {
       await this.dbs.withOrgScope(connection.orgId, (tx) =>

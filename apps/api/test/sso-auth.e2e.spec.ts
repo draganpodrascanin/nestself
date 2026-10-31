@@ -974,6 +974,36 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       }
     });
 
+    it('wrong codes across two pending sign-ins lock the address for the bind routes and for native sign-in', async () => {
+      const email = 'guessed@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      const one = await startCode(first.agent, first.handle, email);
+      const two = await startCode(second.agent, second.handle, email);
+      const wrong = (code: string) => code.slice(0, -1) + (code.endsWith('0') ? '1' : '0');
+
+      // Three wrong codes end the first challenge (the third answers 429 too_many_attempts), two more on the second.
+      for (const status of [401, 401, 429]) {
+        expect((await bind(first.agent, 'verify', { ...one, code: wrong(one.code) })).status).toBe(status);
+      }
+      for (const status of [401, 401]) {
+        expect((await bind(second.agent, 'verify', { ...two, code: wrong(two.code) })).status).toBe(status);
+      }
+
+      // Five failures: the address is locked like an email-code sign-in, which shares the lock.
+      const right = await bind(second.agent, 'verify', two);
+      expect(right.status).toBe(429);
+      expect(right.body.code).toBe('too_many_attempts');
+      const fresh = await bind(second.agent, 'start', { handle: second.handle });
+      expect(fresh.status).toBe(429);
+      expect(fresh.body.code).toBe('too_many_attempts');
+      const native = await request(app.getHttpServer()).post('/api/auth/email-otp/start').send({ email });
+      expect(native.status).toBe(429);
+      expect(native.body.code).toBe('too_many_attempts');
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+    });
+
     it('the redirect never carries the address', async () => {
       const email = 'not.in.the.url@acme.example';
       await invite(email);

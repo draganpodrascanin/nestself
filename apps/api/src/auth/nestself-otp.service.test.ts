@@ -501,6 +501,34 @@ describe('NestselfOtpService', () => {
     });
   });
 
+  describe('peek', () => {
+    it('reads the address and data of a live challenge and leaves it in place', async () => {
+      drawNext(12345678);
+      const { challengeToken } = await ctx.service.issue(INPUT);
+
+      expect(await ctx.service.peek('step_up', challengeToken)).toEqual({ email: EMAIL, data: INPUT.data });
+      // Still there: the code still verifies, with the whole attempt budget.
+      await expect(ctx.service.verify('step_up', challengeToken, '12345678')).resolves.toEqual({
+        email: EMAIL,
+        data: INPUT.data,
+      });
+    });
+
+    it('answers null for an unknown token, another purpose, a consumed challenge and one past its deadline', async () => {
+      drawNext(12345678, 87654321);
+      expect(await ctx.service.peek('step_up', 'unknown')).toBeNull();
+
+      const consumed = await ctx.service.issue(INPUT);
+      expect(await ctx.service.peek('sso_bind', consumed.challengeToken)).toBeNull();
+      await ctx.service.verify('step_up', consumed.challengeToken, '12345678');
+      expect(await ctx.service.peek('step_up', consumed.challengeToken)).toBeNull();
+
+      const expired = await ctx.service.issue(INPUT);
+      secondsLater(CHALLENGE_TTL);
+      expect(await ctx.service.peek('step_up', expired.challengeToken)).toBeNull();
+    });
+  });
+
   describe('resend', () => {
     it('resend is refused inside the cooldown and allowed after it', async () => {
       drawNext(11111111, 22222222);

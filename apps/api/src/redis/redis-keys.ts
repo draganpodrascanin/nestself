@@ -158,6 +158,15 @@ export function ssoPendingBindKey(hash: string): string {
   return `sso_pending_bind:${hash}`;
 }
 
+/**
+ * `sso_bind_start:{hash}`: exists for `OTP_RESEND_COOLDOWN_SECONDS` after a
+ * code went out for the pending binding `sso_pending_bind:{hash}`; until it
+ * expires, another `bind/start` for that binding is refused.
+ */
+export function ssoBindStartKey(hash: string): string {
+  return `sso_bind_start:${hash}`;
+}
+
 /** `ws_ticket:{hash}` */
 export function wsTicketKey(hash: string): string {
   return `ws_ticket:${hash}`;

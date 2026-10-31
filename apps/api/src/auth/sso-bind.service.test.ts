@@ -10,14 +10,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { ApiHttpException } from '../common/api-error.js';
 import { LoggingMailer } from '../email/logging-mailer.js';
+import { MailDeliveryError } from '../email/mailer.js';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { createFakeTokenSet } from '../identity/fake-token-factory.js';
 import { InvitationMembershipActivator } from '../invitations/invitation-membership-activator.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
+import { throttleKey } from '../redis/redis-keys.js';
 import { TokenCipher } from '../session/token-cipher.js';
 import { FederatedBindingService } from './federated-binding.service.js';
 import { NestselfOtpService } from './nestself-otp.service.js';
 import { PendingBindStore, pendingBindId } from './pending-bind-store.js';
+import { SignInThrottle } from './sign-in-throttle.js';
 import { SsoBindService } from './sso-bind.service.js';
 
 const PROVIDER = 'org-acme-oidc';
@@ -123,13 +126,15 @@ function setup(opts: { conn?: Conn | null; domain?: DomainRow } = {}) {
     }),
   };
   const deleteUser = vi.spyOn(idp, 'deleteUser').mockResolvedValue();
+  // The native email-code lock, over the same store: the address's failures are shared with sign-in.
+  const throttle = new SignInThrottle(store);
   const service = new SsoBindService(
-    otp, pendingBinds, sso as never, identities as never, dbs as never, binding, audit as never,
+    otp, pendingBinds, throttle, store, sso as never, identities as never, dbs as never, binding, audit as never,
     principalLoader as never, identity as never,
   );
   return {
     service, store, pendingBinds, mailer, idp, sso, dbs, tx, identities, identityRows, invitations, memberships, audit,
-    principalLoader, identity, deleteUser,
+    principalLoader, identity, deleteUser, throttle,
   };
 }
 
@@ -202,8 +207,10 @@ describe('SsoBindService', () => {
       expect(started).toEqual({ challengeToken: expect.any(String), emailMasked: 'm***@acme.example' });
       expect(ctx.mailer.sent).toHaveLength(1);
       expect(ctx.mailer.sent[0]).toMatchObject({ to: EMAIL, template: 'sso_bind_code', locale: 'hu' });
-      // The pending binding stays: a code lives 5 minutes, the handle 15, so a new start works.
+      // The pending binding stays: a code lives 5 minutes, the handle 15, so a new start works
+      // (once the minute between two starts of one pending sign-in has passed).
       expect(await ctx.pendingBinds.peek(pendingBindId(handle))).toMatchObject({ email: EMAIL, connectionId: 'conn_1' });
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
       const again = await ctx.service.start({ handle }, META);
       expect(again.challengeToken).not.toBe(started.challengeToken);
       expect(ctx.mailer.sent).toHaveLength(2);
@@ -497,6 +504,104 @@ describe('SsoBindService', () => {
       for (const secret of [handle, pendingBindId(handle), challengeToken, code, tokens.accessToken, tokens.idToken, tokens.refreshToken!]) {
         expect(dump).not.toContain(secret);
       }
+    });
+  });
+
+  describe('limits: the address lock shared with sign-in, and a minute between starts', () => {
+    const wrong = (code: string) => code.slice(0, -1) + (code.endsWith('0') ? '1' : '0');
+    const failures = async (ctx: Ctx) => ctx.store.get(throttleKey('otp', EMAIL));
+    async function lockAddress(ctx: Ctx) {
+      for (let i = 0; i < 5; i++) await ctx.throttle.recordFailure(EMAIL);
+    }
+
+    it('start refuses a locked address with the sign-in answer (429 too_many_attempts) and mails nothing', async () => {
+      const ctx = setup();
+      const { handle } = await openPending(ctx);
+      await lockAddress(ctx);
+
+      await expectRefused(ctx.service.start({ handle }, META), 429, 'too_many_attempts');
+      expect(ctx.mailer.sent).toHaveLength(0);
+      // The refusal took no start slot: once unlocked, the code goes out at once.
+      await ctx.throttle.reset(EMAIL);
+      await expect(ctx.service.start({ handle }, META)).resolves.toHaveProperty('challengeToken');
+    });
+
+    it('verify refuses a locked address before it looks at the code; the challenge and the record stay', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { handle } = await openPending(ctx);
+      const { challengeToken, code } = await startAndReadCode(ctx, handle);
+      await lockAddress(ctx);
+
+      await expectRefused(ctx.service.verify({ challengeToken, code }, META), 429, 'too_many_attempts');
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+
+      await ctx.throttle.reset(EMAIL);
+      await expect(ctx.service.verify({ challengeToken, code }, META)).resolves.toHaveProperty('returnPath', '/people');
+    });
+
+    it('every wrong code counts toward the address lock, across challenges; the fifth locks start and verify', async () => {
+      const ctx = setup();
+      const first = await openPending(ctx);
+      const second = await openPending(ctx);
+      const one = await startAndReadCode(ctx, first.handle);
+      const two = await startAndReadCode(ctx, second.handle);
+
+      await expectRefused(ctx.service.verify({ ...one, code: wrong(one.code) }, META), 401, 'invalid_code');
+      await expectRefused(ctx.service.verify({ ...one, code: wrong(one.code) }, META), 401, 'invalid_code');
+      // The third wrong code ends the challenge (the code service's own limit) and counts too.
+      await expectRefused(ctx.service.verify({ ...one, code: wrong(one.code) }, META), 429, 'too_many_attempts');
+      expect(await failures(ctx)).toBe('3');
+
+      await expectRefused(ctx.service.verify({ ...two, code: wrong(two.code) }, META), 401, 'invalid_code');
+      await expectRefused(ctx.service.verify({ ...two, code: wrong(two.code) }, META), 401, 'invalid_code');
+      expect(await ctx.throttle.isLocked(EMAIL)).toBe(true);
+
+      // Locked: not even the right code, and no new code either.
+      await expectRefused(ctx.service.verify(two, META), 429, 'too_many_attempts');
+      await expectRefused(ctx.service.start({ handle: second.handle }, META), 429, 'too_many_attempts');
+      expect(ctx.identities.createExternalIdentity).not.toHaveBeenCalled();
+    });
+
+    it('a successful verify clears the address failures', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { handle } = await openPending(ctx);
+      const { challengeToken, code } = await startAndReadCode(ctx, handle);
+      await expectRefused(ctx.service.verify({ challengeToken, code: wrong(code) }, META), 401, 'invalid_code');
+      await expectRefused(ctx.service.verify({ challengeToken, code: wrong(code) }, META), 401, 'invalid_code');
+      expect(await failures(ctx)).toBe('2');
+
+      await ctx.service.verify({ challengeToken, code }, META);
+
+      expect(await failures(ctx)).toBeNull();
+    });
+
+    it('a second start of one pending sign-in within a minute answers 429 rate_limited with retryAfter; after it a new code goes out', async () => {
+      const ctx = setup();
+      const { handle } = await openPending(ctx);
+      await ctx.service.start({ handle }, META);
+
+      const early = await refusal(ctx.service.start({ handle }, META));
+      expect(early.getStatus()).toBe(429);
+      expect(early.code).toBe('rate_limited');
+      expect(early.details?.retryAfter).toBeGreaterThan(0);
+      expect(early.details?.retryAfter).toBeLessThanOrEqual(60);
+      expect(ctx.mailer.sent).toHaveLength(1);
+
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      await expect(ctx.service.start({ handle }, META)).resolves.toHaveProperty('challengeToken');
+      expect(ctx.mailer.sent).toHaveLength(2);
+    });
+
+    it('a start whose mail is refused releases its slot, so the next start goes out at once', async () => {
+      const ctx = setup();
+      const { handle } = await openPending(ctx);
+      vi.spyOn(ctx.mailer, 'send').mockRejectedValueOnce(new MailDeliveryError({ name: 'Throttling' }));
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+      await expectRefused(ctx.service.start({ handle }, META), 503, 'unavailable');
+      await expect(ctx.service.start({ handle }, META)).resolves.toHaveProperty('challengeToken');
     });
   });
 

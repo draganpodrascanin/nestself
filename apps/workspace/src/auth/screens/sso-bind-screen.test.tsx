@@ -258,6 +258,42 @@ describe('SsoBindScreen', () => {
     expect(authApi.ssoBindStart).toHaveBeenCalledTimes(2);
   });
 
+  it('a start refused as too soon counts down from retryAfter, then asks again only when told to', async () => {
+    vi.useFakeTimers();
+    // A reload within the minute between two starts of one pending sign-in.
+    const ssoBindStart = vi
+      .fn()
+      .mockRejectedValueOnce(apiError(429, 'rate_limited', { retryAfter: 30 }))
+      .mockResolvedValueOnce({ challengeToken: 'challenge-1', emailMasked: 'm***@acme.example' });
+    renderScreen(makeAuthApi({ ssoBindStart }));
+    await settle();
+
+    expect(screen.getAllByText(t('auth:lockout.retryAfter', { minutes: 1 }))).not.toHaveLength(0);
+    expect(resendButton()).toBeDisabled();
+    expect(screen.getByText(t('auth:otp.resendCountdown', { seconds: 30 }))).toBeInTheDocument();
+    secondsPass(29);
+    expect(resendButton()).toBeDisabled();
+    secondsPass(1);
+    expect(resendButton()).toBeEnabled();
+    // No retry loop: nothing more was asked until the button is used.
+    expect(ssoBindStart).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(resendButton());
+    await settle();
+    expect(ssoBindStart).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(INSTRUCTIONS)).toBeInTheDocument();
+  });
+
+  it('a start refused for a locked address shows the lockout copy and asks again only when told to', async () => {
+    const ssoBindStart = vi.fn().mockRejectedValue(apiError(429, 'too_many_attempts'));
+    renderScreen(makeAuthApi({ ssoBindStart }));
+
+    expect(await screen.findAllByText(t('auth:lockout.body'))).not.toHaveLength(0);
+    expect(screen.queryByText('English too_many_attempts')).not.toBeInTheDocument();
+    expect(resendButton()).toBeEnabled();
+    expect(ssoBindStart).toHaveBeenCalledTimes(1);
+  });
+
   it('resend is disabled for 60 seconds after the code was sent', async () => {
     vi.useFakeTimers();
     renderScreen(makeAuthApi());
