@@ -58,6 +58,7 @@ test.describe('@editor Editor journey', () => {
     await page.getByRole('combobox', { name: /primary category/i }).click();
     await page.getByRole('option').first().click();
     await page.getByLabel(/article title/i).fill(TITLE);
+    await shoot(page, 'author', 'create-resource');
     await page.getByRole('button', { name: /create article/i }).click();
 
     await waitForEditorReady(page);
@@ -102,7 +103,7 @@ test.describe('@editor Editor journey', () => {
     for (const group of ['Text', 'Lists', 'Blocks', 'Media']) {
       await expect(menu.getByRole('group', { name: group })).toBeVisible();
     }
-    await shoot(page, 'author', 'slash-menu');
+    await shoot(page, 'author', 'slash-menu', { around: [menu, editor], pad: 24 });
     await page.keyboard.type('zzz');
     await expect(menu.getByText('No matching blocks')).toBeVisible();
     // Esc closes the menu and leaves the typed text.
@@ -221,18 +222,24 @@ test.describe('@editor Editor journey', () => {
     await expect(bubble.getByRole('button', { name: 'Link' })).toBeVisible();
     await expect(bubble.getByRole('button', { name: 'Turn into' })).toBeVisible();
     await expect(bubble.getByRole('button', { name: /italic/i })).toHaveCount(0);
-    await shoot(page, 'author', 'bubble-menu');
+    await shoot(page, 'author', 'bubble-menu', { around: [bubble], pad: 160 });
 
     await bubble.getByRole('button', { name: 'Bold' }).click();
     await expect(editor.locator('strong', { hasText: 'vodiču' })).toBeVisible();
 
+    // Ctrl/Cmd+K opens the link popover for the selection, like the Link button.
+    const linkUrl = page.getByRole('textbox', { name: 'Link URL' });
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(linkUrl).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(linkUrl).toBeHidden();
+
     // A link outside the allowlist is refused with a visible message.
     await bubble.getByRole('button', { name: 'Link' }).click();
-    const linkUrl = page.getByRole('textbox', { name: 'Link URL' });
     await linkUrl.fill('http://insecure.example.com');
     await page.getByRole('button', { name: 'Insert link' }).click();
     await expect(page.getByRole('alert').filter({ hasText: /only https/i })).toBeVisible();
-    await shoot(page, 'author', 'link-popover');
+    await shoot(page, 'author', 'link-popover', { around: [page.getByRole('textbox', { name: 'Link URL' }), page.getByRole('alert').filter({ hasText: /only https/i })], pad: 160 });
 
     await linkUrl.fill('https://example.com/vodic-za-stres');
     await page.getByRole('button', { name: 'Insert link' }).click();
@@ -280,7 +287,7 @@ test.describe('@editor Editor journey', () => {
     for (const item of ['Turn into', 'Duplicate', 'Delete', 'Move up', 'Move down']) {
       await expect(blockMenu.getByRole('menuitem', { name: item })).toBeVisible();
     }
-    await shoot(page, 'author', 'block-menu');
+    await shoot(page, 'author', 'block-menu', { around: [blockMenu, page.getByRole('button', { name: 'Drag or open menu' })], pad: 160 });
     await blockMenu.getByRole('menuitem', { name: 'Duplicate' }).click();
     await expect(editor.locator('blockquote', { hasText: 'Mali koraci' })).toHaveCount(2);
 
@@ -339,7 +346,7 @@ test.describe('@editor Editor journey', () => {
     await figure.getByRole('textbox', { name: 'Alt text' }).fill('Osoba za stolom pravi kratku pauzu');
     await figure.getByRole('textbox', { name: 'Caption' }).fill('Kratka pauza pomaže da se vratite zadatku.');
     await expect(figure.locator('img')).toHaveAttribute('alt', 'Osoba za stolom pravi kratku pauzu');
-    await shoot(page, 'author', 'image-upload');
+    await shoot(page, 'author', 'image-upload', { around: [figure] });
 
     await waitForSaved(page);
     const { body } = await readRevision(page, resourceId, 'sr-Latn');
@@ -459,7 +466,7 @@ test.describe('@editor Editor journey', () => {
     await page.keyboard.type('Izmena iz prve kartice');
     const conflict = page.getByRole('alert').filter({ hasText: /changed by someone else/i });
     await expect(conflict).toBeVisible({ timeout: 15_000 });
-    await shoot(page, 'author', 'conflict');
+    await shoot(page, 'author', 'conflict', { around: [conflict], pad: 120 });
 
     await page.getByRole('button', { name: /reload server version/i }).click();
     await expect(conflict).toBeHidden();
@@ -475,6 +482,9 @@ test.describe('@editor Editor journey', () => {
     expect(textOf(body)).toContain('Izmena iz druge kartice');
     expect(textOf(body)).toContain('Nastavak posle sukoba');
     expect(textOf(body)).not.toContain('Izmena iz prve kartice');
+    // The reloaded reading time is still 6 minutes, not 6 hours.
+    const rev = await readRevision(page, resourceId, 'sr-Latn');
+    expect(rev.durationSeconds).toBe(360);
   });
 
   // ─── 12. Preview at real widths ──────────────────────────────────
@@ -655,6 +665,8 @@ test.describe('@editor Editor journey', () => {
     await page.getByRole('link', { name: TITLE }).click();
     await expect(page.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Šta je stres na poslu' })).toBeVisible();
+    // The author entered 6 minutes of reading time on this variant.
+    await expect(page.getByText('6 min', { exact: true })).toBeVisible();
     await expect(page.getByText('Ako stres traje nedeljama, razgovarajte sa stručnjakom.')).toBeVisible();
     await expect(page.getByText('Kratka pauza za disanje')).toBeVisible();
     await expect(page.getByText('Podesite podsetnik')).toBeVisible();
@@ -665,6 +677,6 @@ test.describe('@editor Editor journey', () => {
       'href',
       'https://example.com/vodic-za-stres',
     );
-    await shoot(page, 'employee', 'article-detail-sr');
+    await shoot(page, 'employee', 'article-detail-sr', { fullPage: true });
   });
 });

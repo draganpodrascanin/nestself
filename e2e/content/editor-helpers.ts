@@ -28,10 +28,36 @@ export async function settle(page: Page): Promise<void> {
   );
 }
 
-/** A settled 1440×900 screenshot of the top of the page. */
-export async function shoot(page: Page, role: string, name: string): Promise<void> {
+export interface ShootOptions {
+  /** Crop to the area around these elements instead of the whole viewport. */
+  around?: Locator[];
+  /** Margin around the cropped elements, in CSS pixels. */
+  pad?: number;
+  /** The whole page, not only the viewport. */
+  fullPage?: boolean;
+}
+
+/**
+ * A settled screenshot for the manual: the viewport, or the area around the
+ * given elements (clamped to the viewport) so a detail stays legible in print.
+ */
+export async function shoot(page: Page, role: string, name: string, opts: ShootOptions = {}): Promise<void> {
+  if (opts.around?.length) await opts.around[0]!.scrollIntoViewIfNeeded();
   await settle(page);
-  await page.screenshot({ path: screenshotPath(role, name) });
+  let clip: { x: number; y: number; width: number; height: number } | undefined;
+  if (opts.around?.length) {
+    const pad = opts.pad ?? 32;
+    const viewport = page.viewportSize()!;
+    const boxes = await Promise.all(opts.around.map((l) => l.boundingBox()));
+    const shown = boxes.filter((b): b is NonNullable<typeof b> => b !== null);
+    expect(shown.length, `screenshot ${name}: elements to crop around are visible`).toBeGreaterThan(0);
+    const x0 = Math.max(0, Math.min(...shown.map((b) => b.x)) - pad);
+    const y0 = Math.max(0, Math.min(...shown.map((b) => b.y)) - pad);
+    const x1 = Math.min(viewport.width, Math.max(...shown.map((b) => b.x + b.width)) + pad);
+    const y1 = Math.min(viewport.height, Math.max(...shown.map((b) => b.y + b.height)) + pad);
+    clip = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  }
+  await page.screenshot({ path: screenshotPath(role, name), clip, fullPage: opts.fullPage });
 }
 
 export const TEST_IMAGE_PATH = path.resolve(import.meta.dirname, '../fixtures/test-image.png');
@@ -70,8 +96,12 @@ export async function caretToNewBlockAtEnd(page: Page): Promise<void> {
   if (lastText.trim() !== '') await page.keyboard.press('Enter');
 }
 
+/**
+ * The slash menu, by its accessible name: a design-system Select keeps its
+ * closed listbox mounted (Field.tsx), so an unnamed listbox query is ambiguous.
+ */
 export function slashMenu(page: Page): Locator {
-  return page.getByRole('listbox');
+  return page.getByRole('listbox', { name: /filter blocks/i });
 }
 
 /**

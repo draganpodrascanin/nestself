@@ -30,6 +30,7 @@ import {
   stripProtectedContent,
 } from './helpers';
 import type { ArticleSetupResult } from './helpers';
+import { settle } from './editor-helpers';
 
 // ---------------------------------------------------------------------------
 // Shared article state: persisted to a file so it survives across Playwright
@@ -116,6 +117,7 @@ test.describe('Step 4: Employee A reads published content', () => {
     const card = page.locator(`[data-resource-id="${a.resourceId}"]`);
     await expect(card).toBeVisible({ timeout: 10_000 });
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'home-desktop'),
       fullPage: false,
@@ -131,6 +133,7 @@ test.describe('Step 4: Employee A reads published content', () => {
     const homeHeading = page.getByRole('heading', { level: 1 });
     await expect(homeHeading).toBeVisible();
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'home-mobile'),
       fullPage: false,
@@ -152,6 +155,7 @@ test.describe('Step 4: Employee A reads published content', () => {
     await expect(heading).toBeVisible();
     await expect(heading).toHaveText(/managing workplace stress/i);
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'content-detail-desktop'),
       fullPage: false,
@@ -167,6 +171,7 @@ test.describe('Step 4: Employee A reads published content', () => {
     await waitForContent(page);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'content-detail-mobile'),
       fullPage: false,
@@ -207,6 +212,7 @@ test.describe('Step 4: Employee A reads published content', () => {
       `paragraph must not contain Latin letters after stripping protected terms, got: "${strippedPara}"`,
     ).toBeNull();
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'cyrillic-detail'),
       fullPage: false,
@@ -242,6 +248,7 @@ test.describe('Step 4: Employee A reads published content', () => {
     const savedLink = page.locator(`a[href*="/content/${a.resourceId}"]`);
     await expect(savedLink).toBeVisible({ timeout: 10_000 });
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'saved-desktop'),
       fullPage: false,
@@ -278,6 +285,7 @@ test.describe('Step 5: Audience isolation', () => {
     const unavailableText = page.getByText(/not available|nije dostupan|ne postoji/i).first();
     await expect(unavailableText).toBeVisible({ timeout: 10_000 });
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'content-unavailable-org-b'),
       fullPage: false,
@@ -314,6 +322,7 @@ test.describe('Step 5: Audience isolation', () => {
     const savedLinkA = page.locator(`a[href*="/content/${a.resourceId}"]`);
     await expect(savedLinkA).toBeVisible({ timeout: 10_000 });
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'multi-org-saved-a'),
       fullPage: false,
@@ -324,6 +333,7 @@ test.describe('Step 5: Audience isolation', () => {
     await waitForContent(page);
     await switchContext(page, 'Example B');
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'org-b-home'),
       fullPage: false,
@@ -371,6 +381,7 @@ test.describe('Step 5: Audience isolation', () => {
     const homeCardB = page.locator(`[data-resource-id="${a.resourceId}"]`);
     await expect(homeCardB).not.toBeVisible();
 
+    await settle(page);
     await page.screenshot({
       path: screenshotPath('employee', 'org-b-home-no-article'),
       fullPage: false,

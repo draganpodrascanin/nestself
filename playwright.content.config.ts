@@ -65,7 +65,8 @@ export default defineConfig({
       name: 'content-desktop',
       use: {
         viewport: { width: 1440, height: 900 },
-        deviceScaleFactor: 1,
+        // 2x so the manual's screenshots stay sharp in print.
+        deviceScaleFactor: 2,
       },
     },
     {
