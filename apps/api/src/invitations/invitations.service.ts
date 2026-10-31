@@ -44,6 +44,32 @@ function ssoDomainClaimed(): ApiHttpException {
   });
 }
 
+type ImportRow = InvitationImportRequest['invitations'][number];
+
+/** What became of one import row: it ends in exactly one bucket. */
+type ImportRowOutcome =
+  | { bucket: 'created' }
+  | { bucket: 'skipped' }
+  | { bucket: 'error'; reason: InvitationImportRowReason };
+
+/** The import answer: one bucket per row, `errors` in the order of the rows sent. */
+function buildImportResponse(
+  rows: readonly ImportRow[],
+  outcomes: ReadonlyMap<number, ImportRowOutcome>,
+): InvitationImportResponse {
+  let created = 0;
+  let skipped = 0;
+  const errors: InvitationImportResponse['errors'] = [];
+  for (const [index, row] of rows.entries()) {
+    const outcome = outcomes.get(index);
+    if (outcome?.bucket === 'created') created++;
+    else if (outcome?.bucket === 'skipped') skipped++;
+    else if (outcome?.bucket === 'error') errors.push({ email: row.email, reason: outcome.reason });
+    else throw new Error(`Import row ${index} ended in no bucket`);
+  }
+  return { created, skipped, errors };
+}
+
 @Injectable()
 export class InvitationsService {
   private readonly logger = new Logger(InvitationsService.name);
@@ -139,6 +165,13 @@ export class InvitationsService {
   // Bulk import
   // -----------------------------------------------------------------------
 
+  /**
+   * Each row lands in exactly one of `created`, `skipped` (the address has a
+   * pending invitation or is an active member: nothing to do) and `errors`
+   * (the row was refused, with a code from `InvitationImportRowReason`). The
+   * invitation mails go out after the transaction has committed, and only for
+   * the created rows.
+   */
   async import(
     orgId: string,
     body: InvitationImportRequest,
@@ -148,108 +181,88 @@ export class InvitationsService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
     const importBatchId = generateToken().slice(0, 16);
+    const rows = body.invitations;
 
-    // Pre-validate all rows.
-    const errors: Array<{ email: string; reason: InvitationImportRowReason }> = [];
-    const validRows: Array<{
-      email: string;
-      orgUnitId?: string | undefined;
-      templateKey: string;
-    }> = [];
+    // What became of each row, by its position in the request. A row ends in
+    // exactly one bucket (created, skipped or an error with a coded reason)
+    // and the first check it fails decides which, so the three always add up
+    // to the rows sent.
+    const outcomes = new Map<number, ImportRowOutcome>();
+    const reject = (index: number, reason: InvitationImportRowReason): void => {
+      outcomes.set(index, { bucket: 'error', reason });
+    };
 
-    // Detect duplicates within the batch.
+    // Checks that need no organization transaction. A repeated address marks
+    // only its later rows; the first goes on to be processed like any other.
+    const processable: Array<{ index: number; row: ImportRow }> = [];
     const seenEmails = new Set<string>();
     const claimedCache = new Map<string, boolean>();
 
-    for (const inv of body.invitations) {
-      // Template key check.
-      if (!findInvitableTemplate(inv.templateKey)) {
-        errors.push({ email: inv.email, reason: 'invalid_template' });
+    for (const [index, row] of rows.entries()) {
+      if (!findInvitableTemplate(row.templateKey)) {
+        reject(index, 'invalid_template');
         continue;
       }
 
-      // Intra-batch duplicate.
-      if (seenEmails.has(inv.email)) {
-        errors.push({ email: inv.email, reason: 'duplicate_in_batch' });
+      if (seenEmails.has(row.email)) {
+        reject(index, 'duplicate_in_batch');
         continue;
       }
-      seenEmails.add(inv.email);
+      seenEmails.add(row.email);
 
-      if (await this.domainClaimedElsewhere(inv.email, orgId, claimedCache)) {
-        errors.push({ email: inv.email, reason: SSO_DOMAIN_CLAIMED });
+      if (await this.domainClaimedElsewhere(row.email, orgId, claimedCache)) {
+        reject(index, SSO_DOMAIN_CLAIMED);
         continue;
       }
 
-      validRows.push(inv);
+      processable.push({ index, row });
     }
 
-    let created = 0;
-    let skipped = 0;
     const names = await this.mailNames(orgId, actorUserId);
     // Collected inside the transaction, mailed after it: an email must not
     // outlive a rollback (a failure on a later row undoes the earlier ones).
     const toMail: Array<Pick<InvitationMailInput, 'email' | 'token'>> = [];
 
     await this.dbs.withOrgScope(orgId, async (tx) => {
-      // Validate org units upfront (deduplicated).
-      const orgUnitIds = [...new Set(validRows.filter((r) => r.orgUnitId).map((r) => r.orgUnitId!))];
-      for (const ouId of orgUnitIds) {
-        try {
-          await this.assertOrgUnitBelongsToOrg(ouId, orgId, tx);
-        } catch {
-          // Mark all rows referencing this unit as errors.
-          const remaining = validRows.filter((r) => r.orgUnitId === ouId);
-          for (const r of remaining) {
-            errors.push({ email: r.email, reason: 'org_unit_outside_org' });
-          }
-          // Remove them from valid list (mutating the iteration is fine; we filter below).
-        }
+      // Org units of other organizations, each unit looked up once.
+      const outsideUnits = new Set<string>();
+      const unitIds = new Set(processable.flatMap(({ row }) => (row.orgUnitId ? [row.orgUnitId] : [])));
+      for (const unitId of unitIds) {
+        if (!(await this.orgUnitInOrg(unitId, orgId, tx))) outsideUnits.add(unitId);
       }
 
       // Owner model (2026-10-24): employer_owner rows are refused while the
       // organization has an active owner.
-      if (validRows.some((r) => r.templateKey === OWNER_TEMPLATE_KEY)) {
-        const [current] = await this.authzRepo.findActiveOwnerGrants(orgId, now, tx);
-        if (current) {
-          for (const r of validRows.filter((v) => v.templateKey === OWNER_TEMPLATE_KEY)) {
-            errors.push({ email: r.email, reason: 'owner_exists' });
-          }
-        }
-      }
+      const ownerTaken =
+        processable.some(({ row }) => row.templateKey === OWNER_TEMPLATE_KEY) &&
+        (await this.authzRepo.findActiveOwnerGrants(orgId, now, tx)).length > 0;
 
-      const errorEmails = new Set(errors.map((e) => e.email));
-      const toCreate = validRows.filter((r) => !errorEmails.has(r.email));
-
-      for (const inv of toCreate) {
-        // Pending invitation check.
-        const pending = await this.invitations.findPendingByEmailAndOrg(inv.email, orgId, now, tx);
-        if (pending) {
-          skipped++;
-          errors.push({ email: inv.email, reason: 'duplicate_invitation' });
+      for (const { index, row } of processable) {
+        if (row.orgUnitId && outsideUnits.has(row.orgUnitId)) {
+          reject(index, 'org_unit_outside_org');
           continue;
         }
 
-        // Already a member check.
-        const existingUser = await this.identities.findUserByEmail(inv.email, tx);
-        if (existingUser) {
-          const userMemberships = await this.memberships.findByUserId(existingUser.id, tx);
-          const activeMembership = userMemberships.find(
-            (m) => m.orgId === orgId && m.status === 'ACTIVE',
-          );
-          if (activeMembership) {
-            skipped++;
-            errors.push({ email: inv.email, reason: 'already_member' });
-            continue;
-          }
+        if (ownerTaken && row.templateKey === OWNER_TEMPLATE_KEY) {
+          reject(index, 'owner_exists');
+          continue;
+        }
+
+        // A pending invitation or an active membership means there is nothing
+        // to do for this address: the row is skipped, not a failure.
+        const pending = await this.invitations.findPendingByEmailAndOrg(row.email, orgId, now, tx);
+        if (pending || (await this.isActiveMember(row.email, orgId, tx))) {
+          outcomes.set(index, { bucket: 'skipped' });
+          continue;
         }
 
         const token = generateToken();
-        const row = await this.invitations.create(
+        const invitation = await this.invitations.create(
           {
-            email: inv.email,
+            email: row.email,
             orgId,
-            orgUnitId: inv.orgUnitId ?? null,
-            templateKey: inv.templateKey,
+            orgUnitId: row.orgUnitId ?? null,
+            templateKey: row.templateKey,
             tokenHash: hashToken(token),
             expiresAt,
             invitedByUserId: actorUserId,
@@ -257,7 +270,6 @@ export class InvitationsService {
           },
           tx,
         );
-        created++;
 
         // Audit per created invitation, in the import transaction.
         await this.audit.record(
@@ -267,14 +279,15 @@ export class InvitationsService {
             actorKind: 'USER',
             orgId,
             recordType: 'invitation',
-            recordId: row.id,
+            recordId: invitation.id,
             result: 'ALLOWED',
-            details: { emailNormalised: inv.email, templateKey: inv.templateKey, importBatchId },
+            details: { emailNormalised: row.email, templateKey: row.templateKey, importBatchId },
           },
           { tx },
         );
 
-        toMail.push({ email: inv.email, token });
+        toMail.push({ email: row.email, token });
+        outcomes.set(index, { bucket: 'created' });
       }
     });
 
@@ -283,7 +296,7 @@ export class InvitationsService {
       this.sendInvitationEmail({ email, token, ...names });
     }
 
-    return { created, skipped, errors };
+    return buildImportResponse(rows, outcomes);
   }
 
   // -----------------------------------------------------------------------
@@ -391,16 +404,20 @@ export class InvitationsService {
     }
   }
 
+  private async orgUnitInOrg(orgUnitId: string, orgId: string, tx: DbExecutor): Promise<boolean> {
+    const [row] = await tx
+      .select({ id: orgUnits.id })
+      .from(orgUnits)
+      .where(and(eq(orgUnits.id, orgUnitId), eq(orgUnits.orgId, orgId)));
+    return row !== undefined;
+  }
+
   private async assertOrgUnitBelongsToOrg(
     orgUnitId: string,
     orgId: string,
     tx: DbExecutor,
   ): Promise<void> {
-    const [row] = await tx
-      .select({ id: orgUnits.id })
-      .from(orgUnits)
-      .where(and(eq(orgUnits.id, orgUnitId), eq(orgUnits.orgId, orgId)));
-    if (!row) {
+    if (!(await this.orgUnitInOrg(orgUnitId, orgId, tx))) {
       throw new ApiHttpException({
         status: 400,
         code: 'validation',
@@ -409,19 +426,20 @@ export class InvitationsService {
     }
   }
 
+  private async isActiveMember(email: string, orgId: string, tx: DbExecutor): Promise<boolean> {
+    const existingUser = await this.identities.findUserByEmail(email, tx);
+    if (!existingUser) return false;
+
+    const userMemberships = await this.memberships.findByUserId(existingUser.id, tx);
+    return userMemberships.some((m) => m.orgId === orgId && m.status === 'ACTIVE');
+  }
+
   private async assertNotAlreadyMember(
     email: string,
     orgId: string,
     tx: DbExecutor,
   ): Promise<void> {
-    const existingUser = await this.identities.findUserByEmail(email, tx);
-    if (!existingUser) return;
-
-    const userMemberships = await this.memberships.findByUserId(existingUser.id, tx);
-    const activeMembership = userMemberships.find(
-      (m) => m.orgId === orgId && m.status === 'ACTIVE',
-    );
-    if (activeMembership) {
+    if (await this.isActiveMember(email, orgId, tx)) {
       throw new ApiHttpException({
         status: 409,
         code: 'already_member',

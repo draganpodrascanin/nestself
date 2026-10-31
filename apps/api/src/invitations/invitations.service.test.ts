@@ -1,5 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  INVITATION_IMPORT_ROW_REASONS,
+  InvitationImportResponseSchema,
+  type InvitationImportResponse,
+} from '@nestself/contracts';
 import { hashToken } from './invitation-token.js';
 import { InvitationsService } from './invitations.service.js';
 
@@ -69,10 +74,13 @@ function createMockMailer() {
   };
 }
 
-// Stub for the orgUnits query used in assertOrgUnitBelongsToOrg.
-// InvitationsService uses `tx.select(...).from(...).where(...)` which
-// requires the real Drizzle query builder. We simulate a passing validation
-// by not providing an orgUnitId in the request (optional field).
+/** Every import row lands in exactly one bucket, so the three buckets add up to the rows sent. */
+const rowsAccountedFor = (r: InvitationImportResponse): number => r.created + r.skipped + r.errors.length;
+
+// The org unit lookup (`orgUnitInOrg`) runs `tx.select(...).from(...).where(...)`.
+// The default transaction here is `{}`, so a test without an orgUnitId never
+// reaches it; a test with one passes a transaction whose chain answers [] (the
+// unit belongs to another organization) or [{ id }] (it belongs to this one).
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -110,6 +118,9 @@ describe('InvitationsService', () => {
       sso as never,
     );
   });
+
+  type Mail = { email: string; token: string; organizationName: string; inviterDisplayName: string };
+  const mailed = (): Mail[] => mailer.send.mock.calls.map(([input]) => input as Mail);
 
   // -- SSO domains of another organization ----------------------------------
 
@@ -149,10 +160,12 @@ describe('InvitationsService', () => {
         false,
       );
       expect(result.created).toBe(1);
+      expect(result.skipped).toBe(0);
       expect(result.errors).toEqual([
         { email: 'a@other.example', reason: 'sso_domain_claimed' },
         { email: 'b@other.example', reason: 'sso_domain_claimed' },
       ]);
+      expect(rowsAccountedFor(result)).toBe(3);
       // One lookup per domain.
       expect(sso.findActiveConnectionForDomain).toHaveBeenCalledTimes(2);
     });
@@ -264,6 +277,39 @@ describe('InvitationsService', () => {
         ),
       ).rejects.toThrow(expect.objectContaining({ code: 'already_member' }));
     });
+
+    it('rejects an org unit of another organization with 400 before it writes anything', async () => {
+      const noOrgUnits = { select: () => ({ from: () => ({ where: async () => [] }) }) };
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+
+      await expect(
+        service.create(
+          'org_sample',
+          { email: 'new@example.com', templateKey: 'employee', orgUnitId: 'ou_elsewhere' },
+          'user_ivana',
+          false,
+        ),
+      ).rejects.toThrow(expect.objectContaining({ code: 'validation' }));
+      expect(invitations.create).not.toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it('accepts an org unit of the organization', async () => {
+      const oneOrgUnit = { select: () => ({ from: () => ({ where: async () => [{ id: 'ou_team' }] }) }) };
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(oneOrgUnit));
+
+      await service.create(
+        'org_sample',
+        { email: 'new@example.com', templateKey: 'employee', orgUnitId: 'ou_team' },
+        'user_ivana',
+        false,
+      );
+
+      expect(invitations.create).toHaveBeenCalledWith(
+        expect.objectContaining({ orgUnitId: 'ou_team' }),
+        oneOrgUnit,
+      );
+    });
   });
 
   // -- owner model (2026-10-24) -----------------------------------------------
@@ -304,6 +350,7 @@ describe('InvitationsService', () => {
       );
       expect(result.created).toBe(1);
       expect(result.errors).toEqual([{ email: 'owner2@example.com', reason: 'owner_exists' }]);
+      expect(rowsAccountedFor(result)).toBe(2);
       expect(invitations.create).toHaveBeenCalledOnce();
       expect(invitations.create).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'ok@example.com' }),
@@ -345,6 +392,7 @@ describe('InvitationsService', () => {
         { email: 'owner@example.com', reason: 'invalid_template' },
         { email: 'ops@example.com', reason: 'invalid_template' },
       ]);
+      expect(rowsAccountedFor(result)).toBe(3);
       expect(invitations.create).toHaveBeenCalledOnce();
       expect(invitations.create).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'ok@example.com', templateKey: 'employee' }),
@@ -373,17 +421,93 @@ describe('InvitationsService', () => {
       );
     });
 
-    it('reports a repeated address and an org unit of another organization as codes', async () => {
-      // No org unit matches: the unit belongs to another organization.
-      const noOrgUnits = { select: () => ({ from: () => ({ where: async () => [] }) }) };
-      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+    // A transaction whose org unit lookup finds nothing: every unit belongs to another organization.
+    const noOrgUnits = { select: () => ({ from: () => ({ where: async () => [] }) }) };
+    const ACTIVE_OWNER = [{ id: 'grant_user_ivana_employer_owner', subjectUserId: 'user_ivana' }];
+
+    it('a duplicate within the batch marks only the later row and creates the first', async () => {
       const result = await service.import(
         'org_sample',
         {
           invitations: [
             { email: 'twice@example.com', templateKey: 'employee' },
             { email: 'twice@example.com', templateKey: 'employee' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result).toEqual({
+        created: 1,
+        skipped: 0,
+        errors: [{ email: 'twice@example.com', reason: 'duplicate_in_batch' }],
+      });
+      expect(invitations.create).toHaveBeenCalledOnce();
+      expect(audit.record).toHaveBeenCalledOnce();
+    });
+
+    it('each row lands in exactly one bucket: a pending invitation or an active member is skipped, not an error', async () => {
+      invitations.findPendingByEmailAndOrg.mockImplementation(async (email: string) =>
+        email === 'pending@example.com' ? { id: 'inv_pending' } : null,
+      );
+      identities.findUserByEmail.mockImplementation(async (email: string) =>
+        email === 'member@example.com' ? { id: 'user_member' } : null,
+      );
+      membershipRepo.findByUserId.mockResolvedValue([{ orgId: 'org_sample', status: 'ACTIVE' }]);
+
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'pending@example.com', templateKey: 'employee' },
+            { email: 'member@example.com', templateKey: 'employee' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result).toEqual({ created: 0, skipped: 2, errors: [] });
+      expect(invitations.create).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('a row that fails two checks is reported once, for the first check that fails', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue(ACTIVE_OWNER);
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+
+      const result = await service.import(
+        'org_sample',
+        { invitations: [{ email: 'both@example.com', templateKey: 'employer_owner', orgUnitId: 'ou_elsewhere' }] },
+        'user_ivana',
+        false,
+      );
+
+      expect(result).toEqual({
+        created: 0,
+        skipped: 0,
+        errors: [{ email: 'both@example.com', reason: 'org_unit_outside_org' }],
+      });
+    });
+
+    it('row reasons are codes of the contract, and the answer parses', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue(ACTIVE_OWNER);
+      sso.findActiveConnectionForDomain.mockImplementation(async (d: string) =>
+        d === 'other.example' ? { orgId: 'org_other', cognitoProviderName: 'org-other-saml' } : null,
+      );
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'platform@example.com', templateKey: 'platform_owner' },
+            { email: 'twice@example.com', templateKey: 'employee' },
+            { email: 'twice@example.com', templateKey: 'employee' },
             { email: 'unit@example.com', templateKey: 'employee', orgUnitId: 'ou_elsewhere' },
+            { email: 'claimed@other.example', templateKey: 'employee' },
+            { email: 'second-owner@example.com', templateKey: 'employer_owner' },
           ],
         },
         'user_ivana',
@@ -391,9 +515,62 @@ describe('InvitationsService', () => {
       );
 
       expect(result.errors).toEqual([
+        { email: 'platform@example.com', reason: 'invalid_template' },
         { email: 'twice@example.com', reason: 'duplicate_in_batch' },
         { email: 'unit@example.com', reason: 'org_unit_outside_org' },
+        { email: 'claimed@other.example', reason: 'sso_domain_claimed' },
+        { email: 'second-owner@example.com', reason: 'owner_exists' },
       ]);
+      for (const { reason } of result.errors) expect(INVITATION_IMPORT_ROW_REASONS).toContain(reason);
+      expect(InvitationImportResponseSchema.parse(result)).toEqual(result);
+    });
+
+    it('created, skipped and errors add up to the rows sent, errors in row order', async () => {
+      authzRepo.findActiveOwnerGrants.mockResolvedValue(ACTIVE_OWNER);
+      sso.findActiveConnectionForDomain.mockImplementation(async (d: string) =>
+        d === 'other.example' ? { orgId: 'org_other', cognitoProviderName: 'org-other-saml' } : null,
+      );
+      invitations.findPendingByEmailAndOrg.mockImplementation(async (email: string) =>
+        email === 'pending@example.com' ? { id: 'inv_pending' } : null,
+      );
+      identities.findUserByEmail.mockImplementation(async (email: string) =>
+        email === 'member@example.com' ? { id: 'user_member' } : null,
+      );
+      membershipRepo.findByUserId.mockResolvedValue([{ orgId: 'org_sample', status: 'ACTIVE' }]);
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(noOrgUnits));
+      const rows = [
+        { email: 'first@example.com', templateKey: 'employee' },
+        { email: 'first@example.com', templateKey: 'employee' },
+        { email: 'pending@example.com', templateKey: 'employee' },
+        { email: 'member@example.com', templateKey: 'employee' },
+        { email: 'platform@example.com', templateKey: 'platform_owner' },
+        { email: 'unit@example.com', templateKey: 'employee', orgUnitId: 'ou_elsewhere' },
+        { email: 'second-owner@example.com', templateKey: 'employer_owner' },
+        { email: 'claimed@other.example', templateKey: 'employee' },
+        { email: 'last@example.com', templateKey: 'employee' },
+      ];
+
+      const result = await service.import('org_sample', { invitations: rows }, 'user_ivana', false);
+
+      expect(result).toEqual({
+        created: 2,
+        skipped: 2,
+        errors: [
+          { email: 'first@example.com', reason: 'duplicate_in_batch' },
+          { email: 'platform@example.com', reason: 'invalid_template' },
+          { email: 'unit@example.com', reason: 'org_unit_outside_org' },
+          { email: 'second-owner@example.com', reason: 'owner_exists' },
+          { email: 'claimed@other.example', reason: 'sso_domain_claimed' },
+        ],
+      });
+      expect(rowsAccountedFor(result)).toBe(rows.length);
+      // Only the created rows reach the repository, the audit trail and the mailer.
+      expect(invitations.create.mock.calls.map(([input]) => input.email)).toEqual([
+        'first@example.com',
+        'last@example.com',
+      ]);
+      expect(audit.record).toHaveBeenCalledTimes(2);
+      expect(mailed().map((m) => m.email)).toEqual(['first@example.com', 'last@example.com']);
     });
   });
 
@@ -420,9 +597,6 @@ describe('InvitationsService', () => {
         { email: 'two@example.com', templateKey: 'employee' },
       ],
     };
-
-    type Mail = { email: string; token: string; organizationName: string; inviterDisplayName: string };
-    const mailed = (): Mail[] => mailer.send.mock.calls.map(([input]) => input as Mail);
 
     afterEach(() => {
       vi.restoreAllMocks();
@@ -473,8 +647,30 @@ describe('InvitationsService', () => {
 
       const result = await service.import('org_sample', TWO_ROWS, 'user_ivana', false);
 
-      expect(result.errors).toEqual([{ email: 'one@example.com', reason: 'duplicate_invitation' }]);
+      expect(result).toEqual({ created: 1, skipped: 1, errors: [] });
       expect(mailed().map((m) => m.email)).toEqual(['two@example.com']);
+    });
+
+    it('import mails the first row of a repeated address, and not the later one', async () => {
+      const result = await service.import(
+        'org_sample',
+        {
+          invitations: [
+            { email: 'twice@example.com', templateKey: 'employee' },
+            { email: 'twice@example.com', templateKey: 'employee' },
+            { email: 'once@example.com', templateKey: 'employee' },
+          ],
+        },
+        'user_ivana',
+        false,
+      );
+
+      expect(result).toEqual({
+        created: 2,
+        skipped: 0,
+        errors: [{ email: 'twice@example.com', reason: 'duplicate_in_batch' }],
+      });
+      expect(mailed().map((m) => m.email)).toEqual(['twice@example.com', 'once@example.com']);
     });
 
     it('import sends nothing when the transaction fails after a row was created', async () => {
