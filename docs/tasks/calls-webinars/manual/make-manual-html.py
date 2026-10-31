@@ -495,7 +495,7 @@ if have("90") or have("91") or have("93"):
             "90"))
     if have("91"):
         t.append(step("Book a consultation",
-            p(f"Select {ui('consultations.newConsultation')}. Choose the {ui('create.organisation')}, the {ui('create.employee')}, the {ui('create.category')} and the {ui('create.expert')}, then the {ui('create.date')}, {ui('create.start')} and {ui('create.end')} in Europe/Belgrade. {ui('create.submit')}. Reminders are scheduled at once."),
+            p(f"Select {ui('consultations.newConsultation')}. Choose the {ui('create.organisation')}, the {ui('create.employee')}, the {ui('create.expert')} and the {ui('create.category')}, then the {ui('create.date')}, {ui('create.start')} and {ui('create.end')} in Europe/Belgrade. {ui('create.submit')}. Reminders are scheduled at once."),
             "91"))
     if have("92"):
         t.append(step("Cancel a consultation",
@@ -505,9 +505,14 @@ if have("90") or have("91") or have("93"):
         t.append(step("Look up a call for support",
             p(f"Support operators open {ui('supportCalls.nav')}, enter the {ui('supportCalls.sessionId')} and {ui('supportCalls.lookup')}. The page shows the session's status and times and, per participant, join and leave times, reconnections, quality, error codes, browser and operating system. Never names or content. {ui('supportCalls.reportsTitle')} lists the technical reports people sent."),
             "93"))
-    chapter("ops", 9, "Book a consultation and look up a call",
-        "NestSelf operations book consultations for client companies; support operators look into technical problems from connection data, never from content.",
-        "Operations and support · admin app", t)
+    if have("93"):
+        chapter("ops", 9, "Book a consultation and look up a call",
+            "NestSelf operations book consultations for client companies; support operators look into technical problems from connection data, never from content.",
+            "Operations and support · admin app", t)
+    else:
+        chapter("ops", 9, "Book a consultation",
+            "NestSelf operations book and cancel consultations for the client companies they coordinate.",
+            "Operations · admin app", t)
 
 # ---------- 10. Good to know ----------
 chapter("know", 10, "Good to know",
