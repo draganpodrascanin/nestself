@@ -29,9 +29,9 @@
       "qa": "Kérdés és válasz",
       "collection": "Gyűjtemény"
     },
-    "loading": "Loading resources...",
-    "loadError": "Could not load resources. Please try again.",
-    "loadMore": "Load more"
+    "loading": "Tartalmak betöltése…",
+    "loadError": "A tartalmakat nem sikerült betölteni. Próbálja újra.",
+    "loadMore": "Továbbiak betöltése"
   },
   "newResource": {
     "title": "Cikk létrehozása",
@@ -59,7 +59,7 @@
     },
     "submit": "Cikk létrehozása",
     "success": "Cikk létrehozva",
-    "categoryRequired": "A primary category is required."
+    "categoryRequired": "Az elsődleges kategória kötelező."
   },
   "detail": {
     "title": "Erőforrás részletei",
@@ -90,9 +90,9 @@
       "expired": "Lejárt",
       "withdrawn": "Visszavont"
     },
-    "loading": "Loading resource...",
-    "notFound": "Resource not found.",
-    "loadError": "Could not load resource. Please try again."
+    "loading": "Tartalom betöltése…",
+    "notFound": "A tartalom nem található.",
+    "loadError": "A tartalmat nem sikerült betölteni. Próbálja újra."
   },
   "editor": {
     "title": "Változat szerkesztése",
@@ -114,7 +114,7 @@
     "audienceOrg": "Szervezet",
     "audienceOrgUnit": "Szervezeti egység",
     "body": "Szövegtörzs",
-    "bodyPlaceholder": "Kezdjen el írni...",
+    "bodyPlaceholder": "Kezdjen el írni, vagy írjon „/” jelet a blokkokhoz",
     "save": "Mentés",
     "submit": "Ellenőrzésre küldés",
     "approve": "Jóváhagyás",
@@ -145,11 +145,11 @@
       "bodyEmpty": "A szövegtörzs megadása kötelező",
       "bodyInvalid": "A szövegtörzs hibákat tartalmaz",
       "audienceRequired": "Beküldés előtt meg kell adni a javasolt közönséget.",
-      "content_invalid_block": "A content block is invalid. Check the highlighted section.",
-      "content_invalid_link": "A link in the content is not allowed. Only https:// links and internal references are permitted.",
-      "content_too_large": "The content exceeds the maximum size (200 KB).",
-      "content_missing_required": "A required field is missing.",
-      "content_schema_version": "The document format is outdated. Please reload the page."
+      "content_invalid_block": "Egy tartalmi blokk érvénytelen. Ellenőrizze a kiemelt részt.",
+      "content_invalid_link": "A tartalomban lévő hivatkozás nem engedélyezett. Csak https:// hivatkozások és belső hivatkozások engedélyezettek.",
+      "content_too_large": "A tartalom meghaladja a megengedett méretet (200 KB).",
+      "content_missing_required": "Egy kötelező mező hiányzik.",
+      "content_schema_version": "A dokumentum formátuma elavult. Töltse újra az oldalt."
     },
     "toolbar": {
       "bold": "Félkövér",
@@ -164,13 +164,13 @@
       "image": "Kép",
       "undo": "Visszavonás",
       "redo": "Újra",
-      "heading3": "Heading 3",
-      "note": "Professional note",
-      "step": "Practical step",
-      "checklist": "Checklist",
-      "cta": "Call to action",
-      "related": "Related resource",
-      "linkInvalid": "Only https:// links and internal references are allowed.",
+      "heading3": "Alcím",
+      "note": "Szakmai megjegyzés",
+      "step": "Gyakorlati lépés",
+      "checklist": "Ellenőrzőlista",
+      "cta": "Cselekvésre ösztönzés",
+      "related": "Kapcsolódó tartalom",
+      "linkInvalid": "Csak https:// hivatkozások és belső hivatkozások engedélyezettek.",
       "toolbar": "Tartalomszerkesztő"
     },
     "slash": {
@@ -195,7 +195,8 @@
       "imageHint": "Feltöltés vagy beillesztés"
     },
     "bubble": {
-      "turnInto": "Átalakítás"
+      "turnInto": "Átalakítás",
+      "format": "Formázás"
     },
     "block": {
       "add": "Blokk hozzáadása",
@@ -214,11 +215,12 @@
       "license": "Licenc",
       "licenseOwned": "Saját",
       "licenseLicensed": "Licencelt",
-      "licenseStock": "Stock",
+      "licenseStock": "Stockfotó",
       "licenseGenerated": "Generált",
-      "ready": "Image ready",
-      "altRequired": "Alt text is required before inserting the image.",
-      "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
+      "ready": "A kép kész",
+      "altRequired": "A kép beszúrása előtt adja meg a helyettesítő szöveget.",
+      "tooLarge": "A fájl nagyobb, mint {{max}} MB. Válasszon kisebb képet.",
+      "uploadFailed": "A képet nem sikerült feltölteni. Próbálja újra."
     },
     "nodeView": {
       "noteKindTip": "Tipp",
@@ -234,15 +236,33 @@
       "relatedEmpty": "(nincs)",
       "imageAlt": "Alternatív szöveg (kötelező)",
       "imageCaption": "Képaláírás (opcionális)",
-      "imagePlaceholder": "Húzza ide vagy illessze be a képet, vagy kattintson a feltöltéshez"
+      "imagePlaceholder": "Húzza ide vagy illessze be a képet, vagy kattintson a feltöltéshez",
+      "noteType": "Megjegyzés típusa",
+      "ctaAction": "Művelet",
+      "ctaContent": "Tartalom",
+      "ctaCollection": "Gyűjtemény",
+      "ctaService": "Szolgáltatás",
+      "serviceLibrary": "Tartalomtár",
+      "serviceGeneralQuestions": "Általános kérdés feltevése",
+      "serviceEventInterest": "Érdeklődés jelzése egy esemény iránt",
+      "ctaButtonLabel": "Gomb felirata",
+      "ctaButtonLabelHint": "Nem kötelező, legfeljebb 100 karakter.",
+      "ctaTargetRequired": "Válassza ki, mit nyisson meg a gomb.",
+      "relatedChoose": "Válasszon tartalmat",
+      "searchPlaceholder": "Keresés cím szerint",
+      "searching": "Keresés…",
+      "searchEmpty": "Nincs megfelelő tartalom",
+      "searchError": "A keresés nem sikerült. Próbálja újra.",
+      "done": "Kész",
+      "imageCaptionLabel": "Képaláírás"
     },
-    "audiencePlaceholder": "Select target audience",
-    "loading": "Loading editor...",
-    "notFound": "Variant not found.",
+    "audiencePlaceholder": "Válassza ki a célközönséget",
+    "loading": "A szerkesztő betöltése…",
+    "notFound": "A nyelvi változat nem található.",
     "createVariant": "{{locale}} változat létrehozása",
-    "loadError": "Could not load the variant. Please try again.",
-    "unsavedPrompt": "You have unsaved changes. Leave without saving?",
-    "dismiss": "Dismiss",
+    "loadError": "A nyelvi változatot nem sikerült betölteni. Próbálja újra.",
+    "unsavedPrompt": "Vannak nem mentett módosítások. Mentés nélkül kilép?",
+    "dismiss": "Bezárás",
     "returnedForChanges": "Visszaküldve módosításra",
     "returnComment": "Megjegyzés",
     "returnCommentPlaceholder": "Írja le, mit kell módosítani…",
@@ -252,7 +272,9 @@
     "returnCommentRequired": "Írja le, mit kell módosítani.",
     "audienceNone": "Még nincs kiválasztott közönség",
     "audienceSaved_one": "Mentett közönség: {{count}} szervezet vagy egység",
-    "audienceSaved_other": "Mentett közönség: {{count}} szervezet vagy egység"
+    "audienceSaved_other": "Mentett közönség: {{count}} szervezet vagy egység",
+    "blockPlaceholder": "Írjon „/” jelet a blokkokhoz",
+    "headingPlaceholder": "Címsor"
   },
   "sample": {
     "saveNotice": "Próba mód: semmi nem lett mentve.",

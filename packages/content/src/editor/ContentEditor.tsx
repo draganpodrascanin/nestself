@@ -23,7 +23,9 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import type { ContentDocument } from '../schema/document.ts';
 import { createEditorExtensions } from './editor-extensions.ts';
+import { DEFAULT_NODE_VIEW_LABELS } from './node-view-labels.ts';
 import type { NodeViewLabels, ImageUploadHandler, ResourceSearchHandler } from './node-view-labels.ts';
+import { BlockDialogs } from './BlockDialogs.tsx';
 import { PasteNormalization } from './paste-handler.ts';
 import { toContentDocument, fromContentDocument } from './converters.ts';
 import { useSlashMenu, createSlashMenuItems } from './SlashMenu.tsx';
@@ -130,6 +132,7 @@ export const DEFAULT_EDITOR_LABELS: ContentEditorLabels = {
     imageHint: 'Upload or paste',
   },
   bubbleMenu: {
+    format: 'Format',
     bold: 'Bold',
     link: 'Link',
     linkUrl: 'Link URL',
@@ -238,13 +241,15 @@ export function ContentEditor({
     () => ({
       attributes: {
         class: [
-          'min-h-[200px] py-4 px-2 focus:outline-none',
-          'text-text bg-surface',
+          'min-h-[320px] py-2 focus:outline-none',
+          'text-text',
+          // Placeholder hints on empty nodes (Tiptap Placeholder sets data-placeholder)
+          '[&_.is-empty]:before:pointer-events-none [&_.is-empty]:before:float-left [&_.is-empty]:before:h-0 [&_.is-empty]:before:text-text-secondary [&_.is-empty]:before:content-[attr(data-placeholder)]',
           '[&_h2]:type-section-title [&_h2]:text-text [&_h2]:mt-6 [&_h2]:mb-2',
           '[&_h3]:type-body-large [&_h3]:font-[var(--font-weight-label)] [&_h3]:text-text [&_h3]:mt-4 [&_h3]:mb-1',
           '[&_p]:type-body [&_p]:text-text [&_p]:my-1',
           '[&_ul]:pl-6 [&_ul]:list-disc [&_ol]:pl-6 [&_ol]:list-decimal',
-          '[&_blockquote]:border-l-2 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:text-text-secondary [&_blockquote]:italic',
+          '[&_blockquote]:border-l-2 [&_blockquote]:border-primary [&_blockquote]:pl-4 [&_blockquote]:text-text-secondary',
           '[&_a]:text-primary [&_a]:underline',
           '[&_figure[data-type="image"]]:my-4 [&_figure[data-type="image"]]:rounded-control [&_figure[data-type="image"]]:border [&_figure[data-type="image"]]:border-border-subtle [&_figure[data-type="image"]]:bg-tint [&_figure[data-type="image"]]:p-4 [&_figure[data-type="image"]]:text-center [&_figure[data-type="image"]]:text-text-secondary',
           '[&_aside[data-type="professionalNote"]]:my-4 [&_aside[data-type="professionalNote"]]:rounded-control [&_aside[data-type="professionalNote"]]:border [&_aside[data-type="professionalNote"]]:border-border-subtle [&_aside[data-type="professionalNote"]]:bg-info-surface [&_aside[data-type="professionalNote"]]:p-4',
@@ -307,9 +312,8 @@ export function ContentEditor({
   return (
     <div
       className={[
-        'relative rounded-control border border-border-control overflow-visible',
-        'focus-within:ring-2 focus-within:ring-focus',
-        'bg-surface',
+        // A borderless writing canvas: the page is the editor.
+        'relative overflow-visible',
         className,
       ]
         .filter(Boolean)
@@ -325,6 +329,15 @@ export function ContentEditor({
       {/* Block handle (drag + add on hover) */}
       {editor && editable ? (
         <BlockHandleComponent editor={editor} labels={labels.blockHandle} />
+      ) : null}
+
+      {/* Call-to-action and related-resource dialogs */}
+      {editor && editable ? (
+        <BlockDialogs
+          editor={editor}
+          labels={labels.nodeView ?? DEFAULT_NODE_VIEW_LABELS}
+          search={resourceSearchHandler}
+        />
       ) : null}
 
       {/* Slash menu popup (portal) */}

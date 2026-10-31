@@ -339,6 +339,15 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
     ? (detail.body as { type: 'doc'; schemaVersion: number; content: unknown[] })
     : { type: 'doc' as const, schemaVersion: 1, content: [] };
 
+  // Related resources the body places inline render as cards there; the list
+  // after the body holds the rest.
+  const inlineRelated = new Set(
+    (document.content as Array<{ type?: string; attrs?: { contentResourceId?: string } }>)
+      .filter((n) => n.type === 'relatedResource' && n.attrs?.contentResourceId)
+      .map((n) => n.attrs!.contentResourceId!),
+  );
+  const listedRelated = detail.relatedResources.filter((r) => !inlineRelated.has(r.resourceId));
+
   // -- Reviewer / author metadata -------------------------------------------
   const authorLabel = detail.reviewerName
     ? t('library:detail.reviewedBy', { name: detail.reviewerName })
@@ -439,14 +448,14 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
             </section>
           ) : null}
 
-          {/* Related resources */}
-          {detail.relatedResources.length > 0 ? (
+          {/* Related resources the body does not place inline */}
+          {listedRelated.length > 0 ? (
             <section className="mt-6">
               <Heading level={2} typeRole="sectionTitle" className="mb-2">
                 {t('library:detail.related')}
               </Heading>
               <div className="space-y-2">
-                {detail.relatedResources.map((rel) => (
+                {listedRelated.map((rel) => (
                   <Link
                     key={rel.resourceId}
                     to="/content/$contentId"
@@ -469,12 +478,12 @@ function DetailView({ detail, locale, onToggleSave, savePending, saveDemoMessage
       media={mediaMeta}
       mediaUrl={mediaUrl as MediaUrlResolver}
       resolveCta={resolveCta}
-      resolveRelated={() => {
-        // Inline relatedResource nodes are suppressed: the dedicated
-        // "Related resources" section below the body already renders them
-        // (from detail.relatedResources), so rendering them twice would
-        // duplicate links and break accessibility landmarks.
-        return null;
+      resolveRelated={(id) => {
+        // A related card renders where the author placed it in the body; the
+        // list below the body shows only the ones the body does not place.
+        const rel = detail.relatedResources.find((r) => r.resourceId === id);
+        if (!rel) return null;
+        return { title: rel.title, href: `/content/${rel.resourceId}`, description: rel.summary };
       }}
       resolveInternalLink={(id) => `/content/${id}`}
       linkComponent={RendererLinkComponent}

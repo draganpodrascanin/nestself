@@ -210,11 +210,6 @@ function VariantEditorPage() {
 
   const isDerivedLocale = routeLocale === 'sr-Cyrl';
 
-  // ─── API loading state ────────────────────────────────────────────
-  const [loadState, setLoadState] = useState<LoadState>(
-    isSampleDataMode ? buildSampleLoadState() : { status: 'loading' },
-  );
-
   function buildSampleLoadState(): LoadState {
     const resource = SAMPLE_CONTENT_RESOURCES.find((r) => r.id === resourceId);
     if (!resource) return { status: 'not-found' };
@@ -312,13 +307,26 @@ function VariantEditorPage() {
     };
   }
 
+  // ─── API loading state ────────────────────────────────────────────
+  // The load result is keyed by resource and locale, so a locale switch shows
+  // the loading state instead of stale content (e.g. transliterating the
+  // English title as if it were Serbian) without resetting state in an effect.
+  const loadKey = `${resourceId}/${routeLocale}`;
+  const [keyedLoad, setKeyedLoad] = useState<{ key: string; state: LoadState }>(() => ({
+    key: loadKey,
+    state: isSampleDataMode ? buildSampleLoadState() : { status: 'loading' },
+  }));
+  const loadState: LoadState =
+    isSampleDataMode || keyedLoad.key === loadKey ? keyedLoad.state : { status: 'loading' };
+  const setLoadState = useCallback(
+    (state: LoadState) => setKeyedLoad({ key: loadKey, state }),
+    [loadKey],
+  );
+
+
   // ─── Fetch resource from API ──────────────────────────────────────
   useEffect(() => {
     if (isSampleDataMode) return;
-
-    // Reset to loading so a locale switch doesn't flash stale content
-    // (e.g. transliterating the English title as if it were Serbian).
-    setLoadState({ status: 'loading' });
 
     let cancelled = false;
 
@@ -363,7 +371,7 @@ function VariantEditorPage() {
 
     void load();
     return () => { cancelled = true; };
-  }, [resourceId, routeLocale, isDerivedLocale, t]);
+  }, [resourceId, routeLocale, isDerivedLocale, setLoadState, t]);
 
   // ─── Loading / error / not-found gates ────────────────────────────
   if (loadState.status === 'loading') {
@@ -615,6 +623,7 @@ function VariantEditorReady({
       imageHint: t('cms:editor.slash.imageHint', { defaultValue: 'Upload or paste' }),
     },
     bubbleMenu: {
+      format: t('cms:editor.bubble.format'),
       bold: t('cms:editor.toolbar.bold'),
       link: t('cms:editor.toolbar.link'),
       linkUrl: t('cms:editor.toolbar.linkUrl'),
@@ -641,6 +650,50 @@ function VariantEditorReady({
       heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
       heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
       quote: t('cms:editor.toolbar.quote'),
+    },
+    nodeView: {
+      noteType: t('cms:editor.nodeView.noteType'),
+      noteKinds: {
+        tip: t('cms:editor.nodeView.noteKindTip'),
+        warning: t('cms:editor.nodeView.noteKindWarning'),
+        disclaimer: t('cms:editor.nodeView.noteKindDisclaimer'),
+      },
+      stepTitle: t('cms:editor.nodeView.stepTitle'),
+      checklistLabel: '',
+      ctaDialog: t('cms:editor.toolbar.cta'),
+      ctaAction: t('cms:editor.nodeView.ctaAction'),
+      ctaKinds: {
+        suggest_topic: t('cms:editor.nodeView.ctaKindSuggestTopic'),
+        open_content: t('cms:editor.nodeView.ctaKindOpenContent'),
+        open_collection: t('cms:editor.nodeView.ctaKindOpenCollection'),
+        open_service: t('cms:editor.nodeView.ctaKindOpenService'),
+      },
+      ctaContent: t('cms:editor.nodeView.ctaContent'),
+      ctaCollection: t('cms:editor.nodeView.ctaCollection'),
+      ctaService: t('cms:editor.nodeView.ctaService'),
+      ctaServices: {
+        library: t('cms:editor.nodeView.serviceLibrary'),
+        general_questions: t('cms:editor.nodeView.serviceGeneralQuestions'),
+        event_interest: t('cms:editor.nodeView.serviceEventInterest'),
+      },
+      ctaButtonLabel: t('cms:editor.nodeView.ctaButtonLabel'),
+      ctaButtonLabelHint: t('cms:editor.nodeView.ctaButtonLabelHint'),
+      ctaTargetRequired: t('cms:editor.nodeView.ctaTargetRequired'),
+      relatedDialog: t('cms:editor.toolbar.related'),
+      relatedChoose: t('cms:editor.nodeView.relatedChoose'),
+      searchPlaceholder: t('cms:editor.nodeView.searchPlaceholder'),
+      searching: t('cms:editor.nodeView.searching'),
+      searchEmpty: t('cms:editor.nodeView.searchEmpty'),
+      searchError: t('cms:editor.nodeView.searchError'),
+      done: t('cms:editor.nodeView.done'),
+      cancel: t('common:action.cancel'),
+      close: t('common:nav.close'),
+      imageAlt: t('cms:editor.image.altText'),
+      imageCaption: t('cms:editor.nodeView.imageCaptionLabel'),
+      imagePlaceholder: t('cms:editor.nodeView.imagePlaceholder'),
+      imageUploading: t('cms:editor.image.uploading'),
+      imageProcessing: t('cms:editor.image.processing'),
+      imageUploadFailed: t('cms:editor.image.uploadFailed'),
     },
   };
 
@@ -806,7 +859,7 @@ function VariantEditorReady({
   // assetId and preview URL).
   const imageUploadHandler: ImageUploadHandler = useCallback(
     async (file, onStatus) => {
-      onStatus('Uploading');
+      onStatus(t('cms:editor.image.uploading'));
 
       const metadata = {
         kind: 'image' as const,
@@ -814,7 +867,11 @@ function VariantEditorReady({
         licenseKind: 'owned' as const,
       };
 
-      const result = await cmsApi.uploadMedia(file, metadata);
+      // The node view shows a rejection's message, so map API codes to copy.
+      const result = await cmsApi.uploadMedia(file, metadata).catch((err: unknown) => {
+        const code = (err as { code?: string }).code ?? 'unknown';
+        throw new Error(t(`cms:error.${code}`, { defaultValue: t('cms:editor.image.uploadFailed') }));
+      });
       const previewUrl = `/api/ops/cms/media/${result.assetId}/original`;
 
       // The upload response includes the actual asset state from the DB.
@@ -824,7 +881,7 @@ function VariantEditorReady({
         return { assetId: result.assetId, previewUrl };
       }
 
-      onStatus('Processing');
+      onStatus(t('cms:editor.image.processing'));
 
       // Poll the preview endpoint (content.preview permission, which all
       // authors have) instead of the detail endpoint (media.manage).
@@ -855,7 +912,7 @@ function VariantEditorReady({
       const result = await cmsApi.listResources({ q: query, limit: 10 });
       return result.items
         .filter((r) => r.title)
-        .map((r) => ({ id: r.id, title: r.title! }));
+        .map((r) => ({ id: r.id, title: r.title!, type: r.type }));
     },
     [],
   );
@@ -1274,7 +1331,7 @@ function VariantEditorReady({
             <div className="flex-1 min-w-0 flex flex-col gap-6">
               {/* Title — large borderless heading input (Notion-style) */}
               {isDerivedLocale ? (
-                <p className="w-full p-0 type-section-title text-text">{displayTitle}</p>
+                <p className="w-full p-0 type-display text-text">{displayTitle}</p>
               ) : (
                 <input
                   id="title"
@@ -1285,7 +1342,7 @@ function VariantEditorReady({
                   readOnly={!editable}
                   aria-label={t('cms:editor.titleField')}
                   aria-required
-                  className="w-full border-0 bg-transparent p-0 type-section-title text-text placeholder:text-text-secondary focus:outline-none"
+                  className="w-full border-0 bg-transparent p-0 type-display text-text placeholder:text-text-secondary focus:outline-none"
                 />
               )}
 
@@ -1405,8 +1462,8 @@ function VariantEditorReady({
 
               {/* Body editor */}
               <div>
-                <Heading level={3}>{t('cms:editor.body')}</Heading>
-                <div className="mt-3">
+                <Heading level={3} className="sr-only">{t('cms:editor.body')}</Heading>
+                <div>
                   {isDerivedLocale ? (
                     <div className="rounded-control border border-border-control bg-surface p-4 min-h-[300px]">
                       <ContentRenderer
@@ -1427,6 +1484,8 @@ function VariantEditorReady({
                       onChange={handleBodyChange}
                       editable={editable}
                       placeholder={t('cms:editor.bodyPlaceholder')}
+                      blockPlaceholder={t('cms:editor.blockPlaceholder')}
+                      headingPlaceholder={t('cms:editor.headingPlaceholder')}
                       labels={editorLabels}
                       onInsertImage={handleInsertImage}
                       imageUploadHandler={imageUploadHandler}

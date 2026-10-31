@@ -40,7 +40,12 @@ export {
   ImageView,
   openImagePicker,
 } from './node-views.tsx';
+export { DEFAULT_NODE_VIEW_LABELS } from './node-view-labels.ts';
 export type { NodeViewLabels, ImageUploadHandler, ImageUploadResult, ResourceSearchHandler, ResourceSearchResult } from './node-view-labels.ts';
+
+// Call-to-action and related-resource dialogs
+export { BlockDialogs, CtaDialog, RelatedDialog, ResourcePicker, openBlockDialog } from './BlockDialogs.tsx';
+export type { BlockDialogRequest } from './BlockDialogs.tsx';
 
 // Legacy toolbar (kept for backward compatibility)
 export { Toolbar, DEFAULT_TOOLBAR_LABELS } from './Toolbar.tsx';

@@ -308,9 +308,9 @@ describe('VariantEditorPage', () => {
   it('shows transliterated title for sr-Cyrl', () => {
     renderEditor({ resourceId: 'res_sample_evening_wind_down', locale: 'sr-Cyrl' });
 
-    // Our mock transliterateText prepends [CYR]
-    const titleInput = screen.getByRole('textbox', { name: /title/i });
-    expect((titleInput as HTMLInputElement).value).toContain('[CYR]');
+    // Our mock transliterateText prepends [CYR]; the derived title is read-only text.
+    expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/\[CYR\]/).length).toBeGreaterThan(0);
   });
 
   it('renders the preview toggle button', () => {

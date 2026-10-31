@@ -115,7 +115,7 @@
     "audienceOrg": "Organisation",
     "audienceOrgUnit": "Organisational unit",
     "body": "Body",
-    "bodyPlaceholder": "Start writing...",
+    "bodyPlaceholder": "Start writing, or type “/” for blocks",
     "save": "Save",
     "submit": "Submit for review",
     "approve": "Approve",
@@ -202,7 +202,8 @@
       "imageHint": "Upload or paste"
     },
     "bubble": {
-      "turnInto": "Turn into"
+      "turnInto": "Turn into",
+      "format": "Format"
     },
     "block": {
       "add": "Add block",
@@ -225,7 +226,8 @@
       "licenseLicensed": "Licensed",
       "licenseStock": "Stock",
       "licenseGenerated": "Generated",
-      "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image."
+      "tooLarge": "This file exceeds {{max}} MB. Choose a smaller image.",
+      "uploadFailed": "The image could not be uploaded. Try again."
     },
     "nodeView": {
       "noteKindTip": "Tip",
@@ -241,7 +243,25 @@
       "relatedEmpty": "(none)",
       "imageAlt": "Alt text (required)",
       "imageCaption": "Caption (optional)",
-      "imagePlaceholder": "Drop or paste an image, or click to upload"
+      "imagePlaceholder": "Drop or paste an image, or click to upload",
+      "noteType": "Note type",
+      "ctaAction": "Action",
+      "ctaContent": "Content",
+      "ctaCollection": "Collection",
+      "ctaService": "Service",
+      "serviceLibrary": "Content library",
+      "serviceGeneralQuestions": "Ask a general question",
+      "serviceEventInterest": "Express interest in an event",
+      "ctaButtonLabel": "Button label",
+      "ctaButtonLabelHint": "Optional, up to 100 characters.",
+      "ctaTargetRequired": "Choose what the button opens.",
+      "relatedChoose": "Choose a resource",
+      "searchPlaceholder": "Search by title",
+      "searching": "Searching…",
+      "searchEmpty": "No matching content",
+      "searchError": "The search failed. Try again.",
+      "done": "Done",
+      "imageCaptionLabel": "Caption"
     },
     "returnedForChanges": "Returned for changes",
     "returnComment": "Comment",
@@ -253,7 +273,9 @@
     "audienceNone": "No audience chosen yet",
     "audienceSaved_one": "Saved audience: {{count}} organisation or unit",
     "audienceSaved_few": "Saved audience: {{count}} organisations or units",
-    "audienceSaved_other": "Saved audience: {{count}} organisations or units"
+    "audienceSaved_other": "Saved audience: {{count}} organisations or units",
+    "blockPlaceholder": "Type “/” for blocks",
+    "headingPlaceholder": "Heading"
   },
   "sample": {
     "saveNotice": "Sample mode: nothing was saved.",

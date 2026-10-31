@@ -13,108 +13,13 @@
  * (the `NodeViewLabelsExtension` in editor-extensions.ts). English fallbacks
  * are provided when the storage is missing so the views render stand-alone.
  */
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
-import { cn } from '@nestself/ui';
-import type { NodeViewLabels } from './node-view-labels.ts';
-
-// ---------------------------------------------------------------------------
-// Inline select for node views (no portal, no Base UI focus management)
-// ---------------------------------------------------------------------------
-
-interface InlineSelectProps {
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-  'aria-label': string;
-}
-
-/**
- * A minimal accessible select that renders options in-place (no portal).
- * Uses role="combobox" / role="option" so Playwright can click options.
- */
-function InlineSelect({ value, options, onChange, 'aria-label': ariaLabel }: InlineSelectProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const baseId = useId();
-  const listboxId = `${baseId}-listbox`;
-  const selected = options.find((o) => o.value === value);
-
-  const toggle = useCallback(() => setOpen((v) => !v), []);
-  const pick = useCallback(
-    (v: string) => {
-      onChange(v);
-      setOpen(false);
-    },
-    [onChange],
-  );
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative inline-block">
-      <button
-        type="button"
-        role="combobox"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-haspopup="listbox"
-        onClick={toggle}
-        className="type-label rounded-control border border-border-control bg-surface px-2 py-0.5 text-text-secondary inline-flex items-center gap-1"
-      >
-        {selected?.label ?? value}
-        <span aria-hidden className="text-[10px]">&#x25BE;</span>
-      </button>
-      {open && (
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={ariaLabel}
-          className="absolute left-0 top-full z-[var(--z-dropdown)] mt-1 min-w-[120px] rounded-control border border-border-subtle bg-surface py-1 shadow-menu"
-        >
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              role="option"
-              type="button"
-              aria-selected={opt.value === value}
-              className={cn(
-                'block w-full px-3 py-1.5 text-left type-label',
-                opt.value === value ? 'bg-tint font-[var(--font-weight-label)]' : 'hover:bg-tint',
-              )}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { Select, cn } from '@nestself/ui';
+import { NOTE_KIND_ICONS, NOTE_KIND_STYLES } from '../render/aside-blocks.tsx';
+import { DEFAULT_NODE_VIEW_LABELS, type NodeViewLabels } from './node-view-labels.ts';
+import { openBlockDialog } from './BlockDialogs.tsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,46 +29,18 @@ function InlineSelect({ value, options, onChange, 'aria-label': ariaLabel }: Inl
 function getLabels(editor: ReactNodeViewProps['editor']): NodeViewLabels {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage is untyped
   const stored = (editor.storage as any)?.nodeViewLabels?.labels as NodeViewLabels | undefined;
-  if (stored) return stored;
-  // English fallback so views still render in isolation (tests, storybook)
-  return {
-    noteKinds: { tip: 'Tip', warning: 'Warning', disclaimer: 'Disclaimer' },
-    stepTitle: 'Step title',
-    checklistLabel: '',
-    ctaKinds: { suggest_topic: 'Suggest topic', open_content: 'Open content', open_collection: 'Open collection', open_service: 'Open service' },
-    ctaLabelPlaceholder: 'Button label (optional, max 100)',
-    relatedSearch: 'Resource ID',
-    relatedEmpty: '(none)',
-    imageAlt: 'Alt text (required)',
-    imageCaption: 'Caption (optional)',
-    imagePlaceholder: 'Drop or paste an image, or click to upload',
-  };
+  return stored ?? DEFAULT_NODE_VIEW_LABELS;
 }
 
 // ---------------------------------------------------------------------------
 // ProfessionalNote node view
 // ---------------------------------------------------------------------------
 
-/**
- * Valid note kinds per schema (blocks.ts:307): 'warning' | 'tip' | 'disclaimer'.
- * 'info' is NOT in the schema and must not appear.
- */
-const NOTE_KIND_ICONS: Record<string, string> = {
-  tip: '✨',         // sparkles
-  warning: '⚠',     // warning sign
-  disclaimer: '⚖',  // scales
-};
-
-const NOTE_KIND_STYLES: Record<string, string> = {
-  tip: 'border-l-primary bg-primary/5',
-  warning: 'border-l-warning bg-warning/5',
-  disclaimer: 'border-l-text-secondary bg-surface-raised',
-};
-
 export function ProfessionalNoteView({ node, updateAttributes, editor }: ReactNodeViewProps) {
   const kind = (node.attrs.noteKind as string) ?? 'tip';
   const editable = editor.isEditable;
   const labels = getLabels(editor);
+  const Icon = NOTE_KIND_ICONS[kind] ?? NOTE_KIND_ICONS.tip!;
 
   return (
     <NodeViewWrapper
@@ -176,15 +53,16 @@ export function ProfessionalNoteView({ node, updateAttributes, editor }: ReactNo
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-lg" aria-hidden>
-          {NOTE_KIND_ICONS[kind] ?? NOTE_KIND_ICONS.tip}
+        <span className="text-text-secondary">
+          <Icon />
         </span>
         {editable ? (
-          <InlineSelect
-            aria-label="Note type"
+          <Select
+            aria-label={labels.noteType}
             value={kind}
-            onChange={(v) => updateAttributes({ noteKind: v })}
+            onValueChange={(v) => { if (v) updateAttributes({ noteKind: v }); }}
             options={Object.entries(labels.noteKinds).map(([value, label]) => ({ value, label }))}
+            className="min-h-9 w-auto type-label"
           />
         ) : (
           <span className="type-label text-text-secondary">
@@ -291,278 +169,68 @@ export function ChecklistItemView({ node, updateAttributes, editor }: ReactNodeV
 }
 
 // ---------------------------------------------------------------------------
-// Resource search combobox (shared by CTA and RelatedResource)
+// CTA node view (atom). Configured in a dialog (BlockDialogs.tsx).
 // ---------------------------------------------------------------------------
 
-interface ResourceComboboxProps {
-  'aria-label': string;
-  onSelect: (id: string, title: string) => void;
-  editor: ReactNodeViewProps['editor'];
-}
-
-/** Read the resource search handler from editor storage. */
-function getSearchHandler(editor: ReactNodeViewProps['editor']) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage is untyped
-  return (editor.storage as any)?.resourceSearch?.handler as
-    | ((q: string) => Promise<Array<{ id: string; title: string }>>)
-    | undefined;
-}
-
-function ResourceCombobox({ 'aria-label': ariaLabel, onSelect, editor }: ResourceComboboxProps) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Array<{ id: string; title: string }>>([]);
-  const [open, setOpen] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const comboBaseId = useId();
-  const comboListboxId = `${comboBaseId}-listbox`;
-
-  const search = getSearchHandler(editor);
-
-  // Debounced search
-  const handleInput = useCallback(
-    (value: string) => {
-      setQuery(value);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (!value.trim() || !search) {
-        setResults([]);
-        setOpen(false);
-        return;
-      }
-      timerRef.current = setTimeout(async () => {
-        try {
-          const items = await search(value.trim());
-          setResults(items);
-          setOpen(items.length > 0);
-        } catch {
-          setResults([]);
-          setOpen(false);
-        }
-      }, 200);
-    },
-    [search],
-  );
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <input
-        type="text"
-        role="combobox"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-controls={comboListboxId}
-        aria-haspopup="listbox"
-        aria-autocomplete="list"
-        value={query}
-        onChange={(e) => handleInput(e.target.value)}
-        onFocus={() => { if (results.length > 0) setOpen(true); }}
-        className="w-full type-body rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
-        placeholder="Search..."
-      />
-      {open && (
-        <ul
-          id={comboListboxId}
-          role="listbox"
-          className="absolute left-0 top-full z-[var(--z-dropdown)] mt-1 max-h-48 w-full overflow-auto rounded-control border border-border-subtle bg-surface py-1 shadow-menu"
-        >
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={false}
-                className="block w-full px-3 py-1.5 text-left type-body hover:bg-tint"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelect(r.id, r.title);
-                  setQuery(r.title);
-                  setOpen(false);
-                }}
-              >
-                {r.title}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CTA node view (atom)
-// ---------------------------------------------------------------------------
-
-const CTA_KINDS = ['suggest_topic', 'open_content', 'open_collection', 'open_service'] as const;
-const NEEDS_TARGET = new Set(['open_content', 'open_collection', 'open_service']);
-
-export function CtaView({ node, updateAttributes, editor }: ReactNodeViewProps) {
+export function CtaView({ node, editor, getPos }: ReactNodeViewProps) {
   const ctaKind = (node.attrs.ctaKind as string) ?? 'suggest_topic';
-  const targetId = (node.attrs.targetId as string) ?? null;
-  const label = (node.attrs.label as string) ?? null;
+  const targetId = (node.attrs.targetId as string | null) ?? null;
+  const label = (node.attrs.label as string | null) ?? null;
   const editable = editor.isEditable;
   const labels = getLabels(editor);
 
-  // Dialog open on insert (when no targetId yet) or when the user clicks the block
-  const [dialogOpen, setDialogOpen] = useState(editable && !targetId);
-  const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
-
-  // Local state for the dialog form
-  const [formKind, setFormKind] = useState(ctaKind);
-  const [formLabel, setFormLabel] = useState(label ?? '');
-  const [formTargetId, setFormTargetId] = useState<string | null>(targetId);
-
-  const handleDone = useCallback(() => {
-    const attrs: Record<string, unknown> = {
-      ctaKind: formKind,
-      label: formLabel || null,
-    };
-    if (NEEDS_TARGET.has(formKind) && formTargetId) {
-      attrs.targetId = formTargetId;
-    }
-    updateAttributes(attrs);
-    setDialogOpen(false);
-  }, [formKind, formLabel, formTargetId, updateAttributes]);
+  const edit = () => {
+    const pos = getPos();
+    if (!editable || typeof pos !== 'number') return;
+    openBlockDialog(editor, { type: 'cta', pos, attrs: { ctaKind, targetId, label } });
+  };
 
   return (
-    <NodeViewWrapper
-      as="div"
-      data-type="cta"
-      className="my-4 rounded-control border border-border-subtle bg-surface-raised p-4"
-    >
-      <div
-        role="button"
-        tabIndex={editable ? 0 : undefined}
-        className="flex h-10 items-center justify-center rounded-control bg-primary px-4 text-on-primary type-label cursor-pointer"
-        onClick={() => { if (editable) setDialogOpen(true); }}
-        onKeyDown={(e) => { if (editable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setDialogOpen(true); } }}
+    <NodeViewWrapper as="div" data-type="cta" className="my-4">
+      <button
+        type="button"
+        disabled={!editable}
+        aria-label={`${labels.ctaDialog}: ${label || labels.ctaKinds[ctaKind] || ctaKind}`}
+        onClick={edit}
+        className="flex min-h-11 w-full items-center justify-center rounded-control bg-primary px-4 text-on-primary type-label transition-colors hover:bg-primary-hover disabled:cursor-default"
       >
-        {label || labels.ctaKinds[ctaKind] || ctaKind.replace(/_/g, ' ')}
-      </div>
-
-      {dialogOpen ? (
-        <div
-          role="dialog"
-          aria-label="Call to action"
-          className="mt-3 rounded-control border border-border-subtle bg-surface p-4 shadow-menu"
-        >
-          <div className="flex flex-col gap-3">
-            {/* Action kind select */}
-            <div>
-              <InlineSelect
-                aria-label="Action"
-                value={formKind}
-                onChange={(v) => {
-                  setFormKind(v);
-                  if (!NEEDS_TARGET.has(v)) {
-                    setFormTargetId(null);
-                  }
-                }}
-                options={CTA_KINDS.map((k) => ({
-                  value: k,
-                  label: labels.ctaKinds[k] || k.replace(/_/g, ' '),
-                }))}
-              />
-            </div>
-
-            {/* Content search (only for kinds that need a target) */}
-            {NEEDS_TARGET.has(formKind) ? (
-              <ResourceCombobox
-                aria-label="Content"
-                editor={editor}
-                onSelect={(id, title) => {
-                  setFormTargetId(id);
-                  setSelectedTitle(title);
-                }}
-              />
-            ) : null}
-
-            {/* Button label */}
-            <input
-              type="text"
-              aria-label="Button label"
-              value={formLabel}
-              onChange={(e) => setFormLabel(e.target.value)}
-              placeholder={labels.ctaLabelPlaceholder}
-              maxLength={100}
-              className="type-metadata rounded-control border border-border-control bg-surface px-2 py-1 text-text placeholder:text-text-secondary"
-            />
-
-            <button
-              type="button"
-              onClick={handleDone}
-              className="self-end rounded-control bg-primary px-4 py-1.5 text-on-primary type-label hover:bg-primary/90"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {selectedTitle && !dialogOpen ? (
-        <p className="mt-1 type-metadata text-text-secondary">{selectedTitle}</p>
-      ) : null}
+        {label || labels.ctaKinds[ctaKind] || ctaKind}
+      </button>
     </NodeViewWrapper>
   );
 }
 
 // ---------------------------------------------------------------------------
-// RelatedResource node view (atom)
+// RelatedResource node view (atom). Picked in a dialog (BlockDialogs.tsx).
 // ---------------------------------------------------------------------------
 
-export function RelatedResourceView({ node, updateAttributes, editor }: ReactNodeViewProps) {
-  const resourceId = (node.attrs.contentResourceId as string) ?? null;
-  const storedTitle = (node.attrs.contentResourceTitle as string) ?? null;
+export function RelatedResourceView({ node, editor, getPos }: ReactNodeViewProps) {
+  const resourceId = (node.attrs.contentResourceId as string | null) ?? null;
+  const storedTitle = (node.attrs.contentResourceTitle as string | null) ?? null;
   const editable = editor.isEditable;
   const labels = getLabels(editor);
 
-  // Dialog open on insert (when no resourceId) or on click
-  const [dialogOpen, setDialogOpen] = useState(editable && !resourceId);
+  const edit = () => {
+    const pos = getPos();
+    if (!editable || typeof pos !== 'number') return;
+    openBlockDialog(editor, {
+      type: 'related',
+      pos,
+      attrs: resourceId ? { contentResourceId: resourceId, contentResourceTitle: storedTitle } : undefined,
+    });
+  };
 
   return (
-    <NodeViewWrapper
-      as="div"
-      data-type="relatedResource"
-      className="my-3 rounded-control border border-border-subtle bg-surface p-4"
-    >
-      <div
-        role="button"
-        tabIndex={editable ? 0 : undefined}
-        className="flex items-center gap-3 cursor-pointer"
-        onClick={() => { if (editable && !dialogOpen) setDialogOpen(true); }}
-        onKeyDown={(e) => { if (editable && !dialogOpen && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setDialogOpen(true); } }}
+    <NodeViewWrapper as="div" data-type="relatedResource" className="my-3">
+      <button
+        type="button"
+        disabled={!editable}
+        onClick={edit}
+        className="flex w-full flex-col items-start gap-0.5 rounded-control border border-border-subtle bg-surface p-4 text-left transition-colors hover:bg-tint disabled:cursor-default"
       >
-        <span className="type-label text-text-secondary">{labels.relatedSearch}:</span>
-        <span className="type-body text-text">{storedTitle || resourceId || labels.relatedEmpty}</span>
-      </div>
-
-      {dialogOpen ? (
-        <div
-          role="dialog"
-          aria-label="Related resource"
-          className="mt-3 rounded-control border border-border-subtle bg-surface p-4 shadow-menu"
-        >
-          <ResourceCombobox
-            aria-label="Content"
-            editor={editor}
-            onSelect={(id, title) => {
-              updateAttributes({ contentResourceId: id, contentResourceTitle: title });
-              setDialogOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
+        <span className="type-metadata text-text-secondary">{labels.relatedDialog}</span>
+        <span className="type-label text-text">{storedTitle || labels.relatedChoose}</span>
+      </button>
     </NodeViewWrapper>
   );
 }
@@ -692,7 +360,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
       try {
         if (!cancelled) {
           setPhase('uploading');
-          setStatusText('Uploading');
+          setStatusText(labels.imageUploading);
         }
 
         const result = await uploadHandler(file, (status) => {
@@ -704,10 +372,10 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
           setPhase('ready');
           updateAttributes({ mediaAssetId: result.assetId });
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setPhase('error');
-          setErrorMsg(err instanceof Error ? err.message : 'Upload failed');
+          setErrorMsg(labels.imageUploadFailed);
           setPreviewUrl(blobUrl);
         }
       }
@@ -737,13 +405,13 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
       {/* Status text during upload/processing */}
       {isUploading ? (
         <div className="flex min-h-[120px] items-center justify-center rounded-control border border-border-subtle bg-surface-raised text-text-secondary">
-          <span className="type-body">{statusText || 'Uploading'}</span>
+          <span className="type-body">{statusText || labels.imageUploading}</span>
         </div>
       ) : null}
 
       {/* Error message */}
       {phase === 'error' ? (
-        <div className="flex min-h-[120px] items-center justify-center rounded-control border border-warning bg-warning/5 text-warning">
+        <div role="alert" className="flex min-h-[120px] items-center justify-center rounded-control border border-danger bg-danger-surface text-danger">
           <span className="type-body">{errorMsg}</span>
         </div>
       ) : null}
@@ -769,7 +437,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
         <div className="mt-2 flex flex-col gap-2">
           <input
             type="text"
-            aria-label="Alt text"
+            aria-label={labels.imageAlt}
             value={alt}
             onChange={(e) => updateAttributes({ alt: e.target.value })}
             placeholder={labels.imageAlt}
@@ -777,7 +445,7 @@ export function ImageView({ node, updateAttributes, editor }: ReactNodeViewProps
           />
           <input
             type="text"
-            aria-label="Caption"
+            aria-label={labels.imageCaption}
             value={caption}
             onChange={(e) => updateAttributes({ caption: e.target.value || null })}
             placeholder={labels.imageCaption}

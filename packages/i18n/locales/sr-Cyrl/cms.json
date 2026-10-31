@@ -114,7 +114,7 @@
     "audienceOrg": "Организација",
     "audienceOrgUnit": "Организациона јединица",
     "body": "Текст",
-    "bodyPlaceholder": "Почните да пишете...",
+    "bodyPlaceholder": "Почните да пишете или откуцајте „/” за блокове",
     "save": "Сачувај",
     "submit": "Пошаљи на рецензију",
     "approve": "Одобри",
@@ -195,7 +195,8 @@
       "imageHint": "Отпреми или налепи"
     },
     "bubble": {
-      "turnInto": "Претвори у"
+      "turnInto": "Претвори у",
+      "format": "Форматирање"
     },
     "block": {
       "add": "Додај блок",
@@ -218,7 +219,8 @@
       "licenseGenerated": "Генерисана",
       "ready": "Слика је спремна",
       "altRequired": "Алтернативни текст је обавезан пре уметања слике.",
-      "tooLarge": "Овај фајл премашује {{max}} МБ. Изаберите мању слику."
+      "tooLarge": "Овај фајл премашује {{max}} МБ. Изаберите мању слику.",
+      "uploadFailed": "Слика није отпремљена. Покушајте поново."
     },
     "nodeView": {
       "noteKindTip": "Савет",
@@ -234,7 +236,25 @@
       "relatedEmpty": "(нема)",
       "imageAlt": "Алтернативни текст (обавезно)",
       "imageCaption": "Опис (опционо)",
-      "imagePlaceholder": "Превуците или налепите слику, или кликните за отпремање"
+      "imagePlaceholder": "Превуците или налепите слику, или кликните за отпремање",
+      "noteType": "Врста напомене",
+      "ctaAction": "Радња",
+      "ctaContent": "Садржај",
+      "ctaCollection": "Колекција",
+      "ctaService": "Услуга",
+      "serviceLibrary": "Библиотека садржаја",
+      "serviceGeneralQuestions": "Поставите опште питање",
+      "serviceEventInterest": "Искажите интересовање за догађај",
+      "ctaButtonLabel": "Текст дугмета",
+      "ctaButtonLabelHint": "Није обавезно, највише 100 знакова.",
+      "ctaTargetRequired": "Изаберите шта дугме отвара.",
+      "relatedChoose": "Изаберите садржај",
+      "searchPlaceholder": "Претражите по наслову",
+      "searching": "Претрага…",
+      "searchEmpty": "Нема одговарајућег садржаја",
+      "searchError": "Претрага није успела. Покушајте поново.",
+      "done": "Готово",
+      "imageCaptionLabel": "Натпис"
     },
     "audiencePlaceholder": "Изаберите циљну публику",
     "loading": "Учитавање едитора...",
@@ -253,7 +273,9 @@
     "audienceNone": "Публика још није изабрана",
     "audienceSaved_one": "Сачувана публика: {{count}} организација или јединица",
     "audienceSaved_few": "Сачувана публика: {{count}} организације или јединице",
-    "audienceSaved_other": "Сачувана публика: {{count}} организација или јединица"
+    "audienceSaved_other": "Сачувана публика: {{count}} организација или јединица",
+    "blockPlaceholder": "Откуцајте „/” за блокове",
+    "headingPlaceholder": "Наслов"
   },
   "sample": {
     "saveNotice": "Пробни режим: ништа није сачувано.",

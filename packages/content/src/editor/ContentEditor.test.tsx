@@ -917,17 +917,12 @@ describe('shipped createEditorExtensions configuration', () => {
 
   it('accepts custom nodeViewLabels', async () => {
     const { createEditorExtensions } = await import('./editor-extensions.ts');
+    const { DEFAULT_NODE_VIEW_LABELS } = await import('./node-view-labels.ts');
     const customLabels = {
-      noteKinds: { tip: 'Savjet', warning: 'Upozorenje', disclaimer: 'Odricanje' },
+      ...DEFAULT_NODE_VIEW_LABELS,
+      noteType: 'Vrsta napomene',
+      noteKinds: { tip: 'Savet', warning: 'Upozorenje', disclaimer: 'Odricanje odgovornosti' },
       stepTitle: 'Naslov koraka',
-      checklistLabel: '',
-      ctaKinds: { suggest_topic: 'Predlozi temu', open_content: 'Otvori', open_collection: 'Kolekcija', open_service: 'Usluga' },
-      ctaLabelPlaceholder: 'Oznaka dugmeta',
-      relatedSearch: 'ID resursa',
-      relatedEmpty: '(nema)',
-      imageAlt: 'Alt tekst',
-      imageCaption: 'Opis',
-      imagePlaceholder: 'Prevuci ili nalepi sliku',
     };
     const extensions = createEditorExtensions({ nodeViewLabels: customLabels });
     expect(extensions.length).toBeGreaterThan(0);

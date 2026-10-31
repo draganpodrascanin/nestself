@@ -16,6 +16,7 @@ import {
   ImageView,
   ChecklistItemView,
 } from './node-views.tsx';
+import { BLOCK_DIALOG_EVENT } from './BlockDialogs.tsx';
 
 // ---------------------------------------------------------------------------
 // Minimal mock for ReactNodeViewProps
@@ -42,7 +43,7 @@ function makeMockProps(attrs: Record<string, unknown> = {}, editable = true): an
     selected: false,
     editor: {
       isEditable: editable,
-      view: { state: { doc: { nodeSize: 10 } } },
+      view: { state: { doc: { nodeSize: 10 } }, dom: document.createElement('div') },
     },
     getPos: () => 0,
     extension: {},
@@ -170,7 +171,6 @@ describe('CtaView', () => {
   it('renders CTA kind label in the button', () => {
     const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, false);
     render(<CtaView {...props} />);
-    // When not editable, only the button preview shows the kind label (no select)
     expect(screen.getByText('Suggest topic')).toBeInTheDocument();
   });
 
@@ -180,28 +180,25 @@ describe('CtaView', () => {
     expect(screen.getByText('Get Started')).toBeInTheDocument();
   });
 
-  it('shows kind selector when editable', () => {
-    const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, true);
+  it('opens the configuration dialog for this node when clicked', async () => {
+    const user = userEvent.setup();
+    const props = makeMockProps({ ctaKind: 'open_content', targetId: 'res_1', label: 'Read more' }, true);
+    props.getPos = () => 7;
+    const onRequest = vi.fn();
+    props.editor.view.dom.addEventListener(BLOCK_DIALOG_EVENT, (e: Event) => onRequest((e as CustomEvent).detail));
     render(<CtaView {...props} />);
-    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /call to action: read more/i }));
+    expect(onRequest).toHaveBeenCalledWith({
+      type: 'cta',
+      pos: 7,
+      attrs: { ctaKind: 'open_content', targetId: 'res_1', label: 'Read more' },
+    });
   });
 
-  it('calls updateAttributes when kind changes and Done is clicked', async () => {
-    const user = userEvent.setup();
-    const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, true);
+  it('cannot be opened when the editor is read-only', () => {
+    const props = makeMockProps({ ctaKind: 'suggest_topic', label: null }, false);
     render(<CtaView {...props} />);
-
-    // Open the custom combobox inside the CTA dialog
-    const combobox = screen.getByRole('combobox', { name: 'Action' });
-    await user.click(combobox);
-
-    // Pick the "open_content" option from the listbox
-    const option = screen.getByRole('option', { name: /open.content/i });
-    await user.click(option);
-
-    // Click "Done" to commit the change (the dialog uses local form state)
-    await user.click(screen.getByRole('button', { name: 'Done' }));
-    expect(props.updateAttributes).toHaveBeenCalled();
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 });
 
@@ -210,23 +207,32 @@ describe('CtaView', () => {
 // ---------------------------------------------------------------------------
 
 describe('RelatedResourceView', () => {
-  it('renders resource ID when set', () => {
-    const props = makeMockProps({ contentResourceId: 'res_123' }, false);
+  it('shows the stored title, never the raw id', () => {
+    const props = makeMockProps({ contentResourceId: 'res_123', contentResourceTitle: 'My Resource' }, false);
     render(<RelatedResourceView {...props} />);
-    expect(screen.getByText('res_123')).toBeInTheDocument();
+    expect(screen.getByText('My Resource')).toBeInTheDocument();
+    expect(screen.queryByText('res_123')).not.toBeInTheDocument();
   });
 
-  it('shows (none) when resource ID is null', () => {
+  it('asks for a resource when none is chosen', () => {
     const props = makeMockProps({ contentResourceId: null }, false);
     render(<RelatedResourceView {...props} />);
-    expect(screen.getByText('(none)')).toBeInTheDocument();
+    expect(screen.getByText('Choose a resource')).toBeInTheDocument();
   });
 
-  it('shows resource title or ID when editable', () => {
+  it('opens the picker for this node when clicked', async () => {
+    const user = userEvent.setup();
     const props = makeMockProps({ contentResourceId: 'res_123', contentResourceTitle: 'My Resource' }, true);
+    props.getPos = () => 3;
+    const onRequest = vi.fn();
+    props.editor.view.dom.addEventListener(BLOCK_DIALOG_EVENT, (e: Event) => onRequest((e as CustomEvent).detail));
     render(<RelatedResourceView {...props} />);
-    // The stored title is displayed instead of a bare text input
-    expect(screen.getByText('My Resource')).toBeInTheDocument();
+    await user.click(screen.getByRole('button'));
+    expect(onRequest).toHaveBeenCalledWith({
+      type: 'related',
+      pos: 3,
+      attrs: { contentResourceId: 'res_123', contentResourceTitle: 'My Resource' },
+    });
   });
 });
 
@@ -249,11 +255,11 @@ describe('ImageView', () => {
     expect(img).toHaveAttribute('src', '/api/ops/cms/media/asset_abc/original');
   });
 
-  it('shows alt and caption inputs when editable', () => {
-    const props = makeMockProps({ mediaAssetId: 'asset_abc', alt: 'Alt text', caption: 'Caption' }, true);
+  it('shows labelled alt text and caption inputs when editable', () => {
+    const props = makeMockProps({ mediaAssetId: 'asset_abc', alt: 'Alt', caption: 'Cap' }, true);
     render(<ImageView {...props} />);
-    expect(screen.getByPlaceholderText('Alt text (required)')).toHaveValue('Alt text');
-    expect(screen.getByPlaceholderText('Caption (optional)')).toHaveValue('Caption');
+    expect(screen.getByRole('textbox', { name: 'Alt text' })).toHaveValue('Alt');
+    expect(screen.getByRole('textbox', { name: 'Caption' })).toHaveValue('Cap');
   });
 
   it('shows caption as figcaption when not editable', () => {
@@ -266,9 +272,7 @@ describe('ImageView', () => {
     const user = userEvent.setup();
     const props = makeMockProps({ mediaAssetId: 'asset_abc', alt: '', caption: '' }, true);
     render(<ImageView {...props} />);
-
-    const altInput = screen.getByPlaceholderText('Alt text (required)');
-    await user.type(altInput, 'New alt');
+    await user.type(screen.getByRole('textbox', { name: 'Alt text' }), 'New alt');
     expect(props.updateAttributes).toHaveBeenCalled();
   });
 });

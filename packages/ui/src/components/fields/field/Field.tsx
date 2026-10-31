@@ -74,6 +74,7 @@ export interface InputProps {
   className?: string;
   id?: string;
   autoComplete?: string;
+  maxLength?: number;
   'aria-describedby'?: string;
 }
 

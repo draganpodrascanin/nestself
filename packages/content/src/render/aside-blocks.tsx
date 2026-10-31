@@ -53,7 +53,8 @@ function InfoIcon() {
   );
 }
 
-const NOTE_KIND_ICONS: Record<string, () => ReactNode> = {
+/** Shared with the editor's note view so both look the same. */
+export const NOTE_KIND_ICONS: Record<string, () => ReactNode> = {
   warning: WarningIcon,
   tip: LightbulbIcon,
   disclaimer: InfoIcon,
@@ -63,7 +64,7 @@ const NOTE_KIND_ICONS: Record<string, () => ReactNode> = {
 // ProfessionalNote
 // ---------------------------------------------------------------------------
 
-const NOTE_KIND_STYLES: Record<string, string> = {
+export const NOTE_KIND_STYLES: Record<string, string> = {
   warning: 'border-warning bg-warning-surface',
   tip: 'border-success bg-success-surface',
   disclaimer: 'border-border-control bg-raised',

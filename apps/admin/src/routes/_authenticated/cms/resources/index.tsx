@@ -36,9 +36,16 @@ function ResourceListPage() {
   const { principal, effectiveActions } = useAuth();
   const canWrite = principal ? can(principal, 'content.write', undefined, effectiveActions) : false;
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [apiResources, setApiResources] = useState<ResourceSummary[]>([]);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [apiLoading, setApiLoading] = useState(!isSampleDataMode);
+  // The API result is keyed by the filter it was loaded for; a new filter shows
+  // the loading state until its own result arrives.
+  const [apiResult, setApiResult] = useState<{
+    filter: string | null;
+    items: ResourceSummary[];
+    error: string | null;
+  } | null>(null);
+  const apiLoading = !isSampleDataMode && (apiResult === null || apiResult.filter !== categoryFilter);
+  const apiResources = apiResult?.items ?? [];
+  const apiError = apiResult?.error ?? null;
 
   // Fetch resources from API in API mode
   useEffect(() => {
@@ -49,20 +56,19 @@ function ResourceListPage() {
     async function load() {
       try {
         const resp = await cmsApi.listResources({ categoryId: categoryFilter ?? undefined });
-        if (!cancelled) {
-          setApiResources(resp.items);
-          setApiLoading(false);
-        }
+        if (!cancelled) setApiResult({ filter: categoryFilter, items: resp.items, error: null });
       } catch (err) {
         if (!cancelled) {
           const code = (err as { code?: string }).code ?? 'unknown';
-          setApiError(t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }));
-          setApiLoading(false);
+          setApiResult({
+            filter: categoryFilter,
+            items: [],
+            error: t(`cms:error.${code}`, { defaultValue: t('cms:error.unknown') }),
+          });
         }
       }
     }
 
-    setApiLoading(true);
     void load();
     return () => { cancelled = true; };
   }, [categoryFilter, t]);
