@@ -1,9 +1,10 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Badge, Field, Heading, Select, Text } from '@nestself/ui';
+import { Alert, Badge, Heading, Text } from '@nestself/ui';
 import type { OrgAdminApi } from '@nestself/api-client';
 import { accessErrorKey } from './access-errors';
 import type { AccessMember } from './access-labels';
+import { MemberPicker } from './member-picker';
 import { sampleEffectiveActions } from './sample-access';
 import { usePreviewAccess } from './use-org-admin';
 
@@ -20,12 +21,13 @@ function groupByPrefix(actions: readonly string[]): [string, string[]][] {
 export interface EffectiveAccessPanelProps {
   adminApi: OrgAdminApi;
   orgId: string;
-  members: readonly AccessMember[];
+  /** Sample mode: the members to choose from; otherwise they are searched through the API. */
+  sampleMembers: readonly AccessMember[];
   sampleMode: boolean;
 }
 
 /** What a chosen member can do in the organization, from `previewAccess`. */
-export function EffectiveAccessPanel({ adminApi, orgId, members, sampleMode }: EffectiveAccessPanelProps) {
+export function EffectiveAccessPanel({ adminApi, orgId, sampleMembers, sampleMode }: EffectiveAccessPanelProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const headingId = useId();
   const [userId, setUserId] = useState<string | null>(null);
@@ -44,13 +46,16 @@ export function EffectiveAccessPanel({ adminApi, orgId, members, sampleMode }: E
         {t('workspace:access.preview.title')}
       </Heading>
       <Text tone="secondary">{t('workspace:access.preview.lead')}</Text>
-      <Field label={t('workspace:access.preview.member')} className="max-w-md">
-        <Select
-          options={members.map((m) => ({ value: m.userId, label: m.displayName }))}
+      <div className="max-w-md">
+        <MemberPicker
+          adminApi={adminApi}
+          orgId={sampleMode ? null : orgId}
+          sampleMembers={sampleMembers}
+          label={t('workspace:access.preview.member')}
           placeholder={t('workspace:access.assign.choose')}
           onValueChange={setUserId}
         />
-      </Field>
+      </div>
       {errorKey ? (
         <Alert tone="danger">{t(`workspace:access.errors.${errorKey}`)}</Alert>
       ) : userId && !sampleMode && preview.isPending ? (

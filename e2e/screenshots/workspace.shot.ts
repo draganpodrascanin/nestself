@@ -7,7 +7,12 @@
  * response is the step-up trigger: the first `POST /orgs/:orgId/grants` is
  * answered in the browser with the API's own 403 `step_up_required` body, as
  * the server would after 30 minutes, so the real dialog opens and starts a
- * real challenge against the stub API.
+ * real challenge against the stub API; the capture waits until the dialog
+ * names the masked address the code went to (`u***@example.com`).
+ *
+ * The member choices of the access page (the effective-access panel, the
+ * assign and transfer dialogs) carry the "Search members" field above their
+ * select; the captures pick from the plain list, without a search.
  */
 import { test, expect } from '@playwright/test';
 import { removeDeveloperAccount } from '../auth/support';
@@ -88,6 +93,10 @@ test('workspace sign-in, access screen, dialogs and step-up', async ({ page }) =
   const stepUp = page.getByRole('dialog', { name: 'Verify your identity' });
   await expect(stepUp).toBeVisible({ timeout: 10_000 });
   expect((await challenge).status()).toBe(200);
+  // The start answer's `emailMasked`: the description names where the code went.
+  await expect(stepUp.getByText('We sent a verification code to u***@example.com. Enter it to continue.')).toBeVisible({
+    timeout: 10_000,
+  });
   await shot(page, 'step-up-dialog');
   // Cancel: nothing is assigned (the create is not retried).
   await stepUp.getByRole('button', { name: 'Cancel' }).click();

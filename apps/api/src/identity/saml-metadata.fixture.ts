@@ -1,6 +1,11 @@
 /**
- * Test fixtures: two self-signed certificates (generated with openssl for
- * these tests only, private keys discarded) and SAML metadata using them.
+ * Fixtures for the stub-mode fake and the tests: two self-signed
+ * certificates (generated with openssl for this purpose only, private keys
+ * discarded) and SAML metadata using them. The stub-mode
+ * `FakeMetadataFetcher` (`sso/fake-metadata-fetcher.ts`) serves
+ * `SAMPLE_SAML_METADATA` for every metadata URL nothing seeded; the
+ * production fetcher never imports this file. Nothing is signed with these
+ * certificates and nothing trusts them.
  */
 
 /** CN=idp.acme.example, notAfter 2027-11-29T07:18:28Z. */

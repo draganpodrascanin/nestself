@@ -13,11 +13,10 @@ export function providerNamePreview(slug: string, protocol: SsoProtocol): string
   return `org-${slug}-${protocol.toLowerCase()}`;
 }
 
-/** An absolute http(s) URL, as the contract's `z.string().url()` fields expect. */
-export function isHttpUrl(value: string): boolean {
+/** An absolute URL starting with `https://`, as the contract's metadata URL and issuer fields require. */
+export function isHttpsUrl(value: string): boolean {
   try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:';
+    return value.startsWith('https://') && new URL(value).protocol === 'https:';
   } catch {
     return false;
   }

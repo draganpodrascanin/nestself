@@ -40,7 +40,13 @@ Authorization is enforced on the server by two global guards in `apps/api`: `Aut
 
 ## Enterprise SSO
 
-Federated sign-in is SP-initiated only: `idpInitiatedAllowed` stays `false` until a risk-acceptance process exists. A new federated binding is created only for an address on a verified domain of the issuing connection (for OIDC also `email_verified`), through a pending invitation of that connection's organization or JIT on an `ACTIVE` connection; never bind or reuse a user by email without that verified-domain check, because a tenant-controlled IdP can assert any address. A provider-name slug (`org-<slug>-saml|oidc`) is reserved for one organization across both protocols: Cognito keeps federated pool users after a provider is deleted, so another organization must never take the name. Test links from `POST /ops/sso-connections/:id/test` are single-use nonces, and the SSO state is bound to the starting browser. Never store, return, log or audit the OIDC client secret: it goes straight to Cognito. `docs/auth/implementation.md` section 22.
+Federated sign-in is SP-initiated only: `idpInitiatedAllowed` stays `false` until a risk-acceptance process exists. A new federated binding is created only for an address on a verified domain of the issuing connection, through a pending invitation of that connection's organization or JIT on an `ACTIVE` connection; never bind or reuse a user by email without that verified-domain check, because a tenant-controlled IdP can assert any address. For OIDC the `email_verified` claim is required by default: when it is false or missing, the user confirms the address once with a code NestSelf mails before the binding is created (the pending binding, `apps/api/src/auth/sso-bind.service.ts`), and only a connection whose claim switch (`oidcEmailVerifiedClaimRequired`) staff turned off, after the client confirmed in writing that its `email` claim is the directory's verified address, binds without the claim. A provider-name slug (`org-<slug>-saml|oidc`) is reserved for one organization across both protocols: Cognito keeps federated pool users after a provider is deleted, so another organization must never take the name. Test links from `POST /ops/sso-connections/:id/test` are single-use nonces, and the SSO state is bound to the starting browser. Never store, return, log or audit the OIDC client secret: it goes straight to Cognito. `docs/auth/implementation.md` section 22.
+
+## Email, outbound requests and addresses in URLs
+
+1. **Email after commit.** A mail goes out after the transaction that justifies it has committed, never inside it: a rolled-back change must not leave a mail behind. Send through the `Mailer` port of `apps/api/src/mailer` (one module per template under `templates/`, four locales, `sr-Cyrl` transliterated from `sr-Latn`, registered in `templates/index.ts`); collect inside `withOrgScope` and send after it returns, as the invitation import does. Log the template, the locale and the recipient's domain, never the address, a code or a link. `docs/auth/implementation.md` section 24.
+2. **Outbound requests are guarded.** The API requests a URL that a tenant or staff typed only after `assertPublicHttpsUrl` and through a fetcher built like `HttpsMetadataFetcher` (`apps/api/src/sso/metadata-fetcher.ts`): `https:` only, no credentials in the URL, every resolved address public unicast (`isPublicAddress`), a timeout, a size cap and no redirects. Log the error's reason, never the URL or the body. Stub mode and tests use a fake (`FakeMetadataFetcher`), never the network.
+3. **No addresses in URLs.** A redirect, a link or a query string never carries an email address: keep the address on the server under an opaque, short-lived handle, as the pending SSO binding does (`/sign-in?reason=sso_email_unverified&bind=<handle>`). Such a handle is a bearer secret while it lives: keep it out of audit details and logs (the access log redacts `Location` and `Referer`). Screens show a masked address (`maskEmail`) at most.
 
 ## No installs during parallel work
 
@@ -51,7 +57,7 @@ After the initial `pnpm install`, no worker runs `pnpm install`, `pnpm add`, `pn
 - **Unit and component tests**: colocated next to the source file as `*.test.ts` or `*.test.tsx`, run by Vitest (`pnpm test`).
 - **End-to-end tests**: in `e2e/` at the repo root, run by Playwright (`pnpm e2e`). See `e2e/README.md`.
 - **Motion tests**: real-browser animation checks in `e2e/motion/`, run by Playwright against Storybook (`pnpm e2e:motion`).
-- **Check scripts** (token smoke, locale parity, motion contract): run by `pnpm check`.
+- **Check scripts** (token smoke, locale parity, motion contract, web parity of the copies the workspace and admin apps share): run by `pnpm check`.
 
 ## How to add a component
 

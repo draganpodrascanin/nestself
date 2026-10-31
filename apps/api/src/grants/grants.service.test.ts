@@ -71,6 +71,8 @@ function input(r: GrantRow): GrantInput {
 
 /** Executor handed out by the mocked `withTransaction` (system context). */
 const SYSTEM_TX = { kind: 'system-tx' };
+/** Executor handed out by the mocked `withOrgScope` (the organization's tenant scope). */
+const ORG_TX = { kind: 'org-tx' };
 
 const ACTOR = { userId: 'user_ivana', context: { kind: 'organization', orgId: ORG } } as Principal;
 
@@ -95,7 +97,7 @@ function createMocks() {
     findByIdAndOrg: vi.fn(async (id: string) => ({ id, orgId: ORG })),
   };
   const db = {
-    withOrgScope: vi.fn(async (_org: string, fn: (tx: never) => Promise<unknown>) => fn(null as never)),
+    withOrgScope: vi.fn(async (_org: string, fn: (tx: never) => Promise<unknown>) => fn(ORG_TX as never)),
     withTransaction: vi.fn(async (fn: (tx: never) => Promise<unknown>) => fn(SYSTEM_TX as never)),
   };
   const principalLoader = {
@@ -200,14 +202,14 @@ describe('GrantsService', () => {
       const err = await apiError(svc.create(ORG, CREATE, ACTOR));
       expect(err.getStatus()).toBe(409);
       expect(err.code).toBe('subject_not_member');
-      expect(m.authzRepo.findActiveMembership).toHaveBeenCalledWith('user_ana', ORG, null);
+      expect(m.authzRepo.findActiveMembership).toHaveBeenCalledWith('user_ana', ORG, ORG_TX);
     });
 
     it('rejects an org unit that does not belong to the organization with 404', async () => {
       m.orgUnits.findByIdAndOrg.mockResolvedValueOnce(null as never);
       const err = await apiError(svc.create(ORG, CREATE, ACTOR));
       expect(err.getStatus()).toBe(404);
-      expect(m.orgUnits.findByIdAndOrg).toHaveBeenCalledWith('team_product', ORG, null);
+      expect(m.orgUnits.findByIdAndOrg).toHaveBeenCalledWith('team_product', ORG, ORG_TX);
     });
 
     it('rejects missing required condition types with 400 missing_conditions', async () => {
@@ -272,6 +274,7 @@ describe('GrantsService', () => {
             conditionTypes: ['spending_ceiling'],
           },
         }),
+        { tx: ORG_TX },
       );
     });
 
@@ -307,14 +310,14 @@ describe('GrantsService', () => {
       expect(err.getStatus()).toBe(409);
       expect(err.code).toBe('owner_exists');
       expect(err.details).toEqual({ currentOwnerUserId: 'user_ivana' });
-      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, null);
+      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, ORG_TX);
       expect(m.authzRepo.createGrant).not.toHaveBeenCalled();
       expect(m.audit.record).not.toHaveBeenCalled();
     });
 
     it('create allows the first employer_owner of an organization', async () => {
       const res = await svc.create(ORG, OWNER_CREATE, ACTOR);
-      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, null);
+      expect(m.authzRepo.findActiveOwnerGrants).toHaveBeenCalledWith(ORG, NOW, ORG_TX);
       expect(m.authzRepo.createGrant.mock.calls[0]![0]).toMatchObject({ templateKey: 'employer_owner', subjectUserId: 'user_stefan' });
       expect(res.id).toBe('grant_new');
     });
@@ -387,7 +390,7 @@ describe('GrantsService', () => {
       const err = await apiError(svc.transferOwnership(ORG, BODY, ACTOR));
       expect(err.getStatus()).toBe(409);
       expect(err.code).toBe('subject_not_member');
-      expect(m.authzRepo.findActiveMembership).toHaveBeenCalledWith('user_stefan', ORG, null);
+      expect(m.authzRepo.findActiveMembership).toHaveBeenCalledWith('user_stefan', ORG, ORG_TX);
       expect(m.authzRepo.revokeGrants).not.toHaveBeenCalled();
     });
 
@@ -404,7 +407,7 @@ describe('GrantsService', () => {
       expect(m.authzRepo.revokeGrants).toHaveBeenCalledWith(
         ['grant_owner_ivana'],
         { at: NOW, byUserId: 'user_ivana', reason: 'ownership_transferred' },
-        null,
+        ORG_TX,
       );
       expect(m.authzRepo.revokeGrantTree).not.toHaveBeenCalled();
       const values = m.authzRepo.createGrant.mock.calls[0]![0] as Record<string, unknown>;
@@ -443,6 +446,7 @@ describe('GrantsService', () => {
             newOwnerUserId: 'user_stefan',
           }),
         }),
+        { tx: ORG_TX },
       );
       expect(m.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -457,6 +461,7 @@ describe('GrantsService', () => {
             previousOwnerUserId: 'user_ivana',
           }),
         }),
+        { tx: ORG_TX },
       );
       for (const [event] of m.audit.record.mock.calls as unknown as [{ details: Record<string, unknown> }][]) {
         expect(event.details).not.toHaveProperty('byStaff');
@@ -483,7 +488,7 @@ describe('GrantsService', () => {
       m.authzRepo.reparentActiveChildren.mockResolvedValueOnce([child]);
       await svc.transferOwnership(ORG, BODY, ACTOR);
 
-      expect(m.authzRepo.reparentActiveChildren).toHaveBeenCalledWith('grant_owner_ivana', 'grant_new', null);
+      expect(m.authzRepo.reparentActiveChildren).toHaveBeenCalledWith('grant_owner_ivana', 'grant_new', ORG_TX);
       // Re-parenting runs after the new grant exists, inside the same transaction.
       expect(m.authzRepo.createGrant.mock.invocationCallOrder[0]!).toBeLessThan(
         m.authzRepo.reparentActiveChildren.mock.invocationCallOrder[0]!,
@@ -498,6 +503,7 @@ describe('GrantsService', () => {
           recordId: 'grant_child_stefan',
           details: expect.objectContaining({ reparented: true, fromGrantId: 'grant_owner_ivana' }),
         }),
+        { tx: ORG_TX },
       );
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_jovan', [ORG]);
       expect(m.principalLoader.invalidateDelegatees).toHaveBeenCalledWith(['grant_new']);
@@ -522,7 +528,7 @@ describe('GrantsService', () => {
         expect(m.authzRepo.revokeGrants).toHaveBeenCalledWith(
           ['grant_owner_ivana'],
           { at: NOW, byUserId: 'user_nikola', reason: 'ownership_transferred' },
-          null,
+          ORG_TX,
         );
         expect(m.authzRepo.createGrant.mock.calls[0]![0]).toMatchObject({ subjectUserId: 'user_stefan', grantedByUserId: 'user_nikola' });
         expect(res.revokedGrantId).toBe('grant_owner_ivana');
@@ -566,7 +572,7 @@ describe('GrantsService', () => {
     it('lists org grants in the org scope with the filter', async () => {
       const res = await svc.list(ORG, { subjectUserId: 'user_ana', includeRevoked: true });
       expect(m.db.withOrgScope).toHaveBeenCalledWith(ORG, expect.any(Function));
-      expect(m.authzRepo.listGrantsForOrg).toHaveBeenCalledWith(ORG, { subjectUserId: 'user_ana', includeRevoked: true }, null);
+      expect(m.authzRepo.listGrantsForOrg).toHaveBeenCalledWith(ORG, { subjectUserId: 'user_ana', includeRevoked: true }, ORG_TX);
       expect(res.items).toHaveLength(1);
       expect(res.items[0]!.conditions).toEqual([{ type: 'spending_ceiling', amountMinor: 1000, currency: 'EUR' }]);
     });
@@ -593,7 +599,7 @@ describe('GrantsService', () => {
 
     it('maps the patch fields explicitly and audits the changed fields', async () => {
       const res = await svc.update(ORG, 'grant_1', { validUntil: '2027-01-01T00:00:00.000Z' }, ACTOR);
-      expect(m.authzRepo.updateGrant).toHaveBeenCalledWith('grant_1', { validUntil: new Date('2027-01-01T00:00:00.000Z') }, null);
+      expect(m.authzRepo.updateGrant).toHaveBeenCalledWith('grant_1', { validUntil: new Date('2027-01-01T00:00:00.000Z') }, ORG_TX);
       expect(res.validUntil).toBe('2027-01-01T00:00:00.000Z');
       expect(m.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -601,6 +607,7 @@ describe('GrantsService', () => {
           recordId: 'grant_1',
           details: expect.objectContaining({ changedFields: ['validUntil'], templateKey: 'team_manager', scopeType: 'org_unit' }),
         }),
+        { tx: ORG_TX },
       );
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_ana', [ORG]);
     });
@@ -686,7 +693,7 @@ describe('GrantsService', () => {
       expect(m.authzRepo.revokeGrantTree).toHaveBeenCalledWith(
         ['grant_1'],
         { at: NOW, byUserId: 'user_ivana', reason: 'role ended' },
-        null,
+        ORG_TX,
       );
     });
 
@@ -705,6 +712,8 @@ describe('GrantsService', () => {
           details: { reason: 'parent_revoked', rootGrantId: 'grant_1' },
         }),
       ]);
+      // Both rows commit or roll back with the revocation.
+      expect(m.audit.record.mock.calls.map((c) => (c as unknown[])[1])).toEqual([{ tx: ORG_TX }, { tx: ORG_TX }]);
     });
 
     it('invalidates every subject in the revoked tree', async () => {
@@ -753,6 +762,7 @@ describe('GrantsService', () => {
           action: 'grant.delegated',
           details: expect.objectContaining({ parentGrantId: 'grant_parent', depth: 1, actionsCount: 1, scopeType: 'organization' }),
         }),
+        { tx: ORG_TX },
       );
       expect(m.principalLoader.invalidateUser).toHaveBeenCalledWith('user_stefan', [ORG]);
     });
@@ -981,10 +991,11 @@ describe('GrantsService', () => {
 
       expect(m.db.withTransaction).toHaveBeenCalledTimes(1);
       expect(m.authzRepo.createGrant.mock.calls[0]![1]).toBe(SYSTEM_TX);
+      expect((m.audit.record.mock.calls[0] as unknown[])[1]).toEqual({ tx: SYSTEM_TX });
       expect(order).toEqual(['begin', 'insert', 'audit', 'commit']);
     });
 
-    it('rolls the platform grant back when the audit writer rejects (strict mode)', async () => {
+    it('rolls the platform grant back when its audit insert fails', async () => {
       let committed = false;
       m.db.withTransaction.mockImplementationOnce(async (fn: (tx: never) => Promise<unknown>) => {
         const result = await fn(SYSTEM_TX as never); // a rejection here rolls the insert back
@@ -1054,6 +1065,7 @@ describe('GrantsService', () => {
           details: { reason: 'parent_revoked', rootGrantId: 'grant_platform' },
         }),
       ]);
+      expect(m.audit.record.mock.calls.map((c) => (c as unknown[])[1])).toEqual([{ tx: SYSTEM_TX }, { tx: SYSTEM_TX }]);
       expect(res.revokedAt).not.toBeNull();
     });
 

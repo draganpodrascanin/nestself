@@ -2,8 +2,12 @@
  * Append-only audit writer. Inserts AuditEvent rows with retention, IP hashing
  * and detail sanitisation.
  *
- * SESS-R-22: record() must never throw to the caller on a write failure
- * (except when strictMode is true, used in tests).
+ * Inside a transaction, `record(event, { tx })` inserts through the caller's
+ * executor: the row commits with the change it describes, and an insert
+ * failure propagates so that the change rolls back with it.
+ *
+ * SESS-R-22: without an executor, record() never throws to the caller on a
+ * write failure (except when strictMode is true, used in tests).
  *
  * @see D-21, SESS-R-20, SESS-R-22
  */
@@ -12,8 +16,9 @@ import {
   hashIp as _hashIp,
   parseUserAgent as _parseUserAgent,
 } from '../common/request-fingerprint.js';
+import type { DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { AuditRepository } from '../db/repositories/audit.repository.js';
+import { AuditRepository, type NewAuditEvent } from '../db/repositories/audit.repository.js';
 import { categoryFor, type AuditAction, type AuditCategory } from './audit-events.js';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +73,11 @@ const FORBIDDEN_KEY_NAMES = [
   'nonce',
   'testNonce',
   'browserNonce',
+  // Email-code flows (step-up of a federated user, pending SSO binding): the
+  // handle of a pending binding and the challenge token are bearer secrets
+  // for as long as they live.
+  'handle',
+  'challengeToken',
   'cookie',
   'authorization',
   'body',
@@ -127,41 +137,58 @@ export class AuditWriter {
 
   constructor(private readonly repo: AuditRepository) {}
 
-  /** Insert an audit event. Never throws in production (SESS-R-22). */
-  async record(input: AuditEventInput): Promise<void> {
+  /**
+   * Insert an audit event.
+   *
+   * With `opts.tx` (the executor of a `withOrgScope` or `withTransaction`
+   * callback) the row is part of that transaction and any error propagates,
+   * so the caller's change rolls back with its audit row: strict by
+   * construction, whatever `strictMode` says. Without it the row is written
+   * on the pool and a failure is logged, never thrown (SESS-R-22).
+   */
+  async record(input: AuditEventInput, opts: { tx?: DbExecutor } = {}): Promise<void> {
+    if (opts.tx) {
+      await this.repo.insertEvent(await this.buildRow(input), opts.tx);
+      return;
+    }
     try {
-      const now = input.occurredAt ?? new Date();
-      const category = categoryFor(input.action);
-      const dataCategory = CATEGORY_TO_DATA_CATEGORY[category];
-      const retentionDays = await this.getRetentionDays(dataCategory);
-      const retainUntil = new Date(now.getTime() + retentionDays * 86_400_000);
-
-      const ipHash = input.ip ? hashIp(input.ip) : null;
-      const userAgentFamily = parseUserAgentFamily(input.userAgent);
-      const details = input.details
-        ? sanitizeDetails(input.details)
-        : {};
-
-      await this.repo.insertEvent({
-        occurredAt: now,
-        actorUserId: input.actorUserId,
-        actorKind: input.actorKind,
-        orgId: input.orgId ?? null,
-        action: input.action,
-        recordType: input.recordType,
-        recordId: input.recordId,
-        result: input.result,
-        category,
-        details,
-        sessionId: input.sessionId ?? null,
-        ipHash,
-        userAgentFamily,
-        retainUntil,
-      });
+      await this.repo.insertEvent(await this.buildRow(input));
     } catch (err) {
       this.logger.error(err, `Failed to write audit event: ${input.action}`);
       if (this.strictMode) throw err;
     }
+  }
+
+  /** The stored row: category, retention horizon (read on the pool), IP hash, sanitised details. */
+  private async buildRow(input: AuditEventInput): Promise<NewAuditEvent> {
+    const now = input.occurredAt ?? new Date();
+    const category = categoryFor(input.action);
+    const dataCategory = CATEGORY_TO_DATA_CATEGORY[category];
+    const retentionDays = await this.getRetentionDays(dataCategory);
+    const retainUntil = new Date(now.getTime() + retentionDays * 86_400_000);
+
+    const ipHash = input.ip ? hashIp(input.ip) : null;
+    const userAgentFamily = parseUserAgentFamily(input.userAgent);
+    const details = input.details
+      ? sanitizeDetails(input.details)
+      : {};
+
+    return {
+      occurredAt: now,
+      actorUserId: input.actorUserId,
+      actorKind: input.actorKind,
+      orgId: input.orgId ?? null,
+      action: input.action,
+      recordType: input.recordType,
+      recordId: input.recordId,
+      result: input.result,
+      category,
+      details,
+      sessionId: input.sessionId ?? null,
+      ipHash,
+      userAgentFamily,
+      retainUntil,
+    };
   }
 
   // -------------------------------------------------------------------------

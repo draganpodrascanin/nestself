@@ -13,7 +13,7 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import type { InvitationAcceptResponse, PermissionTemplateDefinition } from '@nestself/contracts';
+import type { InvitationAcceptResponse, Locale, PermissionTemplateDefinition } from '@nestself/contracts';
 import { DbService } from '../db/db.service.js';
 import { InvitationsRepository } from '../db/repositories/invitations.repository.js';
 import { IdentityRepository } from '../db/repositories/identity.repository.js';
@@ -30,6 +30,7 @@ import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
 import { InvitationMembershipActivator, invitableTemplateFor } from './invitation-membership-activator.js';
 import { apiOriginForSurface, buildSsoStartUrl } from '../auth/sso-start-url.js';
+import { emailDomain } from '../mailer/mask-email.js';
 
 @Injectable()
 export class InvitationActivationService {
@@ -96,10 +97,12 @@ export class InvitationActivationService {
   // Accept (POST /invitations/accept) -- @Public, API-R-08
   // -----------------------------------------------------------------------
 
+  /** `locale` is the language of the code email the email-OTP path sends; the pool default when absent. */
   async accept(
     token: string,
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
+    locale?: Locale,
   ): Promise<InvitationAcceptResponse> {
     const tokenHash = hashToken(token);
     const now = new Date();
@@ -151,7 +154,7 @@ export class InvitationActivationService {
     // Idempotent: if already accepted, return the same response shape with a
     // fresh challenge (do not create a second membership).
     if (invitation.acceptedAt) {
-      return this.buildSignInResponse(invitation, template, surface, meta);
+      return this.buildSignInResponse(invitation, template, surface, meta, { locale });
     }
 
     // Determine the temporary password for staff/expert populations.
@@ -173,18 +176,22 @@ export class InvitationActivationService {
           tx,
         );
 
-        // 2. Audit user.created before side effects (SESS-R-22).
+        // 2. Audit user.created before side effects (SESS-R-22), in this
+        //    transaction: the row rolls back with the user if a later step fails.
         if (userCreated) {
-          await this.audit.record({
-            action: 'user.created',
-            actorUserId: null,
-            actorKind: 'SYSTEM',
-            orgId: invitation.orgId,
-            recordType: 'user',
-            recordId: userId,
-            result: 'ALLOWED',
-            details: { emailNormalised: invitation.email, via: 'invitation' },
-          });
+          await this.audit.record(
+            {
+              action: 'user.created',
+              actorUserId: null,
+              actorKind: 'SYSTEM',
+              orgId: invitation.orgId,
+              recordType: 'user',
+              recordId: userId,
+              result: 'ALLOWED',
+              details: { emailNormalised: invitation.email, via: 'invitation' },
+            },
+            { tx },
+          );
         }
 
         // 3. Ensure identity-provider user exists (with temp password for
@@ -192,16 +199,19 @@ export class InvitationActivationService {
         await this.ensureIdpUser(invitation.email, userId, tx, tempPassword);
 
         // 4. Audit identity.linked.
-        await this.audit.record({
-          action: 'identity.linked',
-          actorUserId: null,
-          actorKind: 'SYSTEM',
-          orgId: invitation.orgId,
-          recordType: 'external_identity',
-          recordId: userId,
-          result: 'ALLOWED',
-          details: { emailNormalised: invitation.email, provider: 'cognito' },
-        });
+        await this.audit.record(
+          {
+            action: 'identity.linked',
+            actorUserId: null,
+            actorKind: 'SYSTEM',
+            orgId: invitation.orgId,
+            recordType: 'external_identity',
+            recordId: userId,
+            result: 'ALLOWED',
+            details: { emailNormalised: invitation.email, provider: 'cognito' },
+          },
+          { tx },
+        );
 
         // 5-7. Membership, default grants, invitation accepted (shared with
         //      the SSO callback).
@@ -227,7 +237,7 @@ export class InvitationActivationService {
     await this.principalLoader.invalidateUser(userId, [invitation.orgId]);
 
     // Build sign-in response based on population.
-    return this.buildSignInResponse(invitation, template, surface, meta, tempPassword);
+    return this.buildSignInResponse(invitation, template, surface, meta, { tempPassword, locale });
   }
 
   // -----------------------------------------------------------------------
@@ -337,7 +347,7 @@ export class InvitationActivationService {
    * Uses SignInService to create challenge tokens, keeping the ChallengeStore
    * and throttle logic centralised in AuthModule.
    *
-   * - employee -> email OTP via SignInService.emailOtpStart()
+   * - employee -> email OTP via SignInService.emailOtpStart(), in `locale`
    * - staff/expert/employer_admin -> password with temp password via
    *   SignInService.passwordSignIn(), returning NEW_PASSWORD_REQUIRED challenge
    * (SSO invitations never get here: `accept` answers them first.)
@@ -347,7 +357,7 @@ export class InvitationActivationService {
     template: PermissionTemplateDefinition,
     surface: 'workspace' | 'admin',
     meta: { ip: string | null; userAgent: string | null },
-    tempPassword?: string,
+    { tempPassword, locale }: { tempPassword?: string; locale?: Locale } = {},
   ): Promise<InvitationAcceptResponse> {
     const population = template.population;
 
@@ -374,16 +384,17 @@ export class InvitationActivationService {
         }
         // Unexpected: tokens returned immediately. Fall through to email OTP.
       } catch {
-        // Password flow failed; fall through to email OTP.
+        // Password flow failed; fall through to email OTP. The log names the
+        // invitee's domain only, never the address.
         this.logger.debug(
-          `Password flow failed for ${invitation.email}; falling back to email OTP`,
+          `Password flow failed during acceptance (recipientDomain=${emailDomain(invitation.email)}); falling back to email OTP`,
         );
       }
     }
 
     // Employee population, or fallback: email OTP.
     try {
-      const otpResult = await this.signIn.emailOtpStart(invitation.email, meta);
+      const otpResult = await this.signIn.emailOtpStart(invitation.email, meta, locale);
       return {
         method: 'email_otp',
         challengeToken: otpResult.challengeToken,
@@ -393,7 +404,7 @@ export class InvitationActivationService {
     } catch {
       // If even the OTP start fails (e.g. throttled), return a best-effort
       // response. The user can retry via the normal sign-in page.
-      this.logger.warn(`Email OTP start failed for ${invitation.email} during acceptance`);
+      this.logger.warn(`Email OTP start failed during acceptance (recipientDomain=${emailDomain(invitation.email)})`);
       return {
         method: 'email_otp',
         challengeToken: null,

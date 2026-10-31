@@ -7,7 +7,7 @@
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -21,6 +21,7 @@ import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { hashSessionId } from '../src/session/session-helpers.js';
 import { sessionKey } from '../src/redis/redis-keys.js';
+import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 import {
   MeResponseSchema,
@@ -640,6 +641,11 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
     let ivanaSessionId: string;
     let anaMembershipId: string;
 
+    beforeEach(() => {
+      // The step-up routes allow 10 a minute per session, and the cases share ivana's.
+      resetThrottlerStorage(app);
+    });
+
     function extractSessionId(res: request.Response): string {
       const cookies = res.headers['set-cookie'] as unknown as string[];
       const match = cookies.map((c) => c.match(/nestself_session=([^;]+)/)).find(Boolean);
@@ -676,7 +682,7 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
         .set('X-CSRF-Token', ivanaCsrf)
         .send({});
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ method: 'email_otp', ssoStartUrl: null });
+      expect(res.body).toMatchObject({ method: 'email_otp', ssoStartUrl: null, emailMasked: 'u***@example.com' });
       return res.body.challengeToken as string;
     }
 
@@ -787,6 +793,46 @@ describe.skipIf(!shouldRun)('Auth (e2e)', () => {
       expect(endRes.body).toHaveProperty('status', 'ENDED');
 
       await ivanaAgent.post('/api/auth/sign-out').set('X-CSRF-Token', newCsrf);
+    });
+
+    it('step-up/resend inside the cooldown answers 429 rate_limited with retryAfter', async () => {
+      const email = 'user_ivana@example.com';
+      const ivana = await signIn(email);
+      const post = (path: string, body: Record<string, string>) =>
+        ivana.agent.post(`/api/auth/step-up/${path}`).set('X-CSRF-Token', ivana.csrf).send(body);
+
+      const start = await post('start', {});
+      expect(start.status).toBe(200);
+      const first = start.body.challengeToken as string;
+      const firstCode = lastCode(email);
+
+      // The cooldown starts with the first code.
+      const refused = await post('resend', { challengeToken: first });
+      expect(refused.status).toBe(429);
+      expect(refused.body).toHaveProperty('code', 'rate_limited');
+      expect(refused.body.details.retryAfter).toBeGreaterThan(0);
+      expect(refused.body.details.retryAfter).toBeLessThanOrEqual(60);
+
+      // 61 seconds later: a new code, under a new token.
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      try {
+        const renewed = await post('resend', { challengeToken: first });
+        expect(renewed.status).toBe(200);
+        expect(renewed.body).toMatchObject({ method: 'email_otp', ssoStartUrl: null, emailMasked: 'u***@example.com' });
+        const second = renewed.body.challengeToken as string;
+        expect(second).not.toBe(first);
+        const secondCode = lastCode(email);
+
+        const old = await post('verify', { challengeToken: first, response: firstCode });
+        expect(old.status).toBe(401);
+        expect(old.body).toHaveProperty('code', 'invalid_challenge');
+
+        const verified = await post('verify', { challengeToken: second, response: secondCode });
+        expect(verified.status).toBe(204);
+        await ivana.agent.post('/api/auth/sign-out').set('X-CSRF-Token', extractCsrf(verified));
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

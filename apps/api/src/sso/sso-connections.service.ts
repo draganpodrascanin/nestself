@@ -6,7 +6,7 @@
  *   POST :id/test      DRAFT|TESTING -> TESTING  (>= 1 verified domain; registers the provider)
  *   POST :id/activate  TESTING -> ACTIVE         (lastTestedAt set by a bound test sign-in)
  *   PATCH status       ACTIVE -> SUSPENDED, SUSPENDED -> ACTIVE, TESTING -> DRAFT (removes the provider)
- *   PATCH provider fields on ACTIVE -> TESTING (lastTestedAt cleared: re-test, then activate)
+ *   PATCH provider fields on ACTIVE or SUSPENDED -> TESTING (lastTestedAt cleared: re-test, then activate)
  *
  * The provider is registered in the identity provider (Cognito) when the
  * connection is tested. One exception: an OIDC client secret is write-only
@@ -18,10 +18,25 @@
  * Writes run in the connection's tenant scope (`withOrgScope`, so row-level
  * security checks them) and share that transaction with their audit
  * events; status changes are conditional on the status read (a concurrent
- * change answers 409). Any reset, re-test or provider change while TESTING
- * or ACTIVE clears `lastTestedAt` (an ACTIVE connection moves back to
- * TESTING), so activation always follows a test sign-in against the current
- * configuration (SSO-R-01).
+ * change answers 409). Any reset, re-test or provider change while the
+ * provider is registered (TESTING, ACTIVE, SUSPENDED) clears `lastTestedAt`
+ * (ACTIVE and SUSPENDED connections move back to TESTING), so activation,
+ * and a reactivation after a suspension, always follow a test sign-in
+ * against the current configuration (SSO-R-01).
+ *
+ * `metadataUrl` and `oidcIssuer` must point at a public host: create, PATCH
+ * and test refuse a URL that `assertPublicHttpsUrl` refuses (https only,
+ * every resolved address public unicast) with 422 `validation`
+ * (`details.field`, `details.reason`), and answer 503 `unavailable` when the
+ * resolver does not answer for the host. The signing-certificate expiry of
+ * a SAML connection is re-read from its metadata at test and at a PATCH that
+ * changes `metadataUrl` or `metadataXml`: fetched from the URL (which
+ * Cognito uses when both are set) through the `MetadataFetcher`, else read
+ * from the XML. A fetch that fails there fails nothing: the identity
+ * provider already accepted the configuration, so the stored expiry stays,
+ * one warning names the error (never the URL or the document), and the
+ * nightly `sso.certificate-expiry` job fetches again. Metadata without a
+ * readable signing certificate keeps a stored expiry too (with a warning).
  *
  * A slug belongs to one organization: create and a DRAFT protocol change
  * refuse with 409 `conflict` (`details.reason: 'provider_name_taken'`) when
@@ -33,8 +48,13 @@
  * Every status change audits `sso_connection.changed { from, to }`
  * (SSO-R-02). Audit details never carry the client secret or the domain
  * verification token.
+ *
+ * `oidcEmailVerifiedClaimRequired` (SSO-R-08) is NestSelf's own rule, not a
+ * provider setting: create stores it as sent (the contract defaults it to
+ * true), a PATCH changes it without a re-test, and both audit its value.
+ * SAML connections store it and ignore it.
  */
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { SSO_TEST_TTL, ssoTestKey } from '../redis/redis-keys.js';
 import { buildSsoStartUrl } from '../auth/sso-start-url.js';
@@ -57,7 +77,7 @@ import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import type { AuditAction } from '../audit/audit-events.js';
 import { isPublicEmailDomain } from '../auth/constants.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { DbService } from '../db/db.service.js';
+import { DbService, type DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { IdentityResolutionService } from '../auth/identity-resolution.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -79,7 +99,16 @@ import {
   IdentityProviderError,
   type ProviderInput,
 } from '../identity/identity-provider.service.js';
+import { certificateExpiryFromMetadata } from '../identity/saml-metadata.js';
 import { DNS_TXT_RESOLVER, type DnsTxtResolver } from './dns-txt-resolver.js';
+import {
+  HostLookupUnavailableError,
+  METADATA_FETCHER,
+  MetadataUrlError,
+  assertPublicHttpsUrl,
+  metadataFailureLabel,
+  type MetadataFetcher,
+} from './metadata-fetcher.js';
 import { ProviderNameTooLongError, buildProviderName, slugProviderNames } from './provider-name.js';
 
 /** DI token of {@link SsoConfig}. */
@@ -116,8 +145,26 @@ const PROVIDER_FIELDS = [
   'attributeMapping',
 ] as const;
 
+/** URL fields something fetches (the API the metadata, Cognito the OIDC discovery): public hosts only. */
+const PUBLIC_URL_FIELDS = ['metadataUrl', 'oidcIssuer'] as const;
+type PublicUrlField = (typeof PUBLIC_URL_FIELDS)[number];
+
 function validation(message: string, details?: Record<string, unknown>): ApiHttpException {
   return new ApiHttpException({ status: 422, code: 'validation', message, details });
+}
+
+/** 422 for a `metadataUrl` or `oidcIssuer` that `assertPublicHttpsUrl` refused. */
+function publicUrlRefused(field: PublicUrlField, err: MetadataUrlError): ApiHttpException {
+  return validation(`${field}: ${err.message}`, { field, reason: err.reason });
+}
+
+/** 503 when the resolver did not answer for a URL's host: the URL is neither accepted nor refused. */
+function hostLookupUnavailable(): ApiHttpException {
+  return new ApiHttpException({
+    status: 503,
+    code: 'unavailable',
+    message: 'The host name could not be resolved. Try again later.',
+  });
 }
 
 function connectionState(message: string): ApiHttpException {
@@ -167,6 +214,8 @@ function sameValue(a: string, b: string): boolean {
 
 @Injectable()
 export class SsoConnectionsService {
+  private readonly logger = new Logger(SsoConnectionsService.name);
+
   constructor(
     private readonly db: DbService,
     private readonly repo: SsoRepository,
@@ -178,6 +227,7 @@ export class SsoConnectionsService {
     @Inject(DNS_TXT_RESOLVER) private readonly dns: DnsTxtResolver,
     @Inject(SSO_CONFIG) private readonly config: SsoConfig,
     @Inject(KEY_VALUE_STORE) private readonly store: KeyValueStore,
+    @Inject(METADATA_FETCHER) private readonly metadata: MetadataFetcher,
   ) {}
 
   // ── Read ──────────────────────────────────────────────────────────────
@@ -197,6 +247,7 @@ export class SsoConnectionsService {
     if (!(await this.organizations.findById(body.orgId))) throw notFound('Organization not found');
     if (body.defaultOrgUnitId) await this.assertOrgUnit(body.orgId, body.defaultOrgUnitId);
     await this.assertProviderNameAvailable(name, body.orgId, 'slug');
+    await this.assertPublicUrls(body);
 
     const values = {
       orgId: body.orgId,
@@ -210,6 +261,8 @@ export class SsoConnectionsService {
       attributeMapping: body.attributeMapping ?? null,
       idpInitiatedAllowed: false,
       jitProvisioning: body.jitProvisioning,
+      // OIDC only; stored as sent (the contract defaults it to true) and ignored for SAML.
+      oidcEmailVerifiedClaimRequired: body.oidcEmailVerifiedClaimRequired,
       defaultOrgUnitId: body.defaultOrgUnitId ?? null,
     };
 
@@ -231,8 +284,10 @@ export class SsoConnectionsService {
             protocol: created.protocol,
             cognitoProviderName: created.cognitoProviderName,
             jitProvisioning: created.jitProvisioning,
+            oidcEmailVerifiedClaimRequired: created.oidcEmailVerifiedClaimRequired,
             providerStaged: stage,
           }),
+          { tx },
         );
         return created;
       });
@@ -253,6 +308,9 @@ export class SsoConnectionsService {
     let to = body.status && body.status !== from ? body.status : from;
 
     if (to !== from) this.assertPatchTransition(conn, to);
+    // Only a move into DRAFT (TESTING -> DRAFT) is a reset. A PATCH on a DRAFT
+    // keeps it DRAFT, and keeps or stages its provider (syncStagedProvider).
+    const reset = to === 'DRAFT' && from !== 'DRAFT';
 
     const protocolChange = body.protocol !== undefined && body.protocol !== conn.protocol;
     if (protocolChange && from !== 'DRAFT') {
@@ -264,11 +322,12 @@ export class SsoConnectionsService {
     if (body.oidcClientSecret !== undefined && (body.protocol ?? conn.protocol) !== 'OIDC') {
       throw secretNotApplicable();
     }
-    if (body.oidcClientSecret !== undefined && to === 'DRAFT') {
+    if (body.oidcClientSecret !== undefined && reset) {
       throw validation('A reset to DRAFT removes the provider; send the client secret in a separate request', {
         field: 'oidcClientSecret',
       });
     }
+    await this.assertPublicUrls(body);
 
     const patch: SsoConnectionPatch = {};
     const changedFields: string[] = [];
@@ -283,6 +342,8 @@ export class SsoConnectionsService {
     setField('oidcClientId', body.oidcClientId);
     setField('attributeMapping', body.attributeMapping);
     setField('jitProvisioning', body.jitProvisioning);
+    // NestSelf's own rule (SSO-R-08), not a provider field: no re-test.
+    setField('oidcEmailVerifiedClaimRequired', body.oidcEmailVerifiedClaimRequired);
     setField('defaultOrgUnitId', body.defaultOrgUnitId);
     if (body.idpInitiatedAllowed === false) setField('idpInitiatedAllowed', false);
     if (body.oidcClientSecret !== undefined) changedFields.push('oidcClientSecret');
@@ -297,10 +358,11 @@ export class SsoConnectionsService {
     const merged = { ...conn, ...patch, cognitoProviderName: name };
     const providerChanged = PROVIDER_FIELDS.some((f) => changedFields.includes(f));
 
-    // SSO-R-01: a provider change on an ACTIVE connection takes it back to
-    // TESTING, so it is activated again only after a test sign-in against
-    // the new configuration. Combined with a suspension it is ambiguous.
-    if (from === 'ACTIVE' && providerChanged) {
+    // SSO-R-01: a provider change on an ACTIVE or SUSPENDED connection takes
+    // it back to TESTING, so it is activated again (or reactivated after the
+    // suspension) only after a test sign-in against the new configuration.
+    // Combined with a status change it is ambiguous.
+    if ((from === 'ACTIVE' || from === 'SUSPENDED') && providerChanged) {
       if (to !== from) {
         throw validation('Change the provider settings and the status in separate requests', { field: 'status' });
       }
@@ -308,7 +370,7 @@ export class SsoConnectionsService {
     }
 
     // Identity provider first: a refused configuration leaves the row unchanged.
-    if (to === 'DRAFT') {
+    if (reset) {
       await this.callIdp(() => this.idp.deleteProvider(conn.cognitoProviderName));
     } else if (REGISTERED_STATUSES.has(from)) {
       if (providerChanged) {
@@ -318,10 +380,16 @@ export class SsoConnectionsService {
       await this.syncStagedProvider(conn, merged, protocolChange, providerChanged, body.oidcClientSecret);
     }
 
+    // New metadata, new signing certificate: derived, so not one of the audited `fields`.
+    if (changedFields.includes('metadataUrl') || changedFields.includes('metadataXml')) {
+      const certificateExpiresAt = await this.certificateExpiry(merged);
+      if (certificateExpiresAt !== undefined) patch.certificateExpiresAt = certificateExpiresAt;
+    }
+
     if (to !== from) patch.status = to;
     if (protocolChange) patch.cognitoProviderName = name;
-    // A reset or a provider change while TESTING or ACTIVE invalidates the last test sign-in.
-    if (to === 'DRAFT' || ((from === 'TESTING' || from === 'ACTIVE') && providerChanged)) patch.lastTestedAt = null;
+    // A reset or a provider change while the provider is registered invalidates the last test sign-in.
+    if (reset || (REGISTERED_STATUSES.has(from) && providerChanged)) patch.lastTestedAt = null;
 
     let updated: SsoConnectionRow;
     try {
@@ -329,9 +397,14 @@ export class SsoConnectionsService {
         const row = await this.repo.updateConnection(id, patch, tx, { fromStatus: from });
         if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
         if (changedFields.length > 0) {
-          await this.audit.record(this.event('sso_connection.updated', row, actor, { fields: changedFields }));
+          // The claim switch is a security decision: its new value is recorded, not only its name.
+          const details =
+            patch.oidcEmailVerifiedClaimRequired === undefined
+              ? { fields: changedFields }
+              : { fields: changedFields, oidcEmailVerifiedClaimRequired: patch.oidcEmailVerifiedClaimRequired };
+          await this.audit.record(this.event('sso_connection.updated', row, actor, details), { tx });
         }
-        if (to !== from) await this.recordStatusChange(row, actor, from, to);
+        if (to !== from) await this.recordStatusChange(row, actor, from, to, tx);
         return row;
       });
     } catch (err) {
@@ -394,6 +467,7 @@ export class SsoConnectionsService {
             recordType: 'sso_domain',
             recordId: added.id,
           }),
+          { tx },
         );
         return added;
       });
@@ -439,6 +513,7 @@ export class SsoConnectionsService {
           recordType: 'sso_domain',
           recordId: row.id,
         }),
+        { tx },
       );
       return marked;
     });
@@ -457,6 +532,8 @@ export class SsoConnectionsService {
     }
 
     const input = this.providerInput(conn);
+    // The host may resolve elsewhere than when the URL was stored.
+    await this.assertPublicUrls(conn);
     const existing = await this.callIdp(() => this.idp.describeProvider(conn.cognitoProviderName));
     if (existing) {
       await this.callIdp(() => this.idp.updateProvider(input));
@@ -466,7 +543,7 @@ export class SsoConnectionsService {
       }
       await this.callIdp(() => this.idp.createProvider(input));
     }
-    const info = await this.idp.describeProvider(conn.cognitoProviderName).catch(() => null);
+    const certificateExpiresAt = await this.certificateExpiry(conn);
 
     // Every test needs a new test sign-in before activation (SSO-R-01).
     await this.db.withOrgScope(conn.orgId, async (tx) => {
@@ -475,15 +552,16 @@ export class SsoConnectionsService {
         {
           status: 'TESTING',
           lastTestedAt: null,
-          ...(info ? { certificateExpiresAt: info.certificateExpiresAt } : {}),
+          ...(certificateExpiresAt !== undefined ? { certificateExpiresAt } : {}),
         },
         tx,
         { fromStatus: conn.status },
       );
       if (!updated) throw connectionState('The connection changed meanwhile; reload and try again');
-      if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING');
+      if (conn.status !== 'TESTING') await this.recordStatusChange(updated, actor, conn.status, 'TESTING', tx);
       await this.audit.record(
         this.event('sso_connection.tested', updated, actor, { cognitoProviderName: conn.cognitoProviderName }),
+        { tx },
       );
     });
 
@@ -507,7 +585,7 @@ export class SsoConnectionsService {
     const updated = await this.db.withOrgScope(conn.orgId, async (tx) => {
       const row = await this.repo.updateConnection(conn.id, { status: 'ACTIVE' }, tx, { fromStatus: 'TESTING' });
       if (!row) throw connectionState('The connection changed meanwhile; reload and try again');
-      await this.recordStatusChange(row, actor, 'TESTING', 'ACTIVE');
+      await this.recordStatusChange(row, actor, 'TESTING', 'ACTIVE', tx);
       return row;
     });
     return this.toResponse({ ...updated, domains: conn.domains });
@@ -553,6 +631,59 @@ export class SsoConnectionsService {
     if (holders.some((c) => c.cognitoProviderName === name && c.id !== selfId)) {
       throw conflict('A connection with this provider name already exists');
     }
+  }
+
+  /**
+   * Every URL given must pass `assertPublicHttpsUrl`, judged by the fetcher's
+   * own lookup: a refusal is 422 `validation` (`details.field`,
+   * `details.reason`), a resolver that does not answer is 503 `unavailable`
+   * (nothing is known about the URL yet; try again later).
+   */
+  private async assertPublicUrls(urls: Partial<Record<PublicUrlField, string | null>>): Promise<void> {
+    for (const field of PUBLIC_URL_FIELDS) {
+      const url = urls[field];
+      if (!url) continue;
+      try {
+        await assertPublicHttpsUrl(url, this.metadata.lookup);
+      } catch (err) {
+        if (err instanceof MetadataUrlError) throw publicUrlRefused(field, err);
+        if (err instanceof HostLookupUnavailableError) throw hostLookupUnavailable();
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * The signing-certificate expiry of the connection's metadata: fetched from
+   * `metadataUrl` when set (Cognito uses the URL when both are), else read
+   * from `metadataXml`; null for OIDC (no SAML signing certificate at all).
+   * `undefined` means "keep the stored value", with one warning naming the
+   * provider and never the URL or the document: the fetch failed (the
+   * nightly job fetches again), or the metadata carries no readable signing
+   * certificate while a date is stored. Metadata without a certificate never
+   * erases a known date; it yields null only when nothing was stored.
+   */
+  private async certificateExpiry(
+    conn: Pick<SsoConnectionRow, 'protocol' | 'cognitoProviderName' | 'metadataUrl' | 'metadataXml' | 'certificateExpiresAt'>,
+  ): Promise<Date | null | undefined> {
+    if (conn.protocol !== 'SAML') return null;
+    let xml = conn.metadataXml;
+    if (conn.metadataUrl) {
+      try {
+        xml = await this.metadata.fetchXml(conn.metadataUrl);
+      } catch (err) {
+        this.logger.warn(
+          `SSO connection ${conn.cognitoProviderName}: metadata not fetched (${metadataFailureLabel(err)}); certificate expiry left unchanged`,
+        );
+        return undefined;
+      }
+    }
+    const expiresAt = certificateExpiryFromMetadata(xml);
+    if (expiresAt || !conn.certificateExpiresAt) return expiresAt;
+    this.logger.warn(
+      `SSO connection ${conn.cognitoProviderName}: no signing certificate in the metadata; certificate expiry left unchanged`,
+    );
+    return undefined;
   }
 
   private async assertOrgUnit(orgId: string, unitId: string): Promise<void> {
@@ -617,18 +748,20 @@ export class SsoConnectionsService {
     }
   }
 
+  /** Audit a status change inside the transaction that made it. */
   private async recordStatusChange(
     row: SsoConnectionRow,
     actor: Principal,
     from: SsoConnectionStatus,
     to: SsoConnectionStatus,
+    tx: DbExecutor,
   ): Promise<void> {
-    await this.audit.record(this.event('sso_connection.changed', row, actor, { from, to }));
-    if (to === 'ACTIVE') await this.audit.record(this.event('sso_connection.activated', row, actor, { from }));
+    await this.audit.record(this.event('sso_connection.changed', row, actor, { from, to }), { tx });
+    if (to === 'ACTIVE') await this.audit.record(this.event('sso_connection.activated', row, actor, { from }), { tx });
     // Leaving ACTIVE (suspension, or a provider change back to TESTING) stops
     // discovery from routing to the connection: both are a deactivation.
     if (from === 'ACTIVE' && to !== 'ACTIVE') {
-      await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }));
+      await this.audit.record(this.event('sso_connection.deactivated', row, actor, { from }), { tx });
     }
   }
 
@@ -664,6 +797,7 @@ export class SsoConnectionsService {
       oidcClientId: row.oidcClientId,
       idpInitiatedAllowed: row.idpInitiatedAllowed,
       jitProvisioning: row.jitProvisioning,
+      oidcEmailVerifiedClaimRequired: row.oidcEmailVerifiedClaimRequired,
       defaultOrgUnitId: row.defaultOrgUnitId,
       certificateExpiresAt: row.certificateExpiresAt?.toISOString() ?? null,
       lastTestedAt: row.lastTestedAt?.toISOString() ?? null,

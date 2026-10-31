@@ -26,7 +26,7 @@ import {
 } from '@phosphor-icons/react';
 import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
-import { useAuth, resolveRouteAuth } from '../auth';
+import { useAuth, resolveRouteAuth, AuthenticatedErrorComponent } from '../auth';
 import { ApiStatus } from '../components/ApiStatus';
 import { UserMenu } from '../features/account/user-menu';
 import { ContextPicker } from '../features/context/context-picker';
@@ -45,6 +45,8 @@ export const Route = createFileRoute('/_authenticated')({
     }
   },
   component: AuthenticatedLayout,
+  // The session could not be loaded (not a 401): a retry screen, not a sign-out.
+  errorComponent: AuthenticatedErrorComponent,
 });
 
 interface NavEntry {
@@ -80,8 +82,10 @@ function AuthenticatedLayout() {
   const showHr = principal
     ? can(principal, 'program.overview', undefined, effectiveActions)
     : false;
-  const showAccess =
-    showHr && principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
+
+  // `/hr/access` sits outside the `_hr` gate: an employer owner holds
+  // `access.preview` without `program.overview`.
+  const showAccess = principal ? can(principal, 'access.preview', undefined, effectiveActions) : false;
 
   // Build nav items — Explore hidden without content.read, Saved without content.bookmark
   const coreNavItems: NavEntry[] = [
@@ -114,7 +118,7 @@ function AuthenticatedLayout() {
     ? [{ to: '/hr', icon: Buildings, label: t('common:nav.hr') }]
     : [];
 
-  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate as well.
+  // `/hr/people` and `/hr/org-units` sit under the `_hr` gate (`program.overview`).
   const peopleNav: NavEntry[] = showHr
     ? [{ to: '/hr/people', icon: UsersThree, label: t('workspace:people.nav') }]
     : [];

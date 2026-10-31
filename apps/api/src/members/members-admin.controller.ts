@@ -1,7 +1,7 @@
 /**
  * MembersAdminController — member listing and update (5.3).
  *
- * GET   /orgs/:orgId/members              — list (program.overview)
+ * GET   /orgs/:orgId/members              — list (program.overview or access.preview)
  * PATCH /orgs/:orgId/members/:membershipId — update (people.move)
  *
  * The existing MembersController already handles /orgs/:orgId/members
@@ -38,7 +38,10 @@ export class MembersAdminController {
   constructor(private readonly service: MembersAdminService) {}
 
   @Get()
-  @Authorize(ACTIONS['program.overview'], orgResourceFromContext('membership'))
+  @Authorize(
+    [ACTIONS['program.overview'], ACTIONS['access.preview']],
+    orgResourceFromContext('membership'),
+  )
   async list(
     @Param('orgId') orgId: string,
     @Query(new ZodValidationPipe(MemberListQuerySchema)) query: MemberListQuery,

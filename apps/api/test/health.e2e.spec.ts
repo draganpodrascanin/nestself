@@ -91,4 +91,37 @@ describe('Health (e2e)', () => {
 
     await app.close();
   });
+
+  it('GET /api/health is never throttled, while the throttler still counts other public routes', async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(DbService)
+      .useValue(dbStub)
+      .compile();
+
+    const app: INestApplication = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    await app.init();
+
+    try {
+      // Past the default 60 a minute from one address, as a load balancer polling often would be.
+      const server = app.getHttpServer();
+      const statuses: number[] = [];
+      for (let i = 0; i < 70; i++) statuses.push((await request(server).get('/api/health')).status);
+      expect(statuses.filter((s) => s !== 200)).toEqual([]);
+
+      // Control: the throttler is active in this application. The invitation accept route
+      // (10 a minute; an empty body is a 400 before any database read) refuses the same
+      // address on its eleventh request.
+      const accept: number[] = [];
+      for (let i = 0; i < 11; i++) {
+        accept.push((await request(server).post('/api/invitations/accept').send({})).status);
+      }
+      expect(accept.slice(0, 10)).toEqual(Array(10).fill(400));
+      expect(accept.at(-1)).toBe(429);
+    } finally {
+      await app.close();
+    }
+  });
 });

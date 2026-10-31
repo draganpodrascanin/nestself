@@ -8,16 +8,14 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  Field,
   FormErrorSummary,
-  Select,
   useToast,
 } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
 import type { GrantResponse } from '@nestself/contracts';
 import type { OrgAdminApi } from '@nestself/api-client';
 import { accessErrorKey } from './access-errors';
-import type { AccessMember } from './access-labels';
+import { MemberPicker } from './member-picker';
 import { useDelegateGrant } from './use-org-admin';
 
 const IDS = {
@@ -33,8 +31,8 @@ export interface DelegateGrantDialogProps {
   onClose: () => void;
   adminApi: OrgAdminApi;
   orgId: string;
-  /** Members who can receive the delegation (the delegator is left out). */
-  members: readonly AccessMember[];
+  /** The delegator, who is left out of the members the delegation can go to. */
+  currentUserId: string;
 }
 
 /**
@@ -42,7 +40,7 @@ export interface DelegateGrantDialogProps {
  * within its scope and conditions. The server rejects anything wider with
  * `delegation_exceeds_boundary`.
  */
-export function DelegateGrantDialog({ parent, onClose, adminApi, orgId, members }: DelegateGrantDialogProps) {
+export function DelegateGrantDialog({ parent, onClose, adminApi, orgId, currentUserId }: DelegateGrantDialogProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const { add: addToast } = useToast();
   const delegateGrant = useDelegateGrant(adminApi, orgId);
@@ -105,13 +103,17 @@ export function DelegateGrantDialog({ parent, onClose, adminApi, orgId, members 
       >
         <form id={IDS.form} tabIndex={-1} noValidate onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
-          <Field id={IDS.member} label={t('workspace:access.delegate.member')} error={errorFor(IDS.member)} required>
-            <Select
-              options={members.map((m) => ({ value: m.userId, label: m.displayName }))}
-              placeholder={t('workspace:access.assign.choose')}
-              onValueChange={setMemberId}
-            />
-          </Field>
+          <MemberPicker
+            adminApi={adminApi}
+            orgId={orgId}
+            id={IDS.member}
+            label={t('workspace:access.delegate.member')}
+            placeholder={t('workspace:access.assign.choose')}
+            required
+            error={errorFor(IDS.member)}
+            excludeUserId={currentUserId}
+            onValueChange={setMemberId}
+          />
           <div id={IDS.actions} tabIndex={-1}>
             <CheckboxGroup
               legend={t('workspace:access.delegate.actions')}

@@ -76,10 +76,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The certificate, zone and prefix list values are fixtures for the offline synth; the real ones come from CDK-setup.md section 8.
       - name: CDK synth (staging, offline)
         run: >-
           pnpm --filter @nestself/cdk exec cdk synth
           -c stage=staging
           -c account=000000000000
           -c platform=true
+          -c authCertificateArn=arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000
+          -c hostedZoneId=Z0000000000000000000
+          -c cloudfrontOriginPrefixListId=pl-00000000000000000
           --no-lookups

@@ -12,7 +12,6 @@ import {
   Input,
   RadioGroup,
   RadioItem,
-  Select,
   Switch,
   Text,
   Textarea,
@@ -20,11 +19,12 @@ import {
 } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
 import { SSO_SLUG_PATTERN } from '@nestself/contracts';
-import type { OrganizationResponse, SsoProtocol } from '@nestself/contracts';
+import type { SsoProtocol } from '@nestself/contracts';
 import type { OpsAdminApi, SsoConnectionCreateBody } from '@nestself/api-client';
+import { OrganizationPicker } from '../organizations/organization-picker';
 import { ssoProblem } from './sso-errors';
 import type { SsoErrorKey, SsoField } from './sso-errors';
-import { isHttpUrl, providerNamePreview } from './sso-labels';
+import { isHttpsUrl, providerNamePreview } from './sso-labels';
 import { useCreateSsoConnection } from './use-sso';
 
 const ID = {
@@ -48,16 +48,17 @@ export interface CreateConnectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   opsApi: OpsAdminApi;
-  organizations: OrganizationResponse[];
 }
 
 /**
  * Creates a DRAFT connection (`POST /ops/sso-connections`, administration
  * step-up). IdP-initiated sign-in is not offered: the API accepts only
  * `false` until the risk-acceptance process exists. The OIDC client secret
- * is write-only: sent once, held by the identity provider, never shown.
+ * is write-only: sent once, held by the identity provider, never shown, and
+ * dropped from the form and the mutation state whatever the outcome. The
+ * organization is found with a server-side search (`OrganizationPicker`).
  */
-export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizations }: CreateConnectionDialogProps) {
+export function CreateConnectionDialog({ open, onOpenChange, opsApi }: CreateConnectionDialogProps) {
   const { t } = useTranslation(['admin', 'common']);
   const { add: addToast } = useToast();
   const create = useCreateSsoConnection(opsApi);
@@ -70,6 +71,7 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
   const [oidcIssuer, setOidcIssuer] = useState('');
   const [oidcClientId, setOidcClientId] = useState('');
   const [oidcClientSecret, setOidcClientSecret] = useState('');
+  const [claimRequired, setClaimRequired] = useState(true);
   const [jit, setJit] = useState(false);
   const [defaultOrgUnitId, setDefaultOrgUnitId] = useState('');
   const [errors, setErrors] = useState<FormError[]>([]);
@@ -106,10 +108,10 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
     if (!orgId) problems.push(problem('orgId', t('admin:sso.errors.organizationRequired')));
     if (!SSO_SLUG_PATTERN.test(slug.trim())) problems.push(problem('slug', t('admin:sso.errors.slugPattern')));
     if (protocol === 'SAML') {
-      if (source === 'url' && !isHttpUrl(metadataUrl.trim())) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
+      if (source === 'url' && !isHttpsUrl(metadataUrl.trim())) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
       if (source === 'xml' && !metadataXml.trim()) problems.push(problem('metadataXml', t('admin:sso.errors.metadataXmlRequired')));
     } else {
-      if (!isHttpUrl(oidcIssuer.trim())) problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
+      if (!isHttpsUrl(oidcIssuer.trim())) problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
       if (!oidcClientId.trim()) problems.push(problem('oidcClientId', t('admin:sso.errors.clientIdRequired')));
     }
     return problems;
@@ -123,6 +125,7 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
     ...(protocol === 'SAML' && source === 'xml' ? { metadataXml: metadataXml.trim() } : {}),
     ...(protocol === 'OIDC' ? { oidcIssuer: oidcIssuer.trim(), oidcClientId: oidcClientId.trim() } : {}),
     ...(protocol === 'OIDC' && oidcClientSecret ? { oidcClientSecret } : {}),
+    ...(protocol === 'OIDC' ? { oidcEmailVerifiedClaimRequired: claimRequired } : {}),
     jitProvisioning: jit,
     ...(defaultOrgUnitId.trim() ? { defaultOrgUnitId: defaultOrgUnitId.trim() } : {}),
   });
@@ -136,8 +139,6 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
     if (problems.length > 0) return;
     try {
       await create.mutateAsync(body());
-      // Drop the request (and its secret) from the mutation state.
-      create.reset();
       addToast({ title: t('admin:sso.create.success'), tone: 'success' });
       finish();
     } catch (err) {
@@ -150,6 +151,11 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
       const name = fieldName(found.field);
       if (name) setErrors([problem(name, message)]);
       else setApiError(found.key);
+    } finally {
+      // The request carried the write-only secret: whatever the outcome, neither
+      // the mutation state nor the form keeps it.
+      create.reset();
+      setOidcClientSecret('');
     }
   };
 
@@ -162,14 +168,16 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
           {apiError ? <Alert tone="danger">{t(`admin:sso.errors.${apiError}`)}</Alert> : null}
 
-          <Field id={ID.orgId} label={labels.orgId} error={errorFor('orgId')} required>
-            <Select
-              placeholder={t('admin:sso.create.organizationPlaceholder')}
-              options={organizations.map((o) => ({ value: o.id, label: o.name }))}
-              value={orgId || undefined}
-              onValueChange={(value) => setOrgId(value ?? '')}
-            />
-          </Field>
+          <OrganizationPicker
+            opsApi={opsApi}
+            enabled={open}
+            id={ID.orgId}
+            label={labels.orgId}
+            placeholder={t('admin:sso.create.organizationPlaceholder')}
+            value={orgId}
+            onValueChange={setOrgId}
+            error={errorFor('orgId')}
+          />
 
           <RadioGroup label={labels.protocol} value={protocol} onValueChange={(value) => setProtocol(value as SsoProtocol)}>
             <RadioItem value="SAML">{t('admin:sso.protocols.SAML')}</RadioItem>
@@ -219,6 +227,14 @@ export function CreateConnectionDialog({ open, onOpenChange, opsApi, organizatio
               >
                 <Input type="password" value={oidcClientSecret} onChange={(e) => setOidcClientSecret(e.target.value)} autoComplete="off" />
               </Field>
+              <div className="space-y-1">
+                <Switch checked={claimRequired} onCheckedChange={setClaimRequired}>
+                  {t('admin:sso.create.oidcClaimRequired')}
+                </Switch>
+                <Text tone="secondary" typeRole="metadata">
+                  {t('admin:sso.create.oidcClaimRequiredHint')}
+                </Text>
+              </div>
             </>
           )}
 

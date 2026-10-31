@@ -14,6 +14,10 @@ describe('MemoryKeyValueStore', () => {
     vi.useRealTimers();
   });
 
+  it('declares itself as the in-memory store, so the health check does not have to guess', () => {
+    expect(store.kind).toBe('memory');
+  });
+
   // -- basic get/set --------------------------------------------------------
 
   it('returns null for a missing key', async () => {

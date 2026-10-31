@@ -127,14 +127,14 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       const handler = (prototype as Record<string, unknown>)[methodName];
       if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
       const targets = [handler, instance.constructor];
-      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authorize = reflector.getAllAndOverride<{ actions: string[] } | undefined>(AUTHORIZE_KEY, targets);
       const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
       const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
       policies[methodName] = isPublic
         ? 'public'
         : authenticated
           ? 'authenticated'
-          : (authorize?.action ?? 'none');
+          : (authorize?.actions[0] ?? 'none');
     }
 
     expect(policies).toEqual({
@@ -176,10 +176,10 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
       const handler = (prototype as Record<string, unknown>)[methodName];
       if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
       const targets = [handler, instance.constructor];
-      const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+      const authorize = reflector.getAllAndOverride<{ actions: string[] } | undefined>(AUTHORIZE_KEY, targets);
       const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
       const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
-      policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+      policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.actions[0] ?? 'none');
     }
 
     expect(policies).toEqual({
@@ -220,10 +220,10 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
         const handler = (prototype as Record<string, unknown>)[methodName];
         if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
         const targets = [handler, instance.constructor];
-        const authorize = reflector.getAllAndOverride<{ action: string } | undefined>(AUTHORIZE_KEY, targets);
+        const authorize = reflector.getAllAndOverride<{ actions: string[] } | undefined>(AUTHORIZE_KEY, targets);
         const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
         const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
-        policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.action ?? 'none');
+        policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.actions[0] ?? 'none');
       }
       return policies;
     };

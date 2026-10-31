@@ -19,6 +19,13 @@ export interface SetOptions {
  * Every method surfaces errors as `RedisUnavailableError` in the Redis implementation.
  */
 export interface KeyValueStore {
+  /**
+   * Which implementation this is. Each implementation declares it, so the
+   * health check can say what the API runs on without guessing from the class:
+   * an `up` from the in-memory store proves nothing about Redis.
+   */
+  readonly kind: 'memory' | 'redis';
+
   get(key: string): Promise<string | null>;
 
   /**

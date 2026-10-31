@@ -1,7 +1,7 @@
 /**
  * OrgUnitsController — organization tree administration (5.3).
  *
- * GET  /orgs/:orgId/org-units         — list (program.overview)
+ * GET  /orgs/:orgId/org-units         — list (program.overview or access.preview)
  * POST /orgs/:orgId/org-units         — create (org_units.manage)
  * PATCH /orgs/:orgId/org-units/:unitId — update (org_units.manage)
  * POST /orgs/:orgId/org-units/:unitId/move — move (org_units.manage)
@@ -39,7 +39,10 @@ export class OrgUnitsController {
   constructor(private readonly orgUnitsService: OrgUnitsService) {}
 
   @Get()
-  @Authorize(ACTIONS['program.overview'], orgResourceFromContext('org_unit'))
+  @Authorize(
+    [ACTIONS['program.overview'], ACTIONS['access.preview']],
+    orgResourceFromContext('org_unit'),
+  )
   async list(
     @Param('orgId') orgId: string,
     @Query('includeArchived') includeArchived?: string,

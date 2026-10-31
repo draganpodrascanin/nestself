@@ -129,8 +129,10 @@ export const envSchema = z
     ADMIN_URL: optionalUrl,
     API_PUBLIC_URL: optionalUrl,
 
-    // Email
+    // Email: the SES sender (absent: mails are logged, not sent) and the
+    // operations mailbox for alerts such as SSO certificate expiry (absent: log only)
     SES_FROM_EMAIL: optionalEmail,
+    OPS_ALERT_EMAIL: optionalEmail,
 
     // Maintenance jobs (worker process only): IANA timezone for the cron schedules
     JOBS_TIMEZONE: optionalString,

@@ -14,6 +14,19 @@ import {
   PasswordResetConfirmRequestSchema,
   ProfileDisplayNameRequestSchema,
   DISPLAY_NAME_MAX_LENGTH,
+  EMAIL_OTP_MAX_LENGTH,
+  EMAIL_OTP_MIN_LENGTH,
+  InvitationAcceptRequestSchema,
+  SSO_SIGN_IN_REASONS,
+  SsoBindResendRequestSchema,
+  SsoBindResendResponseSchema,
+  SsoBindStartRequestSchema,
+  SsoBindStartResponseSchema,
+  SsoBindTokenRequestSchema,
+  SsoBindVerifyRequestSchema,
+  SsoBindVerifyResponseSchema,
+  StepUpResendRequestSchema,
+  StepUpStartResponseSchema,
 } from './auth.ts';
 
 describe('DiscoverRequestSchema', () => {
@@ -307,5 +320,99 @@ describe('ProfileDisplayNameRequestSchema', () => {
     expect(() =>
       ProfileDisplayNameRequestSchema.parse({ displayName: 'x'.repeat(DISPLAY_NAME_MAX_LENGTH + 1) }),
     ).toThrow();
+  });
+});
+
+describe('phase 4 auth contracts', () => {
+  /** 32 random bytes, base64url: the length the pending-bind handle has. */
+  const HANDLE = 'A'.repeat(42) + '_';
+
+  it('contains the phase 4 codes and reasons', () => {
+    expect(AUTH_ERROR_CODES).toEqual(expect.arrayContaining(['step_up_unavailable', 'sso_denied']));
+    expect(SSO_SIGN_IN_REASONS).toContain('sso_rate_limited');
+  });
+
+  it('bind schemas', () => {
+    expect(SsoBindStartRequestSchema.safeParse({ handle: 'short' }).success).toBe(false);
+    expect(
+      StepUpStartResponseSchema.parse({ method: 'email_otp', challengeToken: 't', ssoStartUrl: null, emailMasked: 'd***@x.example' })
+        .emailMasked,
+    ).toBe('d***@x.example');
+  });
+
+  it('StepUpStartResponseSchema requires emailMasked, which may be null', () => {
+    const base = { method: 'email_otp', challengeToken: 't', ssoStartUrl: null };
+    expect(StepUpStartResponseSchema.parse({ ...base, emailMasked: null }).emailMasked).toBeNull();
+    expect(StepUpStartResponseSchema.safeParse(base).success).toBe(false);
+  });
+
+  it('StepUpResendRequestSchema requires the challenge token', () => {
+    expect(StepUpResendRequestSchema.parse({ challengeToken: 'tok' })).toEqual({ challengeToken: 'tok' });
+    expect(StepUpResendRequestSchema.safeParse({ challengeToken: '' }).success).toBe(false);
+    expect(StepUpResendRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoBindStartRequestSchema takes a base64url handle of 32 to 128 characters and an optional locale', () => {
+    expect(SsoBindStartRequestSchema.parse({ handle: HANDLE })).toEqual({ handle: HANDLE });
+    expect(SsoBindStartRequestSchema.parse({ handle: HANDLE, locale: 'hu' }).locale).toBe('hu');
+    for (const handle of ['x'.repeat(31), 'x'.repeat(129), `${'x'.repeat(40)}+/=`, `${'x'.repeat(40)} ab`]) {
+      expect(SsoBindStartRequestSchema.safeParse({ handle }).success, handle).toBe(false);
+    }
+    expect(SsoBindStartRequestSchema.safeParse({ handle: 'x'.repeat(32) }).success).toBe(true);
+    expect(SsoBindStartRequestSchema.safeParse({ handle: 'x'.repeat(128) }).success).toBe(true);
+    expect(SsoBindStartRequestSchema.safeParse({ handle: HANDLE, locale: 'de' }).success).toBe(false);
+  });
+
+  it('SsoBindStartResponseSchema carries the challenge token and the masked address, never empty', () => {
+    const body = { challengeToken: 'tok', emailMasked: 'i***@acme.example' };
+    expect(SsoBindStartResponseSchema.parse(body)).toEqual(body);
+    expect(SsoBindStartResponseSchema.safeParse({ ...body, emailMasked: '' }).success).toBe(false);
+    expect(SsoBindStartResponseSchema.safeParse({ ...body, emailMasked: null }).success).toBe(false);
+    expect(SsoBindStartResponseSchema.safeParse({ ...body, challengeToken: '' }).success).toBe(false);
+  });
+
+  it('SsoBindVerifyRequestSchema bounds the code by the email code lengths', () => {
+    const code = (n: number) => '1'.repeat(n);
+    for (const n of [EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH]) {
+      expect(SsoBindVerifyRequestSchema.safeParse({ challengeToken: 'tok', code: code(n) }).success, String(n)).toBe(true);
+    }
+    for (const n of [EMAIL_OTP_MIN_LENGTH - 1, EMAIL_OTP_MAX_LENGTH + 1]) {
+      expect(SsoBindVerifyRequestSchema.safeParse({ challengeToken: 'tok', code: code(n) }).success, String(n)).toBe(false);
+    }
+    expect(SsoBindVerifyRequestSchema.safeParse({ challengeToken: '', code: code(EMAIL_OTP_MAX_LENGTH) }).success).toBe(false);
+  });
+
+  it('SsoBindVerifyResponseSchema returns the path to continue on', () => {
+    expect(SsoBindVerifyResponseSchema.parse({ returnPath: '/home' })).toEqual({ returnPath: '/home' });
+    expect(SsoBindVerifyResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoBindResendRequestSchema requires the challenge token and takes an optional locale', () => {
+    expect(SsoBindResendRequestSchema.parse({ challengeToken: 'tok' })).toEqual({ challengeToken: 'tok' });
+    expect(SsoBindResendRequestSchema.parse({ challengeToken: 'tok', locale: 'sr-Cyrl' }).locale).toBe('sr-Cyrl');
+    expect(SsoBindResendRequestSchema.safeParse({ challengeToken: '' }).success).toBe(false);
+    expect(SsoBindResendRequestSchema.safeParse({}).success).toBe(false);
+    expect(SsoBindResendRequestSchema.safeParse({ challengeToken: 'tok', locale: 'de' }).success).toBe(false);
+  });
+
+  it('SsoBindResendResponseSchema carries the masked address, never empty', () => {
+    expect(SsoBindResendResponseSchema.parse({ emailMasked: 'i***@acme.example' })).toEqual({
+      emailMasked: 'i***@acme.example',
+    });
+    expect(SsoBindResendResponseSchema.safeParse({ emailMasked: '' }).success).toBe(false);
+    expect(SsoBindResendResponseSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('SsoBindTokenRequestSchema takes a non-empty ID token of at most 8192 characters', () => {
+    expect(SsoBindTokenRequestSchema.parse({ idToken: 'eyJ.x.y' })).toEqual({ idToken: 'eyJ.x.y' });
+    expect(SsoBindTokenRequestSchema.safeParse({ idToken: 'x'.repeat(8192) }).success).toBe(true);
+    expect(SsoBindTokenRequestSchema.safeParse({ idToken: 'x'.repeat(8193) }).success).toBe(false);
+    expect(SsoBindTokenRequestSchema.safeParse({ idToken: '' }).success).toBe(false);
+  });
+
+  it('InvitationAcceptRequestSchema accepts an optional locale of the four supported ones', () => {
+    expect(InvitationAcceptRequestSchema.parse({ token: 'tok' })).toEqual({ token: 'tok' });
+    expect(InvitationAcceptRequestSchema.parse({ token: 'tok', locale: 'sr-Latn' }).locale).toBe('sr-Latn');
+    expect(InvitationAcceptRequestSchema.safeParse({ token: 'tok', locale: 'de' }).success).toBe(false);
   });
 });

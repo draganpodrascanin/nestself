@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Button, Field, Input, Select, Table, Td, Text, Th } from '@nestself/ui';
 import { formatDate } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
 import type { MemberItem } from '@nestself/contracts';
 import type { OpsAdminApi } from '@nestself/api-client';
+import { SEARCH_DEBOUNCE_MS, useDebounced } from '../../use-debounced';
 import { EndMembershipDialog } from './end-membership-dialog';
 import { LoadMore } from './load-more';
 import { peopleErrorKey } from './people-errors';
@@ -15,17 +16,6 @@ import type { MemberFilters } from './use-ops-people';
 
 /** Select value for "no filter". */
 const ALL = '__all__';
-/** Delay between the last keystroke in the search field and the request. */
-export const SEARCH_DEBOUNCE_MS = 300;
-
-function useDebounced<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
 
 function matchesFilters(member: MemberItem, filters: MemberFilters): boolean {
   if (filters.status && member.status !== filters.status) return false;

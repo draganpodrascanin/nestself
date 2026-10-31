@@ -60,16 +60,21 @@ describe('ProfessionalService', () => {
     ['readAssignedConversation', 'conversation.read.assigned'],
     ['readOwnConversation', 'conversation.participate'],
   ] as const)('%s', (method, action) => {
-    it(`requires ${action} on the confidential conversation resource and returns its messages`, async () => {
+    it(`requires ${action} on the confidential conversation resource, answering a denial as not found, and returns its messages`, async () => {
       const res = await ctx.service[method](PRINCIPAL, 'conv_1');
 
-      expect(ctx.authz.require).toHaveBeenCalledWith(PRINCIPAL, action, {
-        type: 'conversation',
-        id: 'case_1',
-        orgId: 'org_1',
-        ownerId: 'user_jovan',
-        isConfidential: true,
-      });
+      expect(ctx.authz.require).toHaveBeenCalledWith(
+        PRINCIPAL,
+        action,
+        {
+          type: 'conversation',
+          id: 'case_1',
+          orgId: 'org_1',
+          ownerId: 'user_jovan',
+          isConfidential: true,
+        },
+        { denyAs: 'not_found' },
+      );
       expect(res).toEqual({
         id: 'conv_1',
         caseId: 'case_1',
@@ -97,16 +102,21 @@ describe('ProfessionalService', () => {
   });
 
   describe('readAssignedIntake', () => {
-    it('requires conversation.read.assigned on the confidential intake resource', async () => {
+    it('requires conversation.read.assigned on the confidential intake resource, answering a denial as not found', async () => {
       const res = await ctx.service.readAssignedIntake(PRINCIPAL, 'intake_1');
 
-      expect(ctx.authz.require).toHaveBeenCalledWith(PRINCIPAL, 'conversation.read.assigned', {
-        type: 'intake',
-        id: 'case_1',
-        orgId: 'org_1',
-        ownerId: 'user_jovan',
-        isConfidential: true,
-      });
+      expect(ctx.authz.require).toHaveBeenCalledWith(
+        PRINCIPAL,
+        'conversation.read.assigned',
+        {
+          type: 'intake',
+          id: 'case_1',
+          orgId: 'org_1',
+          ownerId: 'user_jovan',
+          isConfidential: true,
+        },
+        { denyAs: 'not_found' },
+      );
       expect(res).toEqual({
         id: 'intake_1',
         caseId: 'case_1',

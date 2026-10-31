@@ -10,6 +10,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createAuthApi, ApiError } from '@nestself/api-client';
 import { Button, Heading, Text, StatusBlock } from '@nestself/ui';
+import { negotiateLocale } from '@nestself/i18n';
 import { useAuth } from '../../auth';
 import { api } from '../../api';
 
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/_public/invite/$token')({
 
 function InviteRoute() {
   const { token } = Route.useParams();
-  const { t } = useTranslation('auth');
+  const { t, i18n } = useTranslation('auth');
   const navigate = useNavigate();
   const { refreshPrincipal } = useAuth();
   const authApi = useMemo(() => createAuthApi(api), []);
@@ -50,7 +51,9 @@ function InviteRoute() {
   const handleAccept = useCallback(async () => {
     setAccepting(true);
     try {
-      const result = await authApi.invitationAccept(token);
+      // The acceptance may mail a code: in the language of this page.
+      const locale = negotiateLocale([i18n.resolvedLanguage ?? i18n.language]);
+      const result = await authApi.invitationAccept(token, locale);
 
       // The response includes the auth method and optional next step
       if (result.method === 'sso' && result.ssoStartUrl) {
@@ -71,7 +74,7 @@ function InviteRoute() {
     } finally {
       setAccepting(false);
     }
-  }, [authApi, token, refreshPrincipal, navigate, t]);
+  }, [authApi, token, refreshPrincipal, navigate, t, i18n]);
 
   if (error) {
     return (

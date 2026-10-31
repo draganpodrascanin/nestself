@@ -8,6 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, gt, ilike, or, type SQL } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
+import { likePrefix } from '../like-pattern.js';
 import { organizations } from '../schema/index.js';
 
 export type OrganizationRow = typeof organizations.$inferSelect;
@@ -18,11 +19,6 @@ export interface OrganizationListOptions {
   cursor?: string;
   /** Case-insensitive prefix of the name or the slug. */
   search?: string;
-}
-
-/** Escape LIKE wildcards so a search term matches literally. */
-function likePrefix(term: string): string {
-  return `${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 @Injectable()

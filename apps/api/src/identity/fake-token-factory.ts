@@ -32,6 +32,12 @@ function buildJwt(claims: Record<string, unknown>): string {
 /**
  * Create a realistic-looking TokenSet for local development.
  *
+ * The pool username is carried the way a real Cognito pool carries it: the
+ * access token has a `username` claim, the ID token has `cognito:username`
+ * and no `username` claim. Code that reads the wrong one fails here as it
+ * would against the real pool (the fake used to put both on the ID token,
+ * which hid exactly that).
+ *
  * @param sub       The user's sub (UUID).
  * @param username  The Cognito username.
  * @param originJti An optional origin JTI for refresh token families.
@@ -61,7 +67,6 @@ export function createFakeTokenSet(
 
   const idToken = buildJwt({
     sub,
-    username,
     token_use: 'id',
     client_id: 'fake-web',
     iat: now,

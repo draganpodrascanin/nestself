@@ -20,6 +20,9 @@ import {
   InvitationAcceptResponseSchema,
   PasswordResetStartResponseSchema,
   PasswordResetConfirmResponseSchema,
+  SsoBindStartResponseSchema,
+  SsoBindVerifyResponseSchema,
+  SsoBindResendResponseSchema,
 } from '@nestself/contracts';
 import type { ActiveContext, Locale } from '@nestself/contracts';
 import type { ApiClient } from './client';
@@ -63,6 +66,53 @@ export function createAuthApi(client: ApiClient) {
         schema: MeResponseSchema,
       }),
 
+    /**
+     * POST /auth/sso/bind/start — a federated sign-in whose address the
+     * identity provider did not confirm (`/sign-in?bind=<handle>`): mails a
+     * code to that address, written in `locale` when given. 400
+     * `invalid_challenge` when the handle is unknown or has expired.
+     */
+    ssoBindStart: (handle: string, locale?: Locale) =>
+      client.request('/api/auth/sso/bind/start', {
+        ...jsonPost({ handle, locale }),
+        schema: SsoBindStartResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind/verify — confirms the code: binds the identity,
+     * sets the session cookies and answers where to continue. 403
+     * `sso_denied` when the organisation does not take the sign-in.
+     */
+    ssoBindVerify: (challengeToken: string, code: string) =>
+      client.request('/api/auth/sso/bind/verify', {
+        ...jsonPost({ challengeToken, code }),
+        schema: SsoBindVerifyResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind/resend — a new code for the same challenge, at most
+     * one a minute (429 `rate_limited` with `details.retryAfter`).
+     */
+    ssoBindResend: (challengeToken: string, locale?: Locale) =>
+      client.request('/api/auth/sso/bind/resend', {
+        ...jsonPost({ challengeToken, locale }),
+        schema: SsoBindResendResponseSchema,
+      }),
+
+    /**
+     * POST /auth/sso/bind-token — the mobile app's federated sign-in: the ID
+     * token of its own hosted-UI exchange, once, before anything else; the API
+     * binds the identity under the web's rules (204). 403 `sso_denied` when
+     * the organisation does not take the sign-in, 403 `sso_email_unverified`
+     * when the address has to be confirmed on the web first.
+     */
+    ssoBindToken: (idToken: string) =>
+      client.request('/api/auth/sso/bind-token', {
+        ...jsonPost({ idToken }),
+        schema: z.undefined(),
+        expectBody: false,
+      }),
+
     /** POST /auth/password — password sign-in (may require a second step). */
     password: (email: string, password: string) =>
       client.request('/api/auth/password', {
@@ -77,11 +127,16 @@ export function createAuthApi(client: ApiClient) {
         schema: PasswordResponseSchema,
       }),
 
-    /** GET /auth/me — current principal and effective actions. */
-    me: () =>
+    /**
+     * GET /auth/me — current principal and effective actions. `signal` aborts
+     * the request; an aborted request rejects like any other network failure
+     * (`ApiError` with status 0), never as a 401.
+     */
+    me: (init?: { signal?: AbortSignal }) =>
       client.request('/api/auth/me', {
         method: 'GET',
         schema: MeResponseSchema,
+        ...(init?.signal ? { signal: init.signal } : {}),
       }),
 
     /** POST /auth/context — switch active context (CLIENT-R-04). */
@@ -174,6 +229,18 @@ export function createAuthApi(client: ApiClient) {
         schema: StepUpStartResponseSchema,
       }),
 
+    /**
+     * POST /auth/step-up/resend — a new code for the challenge of an earlier
+     * start, at most one a minute (429 `rate_limited` with
+     * `details.retryAfter`). Continue with the answer's `challengeToken`: it
+     * may be a new one.
+     */
+    stepUpResend: (challengeToken: string) =>
+      client.request('/api/auth/step-up/resend', {
+        ...jsonPost({ challengeToken }),
+        schema: StepUpStartResponseSchema,
+      }),
+
     /** POST /auth/step-up/verify — complete a step-up challenge (204). */
     stepUpVerify: (challengeToken: string, response: string) =>
       client.request('/api/auth/step-up/verify', {
@@ -189,10 +256,13 @@ export function createAuthApi(client: ApiClient) {
         schema: InvitationPreviewResponseSchema,
       }),
 
-    /** POST /invitations/accept — accept an invitation. */
-    invitationAccept: (token: string) =>
+    /**
+     * POST /invitations/accept — accept an invitation. `locale` is the
+     * language of the code email the acceptance may send.
+     */
+    invitationAccept: (token: string, locale?: Locale) =>
       client.request('/api/invitations/accept', {
-        ...jsonPost({ token }),
+        ...jsonPost({ token, locale }),
         schema: InvitationAcceptResponseSchema,
       }),
 

@@ -1,10 +1,25 @@
 /**
- * Step-up re-authentication dialog (auth phase 2).
+ * Step-up re-authentication dialog.
  *
- * Opening it starts an email OTP challenge (`POST /auth/step-up/start`);
- * submitting verifies the code (`POST /auth/step-up/verify`), which refreshes
- * the session cookies. Every failure renders translated copy in the
- * `FormErrorSummary` and on the code field.
+ * Opening it starts a challenge (`POST /auth/step-up/start`): an email code,
+ * sent by Cognito or, for a federated user, by NestSelf, and the description
+ * names the masked address. Submitting verifies the code
+ * (`POST /auth/step-up/verify`), which refreshes the session cookies.
+ *
+ * - A wrong code keeps the challenge: the server allows three tries on it. An
+ *   expired, spent or locked challenge is dropped, and "Send a new code" then
+ *   starts a new one at once.
+ * - "Send a new code" asks for a new code for the same challenge
+ *   (`POST /auth/step-up/resend`), at most once a minute counted from the
+ *   last code, as the server enforces; a countdown says how long is left. A
+ *   resend the server refuses as too soon counts down from the wait it names.
+ * - One request at a time: start, resend and verify never overlap (a verify
+ *   during a resend would find the challenge taken), and Cancel waits for a
+ *   verify in flight. An answer that arrives after the dialog was closed
+ *   (through its close button) is ignored, and the next opening starts afresh.
+ *
+ * Every failure renders translated copy in the `FormErrorSummary` and on the
+ * code field.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { FormEvent } from 'react';
@@ -22,12 +37,26 @@ import type { FormErrorSummaryHandle } from '@nestself/ui';
 import { ApiError } from '@nestself/api-client';
 import type { AuthApi } from '@nestself/api-client';
 import { EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@nestself/contracts';
+import type { StepUpStartResponse } from '@nestself/contracts';
 
 interface Props {
   open: boolean;
   authApi: AuthApi;
   onVerified: () => void;
   onCancel: () => void;
+}
+
+/** The server's resend cooldown (`OTP_RESEND_COOLDOWN_SECONDS`), counted from the last code. */
+const RESEND_COOLDOWN_SECONDS = 60;
+
+/** Answers after which the server no longer has the challenge. */
+const DEAD_CHALLENGE_CODES = new Set(['invalid_challenge', 'expired_code', 'too_many_attempts']);
+
+/** Seconds a `rate_limited` answer asks to wait (`details.retryAfter`), else null. */
+function retryAfterSeconds(err: unknown): number | null {
+  if (!(err instanceof ApiError) || err.code !== 'rate_limited') return null;
+  const retryAfter = err.details?.retryAfter;
+  return typeof retryAfter === 'number' && retryAfter > 0 ? Math.ceil(retryAfter) : null;
 }
 
 function stepUpErrorMessage(err: unknown, t: TFunction<['auth', 'common']>): string {
@@ -38,9 +67,10 @@ function stepUpErrorMessage(err: unknown, t: TFunction<['auth', 'common']>): str
         ? t('auth:lockout.retryAfter', { minutes: Math.ceil(retryAfter / 60) })
         : t('auth:lockout.body');
     }
-    if (err.code === 'invalid_code' || err.code === 'expired_code') return t('auth:error.invalidCode');
-    if (err.code === 'invalid_challenge') return t('auth:error.challengeExpired');
-    if (err.code === 'forbidden') return t('auth:stepUp.unavailable');
+    if (err.code === 'invalid_code') return t('auth:error.invalidCode');
+    if (err.code === 'invalid_challenge' || err.code === 'expired_code') return t('auth:error.challengeExpired');
+    if (err.code === 'step_up_unavailable') return t('auth:stepUp.unavailable');
+    if (err.code === 'unavailable') return t('auth:error.unavailable');
     if (err.code === 'network') return t('auth:error.network');
   }
   return t('auth:error.unknown');
@@ -49,29 +79,82 @@ function stepUpErrorMessage(err: unknown, t: TFunction<['auth', 'common']>): str
 export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
   const { t } = useTranslation(['auth', 'common']);
   const [code, setCode] = useState('');
-  /** Null until a challenge is started, and again once a wrong code consumed it. */
+  /** Null until a challenge is started, and again once the server no longer has it. */
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  /** Where the code went (`i***@acme.example`), as the last start or resend said. */
+  const [emailMasked, setEmailMasked] = useState<string | null>(null);
+  /** Seconds until "Send a new code" is offered again. */
+  const [countdown, setCountdown] = useState(0);
+  /** A start or resend is in flight. */
+  const [sending, setSending] = useState(false);
+  /** A verify is in flight. */
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<FormErrorSummaryHandle>(null);
   /** Guards against a second email when StrictMode re-runs the open effect. */
   const startedRef = useRef(false);
+  /** One request at a time; set before the next render disables the buttons. */
+  const busyRef = useRef(false);
+  /**
+   * Counts the openings. A request answered after its opening ended (the
+   * dialog was closed meanwhile) changes nothing, and does not hold up the
+   * next opening.
+   */
+  const openingRef = useRef(0);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const id = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(id);
+  }, [countdown]);
 
   const showError = useCallback((message: string) => {
     setError(message);
     errorRef.current?.focus();
   }, []);
 
-  const startChallenge = useCallback(async () => {
-    try {
-      const result = await authApi.stepUpStart();
-      setChallengeToken(result.challengeToken);
-      setCode('');
-      setError(null);
-    } catch (err) {
+  /** Shows the failure; a challenge the server no longer has is dropped, so a new one can be asked for at once. */
+  const fail = useCallback(
+    (err: unknown) => {
+      if (err instanceof ApiError && DEAD_CHALLENGE_CODES.has(err.code)) {
+        setChallengeToken(null);
+        setCountdown(0);
+      }
       showError(stepUpErrorMessage(err, t));
-    }
-  }, [authApi, showError, t]);
+    },
+    [showError, t],
+  );
+
+  /** A start or a resend: either answers with the challenge to verify against. */
+  const sendCode = useCallback(
+    async (request: () => Promise<StepUpStartResponse>) => {
+      if (busyRef.current) return;
+      const opening = openingRef.current;
+      busyRef.current = true;
+      setSending(true);
+      try {
+        const result = await request();
+        if (opening !== openingRef.current) return;
+        setChallengeToken(result.challengeToken);
+        setEmailMasked(result.emailMasked);
+        setCountdown(RESEND_COOLDOWN_SECONDS);
+        setCode('');
+        setError(null);
+      } catch (err) {
+        if (opening !== openingRef.current) return;
+        fail(err);
+        // Too soon for another code: offer it again when the server allows one.
+        const retryAfter = retryAfterSeconds(err);
+        if (retryAfter) setCountdown(retryAfter);
+      } finally {
+        if (opening === openingRef.current) {
+          busyRef.current = false;
+          setSending(false);
+        }
+      }
+    },
+    [fail],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -80,12 +163,22 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
     }
     if (startedRef.current) return;
     startedRef.current = true;
-    void startChallenge();
-  }, [open, startChallenge]);
+    // A new opening: whatever the previous one still has in flight no longer counts.
+    openingRef.current += 1;
+    busyRef.current = false;
+    setSubmitting(false);
+    setSending(false);
+    void sendCode(() => authApi.stepUpStart());
+  }, [open, authApi, sendCode]);
+
+  const handleResend = useCallback(() => {
+    void sendCode(() => (challengeToken ? authApi.stepUpResend(challengeToken) : authApi.stepUpStart()));
+  }, [authApi, challengeToken, sendCode]);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
+      if (busyRef.current) return;
       setError(null);
 
       if (code.length < EMAIL_OTP_MIN_LENGTH) {
@@ -97,22 +190,22 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
         return;
       }
 
+      const opening = openingRef.current;
+      busyRef.current = true;
       setSubmitting(true);
       try {
         await authApi.stepUpVerify(challengeToken, code);
-        onVerified();
+        if (opening === openingRef.current) onVerified();
       } catch (err) {
-        // The server consumes the challenge before checking the code, so a
-        // wrong code needs a fresh challenge from "send a new code".
-        if (err instanceof ApiError && (err.code === 'invalid_code' || err.code === 'invalid_challenge')) {
-          setChallengeToken(null);
-        }
-        showError(stepUpErrorMessage(err, t));
+        if (opening === openingRef.current) fail(err);
       } finally {
-        setSubmitting(false);
+        if (opening === openingRef.current) {
+          busyRef.current = false;
+          setSubmitting(false);
+        }
       }
     },
-    [code, challengeToken, authApi, onVerified, showError, t],
+    [code, challengeToken, authApi, onVerified, showError, fail, t],
   );
 
   const handleOpenChange = useCallback(
@@ -130,7 +223,11 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         title={t('auth:stepUp.title')}
-        description={t('auth:stepUp.description')}
+        description={
+          emailMasked
+            ? t('auth:stepUp.descriptionMasked', { email: emailMasked })
+            : t('auth:stepUp.description')
+        }
         closeLabel={t('common:nav.close')}
       >
         <form onSubmit={handleSubmit} noValidate className="space-y-6">
@@ -159,21 +256,25 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
             ) : null}
           </div>
 
-          <div className="text-center">
+          <div className="gap-1 flex flex-col items-center text-center">
             <button
               type="button"
-              onClick={() => void startChallenge()}
-              className="type-metadata text-primary underline hover:text-primary-hover"
+              onClick={handleResend}
+              disabled={countdown > 0 || sending || submitting}
+              className="type-metadata text-primary underline hover:text-primary-hover disabled:cursor-not-allowed disabled:text-disabled-text disabled:no-underline"
             >
               {t('auth:stepUp.resend')}
             </button>
+            <p className="type-metadata text-text-secondary" aria-live="polite">
+              {countdown > 0 ? t('auth:otp.resendCountdown', { seconds: countdown }) : null}
+            </p>
           </div>
 
           <DialogActions>
-            <Button type="button" variant="secondary" onClick={onCancel}>
+            <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
               {t('auth:stepUp.cancel')}
             </Button>
-            <Button type="submit" variant="primary" disabled={submitting}>
+            <Button type="submit" variant="primary" disabled={submitting || sending}>
               {submitting ? t('auth:a11y.loading') : t('auth:stepUp.submit')}
             </Button>
           </DialogActions>

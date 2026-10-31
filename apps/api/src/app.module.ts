@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { validateEnv } from './config/env.js';
 import { DbModule } from './db/db.module.js';
@@ -14,11 +14,15 @@ import { CsrfGuard } from './session/csrf.guard.js';
 import { ProgrammeModule } from './programme/programme.module.js';
 import { LeadsModule } from './leads/leads.module.js';
 import { RedisModule } from './redis/redis.module.js';
+import { KEY_VALUE_STORE } from './redis/key-value-store.js';
+import { AppThrottlerGuard } from './common/app-throttler.guard.js';
+import { throttlerModuleOptions } from './common/throttler-options.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { SessionModule } from './session/session.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { PrincipalModule } from './principal/principal.module.js';
 import { PINO_REDACT_CONFIG } from './audit/pino-redaction.js';
+import { MailerModule } from './mailer/mailer.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { MembersModule } from './members/members.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -71,7 +75,12 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
         },
       }),
     }),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] }),
+    // Counters in Redis when REDIS_URL is set, else the in-memory default (5.9).
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule],
+      inject: [ConfigService, KEY_VALUE_STORE],
+      useFactory: throttlerModuleOptions,
+    }),
     DbModule,
     RedisModule,
     IdentityModule,
@@ -82,6 +91,7 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     AuthModule,
     ProgrammeModule,
     LeadsModule,
+    MailerModule,
     InvitationsModule,
     MembersModule,
     UsersModule,
@@ -108,7 +118,7 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     { provide: APP_GUARD, useExisting: AuthenticationGuard },
     { provide: APP_GUARD, useExisting: CsrfGuard },
     { provide: APP_GUARD, useExisting: AuthorizationGuard },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
   ],
 })
 export class AppModule {}

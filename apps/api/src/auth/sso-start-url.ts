@@ -47,9 +47,26 @@ export function apiOriginForSurface(config: SurfaceUrlConfig, surface: SsoSurfac
   const surfaceUrl = config.get(surface === 'admin' ? 'ADMIN_URL' : 'WORKSPACE_URL');
   if (surfaceUrl) return originOf(surfaceUrl);
   // Stub-mode fallback only (cognito mode requires both surface URLs). The post-callback landing
-  // falls back to localhost:5173/5174 (`DEFAULT_SURFACE_URLS` in sso-callback.service.ts); the two
-  // differ in port only, and localhost cookies ignore ports, so keep them in step if you change one.
+  // falls back to localhost:5173/5174 (`DEFAULT_SURFACE_URLS` below); the two differ in port
+  // only, and localhost cookies ignore ports, so keep them in step if you change one.
   return originOf(apiPublicUrlFrom(config.get('API_PUBLIC_URL')));
+}
+
+/** Stub-mode fallback only; see the note in `apiOriginForSurface`. */
+const DEFAULT_SURFACE_URLS: Record<SsoSurface, string> = {
+  workspace: 'http://localhost:5173',
+  admin: 'http://localhost:5174',
+};
+
+/**
+ * Where a surface's app lives, without a trailing slash: `WORKSPACE_URL` or
+ * `ADMIN_URL`, else the local app. The SSO landing and its
+ * `/sign-in?reason=...` pages are on it, including the throttle's
+ * `sso_rate_limited` redirect (`AppThrottlerGuard`).
+ */
+export function surfaceOrigin(config: SurfaceUrlConfig, surface: SsoSurface): string {
+  const configured = config.get(surface === 'admin' ? 'ADMIN_URL' : 'WORKSPACE_URL');
+  return (configured || DEFAULT_SURFACE_URLS[surface]).replace(/\/+$/, '');
 }
 
 /** The `redirect_uri` of a surface's flow: sent to the IdP and to the token exchange. */

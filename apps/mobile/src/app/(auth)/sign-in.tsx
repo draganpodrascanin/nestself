@@ -8,6 +8,11 @@
  *    - `password`: message that this account signs in on the web.
  * 3. In sample mode, a "Sign in as sample employee" button appears.
  *
+ * After an SSO exchange the API binds the federated identity
+ * (`POST /auth/sso/bind-token`); a refusal leaves the app signed out and
+ * shows `error.ssoDenied`, or `error.ssoEmailUnverifiedMobile` when the
+ * address has to be confirmed on the web first.
+ *
  * Errors never reveal whether an address exists (CLIENT-R-18).
  *
  * @see auth-strategy.md 6.2, CLIENT-R-17..26
@@ -26,14 +31,13 @@ import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
 import { Screen, Text, Button, Field, Input, Alert, Card } from '@nestself/ui-native';
 import { useTheme } from '@nestself/ui-native';
-import { ApiError } from '@nestself/api-client';
 
 import { useAuth } from '@/auth/use-auth';
 import { getCognitoConfig } from '@/auth/config';
 import { useSsoSignIn } from '@/auth/sso';
 import type { CognitoConfig } from '@/auth/config';
 import { SampleDataBanner } from '@/components/SampleDataBanner';
-import { CognitoError } from '@/auth/cognito-public-client';
+import { signInErrorKey } from '@/auth/sign-in-error';
 import { resolveDeviceLocale } from '@/lib/locale';
 
 // Needed for expo-auth-session to complete the redirect
@@ -108,34 +112,8 @@ export default function SignInScreen() {
   // ---------------------------------------------------------------------------
 
   function displayError(err: unknown): void {
-    let message: string;
-    if (err instanceof CognitoError) {
-      switch (err.code) {
-        case 'invalid_code':
-          message = t('error.invalidCode');
-          break;
-        case 'expired_code':
-          message = t('otp.expired');
-          break;
-        case 'too_many_attempts':
-          message = t('lockout.body');
-          break;
-        case 'not_authorized':
-          // Never reveal whether the email exists
-          message = t('error.expired');
-          break;
-        default:
-          message = t('error.unknown');
-      }
-    } else if (err instanceof ApiError) {
-      if (err.code === 'network' || err.status === 0) {
-        message = t('error.network');
-      } else {
-        message = t('error.unknown');
-      }
-    } else {
-      message = t('error.unknown');
-    }
+    // Includes the API's refusal of a federated sign-in (bind-token): sso_denied, sso_email_unverified.
+    const message = t(signInErrorKey(err));
     setErrorMessage(message);
     AccessibilityInfo.announceForAccessibility(message);
   }

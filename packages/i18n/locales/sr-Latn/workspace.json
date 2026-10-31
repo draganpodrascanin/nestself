@@ -242,6 +242,13 @@
       "empty": "Ovaj član nema nijednu radnju u ovoj organizaciji.",
       "loading": "Učitavanje stvarnog pristupa"
     },
+    "memberSearch": {
+      "label": "Pretraži članove",
+      "hint": "Upiši početak imena ili imejl adrese.",
+      "loading": "Učitavanje članova",
+      "empty": "Nema aktivnih članova koje možeš da izabereš.",
+      "noMatch": "Nijedan član ne odgovara ovoj pretrazi."
+    },
     "errors": {
       "loadTitle": "Pristup nije moguće učitati",
       "membersLoadTitle": "Članove nije moguće učitati",
@@ -393,6 +400,7 @@
         "invalidTemplate": "Ovaj šablon se ne može koristiti za pozivnice.",
         "duplicateInBatch": "Ova imejl adresa se pojavljuje više puta u uvozu.",
         "invalidOrgUnit": "Organizaciona jedinica ne pripada ovoj organizaciji.",
+        "ssoDomainClaimed": "Imejl adresa pripada organizaciji koja se prijavljuje preko sopstvenog provajdera identiteta.",
         "ownerExists": "Organizacija već ima vlasnika.",
         "duplicateInvitation": "Za ovu imejl adresu već postoji pozivnica na čekanju.",
         "alreadyMember": "Ova osoba je već aktivan član.",

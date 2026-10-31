@@ -120,16 +120,19 @@ export class InvitationMembershipActivator {
       })
       .returning();
 
-    await this.audit.record({
-      action: 'membership.activated',
-      actorUserId: null,
-      actorKind: 'SYSTEM',
-      orgId: input.orgId,
-      recordType: 'membership',
-      recordId: membership!.id,
-      result: 'ALLOWED',
-      details: { emailNormalised: input.emailNormalised, templateKey: input.template.key, ...input.details },
-    });
+    await this.audit.record(
+      {
+        action: 'membership.activated',
+        actorUserId: null,
+        actorKind: 'SYSTEM',
+        orgId: input.orgId,
+        recordType: 'membership',
+        recordId: membership!.id,
+        result: 'ALLOWED',
+        details: { emailNormalised: input.emailNormalised, templateKey: input.template.key, ...input.details },
+      },
+      { tx },
+    );
 
     await this.createDefaultGrants(input, tx);
     return true;

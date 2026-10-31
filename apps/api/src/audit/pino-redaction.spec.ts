@@ -59,6 +59,51 @@ describe('pino-redaction', () => {
     expect(output).toContain('visible');
   });
 
+  it('redacts the pending-bind handle and challenge tokens in bodies and nested objects', () => {
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          req: { body: { handle: 'handle_1', challengeToken: 'chal_1', code: '12345678' } },
+          nested: { handle: 'handle_2', challengeToken: 'chal_2', safe: 'visible' },
+        },
+        'test',
+      );
+    });
+    for (const v of ['handle_1', 'chal_1', 'handle_2', 'chal_2', '12345678']) {
+      expect(output).not.toContain(v);
+    }
+    expect(output).toContain('visible');
+  });
+
+  it('redacts the Location of a redirect and the Referer of a request (pending-bind handle, OAuth state)', () => {
+    const handle = 'h'.repeat(43);
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          req: {
+            method: 'POST',
+            url: '/api/auth/sso/bind/start',
+            headers: { referer: `http://ws.test/sign-in?reason=sso_email_unverified&bind=${handle}`, host: 'ws.test' },
+          },
+          res: {
+            statusCode: 302,
+            headers: {
+              location: `http://ws.test/sign-in?reason=sso_email_unverified&bind=${handle}`,
+              'cache-control': 'no-store',
+            },
+          },
+        },
+        'request completed',
+      );
+    });
+    expect(output).not.toContain(handle);
+    expect(output).not.toContain('bind=');
+    // The rest of the line stays readable.
+    expect(output).toContain('/api/auth/sso/bind/start');
+    expect(output).toContain('no-store');
+    expect(output).toContain('ws.test');
+  });
+
   it('redacts req.headers.authorization', () => {
     const output = captureLog((logger) => {
       logger.info(

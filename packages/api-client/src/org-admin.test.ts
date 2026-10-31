@@ -91,6 +91,7 @@ const SSO_CONNECTION = {
   oidcClientId: null,
   idpInitiatedAllowed: false,
   jitProvisioning: false,
+  oidcEmailVerifiedClaimRequired: true,
   defaultOrgUnitId: null,
   certificateExpiresAt: null,
   lastTestedAt: null,

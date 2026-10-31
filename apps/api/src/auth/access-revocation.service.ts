@@ -69,7 +69,7 @@ export class AccessRevocationService {
 
     // AdminUserGlobalSignOut is unconditional (SESS-R-23): mobile tokens for
     // every organization are revoked even when other memberships remain.
-    let identities: Array<{ cognitoUsername: string }> = [];
+    let identities: Array<{ cognitoUsername: string; provider: string }> = [];
     try {
       identities = await this.identities.findExternalIdentitiesForUser(userId);
     } catch (err) {
@@ -81,7 +81,8 @@ export class AccessRevocationService {
         report.identitiesSignedOut++;
       } catch (err) {
         report.identitiesFailed++;
-        this.logger.error(err, `globalSignOut failed for ${identity.cognitoUsername}`);
+        // A native pool username is the email address: name the user and the provider instead.
+        this.logger.error(err, `globalSignOut failed for user ${userId} (${identity.provider})`);
       }
     }
 

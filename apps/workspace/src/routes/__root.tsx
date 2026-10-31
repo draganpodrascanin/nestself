@@ -1,4 +1,5 @@
 import { createRootRouteWithContext, Outlet, useRouter } from '@tanstack/react-router';
+import type { AvailableContextEntry } from '@nestself/contracts';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import type { QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
@@ -53,6 +54,22 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   return <AuthProvider client={api}>{children}</AuthProvider>;
 }
 
+const sameActions = (a: readonly string[], b: readonly string[]) =>
+  a === b || (a.length === b.length && a.every((action, i) => action === b[i]));
+
+/** Same entries in the same order: the provider's empty list is never the router's, see `sameActions`. */
+const sameContexts = (a: readonly AvailableContextEntry[], b: readonly AvailableContextEntry[]) =>
+  a.length === b.length &&
+  a.every((entry, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      entry.kind === other.kind &&
+      ('orgId' in entry ? entry.orgId : undefined) === ('orgId' in other ? other.orgId : undefined) &&
+      ('orgName' in entry ? entry.orgName : undefined) === ('orgName' in other ? other.orgName : undefined)
+    );
+  });
+
 /**
  * Syncs auth state into the router context so `beforeLoad` gates
  * can read `context.auth.principal` and `context.auth.effectiveActions`.
@@ -64,14 +81,20 @@ function AuthRouterSync({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { t } = useTranslation('workspace');
-  const settled = status !== 'loading';
+  // A failed `/auth/me` (`error`) is no result: with an empty context the
+  // guards would read it as "signed out" and redirect to /sign-in instead of
+  // asking again (route-auth.ts) and showing the account error screen.
+  const settled = status === 'authenticated' || status === 'unauthenticated';
 
   useEffect(() => {
     const currentAuth = router.options.context.auth;
+    // Compared by content: the provider's empty list is never the router's, and
+    // an invalidation that changes nothing would re-run the guards (and show the
+    // account error screen afresh) for no reason.
     if (
       currentAuth.principal !== principal ||
-      currentAuth.effectiveActions !== effectiveActions ||
-      currentAuth.availableContexts !== availableContexts ||
+      !sameActions(currentAuth.effectiveActions, effectiveActions) ||
+      !sameContexts(currentAuth.availableContexts, availableContexts) ||
       currentAuth.settled !== settled
     ) {
       router.update({

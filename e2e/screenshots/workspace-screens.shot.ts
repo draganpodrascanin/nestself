@@ -1,6 +1,7 @@
 /**
  * Workspace screenshots of the account, people, org units, context picker,
- * expert and participant screens.
+ * expert and participant screens, and of the state a session that cannot be
+ * loaded shows.
  *
  * People in the shots are the fictional sample people only: Ivana (HR admin
  * and owner), Milica (expert, password + authenticator) and Jovan (employee,
@@ -8,20 +9,29 @@
  *
  * Created in the disposable e2e database (global setup removes it with the
  * next reset): the import shot imports two invitations for fictional
- * `new.colleague.*@example.com` addresses, plus one row for an existing
- * member that the server refuses, so the result shows both outcomes; the
- * invitations shot then lists the two pending invitations. Every other
+ * `new.colleague.*@example.com` addresses. Its two other rows show the
+ * other buckets of the result: Ana is an active member, so her row is
+ * skipped (nothing to do), and the second address appears twice, so its
+ * later row is not imported (`duplicate_in_batch`, listed with its reason).
+ * The invitations shot then lists the two pending invitations. Every other
  * screen is only looked at.
+ *
+ * The session-unavailable shot answers `GET /api/auth/me` with a 500 in the
+ * browser, as `workspace-sign-in.spec.ts` does: any failure other than a 401
+ * means the session is unknown, and the page offers Try again instead of
+ * signing the user out.
  */
 import { test, expect } from '@playwright/test';
 import { removeDeveloperAccount, signInWithEmailCode, signInWithPassword } from '../auth/support';
 import { WORKSPACE_URL, shot } from './shots';
 
+/** Created, created, skipped (an active member), not imported (the second address again). */
 const IMPORT_ROWS = [
   'email,templateKey,orgUnit',
   'new.colleague.one@example.com,employee,Product',
   'new.colleague.two@example.com,employee,Sales',
   'user_ana@example.com,employee,Product',
+  'new.colleague.two@example.com,employee,Product',
 ].join('\n');
 
 test.describe.configure({ mode: 'serial' });
@@ -36,7 +46,13 @@ test('HR admin: settings, sessions, context picker, people and org units', async
   const sessions = page.getByRole('table', { name: 'Signed-in sessions' });
   await expect(sessions.getByText('This browser')).toBeVisible({ timeout: 15_000 });
   await shot(page, 'workspace-settings-account');
-  await page.getByRole('heading', { level: 2, name: 'Security' }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  // Scrolled to the end of the list: this browser's row and Sign out everywhere. The stub
+  // API shares the developer's Redis, so sessions of earlier runs fill the rows above, and
+  // their number grows from run to run.
+  await page
+    .getByRole('button', { name: 'Sign out everywhere' })
+    .evaluate((el) => el.scrollIntoView({ block: 'end' }));
+  await page.evaluate(() => window.scrollBy(0, 24));
   await shot(page, 'workspace-settings-sessions');
   await page.evaluate(() => window.scrollTo(0, 0));
 
@@ -53,16 +69,22 @@ test('HR admin: settings, sessions, context picker, people and org units', async
   await expect(members.getByRole('row').filter({ hasText: 'Ana Nikolić' })).toHaveCount(1, { timeout: 15_000 });
   await shot(page, 'workspace-people-members');
 
-  // People: import result (two created, one refused).
+  // People: import result, one row per bucket at least (two created, one
+  // skipped, one not imported with its reason).
   await page.getByRole('tab', { name: 'Invitations' }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const importDialog = page.getByRole('dialog', { name: 'Import invitations' });
   await expect(importDialog).toBeVisible();
   await importDialog.getByLabel('Rows').fill(IMPORT_ROWS);
-  await expect(importDialog.getByText('3 rows ready to import')).toBeVisible();
+  await expect(importDialog.getByText('4 rows ready to import')).toBeVisible();
   await importDialog.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(importDialog.getByText('Import finished')).toBeVisible({ timeout: 15_000 });
-  await expect(importDialog.getByText('Created: 2.', { exact: false })).toBeVisible();
+  await expect(importDialog.getByText('Created: 2. Skipped: 1. Not imported: 1.')).toBeVisible();
+  const refused = importDialog.getByRole('table', { name: 'Rows that were not imported' });
+  await expect(refused.getByRole('row').filter({ hasText: 'new.colleague.two@example.com' })).toContainText(
+    'This email address appears more than once in the import.',
+  );
+  await expect(refused.getByText('user_ana@example.com')).toHaveCount(0);
   await shot(page, 'workspace-people-import-result');
   await importDialog.getByRole('button', { name: 'Done' }).click();
   await expect(importDialog).toBeHidden();
@@ -102,4 +124,22 @@ test('employee: my conversation with an expert', async ({ page }) => {
     timeout: 15_000,
   });
   await shot(page, 'workspace-my-conversation');
+});
+
+test('a session that cannot be loaded: the error state with Try again', async ({ page }) => {
+  // A real session first, so the state below is "unknown", not "signed out".
+  await signInWithEmailCode(page, WORKSPACE_URL, 'user_jovan@example.com');
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'internal_error', message: 'Stubbed for the guide screenshot' }),
+    }),
+  );
+  await page.goto(`${WORKSPACE_URL}/settings`);
+  await expect(page.getByText('We could not load your account')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings$/);
+  await shot(page, 'workspace-session-unavailable');
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });

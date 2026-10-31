@@ -155,6 +155,15 @@ export const SSO_SLUG_PATTERN = /^[a-z0-9-]{2,11}$/;
 const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 /**
+ * An absolute `https:` URL. The API fetches identity-provider metadata from
+ * these addresses, and its outbound calls are `https:` only.
+ */
+export const httpsUrl = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith('https://'), 'https required');
+
+/**
  * IdP-initiated sign-in stays off until the written risk-acceptance process
  * exists (D-12, SSO-R-12): the field is accepted only as `false`.
  */
@@ -171,9 +180,9 @@ export const SsoConnectionCreateRequestSchema = z
     /** Short organization handle used to build `cognitoProviderName`. */
     slug: z.string().regex(SSO_SLUG_PATTERN),
     protocol: SsoProtocolSchema,
-    metadataUrl: z.string().url().optional(),
+    metadataUrl: httpsUrl.optional(),
     metadataXml: z.string().optional(),
-    oidcIssuer: z.string().url().optional(),
+    oidcIssuer: httpsUrl.optional(),
     oidcClientId: z.string().min(1).optional(),
     /**
      * Write-only: passed to the identity provider registration and never
@@ -183,6 +192,14 @@ export const SsoConnectionCreateRequestSchema = z
     attributeMapping: z.record(z.string(), z.string()).optional(),
     idpInitiatedAllowed: z.boolean().default(false),
     jitProvisioning: z.boolean().default(false),
+    /**
+     * OIDC only (SSO-R-08). True: an ID token without `email_verified: true`
+     * binds only after the user confirms the address with a mailed code.
+     * False trusts the provider's email claim on a verified domain, as for
+     * SAML; staff turn it off only after the client confirms that claim is
+     * the directory's verified address.
+     */
+    oidcEmailVerifiedClaimRequired: z.boolean().default(true),
     defaultOrgUnitId: z.string().min(1).optional(),
   })
   .refine(idpInitiatedOff, IDP_INITIATED_REFUSED);
@@ -197,15 +214,16 @@ export const SsoConnectionUpdateRequestSchema = z
     status: z.enum(SSO_CONNECTION_PATCH_STATUSES).optional(),
     /** Immutable once the connection has been tested (the service answers 422). */
     protocol: SsoProtocolSchema.optional(),
-    metadataUrl: z.string().url().nullable().optional(),
+    metadataUrl: httpsUrl.nullable().optional(),
     metadataXml: z.string().nullable().optional(),
-    oidcIssuer: z.string().url().nullable().optional(),
+    oidcIssuer: httpsUrl.nullable().optional(),
     oidcClientId: z.string().min(1).nullable().optional(),
     /** Write-only, as on create: replaces the secret held by the identity provider. */
     oidcClientSecret: z.string().min(1).max(1024).optional(),
     attributeMapping: z.record(z.string(), z.string()).nullable().optional(),
     idpInitiatedAllowed: z.boolean().optional(),
     jitProvisioning: z.boolean().optional(),
+    oidcEmailVerifiedClaimRequired: z.boolean().optional(),
     defaultOrgUnitId: z.string().min(1).nullable().optional(),
   })
   .refine(idpInitiatedOff, IDP_INITIATED_REFUSED)
@@ -255,6 +273,7 @@ export const SsoConnectionResponseSchema = z.object({
   oidcClientId: z.string().nullable(),
   idpInitiatedAllowed: z.boolean(),
   jitProvisioning: z.boolean(),
+  oidcEmailVerifiedClaimRequired: z.boolean(),
   defaultOrgUnitId: z.string().nullable(),
   certificateExpiresAt: z.string().datetime().nullable(),
   lastTestedAt: z.string().datetime().nullable(),

@@ -4,7 +4,12 @@
  */
 import type { Principal, ActiveContext, AvailableContextEntry } from '@nestself/contracts';
 
-export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+/**
+ * `error`: `GET /auth/me` failed for a reason other than 401 (an error
+ * answer, no answer in time, no connection), so it is not known whether the
+ * user is signed in. `principal` keeps what the provider had before.
+ */
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';
 
 export interface AuthSnapshot {
   principal: Principal | null;

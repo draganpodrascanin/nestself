@@ -9,5 +9,6 @@ export { useSampleAuth } from './sample-extras';
 export { handleApiError } from './handle-api-error';
 export { withStepUp, StepUpCancelledError } from './with-step-up';
 export type { AuthSnapshot, AuthStatus, AuthContextValue } from './types';
-export { resolveRouteAuth, initialMe, initialSnapshot } from './route-auth';
+export { resolveRouteAuth, initialMe, initialSnapshot, SessionUnavailableError } from './route-auth';
+export { AuthenticatedErrorComponent } from './session-unavailable';
 export type { RouterAuth } from './route-auth';

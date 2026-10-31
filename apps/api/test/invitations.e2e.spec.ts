@@ -12,11 +12,14 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { InvitationImportResponseSchema } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { Mailer } from '../src/mailer/mailer.js';
+import type { LoggingMailer } from '../src/mailer/logging-mailer.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { externalIdentities, invitations } from '../src/db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 // ---------------------------------------------------------------------------
@@ -244,8 +247,12 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.created).toBe(1);
-    expect(res.body.errors).toEqual([{ email: 'import-second-owner@example.com', reason: 'owner_exists' }]);
+    expect(InvitationImportResponseSchema.parse(res.body)).toEqual(res.body);
+    expect(res.body).toEqual({
+      created: 1,
+      skipped: 0,
+      errors: [{ email: 'import-second-owner@example.com', reason: 'owner_exists' }],
+    });
     const stored = await testDb.db
       .select({ email: invitations.email })
       .from(invitations)
@@ -265,15 +272,68 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.created).toBe(1);
-    expect(res.body.errors).toEqual([
-      expect.objectContaining({ email: 'import-owner@example.com' }),
-    ]);
+    expect(InvitationImportResponseSchema.parse(res.body)).toEqual(res.body);
+    expect(res.body).toEqual({
+      created: 1,
+      skipped: 0,
+      errors: [{ email: 'import-owner@example.com', reason: 'invalid_template' }],
+    });
     const stored = await testDb.db
       .select({ email: invitations.email })
       .from(invitations)
       .where(eq(invitations.email, 'import-owner@example.com'));
     expect(stored).toEqual([]);
+  });
+
+  it('import puts every row in exactly one bucket, creates and mails the first of a repeated address, and skips the rest quietly', async () => {
+    const rows = [
+      { email: 'bucket-first@example.com', templateKey: 'employee' },
+      { email: 'bucket-first@example.com', templateKey: 'employee' },
+      // Pending since the first test of this suite, and an active member of the seed.
+      { email: 'newhire@example.com', templateKey: 'employee' },
+      { email: 'user_jovan@example.com', templateKey: 'employee' },
+      { email: 'bucket-platform@example.com', templateKey: 'platform_owner' },
+      { email: 'bucket-unit@example.com', templateKey: 'employee', orgUnitId: 'ou_not_in_this_org' },
+      { email: 'bucket-owner@example.com', templateKey: 'employer_owner' },
+      { email: 'bucket-last@example.com', templateKey: 'employee' },
+    ];
+    const mailer = app.get(Mailer) as LoggingMailer;
+    const mailedBefore = mailer.sent.length;
+
+    const res = await hrAgent
+      .post('/api/orgs/org_sample/invitations/import')
+      .set('X-CSRF-Token', hrCsrf)
+      .send({ invitations: rows });
+
+    expect(res.status).toBe(200);
+    expect(InvitationImportResponseSchema.parse(res.body)).toEqual(res.body);
+    expect(res.body).toEqual({
+      created: 2,
+      skipped: 2,
+      errors: [
+        { email: 'bucket-first@example.com', reason: 'duplicate_in_batch' },
+        { email: 'bucket-platform@example.com', reason: 'invalid_template' },
+        { email: 'bucket-unit@example.com', reason: 'org_unit_outside_org' },
+        { email: 'bucket-owner@example.com', reason: 'owner_exists' },
+      ],
+    });
+    expect(res.body.created + res.body.skipped + res.body.errors.length).toBe(rows.length);
+
+    // The repeated address has one invitation (its first row), and only the created rows exist.
+    const stored = await testDb.db
+      .select({ email: invitations.email, importBatchId: invitations.importBatchId })
+      .from(invitations)
+      .where(inArray(invitations.email, rows.map((r) => r.email)));
+    expect(stored.map((r) => r.email).sort()).toEqual(
+      ['bucket-first@example.com', 'bucket-last@example.com', 'newhire@example.com'].sort(),
+    );
+    const batchIds = new Set(stored.filter((r) => r.email.startsWith('bucket-')).map((r) => r.importBatchId));
+    expect(batchIds.size).toBe(1);
+    expect([...batchIds][0]).toEqual(expect.any(String));
+
+    // One mail per created invitation, sent after the commit; none for the other rows.
+    const mailed = mailer.sent.slice(mailedBefore).filter((m) => m.template === 'invitation');
+    expect(mailed.map((m) => m.to).sort()).toEqual(['bucket-first@example.com', 'bucket-last@example.com']);
   });
 
   // -----------------------------------------------------------------------
@@ -333,6 +393,26 @@ describe.skipIf(!shouldRun)('Invitations (e2e)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('method', 'email_otp');
     expect(res.body).toHaveProperty('challengeToken');
+  });
+
+  // -----------------------------------------------------------------------
+  // 8b. The code email of the acceptance is written in the requested locale
+  // -----------------------------------------------------------------------
+
+  it('invitation accept passes the locale to the code email', async () => {
+    const email = 'locale-hire@example.com';
+    const created = await createInvitation({ email, templateKey: 'employee' });
+    expect(created.status).toBe(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/invitations/accept')
+      .send({ token: created.body.devToken, locale: 'hu' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('method', 'email_otp');
+    const sent = idp.sentCodes.filter((c) => c.email === email);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toHaveProperty('locale', 'hu');
   });
 
   // -----------------------------------------------------------------------

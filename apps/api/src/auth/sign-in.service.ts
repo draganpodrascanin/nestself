@@ -37,7 +37,8 @@ function challengeStep(
  * Codes a user may get wrong on one email challenge (sign-in or step-up).
  * The third wrong code ends the challenge; `SignInThrottle` counts every
  * failure independently and locks the address after five, and a locked
- * address cannot finish a challenge it still holds.
+ * address cannot finish a challenge it still holds. Step-up does the same per
+ * user with `StepUpThrottle`.
  */
 export const MAX_EMAIL_OTP_ATTEMPTS = 3;
 

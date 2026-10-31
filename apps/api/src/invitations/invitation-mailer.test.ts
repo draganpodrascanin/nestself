@@ -1,56 +1,73 @@
 /**
- * The invitation mailer delegates to the generalised mailer (T-CW-1.3 step 6).
- * The SES assertions moved here from the former `ses-invitation-mailer.test.ts`.
+ * The invitation mailer hands the `invitation` template to the generalised
+ * mailer (T-CW-1.3 step 6) with the workspace activation link.
  */
 import { SendRawEmailCommand, SESClient } from '@aws-sdk/client-ses';
 import { Logger } from '@nestjs/common';
 import { mockClient } from 'aws-sdk-client-mock';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Mailer } from '../mailer/mailer.js';
 import { SesMailer } from '../mailer/ses-mailer.js';
-import { MailerInvitationMailer } from './invitation-mailer.js';
+import { InvitationMailer } from './invitation-mailer.js';
 
-const INVITATION = {
+const INPUT = {
   email: 'invitee@example.test',
   token: 'tok_123',
   organizationName: 'Example <d.o.o.>',
   inviterDisplayName: 'Ivana',
 };
 
-function fakeMailer(): Mailer & { send: ReturnType<typeof vi.fn> } {
-  return { send: vi.fn().mockResolvedValue(undefined) } as unknown as Mailer & { send: ReturnType<typeof vi.fn> };
+function setup(workspaceUrl?: string) {
+  const mailer = { send: vi.fn().mockResolvedValue(undefined) };
+  const config = {
+    get: vi.fn((key: string) => (key === 'WORKSPACE_URL' ? workspaceUrl : undefined)),
+  };
+  const invitationMailer = new InvitationMailer(mailer as never, config as never);
+  return { mailer, invitationMailer };
 }
 
-describe('MailerInvitationMailer', () => {
+describe('InvitationMailer', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('sends the invitation template with the activation link through the mailer', async () => {
-    const mailer = fakeMailer();
-    await new MailerInvitationMailer(mailer, 'https://app.example.test').send(INVITATION);
+  it('hands the invitation template, the platform default locale and the activation link to the Mailer', async () => {
+    const { mailer, invitationMailer } = setup('https://app.example.test');
+
+    await invitationMailer.send(INPUT);
+
     expect(mailer.send).toHaveBeenCalledExactlyOnceWith({
       to: 'invitee@example.test',
-      locale: 'en',
+      locale: 'sr-Latn',
       template: 'invitation',
       data: {
         organizationName: 'Example <d.o.o.>',
         inviterDisplayName: 'Ivana',
-        activationUrl: 'https://app.example.test/invitations/tok_123',
+        activationUrl: 'https://app.example.test/invite/tok_123',
       },
     });
   });
 
   it("uses the invitee's locale when the invitation carries one", async () => {
-    const mailer = fakeMailer();
-    await new MailerInvitationMailer(mailer, 'https://app.example.test').send({ ...INVITATION, locale: 'sr-Latn' });
-    expect(mailer.send.mock.calls[0]![0]).toMatchObject({ locale: 'sr-Latn' });
+    const { mailer, invitationMailer } = setup('https://app.example.test');
+    await invitationMailer.send({ ...INPUT, locale: 'hu' });
+    expect(mailer.send.mock.calls[0]![0]).toMatchObject({ locale: 'hu' });
   });
 
-  it('propagates mailer failures so the caller can log them', async () => {
-    const mailer = fakeMailer();
-    mailer.send.mockRejectedValue(new Error('MessageRejected'));
-    await expect(new MailerInvitationMailer(mailer, 'https://app.example.test').send(INVITATION)).rejects.toThrow(
-      'MessageRejected',
+  it('builds the link on the local workspace origin when WORKSPACE_URL is unset', async () => {
+    const { mailer, invitationMailer } = setup();
+
+    await invitationMailer.send(INPUT);
+
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ activationUrl: 'http://localhost:5173/invite/tok_123' }),
+      }),
     );
+  });
+
+  it('propagates a Mailer failure so the caller can log it', async () => {
+    const { mailer, invitationMailer } = setup('https://app.example.test');
+    mailer.send.mockRejectedValue(new Error('MessageRejected'));
+
+    await expect(invitationMailer.send(INPUT)).rejects.toThrow('MessageRejected');
   });
 
   it('sends a plain-text and HTML email with the activation link through SES', async () => {
@@ -59,7 +76,8 @@ describe('MailerInvitationMailer', () => {
     ses.on(SendRawEmailCommand).resolves({ MessageId: 'msg-1' });
     try {
       const mailer = new SesMailer({ fromEmail: 'no-reply@example.test', region: 'eu-central-1' });
-      await new MailerInvitationMailer(mailer, 'https://app.example.test').send(INVITATION);
+      const config = { get: (key: string) => (key === 'WORKSPACE_URL' ? 'https://app.example.test' : undefined) };
+      await new InvitationMailer(mailer, config as never).send({ ...INPUT, locale: 'en' });
 
       const calls = ses.commandCalls(SendRawEmailCommand);
       expect(calls).toHaveLength(1);
@@ -71,7 +89,7 @@ describe('MailerInvitationMailer', () => {
         Buffer.from(match[1]!.replace(/\r\n/g, ''), 'base64').toString('utf8'),
       );
       const [text, html] = decodedParts;
-      expect(text).toContain('https://app.example.test/invitations/tok_123');
+      expect(text).toContain('https://app.example.test/invite/tok_123');
       expect(html).toContain('Example &lt;d.o.o.&gt;');
       const subject = /^Subject: (.+(?:\r\n .+)*)/m.exec(raw)![1]!;
       const decodedSubject = subject

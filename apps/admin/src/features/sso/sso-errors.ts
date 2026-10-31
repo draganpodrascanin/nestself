@@ -10,12 +10,19 @@
  * add; `details.reason: 'provider_name_taken'` when another organization
  * holds the slug, on create or a protocol change), `validation` (422 with `details.field` or `details.fields`, or none
  * when the identity provider refused the configuration; 400 from the body
- * schema), `not_found` (the organization on create, otherwise the
- * connection or domain), `forbidden`, `rate_limited`, `unavailable` (identity
- * provider down). `step_up_required` is answered by `withStepUp`; it reaches
- * this mapper only when the retry is refused again and then shows `unknown`.
+ * schema; 422 with `details.field` `metadataUrl` or `oidcIssuer` and
+ * `details.reason` `scheme`, `host` or `private_address` when the address is
+ * not a public https URL, on create, update and test), `not_found` (the
+ * organization on create, otherwise the connection or domain), `forbidden`,
+ * `rate_limited`, `unavailable` (identity provider down, or, with an address
+ * to check, the name resolver). `step_up_required` is answered by
+ * `withStepUp`; it reaches this mapper only when the retry is refused again
+ * and then shows `unknown`.
  *
- * `null` means the user cancelled step-up: not a failure, nothing to show.
+ * `null` means the user cancelled the step-up of an action: not a failure,
+ * nothing to show. A cancelled step-up of the list read (`load`) is
+ * `stepUpCancelled`, because the page then has no list to show and offers
+ * Try again.
  */
 import { ApiError } from '@nestself/api-client';
 import { StepUpCancelledError } from '../../auth';
@@ -33,6 +40,7 @@ export type SsoErrorKey =
   | 'conflictProviderNameReserved'
   | 'conflictDomain'
   | 'validation'
+  | 'urlNotPublic'
   | 'idpRefused'
   | 'notFound'
   | 'organizationNotFound'
@@ -40,6 +48,7 @@ export type SsoErrorKey =
   | 'rateLimited'
   | 'unavailable'
   | 'unknown'
+  | 'stepUpCancelled'
   | 'fieldSlug'
   | 'fieldProtocol'
   | 'fieldSecret'
@@ -68,6 +77,9 @@ export interface SsoProblem {
 }
 
 const FORM_OPERATIONS: ReadonlySet<SsoOperation> = new Set(['create', 'update', 'addDomain']);
+
+/** Why the API refuses a metadata URL or issuer: not https, no usable host, or a host that resolves to a non-public address. */
+const NOT_PUBLIC_REASONS: ReadonlySet<string> = new Set(['scheme', 'host', 'private_address']);
 
 const FORM_FIELDS: ReadonlySet<string> = new Set<SsoField>([
   'slug',
@@ -109,6 +121,11 @@ function validationProblem(err: ApiError, op: SsoOperation): { key: SsoErrorKey;
       return { key: 'fieldDefaultOrgUnit', field: 'defaultOrgUnitId' };
     case 'idpInitiatedAllowed':
       return { key: 'fieldIdpInitiated', field: null };
+    case 'metadataUrl':
+    case 'oidcIssuer': {
+      const reason = err.details?.['reason'];
+      return { key: typeof reason === 'string' && NOT_PUBLIC_REASONS.has(reason) ? 'urlNotPublic' : 'validation', field: single };
+    }
     case null:
       // A 422 without a field is the identity provider refusing the configuration.
       return { key: err.status === 422 ? 'idpRefused' : 'validation', field: null };
@@ -152,7 +169,7 @@ function classify(err: ApiError, op: SsoOperation): { key: SsoErrorKey; field: s
 }
 
 export function ssoProblem(err: unknown, op: SsoOperation): SsoProblem | null {
-  if (err instanceof StepUpCancelledError) return null;
+  if (err instanceof StepUpCancelledError) return op === 'load' ? { key: 'stepUpCancelled', field: null } : null;
   if (!(err instanceof ApiError)) return { key: 'unknown', field: null };
   const { key, field } = classify(err, op);
   const inForm = FORM_OPERATIONS.has(op) && field !== null && FORM_FIELDS.has(field);

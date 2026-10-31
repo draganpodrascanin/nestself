@@ -48,10 +48,23 @@ export const InvitationResponseSchema = z.object({
 });
 export type InvitationResponse = z.infer<typeof InvitationResponseSchema>;
 
+/** Why an import row was not created: a code the clients map to translated copy. */
+export const INVITATION_IMPORT_ROW_REASONS = [
+  'invalid_template',
+  'duplicate_in_batch',
+  'org_unit_outside_org',
+  'sso_domain_claimed',
+  'owner_exists',
+  'duplicate_invitation',
+  'already_member',
+] as const;
+export const InvitationImportRowReasonSchema = z.enum(INVITATION_IMPORT_ROW_REASONS);
+export type InvitationImportRowReason = z.infer<typeof InvitationImportRowReasonSchema>;
+
 export const InvitationImportResponseSchema = z.object({
   created: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
-  errors: z.array(z.object({ email: z.string(), reason: z.string() })),
+  errors: z.array(z.object({ email: z.string(), reason: InvitationImportRowReasonSchema })),
 });
 export type InvitationImportResponse = z.infer<typeof InvitationImportResponseSchema>;
 

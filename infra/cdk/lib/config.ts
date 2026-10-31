@@ -14,7 +14,10 @@ export interface StageConfig {
   readonly webLogoutUrls: string[];
   readonly sesFromEmail: string | undefined;
   readonly cognitoDomainPrefix: string | undefined;
-  readonly enableCustomDomain: boolean;
+  /** Custom domain of the Cognito hosted UI, inside the hosted zone of `domainName`; undefined keeps the `cognitoDomainPrefix` domain. */
+  readonly authDomainName: string | undefined;
+  /** Proxies in front of the API (`TRUST_PROXY_HOPS`): CloudFront and the ALB make 2. Above 0 the ALB admits CloudFront only. */
+  readonly trustProxyHops: number;
   readonly enableWaf: boolean;
   readonly enableSes: boolean;
   readonly deletionProtection: boolean;
@@ -50,7 +53,8 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     ],
     sesFromEmail: undefined,
     cognitoDomainPrefix: 'nestself-dev',
-    enableCustomDomain: false,
+    authDomainName: undefined,
+    trustProxyHops: 0,
     enableWaf: false,
     enableSes: false,
     deletionProtection: false,
@@ -83,7 +87,8 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     ],
     sesFromEmail: 'no-reply@staging.nestself.rs',
     cognitoDomainPrefix: undefined,
-    enableCustomDomain: true,
+    authDomainName: 'auth.staging.nestself.rs',
+    trustProxyHops: 2,
     enableWaf: true,
     enableSes: true,
     deletionProtection: true,
@@ -116,7 +121,8 @@ const STAGE_CONFIGS: Record<Stage, StageConfig> = {
     ],
     sesFromEmail: 'no-reply@nestself.rs',
     cognitoDomainPrefix: undefined,
-    enableCustomDomain: true,
+    authDomainName: 'auth.nestself.rs',
+    trustProxyHops: 2,
     enableWaf: true,
     enableSes: true,
     deletionProtection: true,

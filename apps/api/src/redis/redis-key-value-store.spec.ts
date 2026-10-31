@@ -165,3 +165,9 @@ describe.skipIf(!reachable)('RedisKeyValueStore', () => {
     expect(received).toContain('hello');
   });
 });
+
+describe('RedisKeyValueStore.kind', () => {
+  it('declares itself as the Redis store, so the health check does not have to guess (no connection needed)', () => {
+    expect(new RedisKeyValueStore('redis://127.0.0.1:6379').kind).toBe('redis');
+  });
+});

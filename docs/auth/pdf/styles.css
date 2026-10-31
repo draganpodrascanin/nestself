@@ -97,6 +97,8 @@ h1 + p + h2, h1 + p + ul + h2 { break-before: page; }
 /* Screenshots: `![alt](screenshots/x.png)` followed by `*caption*` in the
    same paragraph becomes a figure (build.mjs). */
 figure { margin: 1mm 0 4mm; break-inside: avoid; }
+/* A user-guide step and its picture stay on one page (docs/auth/guides/). */
+li:has(img) { break-inside: avoid; }
 figure img, p > img {
   display: block;
   max-width: 100%;

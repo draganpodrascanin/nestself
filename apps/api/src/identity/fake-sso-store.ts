@@ -34,7 +34,8 @@ export interface FakeFederatedUser {
   /** The subject (NameID / `sub`) at the employer's IdP. */
   subject: string;
   email: string;
-  emailVerified: boolean;
+  /** null: the IdP sends no `email_verified` claim at all (Entra ID by default). */
+  emailVerified: boolean | null;
   /** Pool username; defaults to Cognito's `<providerName>_<subject>`. */
   username: string;
 }
@@ -120,7 +121,8 @@ export class FakeSsoStore {
       providerName: string;
       subject: string;
       email: string;
-      emailVerified: boolean;
+      /** null: no `email_verified` claim at all. */
+      emailVerified: boolean | null;
       username?: string;
     }>,
   ): void {

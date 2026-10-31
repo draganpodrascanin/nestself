@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { InvitationActivationService } from './invitation-activation.service.js';
 import { InvitationMembershipActivator } from './invitation-membership-activator.js';
 import { hashToken } from './invitation-token.js';
@@ -188,6 +189,10 @@ describe('InvitationActivationService', () => {
     vi.setSystemTime(NOW);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   // -- preview --------------------------------------------------------------
 
   describe('preview()', () => {
@@ -278,14 +283,48 @@ describe('InvitationActivationService', () => {
       expect(result).toHaveProperty('method', 'email_otp');
       expect(result).toHaveProperty('challengeToken', 'challenge_token_otp');
       expect(identities.createUser).toHaveBeenCalled();
-      expect(signIn.emailOtpStart).toHaveBeenCalledWith(
-        'invitee@example.com',
-        expect.any(Object),
-      );
+      // No locale was requested: the sign-in service falls back to the pool default.
+      expect(signIn.emailOtpStart).toHaveBeenCalledWith('invitee@example.com', meta, undefined);
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'invitation.accepted' }),
       );
       expect(principalLoader.invalidateUser).toHaveBeenCalled();
+    });
+
+    it('passes the requested locale to the code email, on the first and on a repeated acceptance', async () => {
+      const { service, invitations, signIn } = buildService();
+      invitations.findByTokenHash.mockResolvedValueOnce(validInvitation());
+      invitations.findByTokenHash.mockResolvedValueOnce(validInvitation({ acceptedAt: PAST }));
+
+      await service.accept(token, surface, meta, 'hu');
+      await service.accept(token, surface, meta, 'sr-Cyrl');
+
+      expect(signIn.emailOtpStart.mock.calls).toEqual([
+        ['invitee@example.com', meta, 'hu'],
+        ['invitee@example.com', meta, 'sr-Cyrl'],
+      ]);
+    });
+
+    it('audits the user, identity and membership inside the accept transaction, and the acceptance after it', async () => {
+      const inv = validInvitation();
+      const { service, invitations, audit, dbs } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      const tx = {
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'membership_1' }]) }),
+        }),
+      };
+      dbs.withOrgScope.mockImplementation(async (_orgId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx));
+
+      await service.accept(token, surface, meta);
+
+      const calls = audit.record.mock.calls as unknown as Array<[{ action: string }, { tx?: unknown }?]>;
+      expect(calls.map(([event, opts]) => [event.action, opts?.tx === tx])).toEqual([
+        ['user.created', true],
+        ['identity.linked', true],
+        ['membership.activated', true],
+        ['invitation.accepted', false],
+      ]);
     });
 
     it('returns password/new_password challenge for an employer admin template', async () => {
@@ -415,6 +454,7 @@ describe('InvitationActivationService', () => {
     });
 
     it('falls back to email OTP when password flow fails for an employer admin', async () => {
+      const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
       const inv = validInvitation({ templateKey: 'hr_admin' });
       const { service, invitations, signIn } = buildService();
       invitations.findByTokenHash.mockResolvedValue(inv);
@@ -424,6 +464,25 @@ describe('InvitationActivationService', () => {
 
       expect(result).toHaveProperty('method', 'email_otp');
       expect(result).toHaveProperty('challengeToken', 'challenge_token_otp');
+      // The log line names the invitee's domain, never the address.
+      const lines = debug.mock.calls.map(([line]) => String(line));
+      expect(lines.some((line) => line.includes('recipientDomain=example.com'))).toBe(true);
+      expect(lines.some((line) => line.includes('invitee@'))).toBe(false);
+    });
+
+    it('answers without a challenge when the email code cannot start, and logs the domain only', async () => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      const inv = validInvitation();
+      const { service, invitations, signIn } = buildService();
+      invitations.findByTokenHash.mockResolvedValue(inv);
+      signIn.emailOtpStart.mockRejectedValue(new Error('throttled'));
+
+      const result = await service.accept(token, surface, meta);
+
+      expect(result).toEqual({ method: 'email_otp', challengeToken: null, ssoStartUrl: null, step: null });
+      const lines = warn.mock.calls.map(([line]) => String(line));
+      expect(lines).toEqual(['Email OTP start failed during acceptance (recipientDomain=example.com)']);
+      expect(lines.join('\n')).not.toContain('invitee@example.com');
     });
 
     it('audit details never contain the token or hash', async () => {

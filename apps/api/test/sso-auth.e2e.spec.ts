@@ -9,6 +9,12 @@
  * Connections are seeded through `SsoRepository` (the staff lifecycle over
  * HTTP is `sso.e2e.spec.ts`).
  *
+ * The mobile app's federated sign-in (phase 4 design 5.7, Review Focus 3):
+ * `POST /auth/sso/bind-token` with the ID token of the app's own exchange
+ * (signed with the stub JWT secret, as the stub ID-token verifier checks), and
+ * the bearer path with `BEARER_VERIFIER` overridden to answer what the
+ * Cognito access-token verifier would.
+ *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
 import 'dotenv/config';
@@ -16,10 +22,14 @@ import { randomBytes } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
-import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
+import { IdentityProviderService, decodeJwtClaims } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { s256 } from '../src/identity/fake-sso-store.js';
+import { BEARER_VERIFIER, type BearerPayload, type BearerVerifier } from '../src/auth/bearer-verifier.js';
+import { ApiHttpException } from '../src/common/api-error.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import {
   auditEvents,
@@ -29,12 +39,16 @@ import {
   memberships,
   orgUnits,
   organizations,
+  ssoDomains,
   users,
 } from '../src/db/schema/index.js';
 import { SsoRepository, type SsoConnectionPatch } from '../src/db/repositories/sso.repository.js';
 import { NEUTRAL_DELAY_MS } from '../src/auth/neutral-delay.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
-import { ssoTestKey } from '../src/redis/redis-keys.js';
+import { sessionKey, ssoTestKey } from '../src/redis/redis-keys.js';
+import { Mailer, type MailInput, oneTimeCode } from '../src/mailer/mailer.js';
+import type { LoggingMailer } from '../src/mailer/logging-mailer.js';
+import { hashSessionId } from '../src/session/session-helpers.js';
 import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
@@ -44,7 +58,9 @@ const shouldRun = !!TEST_DB_URL;
 const ORG = 'org_sample';
 const OTHER_ORG = 'org_ssoauth_other';
 const PROVIDER = 'org-acme-oidc';
-const API = 'http://api.ssoauth.test';
+/** OTHER_ORG's ACTIVE connection: start buckets are per IP and connection. */
+const OTHER_PROVIDER = 'org-other-ssoauth-oidc';
+const API ='http://api.ssoauth.test';
 const WORKSPACE = 'http://workspace.ssoauth.test';
 const ADMIN = 'http://admin.ssoauth.test';
 /** Each surface's flow runs on that surface's origin (its SPA proxies /api). */
@@ -62,6 +78,22 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   let unitId: string;
   const jwtSecret = randomBytes(32).toString('hex');
 
+  /**
+   * Stands in for `CognitoBearerVerifier`: a bearer token is accepted when a
+   * test registered what the pool's access-token verifier would answer for
+   * it (`poolBearer`); anything else is refused as the real one refuses it.
+   */
+  const poolBearers = new Map<string, BearerPayload>();
+  const bearerVerifier: BearerVerifier = {
+    async verify(token) {
+      const payload = poolBearers.get(token);
+      if (!payload) {
+        throw new ApiHttpException({ status: 401, code: 'unauthenticated', message: 'Invalid or expired bearer token' });
+      }
+      return payload;
+    },
+  };
+
   beforeAll(async () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'ssoauth');
     await seed(testDb.db);
@@ -78,7 +110,10 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     delete process.env.FAKE_DNS_TXT_AUTOVERIFY;
 
     const { AppModule } = await import('../src/app.module.js');
-    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(BEARER_VERIFIER)
+      .useValue(bearerVerifier)
+      .compile();
     const { ApiExceptionFilter } = await import('../src/common/api-exception.filter.js');
 
     app = moduleFixture.createNestApplication();
@@ -113,6 +148,22 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     await repo.markDomainVerified(domain.id, new Date());
 
     await testDb.db.insert(organizations).values({ id: OTHER_ORG, name: 'Other SSO Auth Org', slug: 'other-ssoauth' });
+    await idp.createProvider({
+      name: OTHER_PROVIDER,
+      protocol: 'OIDC',
+      oidcIssuer: 'https://idp.other.example',
+      oidcClientId: 'client',
+      attributeMapping: {},
+    });
+    await repo.createConnection({
+      orgId: OTHER_ORG,
+      protocol: 'OIDC',
+      cognitoProviderName: OTHER_PROVIDER,
+      status: 'ACTIVE',
+      oidcIssuer: 'https://idp.other.example',
+      oidcClientId: 'client',
+      lastTestedAt: new Date(),
+    });
 
     // Known native user with a password (the discover timing baseline).
     idp.seedUsers([{ email: 'user_nikola@example.com', password: 'Password1!' }]);
@@ -125,8 +176,8 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   });
 
   beforeEach(() => {
-    // The redirect routes allow 10 requests a minute per IP; every test here
-    // comes from the same socket address.
+    // Start allows 60 a minute per IP and connection, the callback 120 per IP,
+    // and every test here comes from the same socket address.
     resetThrottlerStorage(app);
   });
 
@@ -155,7 +206,8 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     return row!.id;
   }
 
-  function seedFederated(subject: string, email: string, emailVerified = true) {
+  /** `emailVerified: null`: the IdP sends no `email_verified` claim (Entra ID by default). */
+  function seedFederated(subject: string, email: string, emailVerified: boolean | null = true) {
     idp.seedFederatedUsers([{ providerName: PROVIDER, subject, email, emailVerified }]);
   }
 
@@ -191,6 +243,13 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
 
   async function auditFor(action: string) {
     return testDb.db.select().from(auditEvents).where(eq(auditEvents.action, action));
+  }
+
+  /** The newest code mail to `email` (the logging mailer keeps what it "sent" in test runs). */
+  function lastMailTo(email: string): MailInput {
+    const mail = (app.get(Mailer) as LoggingMailer).sent.filter((m) => m.to === email).at(-1);
+    if (!mail) throw new Error(`no mail to ${email}`);
+    return mail;
   }
 
   // -------------------------------------------------------------------------
@@ -412,6 +471,69 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       }
     });
 
+    it('the fake IdP issues the ID token of a real pool (cognito:username, no username claim) and the session keeps that username', async () => {
+      // A real Cognito ID token has no `username` claim; a fake that adds one hides code reading the wrong claim.
+      const exchange = vi.spyOn(idp, 'exchangeAuthorizationCode');
+      try {
+        const email = 'shaped@acme.example';
+        await invite(email);
+        seedFederated('sub-shaped', email);
+        const { callback } = await federatedSignIn(email);
+
+        const { idToken } = await exchange.mock.results[0]!.value;
+        const claims = decodeJwtClaims(idToken);
+        expect(claims).not.toHaveProperty('username');
+        expect(claims['cognito:username']).toBe(`${PROVIDER}_sub-shaped`);
+
+        // The session holds the pool username (`<providerName>_<subject>`), not the sub.
+        const sessionId = sessionCookie(callback)!.split(';')[0]!.slice('nestself_session='.length);
+        const raw = await app.get<KeyValueStore>(KEY_VALUE_STORE).get(sessionKey(hashSessionId(sessionId)));
+        expect((JSON.parse(raw!) as { cognito: { username: string } }).cognito.username).toBe(`${PROVIDER}_sub-shaped`);
+      } finally {
+        exchange.mockRestore();
+      }
+    });
+
+    it('a federated identity whose binding connection was moved to another row signs in nowhere', async () => {
+      const email = 'moved@acme.example';
+      await invite(email);
+      seedFederated('sub-moved', email);
+      const bound = await federatedSignIn(email);
+      expect(bound.location).toBe(`${WORKSPACE}/`);
+
+      // linkIdentity recorded the connection the identity was bound through.
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const [identity] = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(identity!.ssoConnectionId).toBe(connectionId);
+
+      // The same identity, now bound to the other organization's connection, while the user is
+      // still an ACTIVE member of ORG: the provider name no longer vouches for it.
+      const other = await repo.findConnectionByProviderName(OTHER_PROVIDER);
+      const bindTo = (ssoConnectionId: string) =>
+        testDb.db.update(externalIdentities).set({ ssoConnectionId }).where(eq(externalIdentities.id, identity!.id));
+      await bindTo(other!.id);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const failedBefore = await auditFor('auth.sign_in.failed');
+        const denied = await federatedSignIn(email);
+        expect(denied.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+        expect(sessionCookie(denied.callback)).toBeUndefined();
+        const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+        expect(failed).toHaveLength(1);
+        expect(failed[0]).toMatchObject({ orgId: ORG, recordId: PROVIDER, details: { reason: 'sso_provider_mismatch' } });
+        // Not an orphan: the pool user stays.
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+        await bindTo(connectionId);
+      }
+
+      // Back on its own connection the identity signs in again, with the same pool user.
+      const again = await federatedSignIn(email);
+      expect(again.location).toBe(`${WORKSPACE}/`);
+      expect(sessionCookie(again.callback)).toBeDefined();
+    });
+
     it('a new binding through a SUSPENDED connection is denied', async () => {
       const email = 'late@acme.example';
       await invite(email);
@@ -469,16 +591,6 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       } finally {
         await setConnection({ jitProvisioning: false });
       }
-    });
-
-    it('unverified OIDC email: no binding, redirect to sso_email_unverified with the address', async () => {
-      const email = 'unverified@acme.example';
-      await invite(email);
-      seedFederated('sub-unverified', email, false);
-      const { callback, location } = await federatedSignIn(email);
-      expect(location).toBe(`${WORKSPACE}/sign-in?reason=sso_email_unverified&email=unverified%40acme.example`);
-      expect(sessionCookie(callback)).toBeUndefined();
-      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
     });
 
     it('a replayed state is answered neutrally with no session (Review Focus 1)', async () => {
@@ -618,6 +730,869 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       const failed = await auditFor('auth.sign_in.failed');
       expect(failed.length).toBe(before + 1);
       expect(failed.some((e) => (e.details as { reason?: string }).reason === 'sso_browser')).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Step-up of a federated user (5.4): a NestSelf code to the identity's address
+  // -------------------------------------------------------------------------
+
+  describe('federated step-up (5.4)', () => {
+    const store = () => app.get<KeyValueStore>(KEY_VALUE_STORE);
+
+    function cookieValue(res: request.Response, name: string): string {
+      const cookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
+      const cookie = cookies.find((c) => c.startsWith(`${name}=`));
+      if (!cookie) throw new Error(`${name} cookie not set`);
+      return cookie.slice(name.length + 1).split(';')[0]!;
+    }
+
+    /** Invited, bound and signed in through the fake IdP: the agent, its CSRF token and session id. */
+    async function signInFederated(email: string) {
+      await invite(email);
+      seedFederated(`sub-${email}`, email);
+      const { agent, callback } = await federatedSignIn(email);
+      return {
+        agent,
+        csrf: cookieValue(callback, 'nestself_csrf'),
+        sessionId: cookieValue(callback, 'nestself_session'),
+      };
+    }
+
+    type Federated = Awaited<ReturnType<typeof signInFederated>>;
+
+    const stepUp = (who: Federated, path: 'start' | 'resend' | 'verify', body: Record<string, string> = {}) =>
+      who.agent.post(`/api/auth/step-up/${path}`).set('X-CSRF-Token', who.csrf).send(body);
+
+    /** Move the session's authentication time 40 minutes into the past. */
+    async function ageSession(sessionId: string) {
+      const key = sessionKey(hashSessionId(sessionId));
+      const raw = await store().get(key);
+      expect(raw).not.toBeNull();
+      const ttl = await store().ttl(key);
+      const record = JSON.parse(raw!) as { auth: { time: string } };
+      record.auth.time = new Date(Date.now() - 40 * 60_000).toISOString();
+      await store().set(key, JSON.stringify(record), { ttlSeconds: ttl });
+    }
+
+    it('a federated session steps up with the mailed code and regenerates the session', async () => {
+      const email = 'marija@acme.example';
+      const marija = await signInFederated(email);
+      await ageSession(marija.sessionId);
+
+      const start = await stepUp(marija, 'start');
+      expect(start.status).toBe(200);
+      expect(start.body).toEqual({
+        method: 'email_otp',
+        challengeToken: expect.any(String),
+        ssoStartUrl: null,
+        emailMasked: 'm***@acme.example',
+      });
+      const mail = lastMailTo(email);
+      expect(mail).toMatchObject({ template: 'step_up_code', locale: 'sr-Latn' });
+
+      const verify = await stepUp(marija, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: oneTimeCode(mail),
+      });
+      expect(verify.status).toBe(204);
+      const newSessionId = cookieValue(verify, 'nestself_session');
+      expect(newSessionId).not.toBe(marija.sessionId);
+      expect(cookieValue(verify, 'nestself_csrf')).not.toBe(marija.csrf);
+      // The old session id no longer authenticates; the new one carries the step-up.
+      expect(await store().get(sessionKey(hashSessionId(marija.sessionId)))).toBeNull();
+      const me = await marija.agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(Date.now() - new Date(me.body.principal.auth.lastStepUpAt as string).getTime()).toBeLessThan(60_000);
+      const completed = (await auditFor('auth.step_up.completed')).filter(
+        (e) => e.actorUserId === me.body.principal.userId,
+      );
+      expect(completed.map((e) => e.details)).toEqual([{ method: 'email_otp', issuer: 'nestself' }]);
+    });
+
+    it('step-up/resend inside the cooldown answers 429 rate_limited with retryAfter', async () => {
+      const email = 'petar@acme.example';
+      const petar = await signInFederated(email);
+      const start = await stepUp(petar, 'start');
+      expect(start.status).toBe(200);
+      const challengeToken = start.body.challengeToken as string;
+      const firstCode = oneTimeCode(lastMailTo(email));
+
+      // The cooldown starts with the first mail.
+      const refused = await stepUp(petar, 'resend', { challengeToken });
+      expect(refused.status).toBe(429);
+      expect(refused.body).toHaveProperty('code', 'rate_limited');
+      expect(refused.body.details.retryAfter).toBeGreaterThan(0);
+      expect(refused.body.details.retryAfter).toBeLessThanOrEqual(60);
+
+      // 61 seconds later: a new code for the same token; the first one stopped working.
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      try {
+        const renewed = await stepUp(petar, 'resend', { challengeToken });
+        expect(renewed.status).toBe(200);
+        expect(renewed.body).toEqual({
+          method: 'email_otp',
+          challengeToken,
+          ssoStartUrl: null,
+          emailMasked: 'p***@acme.example',
+        });
+        const secondCode = oneTimeCode(lastMailTo(email));
+        expect(secondCode).not.toBe(firstCode);
+
+        const old = await stepUp(petar, 'verify', { challengeToken, response: firstCode });
+        expect(old.status).toBe(401);
+        expect(old.body).toHaveProperty('code', 'invalid_code');
+        const verified = await stepUp(petar, 'verify', { challengeToken, response: secondCode });
+        expect(verified.status).toBe(204);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("another user presenting a federated user's step-up token is refused with invalid_challenge (Review Focus 1)", async () => {
+      const ana = await signInFederated('ana.fed@acme.example');
+      const bojan = await signInFederated('bojan@acme.example');
+      const start = await stepUp(ana, 'start');
+      expect(start.status).toBe(200);
+
+      const res = await stepUp(bojan, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: oneTimeCode(lastMailTo('ana.fed@acme.example')),
+      });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+
+      // Nothing was recorded on bojan's session, and the refusal is audited.
+      const me = await bojan.agent.get('/api/auth/me');
+      expect(me.body.principal.auth.lastStepUpAt).toBeNull();
+      const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
+      expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
+    });
+
+    it("the same user's other session presenting the step-up token is refused: a code is bound to the session that asked", async () => {
+      const email = 'vesna@acme.example';
+      const first = await signInFederated(email);
+      const { agent, callback } = await federatedSignIn(email);
+      const second = { agent, csrf: cookieValue(callback, 'nestself_csrf'), sessionId: cookieValue(callback, 'nestself_session') };
+      expect(second.sessionId).not.toBe(first.sessionId);
+
+      const start = await stepUp(first, 'start');
+      expect(start.status).toBe(200);
+      const res = await stepUp(second, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: oneTimeCode(lastMailTo(email)),
+      });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+
+      // Neither session carries a step-up, and the refusal is audited for the user.
+      const me = await second.agent.get('/api/auth/me');
+      expect(me.body.principal.auth.lastStepUpAt).toBeNull();
+      expect((await first.agent.get('/api/auth/me')).body.principal.auth.lastStepUpAt).toBeNull();
+      const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
+      expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pending binding after an unverified OIDC email (5.6): a NestSelf code proves the mailbox
+  // -------------------------------------------------------------------------
+
+  describe('pending binding after an unverified OIDC email (5.6)', () => {
+    /** The IdP signs `email` in without `email_verified`: every hop, the redirect and its handle. */
+    async function unverifiedSignIn(email: string, query: Record<string, string> = {}) {
+      seedFederated(`sub-${email}`, email, false);
+      const flow = await federatedSignIn(email, query);
+      const url = new URL(flow.location);
+      return { ...flow, url, handle: url.searchParams.get('bind') ?? '' };
+    }
+
+    const bind = (agent: request.Agent | ReturnType<typeof request>, path: 'start' | 'verify' | 'resend', body: object) =>
+      (agent as request.Agent).post(`/api/auth/sso/bind/${path}`).send(body);
+
+    /** start, then the code the mail carried. */
+    async function startCode(agent: request.Agent, handle: string, email: string) {
+      const start = await bind(agent, 'start', { handle });
+      expect(start.status).toBe(200);
+      return { challengeToken: start.body.challengeToken as string, code: oneTimeCode(lastMailTo(email)) };
+    }
+
+    it('pending bind end to end: callback -> bind/start -> bind/verify -> session cookie', async () => {
+      const email = 'pending@acme.example';
+      const invitationId = await invite(email);
+      const { agent, callback, url, handle } = await unverifiedSignIn(email, { returnPath: '/people' });
+      expect(url.origin + url.pathname).toBe(`${WORKSPACE}/sign-in`);
+      expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+      expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(sessionCookie(callback)).toBeUndefined();
+      const started = (await auditFor('identity.verification_started')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(started).toHaveLength(1);
+      expect(started[0]).toMatchObject({ orgId: ORG, details: { connectionId, emailVerifiedClaim: false } });
+
+      const start = await bind(agent, 'start', { handle, locale: 'hu' });
+      expect(start.status).toBe(200);
+      expect(start.body).toEqual({ challengeToken: expect.any(String), emailMasked: 'p***@acme.example' });
+      const mail = lastMailTo(email);
+      expect(mail).toMatchObject({ template: 'sso_bind_code', locale: 'hu' });
+
+      const verify = await bind(agent, 'verify', { challengeToken: start.body.challengeToken, code: oneTimeCode(mail) });
+      expect(verify.status).toBe(200);
+      expect(verify.body).toEqual({ returnPath: '/people' });
+      expect(sessionCookie(verify)).toBeDefined();
+      expect((verify.headers['set-cookie'] as unknown as string[]).some((c) => c.startsWith('nestself_csrf='))).toBe(true);
+
+      const me = await agent.get('/api/auth/me');
+      expect(me.status).toBe(200);
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const [identity] = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(identity).toMatchObject({ provider: `cognito:${PROVIDER}`, email, emailVerified: true, ssoConnectionId: connectionId });
+      const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
+      expect(inv!.acceptedUserId).toBe(user!.id);
+      const linked = (await auditFor('identity.linked')).filter((e) => e.recordId === user!.id);
+      expect(linked.map((e) => (e.details as { via?: string }).via)).toEqual(['sso_email_code']);
+      const accepted = (await auditFor('invitation.accepted')).filter((e) => e.recordId === invitationId);
+      expect(accepted.map((e) => (e.details as { via?: string }).via)).toEqual(['sso_email_code']);
+
+      // The handle is spent (asked without the new session cookie, which would need the CSRF header).
+      const again = await bind(request(app.getHttpServer()), 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
+
+      // Bound: the next sign-in takes path 1, although the IdP still does not confirm the address.
+      const next = await federatedSignIn(email);
+      expect(next.location).toBe(`${WORKSPACE}/`);
+      expect(sessionCookie(next.callback)).toBeDefined();
+    });
+
+    it('two pending sign-ins of one IdP account: the second code signs in through the identity the first one bound', async () => {
+      const email = 'two.tabs@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      expect(second.handle).not.toBe(first.handle);
+      const firstCode = await startCode(first.agent, first.handle, email);
+      const secondCode = await startCode(second.agent, second.handle, email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        expect((await bind(first.agent, 'verify', firstCode)).status).toBe(200);
+        const verify = await bind(second.agent, 'verify', secondCode);
+        expect(verify.status).toBe(200);
+        expect(sessionCookie(verify)).toBeDefined();
+        expect((await second.agent.get('/api/auth/me')).status).toBe(200);
+        // Nothing deleted, nothing bound twice: the pool user and its sub stay those of the one identity.
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id))).toHaveLength(1);
+      expect((await auditFor('identity.linked')).filter((e) => e.recordId === user!.id)).toHaveLength(1);
+      expect(
+        (await auditFor('identity.denied')).some((e) => (e.details as { emailNormalised?: string }).emailNormalised === email),
+      ).toBe(false);
+    });
+
+    it('a pending sign-in whose identity was moved to another connection meanwhile is refused without deleting the pool user', async () => {
+      const email = 'moved.pending@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      const firstCode = await startCode(first.agent, first.handle, email);
+      const secondCode = await startCode(second.agent, second.handle, email);
+      expect((await bind(first.agent, 'verify', firstCode)).status).toBe(200);
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const other = await repo.findConnectionByProviderName(OTHER_PROVIDER);
+      const bindTo = (ssoConnectionId: string) =>
+        testDb.db.update(externalIdentities).set({ ssoConnectionId }).where(eq(externalIdentities.userId, user!.id));
+      await bindTo(other!.id);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const failedBefore = await auditFor('auth.sign_in.failed');
+        const verify = await bind(second.agent, 'verify', secondCode);
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+        expect(deleteUser).not.toHaveBeenCalled();
+        const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+        expect(failed).toHaveLength(1);
+        expect(failed[0]).toMatchObject({ orgId: ORG, recordId: PROVIDER, details: { reason: 'sso_provider_mismatch' } });
+      } finally {
+        deleteUser.mockRestore();
+        await bindTo(connectionId);
+      }
+    });
+
+    it('wrong codes across two pending sign-ins lock the address for the bind routes and for native sign-in', async () => {
+      const email = 'guessed@acme.example';
+      await invite(email);
+      const first = await unverifiedSignIn(email);
+      const second = await unverifiedSignIn(email);
+      const one = await startCode(first.agent, first.handle, email);
+      const two = await startCode(second.agent, second.handle, email);
+      const wrong = (code: string) => code.slice(0, -1) + (code.endsWith('0') ? '1' : '0');
+
+      // Three wrong codes end the first challenge (the third answers 429 too_many_attempts), two more on the second.
+      for (const status of [401, 401, 429]) {
+        expect((await bind(first.agent, 'verify', { ...one, code: wrong(one.code) })).status).toBe(status);
+      }
+      for (const status of [401, 401]) {
+        expect((await bind(second.agent, 'verify', { ...two, code: wrong(two.code) })).status).toBe(status);
+      }
+
+      // Five failures: the address is locked like an email-code sign-in, which shares the lock.
+      const right = await bind(second.agent, 'verify', two);
+      expect(right.status).toBe(429);
+      expect(right.body.code).toBe('too_many_attempts');
+      const fresh = await bind(second.agent, 'start', { handle: second.handle });
+      expect(fresh.status).toBe(429);
+      expect(fresh.body.code).toBe('too_many_attempts');
+      const native = await request(app.getHttpServer()).post('/api/auth/email-otp/start').send({ email });
+      expect(native.status).toBe(429);
+      expect(native.body.code).toBe('too_many_attempts');
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+    });
+
+    it('the redirect never carries the address', async () => {
+      const email = 'not.in.the.url@acme.example';
+      await invite(email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const { location, url } = await unverifiedSignIn(email);
+        expect(location).not.toContain('email=');
+        expect(decodeURIComponent(location)).not.toContain(email);
+        expect(decodeURIComponent(location)).not.toContain('acme.example');
+        expect([...url.searchParams.keys()]).toEqual(['reason', 'bind']);
+        // The pool user stays for the code step.
+        expect(deleteUser).not.toHaveBeenCalled();
+        expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      } finally {
+        deleteUser.mockRestore();
+      }
+    });
+
+    it('a connection suspended between the callback and bind/verify answers sso_denied and spends the handle (Review Focus 2)', async () => {
+      const email = 'suspended.meanwhile@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const deniedBefore = await auditFor('identity.denied');
+
+      await setConnection({ status: 'SUSPENDED' });
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
+      }
+
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const denied = (await auditFor('identity.denied')).filter((e) => !deniedBefore.some((b) => b.id === e.id));
+      expect(denied).toHaveLength(1);
+      expect(denied[0]).toMatchObject({
+        orgId: ORG,
+        details: { reason: 'connection_inactive', emailNormalised: email, connectionId, via: 'sso_email_code' },
+      });
+      // Consumed: the handle opens nothing, even with the connection ACTIVE again.
+      const again = await bind(agent, 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
+    });
+
+    it('a domain that lost its verification between the callback and bind/verify answers sso_denied (Review Focus 2)', async () => {
+      const email = 'domain.lost@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const [domain] = await testDb.db.select().from(ssoDomains).where(eq(ssoDomains.domain, 'acme.example'));
+
+      await testDb.db.update(ssoDomains).set({ verifiedAt: null }).where(eq(ssoDomains.id, domain!.id));
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(sessionCookie(verify)).toBeUndefined();
+      } finally {
+        await testDb.db.update(ssoDomains).set({ verifiedAt: domain!.verifiedAt }).where(eq(ssoDomains.id, domain!.id));
+      }
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const denied = (await auditFor('identity.denied')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['connection_inactive']);
+      // Consumed: the handle opens nothing, even with the domain verified again.
+      const again = await bind(agent, 'start', { handle });
+      expect(again.status).toBe(400);
+      expect(again.body.code).toBe('invalid_challenge');
+    });
+
+    it('no invitation and JIT off: bind/verify deletes the orphan pool user and answers sso_denied', async () => {
+      const email = 'walkin.pending@acme.example';
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code } = await startCode(agent, handle, email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(403);
+        expect(verify.body.code).toBe('sso_denied');
+        expect(deleteUser).toHaveBeenCalledWith(`${PROVIDER}_sub-${email}`);
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const denied = (await auditFor('identity.denied')).filter(
+        (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+      );
+      expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['no_invitation']);
+    });
+
+    it('a wrong code keeps the pending sign-in; bind/resend after the cooldown mails a code that binds', async () => {
+      const email = 'resend.pending@acme.example';
+      await invite(email);
+      const { agent, handle } = await unverifiedSignIn(email);
+      const { challengeToken, code: first } = await startCode(agent, handle, email);
+      const wrong = first.slice(0, -1) + (first.endsWith('0') ? '1' : '0');
+
+      const bad = await bind(agent, 'verify', { challengeToken, code: wrong });
+      expect(bad.status).toBe(401);
+      expect(bad.body.code).toBe('invalid_code');
+
+      // The cooldown starts with the first mail.
+      const early = await bind(agent, 'resend', { challengeToken, locale: 'en' });
+      expect(early.status).toBe(429);
+      expect(early.body.code).toBe('rate_limited');
+      expect(early.body.details.retryAfter).toBeGreaterThan(0);
+
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 61_000 });
+      try {
+        const resent = await bind(agent, 'resend', { challengeToken, locale: 'en' });
+        expect(resent.status).toBe(200);
+        expect(resent.body).toEqual({ emailMasked: 'r***@acme.example' });
+        const mail = lastMailTo(email);
+        expect(mail).toMatchObject({ template: 'sso_bind_code', locale: 'en' });
+        expect(oneTimeCode(mail)).not.toBe(first);
+        const verify = await bind(agent, 'verify', { challengeToken, code: oneTimeCode(mail) });
+        expect(verify.status).toBe(200);
+        expect(sessionCookie(verify)).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('with oidcEmailVerifiedClaimRequired off the callback binds the on-domain address at once', async () => {
+      const email = 'switch.off@acme.example';
+      await invite(email);
+      await setConnection({ oidcEmailVerifiedClaimRequired: false });
+      try {
+        const { location, callback } = await unverifiedSignIn(email);
+        expect(location).toBe(`${WORKSPACE}/`);
+        expect(sessionCookie(callback)).toBeDefined();
+      } finally {
+        await setConnection({ oidcEmailVerifiedClaimRequired: true });
+      }
+    });
+
+    it('a staff test sign-in without an email_verified claim finishes through the code and marks the TESTING connection tested', async () => {
+      // Entra ID sends no email_verified claim at all: without this path no staff test could complete.
+      const email = 'pending.tester@acme.example';
+      await invite(email);
+      seedFederated(`sub-${email}`, email, null);
+      await setConnection({ status: 'TESTING', lastTestedAt: null });
+      try {
+        const { agent, callback, location } = await federatedSignIn(email, { test: await issueTestNonce() });
+        const url = new URL(location);
+        expect(url.origin + url.pathname).toBe(`${WORKSPACE}/sign-in`);
+        expect(url.searchParams.get('reason')).toBe('sso_email_unverified');
+        const handle = url.searchParams.get('bind')!;
+        expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(sessionCookie(callback)).toBeUndefined();
+        const started = (await auditFor('identity.verification_started')).filter(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        );
+        expect(started.map((e) => e.details)).toEqual([
+          { emailNormalised: email, connectionId, emailVerifiedClaim: null, testSignIn: true },
+        ]);
+        // Not tested yet: nothing is bound until the code.
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).toBeNull();
+
+        const { challengeToken, code } = await startCode(agent, handle, email);
+        const verify = await bind(agent, 'verify', { challengeToken, code });
+        expect(verify.status).toBe(200);
+        expect(verify.body).toEqual({ returnPath: '/' });
+        expect(sessionCookie(verify)).toBeDefined();
+
+        const me = await agent.get('/api/auth/me');
+        expect(me.status).toBe(200);
+        expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).not.toBeNull();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
+      }
+    });
+
+    it('on a TESTING connection, a sign-in that did not come through the test link is denied at the callback', async () => {
+      const email = 'not.a.tester@acme.example';
+      await invite(email);
+      seedFederated(`sub-${email}`, email, null);
+      // Started while ACTIVE (a TESTING connection refuses a start without the link), completed after the reset.
+      const agent = request.agent(app.getHttpServer());
+      const start = await agent.get('/api/auth/sso/start').query({ connection: PROVIDER, surface: 'workspace' });
+      const authorizeUrl = new URL(start.headers.location as string);
+      authorizeUrl.searchParams.set('as', email);
+      const authorize = await agent.get(authorizeUrl.pathname + authorizeUrl.search);
+      await setConnection({ status: 'TESTING', lastTestedAt: null });
+      try {
+        const cb = new URL(authorize.headers.location as string);
+        const callback = await agent.get(cb.pathname + cb.search);
+        expect(callback.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+        expect(sessionCookie(callback)).toBeUndefined();
+        const denied = (await auditFor('identity.denied')).filter(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        );
+        expect(denied.map((e) => (e.details as { reason?: string }).reason)).toEqual(['connection_inactive']);
+        expect((await auditFor('identity.verification_started')).some(
+          (e) => (e.details as { emailNormalised?: string }).emailNormalised === email,
+        )).toBe(false);
+        expect((await repo.findConnection(connectionId))!.lastTestedAt).toBeNull();
+      } finally {
+        await setConnection({ status: 'ACTIVE' });
+      }
+    });
+
+    it('bind/start answers 400 invalid_challenge for an unknown handle and 400 validation for a malformed one', async () => {
+      const unknown = await bind(request(app.getHttpServer()), 'start', { handle: 'u'.repeat(43) });
+      expect(unknown.status).toBe(400);
+      expect(unknown.body.code).toBe('invalid_challenge');
+      const malformed = await bind(request(app.getHttpServer()), 'start', { handle: 'short' });
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.code).toBe('validation');
+      const verify = await bind(request(app.getHttpServer()), 'verify', { challengeToken: 'unknown', code: '12345678' });
+      expect(verify.status).toBe(401);
+      expect(verify.body.code).toBe('invalid_challenge');
+    });
+
+    it.each(['start', 'verify', 'resend'] as const)('bind/%s allows 10 requests a minute per IP', async (path) => {
+      const body = path === 'start' ? { handle: 'u'.repeat(43) } : { challengeToken: 'unknown', code: '12345678' };
+      for (let i = 0; i < 10; i++) {
+        expect((await bind(request(app.getHttpServer()), path, body)).status).not.toBe(429);
+      }
+      const refused = await bind(request(app.getHttpServer()), path, body);
+      expect(refused.status).toBe(429);
+      expect(refused.body.code).toBe('rate_limited');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Mobile (5.7): bind-token, and the bearer of a federated user
+  // -------------------------------------------------------------------------
+
+  describe('federated users on mobile (5.7)', () => {
+    /**
+     * The mobile app's own PKCE exchange against the hosted UI, in the fake:
+     * Cognito creates (or finds) the federated pool user of `email`. The app
+     * holds that user's ID token, Cognito-shaped as the fake issues it and
+     * signed with the stub JWT secret as the stub ID-token verifier checks.
+     */
+    async function mobileExchange(email: string, emailVerified: boolean | null = true) {
+      const subject = `sub-${email}`;
+      seedFederated(subject, email, emailVerified);
+      const verifier = randomBytes(32).toString('base64url');
+      const code = idp.issueAuthorizationCode(PROVIDER, subject, s256(verifier));
+      const exchanged = await idp.exchangeAuthorizationCode({ code, codeVerifier: verifier, redirectUri: 'nestself://auth/callback' });
+      const { exp: _exp, iat: _iat, ...claims } = decodeJwtClaims(exchanged.idToken) as Record<string, unknown>;
+      return {
+        subject,
+        poolSub: exchanged.idTokenClaims.sub,
+        username: exchanged.idTokenClaims.username,
+        idToken: app.get(JwtService).sign(claims),
+      };
+    }
+
+    /** A bearer token the overridden verifier answers for as the pool would: this `sub`, this pool `username`. */
+    function poolBearer(sub: string, username: string): string {
+      const token = randomBytes(24).toString('base64url');
+      poolBearers.set(token, {
+        userId: '',
+        sub,
+        username,
+        originJti: randomBytes(8).toString('hex'),
+        authMethod: 'email_otp',
+        authTime: Math.floor(Date.now() / 1000),
+      });
+      return token;
+    }
+
+    const bindToken = (idToken: string) =>
+      request(app.getHttpServer()).post('/api/auth/sso/bind-token').send({ idToken });
+    const meWith = (bearer: string) =>
+      request(app.getHttpServer()).get('/api/auth/me').set('Authorization', `Bearer ${bearer}`);
+    const ofEmail = (email: string) => (e: { details: unknown }) =>
+      (e.details as { emailNormalised?: string }).emailNormalised === email;
+
+    it('bind-token binds an invited mobile user and a later bearer call resolves', async () => {
+      const email = 'mobile.invited@acme.example';
+      const invitationId = await invite(email);
+      const mobile = await mobileExchange(email);
+      const bearer = poolBearer(mobile.poolSub, mobile.username);
+
+      // What this task fixes: the federated pool user's bearer resolves to nobody before the binding.
+      expect((await meWith(bearer)).status).toBe(401);
+
+      const res = await bindToken(mobile.idToken);
+      expect(res.status).toBe(204);
+      expect(res.text).toBe('');
+      // No web session: the app keeps signing in with its own tokens.
+      expect(res.headers['set-cookie']).toBeUndefined();
+
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const rows = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(rows).toEqual([
+        expect.objectContaining({
+          provider: `cognito:${PROVIDER}`,
+          subject: mobile.poolSub,
+          cognitoUsername: mobile.username,
+          email,
+          emailVerified: true,
+          ssoConnectionId: connectionId,
+        }),
+      ]);
+      const [inv] = await testDb.db.select().from(invitations).where(eq(invitations.id, invitationId));
+      expect(inv!.acceptedUserId).toBe(user!.id);
+      const accepted = (await auditFor('invitation.accepted')).filter((e) => e.recordId === invitationId);
+      expect(accepted.map((e) => (e.details as { via?: string }).via)).toEqual(['sso']);
+
+      const me = await meWith(bearer);
+      expect(me.status).toBe(200);
+      expect(me.body.principal.userId).toBe(user!.id);
+      // MFA delegated to the identity provider, as for a federated web session.
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+      expect(me.body.principal.memberships).toContainEqual(expect.objectContaining({ orgId: ORG, status: 'ACTIVE' }));
+
+      // The app sends the ID token again (a retry): path 1, nothing bound twice.
+      expect((await bindToken(mobile.idToken)).status).toBe(204);
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id))).toHaveLength(1);
+    });
+
+    it('bind-token without an invitation deletes the orphan and answers sso_denied', async () => {
+      const email = 'mobile.walkin@acme.example';
+      const mobile = await mobileExchange(email);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const res = await bindToken(mobile.idToken);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('sso_denied');
+        // SSO-R-10: the orphan federated pool user goes.
+        expect(deleteUser).toHaveBeenCalledWith(mobile.username);
+      } finally {
+        deleteUser.mockRestore();
+      }
+      const denied = (await auditFor('identity.denied')).filter(ofEmail(email));
+      expect(denied).toEqual([
+        expect.objectContaining({ orgId: ORG, details: expect.objectContaining({ reason: 'no_invitation', connectionId }) }),
+      ]);
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      expect(await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.subject, mobile.poolSub))).toHaveLength(0);
+    });
+
+    it('bind-token with an unverified OIDC email answers sso_email_unverified and keeps the pool user', async () => {
+      const email = 'mobile.unconfirmed@acme.example';
+      await invite(email);
+      // Entra ID by default: no email_verified claim at all.
+      const mobile = await mobileExchange(email, null);
+      expect(decodeJwtClaims(mobile.idToken)).not.toHaveProperty('email_verified');
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const res = await bindToken(mobile.idToken);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('sso_email_unverified');
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+      }
+      expect(await testDb.db.select().from(users).where(eq(users.email, email))).toHaveLength(0);
+      const failed = (await auditFor('auth.sign_in.failed')).filter(
+        (e) => (e.details as { reason?: string }).reason === 'sso_email_unverified',
+      );
+      expect(failed).toEqual([expect.objectContaining({ orgId: ORG, recordId: PROVIDER, result: 'DENIED' })]);
+      // No pending binding on mobile: the person confirms the address on the web.
+      expect((await auditFor('identity.verification_started')).filter(ofEmail(email))).toHaveLength(0);
+
+      // On the web the callback finds no identity, keeps the same pool user and opens the pending binding.
+      const web = await federatedSignIn(email);
+      const handle = new URL(web.location).searchParams.get('bind')!;
+      expect(handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      const start = await web.agent.post('/api/auth/sso/bind/start').send({ handle });
+      expect(start.status).toBe(200);
+      const verify = await web.agent
+        .post('/api/auth/sso/bind/verify')
+        .send({ challengeToken: start.body.challengeToken, code: oneTimeCode(lastMailTo(email)) });
+      expect(verify.status).toBe(200);
+
+      // Back in the app: path 1 binds nothing new, although the provider still does not confirm the address.
+      const again = await mobileExchange(email, null);
+      expect(again.poolSub).toBe(mobile.poolSub);
+      expect((await bindToken(again.idToken)).status).toBe(204);
+      const me = await meWith(poolBearer(again.poolSub, again.username));
+      expect(me.status).toBe(200);
+      expect(me.body.principal.auth).toMatchObject({ method: 'sso', secondFactor: true });
+    });
+
+    it('a federated bearer resolves only through the connection its identity was bound through (Review Focus 3)', async () => {
+      const email = 'mobile.bound@acme.example';
+      await invite(email);
+      const mobile = await mobileExchange(email);
+      expect((await bindToken(mobile.idToken)).status).toBe(204);
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+
+      // An identity under OTHER_ORG's provider name that was bound through ORG's connection (a
+      // provider name that changed hands), for a user who is an ACTIVE member of OTHER_ORG too:
+      // only the binding connection refuses.
+      const movedSub = `pool-sub-${randomBytes(6).toString('hex')}`;
+      await testDb.db.insert(externalIdentities).values({
+        userId: user!.id,
+        provider: `cognito:${OTHER_PROVIDER}`,
+        subject: movedSub,
+        cognitoUsername: `${OTHER_PROVIDER}_idp-moved`,
+        email,
+        emailVerified: true,
+        ssoConnectionId: connectionId,
+      });
+      await testDb.db.insert(memberships).values({ userId: user!.id, orgId: OTHER_ORG, status: 'ACTIVE', startDate: new Date() });
+
+      const failedBefore = await auditFor('auth.sign_in.failed');
+      const presented = [
+        // The identity of ORG's connection, presented under OTHER_ORG's provider name.
+        [mobile.poolSub, `${OTHER_PROVIDER}_${mobile.subject}`],
+        // The identity under OTHER_ORG's provider name, bound through ORG's connection.
+        [movedSub, `${OTHER_PROVIDER}_idp-moved`],
+      ] as const;
+      // Twice each: every request is refused, but each pool user's refusal is audited once per window.
+      for (const [sub, username] of [...presented, ...presented]) {
+        const res = await meWith(poolBearer(sub, username));
+        expect(res.status).toBe(401);
+        expect(res.body.code).toBe('unauthenticated');
+        expect(res.body.principal).toBeUndefined();
+      }
+      const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+      expect(failed).toHaveLength(2);
+      for (const row of failed) {
+        expect(row).toMatchObject({ orgId: OTHER_ORG, recordId: OTHER_PROVIDER, result: 'DENIED', details: { reason: 'sso_provider_mismatch' } });
+      }
+
+      // Under its own provider name the same account resolves.
+      const own = await meWith(poolBearer(mobile.poolSub, mobile.username));
+      expect(own.status).toBe(200);
+      expect(own.body.principal.userId).toBe(user!.id);
+    });
+
+    it('bind-token answers 401 for a token the verifier refuses and 400 for a malformed body', async () => {
+      const jwt = app.get(JwtService);
+      const accessToken = jwt.sign({ sub: 'pool-sub-x', token_use: 'access', username: `${PROVIDER}_x` });
+      const unsigned = `${Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url')}.${Buffer.from(
+        JSON.stringify({ sub: 'pool-sub-x', token_use: 'id', identities: [{ providerName: PROVIDER, userId: 'x' }] }),
+      ).toString('base64url')}.`;
+      for (const idToken of [accessToken, unsigned, 'not-a-jwt']) {
+        const res = await bindToken(idToken);
+        expect(res.status).toBe(401);
+        expect(res.body.code).toBe('unauthenticated');
+      }
+      const malformed = await request(app.getHttpServer()).post('/api/auth/sso/bind-token').send({});
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.code).toBe('validation');
+    });
+
+    it('bind-token allows 10 requests a minute per IP', async () => {
+      for (let i = 0; i < 10; i++) {
+        expect((await bindToken('not-a-jwt')).status).not.toBe(429);
+      }
+      const refused = await bindToken('not-a-jwt');
+      expect(refused.status).toBe(429);
+      expect(refused.body.code).toBe('rate_limited');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Throttles (5.9): a refused browser hop lands on the sign-in page
+  // -------------------------------------------------------------------------
+
+  describe('throttles (5.9)', () => {
+    const RATE_LIMITED = `${WORKSPACE}/sign-in?reason=sso_rate_limited`;
+    const start = (connection: string) =>
+      request(app.getHttpServer()).get('/api/auth/sso/start').query({ connection, surface: 'workspace' });
+    const callback = () =>
+      request(app.getHttpServer()).get('/api/auth/sso/callback').query({ code: 'c', state: 'never-issued' });
+
+    function expectAuthorizeHop(res: request.Response, connection: string) {
+      expect(res.status).toBe(302);
+      const url = new URL(res.headers.location as string);
+      expect(url.origin + url.pathname).toBe(`${WORKSPACE}/api/auth/sso/_fake/authorize`);
+      expect(url.searchParams.get('connection')).toBe(connection);
+    }
+
+    async function spendStarts(connection: string, count: number, from?: string) {
+      for (let i = 0; i < count; i++) {
+        const req = start(connection);
+        expectAuthorizeHop(await (from ? req.set('X-Forwarded-For', from) : req), connection);
+      }
+    }
+
+    function expectRateLimitedRedirect(res: request.Response) {
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe(RATE_LIMITED);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['retry-after']).toBe('60');
+      // A redirect, not the JSON 429 the browser would show as raw text.
+      expect(res.headers['content-type']).toBeUndefined();
+      expect(res.text).toBe('');
+    }
+
+    it('start buckets are per IP and connection', async () => {
+      await spendStarts(PROVIDER, 60);
+      expectAuthorizeHop(await start(OTHER_PROVIDER), OTHER_PROVIDER);
+      // The first connection's own bucket is spent.
+      expect((await start(PROVIDER)).headers.location).toBe(RATE_LIMITED);
+    });
+
+    it('61 starts with distinct unknown connections from one IP: neutral redirects, no 429, no audit rows', async () => {
+      // Each value is its own bucket, so the throttle never refuses these; an
+      // audit row per unknown name would let one client write rows without bound.
+      const before = (await auditFor('auth.sign_in.failed')).length;
+      for (let i = 0; i < 61; i++) {
+        const res = await start(`org-unknown${i}-oidc`);
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      }
+      expect((await auditFor('auth.sign_in.failed')).length).toBe(before);
+    });
+
+    it('the 61st start of one connection redirects to /sign-in?reason=sso_rate_limited', async () => {
+      await spendStarts(PROVIDER, 60);
+      expectRateLimitedRedirect(await start(PROVIDER));
+    });
+
+    it('callback over its limit redirects too', async () => {
+      for (let i = 0; i < 120; i++) {
+        expect((await callback()).headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      }
+      expectRateLimitedRedirect(await callback());
+    });
+
+    it('behind trusted proxies (TRUST_PROXY_HOPS) each visitor address has its own start bucket', async () => {
+      // What main.ts sets from TRUST_PROXY_HOPS; this suite's app runs without it.
+      const express = app.getHttpAdapter().getInstance();
+      express.set('trust proxy', 1);
+      try {
+        await spendStarts(PROVIDER, 60, '198.51.100.7');
+        expectRateLimitedRedirect(await start(PROVIDER).set('X-Forwarded-For', '198.51.100.7'));
+        expectAuthorizeHop(await start(PROVIDER).set('X-Forwarded-For', '198.51.100.8'), PROVIDER);
+      } finally {
+        express.set('trust proxy', false);
+      }
     });
   });
 });

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "check": "node scripts/check-web-parity.mjs",
     "images:sync": "node ../../packages/assets/scripts/sync-images.mjs public/images"
   },
   "dependencies": {

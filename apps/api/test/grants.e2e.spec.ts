@@ -6,9 +6,9 @@
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { CONFIDENTIAL_ACTIONS, PERMISSION_TEMPLATES } from '@nestself/contracts';
@@ -16,7 +16,7 @@ import { IdentityProviderService } from '../src/identity/identity-provider.servi
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, externalIdentities, grants } from '../src/db/schema/index.js';
-import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
+import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const shouldRun = !!TEST_DB_URL;
@@ -38,7 +38,13 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     testDb = await resetTestDatabase(TEST_DB_URL!, 'grants');
     await seed(testDb.db);
 
-    process.env.DATABASE_URL = testDb.url;
+    // The API connects as a member of nestself_app, as deployed: RLS and the
+    // table privileges apply to it (Review Focus 5 revokes one). The test
+    // itself reads and writes through the owner connection (`testDb`).
+    const appRole = await connectAsAppRole(testDb);
+    await appRole.close();
+
+    process.env.DATABASE_URL = appRole.url;
     process.env.AUTH_MODE = 'stub';
     process.env.JWT_SECRET = jwtSecret;
     process.env.SESSION_COOKIE_INSECURE_DEV = 'true';
@@ -175,6 +181,38 @@ describe.skipIf(!shouldRun)('Grant administration (e2e)', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('missing_conditions');
     expect(res.body.details.missing).toEqual(['spending_ceiling']);
+  });
+
+  it('a failing audit insert rolls the grant back: 500 and no grant row (Review Focus 5)', async () => {
+    const subject = 'user_jovan';
+    const grantsOf = () =>
+      testDb.db.select({ id: grants.id }).from(grants).where(eq(grants.subjectUserId, subject));
+    const before = await grantsOf();
+    // The exception filter logs the 500: kept out of the output, read for the cause.
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    try {
+      // Privileges are checked on the partitioned parent only: every audit insert of the API is refused.
+      await testDb.pool.query('REVOKE INSERT ON audit_events FROM nestself_app');
+      const res = await ivana.agent
+        .post(BASE)
+        .set('X-CSRF-Token', ivana.csrf)
+        .send({ templateKey: 'hr_admin', subjectUserId: subject, scopeType: 'organization', conditions: [] });
+
+      expect(res.status).toBe(500);
+      expect(res.body.code).toBe('internal');
+      // The request failed on the audit insert itself, not on anything before it.
+      const unhandled = logged.mock.calls.find((call) => call[1] === 'Unhandled internal')?.[0] as
+        | { query?: string; cause?: { code?: string } }
+        | undefined;
+      expect(unhandled?.query).toMatch(/^insert into "audit_events"/);
+      expect(unhandled?.cause?.code).toBe('42501'); // insufficient_privilege
+    } finally {
+      await testDb.pool.query('GRANT INSERT ON audit_events TO nestself_app');
+      logged.mockRestore();
+    }
+
+    // The grant rolled back with its audit row: no partial state.
+    expect(await grantsOf()).toEqual(before);
   });
 
   it("previews ana's effective access with team_manager actions and no confidential action", async () => {

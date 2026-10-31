@@ -100,7 +100,7 @@ describe('AuthorizationGuard', () => {
 
   it('allows when authorize() returns allowed', async () => {
     const meta = {
-      action: 'wellbeing_checkin:read' as const,
+      actions: ['wellbeing_checkin:read' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
     mocks.reflector.getAllAndOverride
@@ -121,12 +121,12 @@ describe('AuthorizationGuard', () => {
 
     expect(result).toBe(true);
     expect(mocks.contextLoader.build).toHaveBeenCalledOnce();
-    expect(mockAuthorize).toHaveBeenCalledWith(PRINCIPAL, meta.action, RESOURCE, expect.anything());
+    expect(mockAuthorize).toHaveBeenCalledWith(PRINCIPAL, 'wellbeing_checkin:read', RESOURCE, expect.anything());
   });
 
   it('throws 403 when denied but org is visible', async () => {
     const meta = {
-      action: 'wellbeing_checkin:read' as const,
+      actions: ['wellbeing_checkin:read' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
     mocks.reflector.getAllAndOverride
@@ -168,7 +168,7 @@ describe('AuthorizationGuard', () => {
     };
 
     const meta = {
-      action: 'wellbeing_checkin:read' as const,
+      actions: ['wellbeing_checkin:read' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
     mocks.reflector.getAllAndOverride
@@ -198,7 +198,7 @@ describe('AuthorizationGuard', () => {
 
   it('annotates step-up class on the request', async () => {
     const meta = {
-      action: 'wellbeing_checkin:read' as const,
+      actions: ['wellbeing_checkin:read' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
     mocks.reflector.getAllAndOverride
@@ -224,7 +224,7 @@ describe('AuthorizationGuard', () => {
 
   it('throws 401 when no principal on protected route', async () => {
     const meta = {
-      action: 'wellbeing_checkin:read' as const,
+      actions: ['wellbeing_checkin:read' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
     mocks.reflector.getAllAndOverride
@@ -254,7 +254,7 @@ describe('AuthorizationGuard', () => {
 
     async function denyWithInvalidContext(principal: unknown) {
       const meta = {
-        action: 'wellbeing_checkin:read' as const,
+        actions: ['wellbeing_checkin:read' as const],
         resolver: vi.fn().mockResolvedValue(RESOURCE),
       };
       mocks.reflector.getAllAndOverride
@@ -312,7 +312,7 @@ describe('AuthorizationGuard', () => {
         memberships: [ENDED_MEMBERSHIP],
         context: { kind: 'organization' as const, orgId: 'org-1' },
       };
-      const meta = { action: 'wellbeing_checkin:read' as const, resolver: vi.fn().mockResolvedValue(RESOURCE) };
+      const meta = { actions: ['wellbeing_checkin:read' as const], resolver: vi.fn().mockResolvedValue(RESOURCE) };
       mocks.reflector.getAllAndOverride
         .mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValueOnce(meta);
       mockAuthorize.mockReturnValue({
@@ -356,11 +356,11 @@ describe('AuthorizationGuard', () => {
     const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
     // `people.deactivate` is in the administration class (maximum age 1800 s).
     const ADMIN_META = {
-      action: 'people.deactivate' as const,
+      actions: ['people.deactivate' as const],
       resolver: vi.fn().mockResolvedValue(RESOURCE),
     };
 
-    function allowWith(meta: { action: string; resolver: unknown }) {
+    function allowWith(meta: { actions: string[]; resolver: unknown }) {
       mocks.reflector.getAllAndOverride
         .mockReturnValueOnce(false)
         .mockReturnValueOnce(false)
@@ -433,7 +433,7 @@ describe('AuthorizationGuard', () => {
     });
 
     it('never checks freshness for an action without a step-up class', async () => {
-      allowWith({ action: 'wellbeing_checkin:read', resolver: vi.fn().mockResolvedValue(RESOURCE) });
+      allowWith({ actions: ['wellbeing_checkin:read'], resolver: vi.fn().mockResolvedValue(RESOURCE) });
       const req: Record<string, unknown> = {
         principal: principalWith(
           { time: minutesAgo(600), lastStepUpAt: null },
@@ -456,6 +456,152 @@ describe('AuthorizationGuard', () => {
       });
       const req = { principal: principalWith({ time: minutesAgo(31), lastStepUpAt: null }), params: {} };
       await expect(guard.canActivate(mockContext(req))).rejects.toMatchObject({ code: 'forbidden' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // A route that lists several actions: any one of them is enough
+  // -------------------------------------------------------------------------
+
+  describe('several actions', () => {
+    const OVERVIEW_OR_PREVIEW = ['program.overview', 'access.preview'] as const;
+    const ALLOWED = { allowed: true, grantIds: ['g-1'], assignmentIds: [], denialReason: null, explanation: [] };
+    const denied = (reason: string) => ({
+      allowed: false, grantIds: [], assignmentIds: [], denialReason: reason, explanation: [],
+    });
+    const staleAuth = { ...PRINCIPAL, auth: { ...PRINCIPAL.auth, time: new Date(Date.now() - 31 * 60_000).toISOString() } };
+
+    /** The route declares `actions`; returns the metadata so a test can look at its resolver. */
+    function declare(actions: readonly string[]) {
+      const meta = { actions: [...actions], resolver: vi.fn().mockResolvedValue(RESOURCE) };
+      mocks.reflector.getAllAndOverride
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(meta);
+      return meta;
+    }
+
+    it('allows when any of the listed actions is allowed', async () => {
+      declare(OVERVIEW_OR_PREVIEW);
+      mockAuthorize.mockReturnValueOnce(denied('no_matching_grant')).mockReturnValueOnce(ALLOWED);
+
+      await expect(guard.canActivate(mockContext({ principal: PRINCIPAL, params: {} }))).resolves.toBe(true);
+
+      expect(mockAuthorize.mock.calls.map(([, action]) => action)).toEqual(['program.overview', 'access.preview']);
+      // The first action refusing is not a denial of the request.
+      expect(mocks.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('stops at the first action that is allowed', async () => {
+      declare(OVERVIEW_OR_PREVIEW);
+      mockAuthorize.mockReturnValue(ALLOWED);
+
+      await expect(guard.canActivate(mockContext({ principal: PRINCIPAL, params: {} }))).resolves.toBe(true);
+
+      expect(mockAuthorize).toHaveBeenCalledTimes(1);
+      expect(mockAuthorize).toHaveBeenCalledWith(PRINCIPAL, 'program.overview', RESOURCE, expect.anything());
+    });
+
+    it('resolves the resource once and builds the context for each action it evaluates', async () => {
+      const meta = declare(OVERVIEW_OR_PREVIEW);
+      mockAuthorize.mockReturnValueOnce(denied('no_matching_grant')).mockReturnValueOnce(ALLOWED);
+
+      await guard.canActivate(mockContext({ principal: PRINCIPAL, params: {} }));
+
+      expect(meta.resolver).toHaveBeenCalledOnce();
+      expect(mocks.contextLoader.build.mock.calls).toEqual([
+        [PRINCIPAL, RESOURCE, { action: 'program.overview' }],
+        [PRINCIPAL, RESOURCE, { action: 'access.preview' }],
+      ]);
+    });
+
+    it('denies and audits the first action when none is allowed', async () => {
+      declare(OVERVIEW_OR_PREVIEW);
+      mockAuthorize
+        .mockReturnValueOnce(denied('no_matching_grant'))
+        .mockReturnValueOnce(denied('invalid_context'));
+
+      await expect(
+        guard.canActivate(mockContext({ principal: PRINCIPAL, params: {} })),
+      ).rejects.toMatchObject({ code: 'forbidden' });
+
+      expect(mockAuthorize).toHaveBeenCalledTimes(2);
+      expect(mocks.audit.record).toHaveBeenCalledOnce();
+      expect(mocks.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'access.denied',
+          result: 'DENIED',
+          actorUserId: 'user-1',
+          orgId: 'org-1',
+          details: {
+            actionAttempted: 'program.overview',
+            alternatives: ['program.overview', 'access.preview'],
+            resourceType: 'wellbeing_checkin',
+            resourceId: 'r-1',
+            reason: 'no_matching_grant',
+          },
+        }),
+      );
+    });
+
+    it('audits a route with one action without alternatives', async () => {
+      declare(['wellbeing_checkin:read']);
+      mockAuthorize.mockReturnValue(denied('no_matching_grant'));
+
+      await expect(
+        guard.canActivate(mockContext({ principal: PRINCIPAL, params: {} })),
+      ).rejects.toMatchObject({ code: 'forbidden' });
+
+      expect(mocks.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: {
+            actionAttempted: 'wellbeing_checkin:read',
+            resourceType: 'wellbeing_checkin',
+            resourceId: 'r-1',
+            reason: 'no_matching_grant',
+          },
+        }),
+      );
+    });
+
+    it('still answers 404 when none is allowed and the caller has no view of the organization', async () => {
+      declare(OVERVIEW_OR_PREVIEW);
+      mockAuthorize.mockReturnValue(denied('no_matching_grant'));
+      const outsider = {
+        ...PRINCIPAL,
+        memberships: [
+          { membershipId: 'm-2', orgId: 'other-org', orgUnitId: null, status: 'ACTIVE' as const, startDate: '2026-01-01', endDate: null },
+        ],
+      };
+
+      await expect(
+        guard.canActivate(mockContext({ principal: outsider, params: {} })),
+      ).rejects.toMatchObject({ code: 'not_found' });
+      expect(mocks.audit.record).toHaveBeenCalledOnce();
+    });
+
+    it('takes the step-up class from the action that allowed it', async () => {
+      // `wellbeing_checkin:read` has no class; `people.deactivate` is in the administration class.
+      declare(['wellbeing_checkin:read', 'people.deactivate']);
+      mockAuthorize.mockReturnValueOnce(denied('no_matching_grant')).mockReturnValueOnce(ALLOWED);
+      const req: Record<string, unknown> = { principal: staleAuth, params: {} };
+
+      await expect(guard.canActivate(mockContext(req))).rejects.toMatchObject({
+        code: 'step_up_required',
+        details: { stepUpClass: 'administration', maxAge: 1800, method: 'email_otp' },
+      });
+      expect(req.stepUpClass).toBe('administration');
+    });
+
+    it('asks for no step-up when the allowing action has no class, whatever a later action needs', async () => {
+      declare(['wellbeing_checkin:read', 'people.deactivate']);
+      mockAuthorize.mockReturnValue(ALLOWED);
+      const req: Record<string, unknown> = { principal: staleAuth, params: {} };
+
+      await expect(guard.canActivate(mockContext(req))).resolves.toBe(true);
+
+      expect(mockAuthorize).toHaveBeenCalledTimes(1);
+      expect(req.stepUpClass).toBeUndefined();
     });
   });
 });

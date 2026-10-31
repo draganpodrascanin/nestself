@@ -1,11 +1,25 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
-import { NestSelfAuthStack } from '../lib/auth-stack.js';
+import { NestSelfAuthStack, acmCertificateRegion } from '../lib/auth-stack.js';
 import { getStageConfig } from '../lib/config.js';
+import {
+  AUTH_CERTIFICATE_ARN,
+  AUTH_CONTEXT,
+  HOSTED_ZONE_ID,
+  USER_POOL_DOMAIN_TARGET_FLAG,
+  testApp,
+} from './context.js';
 
-function synthStack(stage: 'dev' | 'staging' | 'production'): Template {
-  const app = new cdk.App();
+/** The certificate the CI job passes when it synthesizes staging (`.github/workflows/ci.yml`). */
+const CI_CERTIFICATE_ARN = 'arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000';
+
+function synthStack(
+  stage: 'dev' | 'staging' | 'production',
+  context: Record<string, unknown> = {},
+): Template {
+  const app = testApp(context);
   const config = getStageConfig(stage);
   const stack = new NestSelfAuthStack(app, `Test-${stage}-Auth`, {
     config,
@@ -145,6 +159,17 @@ describe('NestSelfAuthStack -- dev stage', () => {
     });
   });
 
+  it('outputs the prefix domain URL as CognitoDomain', () => {
+    template.hasOutput('CognitoDomain', {
+      Value: 'https://nestself-dev.auth.eu-central-1.amazoncognito.com',
+      Export: { Name: 'nestself-dev-cognito-domain' },
+    });
+  });
+
+  it('needs no certificate or DNS records for dev', () => {
+    expect(template.findResources('AWS::Route53::RecordSet')).toEqual({});
+  });
+
   it('outputs all required values', () => {
     template.hasOutput('UserPoolId', {});
     template.hasOutput('UserPoolArn', {});
@@ -159,7 +184,7 @@ describe('NestSelfAuthStack -- dev stage', () => {
 });
 
 describe('NestSelfAuthStack -- production stage', () => {
-  const template = synthStack('production');
+  const template = synthStack('production', AUTH_CONTEXT);
 
   it('creates a user pool named nestself-production', () => {
     template.hasResourceProperties('AWS::Cognito::UserPool', {
@@ -193,5 +218,108 @@ describe('NestSelfAuthStack -- production stage', () => {
         EmailSendingAccount: 'DEVELOPER',
       }),
     });
+  });
+
+  it('creates the user pool domain auth.nestself.rs with the supplied certificate', () => {
+    template.resourceCountIs('AWS::Cognito::UserPoolDomain', 1);
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'auth.nestself.rs',
+      CustomDomainConfig: { CertificateArn: AUTH_CERTIFICATE_ARN },
+    });
+  });
+
+  it.each(['A', 'AAAA'])('creates an %s alias for auth.nestself.rs to the Cognito distribution', (type) => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: 'auth.nestself.rs.',
+      Type: type,
+      HostedZoneId: HOSTED_ZONE_ID,
+      AliasTarget: {
+        DNSName: { 'Fn::GetAtt': [Match.stringLikeRegexp('CustomDomain'), 'CloudFrontDistribution'] },
+        // CloudFront's hosted zone, looked up per partition (the map is asserted below).
+        HostedZoneId: {
+          'Fn::FindInMap': ['AWSCloudFrontPartitionHostedZoneIdMap', { Ref: 'AWS::Partition' }, 'zoneId'],
+        },
+      },
+    });
+  });
+
+  it("maps the aws partition to CloudFront's hosted zone for the alias target", () => {
+    template.hasMapping('AWSCloudFrontPartitionHostedZoneIdMap', { aws: { zoneId: 'Z2FDTNDATAQYW2' } });
+  });
+
+  it('creates no DNS record besides the two aliases', () => {
+    template.resourceCountIs('AWS::Route53::RecordSet', 2);
+  });
+
+  it('outputs the custom domain URL as CognitoDomain', () => {
+    template.hasOutput('CognitoDomain', {
+      Value: 'https://auth.nestself.rs',
+      Export: { Name: 'nestself-production-cognito-domain' },
+    });
+  });
+});
+
+describe('NestSelfAuthStack -- staging stage', () => {
+  const template = synthStack('staging', AUTH_CONTEXT);
+
+  it('creates the user pool domain auth.staging.nestself.rs and outputs its URL', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'auth.staging.nestself.rs',
+      CustomDomainConfig: { CertificateArn: AUTH_CERTIFICATE_ARN },
+    });
+    template.hasOutput('CognitoDomain', { Value: 'https://auth.staging.nestself.rs' });
+  });
+
+  it.each(['A', 'AAAA'])('names the %s alias inside the staging zone once', (type) => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: 'auth.staging.nestself.rs.',
+      Type: type,
+      HostedZoneId: HOSTED_ZONE_ID,
+    });
+  });
+});
+
+describe('NestSelfAuthStack -- custom domain context', () => {
+  const message = 'auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md';
+
+  it.each([
+    { stage: 'staging', given: 'no context', context: {} },
+    { stage: 'production', given: 'no context', context: {} },
+    { stage: 'production', given: 'only the hosted zone id', context: { hostedZoneId: HOSTED_ZONE_ID } },
+    { stage: 'production', given: 'only the certificate ARN', context: { authCertificateArn: AUTH_CERTIFICATE_ARN } },
+    { stage: 'production', given: 'empty values', context: { authCertificateArn: '', hostedZoneId: '' } },
+  ] as const)('$stage does not synthesize with $given', ({ stage, context }) => {
+    expect(() => synthStack(stage, context)).toThrow(message);
+  });
+
+  it.each(['eu-central-1', 'us-west-2'])('refuses a certificate in %s at synth, naming CDK-setup.md section 8', (region) => {
+    const authCertificateArn = `arn:aws:acm:${region}:111111111111:certificate/00000000-0000-0000-0000-000000000000`;
+    expect(() => synthStack('production', { authCertificateArn, hostedZoneId: HOSTED_ZONE_ID })).toThrow(
+      `auth custom domain needs its certificate in us-east-1 (Cognito serves the domain through CloudFront), but authCertificateArn is in ${region}; see CDK-setup.md section 8`,
+    );
+  });
+
+  it('synthesizes with the certificate the CI job passes, in us-east-1', () => {
+    const template = synthStack('staging', { authCertificateArn: CI_CERTIFICATE_ARN, hostedZoneId: HOSTED_ZONE_ID });
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      CustomDomainConfig: { CertificateArn: CI_CERTIFICATE_ARN },
+    });
+  });
+
+  it('leaves a value that is no ACM ARN to the deployer, as the placeholders of a first synth', () => {
+    expect(acmCertificateRegion('pending')).toBeNull();
+    expect(acmCertificateRegion('arn:aws:iam::111111111111:role/x')).toBeNull();
+    expect(acmCertificateRegion(CI_CERTIFICATE_ARN)).toBe('us-east-1');
+    expect(acmCertificateRegion('arn:aws-us-gov:acm:us-gov-west-1:111111111111:certificate/1')).toBe('us-gov-west-1');
+    expect(() => synthStack('staging', { authCertificateArn: 'pending', hostedZoneId: 'pending' })).not.toThrow();
+  });
+});
+
+describe('cdk.json', () => {
+  it('carries the route53-targets flag the test app sets, so cdk synth emits the alias target the tests check', () => {
+    const cdkJson = JSON.parse(readFileSync(new URL('../cdk.json', import.meta.url), 'utf8')) as {
+      context: Record<string, unknown>;
+    };
+    expect(cdkJson.context[USER_POOL_DOMAIN_TARGET_FLAG]).toBe(true);
   });
 });

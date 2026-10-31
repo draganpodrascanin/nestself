@@ -14,6 +14,8 @@ interface Entry {
 }
 
 export class MemoryKeyValueStore implements KeyValueStore {
+  readonly kind = 'memory';
+
   private readonly data = new Map<string, Entry>();
   private readonly sets = new Map<string, Set<string>>();
   private readonly subs = new Map<string, Set<(message: string) => void>>();

@@ -3,7 +3,9 @@
  * because {@link MailInput} pairs each name with its own data type.
  *
  * Names follow the jobs and audit events of the decision record (section 7);
- * section 10 of the guidelines lists them with their recipients.
+ * section 10 of the guidelines lists them with their recipients. The auth
+ * templates (`step_up_code`, `sso_bind_code`, `ops_certificate_alert`) are
+ * described in `docs/auth/implementation.md` section 23.
  */
 import { type Locale } from '@nestself/contracts';
 import * as appointmentCanceled from './appointment-canceled.js';
@@ -16,7 +18,10 @@ import * as followUpConfirmed from './follow-up-confirmed.js';
 import * as followUpDeclined from './follow-up-declined.js';
 import * as followUpProposed from './follow-up-proposed.js';
 import * as invitation from './invitation.js';
+import * as opsCertificateAlert from './ops-certificate-alert.js';
 import { type MailEnvelope, type RenderedMail } from './shared.js';
+import * as ssoBindCode from './sso-bind-code.js';
+import * as stepUpCode from './step-up-code.js';
 import * as webinarCanceled from './webinar-canceled.js';
 import * as webinarRecordedNotice from './webinar-recorded-notice.js';
 import * as webinarRegistration from './webinar-registration.js';
@@ -37,6 +42,9 @@ export const mailTemplates = {
   'webinar.canceled': webinarCanceled,
   'webinar.recorded_notice': webinarRecordedNotice,
   invitation,
+  step_up_code: stepUpCode,
+  sso_bind_code: ssoBindCode,
+  ops_certificate_alert: opsCertificateAlert,
 } as const;
 
 export type MailTemplateName = keyof typeof mailTemplates;

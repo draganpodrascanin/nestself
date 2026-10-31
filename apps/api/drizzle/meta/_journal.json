@@ -120,6 +120,34 @@
       "when": 1792936192600,
       "tag": "0016_cms_ee_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793403817819,
+      "tag": "0017_cases",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793403884296,
+      "tag": "0018_external_identities_sso_connection",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793403909352,
+      "tag": "0019_sso_connections_oidc_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793403929381,
+      "tag": "0020_organizations_status_check",
+      "breakpoints": true
     }
   ]
 }

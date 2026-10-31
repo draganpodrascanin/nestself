@@ -154,6 +154,7 @@ export class GrantsService {
           actionsCount: row.actions.length,
           conditionTypes: conditionTypes(body.conditions),
         }),
+        { tx },
       );
       return row;
     });
@@ -196,10 +197,9 @@ export class GrantsService {
     const subject = await this.principalLoader.load(body.subjectUserId);
     if (!subject) throw new ApiHttpException({ status: 404, code: 'not_found', message: 'User not found' });
 
-    // The insert and the audit call share one transaction (no tenant
-    // setting: the grant has no organization). In strict mode a rejected
-    // audit write rolls the grant back; otherwise the audit writer logs the
-    // failure and the grant commits, as on the organization path (API-R-22).
+    // The insert and its audit row share one transaction (no tenant setting:
+    // the grant has no organization), so a failed audit insert rolls the
+    // grant back, as on the organization path (API-R-22).
     const row = await this.db.withTransaction(async (tx) => {
       const created = await this.authzRepo.createGrant(
         {
@@ -226,6 +226,7 @@ export class GrantsService {
           actionsCount: created.actions.length,
           conditionTypes: conditionTypes(body.conditions),
         }),
+        { tx },
       );
       return created;
     });
@@ -240,8 +241,8 @@ export class GrantsService {
    * are revoked through `/ops/orgs/:orgId/grants/:grantId/revoke`.
    */
   async revokePlatform(grantId: string, body: GrantRevokeRequest, actor: Principal): Promise<GrantResponse> {
-    // Tree revocation and audit share one system transaction, as in
-    // createPlatform: in strict mode a rejected audit write rolls it back.
+    // Tree revocation and its audit rows share one system transaction, as in
+    // createPlatform: a failed audit insert rolls the revocation back.
     const root = await this.db.withTransaction(async (tx) => {
       const grant = await this.authzRepo.findGrantById(grantId, tx);
       if (!grant || grant.scopeOrgId !== null) {
@@ -266,18 +267,22 @@ export class GrantsService {
           reason: body.reason,
           revokedDescendants: children.length,
         }),
+        { tx },
       );
       for (const childId of children) {
-        await this.audit.record({
-          action: 'grant.delegation_revoked',
-          actorUserId: actor.userId,
-          actorKind: 'USER',
-          orgId: null,
-          recordType: 'grant',
-          recordId: childId,
-          result: 'ALLOWED',
-          details: { reason: 'parent_revoked', rootGrantId: grant.id },
-        });
+        await this.audit.record(
+          {
+            action: 'grant.delegation_revoked',
+            actorUserId: actor.userId,
+            actorKind: 'USER',
+            orgId: null,
+            recordType: 'grant',
+            recordId: childId,
+            result: 'ALLOWED',
+            details: { reason: 'parent_revoked', rootGrantId: grant.id },
+          },
+          { tx },
+        );
       }
       return revoked;
     });
@@ -374,6 +379,7 @@ export class GrantsService {
           changedFields: Object.keys(patch),
           conditionTypes: conditionTypes(parseConditions(row.conditions)),
         }),
+        { tx },
       );
       return row;
     });
@@ -410,18 +416,22 @@ export class GrantsService {
           reason: body.reason,
           revokedDescendants: children.length,
         }),
+        { tx },
       );
       for (const childId of children) {
-        await this.audit.record({
-          action: 'grant.delegation_revoked',
-          actorUserId: actor.userId,
-          actorKind: 'USER',
-          orgId,
-          recordType: 'grant',
-          recordId: childId,
-          result: 'ALLOWED',
-          details: { reason: 'parent_revoked', rootGrantId: grant.id },
-        });
+        await this.audit.record(
+          {
+            action: 'grant.delegation_revoked',
+            actorUserId: actor.userId,
+            actorKind: 'USER',
+            orgId,
+            recordType: 'grant',
+            recordId: childId,
+            result: 'ALLOWED',
+            details: { reason: 'parent_revoked', rootGrantId: grant.id },
+          },
+          { tx },
+        );
       }
       return revoked;
     });
@@ -521,6 +531,7 @@ export class GrantsService {
           previousOwnerUserId: previousOwner?.subjectUserId ?? null,
           ...staffDetail,
         }),
+        { tx },
       );
       const revokedPrevious = previous.filter((g) => revokedIds.includes(g.id));
       const reparented: GrantRow[] = [];
@@ -534,6 +545,7 @@ export class GrantsService {
               fromGrantId: old.id,
               ...staffDetail,
             }),
+            { tx },
           );
         }
         reparented.push(...children);
@@ -590,6 +602,7 @@ export class GrantsService {
           newOwnerUserId,
           ...staffDetail,
         }),
+        { tx },
       );
     }
     return revokedIds;
@@ -690,6 +703,7 @@ export class GrantsService {
           conditionTypes: conditionTypes(body.conditions),
           depth,
         }),
+        { tx },
       );
       return row;
     });

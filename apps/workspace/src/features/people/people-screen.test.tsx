@@ -519,12 +519,14 @@ describe('PeopleScreen: import', () => {
 
   it('imports the parsed rows and shows created, skipped and errors with translated reasons', async () => {
     const user = userEvent.setup();
+    // As the API answers: every row is created, skipped (already a member or
+    // invited: a count, not a table row) or refused with a coded reason.
     const importInvitations = vi.fn().mockResolvedValue({
       created: 1,
-      skipped: 1,
+      skipped: 2,
       errors: [
-        { email: 'ivan@example.com', reason: 'already_member' },
         { email: 'boss@example.com', reason: 'owner_exists' },
+        { email: 'dev@acme.example', reason: 'sso_domain_claimed' },
         { email: 'x@example.com', reason: 'Something the server said' },
       ],
     });
@@ -533,9 +535,9 @@ describe('PeopleScreen: import', () => {
     await paste(
       user,
       dialog,
-      'email,template,unit\nana@example.com,employee,Product\nivan@example.com,employee\nboss@example.com,employer_owner\nx@example.com,employee',
+      'email,template,unit\nana@example.com,employee,Product\nivan@example.com,employee\ncleo@example.com,employee\nboss@example.com,employer_owner\ndev@acme.example,employee\nx@example.com,employee',
     );
-    expect(within(dialog).getByText(t('workspace:people.import.preview', { count: 4 }))).toBeInTheDocument();
+    expect(within(dialog).getByText(t('workspace:people.import.preview', { count: 6 }))).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: t('workspace:people.import.submit') }));
 
     await waitFor(() =>
@@ -543,16 +545,23 @@ describe('PeopleScreen: import', () => {
         invitations: [
           { email: 'ana@example.com', templateKey: 'employee', orgUnitId: 'team_product' },
           { email: 'ivan@example.com', templateKey: 'employee' },
+          { email: 'cleo@example.com', templateKey: 'employee' },
           { email: 'boss@example.com', templateKey: 'employer_owner' },
+          { email: 'dev@acme.example', templateKey: 'employee' },
           { email: 'x@example.com', templateKey: 'employee' },
         ],
       }),
     );
-    expect(await within(dialog).findByText(t('workspace:people.import.resultSummary', { created: 1, skipped: 1, failed: 3 }))).toBeInTheDocument();
+    // 1 created + 2 skipped + 3 not imported = the 6 rows sent.
+    expect(await within(dialog).findByText(t('workspace:people.import.resultSummary', { created: 1, skipped: 2, failed: 3 }))).toBeInTheDocument();
     const table = within(dialog).getByRole('region', { name: t('workspace:people.import.errorsCaption') });
-    expect(within(table).getByText(t('workspace:people.import.reasons.alreadyMember'))).toBeInTheDocument();
-    expect(within(table).getByText(t('workspace:people.import.reasons.ownerExists'))).toBeInTheDocument();
-    expect(within(table).getByText(t('workspace:people.import.reasons.unknown'))).toBeInTheDocument();
+    const rowOf = (email: string) => within(table).getByText(email).closest('tr')!;
+    expect(rowOf('boss@example.com')).toHaveTextContent(t('workspace:people.import.reasons.ownerExists'));
+    expect(rowOf('dev@acme.example')).toHaveTextContent(t('workspace:people.import.reasons.ssoDomainClaimed'));
+    expect(rowOf('x@example.com')).toHaveTextContent(t('workspace:people.import.reasons.unknown'));
+    // Skipped rows are counted, not listed; the server's own words are never shown.
+    expect(within(table).queryByText('ivan@example.com')).not.toBeInTheDocument();
+    expect(within(table).queryByText('cleo@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText('Something the server said')).not.toBeInTheDocument();
   });
 

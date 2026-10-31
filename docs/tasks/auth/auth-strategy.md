@@ -5390,6 +5390,15 @@ This section defines repeatable procedures for identity and access operations. E
 
 Rollback is `PATCH /ops/sso-connections/:id` with `status: SUSPENDED` (back with `ACTIVE`); `TESTING` can return to `DRAFT`, which removes the Cognito provider. The sign-in routes are `GET /auth/sso/start?connection&surface[&returnPath][&test]` and `GET /auth/sso/callback`. The NestSelf SP values are shown in the connection's detail panel: entity ID `urn:amazon:cognito:sp:<COGNITO_USER_POOL_ID>`, ACS URL `<COGNITO_DOMAIN>/saml2/idpresponse` (the custom `auth.<domain>` is a CDK follow-up). Details: `docs/auth/implementation.md` section 22.
 
+**Amendment 2026-10-31** (auth phase 4, `docs/superpowers/plans/2026-10-30-auth-phase-4-pilot-readiness.md`; it wins over the steps and the 2026-10-25 amendment where they differ):
+
+- Before step 1, the stage's Cognito custom domain `auth.<domain>` is deployed (`CDK-setup.md` section 8): the ACS URL and the OIDC redirect URI the client registers derive from it, so it must be final before the client configures anything. `OPS_ALERT_EMAIL` is set so certificate alerts reach the operations mailbox.
+- Step 1: the metadata URL and the OIDC issuer must be public `https:` addresses; the API refuses others: anything but `https:` with 400 `validation` from the request schema (`httpsUrl`), a host that does not exist or resolves to a non-public address with 422 (a stored `http:` URL from before meets the 422 `scheme` at its next test). It fetches the metadata itself without following redirects. For an OIDC connection, ask the client whether its ID token carries `email_verified`. If it does not (Entra ID by default), either keep "Require a verified email claim from the provider" on, and each employee confirms the address once with a code NestSelf mails, or turn it off only after the client confirms in writing that its `email` claim is the directory's verified address.
+- Step 3: Test sign-in shows the single-use link in the admin page, to open in a new tab or copy. With an OIDC provider that sends no `email_verified`, the test sign-in finishes through the confirm-email step and still marks the connection tested.
+- Step 6: changing the provider settings of an `ACTIVE` or `SUSPENDED` connection takes it back to `TESTING`; test again, then activate. `TESTING` can be reset to `DRAFT` from the page (Reset to draft), which removes the Cognito provider.
+- Step 8: the nightly job reads the certificate from the metadata URL itself, audits an expiring certificate every night from 30 days before, and mails `OPS_ALERT_EMAIL` at most once a week per connection.
+- Step 9: watch for `identity.verification_started` rows (employees waiting on the confirm-email step) and for unbound federated pool users left by abandoned confirmations; `docs/auth/implementation.md` section 22.15 has the clean-up and the other operating notes, section 22.13 the checklist for the first real employer.
+
 **RUN-R-02** Domain verification must use DNS TXT records [DR-07]. **RUN-R-03** IdP-initiated sign-in stays disabled unless the client provides written risk acceptance, with signed and encrypted assertions, five-minute validity and replay-cache checks (`saml_assertion:{id}`, 10 min, GETDEL) [D-12, DR-06].
 
 **Rollback:** Suspend the connection (`status: SUSPENDED`). Do not delete `ExternalIdentity` rows for users who already signed in; suspend their memberships instead.
@@ -5410,6 +5419,8 @@ Rollback is `PATCH /ops/sso-connections/:id` with `status: SUSPENDED` (back with
 6. Update `certificateExpiresAt`. Record `sso_connection.changed`.
 
 **Rollback:** Client re-enables the old certificate. Sign-ins may fail for up to six hours during cache refresh.
+
+**Amendment 2026-10-31** (auth phase 4): the trigger arrives by mail to `OPS_ALERT_EMAIL` (`ops_certificate_alert`, at most once a week per connection) besides the nightly audit row. Step 6 is automatic: the expiry is re-read from the metadata when the connection is tested or its metadata changes, and every night for a metadata-URL connection. Updating the metadata of an `ACTIVE` connection takes it back to `TESTING`, so step 4 (a test sign-in) is followed by activating it again (`docs/auth/implementation.md` sections 22.2 and 22.11).
 
 ---
 
@@ -9014,7 +9025,7 @@ Mobile: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_DATA_SOURCE`, `EXPO_PUBLIC_COGNITO_R
 CDK and CI: `CDK_STAGE`, `AWS_ACCOUNT_STAGING`, `AWS_ACCOUNT_PRODUCTION`, `DOMAIN_NAME`, `GITHUB_REPOSITORY`.
 
 #### Redis keys (Valkey)
-`session:{sessionId}` (JSON; TTL = remaining absolute lifetime), `user_sessions:{userId}` (set), `principal:{userId}` (30 s ± 5 s), `grants:{userId}:{orgId}` (60 s ± 10 s), `assignments:{userId}` (60 s), `org_tree:{orgId}` (5 min), `otp:{purpose}:{hash}` (10 min), `challenge:{challengeToken}` (5 min), `pkce:{state}` (10 min), `ws_ticket:{hash}` (30 s, single use), `saml_assertion:{assertionId}` (10 min, single use), `revoked_family:{originJti}` (20 min), `mobile_family:{originJti}` (30 d, last seen), `user_mobile_families:{userId}` (set), `stepup:{originJti}` (per step-up class, 5 to 30 min), `idempotency:{key}` (24 h), `throttle:{route}:{key}`, `lock:session:{sessionId}` (5 s), channel `invalidate`, `bull:*`.
+`session:{sessionId}` (JSON; TTL = remaining absolute lifetime), `user_sessions:{userId}` (set), `principal:{userId}` (30 s ± 5 s), `grants:{userId}:{orgId}` (60 s ± 10 s), `assignments:{userId}` (60 s), `org_tree:{orgId}` (5 min), `otp:{purpose}:{hash}` (5 min, `CHALLENGE_TTL`), `challenge:{challengeToken}` (5 min), `pkce:{state}` (10 min), `ws_ticket:{hash}` (30 s, single use), `saml_assertion:{assertionId}` (10 min, single use), `revoked_family:{originJti}` (20 min), `mobile_family:{originJti}` (30 d, last seen), `user_mobile_families:{userId}` (set), `stepup:{originJti}` (per step-up class, 5 to 30 min), `idempotency:{key}` (24 h), `throttle:{route}:{key}`, `lock:session:{sessionId}` (5 s), channel `invalidate`, `bull:*`.
 
 #### Cognito names
 Pool `nestself-{env}`; domain `auth.<domain>`; clients `nestself-web-{env}`, `nestself-mobile-{env}`, `nestself-m2m-{env}`; providers `org-<slug>-saml` or `org-<slug>-oidc`; triggers `nestself-{env}-cognito-custom-message`, `nestself-{env}-cognito-pre-sign-up`; custom attribute `custom:locale`.

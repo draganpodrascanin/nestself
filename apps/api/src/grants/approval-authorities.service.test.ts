@@ -194,9 +194,12 @@ describe('ApprovalAuthoritiesService', () => {
       expect(values['maxAmountMinor']).toBeNull();
     });
 
-    it('audits approval_authority.changed with the changed fields and no values', async () => {
+    it('audits approval_authority.changed with the changed fields and no values, in the write transaction', async () => {
+      const tx = { kind: 'org-tx' };
+      m.db.withOrgScope.mockImplementationOnce(async (_org: string, fn: (t: never) => Promise<unknown>) => fn(tx as never));
       await svc.create(ORG, { ...CREATE, maxAmountMinor: 9000 }, ACTOR);
       expect(m.audit.record).toHaveBeenCalledTimes(1);
+      expect((m.audit.record.mock.calls[0] as unknown[])[1]).toEqual({ tx });
       const event = m.audit.record.mock.calls[0]![0];
       expect(event).toMatchObject({
         action: 'approval_authority.changed',
@@ -272,8 +275,11 @@ describe('ApprovalAuthoritiesService', () => {
       expect(err.getStatus()).toBe(400);
     });
 
-    it('audits approval_authority.changed with the changed field names', async () => {
+    it('audits approval_authority.changed with the changed field names, in the write transaction', async () => {
+      const tx = { kind: 'org-tx' };
+      m.db.withOrgScope.mockImplementationOnce(async (_org: string, fn: (t: never) => Promise<unknown>) => fn(tx as never));
       await svc.update(ORG, 'aa_1', { categories: ['travel'], isConfidentialApprover: true }, ACTOR);
+      expect((m.audit.record.mock.calls[0] as unknown[])[1]).toEqual({ tx });
       const event = m.audit.record.mock.calls[0]![0];
       expect(event).toMatchObject({ action: 'approval_authority.changed', recordId: 'aa_1', orgId: ORG });
       expect(event['details']).toEqual({

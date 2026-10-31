@@ -9,6 +9,8 @@ import {
   OrganizationListResponseSchema,
   OrganizationResponseSchema,
   PlatformGrantCreateRequestSchema,
+  SsoConnectionCreateRequestSchema,
+  SsoConnectionUpdateRequestSchema,
   UserAccessResponseSchema,
 } from './ops-admin.ts';
 
@@ -165,6 +167,58 @@ describe('ops-admin schemas', () => {
 
     it('OrganizationListResponseSchema accepts a last page', () => {
       expect(OrganizationListResponseSchema.parse({ items: [ORG], nextCursor: null })).toEqual({ items: [ORG], nextCursor: null });
+    });
+  });
+
+  describe('SSO connections (phase 4)', () => {
+    it('refuses an http metadata URL and an http issuer', () => {
+      expect(
+        SsoConnectionCreateRequestSchema.safeParse({ orgId: 'o', slug: 'acme', protocol: 'SAML', metadataUrl: 'http://idp.acme.example/m' })
+          .success,
+      ).toBe(false);
+      expect(SsoConnectionUpdateRequestSchema.safeParse({ oidcIssuer: 'http://idp.acme.example' }).success).toBe(false);
+    });
+
+    it('requires https: for metadataUrl and oidcIssuer on create and update, and names the field', () => {
+      const create = { orgId: 'o', slug: 'acme', protocol: 'OIDC' };
+      for (const url of ['http://idp.acme.example', 'file:///etc/passwd', 'ftp://idp.acme.example/m', 'not a url']) {
+        const issuer = SsoConnectionCreateRequestSchema.safeParse({ ...create, oidcIssuer: url });
+        expect(issuer.success, url).toBe(false);
+        expect(issuer.error?.issues[0]?.path, url).toEqual(['oidcIssuer']);
+        const metadata = SsoConnectionUpdateRequestSchema.safeParse({ metadataUrl: url });
+        expect(metadata.success, url).toBe(false);
+        expect(metadata.error?.issues[0]?.path, url).toEqual(['metadataUrl']);
+      }
+      expect(SsoConnectionCreateRequestSchema.parse({ ...create, oidcIssuer: 'https://idp.acme.example' }).oidcIssuer).toBe(
+        'https://idp.acme.example',
+      );
+      expect(SsoConnectionUpdateRequestSchema.parse({ metadataUrl: 'https://idp.acme.example/metadata' })).toEqual({
+        metadataUrl: 'https://idp.acme.example/metadata',
+      });
+      expect(SsoConnectionUpdateRequestSchema.parse({ metadataUrl: null, oidcIssuer: null })).toEqual({
+        metadataUrl: null,
+        oidcIssuer: null,
+      });
+    });
+
+    it('defaults oidcEmailVerifiedClaimRequired to true on create', () => {
+      expect(
+        SsoConnectionCreateRequestSchema.parse({ orgId: 'o', slug: 'acme', protocol: 'OIDC', oidcIssuer: 'https://idp.acme.example', oidcClientId: 'c' })
+          .oidcEmailVerifiedClaimRequired,
+      ).toBe(true);
+    });
+
+    it('oidcEmailVerifiedClaimRequired is a boolean that a create may turn off and a patch may change alone', () => {
+      const create = { orgId: 'o', slug: 'acme', protocol: 'OIDC', oidcIssuer: 'https://idp.acme.example', oidcClientId: 'c' };
+      expect(SsoConnectionCreateRequestSchema.parse({ ...create, oidcEmailVerifiedClaimRequired: false }).oidcEmailVerifiedClaimRequired).toBe(
+        false,
+      );
+      expect(SsoConnectionCreateRequestSchema.safeParse({ ...create, oidcEmailVerifiedClaimRequired: 'no' }).success).toBe(false);
+      expect(SsoConnectionUpdateRequestSchema.parse({ oidcEmailVerifiedClaimRequired: false })).toEqual({
+        oidcEmailVerifiedClaimRequired: false,
+      });
+      expect(SsoConnectionUpdateRequestSchema.parse({ jitProvisioning: true })).not.toHaveProperty('oidcEmailVerifiedClaimRequired');
+      expect(SsoConnectionUpdateRequestSchema.safeParse({ oidcEmailVerifiedClaimRequired: null }).success).toBe(false);
     });
   });
 });

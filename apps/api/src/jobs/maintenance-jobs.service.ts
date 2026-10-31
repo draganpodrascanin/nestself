@@ -6,28 +6,39 @@
  * one on demand. Nothing here runs on a request path.
  *
  * Jobs run in system context (no tenant setting): they must see every
- * organization. The SSO certificate-expiry job (3.4.10) also reads the
- * identity provider's view of each ACTIVE SAML connection. Every change is written to the audit log with
- * `actorKind: 'JOB'` and invalidates the affected principal caches.
+ * organization. The SSO certificate-expiry job (3.4.10) also fetches the
+ * metadata of each ACTIVE metadata-URL SAML connection, reads the identity
+ * provider's view of the others and mails the operations mailbox. Every
+ * change is written to the audit log with `actorKind: 'JOB'` and
+ * invalidates the affected principal caches.
  */
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
+import { surfaceOrigin } from '../auth/sso-start-url.js';
+import { DbService } from '../db/db.service.js';
 import { AuthorizationRepository, type GrantRow } from '../db/repositories/authorization.repository.js';
 import { AuditRepository } from '../db/repositories/audit.repository.js';
-import { SsoRepository } from '../db/repositories/sso.repository.js';
+import { OrganizationsRepository } from '../db/repositories/organizations.repository.js';
+import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.repository.js';
+import { Mailer } from '../mailer/mailer.js';
 import { IdentityProviderService } from '../identity/identity-provider.service.js';
-import { AuditWriter } from '../audit/audit-writer.js';
+import { certificateExpiryFromMetadata } from '../identity/saml-metadata.js';
+import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import {
+  SSO_CERT_ALERT_TTL,
   STALE_FAMILY_DENYLIST_TTL,
   mobileFamilyKey,
   revokedFamilyKey,
   sessionKey,
+  ssoCertAlertKey,
   userMobileFamiliesKey,
 } from '../redis/redis-keys.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SessionService } from '../session/session.service.js';
+import { METADATA_FETCHER, metadataFailureLabel, type MetadataFetcher } from '../sso/metadata-fetcher.js';
 
 /** Months of `audit_events` partitions kept ahead of today (D-21). */
 export const AUDIT_PARTITION_MONTHS_AHEAD = 3;
@@ -50,6 +61,8 @@ export interface GrantReconciliationReport {
   expired: string[];
   orphanedDelegations: string[];
   withoutMembership: string[];
+  /** Grants whose close or audit write threw; rolled back, logged by id and retried on the next run. */
+  failed: number;
 }
 
 export interface StaleFamilyReport {
@@ -60,6 +73,8 @@ export interface StaleFamilyReport {
 
 export interface EmergencySweepReport {
   expired: string[];
+  /** Records whose revoke or audit write threw; rolled back, logged by id and retried on the next run. */
+  failed: number;
 }
 
 export interface SessionTtlReport {
@@ -79,13 +94,27 @@ export interface SsoCertificateReport {
   job: 'sso.certificate-expiry';
   /** ACTIVE connections looked at. */
   scanned: number;
-  /** Connections whose missing expiry was filled in from the identity provider. */
+  /**
+   * Connections whose stored expiry changed: set from the fetched metadata
+   * (metadata-URL connections) or filled in from the identity provider.
+   */
   refreshed: number;
   /** Connections whose certificate expires within the warning window (or has expired); each audited. */
   expiring: number;
-  /** Connections whose provider lookup or audit write threw; logged and retried on the next run. */
+  /** Expiring connections mailed to `OPS_ALERT_EMAIL` in this run (at most one mail per connection in 7 days). */
+  alerted: number;
+  /**
+   * Failures, each logged and retried on the next run: a refresh that threw
+   * (fetch, provider lookup, write) or fetched metadata without a signing
+   * certificate, whose connection is still checked against its stored
+   * expiry; an audit transaction that rejected (that connection is neither
+   * counted as expiring nor mailed); an alert mail that was not sent.
+   */
   failed: number;
 }
+
+/** What a connection's refresh found: the expiry to check, or fetched metadata without a signing certificate. */
+type CertificateRefresh = { kind: 'expiry'; expiresAt: Date | null; written: boolean } | { kind: 'no_certificate' };
 
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
@@ -108,6 +137,11 @@ export class MaintenanceJobsService {
     private readonly sessions: SessionService,
     @Inject(forwardRef(() => SsoRepository)) private readonly ssoRepo: SsoRepository,
     @Inject(forwardRef(() => IdentityProviderService)) private readonly idp: IdentityProviderService,
+    @Inject(forwardRef(() => DbService)) private readonly dbs: DbService,
+    @Inject(forwardRef(() => OrganizationsRepository)) private readonly organizations: OrganizationsRepository,
+    @Inject(METADATA_FETCHER) private readonly metadata: MetadataFetcher,
+    @Inject(forwardRef(() => Mailer)) private readonly mailer: Mailer,
+    @Inject(forwardRef(() => ConfigService)) private readonly config: ConfigService,
   ) {}
 
   /** Run one job by name. */
@@ -144,55 +178,86 @@ export class MaintenanceJobsService {
    * - delegated grants whose parent is revoked are revoked (`parent_revoked`);
    * - organization-scoped grants without an ACTIVE membership are revoked
    *   (`membership_ended`), closing any gap left by a missed cascade.
-   * Every change is audited and the subject's caches are invalidated.
+   * Each grant is closed in its own transaction with its audit row, so one
+   * failing grant is rolled back, logged by id, counted in `failed` and
+   * retried on the next run while the others are closed. Only the grants
+   * this run closed are listed; the subjects' caches are invalidated after
+   * the commits.
    */
   async reconcileGrants(now = new Date()): Promise<GrantReconciliationReport> {
-    const expired = await this.authzRepo.findExpiredUnrevokedGrants(now);
-    await this.closeGrants(expired, now, 'expired', 'grant.expired');
+    const expired = await this.closeGrants(
+      await this.authzRepo.findExpiredUnrevokedGrants(now),
+      now,
+      'expired',
+      'grant.expired',
+    );
+    const orphaned = await this.closeGrants(
+      await this.authzRepo.findOrphanedDelegations(),
+      now,
+      'parent_revoked',
+      'grant.delegation_revoked',
+    );
+    const withoutMembership = await this.closeGrants(
+      await this.authzRepo.findGrantsWithoutActiveMembership(),
+      now,
+      'membership_ended',
+      'grant.revoked',
+    );
 
-    const orphaned = await this.authzRepo.findOrphanedDelegations();
-    await this.closeGrants(orphaned, now, 'parent_revoked', 'grant.delegation_revoked');
-
-    const withoutMembership = await this.authzRepo.findGrantsWithoutActiveMembership();
-    await this.closeGrants(withoutMembership, now, 'membership_ended', 'grant.revoked');
-
-    const report = {
-      expired: expired.map((g) => g.id),
-      orphanedDelegations: orphaned.map((g) => g.id),
-      withoutMembership: withoutMembership.map((g) => g.id),
+    const report: GrantReconciliationReport = {
+      expired: expired.closed,
+      orphanedDelegations: orphaned.closed,
+      withoutMembership: withoutMembership.closed,
+      failed: expired.failed + orphaned.failed + withoutMembership.failed,
     };
     this.logger.log(
-      `grants reconciled: ${report.expired.length} expired, ${report.orphanedDelegations.length} orphaned, ${report.withoutMembership.length} without membership`,
+      `grants reconciled: ${report.expired.length} expired, ${report.orphanedDelegations.length} orphaned, ${report.withoutMembership.length} without membership, ${report.failed} failed`,
     );
     return report;
   }
 
+  /** Close each grant in its own transaction; returns the closed ids and the failure count. */
   private async closeGrants(
     rows: GrantRow[],
     now: Date,
     reason: 'expired' | 'parent_revoked' | 'membership_ended',
     action: 'grant.expired' | 'grant.delegation_revoked' | 'grant.revoked',
-  ): Promise<void> {
-    if (rows.length === 0) return;
-    await this.authzRepo.revokeGrants(
-      rows.map((g) => g.id),
-      { at: now, byUserId: null, reason },
-    );
+  ): Promise<{ closed: string[]; failed: number }> {
+    const closed: GrantRow[] = [];
+    let failed = 0;
     for (const g of rows) {
-      await this.audit.record({
-        action,
-        actorUserId: null,
-        actorKind: 'JOB',
-        orgId: g.scopeOrgId,
-        recordType: 'grant',
-        recordId: g.id,
-        result: 'ALLOWED',
-        details: { reason, subjectUserId: g.subjectUserId, templateKey: g.templateKey, job: 'grants.reconcile' },
-        occurredAt: now,
-      });
+      try {
+        const revoked = await this.dbs.withTransaction(async (tx) => {
+          // Empty when another path revoked it meanwhile: that path audited it.
+          const ids = await this.authzRepo.revokeGrants([g.id], { at: now, byUserId: null, reason }, tx);
+          if (ids.length === 0) return false;
+          await this.audit.record(
+            {
+              action,
+              actorUserId: null,
+              actorKind: 'JOB',
+              orgId: g.scopeOrgId,
+              recordType: 'grant',
+              recordId: g.id,
+              result: 'ALLOWED',
+              details: { reason, subjectUserId: g.subjectUserId, templateKey: g.templateKey, job: 'grants.reconcile' },
+              occurredAt: now,
+            },
+            { tx },
+          );
+          return true;
+        });
+        if (revoked) closed.push(g);
+      } catch (err) {
+        failed += 1;
+        const name = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`grant ${g.id} not closed (${name}); retried on the next run`);
+      }
     }
+    if (closed.length === 0) return { closed: [], failed };
+
     const bySubject = new Map<string, Set<string>>();
-    for (const g of rows) {
+    for (const g of closed) {
       const orgs = bySubject.get(g.subjectUserId) ?? new Set<string>();
       if (g.scopeOrgId) orgs.add(g.scopeOrgId);
       bySubject.set(g.subjectUserId, orgs);
@@ -202,7 +267,9 @@ export class MaintenanceJobsService {
     }
     // Delegatees of the closed grants cache them as ancestors (a grant closed
     // without its tree, e.g. without membership, leaves active children).
-    await this.principals.invalidateDelegatees(rows.map((g) => g.id));
+    const closedIds = closed.map((g) => g.id);
+    await this.principals.invalidateDelegatees(closedIds);
+    return { closed: closedIds, failed };
   }
 
   /**
@@ -211,29 +278,47 @@ export class MaintenanceJobsService {
    * `revokedAt = now` with no revoking user, an `emergency_access.expired`
    * audit event and a cache invalidation. Secondary enforcement only:
    * `findActiveEmergencyAccess` already ignores expired rows on every request.
+   * Each record is revoked in its own transaction with its audit row; one
+   * that throws is rolled back, logged by id, counted in `failed` and retried
+   * on the next run, and the sweep continues with the next record.
    */
   async sweepExpiredEmergencyAccess(now = new Date()): Promise<EmergencySweepReport> {
     const rows = await this.authzRepo.findExpiredApprovedEmergencyAccess(now);
     const expired: string[] = [];
+    let failed = 0;
     for (const row of rows) {
-      // Null when a manual revoke won the race: that path already audited.
-      const revoked = await this.authzRepo.revokeEmergencyAccess(row.id, null, now);
+      let revoked: boolean;
+      try {
+        revoked = await this.dbs.withTransaction(async (tx) => {
+          // Null when a manual revoke won the race: that path already audited.
+          if (!(await this.authzRepo.revokeEmergencyAccess(row.id, null, now, tx))) return false;
+          await this.audit.record(
+            {
+              action: 'emergency_access.expired',
+              actorUserId: null,
+              actorKind: 'JOB',
+              recordType: 'emergency_access',
+              recordId: row.id,
+              result: 'ALLOWED',
+              details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
+              occurredAt: now,
+            },
+            { tx },
+          );
+          return true;
+        });
+      } catch (err) {
+        failed += 1;
+        const name = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(`emergency access ${row.id} not swept (${name}); retried on the next run`);
+        continue;
+      }
       if (!revoked) continue;
-      await this.audit.record({
-        action: 'emergency_access.expired',
-        actorUserId: null,
-        actorKind: 'JOB',
-        recordType: 'emergency_access',
-        recordId: row.id,
-        result: 'ALLOWED',
-        details: { userId: row.userId, scopeKind: row.scopeKind, scopeId: row.scopeId, job: 'emergency.sweep-expired' },
-        occurredAt: now,
-      });
       await this.principals.invalidateUser(row.userId);
       expired.push(row.id);
     }
-    this.logger.log(`emergency access swept: ${expired.length} expired`);
-    return { expired };
+    this.logger.log(`emergency access swept: ${expired.length} expired, ${failed} failed`);
+    return { expired, failed };
   }
 
   /**
@@ -278,19 +363,32 @@ export class MaintenanceJobsService {
   /**
    * SSO signing-certificate expiry (3.4.10, nightly). For every ACTIVE
    * connection:
-   * - a SAML connection without a known `certificateExpiresAt` is looked up
-   *   with `describeProvider`; an expiry the provider reports is stored. Only
-   *   a provider registered from metadata XML reports one: for a metadata-URL
-   *   provider Cognito returns the URL, not the file, so its expiry stays
-   *   unknown and it is looked up again every night (implementation.md 22.11);
+   * - a SAML connection with a `metadataUrl` has its metadata fetched every
+   *   night through the `MetadataFetcher` (https only, public addresses only,
+   *   5 s, 1 MiB) and `certificateExpiresAt` set to what the document carries:
+   *   certificates rotate, so a stored date goes stale. Cognito cannot help
+   *   here: for a metadata-URL provider it returns the URL, not the file;
+   * - a SAML connection registered from metadata XML without a known expiry
+   *   is looked up with `describeProvider`; an expiry the provider reports is
+   *   stored;
    * - a certificate that expires within `SSO_CERTIFICATE_WARNING_DAYS`, or has
    *   already expired, is audited as `sso_connection.changed` with reason
    *   `certificate_expiring` (actor JOB, the connection's organization) and
-   *   logged as a warning. Staff then ask the employer for new metadata.
-   * A provider lookup or audit write that throws is counted in `failed`,
-   * logged by provider name and retried on the next run. Logs and audit
-   * details carry the provider name, dates and ids only, never metadata.
-   * The ops alert email waits for the SES mailer (follow-up).
+   *   logged as a warning. The row is written in its own transaction, so an
+   *   insert that fails rejects (the pool path would only log it); once the
+   *   transaction committed, `ops_certificate_alert` is mailed to
+   *   `OPS_ALERT_EMAIL` (English) at most once per connection in
+   *   `SSO_CERT_ALERT_TTL`. Without `OPS_ALERT_EMAIL` the run audits and logs
+   *   as before and warns once that alert mail is off. Staff then ask the
+   *   employer for new metadata.
+   * A refresh that fails (the fetch, the provider lookup or the write throws,
+   * or the fetched metadata has no signing certificate) is counted in
+   * `failed` and logged, and the connection is still checked against its
+   * stored expiry: an outage at the IdP never hides a known expiring date.
+   * An audit transaction or an alert that fails is counted in `failed` too.
+   * Everything failed is retried on the next run, nothing within the run.
+   * Logs and audit details carry the provider name, dates and ids only,
+   * never the metadata URL or document.
    */
   async checkSsoCertificates(now = new Date()): Promise<SsoCertificateReport> {
     const report: SsoCertificateReport = {
@@ -298,51 +396,57 @@ export class MaintenanceJobsService {
       scanned: 0,
       refreshed: 0,
       expiring: 0,
+      alerted: 0,
       failed: 0,
     };
+    const opsAlertEmail = this.config.get<string>('OPS_ALERT_EMAIL');
+    let unmailed = 0;
     const connections = await this.ssoRepo.listActiveConnections();
     for (const conn of connections) {
       report.scanned += 1;
+      // A refresh that fails leaves the stored date, which is checked all the same.
       let expiresAt = conn.certificateExpiresAt;
-      if (!expiresAt && conn.protocol === 'SAML') {
-        try {
-          const info = await this.idp.describeProvider(conn.cognitoProviderName);
-          if (info?.certificateExpiresAt) {
-            await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: info.certificateExpiresAt });
-            expiresAt = info.certificateExpiresAt;
-            report.refreshed += 1;
-          }
-        } catch (err) {
+      try {
+        const refresh = await this.refreshCertificateExpiry(conn);
+        if (refresh.kind === 'no_certificate') {
           report.failed += 1;
-          const reason = err instanceof Error ? err.name : 'unknown error';
           this.logger.warn(
-            `SSO connection ${conn.cognitoProviderName}: certificate expiry not refreshed (${reason}); retried on the next run`,
+            `SSO connection ${conn.cognitoProviderName}: no certificate in metadata; the stored expiry is checked, retried on the next run`,
           );
-          continue;
+        } else {
+          expiresAt = refresh.expiresAt;
+          if (refresh.written) report.refreshed += 1;
         }
+      } catch (err) {
+        report.failed += 1;
+        this.logger.warn(
+          `SSO connection ${conn.cognitoProviderName}: certificate expiry not refreshed (${metadataFailureLabel(err)}); the stored expiry is checked, retried on the next run`,
+        );
       }
       if (!expiresAt) continue;
       const msLeft = expiresAt.getTime() - now.getTime();
       if (msLeft > SSO_CERTIFICATE_WARNING_DAYS * DAY_MS) continue;
       const daysLeft = Math.floor(msLeft / DAY_MS);
+      const event: AuditEventInput = {
+        action: 'sso_connection.changed',
+        actorUserId: null,
+        actorKind: 'JOB',
+        orgId: conn.orgId,
+        recordType: 'sso_connection',
+        recordId: conn.id,
+        result: 'ALLOWED',
+        details: {
+          reason: 'certificate_expiring',
+          expiresAt: expiresAt.toISOString(),
+          connectionId: conn.id,
+          daysLeft,
+          job: 'sso.certificate-expiry',
+        },
+        occurredAt: now,
+      };
       try {
-        await this.audit.record({
-          action: 'sso_connection.changed',
-          actorUserId: null,
-          actorKind: 'JOB',
-          orgId: conn.orgId,
-          recordType: 'sso_connection',
-          recordId: conn.id,
-          result: 'ALLOWED',
-          details: {
-            reason: 'certificate_expiring',
-            expiresAt: expiresAt.toISOString(),
-            connectionId: conn.id,
-            daysLeft,
-            job: 'sso.certificate-expiry',
-          },
-          occurredAt: now,
-        });
+        // In a transaction, as the other jobs write theirs: a failed insert throws.
+        await this.dbs.withTransaction((tx) => this.audit.record(event, { tx }));
       } catch (err) {
         report.failed += 1;
         const reason = err instanceof Error ? err.name : 'unknown error';
@@ -355,11 +459,95 @@ export class MaintenanceJobsService {
           ? `SSO connection ${conn.cognitoProviderName}: signing certificate expired on ${expiresAt.toISOString()}`
           : `SSO connection ${conn.cognitoProviderName}: signing certificate expires on ${expiresAt.toISOString()} (${daysLeft} days left)`,
       );
+
+      // The audit row is committed: now the mail (never before, never inside a transaction).
+      if (!opsAlertEmail) {
+        unmailed += 1;
+        continue;
+      }
+      try {
+        if (await this.mailCertificateAlert(conn, opsAlertEmail, expiresAt, daysLeft, now)) report.alerted += 1;
+      } catch (err) {
+        report.failed += 1;
+        const reason = err instanceof Error ? err.name : 'unknown error';
+        this.logger.warn(
+          `SSO connection ${conn.cognitoProviderName}: expiry alert not sent (${reason}); retried on the next run`,
+        );
+      }
+    }
+    if (unmailed > 0) {
+      this.logger.warn(
+        `SSO certificate alert mail is off (OPS_ALERT_EMAIL is not set): ${unmailed} expiring connection(s) audited and logged only`,
+      );
     }
     this.logger.log(
-      `SSO certificates: ${report.scanned} scanned, ${report.refreshed} refreshed, ${report.expiring} expiring, ${report.failed} failed`,
+      `SSO certificates: ${report.scanned} scanned, ${report.refreshed} refreshed, ${report.expiring} expiring, ${report.alerted} alerted, ${report.failed} failed`,
     );
     return report;
+  }
+
+  /**
+   * The certificate expiry to check for one connection, stored first when it
+   * changed (`written`): the expiry the fetched metadata carries for a
+   * metadata-URL SAML connection (`no_certificate` when it has no readable
+   * signing certificate, so a stored date is never erased), the identity
+   * provider's answer for a metadata-XML one whose expiry is unknown, the
+   * stored value otherwise. Throws when the fetch, the lookup or the write
+   * fails.
+   */
+  private async refreshCertificateExpiry(conn: SsoConnectionRow): Promise<CertificateRefresh> {
+    const stored = conn.certificateExpiresAt;
+    if (conn.protocol !== 'SAML') return { kind: 'expiry', expiresAt: stored, written: false };
+    if (conn.metadataUrl) {
+      const fetched = certificateExpiryFromMetadata(await this.metadata.fetchXml(conn.metadataUrl));
+      if (!fetched) return { kind: 'no_certificate' };
+      if (fetched.getTime() === stored?.getTime()) return { kind: 'expiry', expiresAt: stored, written: false };
+      await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: fetched });
+      return { kind: 'expiry', expiresAt: fetched, written: true };
+    }
+    if (stored) return { kind: 'expiry', expiresAt: stored, written: false };
+    const info = await this.idp.describeProvider(conn.cognitoProviderName);
+    if (!info?.certificateExpiresAt) return { kind: 'expiry', expiresAt: null, written: false };
+    await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: info.certificateExpiresAt });
+    return { kind: 'expiry', expiresAt: info.certificateExpiresAt, written: true };
+  }
+
+  /**
+   * Mails `ops_certificate_alert` unless one went out for this connection
+   * within `SSO_CERT_ALERT_TTL`; returns whether it did. The key is taken
+   * (NX) before the send, so overlapping runs cannot both mail, and deleted
+   * again when the send throws, so the next run retries.
+   */
+  private async mailCertificateAlert(
+    conn: SsoConnectionRow,
+    to: string,
+    expiresAt: Date,
+    daysLeft: number,
+    now: Date,
+  ): Promise<boolean> {
+    const key = ssoCertAlertKey(conn.id);
+    const taken = await this.store.set(key, now.toISOString(), { ttlSeconds: SSO_CERT_ALERT_TTL, onlyIfAbsent: true });
+    if (!taken) return false;
+    try {
+      const organization = await this.organizations.findById(conn.orgId);
+      await this.mailer.send({
+        to,
+        locale: 'en',
+        template: 'ops_certificate_alert',
+        data: {
+          organizationName: organization?.name ?? conn.orgId,
+          providerName: conn.cognitoProviderName,
+          expiresAt: expiresAt.toISOString(),
+          daysLeft: String(daysLeft),
+          adminUrl: `${surfaceOrigin(this.config, 'admin')}/sso`,
+        },
+      });
+    } catch (err) {
+      // A release that fails too only delays the retry until the key expires.
+      await this.store.del(key).catch(() => undefined);
+      throw err;
+    }
+    return true;
   }
 
   /**

@@ -55,7 +55,16 @@ import { ProfileService } from './profile.service.js';
 import { StepUpService } from './step-up.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { SsoBindService } from './sso-bind.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { RedirectOnThrottle } from '../common/redirect-on-throttle.decorator.js';
+import {
+  SESSION_THROTTLE,
+  SSO_BIND_THROTTLE,
+  SSO_CALLBACK_THROTTLE,
+  SSO_START_THROTTLE,
+} from '../authz/throttles.js';
 import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
@@ -70,13 +79,15 @@ import {
   ContextSwitchRequestSchema,
   ProfileLocaleRequestSchema,
   ProfileDisplayNameRequestSchema,
+  StepUpResendRequestSchema,
   StepUpVerifyRequestSchema,
   SsoStartQuerySchema,
   SsoCallbackQuerySchema,
+  SsoBindStartRequestSchema,
+  SsoBindVerifyRequestSchema,
+  SsoBindResendRequestSchema,
+  SsoBindTokenRequestSchema,
 } from '@nestself/contracts';
-
-/** API-R-06/07: the redirect endpoints share a tight per-IP limit. */
-const SSO_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,6 +139,7 @@ export class AuthController {
     private readonly profile: ProfileService,
     private readonly stepUp: StepUpService,
     private readonly ssoCallback: SsoCallbackService,
+    private readonly ssoBind: SsoBindService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -149,11 +161,14 @@ export class AuthController {
   /**
    * `?connection=<cognitoProviderName>&surface=workspace|admin[&returnPath=/x][&test=<nonce>]`
    * -> 302 to the identity provider. 400 `validation` for a malformed query,
-   * including an absolute or protocol-relative `returnPath`.
+   * including an absolute or protocol-relative `returnPath`. Throttled per IP
+   * and connection; a refused start is a 302 to the workspace's
+   * `/sign-in?reason=sso_rate_limited`.
    */
   @Public()
   @Get('sso/start')
-  @Throttle(SSO_THROTTLE)
+  @Throttle(SSO_START_THROTTLE)
+  @RedirectOnThrottle()
   async ssoStart(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = validate(SsoStartQuerySchema, query);
     const result = await this.ssoCallback.start(parsed, extractMeta(req));
@@ -169,11 +184,13 @@ export class AuthController {
 
   /**
    * Cognito's redirect target. Always a 302: to the surface with the session
-   * cookies on success, else to the surface's `/sign-in?reason=...`.
+   * cookies on success, else to the surface's `/sign-in?reason=...` (a
+   * throttled callback: the workspace's `reason=sso_rate_limited`).
    */
   @Public()
   @Get('sso/callback')
-  @Throttle(SSO_THROTTLE)
+  @Throttle(SSO_CALLBACK_THROTTLE)
+  @RedirectOnThrottle()
   async ssoCallbackRoute(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = SsoCallbackQuerySchema.safeParse(query);
     const result = await this.ssoCallback.callback(
@@ -183,6 +200,78 @@ export class AuthController {
     );
     // The browser-binding cookie is spent on every outcome.
     this.sendRedirect(res, result, [this.cookies.clearSsoNonce()]);
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/sso/bind/{start,verify,resend} -- pending binding (SSO-R-08)
+  // -----------------------------------------------------------------------
+
+  /**
+   * `{ handle, locale? }` from `/sign-in?reason=sso_email_unverified&bind=`:
+   * mails a code to the address the identity provider asserted and answers
+   * `{ challengeToken, emailMasked }`. 400 `invalid_challenge` for an unknown
+   * or expired handle. The three bind routes allow 10 a minute per IP.
+   */
+  @Public()
+  @Post('sso/bind/start')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindStart(@Req() req: HttpReq, @Body() body: unknown) {
+    return this.ssoBind.start(validate(SsoBindStartRequestSchema, body), extractMeta(req));
+  }
+
+  /**
+   * `{ challengeToken, code }`: binds the identity, sets the session cookies
+   * and answers `{ returnPath }`. 401 `invalid_code` / `invalid_challenge`,
+   * 429 `too_many_attempts`, 403 `sso_denied` when nothing can be bound.
+   */
+  @Public()
+  @Post('sso/bind/verify')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindVerify(
+    @Req() req: HttpReq,
+    @Res({ passthrough: true }) res: HttpRes,
+    @Body() body: unknown,
+  ) {
+    const result = await this.ssoBind.verify(validate(SsoBindVerifyRequestSchema, body), extractMeta(req));
+    const { sessionId, csrfToken, absoluteExpiresAt } = result.session;
+    this.setSessionCookies(res, sessionId, csrfToken, absoluteExpiresAt);
+    return { returnPath: result.returnPath };
+  }
+
+  /**
+   * `{ challengeToken, locale? }`: a new code for the same challenge, at most
+   * one a minute counted from the previous mail (429 `rate_limited` with
+   * `details.retryAfter`). Answers `{ emailMasked }`.
+   */
+  @Public()
+  @Post('sso/bind/resend')
+  @HttpCode(200)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindResend(@Body() body: unknown) {
+    const { challengeToken, locale } = validate(SsoBindResendRequestSchema, body);
+    return this.ssoBind.resend(challengeToken, locale ?? 'sr-Latn');
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/sso/bind-token -- the mobile app's federated binding (5.7)
+  // -----------------------------------------------------------------------
+
+  /**
+   * `{ idToken }`: the Cognito ID token of the mobile app's own exchange,
+   * once after sign-in; binds the federated identity under the callback's
+   * rules and answers 204. 401 `unauthenticated` for a token that fails
+   * verification, 403 `sso_email_unverified` when the OIDC provider did not
+   * confirm the address (confirm it once on the web), 403 `sso_denied` when
+   * nothing can be bound. 10 a minute per IP.
+   */
+  @Public()
+  @Post('sso/bind-token')
+  @HttpCode(204)
+  @Throttle(SSO_BIND_THROTTLE)
+  async ssoBindToken(@Req() req: HttpReq, @Body() body: unknown): Promise<void> {
+    await this.ssoBind.bindToken(validate(SsoBindTokenRequestSchema, body), extractMeta(req));
   }
 
   // -----------------------------------------------------------------------
@@ -385,15 +474,44 @@ export class AuthController {
   // POST /api/auth/step-up/start
   // -----------------------------------------------------------------------
 
+  /**
+   * Mails a code: Cognito's for a native user, a NestSelf one to the
+   * federated identity's address otherwise; 403 `step_up_unavailable` when
+   * there is neither. The three step-up routes allow 10 a minute per session
+   * (bearer: per token family), and wrong codes lock the user (StepUpThrottle).
+   */
   @Authenticated()
   @Post('step-up/start')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle(SESSION_THROTTLE)
   async stepUpStart(
     @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,
   ) {
     return this.stepUp.start(principal, extractMeta(req), req.session?.surface ?? extractSurface(req));
+  }
+
+  // -----------------------------------------------------------------------
+  // POST /api/auth/step-up/resend
+  // -----------------------------------------------------------------------
+
+  /**
+   * A new code for the challenge of an earlier start, at most one a minute
+   * counted from the previous mail (429 `rate_limited` with
+   * `details.retryAfter`). Answers like start; the Cognito kind answers with a
+   * new challenge token.
+   */
+  @Authenticated()
+  @Post('step-up/resend')
+  @HttpCode(200)
+  @Throttle(SESSION_THROTTLE)
+  async stepUpResend(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: HttpReq,
+    @Body() body: unknown,
+  ) {
+    const { challengeToken } = validate(StepUpResendRequestSchema, body);
+    return this.stepUp.resend(principal, challengeToken, extractMeta(req));
   }
 
   // -----------------------------------------------------------------------
@@ -403,7 +521,7 @@ export class AuthController {
   @Authenticated()
   @Post('step-up/verify')
   @HttpCode(204)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle(SESSION_THROTTLE)
   async stepUpVerify(
     @CurrentPrincipal() principal: Principal,
     @Req() req: HttpReq,

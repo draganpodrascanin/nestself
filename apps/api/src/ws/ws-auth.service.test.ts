@@ -71,6 +71,7 @@ function createMocks() {
     load: vi.fn(),
   };
   const store = {
+    kind: 'memory' as const,
     getDel: vi.fn(),
     get: vi.fn(),
     set: vi.fn(),

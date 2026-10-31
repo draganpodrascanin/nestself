@@ -15,6 +15,9 @@ import type { SsoProtocol } from '@nestself/contracts';
 
 export const PROVIDER_NAME_MAX_LENGTH = 20;
 
+/** `org-<slug>-saml|oidc`, the slug in the characters a slug may hold; no length bound (see `hasProviderNameShape`). */
+const PROVIDER_NAME_SHAPE = /^org-[a-z0-9-]+-(?:saml|oidc)$/;
+
 export class ProviderNameTooLongError extends Error {
   constructor(readonly providerName: string) {
     super(`Provider name ${providerName} exceeds ${PROVIDER_NAME_MAX_LENGTH} characters`);
@@ -27,6 +30,21 @@ export function buildProviderName(slug: string, protocol: SsoProtocol): string {
   const name = `org-${slug.trim().toLowerCase()}-${protocol.toLowerCase()}`;
   if (name.length > PROVIDER_NAME_MAX_LENGTH) throw new ProviderNameTooLongError(name);
   return name;
+}
+
+/**
+ * Whether `name` has the shape of a provider name: `org-<slug>-saml` or
+ * `org-<slug>-oidc`, lowercase letters, digits and hyphens. Only such a name
+ * can belong to a connection, so the bearer path looks nothing else up: a
+ * native address with an underscore (`ana_maria@...`) costs no query, while
+ * one that starts with a real provider name and `_` is still treated as
+ * federated and refused (the prefix rule fails safe). The check is looser
+ * than {@link buildProviderName} on purpose (no slug length, no 20-character
+ * bound): a connection row that predates a creation rule must still resolve,
+ * so the guard never depends on those rules.
+ */
+export function hasProviderNameShape(name: string): boolean {
+  return PROVIDER_NAME_SHAPE.test(name);
 }
 
 /**

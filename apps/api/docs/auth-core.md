@@ -120,7 +120,7 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | 1 | `AuthenticationGuard` | Session cookie path or bearer token path. Attaches `request.principal`, `request.session`, `request.authMeta`, `request.csrfToken`. `@Public()` bypasses. |
 | 2 | `CsrfGuard` | Double-submit CSRF check. Only enforces when session cookie is present. Safe methods (GET/HEAD/OPTIONS) pass. |
 | 3 | `AuthorizationGuard` | Reads `@Authorize()` metadata, resolves resource, calls `authorize()`. `@Public()` and `@Authenticated()` bypass. Non-disclosure: 404 when no org visibility, 403 when visible but denied (AUTHZ-R-61). |
-| 4 | `ThrottlerGuard` | @nestjs/throttler, default 60 req/min. |
+| 4 | `AppThrottlerGuard` | @nestjs/throttler, 60 req/min per client IP unless the route sets its own (`src/authz/throttles.ts`); counters in Redis when `REDIS_URL` is set (`KeyValueThrottlerStorage`); a route marked `@RedirectOnThrottle()` answers a refusal with a 302 to the workspace `/sign-in?reason=sso_rate_limited`. |
 
 ### Decorators
 
@@ -129,6 +129,7 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | `@Public()` | `isPublic` | Bypasses authentication and authorization |
 | `@Authenticated()` | `isAuthenticatedOnly` | Requires valid session/bearer, no authorization check |
 | `@Authorize(action, resolver)` | `authorize` | Requires authentication + passes authorize(principal, action, resource, ctx), then the step-up freshness check when the action has a class |
+| `@Authorize([action, ...], resolver)` | `authorize` | Any of the listed actions: they are evaluated in order and the first that allows decides, and its step-up class applies. When none allows, the denial is audited as `access.denied` under the first action (`actionAttempted`) with the whole list in `details.alternatives`. An empty list throws when the route is declared. |
 | `@CurrentPrincipal()` | param decorator | Extracts `request.principal` |
 
 ### Resource resolvers (`src/authz/resolvers.ts`)
@@ -139,9 +140,11 @@ Four global guards registered via `APP_GUARD` in `app.module.ts`:
 | `operationsResource(type, idFn?)` | `/ops/*` without an organization | Requires a web session (403 `session_required` for bearer callers, API-R-28) and the operations context (403 `context_mismatch`); returns `{ type, id? }` |
 | `operationsOrgResource(type)` | `/ops/orgs/:orgId/*` | The same session and context checks (shared `assertOperationsSession`), then the route `:orgId` (404 `not_found` without it); returns `{ type, orgId }`, so the engine applies the `assigned_clients` scope through the CLIENT assignment |
 
-Routes whose resource needs row data (confidential conversations and intakes, emergency record reads) are `@Authenticated()` and call `AuthorizationService.require(principal, action, resource)` after loading the row; `require()` audits denials, maps them to 403 or 404 like the guard and runs the same step-up check (`assertStepUpFresh` in `step-up-freshness.ts`).
+Routes whose resource needs row data (confidential conversations and intakes, emergency record reads) are `@Authenticated()` and call `AuthorizationService.require(principal, action, resource)` after loading the row; `require()` audits denials, maps them to 403 or 404 like the guard and runs the same step-up check (`assertStepUpFresh` in `step-up-freshness.ts`). `require(principal, action, resource, { denyAs: 'not_found' })` answers every denial as the 404 `not_found` of a missing record (the audit row is unchanged); the `/professional/*` single-record reads pass it, because the row is loaded before the decision and a 403 would confirm that the record exists. A stale step-up is not a denial and stays 403 `step_up_required`.
 
-Staff (any principal with a staff template) always count as having organization visibility, so a denied operations caller gets 403, not 404.
+The emergency record read checks the caller's own access record before it loads the record: unknown or someone else's is 404, one that is not active (pending, revoked, expired) is 403 `emergency_not_active`, answered the same for any record id. Then the record (404) and whether the access covers it (404, like a missing one), then the engine. The two refusals the engine no longer sees are audited as `access.denied` (`details.reason` `emergency_not_active` or `outside_emergency_scope`, identifiers only).
+
+Staff (any principal with a staff template) always count as having organization visibility, so a denied operations caller gets 403, not 404, except on the confidential reads above.
 
 ### Route table
 
@@ -149,21 +152,22 @@ All routes under the global `/api` prefix.
 
 | Method | Path | Decorator | Throttle |
 |--------|------|-----------|----------|
-| POST | /auth/discover | @Public | 10/min |
-| POST | /auth/email-otp/start | @Public | 10/min |
-| POST | /auth/email-otp/verify | @Public | 5/min |
-| POST | /auth/password | @Public | 10/min |
-| POST | /auth/challenge | @Public | 5/min |
-| POST | /auth/totp/enrol | @Public | 5/min |
-| POST | /auth/totp/confirm | @Authenticated | 5/min |
-| POST | /auth/password-reset/start | @Public | 10/min |
-| POST | /auth/password-reset/confirm | @Public | 5/min |
+| POST | /auth/discover | @Public | default |
+| POST | /auth/email-otp/start | @Public | default (a locked address gets no code) |
+| POST | /auth/email-otp/verify | @Public | default (wrong codes are bounded per address by `SignInThrottle`: five failures lock the address for 15 minutes) |
+| POST | /auth/password | @Public | default (wrong passwords count toward the same `SignInThrottle` lock) |
+| POST | /auth/challenge | @Public | default |
+| POST | /auth/totp/enrol | @Public | default |
+| POST | /auth/totp/confirm | @Authenticated | default |
+| POST | /auth/password-reset/start | @Public | default |
+| POST | /auth/password-reset/confirm | @Public | default |
 | POST | /auth/context | @Authenticated | default |
-| POST | /auth/step-up/start | @Authenticated | 5/min |
-| POST | /auth/step-up/verify | @Authenticated (204) | 5/min |
+| POST | /auth/step-up/start | @Authenticated | 10/min per session |
+| POST | /auth/step-up/resend | @Authenticated | 10/min per session |
+| POST | /auth/step-up/verify | @Authenticated (204) | 10/min per session |
 | POST | /auth/sign-out | @Authenticated | default |
 | POST | /auth/sign-out-all | @Authenticated | default |
-| POST | /auth/ws-ticket | @Authenticated | 30/min |
+| POST | /auth/ws-ticket | @Authenticated | default |
 | GET | /auth/me | @Authenticated | default |
 | PATCH | /auth/me/locale | @Authenticated | default |
 | PATCH | /auth/me/display-name | @Authenticated | default |
@@ -171,11 +175,11 @@ All routes under the global `/api` prefix.
 | DELETE | /auth/sessions/:sessionId | @Authenticated | default |
 | GET | /health | @Public (reports `database` and `redis`) | default |
 | GET | /orgs/:orgId/programme | @Authorize(program.overview) | default |
-| GET | /orgs/:orgId/org-units | @Authorize(program.overview) | default |
+| GET | /orgs/:orgId/org-units | @Authorize([program.overview, access.preview]) | default |
 | POST | /orgs/:orgId/org-units | @Authorize(org_units.manage) | default |
 | PATCH | /orgs/:orgId/org-units/:unitId | @Authorize(org_units.manage) | default |
 | POST | /orgs/:orgId/org-units/:unitId/move | @Authorize(org_units.manage) | default |
-| GET | /orgs/:orgId/members | @Authorize(program.overview) | default |
+| GET | /orgs/:orgId/members | @Authorize([program.overview, access.preview]) | default |
 | PATCH | /orgs/:orgId/members/:membershipId | @Authorize(people.move) | default |
 | POST | /orgs/:orgId/members/:membershipId/end | @Authorize(people.deactivate) | default |
 | POST | /ops/users/:userId/suspend | @Authorize(people.deactivate) | default |
@@ -215,8 +219,12 @@ All routes under the global `/api` prefix.
 | GET | /professional/conversations/:id | @Authenticated; `require(conversation.read.assigned)` | default |
 | GET | /professional/me/conversations/:id | @Authenticated; `require(conversation.participate)` | default |
 | GET | /professional/intake/:id | @Authenticated; `require(conversation.read.assigned)` | default |
-| GET | /auth/sso/start | @Public (302 to the identity provider) | 10/min |
-| GET | /auth/sso/callback | @Public (always 302) | 10/min |
+| GET | /auth/sso/start | @Public, @RedirectOnThrottle (302 to the identity provider) | 60/min per IP and connection |
+| GET | /auth/sso/callback | @Public, @RedirectOnThrottle (always 302) | 120/min per IP |
+| POST | /auth/sso/bind/start | @Public (pending binding: mails the confirm-email code) | 10/min per IP |
+| POST | /auth/sso/bind/verify | @Public (binds, sets the session cookies) | 10/min per IP; wrong codes count toward the address's `SignInThrottle` lock |
+| POST | /auth/sso/bind/resend | @Public | 10/min per IP |
+| POST | /auth/sso/bind-token | @Public (mobile federated binding, 204) | 10/min per IP |
 | GET | /auth/sso/_fake/authorize | @Public; registered only with `AUTH_MODE=stub` | default |
 | GET | /ops/sso-connections | @Authorize(sso.manage), operationsResource | default |
 | POST | /ops/sso-connections | @Authorize(sso.manage), operationsResource | 10/min |
@@ -227,7 +235,7 @@ All routes under the global `/api` prefix.
 | POST | /ops/sso-connections/:id/activate | @Authorize(sso.manage), operationsResource | 10/min |
 | GET | /invitations/:token/preview | @Public | 10/min |
 | POST | /invitations/accept | @Public | 10/min |
-| POST | /leads/* (3 routes) | @Public | default |
+| POST | /leads/* (3 routes) | @Public | 5/min |
 
 ### Organization owner (owner model, 2026-10-24)
 
@@ -283,7 +291,7 @@ person can sign in after `db:migrate` and `db:seed`.
 **Employee (email OTP)**, e.g. `user_jovan@example.com`:
 1. `POST /api/auth/discover` with email → `method: "email_otp"`
 2. `POST /api/auth/email-otp/start` → `challengeToken`
-3. Read the code from the API log: `Fake identity provider: OTP for user_jovan@example.com is 123456` (or set `FAKE_IDP_FIXED_OTP`)
+3. Read the code from the API log: `Fake identity provider: OTP for u***@example.com is 123456` (the address masked; or set `FAKE_IDP_FIXED_OTP`)
 4. `POST /api/auth/email-otp/verify` with `{ challengeToken, code }` → session cookies set
 
 **Staff and experts (password + TOTP)**, e.g. `user_nikola@example.com`:
@@ -423,6 +431,6 @@ On each message with a `userId`:
 
 ### Not yet implemented
 
-- IdP-initiated SSO, SCIM, federated step-up and federated mobile bearer lookups (SP-initiated SSO is built; `docs/auth/implementation.md` section 22)
+- IdP-initiated SSO and SCIM (SP-initiated SSO is built, federated mobile users included; `docs/auth/implementation.md` section 22)
 - Push notifications
 - A step-up screen in the mobile app (the API accepts bearer step-up)

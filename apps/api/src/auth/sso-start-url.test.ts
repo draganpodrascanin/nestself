@@ -4,7 +4,13 @@
  * host-only session cookie lands where `/api/auth/me` asks for it.
  */
 import { describe, it, expect } from 'vitest';
-import { apiOriginForSurface, buildSsoStartUrl, registeredSsoCallbackUrls, ssoCallbackUrl } from './sso-start-url.js';
+import {
+  apiOriginForSurface,
+  buildSsoStartUrl,
+  registeredSsoCallbackUrls,
+  ssoCallbackUrl,
+  surfaceOrigin,
+} from './sso-start-url.js';
 
 function config(values: Record<string, string | undefined>) {
   return { get: (key: string) => values[key] };
@@ -40,6 +46,18 @@ describe('apiOriginForSurface', () => {
 
   it('falls back to the local API when nothing is set', () => {
     expect(apiOriginForSurface(config({}), 'workspace')).toBe('http://localhost:4000');
+  });
+});
+
+describe('surfaceOrigin', () => {
+  it('is the surface URL without a trailing slash', () => {
+    expect(surfaceOrigin(DEPLOYED, 'workspace')).toBe('https://app.staging.nestself.example');
+    expect(surfaceOrigin(DEPLOYED, 'admin')).toBe('https://admin.staging.nestself.example');
+  });
+
+  it('falls back to the local apps when the surface URL is unset (stub mode only), never to API_PUBLIC_URL', () => {
+    expect(surfaceOrigin(config({ API_PUBLIC_URL: 'http://api.test' }), 'workspace')).toBe('http://localhost:5173');
+    expect(surfaceOrigin(config({ ADMIN_URL: '' }), 'admin')).toBe('http://localhost:5174');
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@nestself/api-client';
+import { StepUpCancelledError } from './auth/with-step-up';
 import { shouldRetryQuery } from './query-retry';
 
 const apiError = (status: number) =>
@@ -31,5 +32,9 @@ describe('shouldRetryQuery', () => {
   it('retries network and other errors up to three times', () => {
     expect(shouldRetryQuery(0, new TypeError('Failed to fetch'))).toBe(true);
     expect(shouldRetryQuery(3, new TypeError('Failed to fetch'))).toBe(false);
+  });
+
+  it('never retries a cancelled step-up, which would open the dialog again', () => {
+    expect(shouldRetryQuery(0, new StepUpCancelledError())).toBe(false);
   });
 });

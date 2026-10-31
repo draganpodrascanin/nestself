@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { StepUpCancelledError } from '../../auth';
-import { apiError } from '../organizations/ops-test-harness';
+import { apiError, t } from '../organizations/ops-test-harness';
 import { ssoProblem } from './sso-errors';
 import type { SsoOperation } from './sso-errors';
 
@@ -27,6 +27,16 @@ describe('ssoProblem', () => {
     [apiError(422, 'validation', { field: 'idpInitiatedAllowed' }), 'create', 'fieldIdpInitiated', null],
     [apiError(422, 'validation', { fields: ['metadataUrl', 'metadataXml'] }), 'test', 'fieldSamlMetadata', null],
     [apiError(422, 'validation', { fields: ['oidcIssuer', 'oidcClientId'] }), 'create', 'fieldOidc', 'oidcIssuer'],
+    [apiError(422, 'validation', { field: 'metadataUrl', reason: 'scheme' }), 'create', 'urlNotPublic', 'metadataUrl'],
+    [apiError(422, 'validation', { field: 'metadataUrl', reason: 'host' }), 'update', 'urlNotPublic', 'metadataUrl'],
+    [apiError(422, 'validation', { field: 'metadataUrl', reason: 'private_address' }), 'create', 'urlNotPublic', 'metadataUrl'],
+    [apiError(422, 'validation', { field: 'oidcIssuer', reason: 'scheme' }), 'create', 'urlNotPublic', 'oidcIssuer'],
+    [apiError(422, 'validation', { field: 'oidcIssuer', reason: 'host' }), 'update', 'urlNotPublic', 'oidcIssuer'],
+    [apiError(422, 'validation', { field: 'oidcIssuer', reason: 'private_address' }), 'update', 'urlNotPublic', 'oidcIssuer'],
+    [apiError(422, 'validation', { field: 'metadataUrl', reason: 'private_address' }), 'test', 'urlNotPublic', null],
+    [apiError(422, 'validation', { field: 'oidcIssuer', reason: 'host' }), 'test', 'urlNotPublic', null],
+    [apiError(422, 'validation', { field: 'metadataUrl', reason: 'a_reason_added_later' }), 'create', 'validation', 'metadataUrl'],
+    [apiError(422, 'validation', { field: 'metadataUrl' }), 'update', 'validation', 'metadataUrl'],
     [apiError(422, 'validation'), 'test', 'idpRefused', null],
     [apiError(400, 'validation'), 'create', 'validation', null],
     [apiError(400, 'validation', { issues: [{ path: ['metadataUrl'], message: 'Invalid url', code: 'invalid_string' }] }), 'create', 'validation', 'metadataUrl'],
@@ -37,6 +47,8 @@ describe('ssoProblem', () => {
     [apiError(429, 'rate_limited'), 'test', 'rateLimited', null],
     [apiError(429, 'whatever'), 'test', 'rateLimited', null],
     [apiError(503, 'unavailable'), 'test', 'unavailable', null],
+    [apiError(503, 'unavailable'), 'create', 'unavailable', null],
+    [apiError(503, 'unavailable'), 'update', 'unavailable', null],
     [apiError(403, 'step_up_required'), 'activate', 'unknown', null],
     [apiError(500, 'internal'), 'load', 'unknown', null],
     [new Error('network'), 'load', 'unknown', null],
@@ -44,7 +56,15 @@ describe('ssoProblem', () => {
     expect(ssoProblem(err, op)).toEqual({ key, field });
   });
 
+  it('words a refused address as the rule it broke', () => {
+    expect(t('admin:sso.errors.urlNotPublic')).toBe('The address must be a public https URL.');
+  });
+
   it('treats a cancelled step-up as nothing to show', () => {
     expect(ssoProblem(new StepUpCancelledError(), 'activate')).toBeNull();
+  });
+
+  it('names a cancelled step-up of the list read, which leaves the page without a list', () => {
+    expect(ssoProblem(new StepUpCancelledError(), 'load')).toEqual({ key: 'stepUpCancelled', field: null });
   });
 });

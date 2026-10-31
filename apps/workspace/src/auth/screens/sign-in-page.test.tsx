@@ -28,7 +28,8 @@ import { SignInPage } from './sign-in-page';
 // SignInPage builds its own AuthApi (the sample one under test); hand it ours.
 const pageApi = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock('./sample-auth-api', () => ({ createSampleAuthApi: () => pageApi.current }));
-vi.mock('../auth-context', () => ({ useAuth: () => ({ refreshPrincipal: vi.fn() }) }));
+const auth = vi.hoisted(() => ({ refreshPrincipal: vi.fn(async () => {}) }));
+vi.mock('../auth-context', () => ({ useAuth: () => auth }));
 
 const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({
@@ -85,11 +86,14 @@ function renderInRouter(component: React.ReactNode) {
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
 
-  return render(
-    <I18nextProvider i18n={testI18n}>
-      <RouterProvider router={router} />
-    </I18nextProvider>,
-  );
+  return {
+    router,
+    ...render(
+      <I18nextProvider i18n={testI18n}>
+        <RouterProvider router={router} />
+      </I18nextProvider>,
+    ),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -739,18 +743,58 @@ describe('SignInPage SSO return reasons', () => {
     expect(testI18n.t('auth:error.ssoDenied')).not.toBe(testI18n.t('auth:error.ssoDenied', { lng: 'en' }));
   });
 
-  it('sso_email_unverified: explains, prefills the address and goes straight to the email code (no discover)', async () => {
+  const HANDLE = 'h'.repeat(43);
+
+  it('sso_email_unverified with a bind handle opens the confirm-email step instead of the address field', async () => {
     const discover = vi.fn();
+    const ssoBindStart = vi.fn().mockResolvedValue({ challengeToken: 'challenge-1', emailMasked: 'm***@acme.example' });
+    pageApi.current = makeAuthApi({ discover, ssoBindStart });
+    renderInRouter(<SignInPage reason="sso_email_unverified" bind={HANDLE} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Confirm your email address' })).toBeInTheDocument();
+    expect(
+      await screen.findByText("Your organisation's sign-in did not confirm m***@acme.example. Enter the code we sent there."),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(ssoBindStart).toHaveBeenCalledWith(HANDLE, 'en'));
+    expect(screen.queryByRole('textbox', { name: /Email address/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  it('after the code, the page refreshes the principal and continues to the path the API returned', async () => {
+    auth.refreshPrincipal.mockClear();
+    pageApi.current = makeAuthApi({
+      ssoBindStart: vi.fn().mockResolvedValue({ challengeToken: 'challenge-1', emailMasked: 'm***@acme.example' }),
+      ssoBindVerify: vi.fn().mockResolvedValue({ returnPath: '/people' }),
+    });
+    const { router } = renderInRouter(<SignInPage reason="sso_email_unverified" bind={HANDLE} returnPath="/elsewhere" />);
+
+    await user.type(await screen.findByLabelText(/Verification code/), '123456');
+    await user.click(screen.getByRole('button', { name: testI18n.t('auth:ssoBind.submit') }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/people'));
+    expect(auth.refreshPrincipal).toHaveBeenCalledTimes(1);
+  });
+
+  it('sso_email_unverified without a handle (a link from before) explains and continues with discovery', async () => {
+    const discover = vi.fn().mockResolvedValue({ method: 'email_otp', ssoStartUrl: null, connection: null });
     const emailOtpStart = vi.fn().mockResolvedValue({ challengeToken: 'tok', codeDeliveryMedium: 'EMAIL' });
     pageApi.current = makeAuthApi({ discover, emailOtpStart });
-    renderInRouter(<SignInPage reason="sso_email_unverified" email="new@acme.example" />);
+    renderInRouter(<SignInPage reason="sso_email_unverified" />);
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.getAllByText(testI18n.t('auth:error.ssoEmailUnverified')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('textbox')).toHaveValue('new@acme.example');
-
+    await user.type(screen.getByRole('textbox'), 'new@acme.example');
     await user.click(screen.getByRole('button', { name: testI18n.t('auth:signIn.submit') }));
-    await waitFor(() => expect(emailOtpStart).toHaveBeenCalledWith('new@acme.example', 'en'));
-    expect(discover).not.toHaveBeenCalled();
+    await waitFor(() => expect(discover).toHaveBeenCalledWith('new@acme.example'));
+  });
+
+  it('sso_rate_limited: says to wait a minute, in the error summary', async () => {
+    pageApi.current = makeAuthApi();
+    renderInRouter(<SignInPage reason="sso_rate_limited" />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Too many sign-in attempts from your network. Wait a minute and try again.').length,
+    ).toBeGreaterThan(0);
   });
 });

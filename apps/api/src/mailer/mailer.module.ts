@@ -4,14 +4,18 @@
  * - SES (`SesMailer`) when `SES_FROM_EMAIL` is set and `NODE_ENV` is not
  *   `test`, the rule the invitation mailer used (D-29). The region follows
  *   `COGNITO_REGION`, as before, and defaults to eu-central-1.
- * - Otherwise `LoggingMailer`.
+ * - Otherwise `LoggingMailer`, which keeps what it was asked to send (`sent`)
+ *   only under `NODE_ENV=test` and in stub auth mode, for assertions.
  *
- * Imported by the modules that send email (today `InvitationsModule`); it is
- * not global.
+ * Global, like the audit and Redis modules: `AppModule` imports it once, the
+ * auth, jobs and invitation modules inject `Mailer` without importing it, and
+ * the worker process boots the same `AppModule`, so the nightly jobs get the
+ * same mailer. Modules that list it in `imports` anyway (appointments,
+ * webinars, calls jobs) are fine: the module is a singleton either way.
  */
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LoggingMailer } from './logging-mailer.js';
+import { keepsSentMail, LoggingMailer } from './logging-mailer.js';
 import { Mailer } from './mailer.js';
 import { SesMailer } from './ses-mailer.js';
 
@@ -28,9 +32,13 @@ export function sesMailerOptions(config: ConfigReader): { fromEmail: string; reg
 
 export function createMailer(config: ConfigReader): Mailer {
   const ses = sesMailerOptions(config);
-  return ses ? new SesMailer(ses) : new LoggingMailer();
+  if (ses) return new SesMailer(ses);
+  return new LoggingMailer({
+    keepSent: keepsSentMail({ NODE_ENV: config.get<string>('NODE_ENV'), AUTH_MODE: config.get<string>('AUTH_MODE') }),
+  });
 }
 
+@Global()
 @Module({
   providers: [
     {

@@ -1,14 +1,15 @@
 /**
- * Confidential professional-interaction domain (T-2.4, section 4.7): private
- * conversations between an employee and the expert assigned to their case,
- * and intake records. Every table is tenant-scoped (RLS) and read only by
- * the professional module, which authorizes each row with a confidential
+ * Confidential professional-interaction domain (T-2.4, section 4.7): cases,
+ * private conversations between an employee and the expert assigned to their
+ * case, and intake records. Every table is tenant-scoped (RLS) and read only
+ * by the professional module, which authorizes each row with a confidential
  * resource before returning it [D-20, CONF-R-03].
  *
- * There is no `cases` table yet: `case_id` is the identifier that CASE
- * assignments target.
+ * Conversations and intake records reference their case together with their
+ * organization, so a row of one organization can never carry the case id of
+ * another: the CASE assignment match on the target id alone stays safe.
  */
-import { index, pgPolicy, pgTable, text } from 'drizzle-orm/pg-core';
+import { foreignKey, index, pgPolicy, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { users } from './identity.js';
 import { organizations } from './organization.js';
 import {
@@ -19,6 +20,30 @@ import {
   tenantPredicateVia,
 } from './_shared.js';
 
+/**
+ * A case of one organization: the target of CASE assignments
+ * (`assignments.target_id`). `(id, org_id)` is unique so that conversations
+ * and intake records reference it together with their own organization.
+ */
+export const cases = pgTable(
+  'cases',
+  {
+    id: idColumn(),
+    orgId: text()
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('cases_id_org_id_key').on(t.id, t.orgId),
+    pgPolicy('cases_tenant_isolation', {
+      for: 'all',
+      using: tenantPredicate(t.orgId),
+      withCheck: tenantPredicate(t.orgId),
+    }),
+  ],
+).enableRLS();
+
 export const conversations = pgTable(
   'conversations',
   {
@@ -26,9 +51,7 @@ export const conversations = pgTable(
     orgId: text()
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-    // TODO(phase-2-readiness): case_id is unconstrained and CASE assignments
-    // match on targetId only. Blocker for any write path: add a
-    // cases(id, org_id) table and FK this column to it.
+    /** A case of the same organization (`conversations_case_org_fk`). */
     caseId: text().notNull(),
     employeeUserId: text()
       .notNull()
@@ -40,6 +63,13 @@ export const conversations = pgTable(
   },
   (t) => [
     index('conversations_case_id_idx').on(t.caseId),
+    foreignKey({
+      columns: [t.caseId, t.orgId],
+      foreignColumns: [cases.id, cases.orgId],
+      name: 'conversations_case_org_fk',
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
     pgPolicy('conversations_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),
@@ -81,9 +111,7 @@ export const intakeRecords = pgTable(
     orgId: text()
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
-    // TODO(phase-2-readiness): case_id is unconstrained and CASE assignments
-    // match on targetId only. Blocker for any write path: add a
-    // cases(id, org_id) table and FK this column to it.
+    /** A case of the same organization (`intake_records_case_org_fk`). */
     caseId: text().notNull(),
     employeeUserId: text()
       .notNull()
@@ -93,6 +121,13 @@ export const intakeRecords = pgTable(
   },
   (t) => [
     index('intake_records_case_id_idx').on(t.caseId),
+    foreignKey({
+      columns: [t.caseId, t.orgId],
+      foreignColumns: [cases.id, cases.orgId],
+      name: 'intake_records_case_org_fk',
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
     pgPolicy('intake_records_tenant_isolation', {
       for: 'all',
       using: tenantPredicate(t.orgId),

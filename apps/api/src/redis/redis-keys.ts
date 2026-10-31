@@ -25,8 +25,11 @@ export const ASSIGNMENTS_TTL = 60;
 /** Org tree cache: 5 min. */
 export const ORG_TREE_TTL = 300;
 
-/** OTP record: 10 min. */
-export const OTP_TTL = 600;
+/**
+ * Time between two NestSelf-sent codes on one challenge: a resend is refused
+ * for this long after the last code went out (`otpResendKey`).
+ */
+export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 /** Challenge record: 5 min. */
 export const CHALLENGE_TTL = 300;
@@ -36,6 +39,27 @@ export const PKCE_TTL = 600;
 
 /** Single-use staff test sign-in of a TESTING SSO connection (`sso_test:{nonce}`). */
 export const SSO_TEST_TTL = 900;
+
+/**
+ * Pending federated binding after an unverified OIDC email (`ssoPendingBindKey`):
+ * 15 min, so a user whose code (`CHALLENGE_TTL`) expired asks for a new one
+ * without signing in at the identity provider again.
+ */
+export const SSO_PENDING_BIND_TTL = 900;
+
+/**
+ * A refused federated bearer's `auth.sign_in.failed` row: one per connection
+ * and pool user in 10 min (`bearerMismatchAuditedKey`). Later refusals in
+ * the window are refused without a row.
+ */
+export const BEARER_MISMATCH_AUDIT_TTL = 600;
+
+/**
+ * SSO signing-certificate expiry alert to `OPS_ALERT_EMAIL`: at most one
+ * mail per connection in 7 days (`ssoCertAlertKey`). The nightly job audits
+ * and logs an expiring certificate every night regardless.
+ */
+export const SSO_CERT_ALERT_TTL = 7 * 24 * 3600;
 
 /** WebSocket ticket: 30 s. */
 export const WS_TICKET_TTL = 30;
@@ -111,9 +135,20 @@ export function orgTreeKey(orgId: string): string {
   return `org_tree:${orgId}`;
 }
 
-/** `otp:{purpose}:{hash}` */
+/**
+ * `otp:{purpose}:{hash}`: a code challenge issued by NestSelf (`NestselfOtpService`).
+ * `hash` is the sha256 of the challenge token; the record lives for `CHALLENGE_TTL`.
+ */
 export function otpKey(purpose: string, hash: string): string {
   return `otp:${purpose}:${hash}`;
+}
+
+/**
+ * `otp_resend:{purpose}:{hash}`: exists while a resend of the code of that
+ * challenge is refused. `hash` is the one of the challenge's `otpKey`.
+ */
+export function otpResendKey(purpose: string, hash: string): string {
+  return `otp_resend:${purpose}:${hash}`;
 }
 
 /** `challenge:{challengeToken}` */
@@ -129,6 +164,43 @@ export function pkceKey(state: string): string {
 /** `sso_test:{nonce}` -> `{ connectionId }`, issued by `POST /ops/sso-connections/:id/test`. */
 export function ssoTestKey(nonce: string): string {
   return `sso_test:${nonce}`;
+}
+
+/**
+ * `sso_pending_bind:{hash}`: a federated sign-in waiting for the user to
+ * confirm the address with a code (`PendingBindStore`). `hash` is the sha256
+ * of the handle on the sign-in URL; the store never holds the handle.
+ */
+export function ssoPendingBindKey(hash: string): string {
+  return `sso_pending_bind:${hash}`;
+}
+
+/**
+ * `sso_bind_start:{hash}`: exists for `OTP_RESEND_COOLDOWN_SECONDS` after a
+ * code went out for the pending binding `sso_pending_bind:{hash}`; until it
+ * expires, another `bind/start` for that binding is refused.
+ */
+export function ssoBindStartKey(hash: string): string {
+  return `sso_bind_start:${hash}`;
+}
+
+/**
+ * `bearer_mismatch_audited:{connectionId}:{subHash}`: the bearer of this pool
+ * user (`subHash`: sha256 hex of the access token's `sub`) was refused for
+ * this connection and audited; for `BEARER_MISMATCH_AUDIT_TTL` further
+ * refusals write no row.
+ */
+export function bearerMismatchAuditedKey(connectionId: string, subHash: string): string {
+  return `bearer_mismatch_audited:${connectionId}:${subHash}`;
+}
+
+/**
+ * `sso_cert_alert:{connectionId}`: the certificate-expiry alert for this SSO
+ * connection was mailed; while the key lives (`SSO_CERT_ALERT_TTL`) the
+ * nightly job mails no other. Deleted again when the mail could not be sent.
+ */
+export function ssoCertAlertKey(connectionId: string): string {
+  return `sso_cert_alert:${connectionId}`;
 }
 
 /** `ws_ticket:{hash}` */

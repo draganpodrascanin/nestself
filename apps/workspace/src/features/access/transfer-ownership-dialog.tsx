@@ -7,15 +7,13 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  Field,
   FormErrorSummary,
-  Select,
   useToast,
 } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
 import type { OrgAdminApi } from '@nestself/api-client';
 import { transferErrorKey } from './access-errors';
-import type { AccessMember } from './access-labels';
+import { MemberPicker } from './member-picker';
 import { useTransferOwnership } from './use-org-admin';
 
 const IDS = {
@@ -28,8 +26,8 @@ export interface TransferOwnershipDialogProps {
   onOpenChange: (open: boolean) => void;
   adminApi: OrgAdminApi;
   orgId: string;
-  /** Active members who can become the owner (the current owner is left out). */
-  members: readonly AccessMember[];
+  /** The current owner, who is left out of the members who can become the owner. */
+  currentUserId: string;
 }
 
 /**
@@ -37,7 +35,7 @@ export interface TransferOwnershipDialogProps {
  * server revokes the caller's owner grant in the same transaction, so the
  * dialog says so before the caller confirms.
  */
-export function TransferOwnershipDialog({ open, onOpenChange, adminApi, orgId, members }: TransferOwnershipDialogProps) {
+export function TransferOwnershipDialog({ open, onOpenChange, adminApi, orgId, currentUserId }: TransferOwnershipDialogProps) {
   const { t } = useTranslation(['workspace', 'common']);
   const { add: addToast } = useToast();
   const transfer = useTransferOwnership(adminApi, orgId);
@@ -93,13 +91,17 @@ export function TransferOwnershipDialog({ open, onOpenChange, adminApi, orgId, m
       >
         <form id={IDS.form} tabIndex={-1} noValidate onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
-          <Field id={IDS.member} label={t('workspace:access.transfer.member')} error={errorFor(IDS.member)} required>
-            <Select
-              options={members.map((m) => ({ value: m.userId, label: m.displayName }))}
-              placeholder={t('workspace:access.assign.choose')}
-              onValueChange={setMemberId}
-            />
-          </Field>
+          <MemberPicker
+            adminApi={adminApi}
+            orgId={orgId}
+            id={IDS.member}
+            label={t('workspace:access.transfer.member')}
+            placeholder={t('workspace:access.assign.choose')}
+            required
+            error={errorFor(IDS.member)}
+            excludeUserId={currentUserId}
+            onValueChange={setMemberId}
+          />
           <Alert tone="info">{t('workspace:access.transfer.confirmation')}</Alert>
           <DialogActions>
             <Button type="button" variant="secondary" onClick={close} disabled={transfer.isPending}>

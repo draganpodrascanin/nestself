@@ -10,6 +10,7 @@ import { Logger } from '@nestjs/common';
 import type { IdpUser, TokenSet } from './identity-provider.service.js';
 import { IdentityProviderError } from './identity-provider.service.js';
 import { createFakeTokenSet } from './fake-token-factory.js';
+import { maskEmail } from '../mailer/mask-email.js';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -66,7 +67,8 @@ export class FakeUserStore {
   readonly users = new Map<string, FakeUser>();
   readonly otps = new Map<string, FakeOtp>();
   readonly refreshTokens = new Map<string, FakeRefreshEntry>();
-  readonly sentCodes: Array<{ email: string; code: string; sentAt: Date }> = [];
+  /** Every code "sent", newest last; `locale` is the language the caller asked for (tests assert it). */
+  readonly sentCodes: Array<{ email: string; code: string; sentAt: Date; locale?: string }> = [];
 
   findUser(email: string): FakeUser | undefined {
     return this.users.get(email.toLowerCase());
@@ -90,12 +92,14 @@ export class FakeUserStore {
     return ts;
   }
 
-  sendOtp(email: string): string {
+  sendOtp(email: string, locale?: string): string {
     const code = String(randomInt(100_000, 1_000_000));
     this.otps.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS });
-    this.sentCodes.push({ email, code, sentAt: new Date() });
+    this.sentCodes.push({ email, code, sentAt: new Date(), locale });
     if (this.sentCodes.length > MAX_SENT_CODES) this.sentCodes.shift();
-    this.logger.log(`Fake identity provider: OTP for ${email} is ${code}`);
+    // Stub mode only (the fake refuses to run in production): the code is how a developer
+    // signs in without mail; the address is masked like every other log line.
+    this.logger.log(`Fake identity provider: OTP for ${maskEmail(email)} is ${code}`);
     return code;
   }
 

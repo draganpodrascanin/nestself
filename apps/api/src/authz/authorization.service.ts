@@ -32,11 +32,21 @@ export class AuthorizationService {
    * Check authorization and throw on denial; once allowed, enforce the
    * action's step-up freshness (403 `step_up_required`).
    * Service-layer equivalent of the AuthorizationGuard.
+   *
+   * A denial is audited, then answered 404 `not_found` when the caller has no
+   * visibility of the resource's organisation (AUTHZ-R-61) and 403 `forbidden`
+   * otherwise. `denyAs: 'not_found'` answers every denial as that same 404.
+   * Reads of confidential records pass it: the row is loaded before the
+   * decision, so "it exists and you may not read it" would tell the caller that
+   * a record exists. The audit row is the same either way (it is for staff;
+   * the answer is for the caller). A stale step-up is not a denial: it stays
+   * 403 `step_up_required`.
    */
   async require(
     principal: Principal,
     action: Action,
     resource: Resource,
+    opts: { denyAs?: 'not_found' } = {},
   ): Promise<void> {
     const ctx = await this.contextLoader.build(principal, resource, { action });
     const decision = authorize(principal, action, resource, ctx);
@@ -70,8 +80,6 @@ export class AuthorizationService {
       }
 
       // Non-context denials: audit the original engine reason (matches guard).
-      const hasVisibility = this.hasOrgVisibility(principal, resource);
-
       await this.audit.record({
         action: 'access.denied',
         actorUserId: principal.userId,
@@ -88,7 +96,7 @@ export class AuthorizationService {
         },
       });
 
-      if (!hasVisibility) {
+      if (opts.denyAs === 'not_found' || !this.hasOrgVisibility(principal, resource)) {
         throw new ApiHttpException({
           status: 404,
           code: 'not_found',

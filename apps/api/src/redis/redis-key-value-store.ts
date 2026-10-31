@@ -24,6 +24,8 @@ type Client = RedisClientType<
 >;
 
 export class RedisKeyValueStore implements KeyValueStore {
+  readonly kind = 'redis';
+
   private readonly client: Client;
   private subscriber: Client | null = null;
 

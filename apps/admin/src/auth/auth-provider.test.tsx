@@ -262,6 +262,74 @@ describe('AuthProvider (admin)', () => {
 // Step-up tests
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Session state: a failed /auth/me is `error`, never a sign-out
+// ---------------------------------------------------------------------------
+
+describe('AuthProvider session state', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the principal and reports status error when a refresh fails with something other than 401', async () => {
+    let callCount = 0;
+    const client = createMockClient(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(sampleMe);
+      return Promise.reject(new Error('Server error'));
+    });
+    renderProvider(client);
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('Platform Admin');
+  });
+
+  it.each([
+    ['an error answer', () => Promise.reject(makeApiError(500, 'internal_error'))],
+    ['no connection', () => Promise.reject(makeApiError(0, 'network'))],
+    ['an answer that is not a session', () => Promise.reject(makeApiError(200, 'invalid_response'))],
+  ])('becomes error, not unauthenticated, when the first /auth/me fails with %s', async (_label, fail) => {
+    renderProvider(createMockClient(fail));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('none');
+  });
+
+  it('recovers when the next refresh succeeds, asking /auth/me again with a timeout', async () => {
+    const requestFn = vi
+      .fn<(path: string, init?: RequestInit) => Promise<unknown>>()
+      .mockRejectedValueOnce(makeApiError(500, 'internal_error'))
+      .mockResolvedValue(sampleMe);
+    renderProvider(createMockClient(requestFn as (...args: unknown[]) => Promise<unknown>));
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('error');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('authenticated');
+    });
+    expect(screen.getByTestId('name').textContent).toBe('Platform Admin');
+    expect(requestFn).toHaveBeenCalledTimes(2);
+    expect(requestFn.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
 const testI18n = i18next.createInstance();
 void testI18n.use(initReactI18next).init({
   lng: 'en',
@@ -285,7 +353,7 @@ function renderStepUp(
 ) {
   const requestFn = vi.fn((path: unknown) => {
     if (path === '/api/auth/step-up/start') {
-      return Promise.resolve({ method: 'email_otp', challengeToken: 'challenge-1', ssoStartUrl: null });
+      return Promise.resolve({ method: 'email_otp', challengeToken: 'challenge-1', ssoStartUrl: null, emailMasked: null });
     }
     if (path === '/api/auth/step-up/verify') return verify();
     return Promise.resolve(sampleMe);
@@ -360,12 +428,13 @@ describe('AuthProvider stepUp()', () => {
     const codeLabel = new RegExp(testI18n.t('auth:stepUp.codeLabel'));
     const submit = { name: testI18n.t('auth:stepUp.submit') };
 
-    // First step-up: submit, then cancel while verify is still in flight.
+    // First step-up: submit, then close the dialog while verify is still in
+    // flight (Cancel is disabled meanwhile; the dialog's close button is not).
     await user.click(screen.getByRole('button', { name: 'do sensitive thing' }));
     await user.type(await screen.findByLabelText(codeLabel), '1'.repeat(EMAIL_OTP_MAX_LENGTH));
     await user.click(screen.getByRole('button', submit));
     await waitFor(() => expect(verify).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole('button', { name: testI18n.t('auth:stepUp.cancel') }));
+    await user.click(screen.getByRole('button', { name: testI18n.t('common:nav.close') }));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(false));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 

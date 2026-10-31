@@ -3,13 +3,14 @@
  * unscoped (`dbs.db`, system context) because the professional module
  * authorizes each loaded row with `AuthorizationService.require` before
  * returning anything; RLS stays the defense in depth for scoped callers.
- * The create methods serve the seed and tests.
+ * The create methods serve the seed and tests; a conversation or an intake
+ * record is created after its case (`createCase`).
  */
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db.service.js';
-import { conversationMessages, conversations, intakeRecords } from '../schema/index.js';
+import { cases, conversationMessages, conversations, intakeRecords } from '../schema/index.js';
 
 export type ConversationRow = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
@@ -113,7 +114,17 @@ export class ProfessionalRepository {
     return row ?? null;
   }
 
+  /**
+   * Insert the case unless its id exists. An existing case is never moved to
+   * another organization: a row that names it from another organization is
+   * then refused by the composite foreign key.
+   */
+  async createCase(input: { id: string; orgId: string }, tx?: DbExecutor): Promise<void> {
+    await this.exec(tx).insert(cases).values(input).onConflictDoNothing({ target: cases.id });
+  }
+
   async createConversation(values: NewConversation, tx?: DbExecutor): Promise<ConversationRow> {
+    await this.createCase({ id: values.caseId, orgId: values.orgId }, tx);
     const [row] = await this.exec(tx).insert(conversations).values(values).returning();
     return row!;
   }
@@ -124,6 +135,7 @@ export class ProfessionalRepository {
   }
 
   async createIntake(values: NewIntakeRecord, tx?: DbExecutor): Promise<IntakeRecordRow> {
+    await this.createCase({ id: values.caseId, orgId: values.orgId }, tx);
     const [row] = await this.exec(tx).insert(intakeRecords).values(values).returning();
     return row!;
   }

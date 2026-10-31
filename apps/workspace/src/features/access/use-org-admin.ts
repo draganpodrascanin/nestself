@@ -29,7 +29,8 @@ const MEMBER_PAGE_SIZE = 100;
 export const accessKeys = {
   org: (orgId: string) => ['org-admin', orgId] as const,
   grants: (orgId: string) => ['org-admin', orgId, 'grants'] as const,
-  members: (orgId: string) => ['org-admin', orgId, 'members'] as const,
+  /** An empty `search` is the plain list the screen itself reads. */
+  members: (orgId: string, search = '') => ['org-admin', orgId, 'members', search] as const,
   preview: (orgId: string, userId: string) => ['org-admin', orgId, 'preview', userId] as const,
 };
 
@@ -41,11 +42,21 @@ export function useGrants(adminApi: OrgAdminApi, orgId: string | null) {
   });
 }
 
-export function useMembers(adminApi: OrgAdminApi, orgId: string | null) {
+/**
+ * Active members, the first `MEMBER_PAGE_SIZE` of them. `search` narrows the
+ * list on the server (a prefix of the name or the email); it is sent as typed,
+ * because the API escapes `%`, `_` and `\` itself. Without a search this is the
+ * plain list the screen reads for the names in its table.
+ */
+export function useMembers(adminApi: OrgAdminApi, orgId: string | null, search = '') {
   return useQuery({
-    queryKey: accessKeys.members(orgId ?? ''),
+    queryKey: accessKeys.members(orgId ?? '', search),
     queryFn: async (): Promise<AccessMember[]> => {
-      const page = await adminApi.listMembers(orgId!, { status: 'ACTIVE', limit: MEMBER_PAGE_SIZE });
+      const page = await adminApi.listMembers(orgId!, {
+        status: 'ACTIVE',
+        limit: MEMBER_PAGE_SIZE,
+        ...(search ? { search } : {}),
+      });
       return page.items.map((m) => ({ userId: m.userId, displayName: m.displayName }));
     },
     enabled: orgId !== null,

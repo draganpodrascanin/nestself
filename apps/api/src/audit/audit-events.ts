@@ -23,6 +23,11 @@ export const AUDIT_ACTIONS = [
   'identity.unlinked',
   /** An SSO sign-in matched no identity, invitation or JIT rule; the orphan IdP user was deleted (SSO-R-10). */
   'identity.denied',
+  /**
+   * An OIDC sign-in without `email_verified` is pending: the binding waits
+   * for the user to confirm the address with a NestSelf code (SSO-R-08).
+   */
+  'identity.verification_started',
   'invitation.created',
   'invitation.accepted',
   'invitation.revoked',

@@ -50,7 +50,7 @@ export const organizations = pgTable(
     financialStepUpThresholdMinor: integer(),
     /** Per-organization reporting cohort threshold; null falls back to the platform default (F-03). */
     cohortThreshold: integer(),
-    /** Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED. */
+    /** Lifecycle state: ONBOARDING, ACTIVE, SUSPENDED, ENDED (`organizations_status_check`). */
     status: text().notNull().default('ACTIVE'),
     /**
      * What an employee's confirmation of a follow-up does (D-CW-37):
@@ -68,6 +68,7 @@ export const organizations = pgTable(
       'organizations_follow_up_approval_policy_check',
       sql`${t.followUpApprovalPolicy} in ('AUTOMATIC', 'MANAGER_APPROVAL')`,
     ),
+    check('organizations_status_check', sql`${t.status} in ('ONBOARDING','ACTIVE','SUSPENDED','ENDED')`),
   ],
 );
 

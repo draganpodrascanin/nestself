@@ -128,7 +128,10 @@ export interface JwtClaims {
   jti?: string;
   origin_jti?: string;
   client_id?: string;
+  /** Access-token claim; a real Cognito ID token does not carry it. */
   username?: string;
+  /** ID-token claim: the pool username (federated users: `<providerName>_<subject>`). */
+  'cognito:username'?: string;
   token_use?: string;
   email?: string;
   email_verified?: boolean;

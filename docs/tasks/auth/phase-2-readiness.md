@@ -22,6 +22,7 @@ Phase 2 was carried out on `feat/auth-foundation` following `docs/superpowers/pl
 | T-2.12 Weekly Cognito user export | Deferred | Needs the S3 archive bucket (staging) | |
 | Compliance track (T-C.x) | Owner decision | Unchanged; must land before the first real employee signs in | |
 | Phase 3 SSO | Done locally; live IdP test pending | See "Phase 3 status" below | |
+| Phase 4 pilot readiness and auth debts | Done locally; deployment and the live IdP test pending | See "Phase 4 status" below | |
 
 ### UI coverage (2026-10-25)
 
@@ -66,6 +67,33 @@ Enterprise SSO (`docs/superpowers/plans/2026-10-25-auth-phase-3-sso.md`, branch 
 | T5 Admin SSO page | Done | `/sso` list, detail, create, edit, domains, test, activate, suspend; sample fixture; four locales | `4aa0293`, `d19573a`, `c76349a` |
 | T6 Certificate-expiry job, docs | Done | `sso.certificate-expiry` (03:00), screenshots, guides, runbook amendment | `f4d7e06` and the `docs(auth): enterprise SSO` commit |
 | T-3.4 Live IdP test | Pending pilot | Needs a pilot employer's IdP, domains and a test account (`implementation.md` section 22.13) | |
+
+### Phase 4 status (2026-10-31)
+
+Pilot readiness and auth debts (design `docs/superpowers/specs/2026-10-30-auth-phase-4-pilot-readiness-design.md`, plan `docs/superpowers/plans/2026-10-30-auth-phase-4-pilot-readiness.md`, branch `feat/auth-p2`). Everything runs locally and against the fake identity provider; nothing was deployed. What shipped is in `docs/auth/implementation.md` (section 21 lists what closed and what is left, with a reason each; section 23 is the new mailer). Commit ranges are `base..head`, the head included.
+
+| Task | Title | Status | Commits |
+| --- | --- | --- | --- |
+| 1 | Contracts, schema and migrations | Done | `f78d658..031061f` |
+| 2 | Email module: `Mailer` port, templates, SES and logging adapters | Done | `031061f..588f1f2` |
+| 3 | NestSelf-issued one-time codes | Done | `588f1f2..91d13b0` |
+| 4 | Audit rows in the caller's transaction; sweepers continue past failures | Done | `91d13b0..8f80b00` |
+| 5 | Throttling: trackers, Redis storage, redirect on 429, trust proxy | Done | `8f80b00..268c494` |
+| 6 | Step-up for federated users, `step_up_unavailable`, locale, resend, lockout; the web dialog | Done | `268c494..84e9e93` |
+| 7 | Binding connection on the identity; `cognito:username` | Done | `84e9e93..93e0aff` |
+| 8 | Pending binding after an unverified OIDC email (API and web) | Done | `93e0aff..f44048a` |
+| 9 | Federated users on mobile: `bind-token` and bearer resolution | Done | `f44048a..4f833b1` |
+| 10 | Certificates: metadata fetcher with SSRF guard, refresh points, ops alert, `SUSPENDED → TESTING` | Done | `4f833b1..c2b8fd5` |
+| 11 | Admin SSO screen | Done | `c2b8fd5..6c4d12d` |
+| 12 | Invitation import buckets, `@Authorize` any-of, member search escaping | Done | `6c4d12d..70794e4` |
+| 13 | Confidential reads without an existence oracle; health indicator | Done | `70794e4..30e5e01` |
+| 14 | Web: access route gate, `/auth/me` resilience, import reasons, member search | Done | `30e5e01..e4828c1`, fix `8141da3` |
+| 15 | CDK: Cognito custom domain, environment, ALB restricted to CloudFront | Done (synthesized and tested, not deployed) | `e4828c1..c5a9c4c` |
+| 16 | Documentation, screenshots and PDFs | Done | the `docs(auth): phase 4 documented; screenshots and PDFs rebuilt` commit, fix `docs(auth): CDK setup no longer claims the invitation link is logged` |
+| 17 | User guides: one tutorial PDF per role | Done | the commits `docs(auth): per-role tutorial guides with screenshots, as PDFs`, `docs(auth): guide pictures legible, every step pictured, SSO onboarding on one connection` and `docs(auth): a guide step and its picture stay on one page` |
+| Final review | Fixes from the whole-branch review | Done | the commits `fix(auth): invitation links open the accept screen, SSO reads behind step-up, picker keeps its choice, address-free logs, example domains`, `fix(auth): step-up codes bound to their session, invitation audit inside its transaction, cheaper native bearer path, unthrottled health checks`, `docs(auth): guides corrected, stale sentences fixed, PDFs rebuilt` and `test(infra,web): certificate region checked at synth, alias target and cdk.json flag asserted, web parity check` |
+
+Owner confirmations after this phase (`implementation.md` section 17.2): `cdk diff NestSelf-dev-Auth -c stage=dev -c account=$AWS_ACCOUNT_DEV` shows no differences before the next dev deploy (phase 4 left the dev template unchanged); after the first staging and production deploys, the load balancer refuses traffic that does not come through CloudFront (`CDK-setup.md` 8.6 step 2); the Cognito custom domain is deployed before the first employer configures its identity provider. The live IdP test (T-3.4) waits for the pilot organisation (`implementation.md` section 22.13).
 
 New owner decisions raised by phase 2 are in section 4 below. The rest of this document is the work list as it stood on 2026-10-23 and is kept for its reasoning.
 
@@ -174,7 +202,7 @@ Resolved on 2026-10-24: who administers grants inside an organization. Exactly o
 | Who may approve emergency access, and is a second approver required? | T-2.5 request and approval flow | `platform_owner` approves; one approver |
 | Staging deployment date | T-2.8, T-2.9, T-2.11 and the real SES, S3 and WAF behaviour | Local development continues; use `cdk synth -c platform=true` to keep the stacks reviewed |
 | Step-up method for the `emergency` class (raised 2026-10-24) | The strategy asks for an authenticator; Cognito cannot issue one without a password first | Email code for every class |
-| A `cases(id, org_id)` table before conversation writes (raised 2026-10-24) | `case_id` has no organization binding; blocks any route that creates conversations or intakes | No write routes |
+| A `cases(id, org_id)` table before conversation writes (raised 2026-10-24) | Resolved by phase 4, Task 1: migration `0017` (`0007` on the branch) adds the table with composite foreign keys from `conversations` and `intake_records` | |
 
 ## 5. Definition of done for phase 2
 

@@ -24,7 +24,8 @@ import type { OrgAdminApi } from '@nestself/api-client';
 import { accessErrorKey } from './access-errors';
 import type { AccessErrorKey } from './access-errors';
 import { templateLabel } from './access-labels';
-import type { AccessMember, AccessOrgUnit } from './access-labels';
+import type { AccessOrgUnit } from './access-labels';
+import { MemberPicker } from './member-picker';
 import { useCreateGrant } from './use-org-admin';
 
 type OrgScope = 'organization' | 'org_unit';
@@ -63,7 +64,6 @@ export interface AssignTemplateDialogProps {
   onOpenChange: (open: boolean) => void;
   adminApi: OrgAdminApi;
   orgId: string;
-  members: readonly AccessMember[];
   orgUnits: readonly AccessOrgUnit[];
 }
 
@@ -72,7 +72,6 @@ export function AssignTemplateDialog({
   onOpenChange,
   adminApi,
   orgId,
-  members,
   orgUnits,
 }: AssignTemplateDialogProps) {
   const { t } = useTranslation(['workspace', 'common']);
@@ -210,13 +209,16 @@ export function AssignTemplateDialog({
         <form id={IDS.form} tabIndex={-1} noValidate onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
 
-          <Field id={IDS.member} label={t('workspace:access.assign.member')} error={errorFor(IDS.member)} required>
-            <Select
-              options={members.map((m) => ({ value: m.userId, label: m.displayName }))}
-              placeholder={t('workspace:access.assign.choose')}
-              onValueChange={setMemberId}
-            />
-          </Field>
+          <MemberPicker
+            adminApi={adminApi}
+            orgId={orgId}
+            id={IDS.member}
+            label={t('workspace:access.assign.member')}
+            placeholder={t('workspace:access.assign.choose')}
+            required
+            error={errorFor(IDS.member)}
+            onValueChange={setMemberId}
+          />
 
           <Field id={IDS.template} label={t('workspace:access.assign.template')} error={errorFor(IDS.template)} required>
             <Select

@@ -8,6 +8,8 @@
  *   works; 111111 triggers the invalid-code error so that state is reviewable.
  * - user_milica@example.com / user_nikola@example.com -> password -> totp.
  * - Unknown addresses behave like employees (email_otp).
+ * - There is no federated sign-in with sample data, so no sign-in is ever
+ *   waiting for an email code: the confirm-email step says the link expired.
  */
 import { ApiError } from '@nestself/api-client';
 import type { AuthApi } from '@nestself/api-client';
@@ -16,6 +18,23 @@ const PASSWORD_EMAILS = ['user_milica@example.com', 'user_nikola@example.com'];
 const FAKE_TOKEN = 'sample-challenge-token';
 
 type Resolved<K extends keyof AuthApi> = Awaited<ReturnType<AuthApi[K]>>;
+
+const SAMPLE_STEP_UP: Resolved<'stepUpStart'> = {
+  method: 'email_otp',
+  challengeToken: FAKE_TOKEN,
+  ssoStartUrl: null,
+  emailMasked: null,
+};
+
+/** What the API answers for a handle it does not know. */
+async function noPendingSignIn(): Promise<never> {
+  throw new ApiError({
+    status: 400,
+    code: 'invalid_challenge',
+    message: 'Challenge expired or invalid',
+    requestId: null,
+  });
+}
 
 export function createSampleAuthApi(): AuthApi {
   return {
@@ -43,6 +62,12 @@ export function createSampleAuthApi(): AuthApi {
       // Any other 6-digit code succeeds
       return {} as Resolved<'emailOtpVerify'>;
     },
+
+    ssoBindStart: noPendingSignIn,
+    ssoBindVerify: noPendingSignIn,
+    ssoBindResend: noPendingSignIn,
+    // The mobile app's binding; the web never calls it.
+    ssoBindToken: noPendingSignIn,
 
     password: async () =>
       // Password users always proceed to TOTP challenge
@@ -81,8 +106,9 @@ export function createSampleAuthApi(): AuthApi {
     updateLocale: async () => ({}) as unknown as Resolved<'updateLocale'>,
     updateDisplayName: async () => ({}) as unknown as Resolved<'updateDisplayName'>,
 
-    stepUpStart: async () =>
-      ({ challengeToken: FAKE_TOKEN }) as unknown as Resolved<'stepUpStart'>,
+    // No address is shown in sample mode: emailMasked null keeps the general description.
+    stepUpStart: async () => SAMPLE_STEP_UP,
+    stepUpResend: async () => SAMPLE_STEP_UP,
     stepUpVerify: async () => undefined as unknown as Resolved<'stepUpVerify'>,
 
     invitationPreview: async () => ({}) as unknown as Resolved<'invitationPreview'>,

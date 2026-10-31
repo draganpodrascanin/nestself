@@ -31,7 +31,7 @@ import { AuditWriter } from '../audit/audit-writer.js';
 import { authorize } from './authorize.js';
 import { denialCode } from './context.js';
 import { ApiHttpException } from '../common/api-error.js';
-import type { Principal, Resource } from '@nestself/contracts';
+import type { Action, Decision, Principal, Resource } from '@nestself/contracts';
 import { STEP_UP_CLASS_BY_ACTION } from '@nestself/contracts';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import { assertStepUpFresh } from './step-up-freshness.js';
@@ -103,21 +103,25 @@ export class AuthorizationGuard implements CanActivate {
     };
     const resource = await meta.resolver(req, principal, deps);
 
-    // Build context and authorize
-    const ctx = await this.contextLoader.build(principal, resource, {
-      action: meta.action,
-    });
-    const decision = authorize(principal, meta.action, resource, ctx);
-
-    // Annotate the step-up class; enforced below once the action is allowed.
-    const stepUpClass = STEP_UP_CLASS_BY_ACTION[meta.action];
-    if (stepUpClass) {
-      req.stepUpClass = stepUpClass;
+    // Build context and authorize. The route lists the actions that may open
+    // it: any one is enough, so they are evaluated in order and the first that
+    // allows decides. When none does, the first denial is the one reported.
+    let allowedBy: Action | undefined;
+    let firstDenial: Decision | undefined;
+    for (const action of meta.actions) {
+      const ctx = await this.contextLoader.build(principal, resource, { action });
+      const decision = authorize(principal, action, resource, ctx);
+      if (decision.allowed) {
+        allowedBy = action;
+        break;
+      }
+      firstDenial ??= decision;
     }
 
-    if (!decision.allowed) {
-      // Context expiry mapping via shared denialCode helper (I2).
-      const code = denialCode(principal, decision.denialReason ?? 'forbidden');
+    if (allowedBy === undefined) {
+      // Context expiry mapping via shared denialCode helper (I2): an invalid or
+      // expired organisation context is answered as such, never as 404.
+      const code = denialCode(principal, firstDenial?.denialReason ?? 'forbidden');
       if (code === 'invalid_context' || code === 'org_context_expired') {
         await this.audit.record({
           action: 'access.denied',
@@ -128,7 +132,8 @@ export class AuthorizationGuard implements CanActivate {
           recordId: resource.id ?? 'unknown',
           result: 'DENIED',
           details: {
-            actionAttempted: meta.action,
+            actionAttempted: meta.actions[0],
+            ...(meta.actions.length > 1 ? { alternatives: meta.actions } : {}),
             resourceType: resource.type,
             resourceId: resource.id,
             reason: code,
@@ -155,10 +160,12 @@ export class AuthorizationGuard implements CanActivate {
         recordId: resource.id ?? 'unknown',
         result: 'DENIED',
         details: {
-          actionAttempted: meta.action,
+          actionAttempted: meta.actions[0],
+          // Only a route with alternatives names them; a single action keeps its audit row as it was.
+          ...(meta.actions.length > 1 ? { alternatives: meta.actions } : {}),
           resourceType: resource.type,
           resourceId: resource.id,
-          reason: decision.denialReason,
+          reason: firstDenial?.denialReason,
         },
       });
 
@@ -177,7 +184,13 @@ export class AuthorizationGuard implements CanActivate {
       });
     }
 
-    await assertStepUpFresh(principal, meta.action, this.store);
+    // Annotate the step-up class of the action that allowed the request and
+    // enforce its freshness.
+    const stepUpClass = STEP_UP_CLASS_BY_ACTION[allowedBy];
+    if (stepUpClass) {
+      req.stepUpClass = stepUpClass;
+    }
+    await assertStepUpFresh(principal, allowedBy, this.store);
 
     return true;
   }

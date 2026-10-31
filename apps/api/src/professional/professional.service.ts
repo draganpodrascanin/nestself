@@ -6,6 +6,10 @@
  * `access.denied` with identifiers only. Message bodies and intake text are
  * never logged or written to audit details.
  *
+ * The row is loaded before the decision, so a denial is answered as 404, the
+ * same error as a missing id (`denyAs: 'not_found'`): a caller cannot tell a
+ * record they may not read from one that does not exist, whatever their role.
+ *
  * The two list routes return metadata only (no message body). Candidate
  * rows come from the caller's current CASE / SUPPORT_CASE assignments
  * (expert list) or from `employeeUserId = caller` (participant list); each
@@ -65,6 +69,9 @@ function notFound(): ApiHttpException {
   return new ApiHttpException({ status: 404, code: 'not_found', message: 'Resource not found' });
 }
 
+/** Passed to every single-record read: a denial must look exactly like `notFound()`. */
+const DENY_AS_NOT_FOUND = { denyAs: 'not_found' } as const;
+
 @Injectable()
 export class ProfessionalService {
   constructor(
@@ -109,7 +116,12 @@ export class ProfessionalService {
   async readAssignedIntake(principal: Principal, id: string): Promise<IntakeView> {
     const row = await this.repo.findIntake(id);
     if (!row) throw notFound();
-    await this.authz.require(principal, 'conversation.read.assigned', confidentialResource('intake', row));
+    await this.authz.require(
+      principal,
+      'conversation.read.assigned',
+      confidentialResource('intake', row),
+      DENY_AS_NOT_FOUND,
+    );
     return toIntakeView(row);
   }
 
@@ -143,7 +155,7 @@ export class ProfessionalService {
   private async readConversation(principal: Principal, id: string, action: Action): Promise<ConversationView> {
     const row = await this.repo.findConversation(id);
     if (!row) throw notFound();
-    await this.authz.require(principal, action, confidentialResource('conversation', row));
+    await this.authz.require(principal, action, confidentialResource('conversation', row), DENY_AS_NOT_FOUND);
     return toConversationView(row, await this.repo.listMessages(row.id));
   }
 }

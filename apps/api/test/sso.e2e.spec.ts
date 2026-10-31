@@ -2,9 +2,12 @@
  * SSO connection management e2e tests (auth phase 3, Task 3): the staff
  * lifecycle DRAFT -> TESTING -> ACTIVE -> SUSPENDED -> ACTIVE over HTTP,
  * DNS domain verification with the fake resolver, provider registration in
- * the fake identity provider, Review Focus 3 (domain on another connection)
- * and 5 (provider name length and collision), the per-organization slug
- * reservation and the ACTIVE -> TESTING move on a provider change (SSO-R-01).
+ * the fake identity provider, Review Focus 3 (domain on another connection),
+ * 4 (a metadata URL on a host that resolves to a public and a private
+ * address) and 5 (provider name length and collision), the per-organization
+ * slug reservation, the ACTIVE -> TESTING and SUSPENDED -> TESTING moves on
+ * a provider change (SSO-R-01) and the certificate expiry read from the
+ * fetched metadata (the fake metadata fetcher).
  *
  * Requires TEST_DATABASE_URL (PostgreSQL). Skipped otherwise.
  */
@@ -18,11 +21,14 @@ import { and, eq, like } from 'drizzle-orm';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
+import { SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js';
 import { computeTotp } from '../src/identity/totp.js';
 import { seed } from '../src/db/seed/seed-lib.js';
 import { auditEvents, externalIdentities, grants, organizations } from '../src/db/schema/index.js';
 import { SsoRepository } from '../src/db/repositories/sso.repository.js';
 import { DNS_TXT_RESOLVER, type FakeDnsTxtResolver } from '../src/sso/dns-txt-resolver.js';
+import type { FakeMetadataFetcher } from '../src/sso/fake-metadata-fetcher.js';
+import { METADATA_FETCHER } from '../src/sso/metadata-fetcher.js';
 import { resetThrottlerStorage } from './throttler-reset.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
@@ -35,11 +41,14 @@ const NIKOLA_EMAIL = 'user_nikola@example.com';
 const IVANA_EMAIL = 'user_ivana@example.com';
 const TEMP_PASSWORD = 'TempPassword1!';
 const METADATA_URL = 'https://idp.acme.example/metadata';
+/** Resolves to one public and one private address (Review Focus 4). */
+const MIXED_HOST = 'idp.mixed.example';
 
 describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
   let app: INestApplication;
   let idp: FakeIdentityProvider;
   let dns: FakeDnsTxtResolver;
+  let metadata: FakeMetadataFetcher;
   let testDb: TestDatabase;
   const jwtSecret = randomBytes(32).toString('hex');
 
@@ -72,6 +81,11 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
 
     idp = app.get(IdentityProviderService) as FakeIdentityProvider;
     dns = app.get<FakeDnsTxtResolver>(DNS_TXT_RESOLVER);
+    // Stub mode: every metadata URL serves the fixture (signing certificate until
+    // SIGNING_CERT_NOT_AFTER); only the hosts below resolve to private addresses.
+    metadata = app.get<FakeMetadataFetcher>(METADATA_FETCHER);
+    metadata.setAddresses(MIXED_HOST, ['203.0.113.10', '10.0.0.1']);
+    metadata.setAddresses('login.internal.example', ['10.20.30.40']);
     idp.seedUsers([
       { email: NIKOLA_EMAIL, password: TEMP_PASSWORD, temporaryPassword: TEMP_PASSWORD },
       { email: IVANA_EMAIL },
@@ -233,7 +247,7 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     for (const e of events) expect(JSON.stringify(e.details)).not.toContain(token);
   });
 
-  it('test registers the provider in the identity provider and moves to TESTING', async () => {
+  it('test registers the provider in the identity provider, moves to TESTING and stores the fetched certificate expiry', async () => {
     const res = await post(`/${connectionId}/test`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -252,7 +266,10 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(list.body.items.find((c: { id: string }) => c.id === connectionId)).toMatchObject({
       status: 'TESTING',
       domains: [{ id: domainId, domain: 'acme.example' }],
+      // Read from the fixture metadata the stub fetcher serves at METADATA_URL.
+      certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString(),
     });
+    expect(metadata.fetched).toContain(METADATA_URL);
   });
 
   it('activation is refused until a test sign-in has bound: 409 sso_connection_state', async () => {
@@ -330,6 +347,84 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect((await post(`/${connectionId}/test`)).status).toBe(200);
     await app.get(SsoRepository).updateConnection(connectionId, { lastTestedAt: new Date() });
     expect((await post(`/${connectionId}/activate`)).status).toBe(200);
+  });
+
+  it('a provider change on a SUSPENDED connection moves it to TESTING; reactivation needs a new test sign-in (SSO-R-01)', async () => {
+    const auditOf = async (action: 'sso_connection.changed' | 'sso_connection.deactivated') =>
+      testDb.db
+        .select()
+        .from(auditEvents)
+        .where(and(eq(auditEvents.recordId, connectionId), eq(auditEvents.action, action)));
+    expect((await patch(`/${connectionId}`, { status: 'SUSPENDED' })).status).toBe(200);
+    const deactivationsBefore = (await auditOf('sso_connection.deactivated')).length;
+
+    const res = await patch(`/${connectionId}`, { metadataUrl: 'https://idp.acme.example/metadata-v3' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'TESTING',
+      lastTestedAt: null,
+      metadataUrl: 'https://idp.acme.example/metadata-v3',
+      certificateExpiresAt: SIGNING_CERT_NOT_AFTER.toISOString(),
+    });
+    expect((await auditOf('sso_connection.changed')).map((e) => e.details)).toContainEqual({ from: 'SUSPENDED', to: 'TESTING' });
+    // It was not routable while suspended: leaving SUSPENDED is no deactivation.
+    expect(await auditOf('sso_connection.deactivated')).toHaveLength(deactivationsBefore);
+    const reactivate = await patch(`/${connectionId}`, { status: 'ACTIVE' });
+    expect(reactivate.status).toBe(409);
+    expect(reactivate.body.code).toBe('sso_connection_state');
+    expect((await post(`/${connectionId}/activate`)).status).toBe(409);
+
+    // Back to ACTIVE through the normal path for the tests below.
+    expect((await post(`/${connectionId}/test`)).status).toBe(200);
+    await app.get(SsoRepository).updateConnection(connectionId, { lastTestedAt: new Date() });
+    expect((await post(`/${connectionId}/activate`)).status).toBe(200);
+  });
+
+  it('refuses an http: metadata URL or issuer in the request body: the body schema answers 400 validation, nothing changes', async () => {
+    const create = await post('', { orgId: ORG, slug: 'plainhttp', protocol: 'SAML', metadataUrl: 'http://idp.acme.example/metadata' });
+    expect(create.status).toBe(400);
+    expect(create.body.code).toBe('validation');
+    expect(await app.get(SsoRepository).findConnectionByProviderName('org-plainhttp-saml')).toBeNull();
+
+    const update = await patch(`/${connectionId}`, { metadataUrl: 'http://idp.acme.example/metadata-v4' });
+    expect(update.status).toBe(400);
+    expect(update.body.code).toBe('validation');
+    const issuer = await patch(`/${connectionId}`, { oidcIssuer: 'http://login.acme.example' });
+    expect(issuer.status).toBe(400);
+    expect(issuer.body.code).toBe('validation');
+    expect(await app.get(SsoRepository).findConnection(connectionId)).toMatchObject({
+      status: 'ACTIVE',
+      metadataUrl: 'https://idp.acme.example/metadata-v3',
+      oidcIssuer: null,
+    });
+  });
+
+  it('refuses a metadata URL or issuer whose host is not public: 422 validation with details.field (Review Focus 4)', async () => {
+    const mixedUrl = `https://${MIXED_HOST}/metadata`;
+    const create = await post('', { orgId: ORG, slug: 'mixed', protocol: 'SAML', metadataUrl: mixedUrl });
+    expect(create.status).toBe(422);
+    expect(create.body).toMatchObject({ code: 'validation', details: { field: 'metadataUrl', reason: 'private_address' } });
+    expect(await app.get(SsoRepository).findConnectionByProviderName('org-mixed-saml')).toBeNull();
+
+    const update = await patch(`/${connectionId}`, { metadataUrl: mixedUrl });
+    expect(update.status).toBe(422);
+    expect(update.body).toMatchObject({ code: 'validation', details: { field: 'metadataUrl', reason: 'private_address' } });
+    expect(await app.get(SsoRepository).findConnection(connectionId)).toMatchObject({
+      status: 'ACTIVE',
+      metadataUrl: 'https://idp.acme.example/metadata-v3',
+    });
+
+    const oidc = await post('', {
+      orgId: ORG,
+      slug: 'internal',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.internal.example',
+      oidcClientId: 'client-internal',
+    });
+    expect(oidc.status).toBe(422);
+    expect(oidc.body).toMatchObject({ code: 'validation', details: { field: 'oidcIssuer', reason: 'private_address' } });
+    expect(metadata.fetched.some((url) => url.includes(MIXED_HOST))).toBe(false);
   });
 
   it('a provider name freed by a protocol switch stays reserved for its organization: another org gets 409 provider_name_taken', async () => {
@@ -430,6 +525,68 @@ describe.skipIf(!shouldRun)('SSO connection management (e2e)', () => {
     expect(JSON.stringify(res.body)).not.toContain('e2e-oidc-secret-value');
     const events = await testDb.db.select().from(auditEvents).where(like(auditEvents.action, 'sso_%'));
     expect(JSON.stringify(events)).not.toContain('e2e-oidc-secret-value');
+  });
+
+  it('oidcEmailVerifiedClaimRequired defaults to true, and PATCH true -> false -> true stores, answers and audits it', async () => {
+    const created = await post('', {
+      orgId: ORG,
+      slug: 'claim',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.claim.example',
+      oidcClientId: 'client-claim',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.oidcEmailVerifiedClaimRequired).toBe(true);
+    const id = created.body.id as string;
+    const stored = async () => (await app.get(SsoRepository).findConnection(id))!.oidcEmailVerifiedClaimRequired;
+
+    const off = await patch(`/${id}`, { oidcEmailVerifiedClaimRequired: false });
+    expect(off.status).toBe(200);
+    expect(off.body).toMatchObject({ status: 'DRAFT', oidcEmailVerifiedClaimRequired: false });
+    expect(await stored()).toBe(false);
+    const listed = await nikola.agent.get('/api/ops/sso-connections').query({ orgId: ORG });
+    expect(listed.body.items.find((c: { id: string }) => c.id === id).oidcEmailVerifiedClaimRequired).toBe(false);
+
+    const on = await patch(`/${id}`, { oidcEmailVerifiedClaimRequired: true });
+    expect(on.status).toBe(200);
+    expect(on.body.oidcEmailVerifiedClaimRequired).toBe(true);
+    expect(await stored()).toBe(true);
+
+    const updates = await testDb.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.recordId, id), eq(auditEvents.action, 'sso_connection.updated')));
+    expect(updates.map((e) => e.details)).toEqual(
+      expect.arrayContaining([
+        { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: false },
+        { fields: ['oidcEmailVerifiedClaimRequired'], oidcEmailVerifiedClaimRequired: true },
+      ]),
+    );
+    expect(updates).toHaveLength(2);
+  });
+
+  it('a client secret PATCHed onto a DRAFT OIDC connection stages the provider: 200, still DRAFT', async () => {
+    const created = await post('', {
+      orgId: ORG,
+      slug: 'stage',
+      protocol: 'OIDC',
+      oidcIssuer: 'https://login.stage.example',
+      oidcClientId: 'client-stage',
+    });
+    expect(created.status).toBe(201);
+    expect(await idp.listProviders()).not.toContain('org-stage-oidc');
+
+    const res = await patch(`/${created.body.id as string}`, { oidcClientSecret: 'e2e-staged-secret' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'DRAFT', cognitoProviderName: 'org-stage-oidc' });
+    expect(JSON.stringify(res.body)).not.toContain('e2e-staged-secret');
+    expect(await idp.listProviders()).toContain('org-stage-oidc');
+    expect(await idp.describeProvider('org-stage-oidc')).toMatchObject({ name: 'org-stage-oidc', protocol: 'OIDC' });
+
+    // Another field on the staged DRAFT keeps the registration.
+    const switched = await patch(`/${created.body.id as string}`, { oidcEmailVerifiedClaimRequired: false });
+    expect(switched.status).toBe(200);
+    expect(await idp.listProviders()).toContain('org-stage-oidc');
   });
 
   it('an unknown connection is 404', async () => {

@@ -79,7 +79,7 @@ export class ApprovalAuthoritiesService {
         },
         tx,
       );
-      await this.recordChange(row, actor, 'created', providedFields(body));
+      await this.recordChange(row, actor, 'created', providedFields(body), tx);
       return row;
     });
     return toResponse(created);
@@ -119,7 +119,7 @@ export class ApprovalAuthoritiesService {
       assertWindow(patch.validFrom ?? existing.validFrom, patch.validUntil ?? existing.validUntil);
 
       const row = await this.repo.update(id, patch, tx);
-      await this.recordChange(row, actor, 'updated', changedFields);
+      await this.recordChange(row, actor, 'updated', changedFields, tx);
       return row;
     });
     return toResponse(updated);
@@ -143,22 +143,27 @@ export class ApprovalAuthoritiesService {
     }
   }
 
+  /** Audit the write inside its transaction: the row commits or rolls back with it. */
   private async recordChange(
     row: ApprovalAuthorityRow,
     actor: Principal,
     operation: 'created' | 'updated',
     changedFields: string[],
+    tx: DbExecutor,
   ): Promise<void> {
-    await this.audit.record({
-      action: 'approval_authority.changed',
-      actorUserId: actor.userId,
-      actorKind: 'USER',
-      orgId: row.orgId,
-      recordType: 'approval_authority',
-      recordId: row.id,
-      result: 'ALLOWED',
-      details: { operation, subjectUserId: row.userId, changedFields },
-    });
+    await this.audit.record(
+      {
+        action: 'approval_authority.changed',
+        actorUserId: actor.userId,
+        actorKind: 'USER',
+        orgId: row.orgId,
+        recordType: 'approval_authority',
+        recordId: row.id,
+        result: 'ALLOWED',
+        details: { operation, subjectUserId: row.userId, changedFields },
+      },
+      { tx },
+    );
   }
 }
 

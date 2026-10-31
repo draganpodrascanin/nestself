@@ -7,12 +7,24 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as path from 'node:path';
 import type { Construct } from 'constructs';
 import type { StageConfig } from './config.js';
 
 export interface AuthStackProps extends cdk.StackProps {
   readonly config: StageConfig;
+}
+
+/**
+ * The region of an ACM certificate ARN (`arn:<partition>:acm:<region>:<account>:certificate/<id>`),
+ * or null for anything else, such as the `pending` placeholder of a first synth (CDK-setup.md 8.1).
+ */
+export function acmCertificateRegion(arn: string): string | null {
+  const match = /^arn:aws[a-z-]*:acm:([a-z0-9-]+):\d{12}:certificate\/.+$/.exec(arn);
+  return match ? match[1]! : null;
 }
 
 export class NestSelfAuthStack extends cdk.Stack {
@@ -88,12 +100,49 @@ export class NestSelfAuthStack extends cdk.Stack {
 
     // ── Cognito domain ───────────────────────────────────────────────
     let cognitoDomainUrl: string;
+    const authDomainName = config.authDomainName;
 
-    if (config.enableCustomDomain) {
-      // Staging/production: custom domain requires a us-east-1 ACM cert and
-      // hosted zone, provisioned by NestSelfEdgeStack. Placeholder URL for
-      // outputs; the addDomain call is a follow-up.
-      cognitoDomainUrl = `https://auth.${config.domainName}`;
+    if (authDomainName) {
+      // Staging/production: the hosted UI answers on a custom domain. Cognito serves it through a
+      // CloudFront distribution of its own, so the certificate must be in us-east-1 whatever the
+      // pool's region, and the parent domain needs an A record before the domain can be created.
+      // Both are manual prerequisites (CDK-setup.md section 8); the deployer passes the certificate
+      // ARN and the hosted zone id as context, so offline synth keeps working.
+      const certificateArn = this.node.tryGetContext('authCertificateArn') as string | undefined;
+      const hostedZoneId = this.node.tryGetContext('hostedZoneId') as string | undefined;
+      if (!certificateArn || !hostedZoneId) {
+        throw new Error(
+          'auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md',
+        );
+      }
+      // A certificate in any other region would fail only at deploy time, when Cognito creates the
+      // domain; refuse it at synth, while the fix is still a context value.
+      const certificateRegion = acmCertificateRegion(certificateArn);
+      if (certificateRegion !== null && certificateRegion !== 'us-east-1') {
+        throw new Error(
+          `auth custom domain needs its certificate in us-east-1 (Cognito serves the domain through CloudFront), but authCertificateArn is in ${certificateRegion}; see CDK-setup.md section 8`,
+        );
+      }
+
+      const domain = userPool.addDomain('CustomDomain', {
+        customDomain: {
+          domainName: authDomainName,
+          certificate: acm.Certificate.fromCertificateArn(this, 'AuthCertificate', certificateArn),
+        },
+      });
+
+      const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'AuthZone', {
+        hostedZoneId,
+        zoneName: config.domainName,
+      });
+      const aliasTarget = route53.RecordTarget.fromAlias(new route53Targets.UserPoolDomainTarget(domain));
+      new route53.ARecord(this, 'AuthDomainARecord', {
+        zone, recordName: authDomainName, target: aliasTarget,
+      });
+      new route53.AaaaRecord(this, 'AuthDomainAaaaRecord', {
+        zone, recordName: authDomainName, target: aliasTarget,
+      });
+      cognitoDomainUrl = `https://${authDomainName}`;
     } else {
       // Dev: Cognito prefix domain
       const prefix = config.cognitoDomainPrefix ?? `nestself-${stage}`;

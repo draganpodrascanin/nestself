@@ -136,6 +136,15 @@ describe('FakeIdentityProvider: enterprise SSO', () => {
       expect(result.idTokenClaims.emailVerified).toBe(false);
     });
 
+    it('sends no email_verified claim at all for a user seeded with null (Entra ID by default)', async () => {
+      idp.seedFederatedUsers([{ providerName: SAML.name, subject: 'silent', email: 's@acme.example', emailVerified: null }]);
+      const code = idp.issueAuthorizationCode(SAML.name, 'silent', s256(VERIFIER));
+      const result = await idp.exchangeAuthorizationCode({ code, codeVerifier: VERIFIER, redirectUri: REDIRECT });
+      // As `toIdTokenClaims` maps an absent claim.
+      expect(result.idTokenClaims.emailVerified).toBeNull();
+      expect(decodeJwtClaims(result.idToken)).not.toHaveProperty('email_verified');
+    });
+
     it('is single use, even after a wrong verifier', async () => {
       const code = idp.issueAuthorizationCode(SAML.name, 'ana-nameid', s256(VERIFIER));
       await expect(

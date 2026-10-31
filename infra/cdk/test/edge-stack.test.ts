@@ -7,6 +7,7 @@ import { NestSelfNetworkStack } from '../lib/network-stack.js';
 import { NestSelfSecurityBaselineStack } from '../lib/security-baseline-stack.js';
 import { NestSelfAuthStack } from '../lib/auth-stack.js';
 import { getStageConfig } from '../lib/config.js';
+import { PLATFORM_CONTEXT, testApp } from './context.js';
 
 const sharedEnv = { account: '111111111111', region: 'eu-central-1' };
 const synthesizerProps = {
@@ -49,7 +50,7 @@ function directives(policy: string): Record<string, string> {
 }
 
 function synthEdgeStack(stage: 'staging' | 'production'): Template {
-  const app = new cdk.App();
+  const app = testApp(PLATFORM_CONTEXT);
   const config = getStageConfig(stage);
 
   const _auth = new NestSelfAuthStack(app, `Test-${stage}-Auth`, {

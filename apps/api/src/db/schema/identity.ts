@@ -10,6 +10,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { ssoConnections } from './invitations.js';
 import { createdAt, idColumn, ts, updatedAt } from './_shared.js';
 
 /**
@@ -60,6 +61,8 @@ export const externalIdentities = pgTable(
     email: text().notNull(),
     /** Whether the IdP asserted email ownership [D-04]. */
     emailVerified: boolean().notNull().default(false),
+    /** The SSO connection a federated identity was bound through; null for the pool-native identity. */
+    ssoConnectionId: text().references(() => ssoConnections.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
     /** Updated on each sign-in through this identity. */
     lastSeenAt: ts(),
     createdAt: createdAt(),
@@ -67,5 +70,6 @@ export const externalIdentities = pgTable(
   (t) => [
     uniqueIndex('external_identities_provider_subject_key').on(t.provider, t.subject),
     index('external_identities_user_id_idx').on(t.userId),
+    index('external_identities_sso_connection_id_idx').on(t.ssoConnectionId),
   ],
 );

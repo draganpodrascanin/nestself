@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { FakeIdentityProvider } from './fake-identity-provider.js';
 import { IdentityProviderError, decodeJwtClaims } from './identity-provider.service.js';
 import { computeTotp } from './totp.js';
@@ -56,6 +57,26 @@ describe('FakeIdentityProvider', () => {
         const claims = decodeJwtClaims(result.tokens.accessToken);
         expect(claims.sub).toBeTruthy();
         expect(claims.token_use).toBe('access');
+      }
+    });
+
+    it('records the language the code email was asked for, so tests can assert it', async () => {
+      await provider.startEmailOtp({ email: 'alice@example.com', locale: 'hu' });
+      await provider.startEmailOtp({ email: 'alice@example.com' });
+
+      expect(provider.sentCodes.map((c) => c.locale)).toEqual(['hu', undefined]);
+    });
+
+    it('logs the code for a local sign-in with the address masked, never the whole address', async () => {
+      const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+      try {
+        await provider.startEmailOtp({ email: 'alice@example.com' });
+        const code = provider.sentCodes[0]!.code;
+        const lines = log.mock.calls.map(([line]) => String(line));
+        expect(lines).toContain(`Fake identity provider: OTP for a***@example.com is ${code}`);
+        expect(lines.join('\n')).not.toContain('alice@example.com');
+      } finally {
+        log.mockRestore();
       }
     });
 

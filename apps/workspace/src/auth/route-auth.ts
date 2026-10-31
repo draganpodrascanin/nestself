@@ -13,10 +13,30 @@ import type { MeResponse } from '@nestself/contracts';
 import type { AuthSnapshot } from './types';
 
 export interface RouterAuth extends AuthSnapshot {
-  /** True once the provider has a result for the session (authenticated or not). */
+  /**
+   * True once the provider has a result for the session: signed in or signed
+   * out. A `/auth/me` that failed is no result, so guards keep asking `ensure`.
+   */
   settled?: boolean;
   /** Resolves the session for guards while the provider is still loading. */
   ensure?: () => Promise<AuthSnapshot>;
+}
+
+/** How long the page waits for `GET /auth/me` before it reports the session as unavailable. */
+export const ME_TIMEOUT_MS = 10_000;
+
+/**
+ * `GET /auth/me` could not say whether there is a session: the API answered
+ * with something other than a session or a 401, did not answer within
+ * `ME_TIMEOUT_MS`, or could not be reached. That is not "signed out", so a
+ * guard fails with this error (the `_authenticated` route renders a retry
+ * state for it) instead of sending the user to /sign-in.
+ */
+export class SessionUnavailableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('Session could not be loaded', options);
+    this.name = 'SessionUnavailableError';
+  }
 }
 
 const initialRequests = new WeakMap<ApiClient, Promise<MeResponse>>();
@@ -24,12 +44,13 @@ const initialRequests = new WeakMap<ApiClient, Promise<MeResponse>>();
 /**
  * The page's first `GET /auth/me`, shared by the guards of the first
  * navigation and the provider's initial load. The provider releases it once
- * its own state holds the result; later callers then make a fresh request.
+ * its own state holds the result, whether that is a session or a failure;
+ * later callers then make a fresh request.
  */
 export function initialMe(client: ApiClient): Promise<MeResponse> {
   let pending = initialRequests.get(client);
   if (!pending) {
-    pending = createAuthApi(client).me();
+    pending = createAuthApi(client).me({ signal: AbortSignal.timeout(ME_TIMEOUT_MS) });
     initialRequests.set(client, pending);
   }
   return pending;
@@ -40,17 +61,20 @@ export function releaseInitialMe(client: ApiClient): void {
   initialRequests.delete(client);
 }
 
-/** The first session snapshot: a signed-out snapshot when `/auth/me` fails. */
+/**
+ * The first session snapshot. A 401 is a signed-out snapshot; any other
+ * failure (an error answer, no answer in time, no connection) throws
+ * `SessionUnavailableError`, because the user may well be signed in.
+ */
 export async function initialSnapshot(client: ApiClient): Promise<AuthSnapshot> {
   try {
     const me = await initialMe(client);
     return { principal: me.principal, effectiveActions: me.effectiveActions, availableContexts: me.availableContexts };
   } catch (err) {
-    if (!(err instanceof ApiError) || err.status !== 401) {
-      // Not a signed-out answer, but the guard cannot let the user in either.
-      console.warn('Session could not be loaded', err);
+    if (err instanceof ApiError && err.status === 401) {
+      return { principal: null, effectiveActions: [], availableContexts: [] };
     }
-    return { principal: null, effectiveActions: [], availableContexts: [] };
+    throw new SessionUnavailableError({ cause: err });
   }
 }
 

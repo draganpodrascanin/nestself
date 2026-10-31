@@ -92,8 +92,8 @@ export class InvitationActivationController {
   @Post('accept')
   @HttpCode(200)
   async accept(@Req() req: HttpReq, @Body() body: unknown) {
-    const { token } = validate(InvitationAcceptRequestSchema, body);
+    const { token, locale } = validate(InvitationAcceptRequestSchema, body);
     const surface = extractSurface(req);
-    return this.activation.accept(token, surface, extractMeta(req));
+    return this.activation.accept(token, surface, extractMeta(req), locale);
   }
 }

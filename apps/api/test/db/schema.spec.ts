@@ -6,9 +6,19 @@
  * databases and roles.
  */
 import 'dotenv/config';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
-import { withOrgScope } from '../../src/db/db.service.js';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Pool } from 'pg';
+import { ORGANIZATION_STATUSES } from '@nestself/contracts';
+import { createDatabase, withOrgScope, type DbService } from '../../src/db/db.service.js';
+import { runMigrations } from '../../src/db/migrate.js';
+import { IdentityRepository } from '../../src/db/repositories/identity.repository.js';
+import { ProfessionalRepository } from '../../src/db/repositories/professional.repository.js';
 import { seed } from '../../src/db/seed/seed-lib.js';
 import { PERMISSION_TEMPLATES } from '@nestself/contracts';
 import { SAMPLE_CATEGORY_IDS, SAMPLE_EDITORIAL_STAFF } from '@nestself/sample-data';
@@ -21,6 +31,7 @@ import {
   callOutcomes,
   callParticipants,
   callSessions,
+  cases,
   channels,
   conversationMessages,
   conversations,
@@ -37,10 +48,22 @@ import {
   webinarRegistrations,
   webinars,
 } from '../../src/db/schema/index.js';
-import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './test-database.js';
+import {
+  connectAsAppRole,
+  recreateTestDatabase,
+  resetTestDatabase,
+  type TestDatabase,
+} from './test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 const shouldRun = !!TEST_DB_URL;
+
+/** The PostgreSQL message of a write that must fail; Drizzle wraps driver errors in DrizzleQueryError. */
+async function driverError(write: PromiseLike<unknown>): Promise<string> {
+  const err = await Promise.resolve(write).then(() => null, (e: unknown) => e);
+  expect(err, 'the write should have failed').toBeInstanceOf(Error);
+  return ((err as Error & { cause?: Error }).cause ?? (err as Error)).message;
+}
 
 describe.skipIf(!shouldRun)('schema integration tests', () => {
   let owner: TestDatabase;
@@ -60,8 +83,8 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    // 0000 through 0016 = 17 migrations (calls at 0007-0015, CMS at 0016)
-    expect(Number(rows[0]!.n)).toBe(17);
+    // 0000 through 0020 = 21 migrations (calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020)
+    expect(Number(rows[0]!.n)).toBe(21);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -111,14 +134,24 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     });
 
     it('event lands in the correct monthly partition', async () => {
-      const oct2026 = new Date('2026-10-15T12:00:00Z');
-      await insertAudit('audit_partition_test', oct2026);
+      // Migration 0001 creates the partitions from the month it runs in, so the
+      // event goes into the current month: a fixed date would fall into the
+      // DEFAULT partition once that month lies behind the test database's creation.
+      // The database's own current month: the partitions were cut with its
+      // CURRENT_DATE, which near midnight differs from this process's UTC date.
+      const { rows: current } = await owner.pool.query<{ at: Date; name: string }>(
+        `SELECT (date_trunc('month', CURRENT_DATE) + interval '14 days 12 hours') AS at,
+                'audit_events_y' || to_char(CURRENT_DATE, 'YYYY') || 'm' || to_char(CURRENT_DATE, 'MM') AS name`,
+      );
+      const midMonth = current[0]!.at;
+      const expected = current[0]!.name;
+      await insertAudit('audit_partition_test', midMonth);
       const { rows } = await owner.pool.query<{ partition: string }>(
         `SELECT tableoid::regclass::text AS partition FROM audit_events WHERE id = 'audit_partition_test' AND occurred_at = $1`,
-        [oct2026],
+        [midMonth],
       );
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.partition).toBe('audit_events_y2026m10');
+      expect(rows[0]!.partition).toBe(expected);
     });
 
     it('application role may INSERT but not UPDATE or DELETE (A.3.4)', async () => {
@@ -152,6 +185,81 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         `INSERT INTO memberships (user_id, org_id, status, start_date) VALUES ('user_dup', 'org_dup', 'ACTIVE', '2026-02-01')`,
       ),
     ).rejects.toThrow(/idx_memberships_one_active/);
+  });
+
+  it('organizations.status is checked', async () => {
+    expect(
+      await driverError(owner.db.insert(organizations).values({ id: 'o_bad', name: 'x', slug: 'x', status: 'BOGUS' })),
+    ).toMatch(/organizations_status_check/);
+    const valid = ORGANIZATION_STATUSES.map((status) => ({ id: `o_${status}`, name: status, slug: `o-${status.toLowerCase()}`, status }));
+    await owner.db.insert(organizations).values(valid);
+    await owner.db.delete(organizations).where(inArray(organizations.id, valid.map((o) => o.id)));
+  });
+
+  describe('cases (phase 4)', () => {
+    const ORG_A = 'case_org_a';
+    const ORG_B = 'case_org_b';
+    const row = { employeeUserId: 'case_user', expertUserId: 'case_user' };
+    const intake = { employeeUserId: 'case_user', body: 'Sample intake (fixture)' };
+    const dbs = () => ({ db: owner.db }) as unknown as DbService;
+
+    beforeAll(async () => {
+      await owner.db.insert(organizations).values([
+        { id: ORG_A, name: 'Case A', slug: 'case-a' },
+        { id: ORG_B, name: 'Case B', slug: 'case-b' },
+      ]);
+      await owner.pool.query(
+        `INSERT INTO users (id, email, display_name) VALUES ('case_user', 'case_user@example.com', 'Case')`,
+      );
+    });
+
+    it('a conversation cannot point at a case of another organization', async () => {
+      await owner.db.insert(cases).values({ id: 'case_fk_a', orgId: ORG_A });
+      expect(
+        await driverError(owner.db.insert(conversations).values({ id: 'conv_fk_b', ...row, caseId: 'case_fk_a', orgId: ORG_B })),
+      ).toMatch(/conversations_case_org_fk/);
+      expect(
+        await driverError(owner.db.insert(intakeRecords).values({ id: 'intake_fk_b', ...intake, caseId: 'case_fk_a', orgId: ORG_B })),
+      ).toMatch(/intake_records_case_org_fk/);
+      expect(
+        await driverError(owner.db.insert(conversations).values({ id: 'conv_fk_none', ...row, caseId: 'case_fk_none', orgId: ORG_A })),
+      ).toMatch(/conversations_case_org_fk/);
+
+      await owner.db.insert(conversations).values({ id: 'conv_fk_a', ...row, caseId: 'case_fk_a', orgId: ORG_A });
+      await owner.db.insert(intakeRecords).values({ id: 'intake_fk_a', ...intake, caseId: 'case_fk_a', orgId: ORG_A });
+    });
+
+    it('ProfessionalRepository inserts the case before the conversation and the intake record', async () => {
+      const repo = new ProfessionalRepository(dbs());
+      await repo.createConversation({ id: 'conv_repo', ...row, caseId: 'case_repo', orgId: ORG_A });
+      await repo.createIntake({ id: 'intake_repo', ...intake, caseId: 'case_repo', orgId: ORG_A });
+      await repo.createCase({ id: 'case_repo', orgId: ORG_A });
+      const rows = await owner.db.select({ orgId: cases.orgId }).from(cases).where(eq(cases.id, 'case_repo'));
+      expect(rows).toEqual([{ orgId: ORG_A }]);
+
+      // Another organization cannot take the case over: the existing row is kept and the write refused.
+      expect(
+        await driverError(repo.createConversation({ id: 'conv_repo_b', ...row, caseId: 'case_repo', orgId: ORG_B })),
+      ).toMatch(/conversations_case_org_fk/);
+      expect(await owner.db.select({ orgId: cases.orgId }).from(cases).where(eq(cases.id, 'case_repo'))).toEqual([{ orgId: ORG_A }]);
+    });
+
+    it('an identity binding names an existing SSO connection', async () => {
+      await owner.db.insert(ssoConnections).values({ id: 'case_sso', orgId: ORG_A, protocol: 'OIDC', cognitoProviderName: 'org-casea-oidc' });
+      const repo = new IdentityRepository(dbs());
+      const identity = {
+        userId: 'case_user',
+        provider: 'cognito:org-casea-oidc',
+        cognitoUsername: 'org-casea-oidc_sub',
+        email: 'case_user@example.com',
+      };
+      const bound = await repo.createExternalIdentity({ ...identity, subject: 'case-sub-1', ssoConnectionId: 'case_sso' });
+      expect(bound.ssoConnectionId).toBe('case_sso');
+      expect((await repo.createExternalIdentity({ ...identity, subject: 'case-sub-2' })).ssoConnectionId).toBeNull();
+      expect(
+        await driverError(repo.createExternalIdentity({ ...identity, subject: 'case-sub-3', ssoConnectionId: 'sso_missing' })),
+      ).toMatch(/violates foreign key constraint "external_identities_sso_connection_id/);
+    });
   });
 
   describe('row-level security (D-19, D-37)', () => {
@@ -199,9 +307,9 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'call_outcomes','call_feedback','call_consents','appointment_approvals',
                            'webinars','webinar_hosts','webinar_registrations','webinar_messages',
                            'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings',
-                           'sso_domains')`,
+                           'sso_domains','cases')`,
       );
-      expect(rows).toHaveLength(34);
+      expect(rows).toHaveLength(35);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -276,7 +384,12 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(all).toHaveLength(2);
     });
 
-    it('confidential-domain tables are isolated by tenant (conversations, messages, intake)', async () => {
+    it('confidential-domain tables are isolated by tenant (cases, conversations, messages, intake)', async () => {
+      await owner.db.insert(cases).values([
+        { id: 'rls_case_a', orgId: 'rls_org_a' },
+        { id: 'rls_case_b', orgId: 'rls_org_b' },
+        { id: 'rls_case_leak', orgId: 'rls_org_b' },
+      ]);
       await owner.db.insert(conversations).values([
         { id: 'rls_conv_a', orgId: 'rls_org_a', caseId: 'rls_case_a', employeeUserId: 'rls_user', expertUserId: 'rls_user' },
         { id: 'rls_conv_b', orgId: 'rls_org_b', caseId: 'rls_case_b', employeeUserId: 'rls_user', expertUserId: 'rls_user' },
@@ -292,6 +405,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
 
       // The second organization's scoped reads see none of the first one's rows.
       const fromB = await withOrgScope(app.db, 'rls_org_b', async (tx) => ({
+        cases: await tx.select({ id: cases.id }).from(cases).where(eq(cases.id, 'rls_case_a')),
         conversations: await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, 'rls_conv_a')),
         messages: await tx
           .select({ id: conversationMessages.id })
@@ -299,7 +413,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
           .where(eq(conversationMessages.conversationId, 'rls_conv_a')),
         intake: await tx.select({ id: intakeRecords.id }).from(intakeRecords).where(eq(intakeRecords.id, 'rls_intake_a')),
       }));
-      expect(fromB).toEqual({ conversations: [], messages: [], intake: [] });
+      expect(fromB).toEqual({ cases: [], conversations: [], messages: [], intake: [] });
 
       const fromA = await withOrgScope(app.db, 'rls_org_a', (tx) =>
         tx
@@ -315,6 +429,7 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
         const cause = (err as Error & { cause?: Error }).cause ?? (err as Error);
         expect(cause.message).toMatch(/row-level security policy/);
       };
+      await rejected((tx) => tx.insert(cases).values({ id: 'rls_case_leak_2', orgId: 'rls_org_b' }));
       await rejected((tx) =>
         tx.insert(conversations).values({
           id: 'rls_conv_leak',
@@ -769,5 +884,88 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       expect(rows.map((r) => r.id).sort()).toEqual(['grant_explicit_jovan_approver', 'grant_user_jovan_employee']);
       await owner.db.delete(grants).where(eq(grants.id, 'grant_explicit_jovan_approver'));
     });
+  });
+});
+
+/**
+ * A copy of `apps/api/drizzle` that stops before the migration `tag`, so a
+ * suite can create rows in the earlier schema and then apply the rest.
+ */
+async function migrationsBefore(tag: string): Promise<string> {
+  const source = fileURLToPath(new URL('../../drizzle/', import.meta.url));
+  const journal = JSON.parse(await readFile(path.join(source, 'meta', '_journal.json'), 'utf8')) as {
+    entries: Array<{ tag: string }>;
+  };
+  const entries = journal.entries.filter((e) => e.tag < tag);
+  const dir = await mkdtemp(path.join(tmpdir(), 'nestself-migrations-'));
+  await mkdir(path.join(dir, 'meta'));
+  await writeFile(path.join(dir, 'meta', '_journal.json'), JSON.stringify({ ...journal, entries }));
+  for (const e of entries) await copyFile(path.join(source, `${e.tag}.sql`), path.join(dir, `${e.tag}.sql`));
+  return dir;
+}
+
+describe.skipIf(!shouldRun)('phase 4 migrations over existing rows (0017 cases, 0018 binding connection)', () => {
+  let pool: Pool;
+  let earlier: string;
+
+  beforeAll(async () => {
+    const url = await recreateTestDatabase(TEST_DB_URL!, 'migbackfill');
+    pool = new Pool({ connectionString: url, max: 2 });
+    earlier = await migrationsBefore('0017');
+    await migrate(createDatabase(pool), { migrationsFolder: earlier });
+
+    // Rows as phase 3 left them: free-text case ids and unbound federated identities.
+    await pool.query(`
+      INSERT INTO organizations (id, name, slug) VALUES ('bf_org_a', 'Backfill A', 'bf-a'), ('bf_org_b', 'Backfill B', 'bf-b');
+      INSERT INTO users (id, email, display_name) VALUES ('bf_user', 'bf_user@example.com', 'Backfill');
+      INSERT INTO conversations (id, org_id, case_id, employee_user_id, expert_user_id) VALUES
+        ('bf_conv_1', 'bf_org_a', 'bf_case_shared', 'bf_user', 'bf_user'),
+        ('bf_conv_2', 'bf_org_a', 'bf_case_shared', 'bf_user', 'bf_user'),
+        ('bf_conv_3', 'bf_org_b', 'bf_case_b', 'bf_user', 'bf_user');
+      INSERT INTO intake_records (id, org_id, case_id, employee_user_id, body) VALUES
+        ('bf_intake_1', 'bf_org_a', 'bf_case_shared', 'bf_user', 'Sample intake (fixture)'),
+        ('bf_intake_2', 'bf_org_b', 'bf_case_intake_only', 'bf_user', 'Sample intake (fixture)');
+      INSERT INTO sso_connections (id, org_id, protocol, cognito_provider_name) VALUES
+        ('bf_sso_acme', 'bf_org_a', 'SAML', 'org-acme-saml');
+      INSERT INTO external_identities (id, user_id, provider, subject, cognito_username, email) VALUES
+        ('bf_ei_native', 'bf_user', 'cognito', 'sub-native', 'bf_user@example.com', 'bf_user@example.com'),
+        ('bf_ei_acme', 'bf_user', 'cognito:org-acme-saml', 'sub-acme', 'org-acme-saml_sub-acme', 'bf_user@example.com'),
+        ('bf_ei_gone', 'bf_user', 'cognito:org-gone-saml', 'sub-gone', 'org-gone-saml_sub-gone', 'bf_user@example.com');
+    `);
+
+    await runMigrations(url);
+  }, 180_000);
+
+  afterAll(async () => {
+    await pool?.end();
+    if (earlier) await rm(earlier, { recursive: true, force: true });
+  });
+
+  it('0017 creates one case per (case_id, org_id) of conversations and intake records, then adds the foreign keys', async () => {
+    const { rows } = await pool.query<{ id: string; org_id: string }>('SELECT id, org_id FROM cases ORDER BY id');
+    expect(rows).toEqual([
+      { id: 'bf_case_b', org_id: 'bf_org_b' },
+      { id: 'bf_case_intake_only', org_id: 'bf_org_b' },
+      { id: 'bf_case_shared', org_id: 'bf_org_a' },
+    ]);
+    const { rows: fks } = await pool.query<{ conname: string; convalidated: boolean }>(
+      `SELECT conname, convalidated FROM pg_constraint
+       WHERE conname IN ('conversations_case_org_fk', 'intake_records_case_org_fk') ORDER BY conname`,
+    );
+    expect(fks).toEqual([
+      { conname: 'conversations_case_org_fk', convalidated: true },
+      { conname: 'intake_records_case_org_fk', convalidated: true },
+    ]);
+  });
+
+  it('0018 binds a federated identity to the connection that holds its provider name', async () => {
+    const { rows } = await pool.query<{ id: string; sso_connection_id: string | null }>(
+      'SELECT id, sso_connection_id FROM external_identities ORDER BY id',
+    );
+    expect(rows).toEqual([
+      { id: 'bf_ei_acme', sso_connection_id: 'bf_sso_acme' },
+      { id: 'bf_ei_gone', sso_connection_id: null },
+      { id: 'bf_ei_native', sso_connection_id: null },
+    ]);
   });
 });

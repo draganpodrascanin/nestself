@@ -29,6 +29,11 @@ describe('audit-events', () => {
     expect(categoryFor('user.suspended')).toBe('SECURITY');
   });
 
+  it('identity.verification_started (a pending SSO binding) is catalogued as ADMIN', () => {
+    expect(AUDIT_ACTIONS).toContain('identity.verification_started');
+    expect(categoryFor('identity.verification_started')).toBe('ADMIN');
+  });
+
   it('grant and access actions map to AUTHORIZATION', () => {
     const authzActions = AUDIT_ACTIONS.filter(
       (a) =>

@@ -133,5 +133,182 @@ describe('createAuthApi() account methods', () => {
     const { auth } = setup({ enrolled: false });
     await expect(auth.totpConfirm('123456')).rejects.toMatchObject({ code: 'invalid_response' });
   });
+
+  const RESENT = { method: 'email_otp', challengeToken: 'tok-2', ssoStartUrl: null, emailMasked: 'i***@acme.example' };
+
+  it('stepUpResend posts the challenge token to /api/auth/step-up/resend and parses the new challenge', async () => {
+    const { auth, last } = setup(RESENT);
+    await expect(auth.stepUpResend('tok-1')).resolves.toEqual(RESENT);
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/step-up/resend',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-1' },
+    });
+  });
+
+  it('stepUpResend rejects an answer without emailMasked', async () => {
+    const { emailMasked: _omit, ...withoutMask } = RESENT;
+    const { auth } = setup(withoutMask);
+    await expect(auth.stepUpResend('tok-1')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  const ACCEPTED = { method: 'email_otp', challengeToken: 'tok', ssoStartUrl: null, step: null };
+
+  it('invitationAccept sends the locale of the code email with the token', async () => {
+    const { auth, last } = setup(ACCEPTED);
+    await auth.invitationAccept('inv-1', 'hu');
+    expect(last()).toMatchObject({ url: 'http://x/api/invitations/accept', method: 'POST', body: { token: 'inv-1', locale: 'hu' } });
+  });
+
+  it('invitationAccept sends only the token when no locale is given', async () => {
+    const { auth, last } = setup(ACCEPTED);
+    await auth.invitationAccept('inv-1');
+    expect(last().body).toEqual({ token: 'inv-1' });
+  });
+
+  const HANDLE = 'h'.repeat(43);
+  const BIND_STARTED = { challengeToken: 'tok-b', emailMasked: 'm***@acme.example' };
+
+  it('ssoBindStart posts the handle and the locale to /api/auth/sso/bind/start and parses the challenge', async () => {
+    const { auth, last } = setup(BIND_STARTED);
+    await expect(auth.ssoBindStart(HANDLE, 'sr-Latn')).resolves.toEqual(BIND_STARTED);
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/start',
+      method: 'POST',
+      csrf: 'tok',
+      body: { handle: HANDLE, locale: 'sr-Latn' },
+    });
+  });
+
+  it('ssoBindStart sends only the handle when no locale is given, and rejects an answer without the masked address', async () => {
+    const ok = setup(BIND_STARTED);
+    await ok.auth.ssoBindStart(HANDLE);
+    expect(ok.last().body).toEqual({ handle: HANDLE });
+    const bad = setup({ challengeToken: 'tok-b' });
+    await expect(bad.auth.ssoBindStart(HANDLE)).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('ssoBindVerify posts the challenge token and the code and parses the return path', async () => {
+    const { auth, last } = setup({ returnPath: '/people' });
+    await expect(auth.ssoBindVerify('tok-b', '123456')).resolves.toEqual({ returnPath: '/people' });
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/verify',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-b', code: '123456' },
+    });
+  });
+
+  it('ssoBindResend posts the challenge token and the locale and parses the masked address', async () => {
+    const { auth, last } = setup({ emailMasked: 'm***@acme.example' });
+    await expect(auth.ssoBindResend('tok-b', 'hu')).resolves.toEqual({ emailMasked: 'm***@acme.example' });
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/sso/bind/resend',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-b', locale: 'hu' },
+    });
+  });
+
+  describe('me', () => {
+    const meResponse = () =>
+      new Response(JSON.stringify({ principal: PRINCIPAL, effectiveActions: ['content.read'], availableContexts: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    /** A cookie-mode client whose fetch keeps the `signal` of every request and answers like `/auth/me`. */
+    function meApi(respond: (signal: AbortSignal | null | undefined) => Promise<Response> = async () => meResponse()) {
+      const signals: Array<AbortSignal | null | undefined> = [];
+      const fetchImpl: typeof fetch = async (_input, init) => {
+        signals.push(init?.signal);
+        return respond(init?.signal);
+      };
+      return { auth: createAuthApi(createApiClient({ baseUrl: 'http://x', mode: 'cookie', fetchImpl })), signals };
+    }
+
+    it('passes the abort signal to the request, so the page can give up on an API that does not answer', async () => {
+      const { auth, signals } = meApi();
+      const controller = new AbortController();
+
+      await expect(auth.me({ signal: controller.signal })).resolves.toMatchObject({ effectiveActions: ['content.read'] });
+
+      expect(signals).toHaveLength(1);
+      expect(signals[0]).toBe(controller.signal);
+    });
+
+    it('sends no signal when none is given', async () => {
+      const { auth, signals } = meApi();
+
+      await auth.me();
+
+      expect(signals).toEqual([undefined]);
+    });
+
+    it('rejects an aborted request as a network failure (status 0), which is not a signed-out answer', async () => {
+      const { auth } = meApi(
+        (signal) =>
+          new Promise<Response>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+          }),
+      );
+      const controller = new AbortController();
+
+      const pending = auth.me({ signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toMatchObject({ status: 0, code: 'network' });
+    });
+  });
+});
+
+describe('createAuthApi().ssoBindToken (the mobile app, bearer mode)', () => {
+  interface BearerCall {
+    url: string;
+    method: string;
+    authorization: string | null;
+    body: unknown;
+  }
+
+  /** A bearer-mode client with no stored token yet (the app has not kept the new tokens). */
+  function bearerApi(answer: () => Response) {
+    const calls: BearerCall[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      calls.push({
+        url: String(input),
+        method: init?.method ?? 'GET',
+        authorization: new Headers(init?.headers).get('Authorization'),
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      });
+      return answer();
+    };
+    const client = createApiClient({ baseUrl: 'http://x', mode: 'bearer', getToken: () => null, fetchImpl });
+    return { auth: createAuthApi(client), calls };
+  }
+
+  it('posts the ID token to /api/auth/sso/bind-token and resolves on 204 without a body', async () => {
+    const { auth, calls } = bearerApi(() => new Response(null, { status: 204 }));
+    await expect(auth.ssoBindToken('header.payload.signature')).resolves.toBeUndefined();
+    expect(calls).toEqual([
+      {
+        url: 'http://x/api/auth/sso/bind-token',
+        method: 'POST',
+        authorization: null,
+        body: { idToken: 'header.payload.signature' },
+      },
+    ]);
+  });
+
+  it.each(['sso_denied', 'sso_email_unverified'])('rejects with the API code %s of a refused binding', async (code) => {
+    const { auth } = bearerApi(
+      () =>
+        new Response(JSON.stringify({ status: 403, code, message: 'refused', requestId: null }), {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    await expect(auth.ssoBindToken('header.payload.signature')).rejects.toMatchObject({ status: 403, code });
+  });
 });
 

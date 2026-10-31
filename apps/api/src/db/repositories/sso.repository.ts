@@ -42,6 +42,7 @@ export type SsoConnectionPatch = Partial<
     | 'attributeMapping'
     | 'idpInitiatedAllowed'
     | 'jitProvisioning'
+    | 'oidcEmailVerifiedClaimRequired'
     | 'defaultOrgUnitId'
     | 'certificateExpiresAt'
     | 'lastTestedAt'

@@ -269,6 +269,7 @@ describe('SSO connection schemas (D-12, 5.4)', () => {
     oidcClientId: null,
     idpInitiatedAllowed: false,
     jitProvisioning: false,
+    oidcEmailVerifiedClaimRequired: true,
     defaultOrgUnitId: null,
     certificateExpiresAt: null,
     lastTestedAt: null,
@@ -293,6 +294,7 @@ describe('SSO connection schemas (D-12, 5.4)', () => {
       metadataUrl: 'https://idp.acme.example/metadata.xml',
       idpInitiatedAllowed: false,
       jitProvisioning: false,
+      oidcEmailVerifiedClaimRequired: true,
     });
   });
 
@@ -408,6 +410,7 @@ describe('SSO connection schemas (D-12, 5.4)', () => {
     expect(SsoConnectionResponseSchema.parse({ ...connection, spMetadata: null, domains: [] }).spMetadata).toBeNull();
     expect(SsoConnectionResponseSchema.safeParse({ ...connection, status: 'DELETED' }).success).toBe(false);
     expect(SsoConnectionResponseSchema.safeParse({ ...connection, domains: undefined }).success).toBe(false);
+    expect(SsoConnectionResponseSchema.safeParse({ ...connection, oidcEmailVerifiedClaimRequired: undefined }).success).toBe(false);
   });
 
   it('SsoConnectionResponseSchema strips stored secrets and raw metadata', () => {

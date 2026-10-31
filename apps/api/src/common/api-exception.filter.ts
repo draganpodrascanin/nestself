@@ -13,17 +13,26 @@ import {
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
 import { ZodError } from 'zod';
-import { ApiHttpException, type ApiErrorBody } from './api-error.js';
+import { ApiHttpException, ThrottledRedirect, type ApiErrorBody } from './api-error.js';
 
 /** Minimal Express-compatible request shape (avoids depending on @types/express). */
-interface HttpReq { id?: string; headers: Record<string, string | undefined> }
+interface HttpReq {
+  id?: string;
+  headers: Record<string, string | undefined>;
+  originalUrl?: string;
+  url?: string;
+}
 /** Minimal Express-compatible response shape. */
 interface HttpRes {
   headersSent: boolean;
   setHeader(k: string, v: string): void;
   status(code: number): HttpRes;
   json(body: unknown): void;
+  end(): void;
 }
+
+/** The throttle window the 429 and the throttled redirect announce (seconds). */
+const THROTTLE_RETRY_AFTER = 60;
 
 const STATUS_CODE_MAP: Record<number, string> = {
   [HttpStatus.BAD_REQUEST]: 'validation',
@@ -44,6 +53,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const res = ctx.getResponse<HttpRes>();
     const requestId = req.id ?? null;
 
+    if (exception instanceof ThrottledRedirect) {
+      this.redirectThrottled(exception, req, res, requestId);
+      return;
+    }
+
     const body = this.buildBody(exception, requestId);
 
     if (body.status >= 500) {
@@ -62,6 +76,30 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     res.status(body.status).json(body);
+  }
+
+  /**
+   * A refused SSO browser hop (5.9): a bodyless 302 to the sign-in page. The
+   * log names the route only; the query of these routes carries the
+   * connection, the authorization code and the state.
+   */
+  private redirectThrottled(
+    exception: ThrottledRedirect,
+    req: HttpReq,
+    res: HttpRes,
+    requestId: string | null,
+  ): void {
+    const route = (req.originalUrl ?? req.url ?? '').split('?', 1)[0];
+    this.logger.warn(`Throttled ${route}; redirected to the sign-in page`);
+
+    if (res.headersSent) return;
+    if (requestId) {
+      res.setHeader('x-request-id', requestId);
+    }
+    res.setHeader('Location', exception.location);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Retry-After', String(THROTTLE_RETRY_AFTER));
+    res.status(302).end();
   }
 
   private buildBody(
@@ -103,7 +141,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         code: 'rate_limited',
         message: 'Too many requests',
         requestId,
-        details: { retryAfter: 60 },
+        details: { retryAfter: THROTTLE_RETRY_AFTER },
       };
     }
 
