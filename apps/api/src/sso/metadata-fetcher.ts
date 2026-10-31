@@ -21,19 +21,20 @@
  * one at connect time is not caught; pinning the checked address would take
  * a custom connector, which the plan does not add.
  *
+ * A host the resolver cannot answer for in time (`EAI_AGAIN`, `ETIMEOUT`,
+ * `ETIMEDOUT`, or no answer within 5 s) says nothing about the URL: that is
+ * a {@link HostLookupUnavailableError} (the SSO service answers 503), while a
+ * name that does not exist is a {@link MetadataUrlError} `host` (422).
+ *
  * Errors carry a fixed reason and a message without the URL; log them with
  * `metadataFailureLabel`, never with the URL (its query may hold a tenant
  * identifier) or the body.
  *
- * `FakeMetadataFetcher` is the stub-mode and test adapter. It never touches
- * DNS or the network: hosts resolve from a table (a host without an entry
- * answers a public documentation address), and a URL nothing seeded serves
- * the fixture metadata `SAMPLE_SAML_METADATA`, so stub-mode SAML connections
- * get a realistic expiry. A test that needs a failure seeds one.
+ * The stub-mode and test adapter is `FakeMetadataFetcher`
+ * (`fake-metadata-fetcher.ts`).
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { SAMPLE_SAML_METADATA } from '../identity/saml-metadata.fixture.js';
 import { isPublicAddress } from './public-address.js';
 
 /** DI token of the {@link MetadataFetcher}; `IdentityModule` provides it. */
@@ -52,7 +53,10 @@ export interface MetadataFetcher {
    * validates URLs this way before storing them).
    */
   readonly lookup: HostLookup;
-  /** The document at `url`; rejects with {@link MetadataUrlError} or {@link MetadataFetchError}. */
+  /**
+   * The document at `url`; rejects with {@link MetadataUrlError},
+   * {@link HostLookupUnavailableError} or {@link MetadataFetchError}.
+   */
   fetchXml(url: string): Promise<string>;
 }
 
@@ -71,6 +75,21 @@ export class MetadataUrlError extends Error {
     this.name = 'MetadataUrlError';
   }
 }
+
+/**
+ * The resolver did not answer for the host (a temporary failure, a timeout,
+ * or nothing within the 5-second deadline): neither a refusal nor an
+ * acceptance of the URL. Worth another try later.
+ */
+export class HostLookupUnavailableError extends Error {
+  constructor() {
+    super('The host name could not be resolved in time; try again later');
+    this.name = 'HostLookupUnavailableError';
+  }
+}
+
+/** Resolver codes for a resolver that did not answer, as opposed to a name that does not exist. */
+const RESOLVER_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(['EAI_AGAIN', 'ETIMEOUT', 'ETIMEDOUT']);
 
 export type MetadataFetchFailure = 'redirect' | 'status' | 'too_large' | 'timeout' | 'network';
 
@@ -102,7 +121,10 @@ export function metadataFailureLabel(err: unknown): string {
 /**
  * Resolves when `url` is an `https:` URL without credentials whose host is
  * a public address literal or resolves (through `lookup`) to public
- * addresses only; rejects with a {@link MetadataUrlError} otherwise.
+ * addresses only. Rejects with a {@link MetadataUrlError} otherwise (`host`
+ * for a name that does not resolve: `ENOTFOUND`, `ENODATA`, `ENOTIMP`, no
+ * address), and with a {@link HostLookupUnavailableError} when the resolver
+ * fails temporarily or takes longer than `METADATA_FETCH_TIMEOUT_MS`.
  */
 export async function assertPublicHttpsUrl(url: string, lookup: HostLookup): Promise<void> {
   let parsed: URL;
@@ -123,12 +145,26 @@ export async function assertPublicHttpsUrl(url: string, lookup: HostLookup): Pro
 
   let addresses: string[];
   try {
-    addresses = await lookup(host);
-  } catch {
+    addresses = await lookupWithin(lookup, host, METADATA_FETCH_TIMEOUT_MS);
+  } catch (err) {
+    if (err instanceof HostLookupUnavailableError) throw err;
+    const code = (err as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && RESOLVER_UNAVAILABLE_CODES.has(code)) throw new HostLookupUnavailableError();
     throw new MetadataUrlError('host');
   }
   if (addresses.length === 0) throw new MetadataUrlError('host');
   if (!addresses.every(isPublicAddress)) throw new MetadataUrlError('private_address');
+}
+
+/** `lookup(host)`, or a {@link HostLookupUnavailableError} when it has not answered within `ms`. */
+function lookupWithin(lookup: HostLookup, host: string, ms: number): Promise<string[]> {
+  return new Promise<string[]>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new HostLookupUnavailableError()), ms);
+    Promise.resolve()
+      .then(() => lookup(host))
+      .then(resolve, reject)
+      .finally(() => clearTimeout(timer));
+  });
 }
 
 /** `work`, unless `signal` aborts first: then a {@link MetadataFetchError} `timeout`. */
@@ -240,58 +276,5 @@ export class HttpsMetadataFetcher implements MetadataFetcher {
 
   private transportFailure(err: unknown, signal: AbortSignal): MetadataFetchError {
     return signal.aborted ? new MetadataFetchError('timeout') : new MetadataFetchError('network', { cause: err });
-  }
-}
-
-/** What an unseeded host resolves to in the fake: a documentation address (TEST-NET-3), public by `isPublicAddress`. */
-export const FAKE_PUBLIC_ADDRESS = '203.0.113.10';
-
-/**
- * Stub mode and tests. `responses` maps a URL to the document it serves, or
- * to the error its fetch throws; a URL without an entry serves
- * `SAMPLE_SAML_METADATA` (signing certificate until `SIGNING_CERT_NOT_AFTER`), so
- * stub-mode flows and the e2e suites see a realistic expiry and no fetch
- * failure. `addresses` maps a host name to what it resolves to. The guard is
- * the real `assertPublicHttpsUrl`, so a seeded private or mixed answer is
- * refused exactly as the HTTPS fetcher would refuse it, before anything is
- * "fetched". Tests reach the instance of a running app through
- * `app.get(METADATA_FETCHER)`.
- */
-export class FakeMetadataFetcher implements MetadataFetcher {
-  /** URLs that passed the guard and were answered (a document or a seeded failure), oldest first. */
-  readonly fetched: string[] = [];
-  readonly lookup: HostLookup = async (hostname) =>
-    this.addresses.get(hostname.toLowerCase()) ?? [FAKE_PUBLIC_ADDRESS];
-
-  private readonly addresses = new Map<string, string[]>();
-
-  constructor(
-    private readonly responses: Map<string, string | Error> = new Map(),
-    addresses: Map<string, string[]> = new Map(),
-  ) {
-    for (const [host, list] of addresses) this.setAddresses(host, list);
-  }
-
-  /** The document `url` serves from now on. */
-  setResponse(url: string, xml: string): void {
-    this.responses.set(url, xml);
-  }
-
-  /** From now on a fetch of `url` throws `error` (by default what a missing document gives). */
-  setFailure(url: string, error: Error = new MetadataFetchError('status')): void {
-    this.responses.set(url, error);
-  }
-
-  /** What `hostname` resolves to from now on. */
-  setAddresses(hostname: string, addresses: string[]): void {
-    this.addresses.set(hostname.toLowerCase(), [...addresses]);
-  }
-
-  async fetchXml(url: string): Promise<string> {
-    await assertPublicHttpsUrl(url, this.lookup);
-    this.fetched.push(url);
-    const seeded = this.responses.get(url);
-    if (seeded instanceof Error) throw seeded;
-    return seeded ?? SAMPLE_SAML_METADATA;
   }
 }

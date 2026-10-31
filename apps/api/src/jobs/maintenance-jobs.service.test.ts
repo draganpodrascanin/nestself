@@ -15,7 +15,8 @@ import {
   userSessionsKey,
 } from '../redis/redis-keys.js';
 import { SessionService } from '../session/session.service.js';
-import { FakeMetadataFetcher } from '../sso/metadata-fetcher.js';
+import { FakeMetadataFetcher } from '../sso/fake-metadata-fetcher.js';
+import { MetadataFetchError } from '../sso/metadata-fetcher.js';
 import { MAINTENANCE_SCHEDULES } from './job-scheduler.service.js';
 import { MAINTENANCE_JOB_NAMES, MaintenanceJobsService } from './maintenance-jobs.service.js';
 
@@ -544,23 +545,28 @@ describe('MaintenanceJobsService', () => {
 
       expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, alerted: 1, failed: 0 });
       expect(audit.record).toHaveBeenCalledTimes(1);
-      expect(audit.record).toHaveBeenCalledWith({
-        action: 'sso_connection.changed',
-        actorUserId: null,
-        actorKind: 'JOB',
-        orgId: 'org_1',
-        recordType: 'sso_connection',
-        recordId: 'sso_1',
-        result: 'ALLOWED',
-        details: {
-          reason: 'certificate_expiring',
-          expiresAt: expiresAt.toISOString(),
-          connectionId: 'sso_1',
-          daysLeft: 12,
-          job: 'sso.certificate-expiry',
+      // In its own transaction, so a failed insert throws (the pool path only logs it).
+      expect(dbs.withTransaction).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(
+        {
+          action: 'sso_connection.changed',
+          actorUserId: null,
+          actorKind: 'JOB',
+          orgId: 'org_1',
+          recordType: 'sso_connection',
+          recordId: 'sso_1',
+          result: 'ALLOWED',
+          details: {
+            reason: 'certificate_expiring',
+            expiresAt: expiresAt.toISOString(),
+            connectionId: 'sso_1',
+            daysLeft: 12,
+            job: 'sso.certificate-expiry',
+          },
+          occurredAt: NOW,
         },
-        occurredAt: NOW,
-      });
+        { tx: TX },
+      );
       expect(idp.describeProvider).not.toHaveBeenCalled();
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]![0]).toContain('org-acme-saml');
@@ -574,6 +580,7 @@ describe('MaintenanceJobsService', () => {
       expect(report).toMatchObject({ expiring: 1, alerted: 1 });
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ details: expect.objectContaining({ daysLeft: -2 }) }),
+        { tx: TX },
       );
       expect(mailer.sent[0]?.params).toMatchObject({ daysLeft: '-2', expiresAt: expiresAt.toISOString() });
     });
@@ -631,7 +638,7 @@ describe('MaintenanceJobsService', () => {
       expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
       expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
       expect(audit.record).toHaveBeenCalledTimes(1);
-      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }));
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }), { tx: TX });
       expect(warnings().some((m) => m.includes('org-acme-saml'))).toBe(true);
     });
 
@@ -691,7 +698,7 @@ describe('MaintenanceJobsService', () => {
         expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 2, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
         expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
         expect(audit.record).toHaveBeenCalledTimes(1);
-        expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }));
+        expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sso_2' }), { tx: TX });
         const failure = warnings().find((m) => m.includes('org-acme-saml'))!;
         expect(failure).toContain('(TypeError)');
         expect(failure).not.toMatch(/tenant|idp\.acme\.example|https:|EntityDescriptor/);
@@ -709,6 +716,51 @@ describe('MaintenanceJobsService', () => {
         expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
         expect(mailer.sent).toEqual([]);
         expect(warnings()).toEqual([expect.stringContaining('(MetadataUrlError: private_address)')]);
+      });
+
+      it('a fetch that fails still checks the stored date: inside 30 days it is audited and mailed', async () => {
+        const storedSoon = new Date(NOW.getTime() + 5 * DAY);
+        fetcher.setFailure(METADATA_URL, new MetadataFetchError('timeout'));
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection({ certificateExpiresAt: storedSoon })]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
+        expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+        expect(audit.record).toHaveBeenCalledTimes(1);
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({ recordId: 'sso_1', details: expect.objectContaining({ expiresAt: storedSoon.toISOString(), daysLeft: 5 }) }),
+          { tx: TX },
+        );
+        expect(mailer.sent).toHaveLength(1);
+        expect(mailer.sent[0]!.params).toMatchObject({ expiresAt: storedSoon.toISOString(), daysLeft: '5' });
+        expect(warnings()).toContainEqual(expect.stringContaining('(MetadataFetchError: timeout)'));
+      });
+
+      it('a fetched document without a signing certificate is a failed refresh: the stored date stays and is checked', async () => {
+        const storedSoon = new Date(NOW.getTime() + 5 * DAY);
+        fetcher.setResponse(METADATA_URL, '<md:EntityDescriptor><md:IDPSSODescriptor/></md:EntityDescriptor>');
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection({ certificateExpiresAt: storedSoon })]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 1, alerted: 1, failed: 1 });
+        expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+        expect(mailer.sent).toHaveLength(1);
+        const line = warnings().find((m) => m.includes('no certificate in metadata'))!;
+        expect(line).toContain('org-acme-saml');
+        expect(line).not.toMatch(/idp\.acme\.example|https:|EntityDescriptor/);
+      });
+
+      it('a fetched document without a signing certificate and nothing stored: counted, nothing written', async () => {
+        fetcher.setResponse(METADATA_URL, '<md:EntityDescriptor/>');
+        ssoRepo.listActiveConnections.mockResolvedValue([urlConnection()]);
+
+        const report = await service.checkSsoCertificates(NOW);
+
+        expect(report).toEqual({ job: 'sso.certificate-expiry', scanned: 1, refreshed: 0, expiring: 0, alerted: 0, failed: 1 });
+        expect(ssoRepo.updateConnection).not.toHaveBeenCalled();
+        expect(audit.record).not.toHaveBeenCalled();
       });
     });
 
@@ -781,15 +833,22 @@ describe('MaintenanceJobsService', () => {
         expect(mailer.sent).toHaveLength(1);
       });
 
-      it('an audit row that is not written sends no mail', async () => {
+      it('an audit row that is not written sends no mail: the insert fails inside its transaction, which rejects', async () => {
         ssoRepo.listActiveConnections.mockResolvedValue([connection({ certificateExpiresAt: new Date(NOW.getTime() + 3 * DAY) })]);
-        audit.record.mockRejectedValueOnce(new Error('insert failed'));
+        // The real AuditWriter: with a transaction an insert error propagates;
+        // on the pool it is only logged and the call resolves.
+        const insertFailed = new Error('insert failed');
+        audit.record.mockImplementation(async (_event: unknown, opts?: { tx?: unknown }) => {
+          if (opts?.tx) throw insertFailed;
+        });
 
         const report = await service.checkSsoCertificates(NOW);
 
+        await expect(dbs.withTransaction.mock.results[0]!.value).rejects.toBe(insertFailed);
         expect(report).toMatchObject({ expiring: 0, alerted: 0, failed: 1 });
         expect(mailer.sent).toEqual([]);
         expect(await store.get(ssoCertAlertKey('sso_1'))).toBeNull();
+        expect(warnings()).toContainEqual(expect.stringMatching(/org-acme-saml: expiry audit not written \(Error\)/));
       });
 
       it('without OPS_ALERT_EMAIL: audits as before, says once per run that alerts are off, and sets no key', async () => {

@@ -19,7 +19,8 @@ import { SIGNING_CERT_NOT_AFTER } from '../src/identity/saml-metadata.fixture.js
 import { MaintenanceJobsService } from '../src/jobs/maintenance-jobs.service.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../src/redis/key-value-store.js';
 import { SSO_CERT_ALERT_TTL, ssoCertAlertKey } from '../src/redis/redis-keys.js';
-import { METADATA_FETCHER, type FakeMetadataFetcher } from '../src/sso/metadata-fetcher.js';
+import type { FakeMetadataFetcher } from '../src/sso/fake-metadata-fetcher.js';
+import { METADATA_FETCHER } from '../src/sso/metadata-fetcher.js';
 import { connectAsAppRole, resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL;

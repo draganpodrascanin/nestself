@@ -27,14 +27,16 @@
  * `metadataUrl` and `oidcIssuer` must point at a public host: create, PATCH
  * and test refuse a URL that `assertPublicHttpsUrl` refuses (https only,
  * every resolved address public unicast) with 422 `validation`
- * (`details.field`, `details.reason`). The signing-certificate expiry of a
- * SAML connection is re-read from its metadata at test and at a PATCH that
+ * (`details.field`, `details.reason`), and answer 503 `unavailable` when the
+ * resolver does not answer for the host. The signing-certificate expiry of
+ * a SAML connection is re-read from its metadata at test and at a PATCH that
  * changes `metadataUrl` or `metadataXml`: fetched from the URL (which
  * Cognito uses when both are set) through the `MetadataFetcher`, else read
  * from the XML. A fetch that fails there fails nothing: the identity
  * provider already accepted the configuration, so the stored expiry stays,
  * one warning names the error (never the URL or the document), and the
- * nightly `sso.certificate-expiry` job fetches again.
+ * nightly `sso.certificate-expiry` job fetches again. Metadata without a
+ * readable signing certificate keeps a stored expiry too (with a warning).
  *
  * A slug belongs to one organization: create and a DRAFT protocol change
  * refuse with 409 `conflict` (`details.reason: 'provider_name_taken'`) when
@@ -100,6 +102,7 @@ import {
 import { certificateExpiryFromMetadata } from '../identity/saml-metadata.js';
 import { DNS_TXT_RESOLVER, type DnsTxtResolver } from './dns-txt-resolver.js';
 import {
+  HostLookupUnavailableError,
   METADATA_FETCHER,
   MetadataUrlError,
   assertPublicHttpsUrl,
@@ -153,6 +156,15 @@ function validation(message: string, details?: Record<string, unknown>): ApiHttp
 /** 422 for a `metadataUrl` or `oidcIssuer` that `assertPublicHttpsUrl` refused. */
 function publicUrlRefused(field: PublicUrlField, err: MetadataUrlError): ApiHttpException {
   return validation(`${field}: ${err.message}`, { field, reason: err.reason });
+}
+
+/** 503 when the resolver did not answer for a URL's host: the URL is neither accepted nor refused. */
+function hostLookupUnavailable(): ApiHttpException {
+  return new ApiHttpException({
+    status: 503,
+    code: 'unavailable',
+    message: 'The host name could not be resolved. Try again later.',
+  });
 }
 
 function connectionState(message: string): ApiHttpException {
@@ -622,8 +634,10 @@ export class SsoConnectionsService {
   }
 
   /**
-   * 422 `validation` (`details.field`, `details.reason`) unless every URL
-   * given passes `assertPublicHttpsUrl`, judged by the fetcher's own lookup.
+   * Every URL given must pass `assertPublicHttpsUrl`, judged by the fetcher's
+   * own lookup: a refusal is 422 `validation` (`details.field`,
+   * `details.reason`), a resolver that does not answer is 503 `unavailable`
+   * (nothing is known about the URL yet; try again later).
    */
   private async assertPublicUrls(urls: Partial<Record<PublicUrlField, string | null>>): Promise<void> {
     for (const field of PUBLIC_URL_FIELDS) {
@@ -633,6 +647,7 @@ export class SsoConnectionsService {
         await assertPublicHttpsUrl(url, this.metadata.lookup);
       } catch (err) {
         if (err instanceof MetadataUrlError) throw publicUrlRefused(field, err);
+        if (err instanceof HostLookupUnavailableError) throw hostLookupUnavailable();
         throw err;
       }
     }
@@ -641,23 +656,34 @@ export class SsoConnectionsService {
   /**
    * The signing-certificate expiry of the connection's metadata: fetched from
    * `metadataUrl` when set (Cognito uses the URL when both are), else read
-   * from `metadataXml`; null for OIDC or metadata without a readable signing
-   * certificate. `undefined` when the fetch fails (logged by error name
-   * only): the caller keeps the stored value and the nightly job fetches again.
+   * from `metadataXml`; null for OIDC (no SAML signing certificate at all).
+   * `undefined` means "keep the stored value", with one warning naming the
+   * provider and never the URL or the document: the fetch failed (the
+   * nightly job fetches again), or the metadata carries no readable signing
+   * certificate while a date is stored. Metadata without a certificate never
+   * erases a known date; it yields null only when nothing was stored.
    */
   private async certificateExpiry(
-    conn: Pick<SsoConnectionRow, 'protocol' | 'cognitoProviderName' | 'metadataUrl' | 'metadataXml'>,
+    conn: Pick<SsoConnectionRow, 'protocol' | 'cognitoProviderName' | 'metadataUrl' | 'metadataXml' | 'certificateExpiresAt'>,
   ): Promise<Date | null | undefined> {
     if (conn.protocol !== 'SAML') return null;
-    if (!conn.metadataUrl) return certificateExpiryFromMetadata(conn.metadataXml);
-    try {
-      return certificateExpiryFromMetadata(await this.metadata.fetchXml(conn.metadataUrl));
-    } catch (err) {
-      this.logger.warn(
-        `SSO connection ${conn.cognitoProviderName}: metadata not fetched (${metadataFailureLabel(err)}); certificate expiry left unchanged`,
-      );
-      return undefined;
+    let xml = conn.metadataXml;
+    if (conn.metadataUrl) {
+      try {
+        xml = await this.metadata.fetchXml(conn.metadataUrl);
+      } catch (err) {
+        this.logger.warn(
+          `SSO connection ${conn.cognitoProviderName}: metadata not fetched (${metadataFailureLabel(err)}); certificate expiry left unchanged`,
+        );
+        return undefined;
+      }
     }
+    const expiresAt = certificateExpiryFromMetadata(xml);
+    if (expiresAt || !conn.certificateExpiresAt) return expiresAt;
+    this.logger.warn(
+      `SSO connection ${conn.cognitoProviderName}: no signing certificate in the metadata; certificate expiry left unchanged`,
+    );
+    return undefined;
   }
 
   private async assertOrgUnit(orgId: string, unitId: string): Promise<void> {

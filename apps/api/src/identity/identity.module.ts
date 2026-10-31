@@ -16,12 +16,8 @@ import { IdentityProviderService } from './identity-provider.service.js';
 import { CognitoIdentityProvider } from './cognito-identity-provider.js';
 import { FakeIdentityProvider } from './fake-identity-provider.js';
 import { SAMPLE_EXTERNAL_IDENTITIES, SAMPLE_DEV_PASSWORD } from '@nestself/sample-data';
-import {
-  FakeMetadataFetcher,
-  HttpsMetadataFetcher,
-  METADATA_FETCHER,
-  type MetadataFetcher,
-} from '../sso/metadata-fetcher.js';
+import { FakeMetadataFetcher } from '../sso/fake-metadata-fetcher.js';
+import { HttpsMetadataFetcher, METADATA_FETCHER, type MetadataFetcher } from '../sso/metadata-fetcher.js';
 
 @Module({
   providers: [

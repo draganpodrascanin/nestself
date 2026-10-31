@@ -4,11 +4,11 @@
  * fetcher runs against a stubbed `fetch` and lookup, so nothing here touches
  * the network; the one system lookup asks for `localhost` (the hosts file).
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE_SAML_METADATA } from '../identity/saml-metadata.fixture.js';
 import {
-  FAKE_PUBLIC_ADDRESS,
-  FakeMetadataFetcher,
+  HostLookupUnavailableError,
   HttpsMetadataFetcher,
   METADATA_FETCH_TIMEOUT_MS,
   METADATA_MAX_BYTES,
@@ -22,6 +22,8 @@ import {
 import { isPublicAddress } from './public-address.js';
 
 const URL_OK = 'https://idp.acme.example/metadata';
+/** A documentation address (TEST-NET-3): public by `isPublicAddress`, routed nowhere. */
+const PUBLIC_ADDRESS = '203.0.113.10';
 
 /** A lookup that answers every host with the given addresses and records what it was asked. */
 function lookupAnswering(...addresses: string[]) {
@@ -68,7 +70,7 @@ describe('assertPublicHttpsUrl', () => {
   it.each(['http://idp.acme.example/metadata', 'ftp://idp.acme.example/metadata', 'file:///etc/passwd', 'not a url'])(
     'refuses %s with reason scheme, before any lookup',
     async (url) => {
-      const lookup = lookupAnswering(FAKE_PUBLIC_ADDRESS);
+      const lookup = lookupAnswering(PUBLIC_ADDRESS);
       const err = await rejection(assertPublicHttpsUrl(url, lookup));
       expect(err).toBeInstanceOf(MetadataUrlError);
       expect(err).toMatchObject({ name: 'MetadataUrlError', reason: 'scheme' });
@@ -77,7 +79,7 @@ describe('assertPublicHttpsUrl', () => {
   );
 
   it('refuses credentials in the URL with reason host', async () => {
-    const lookup = lookupAnswering(FAKE_PUBLIC_ADDRESS);
+    const lookup = lookupAnswering(PUBLIC_ADDRESS);
     await expect(assertPublicHttpsUrl('https://user:pass@idp.acme.example/metadata', lookup)).rejects.toMatchObject({
       reason: 'host',
     });
@@ -97,7 +99,7 @@ describe('assertPublicHttpsUrl', () => {
     'https://2130706433/metadata',
     'https://0x7f.1/metadata',
   ])('refuses the non-public address literal in %s without a lookup', async (url) => {
-    const lookup = lookupAnswering(FAKE_PUBLIC_ADDRESS);
+    const lookup = lookupAnswering(PUBLIC_ADDRESS);
     await expect(assertPublicHttpsUrl(url, lookup)).rejects.toMatchObject({ reason: 'private_address' });
     expect(lookup).not.toHaveBeenCalled();
   });
@@ -118,12 +120,59 @@ describe('assertPublicHttpsUrl', () => {
     });
   });
 
-  it('refuses a host that does not resolve, or resolves to nothing, with reason host', async () => {
-    const failing = vi.fn<HostLookup>(async () => {
-      throw Object.assign(new Error('getaddrinfo ENOTFOUND idp.acme.example'), { code: 'ENOTFOUND' });
+  /** A lookup that fails the way the resolver reports it: an error with a `code`. */
+  const lookupFailingWith = (code: string) =>
+    vi.fn<HostLookup>(async () => {
+      throw Object.assign(new Error(`getaddrinfo ${code} idp.acme.example`), { code });
     });
-    await expect(assertPublicHttpsUrl(URL_OK, failing)).rejects.toMatchObject({ reason: 'host' });
+
+  it.each(['ENOTFOUND', 'ENODATA', 'ENOTIMP'])(
+    'refuses a host the resolver says does not exist (%s) with reason host',
+    async (code) => {
+      const err = await rejection(assertPublicHttpsUrl(URL_OK, lookupFailingWith(code)));
+      expect(err).toBeInstanceOf(MetadataUrlError);
+      expect(err).toMatchObject({ reason: 'host' });
+    },
+  );
+
+  it('refuses a host that resolves to no address at all with reason host', async () => {
     await expect(assertPublicHttpsUrl(URL_OK, lookupAnswering())).rejects.toMatchObject({ reason: 'host' });
+  });
+
+  it.each(['EAI_AGAIN', 'ETIMEOUT', 'ETIMEDOUT'])(
+    'reports a resolver that did not answer (%s) as unavailable, not as a refusal of the URL',
+    async (code) => {
+      const err = await rejection(assertPublicHttpsUrl(URL_OK, lookupFailingWith(code)));
+      expect(err).toBeInstanceOf(HostLookupUnavailableError);
+      expect(err).not.toBeInstanceOf(MetadataUrlError);
+      expect(err).toMatchObject({ name: 'HostLookupUnavailableError' });
+    },
+  );
+
+  it('reports a lookup that takes longer than the 5-second deadline as unavailable', async () => {
+    vi.useFakeTimers();
+    const hanging = vi.fn<HostLookup>(() => new Promise<string[]>(() => undefined));
+    let settled = false;
+    const outcome = assertPublicHttpsUrl(URL_OK, hanging).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    void outcome.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(METADATA_FETCH_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(await outcome).toBeInstanceOf(HostLookupUnavailableError);
+    expect(hanging).toHaveBeenCalledWith('idp.acme.example');
+  });
+
+  it('a lookup that answers before the deadline leaves no timer behind', async () => {
+    vi.useFakeTimers();
+    await expect(assertPublicHttpsUrl(URL_OK, lookupAnswering(PUBLIC_ADDRESS))).resolves.toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('accepts a host whose every address is public, asking the lookup for the bare host name', async () => {
@@ -136,7 +185,7 @@ describe('assertPublicHttpsUrl', () => {
 describe('HttpsMetadataFetcher', () => {
   it('returns the document of a public https URL, fetched without following redirects or sending credentials', async () => {
     const { fn, fetch } = stubFetch(() => new Response(SAMPLE_SAML_METADATA, { status: 200 }));
-    const lookup = lookupAnswering(FAKE_PUBLIC_ADDRESS);
+    const lookup = lookupAnswering(PUBLIC_ADDRESS);
     const fetcher = new HttpsMetadataFetcher({ lookup, fetch });
 
     await expect(fetcher.fetchXml(URL_OK)).resolves.toBe(SAMPLE_SAML_METADATA);
@@ -155,7 +204,7 @@ describe('HttpsMetadataFetcher', () => {
 
   it('refuses an http URL before any request', async () => {
     const { fn, fetch } = stubFetch(() => new Response('<x/>'));
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     await expect(fetcher.fetchXml('http://idp.acme.example/metadata')).rejects.toMatchObject({
       name: 'MetadataUrlError',
       reason: 'scheme',
@@ -176,7 +225,7 @@ describe('HttpsMetadataFetcher', () => {
     const { fn, fetch } = stubFetch(
       () => new Response(null, { status, headers: { location: 'https://169.254.169.254/latest/meta-data/' } }),
     );
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     const err = await rejection(fetcher.fetchXml(URL_OK));
     expect(err).toBeInstanceOf(MetadataFetchError);
     expect(err).toMatchObject({ name: 'MetadataFetchError', reason: 'redirect' });
@@ -185,7 +234,7 @@ describe('HttpsMetadataFetcher', () => {
 
   it('treats a status outside 2xx as a failure', async () => {
     const { fetch } = stubFetch(() => new Response('not here', { status: 404 }));
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ reason: 'status' });
   });
 
@@ -193,14 +242,14 @@ describe('HttpsMetadataFetcher', () => {
     const { fetch } = stubFetch(() => {
       throw new TypeError('fetch failed');
     });
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ name: 'MetadataFetchError', reason: 'network' });
   });
 
   it('stops reading a body past 1 MiB while it streams', async () => {
     const { stream, state } = endlessBody();
     const { fetch } = stubFetch(() => new Response(stream));
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
 
     const err = await rejection(fetcher.fetchXml(URL_OK));
 
@@ -216,13 +265,13 @@ describe('HttpsMetadataFetcher', () => {
     const { fetch } = stubFetch(
       () => new Response('<x/>', { headers: { 'content-length': String(METADATA_MAX_BYTES + 1) } }),
     );
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ reason: 'too_large' });
   });
 
   it('accepts a body of exactly 1 MiB', async () => {
     const { fetch } = stubFetch(() => new Response(new Uint8Array(METADATA_MAX_BYTES).fill(0x20)));
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     await expect(fetcher.fetchXml(URL_OK)).resolves.toHaveLength(METADATA_MAX_BYTES);
   });
 
@@ -234,7 +283,7 @@ describe('HttpsMetadataFetcher', () => {
           init.signal!.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
         }),
     );
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     let settled = false;
     const outcome = fetcher.fetchXml(URL_OK).then(
       () => null,
@@ -286,7 +335,7 @@ describe('HttpsMetadataFetcher', () => {
       });
       return new Response(body);
     });
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch });
     const outcome = fetcher.fetchXml(URL_OK).then(
       () => null,
       (err: unknown) => err,
@@ -310,63 +359,8 @@ describe('HttpsMetadataFetcher', () => {
 
   it('honours a smaller size cap when given', async () => {
     const { fetch } = stubFetch(() => new Response('0123456789'));
-    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(FAKE_PUBLIC_ADDRESS), fetch, maxBytes: 9 });
+    const fetcher = new HttpsMetadataFetcher({ lookup: lookupAnswering(PUBLIC_ADDRESS), fetch, maxBytes: 9 });
     await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ reason: 'too_large' });
-  });
-});
-
-describe('FakeMetadataFetcher', () => {
-  it('serves the fixture metadata for a URL nothing seeded, on a host that resolves without DNS', async () => {
-    const fetcher = new FakeMetadataFetcher();
-    // `.example` names never resolve: a DNS lookup would refuse this host.
-    await expect(fetcher.lookup('idp.nowhere.example')).resolves.toEqual([FAKE_PUBLIC_ADDRESS]);
-    await expect(fetcher.fetchXml('https://idp.nowhere.example/saml/metadata?tenant=a')).resolves.toBe(SAMPLE_SAML_METADATA);
-    expect(fetcher.fetched).toEqual(['https://idp.nowhere.example/saml/metadata?tenant=a']);
-  });
-
-  it('serves a seeded document instead', async () => {
-    const fetcher = new FakeMetadataFetcher(new Map([[URL_OK, '<md:EntityDescriptor/>']]));
-    await expect(fetcher.fetchXml(URL_OK)).resolves.toBe('<md:EntityDescriptor/>');
-    fetcher.setResponse(URL_OK, '<md:EntityDescriptor>rotated</md:EntityDescriptor>');
-    await expect(fetcher.fetchXml(URL_OK)).resolves.toBe('<md:EntityDescriptor>rotated</md:EntityDescriptor>');
-  });
-
-  it('throws a seeded failure: a missing document by default, or the error given', async () => {
-    const fetcher = new FakeMetadataFetcher();
-    fetcher.setFailure(URL_OK);
-    await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ name: 'MetadataFetchError', reason: 'status' });
-
-    const timeout = new MetadataFetchError('timeout');
-    fetcher.setFailure(URL_OK, timeout);
-    await expect(fetcher.fetchXml(URL_OK)).rejects.toBe(timeout);
-
-    const redirect = new MetadataFetchError('redirect');
-    const seeded = new FakeMetadataFetcher(new Map<string, string | Error>([[URL_OK, redirect]]));
-    await expect(seeded.fetchXml(URL_OK)).rejects.toBe(redirect);
-
-    // A failure seeded for one URL leaves the others answering the fixture.
-    await expect(fetcher.fetchXml('https://idp.acme.example/other')).resolves.toBe(SAMPLE_SAML_METADATA);
-    expect(fetcher.fetched).toEqual([URL_OK, URL_OK, 'https://idp.acme.example/other']);
-  });
-
-  it('applies the same guard as the HTTPS fetcher to seeded private and mixed answers, before serving', async () => {
-    const mixed = 'https://idp.mixed.example/metadata';
-    const fetcher = new FakeMetadataFetcher();
-    fetcher.setAddresses('IDP.Mixed.example', ['203.0.113.10', '10.0.0.1']);
-    fetcher.setAddresses('idp.internal.example', ['10.0.0.5']);
-
-    await expect(fetcher.lookup('idp.mixed.example')).resolves.toEqual(['203.0.113.10', '10.0.0.1']);
-    await expect(fetcher.fetchXml(mixed)).rejects.toMatchObject({ name: 'MetadataUrlError', reason: 'private_address' });
-    await expect(fetcher.fetchXml('https://idp.internal.example/metadata')).rejects.toMatchObject({
-      reason: 'private_address',
-    });
-    await expect(fetcher.fetchXml('http://idp.acme.example/metadata')).rejects.toMatchObject({ reason: 'scheme' });
-    expect(fetcher.fetched).toEqual([]);
-  });
-
-  it('takes the address table in the constructor too', async () => {
-    const fetcher = new FakeMetadataFetcher(new Map(), new Map([['IDP.Acme.example', ['127.0.0.1']]]));
-    await expect(fetcher.fetchXml(URL_OK)).rejects.toMatchObject({ reason: 'private_address' });
   });
 });
 
@@ -374,6 +368,7 @@ describe('metadataFailureLabel', () => {
   it('names the error and, for this module, its reason; never the URL, its query or the body', () => {
     expect(metadataFailureLabel(new MetadataUrlError('private_address'))).toBe('MetadataUrlError: private_address');
     expect(metadataFailureLabel(new MetadataFetchError('timeout'))).toBe('MetadataFetchError: timeout');
+    expect(metadataFailureLabel(new HostLookupUnavailableError())).toBe('HostLookupUnavailableError');
     const leaky = new TypeError('fetch failed: https://idp.acme.example/metadata?tenant=secret <md:EntityDescriptor>');
     expect(metadataFailureLabel(leaky)).toBe('TypeError');
     expect(metadataFailureLabel('a thrown string')).toBe('unknown error');
@@ -386,5 +381,14 @@ describe('metadataFailureLabel', () => {
     for (const reason of ['redirect', 'status', 'too_large', 'timeout', 'network'] as const) {
       expect(new MetadataFetchError(reason).message).not.toMatch(/https?:\/\/|\.example/);
     }
+    expect(new HostLookupUnavailableError().message).not.toMatch(/https?:\/\/|\.example/);
+  });
+});
+
+describe('module boundaries', () => {
+  it('the production fetcher imports no fixture: the stub-mode fake lives in fake-metadata-fetcher.ts', () => {
+    const source = readFileSync(new URL('./metadata-fetcher.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/from '[^']*fixture[^']*'/);
+    expect(source).not.toMatch(/class FakeMetadataFetcher/);
   });
 });

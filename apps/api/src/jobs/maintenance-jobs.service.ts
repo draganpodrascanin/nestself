@@ -24,7 +24,7 @@ import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.rep
 import { Mailer } from '../email/mailer.js';
 import { IdentityProviderService } from '../identity/identity-provider.service.js';
 import { certificateExpiryFromMetadata } from '../identity/saml-metadata.js';
-import { AuditWriter } from '../audit/audit-writer.js';
+import { AuditWriter, type AuditEventInput } from '../audit/audit-writer.js';
 import { PrincipalLoader } from '../principal/principal-loader.js';
 import { KEY_VALUE_STORE, type KeyValueStore } from '../redis/key-value-store.js';
 import {
@@ -103,9 +103,18 @@ export interface SsoCertificateReport {
   expiring: number;
   /** Expiring connections mailed to `OPS_ALERT_EMAIL` in this run (at most one mail per connection in 7 days). */
   alerted: number;
-  /** Connections whose fetch, provider lookup, audit write or alert threw; logged and retried on the next run. */
+  /**
+   * Failures, each logged and retried on the next run: a refresh that threw
+   * (fetch, provider lookup, write) or fetched metadata without a signing
+   * certificate, whose connection is still checked against its stored
+   * expiry; an audit transaction that rejected (that connection is neither
+   * counted as expiring nor mailed); an alert mail that was not sent.
+   */
   failed: number;
 }
+
+/** What a connection's refresh found: the expiry to check, or fetched metadata without a signing certificate. */
+type CertificateRefresh = { kind: 'expiry'; expiresAt: Date | null; written: boolean } | { kind: 'no_certificate' };
 
 export type MaintenanceReport =
   | { job: 'audit.ensure-partitions'; partitions: string[] }
@@ -365,15 +374,21 @@ export class MaintenanceJobsService {
    * - a certificate that expires within `SSO_CERTIFICATE_WARNING_DAYS`, or has
    *   already expired, is audited as `sso_connection.changed` with reason
    *   `certificate_expiring` (actor JOB, the connection's organization) and
-   *   logged as a warning. Once that row is written, `ops_certificate_alert`
-   *   is mailed to `OPS_ALERT_EMAIL` (English) at most once per connection in
+   *   logged as a warning. The row is written in its own transaction, so an
+   *   insert that fails rejects (the pool path would only log it); once the
+   *   transaction committed, `ops_certificate_alert` is mailed to
+   *   `OPS_ALERT_EMAIL` (English) at most once per connection in
    *   `SSO_CERT_ALERT_TTL`. Without `OPS_ALERT_EMAIL` the run audits and logs
    *   as before and warns once that alert mail is off. Staff then ask the
    *   employer for new metadata.
-   * A fetch, provider lookup, audit write or alert that throws is counted in
-   * `failed`, logged by provider name and error name and retried on the next
-   * run; nothing is retried within the run. Logs and audit details carry the
-   * provider name, dates and ids only, never the metadata URL or document.
+   * A refresh that fails (the fetch, the provider lookup or the write throws,
+   * or the fetched metadata has no signing certificate) is counted in
+   * `failed` and logged, and the connection is still checked against its
+   * stored expiry: an outage at the IdP never hides a known expiring date.
+   * An audit transaction or an alert that fails is counted in `failed` too.
+   * Everything failed is retried on the next run, nothing within the run.
+   * Logs and audit details carry the provider name, dates and ids only,
+   * never the metadata URL or document.
    */
   async checkSsoCertificates(now = new Date()): Promise<SsoCertificateReport> {
     const report: SsoCertificateReport = {
@@ -389,40 +404,49 @@ export class MaintenanceJobsService {
     const connections = await this.ssoRepo.listActiveConnections();
     for (const conn of connections) {
       report.scanned += 1;
-      let expiresAt: Date | null;
+      // A refresh that fails leaves the stored date, which is checked all the same.
+      let expiresAt = conn.certificateExpiresAt;
       try {
-        const current = await this.currentCertificateExpiry(conn);
-        expiresAt = current.expiresAt;
-        if (current.refreshed) report.refreshed += 1;
+        const refresh = await this.refreshCertificateExpiry(conn);
+        if (refresh.kind === 'no_certificate') {
+          report.failed += 1;
+          this.logger.warn(
+            `SSO connection ${conn.cognitoProviderName}: no certificate in metadata; the stored expiry is checked, retried on the next run`,
+          );
+        } else {
+          expiresAt = refresh.expiresAt;
+          if (refresh.written) report.refreshed += 1;
+        }
       } catch (err) {
         report.failed += 1;
         this.logger.warn(
-          `SSO connection ${conn.cognitoProviderName}: certificate expiry not refreshed (${metadataFailureLabel(err)}); retried on the next run`,
+          `SSO connection ${conn.cognitoProviderName}: certificate expiry not refreshed (${metadataFailureLabel(err)}); the stored expiry is checked, retried on the next run`,
         );
-        continue;
       }
       if (!expiresAt) continue;
       const msLeft = expiresAt.getTime() - now.getTime();
       if (msLeft > SSO_CERTIFICATE_WARNING_DAYS * DAY_MS) continue;
       const daysLeft = Math.floor(msLeft / DAY_MS);
+      const event: AuditEventInput = {
+        action: 'sso_connection.changed',
+        actorUserId: null,
+        actorKind: 'JOB',
+        orgId: conn.orgId,
+        recordType: 'sso_connection',
+        recordId: conn.id,
+        result: 'ALLOWED',
+        details: {
+          reason: 'certificate_expiring',
+          expiresAt: expiresAt.toISOString(),
+          connectionId: conn.id,
+          daysLeft,
+          job: 'sso.certificate-expiry',
+        },
+        occurredAt: now,
+      };
       try {
-        await this.audit.record({
-          action: 'sso_connection.changed',
-          actorUserId: null,
-          actorKind: 'JOB',
-          orgId: conn.orgId,
-          recordType: 'sso_connection',
-          recordId: conn.id,
-          result: 'ALLOWED',
-          details: {
-            reason: 'certificate_expiring',
-            expiresAt: expiresAt.toISOString(),
-            connectionId: conn.id,
-            daysLeft,
-            job: 'sso.certificate-expiry',
-          },
-          occurredAt: now,
-        });
+        // In a transaction, as the other jobs write theirs: a failed insert throws.
+        await this.dbs.withTransaction((tx) => this.audit.record(event, { tx }));
       } catch (err) {
         report.failed += 1;
         const reason = err instanceof Error ? err.name : 'unknown error';
@@ -436,7 +460,7 @@ export class MaintenanceJobsService {
           : `SSO connection ${conn.cognitoProviderName}: signing certificate expires on ${expiresAt.toISOString()} (${daysLeft} days left)`,
       );
 
-      // The audit row is written: now the mail (never before, never inside a transaction).
+      // The audit row is committed: now the mail (never before, never inside a transaction).
       if (!opsAlertEmail) {
         unmailed += 1;
         continue;
@@ -464,28 +488,28 @@ export class MaintenanceJobsService {
 
   /**
    * The certificate expiry to check for one connection, stored first when it
-   * changed (`refreshed`): what the fetched metadata carries for a
-   * metadata-URL SAML connection (null when it has no readable signing
-   * certificate), the identity provider's answer for a metadata-XML one
-   * whose expiry is unknown, the stored value otherwise. Throws when the
-   * fetch, the lookup or the write fails.
+   * changed (`written`): the expiry the fetched metadata carries for a
+   * metadata-URL SAML connection (`no_certificate` when it has no readable
+   * signing certificate, so a stored date is never erased), the identity
+   * provider's answer for a metadata-XML one whose expiry is unknown, the
+   * stored value otherwise. Throws when the fetch, the lookup or the write
+   * fails.
    */
-  private async currentCertificateExpiry(
-    conn: SsoConnectionRow,
-  ): Promise<{ expiresAt: Date | null; refreshed: boolean }> {
+  private async refreshCertificateExpiry(conn: SsoConnectionRow): Promise<CertificateRefresh> {
     const stored = conn.certificateExpiresAt;
-    if (conn.protocol !== 'SAML') return { expiresAt: stored, refreshed: false };
+    if (conn.protocol !== 'SAML') return { kind: 'expiry', expiresAt: stored, written: false };
     if (conn.metadataUrl) {
       const fetched = certificateExpiryFromMetadata(await this.metadata.fetchXml(conn.metadataUrl));
-      if (fetched?.getTime() === stored?.getTime()) return { expiresAt: stored, refreshed: false };
+      if (!fetched) return { kind: 'no_certificate' };
+      if (fetched.getTime() === stored?.getTime()) return { kind: 'expiry', expiresAt: stored, written: false };
       await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: fetched });
-      return { expiresAt: fetched, refreshed: true };
+      return { kind: 'expiry', expiresAt: fetched, written: true };
     }
-    if (stored) return { expiresAt: stored, refreshed: false };
+    if (stored) return { kind: 'expiry', expiresAt: stored, written: false };
     const info = await this.idp.describeProvider(conn.cognitoProviderName);
-    if (!info?.certificateExpiresAt) return { expiresAt: null, refreshed: false };
+    if (!info?.certificateExpiresAt) return { kind: 'expiry', expiresAt: null, written: false };
     await this.ssoRepo.updateConnection(conn.id, { certificateExpiresAt: info.certificateExpiresAt });
-    return { expiresAt: info.certificateExpiresAt, refreshed: true };
+    return { kind: 'expiry', expiresAt: info.certificateExpiresAt, written: true };
   }
 
   /**

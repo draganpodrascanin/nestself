@@ -26,7 +26,7 @@ import {
   SIGNING_CERT_NOT_AFTER,
 } from '../identity/saml-metadata.fixture.js';
 import { FakeDnsTxtResolver } from './dns-txt-resolver.js';
-import { FakeMetadataFetcher } from './metadata-fetcher.js';
+import { FakeMetadataFetcher } from './fake-metadata-fetcher.js';
 import { SsoConnectionsService } from './sso-connections.service.js';
 
 const ACTOR = { userId: 'user_nikola', sessionId: 'sess_1' } as Principal;
@@ -169,6 +169,12 @@ const OIDC: SsoConnectionCreateRequest = {
   oidcIssuer: 'https://login.acme.example',
   oidcClientId: 'client-1',
 };
+
+/** Metadata a 2xx answer may carry that has no signing certificate in it. */
+const NO_CERTIFICATE_METADATA = '<md:EntityDescriptor entityID="https://idp.acme.example"><md:IDPSSODescriptor/></md:EntityDescriptor>';
+
+/** A resolver failure as `dns.lookup` reports it: an error with a `code`. */
+const resolverError = (code: string) => Object.assign(new Error(`getaddrinfo ${code}`), { code });
 
 async function expectApiError(promise: Promise<unknown>, status: number, code: string): Promise<ApiHttpException> {
   const err = await promise.then(
@@ -357,6 +363,24 @@ describe('SsoConnectionsService', () => {
       it('accepts a public host and fetches nothing at create', async () => {
         await expect(ctx.service.create(SAML, ACTOR)).resolves.toMatchObject({ status: 'DRAFT', certificateExpiresAt: null });
         expect(ctx.fetcher.fetched).toEqual([]);
+      });
+
+      it('a host that does not exist is 422 (host); a resolver that does not answer is 503 unavailable', async () => {
+        ctx.fetcher.setLookupFailure('idp.gone.example', resolverError('ENOTFOUND'));
+        const gone = await expectApiError(
+          ctx.service.create({ ...SAML, metadataUrl: 'https://idp.gone.example/metadata' }, ACTOR),
+          422,
+          'validation',
+        );
+        expect(gone.details).toEqual({ field: 'metadataUrl', reason: 'host' });
+
+        ctx.fetcher.setLookupFailure('idp.slow.example', resolverError('EAI_AGAIN'));
+        await expectApiError(
+          ctx.service.create({ ...SAML, metadataUrl: 'https://idp.slow.example/metadata' }, ACTOR),
+          503,
+          'unavailable',
+        );
+        expect(ctx.repo.createConnection).not.toHaveBeenCalled();
       });
     });
   });
@@ -551,6 +575,43 @@ describe('SsoConnectionsService', () => {
         expect(ctx.idp.createProvider).not.toHaveBeenCalled();
         expect(ctx.repo.connections.get(conn.id)?.status).toBe('DRAFT');
         expect(ctx.fetcher.fetched).toEqual([]);
+      });
+
+      it('answers 503 unavailable, before registering, when the resolver does not answer for the stored URL', async () => {
+        const conn = await connectionIn(ctx, 'DRAFT');
+        ctx.fetcher.setLookupFailure('idp.acme.example', resolverError('ETIMEDOUT'));
+
+        await expectApiError(ctx.service.test(conn.id, ACTOR), 503, 'unavailable');
+
+        expect(ctx.idp.createProvider).not.toHaveBeenCalled();
+        expect(ctx.repo.connections.get(conn.id)?.status).toBe('DRAFT');
+      });
+
+      it('a fetched document without a signing certificate keeps the stored expiry and warns', async () => {
+        const conn = await connectionIn(ctx, 'TESTING');
+        const stored = new Date('2027-01-01T00:00:00Z');
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+        ctx.fetcher.setResponse(SAML.metadataUrl!, NO_CERTIFICATE_METADATA);
+        ctx.warn.mockImplementation(() => {});
+
+        await ctx.service.test(conn.id, ACTOR);
+
+        expect(ctx.repo.connections.get(conn.id)).toMatchObject({ status: 'TESTING', certificateExpiresAt: stored });
+        expect(ctx.warn).toHaveBeenCalledTimes(1);
+        const line = String(ctx.warn.mock.calls[0]![0]);
+        expect(line).toContain('org-acme-saml');
+        expect(line).toContain('no signing certificate in the metadata');
+        expect(line).not.toMatch(/idp\.acme\.example|https:|EntityDescriptor/);
+      });
+
+      it('stores null for a document without a signing certificate only when nothing was stored before', async () => {
+        const conn = await connectionIn(ctx, 'DRAFT');
+        ctx.fetcher.setResponse(SAML.metadataUrl!, NO_CERTIFICATE_METADATA);
+
+        await ctx.service.test(conn.id, ACTOR);
+
+        expect(ctx.repo.connections.get(conn.id)?.certificateExpiresAt).toBeNull();
+        expect(ctx.warn).not.toHaveBeenCalled();
       });
     });
   });
@@ -980,6 +1041,60 @@ describe('SsoConnectionsService', () => {
         );
         expect(err.details).toEqual({ field: 'oidcIssuer', reason: 'private_address' });
         expect(ctx.repo.connections.get(conn.id)?.oidcIssuer).toBe(OIDC.oidcIssuer);
+      });
+
+      it('answers 503 unavailable and changes nothing when the resolver does not answer for the new issuer', async () => {
+        const conn = await ctx.service.create(OIDC, ACTOR);
+        ctx.fetcher.setLookupFailure('login2.acme.example', resolverError('EAI_AGAIN'));
+
+        await expectApiError(ctx.service.update(conn.id, { oidcIssuer: 'https://login2.acme.example' }, ACTOR), 503, 'unavailable');
+
+        expect(ctx.repo.connections.get(conn.id)?.oidcIssuer).toBe(OIDC.oidcIssuer);
+        expect(ctx.events.map((e) => e.action)).toEqual(['sso_connection.created']);
+      });
+    });
+
+    describe('metadata without a signing certificate never erases a known expiry', () => {
+      it('a metadataXml change to such a document keeps the stored expiry and warns', async () => {
+        const conn = await connectionIn(ctx, 'TESTING', null, SAML_XML);
+        const stored = new Date('2027-02-01T00:00:00Z');
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+        ctx.warn.mockImplementation(() => {});
+
+        const res = await ctx.service.update(conn.id, { metadataXml: NO_CERTIFICATE_METADATA }, ACTOR);
+
+        expect(res.certificateExpiresAt).toBe(stored.toISOString());
+        // No certificateExpiresAt in the patch: the stored date stays.
+        expect(ctx.repo.updateConnection).toHaveBeenLastCalledWith(
+          conn.id,
+          { metadataXml: NO_CERTIFICATE_METADATA, lastTestedAt: null },
+          TX,
+          { fromStatus: 'TESTING' },
+        );
+        expect(ctx.warn).toHaveBeenCalledTimes(1);
+        expect(String(ctx.warn.mock.calls[0]![0])).toContain('no signing certificate in the metadata');
+      });
+
+      it('a metadataUrl change to a URL serving such a document keeps the stored expiry and warns', async () => {
+        const next = 'https://idp.acme.example/empty';
+        ctx.fetcher.setResponse(next, NO_CERTIFICATE_METADATA);
+        const conn = await connectionIn(ctx, 'TESTING');
+        const stored = new Date('2027-02-01T00:00:00Z');
+        await ctx.repo.updateConnection(conn.id, { certificateExpiresAt: stored });
+        ctx.warn.mockImplementation(() => {});
+
+        const res = await ctx.service.update(conn.id, { metadataUrl: next }, ACTOR);
+
+        expect(res.certificateExpiresAt).toBe(stored.toISOString());
+        expect(ctx.fetcher.fetched).toEqual([next]);
+        expect(ctx.warn).toHaveBeenCalledTimes(1);
+      });
+
+      it('with nothing stored before, the expiry stays null and nothing is logged', async () => {
+        const draft = await ctx.service.create(SAML_XML, ACTOR);
+        const res = await ctx.service.update(draft.id, { metadataXml: NO_CERTIFICATE_METADATA }, ACTOR);
+        expect(res.certificateExpiresAt).toBeNull();
+        expect(ctx.warn).not.toHaveBeenCalled();
       });
     });
 
