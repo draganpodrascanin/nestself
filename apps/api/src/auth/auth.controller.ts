@@ -57,6 +57,8 @@ import { StepUpService } from './step-up.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SsoCallbackService, type SsoRedirect } from './sso-callback.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { RedirectOnThrottle } from '../common/redirect-on-throttle.decorator.js';
+import { SSO_CALLBACK_THROTTLE, SSO_START_THROTTLE } from '../authz/throttles.js';
 import { PKCE_TTL } from '../redis/redis-keys.js';
 import {
   DiscoverRequestSchema,
@@ -75,9 +77,6 @@ import {
   SsoStartQuerySchema,
   SsoCallbackQuerySchema,
 } from '@nestself/contracts';
-
-/** API-R-06/07: the redirect endpoints share a tight per-IP limit. */
-const SSO_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -150,11 +149,14 @@ export class AuthController {
   /**
    * `?connection=<cognitoProviderName>&surface=workspace|admin[&returnPath=/x][&test=<nonce>]`
    * -> 302 to the identity provider. 400 `validation` for a malformed query,
-   * including an absolute or protocol-relative `returnPath`.
+   * including an absolute or protocol-relative `returnPath`. Throttled per IP
+   * and connection; a refused start is a 302 to the workspace's
+   * `/sign-in?reason=sso_rate_limited`.
    */
   @Public()
   @Get('sso/start')
-  @Throttle(SSO_THROTTLE)
+  @Throttle(SSO_START_THROTTLE)
+  @RedirectOnThrottle()
   async ssoStart(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = validate(SsoStartQuerySchema, query);
     const result = await this.ssoCallback.start(parsed, extractMeta(req));
@@ -170,11 +172,13 @@ export class AuthController {
 
   /**
    * Cognito's redirect target. Always a 302: to the surface with the session
-   * cookies on success, else to the surface's `/sign-in?reason=...`.
+   * cookies on success, else to the surface's `/sign-in?reason=...` (a
+   * throttled callback: the workspace's `reason=sso_rate_limited`).
    */
   @Public()
   @Get('sso/callback')
-  @Throttle(SSO_THROTTLE)
+  @Throttle(SSO_CALLBACK_THROTTLE)
+  @RedirectOnThrottle()
   async ssoCallbackRoute(@Req() req: HttpReq, @Res() res: HttpRes, @Query() query: unknown): Promise<void> {
     const parsed = SsoCallbackQuerySchema.safeParse(query);
     const result = await this.ssoCallback.callback(

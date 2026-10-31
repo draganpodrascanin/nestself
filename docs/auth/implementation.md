@@ -748,11 +748,13 @@ Status changes are conditional (`updateConnection(..., { fromStatus })`): a conc
 | POST | `/ops/sso-connections/:id/domains/:domainId/verify` | same | 10/min |
 | POST | `/ops/sso-connections/:id/test` | same | 10/min |
 | POST | `/ops/sso-connections/:id/activate` | same | 10/min |
-| GET | `/auth/sso/start` | `@Public` | 10/min |
-| GET | `/auth/sso/callback` | `@Public` | 10/min |
+| GET | `/auth/sso/start` | `@Public`, `@RedirectOnThrottle()` | 60/min per IP and connection (`SSO_START_THROTTLE`) |
+| GET | `/auth/sso/callback` | `@Public`, `@RedirectOnThrottle()` | 120/min per IP (`SSO_CALLBACK_THROTTLE`) |
 | GET | `/auth/sso/_fake/authorize` | `@Public`, **stub mode only** (22.7) | default |
 
 `sso.manage` is held by `platform_owner` only and has the `administration` step-up class, so every `/ops/sso-connections` route needs a sign-in or step-up from the last 30 minutes.
+
+A refused `start` or `callback` is not the JSON 429: `AppThrottlerGuard` (`src/common/app-throttler.guard.ts`) throws `ThrottledRedirect` and the exception filter answers it with a bodyless 302 to the workspace `/sign-in?reason=sso_rate_limited` (`Cache-Control: no-store`, `Retry-After: 60`), which the sign-in page shows as "wait a minute". With `REDIS_URL` set the counters are in Redis (`KeyValueThrottlerStorage`), so every API task counts against the same budget.
 
 **Which origin the browser routes use.** `start`, `callback` and the fake `authorize` are reached through the surface's own origin, not `API_PUBLIC_URL`: the workspace origin for `surface=workspace`, the admin origin for `surface=admin` (`apiOriginForSurface`, `src/auth/sso-start-url.ts`). Every SPA proxies `/api` to the API (CloudFront `/api/*` to the ALB on both distributions, `infra/cdk/lib/edge-stack.ts`; the Vite dev proxy to `:4000`), and the session cookie `__Host-nestself_session` (`Path=/`, no `Domain`) binds to the exact host that sets it. With every URL built from `API_PUBLIC_URL` (the workspace origin in staging and production) an admin flow set its cookie on `app.<stage>` and redirected to `admin.<stage>`, whose `/api/auth/me` never saw it; locally it worked only because localhost cookies ignore ports. A flow also has to start on the origin its callback runs on, because the browser-binding cookie set at start is host-only. The registered web-client callbacks (`webCallbackUrls` in `infra/cdk/lib/config.ts`: both SPA origins, plus `:4000` in dev) are exactly the ones the API now sends; `API_PUBLIC_URL` remains for mobile and direct callers.
 

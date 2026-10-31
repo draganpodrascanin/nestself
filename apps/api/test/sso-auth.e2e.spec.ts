@@ -44,7 +44,9 @@ const shouldRun = !!TEST_DB_URL;
 const ORG = 'org_sample';
 const OTHER_ORG = 'org_ssoauth_other';
 const PROVIDER = 'org-acme-oidc';
-const API = 'http://api.ssoauth.test';
+/** OTHER_ORG's ACTIVE connection: start buckets are per IP and connection. */
+const OTHER_PROVIDER = 'org-other-ssoauth-oidc';
+const API ='http://api.ssoauth.test';
 const WORKSPACE = 'http://workspace.ssoauth.test';
 const ADMIN = 'http://admin.ssoauth.test';
 /** Each surface's flow runs on that surface's origin (its SPA proxies /api). */
@@ -113,6 +115,22 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
     await repo.markDomainVerified(domain.id, new Date());
 
     await testDb.db.insert(organizations).values({ id: OTHER_ORG, name: 'Other SSO Auth Org', slug: 'other-ssoauth' });
+    await idp.createProvider({
+      name: OTHER_PROVIDER,
+      protocol: 'OIDC',
+      oidcIssuer: 'https://idp.other.example',
+      oidcClientId: 'client',
+      attributeMapping: {},
+    });
+    await repo.createConnection({
+      orgId: OTHER_ORG,
+      protocol: 'OIDC',
+      cognitoProviderName: OTHER_PROVIDER,
+      status: 'ACTIVE',
+      oidcIssuer: 'https://idp.other.example',
+      oidcClientId: 'client',
+      lastTestedAt: new Date(),
+    });
 
     // Known native user with a password (the discover timing baseline).
     idp.seedUsers([{ email: 'user_nikola@example.com', password: 'Password1!' }]);
@@ -125,8 +143,8 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
   });
 
   beforeEach(() => {
-    // The redirect routes allow 10 requests a minute per IP; every test here
-    // comes from the same socket address.
+    // Start allows 60 a minute per IP and connection, the callback 120 per IP,
+    // and every test here comes from the same socket address.
     resetThrottlerStorage(app);
   });
 
@@ -618,6 +636,74 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       const failed = await auditFor('auth.sign_in.failed');
       expect(failed.length).toBe(before + 1);
       expect(failed.some((e) => (e.details as { reason?: string }).reason === 'sso_browser')).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Throttles (5.9): a refused browser hop lands on the sign-in page
+  // -------------------------------------------------------------------------
+
+  describe('throttles (5.9)', () => {
+    const RATE_LIMITED = `${WORKSPACE}/sign-in?reason=sso_rate_limited`;
+    const start = (connection: string) =>
+      request(app.getHttpServer()).get('/api/auth/sso/start').query({ connection, surface: 'workspace' });
+    const callback = () =>
+      request(app.getHttpServer()).get('/api/auth/sso/callback').query({ code: 'c', state: 'never-issued' });
+
+    function expectAuthorizeHop(res: request.Response, connection: string) {
+      expect(res.status).toBe(302);
+      const url = new URL(res.headers.location as string);
+      expect(url.origin + url.pathname).toBe(`${WORKSPACE}/api/auth/sso/_fake/authorize`);
+      expect(url.searchParams.get('connection')).toBe(connection);
+    }
+
+    async function spendStarts(connection: string, count: number, from?: string) {
+      for (let i = 0; i < count; i++) {
+        const req = start(connection);
+        expectAuthorizeHop(await (from ? req.set('X-Forwarded-For', from) : req), connection);
+      }
+    }
+
+    function expectRateLimitedRedirect(res: request.Response) {
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe(RATE_LIMITED);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['retry-after']).toBe('60');
+      // A redirect, not the JSON 429 the browser would show as raw text.
+      expect(res.headers['content-type']).toBeUndefined();
+      expect(res.text).toBe('');
+    }
+
+    it('start buckets are per IP and connection', async () => {
+      await spendStarts(PROVIDER, 60);
+      expectAuthorizeHop(await start(OTHER_PROVIDER), OTHER_PROVIDER);
+      // The first connection's own bucket is spent.
+      expect((await start(PROVIDER)).headers.location).toBe(RATE_LIMITED);
+    });
+
+    it('the 61st start of one connection redirects to /sign-in?reason=sso_rate_limited', async () => {
+      await spendStarts(PROVIDER, 60);
+      expectRateLimitedRedirect(await start(PROVIDER));
+    });
+
+    it('callback over its limit redirects too', async () => {
+      for (let i = 0; i < 120; i++) {
+        expect((await callback()).headers.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+      }
+      expectRateLimitedRedirect(await callback());
+    });
+
+    it('behind trusted proxies (TRUST_PROXY_HOPS) each visitor address has its own start bucket', async () => {
+      // What main.ts sets from TRUST_PROXY_HOPS; this suite's app runs without it.
+      const express = app.getHttpAdapter().getInstance();
+      express.set('trust proxy', 1);
+      try {
+        await spendStarts(PROVIDER, 60, '198.51.100.7');
+        expectRateLimitedRedirect(await start(PROVIDER).set('X-Forwarded-For', '198.51.100.7'));
+        expectAuthorizeHop(await start(PROVIDER).set('X-Forwarded-For', '198.51.100.8'), PROVIDER);
+      } finally {
+        express.set('trust proxy', false);
+      }
     });
   });
 });

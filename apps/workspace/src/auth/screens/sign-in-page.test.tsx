@@ -753,4 +753,13 @@ describe('SignInPage SSO return reasons', () => {
     await waitFor(() => expect(emailOtpStart).toHaveBeenCalledWith('new@acme.example', 'en'));
     expect(discover).not.toHaveBeenCalled();
   });
+
+  it('sso_rate_limited: says to wait a minute, in the error summary', async () => {
+    pageApi.current = makeAuthApi();
+    renderInRouter(<SignInPage reason="sso_rate_limited" />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Too many sign-in attempts from your network. Wait a minute and try again.').length,
+    ).toBeGreaterThan(0);
+  });
 });

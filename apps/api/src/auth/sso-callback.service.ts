@@ -77,7 +77,7 @@ import {
   invitableTemplateFor,
 } from '../invitations/invitation-membership-activator.js';
 import { IdentityResolutionService, federatedProvider } from './identity-resolution.service.js';
-import { ssoCallbackUrl } from './sso-start-url.js';
+import { ssoCallbackUrl, surfaceOrigin } from './sso-start-url.js';
 
 export type Surface = 'workspace' | 'admin';
 export type RequestMeta = { ip: string | null; userAgent: string | null };
@@ -101,12 +101,6 @@ export interface SsoRedirect {
   /** Set by `start`: the controller writes it as the SSO browser-binding cookie. */
   browserNonce?: string;
 }
-
-/** Stub-mode fallback only; see the note in `apiOriginForSurface` (sso-start-url.ts). */
-const DEFAULT_SURFACE_URLS: Record<Surface, string> = {
-  workspace: 'http://localhost:5173',
-  admin: 'http://localhost:5174',
-};
 
 const JIT_TEMPLATE = PERMISSION_TEMPLATES.find((t) => t.key === JIT_TEMPLATE_KEY)!;
 
@@ -187,11 +181,6 @@ export class SsoCallbackService {
    */
   callbackUrl(surface: Surface): string {
     return ssoCallbackUrl(this.config, surface);
-  }
-
-  surfaceOrigin(surface: Surface): string {
-    const configured = this.config.get<string>(surface === 'admin' ? 'ADMIN_URL' : 'WORKSPACE_URL');
-    return (configured || DEFAULT_SURFACE_URLS[surface]).replace(/\/+$/, '');
   }
 
   // -------------------------------------------------------------------------
@@ -569,7 +558,7 @@ export class SsoCallbackService {
     }
 
     return {
-      location: `${this.surfaceOrigin(record.surface)}${record.returnPath ?? '/'}`,
+      location: `${surfaceOrigin(this.config, record.surface)}${record.returnPath ?? '/'}`,
       session: {
         sessionId: session.sessionId,
         csrfToken: session.csrfToken,
@@ -640,6 +629,6 @@ export class SsoCallbackService {
   private signInUrl(surface: Surface, reason: SsoSignInReason, email?: string): string {
     const query = new URLSearchParams({ reason });
     if (email) query.set('email', email);
-    return `${this.surfaceOrigin(surface)}/sign-in?${query.toString()}`;
+    return `${surfaceOrigin(this.config, surface)}/sign-in?${query.toString()}`;
   }
 }

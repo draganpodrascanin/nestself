@@ -44,6 +44,20 @@ export class SessionExpiredError extends ApiHttpException {
 }
 
 /**
+ * Thrown by `AppThrottlerGuard` when the throttle refuses a route marked
+ * `@RedirectOnThrottle()` (the SSO browser hops, 5.9). The exception filter
+ * answers it with a bodyless 302 to `location` instead of the JSON 429,
+ * which a browser navigation would show as raw text.
+ */
+export class ThrottledRedirect extends Error {
+  override readonly name = 'ThrottledRedirect';
+
+  constructor(readonly location: string) {
+    super('Too many requests');
+  }
+}
+
+/**
  * Thrown when the session refresh lock cannot be acquired and the current
  * token is too close to expiry. The HTTP layer maps it to 503 with Retry-After.
  *

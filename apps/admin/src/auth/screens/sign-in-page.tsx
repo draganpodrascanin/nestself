@@ -58,6 +58,7 @@ interface Props {
 function reasonMessage(reason: SsoSignInReason | undefined, t: (key: string) => string): string | null {
   if (reason === 'sso_denied') return t('error.ssoDenied');
   if (reason === 'sso_email_unverified') return t('error.ssoEmailUnverified');
+  if (reason === 'sso_rate_limited') return t('error.ssoRateLimited');
   return null;
 }
 
