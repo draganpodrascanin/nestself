@@ -107,7 +107,7 @@ export type SsoBindStartRequest = z.infer<typeof SsoBindStartRequestSchema>;
 
 export const SsoBindStartResponseSchema = z.object({
   challengeToken: z.string().min(1),
-  /** The address the code was sent to, masked, for example `d***@intesa.example`. */
+  /** The address the code was sent to, masked, for example `i***@acme.example`. */
   emailMasked: z.string().min(1),
 });
 export type SsoBindStartResponse = z.infer<typeof SsoBindStartResponseSchema>;
@@ -312,7 +312,7 @@ export const StepUpStartResponseSchema = z.object({
   method: z.enum(['totp', 'email_otp', 'sso']),
   challengeToken: z.string().min(1),
   ssoStartUrl: z.string().url().nullable(),
-  /** The address the code was sent to, masked (`d***@intesa.example`); null when no email was sent. */
+  /** The address the code was sent to, masked (`i***@acme.example`); null when no email was sent. */
   emailMasked: z.string().nullable(),
 });
 export type StepUpStartResponse = z.infer<typeof StepUpStartResponseSchema>;

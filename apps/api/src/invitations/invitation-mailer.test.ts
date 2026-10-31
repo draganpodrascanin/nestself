@@ -29,7 +29,7 @@ describe('InvitationMailer', () => {
       locale: 'sr-Latn',
       template: 'invitation',
       params: {
-        link: 'https://app.example.test/invitations/tok_123',
+        link: 'https://app.example.test/invite/tok_123',
         organizationName: 'Example <d.o.o.>',
         inviterDisplayName: 'Ivana',
       },
@@ -43,7 +43,7 @@ describe('InvitationMailer', () => {
 
     expect(mailer.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({ link: 'http://localhost:5173/invitations/tok_123' }),
+        params: expect.objectContaining({ link: 'http://localhost:5173/invite/tok_123' }),
       }),
     );
   });

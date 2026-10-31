@@ -742,6 +742,8 @@
       "rateLimited": "Too many attempts. Wait a moment and try again.",
       "unavailable": "The identity provider is not reachable right now. Try again later.",
       "unknown": "Something went wrong. Try again.",
+      "stepUpCancelledTitle": "Verification cancelled",
+      "stepUpCancelled": "SSO connections are shown only after you verify your identity. Nothing was loaded.",
       "fieldSlug": "Choose a shorter slug: the provider name must stay within 20 characters.",
       "fieldProtocol": "The protocol cannot change after the connection was tested.",
       "fieldSecret": "The client secret applies to OIDC connections only and cannot be sent with a reset to draft.",

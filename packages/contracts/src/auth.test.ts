@@ -362,7 +362,7 @@ describe('phase 4 auth contracts', () => {
   });
 
   it('SsoBindStartResponseSchema carries the challenge token and the masked address, never empty', () => {
-    const body = { challengeToken: 'tok', emailMasked: 'd***@intesa.example' };
+    const body = { challengeToken: 'tok', emailMasked: 'i***@acme.example' };
     expect(SsoBindStartResponseSchema.parse(body)).toEqual(body);
     expect(SsoBindStartResponseSchema.safeParse({ ...body, emailMasked: '' }).success).toBe(false);
     expect(SsoBindStartResponseSchema.safeParse({ ...body, emailMasked: null }).success).toBe(false);
@@ -394,8 +394,8 @@ describe('phase 4 auth contracts', () => {
   });
 
   it('SsoBindResendResponseSchema carries the masked address, never empty', () => {
-    expect(SsoBindResendResponseSchema.parse({ emailMasked: 'd***@intesa.example' })).toEqual({
-      emailMasked: 'd***@intesa.example',
+    expect(SsoBindResendResponseSchema.parse({ emailMasked: 'i***@acme.example' })).toEqual({
+      emailMasked: 'i***@acme.example',
     });
     expect(SsoBindResendResponseSchema.safeParse({ emailMasked: '' }).success).toBe(false);
     expect(SsoBindResendResponseSchema.safeParse({}).success).toBe(false);

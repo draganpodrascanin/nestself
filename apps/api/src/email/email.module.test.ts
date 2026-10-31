@@ -8,7 +8,7 @@ import { Mailer, type MailMessage } from './mailer.js';
 import { SesMailer } from './ses-mailer.js';
 
 const MAIL: MailMessage = {
-  to: 'dragan@intesa.example',
+  to: 'ivana@acme.example',
   locale: 'en',
   template: 'step_up_code',
   params: { code: '12345678', minutes: '5' },

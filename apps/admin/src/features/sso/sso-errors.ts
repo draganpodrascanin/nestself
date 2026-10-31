@@ -19,7 +19,10 @@
  * `withStepUp`; it reaches this mapper only when the retry is refused again
  * and then shows `unknown`.
  *
- * `null` means the user cancelled step-up: not a failure, nothing to show.
+ * `null` means the user cancelled the step-up of an action: not a failure,
+ * nothing to show. A cancelled step-up of the list read (`load`) is
+ * `stepUpCancelled`, because the page then has no list to show and offers
+ * Try again.
  */
 import { ApiError } from '@nestself/api-client';
 import { StepUpCancelledError } from '../../auth';
@@ -45,6 +48,7 @@ export type SsoErrorKey =
   | 'rateLimited'
   | 'unavailable'
   | 'unknown'
+  | 'stepUpCancelled'
   | 'fieldSlug'
   | 'fieldProtocol'
   | 'fieldSecret'
@@ -165,7 +169,7 @@ function classify(err: ApiError, op: SsoOperation): { key: SsoErrorKey; field: s
 }
 
 export function ssoProblem(err: unknown, op: SsoOperation): SsoProblem | null {
-  if (err instanceof StepUpCancelledError) return null;
+  if (err instanceof StepUpCancelledError) return op === 'load' ? { key: 'stepUpCancelled', field: null } : null;
   if (!(err instanceof ApiError)) return { key: 'unknown', field: null };
   const { key, field } = classify(err, op);
   const inForm = FORM_OPERATIONS.has(op) && field !== null && FORM_FIELDS.has(field);

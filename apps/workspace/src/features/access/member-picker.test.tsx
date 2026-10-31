@@ -175,11 +175,18 @@ describe('MemberPicker', () => {
 
   it('lets the user pick another member after a second search', async () => {
     const user = userEvent.setup();
-    const { onValueChange } = renderPicker();
+    const { listMembers, onValueChange } = renderPicker();
     await pick(user, 'Ana Nikolić');
 
     await user.clear(searchField());
     await user.type(searchField(), 'Stefan');
+    // Open the choices only once the debounced search has answered and its options are
+    // rendered: opened earlier, the popup shows the first page, and the click can land on
+    // an option that the search result is about to rebuild.
+    await waitFor(() =>
+      expect(listMembers).toHaveBeenLastCalledWith(ORG_ID, { status: 'ACTIVE', limit: 100, search: 'Stefan' }),
+    );
+    await waitFor(() => expect(select.latest?.options.map((o) => o.label)).toEqual(['Ana Nikolić', 'Stefan Marković']));
     await user.click(trigger());
     await user.click(await screen.findByRole('option', { name: 'Stefan Marković' }));
 

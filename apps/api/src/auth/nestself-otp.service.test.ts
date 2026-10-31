@@ -28,7 +28,7 @@ vi.mock('node:crypto', async (importOriginal) => {
 });
 
 const NOW = new Date('2026-10-31T10:00:00Z');
-const EMAIL = 'dragan@intesa.example';
+const EMAIL = 'ivana@acme.example';
 
 const INPUT: OtpIssueInput = {
   purpose: 'step_up',
@@ -138,7 +138,7 @@ describe('NestselfOtpService', () => {
     it('issues an 8-digit code, mails it in the locale and masks the address', async () => {
       const { challengeToken, emailMasked } = await ctx.service.issue(INPUT);
 
-      expect(emailMasked).toBe('d***@intesa.example');
+      expect(emailMasked).toBe('i***@acme.example');
       expect(Buffer.from(challengeToken, 'base64url')).toHaveLength(32);
       expect(ctx.mailer.sent).toHaveLength(1);
       expect(ctx.mailer.sent[0]).toMatchObject({
@@ -305,7 +305,7 @@ describe('NestselfOtpService', () => {
         const line = String(warn.mock.calls[0]![0]);
         expect(line).toContain('step_up_code');
         expect(line).toContain('MessageRejected');
-        expect(line).not.toContain('dragan');
+        expect(line).not.toContain('ivana');
         // The token never left the service, so nothing may stay behind: no record holding the address.
         expect(await ctx.store.scan('*')).toEqual([]);
       });
@@ -552,7 +552,7 @@ describe('NestselfOtpService', () => {
 
       secondsLater(OTP_RESEND_COOLDOWN_SECONDS - 20);
       await expect(ctx.service.resend('step_up', challengeToken, 'sr-Latn')).resolves.toEqual({
-        emailMasked: 'd***@intesa.example',
+        emailMasked: 'i***@acme.example',
       });
 
       expect(ctx.mailer.sent).toHaveLength(2);
@@ -711,7 +711,7 @@ describe('NestselfOtpService', () => {
       const accept = vi.fn(() => true);
 
       await expect(ctx.service.resend('step_up', challengeToken, 'en', accept)).resolves.toEqual({
-        emailMasked: 'd***@intesa.example',
+        emailMasked: 'i***@acme.example',
       });
 
       expect(accept).toHaveBeenCalledWith(INPUT.data);
@@ -814,7 +814,7 @@ describe('NestselfOtpService', () => {
         );
 
         await expect(ctx.service.resend('step_up', challengeToken, 'en')).resolves.toEqual({
-          emailMasked: 'd***@intesa.example',
+          emailMasked: 'i***@acme.example',
         });
         await expect(
           ctx.service.verify('step_up', challengeToken, mailedCode(ctx)),
@@ -924,7 +924,7 @@ describe('NestselfOtpService', () => {
           'invalid_challenge',
         );
         held.accept();
-        await expect(resending).resolves.toEqual({ emailMasked: 'd***@intesa.example' });
+        await expect(resending).resolves.toEqual({ emailMasked: 'i***@acme.example' });
 
         await expectRefused(
           ctx.service.verify('step_up', challengeToken, first),
@@ -953,7 +953,7 @@ describe('NestselfOtpService', () => {
       // The logging mailer's own debug line: the template, the locale and the domain.
       expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) {
-        for (const secret of [challengeToken, mailedCode(ctx, 0), mailedCode(ctx, 1), 'dragan']) {
+        for (const secret of [challengeToken, mailedCode(ctx, 0), mailedCode(ctx, 1), 'ivana']) {
           expect(line).not.toContain(secret);
         }
       }

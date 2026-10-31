@@ -4,6 +4,7 @@
  * @see T-1.18
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 
 // ---------------------------------------------------------------------------
@@ -147,20 +148,29 @@ describe('UsersService', () => {
       expect(revocation.revokeAllAccess).toHaveBeenCalledOnce();
     });
 
-    it('still calls revocation when IdP disable fails', async () => {
+    it('still calls revocation when IdP disable fails, and logs no pool username', async () => {
+      const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
       identities.findUserById.mockResolvedValue(ACTIVE_USER);
+      // A native pool username is the email address.
       identities.findExternalIdentitiesForUser.mockResolvedValue([
-        { cognitoUsername: 'cog-1' },
+        { cognitoUsername: 'ivana@acme.example', provider: 'cognito' },
       ]);
       idp.disableUser.mockRejectedValue(new Error('Cognito unavailable'));
 
-      const result = await service.suspendUser(
-        'user-1', { reason: 'Test IdP failure' }, 'actor-1',
-      );
+      try {
+        const result = await service.suspendUser(
+          'user-1', { reason: 'Test IdP failure' }, 'actor-1',
+        );
 
-      expect(result.userId).toBe('user-1');
-      // revocation still called despite IdP failure.
-      expect(revocation.revokeAllAccess).toHaveBeenCalledWith('user-1');
+        expect(result.userId).toBe('user-1');
+        // revocation still called despite IdP failure.
+        expect(revocation.revokeAllAccess).toHaveBeenCalledWith('user-1');
+        const lines = error.mock.calls.map((args) => args.map(String).join(' '));
+        expect(lines.some((line) => line.includes('disableUser failed for user user-1 (cognito)'))).toBe(true);
+        expect(lines.join('\n')).not.toContain('ivana@acme.example');
+      } finally {
+        error.mockRestore();
+      }
     });
 
     it('handles findExternalIdentitiesForUser failure gracefully', async () => {

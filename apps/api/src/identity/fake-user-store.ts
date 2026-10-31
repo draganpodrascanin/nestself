@@ -10,6 +10,7 @@ import { Logger } from '@nestjs/common';
 import type { IdpUser, TokenSet } from './identity-provider.service.js';
 import { IdentityProviderError } from './identity-provider.service.js';
 import { createFakeTokenSet } from './fake-token-factory.js';
+import { maskEmail } from '../email/mask-email.js';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -96,7 +97,9 @@ export class FakeUserStore {
     this.otps.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS });
     this.sentCodes.push({ email, code, sentAt: new Date(), locale });
     if (this.sentCodes.length > MAX_SENT_CODES) this.sentCodes.shift();
-    this.logger.log(`Fake identity provider: OTP for ${email} is ${code}`);
+    // Stub mode only (the fake refuses to run in production): the code is how a developer
+    // signs in without mail; the address is masked like every other log line.
+    this.logger.log(`Fake identity provider: OTP for ${maskEmail(email)} is ${code}`);
     return code;
   }
 

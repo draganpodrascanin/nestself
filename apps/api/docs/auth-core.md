@@ -291,7 +291,7 @@ person can sign in after `db:migrate` and `db:seed`.
 **Employee (email OTP)**, e.g. `user_jovan@example.com`:
 1. `POST /api/auth/discover` with email → `method: "email_otp"`
 2. `POST /api/auth/email-otp/start` → `challengeToken`
-3. Read the code from the API log: `Fake identity provider: OTP for user_jovan@example.com is 123456` (or set `FAKE_IDP_FIXED_OTP`)
+3. Read the code from the API log: `Fake identity provider: OTP for u***@example.com is 123456` (the address masked; or set `FAKE_IDP_FIXED_OTP`)
 4. `POST /api/auth/email-otp/verify` with `{ challengeToken, code }` → session cookies set
 
 **Staff and experts (password + TOTP)**, e.g. `user_nikola@example.com`:

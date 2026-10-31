@@ -37,7 +37,7 @@ export class InvitationMailer {
       locale: 'sr-Latn',
       template: 'invitation',
       params: {
-        link: `${this.workspaceUrl}/invitations/${input.token}`,
+        link: `${this.workspaceUrl}/invite/${input.token}`,
         organizationName: input.organizationName,
         inviterDisplayName: input.inviterDisplayName,
       },

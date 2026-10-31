@@ -141,7 +141,7 @@ export class UsersService {
 
   /** Disable all external IdP identities for a user. Catches and logs failures. */
   private async disableIdpIdentities(userId: string): Promise<void> {
-    let identities: Array<{ cognitoUsername: string }> = [];
+    let identities: Array<{ cognitoUsername: string; provider: string }> = [];
     try {
       identities = await this.identities.findExternalIdentitiesForUser(userId);
     } catch (err) {
@@ -152,14 +152,15 @@ export class UsersService {
       try {
         await this.idp.disableUser(identity.cognitoUsername);
       } catch (err) {
-        this.logger.error(err, `disableUser failed for ${identity.cognitoUsername}`);
+        // A native pool username is the email address: name the user and the provider instead.
+        this.logger.error(err, `disableUser failed for user ${userId} (${identity.provider})`);
       }
     }
   }
 
   /** Enable all external IdP identities for a user. Catches and logs failures. */
   private async enableIdpIdentities(userId: string): Promise<void> {
-    let identities: Array<{ cognitoUsername: string }> = [];
+    let identities: Array<{ cognitoUsername: string; provider: string }> = [];
     try {
       identities = await this.identities.findExternalIdentitiesForUser(userId);
     } catch (err) {
@@ -170,7 +171,8 @@ export class UsersService {
       try {
         await this.idp.enableUser(identity.cognitoUsername);
       } catch (err) {
-        this.logger.error(err, `enableUser failed for ${identity.cognitoUsername}`);
+        // A native pool username is the email address: name the user and the provider instead.
+        this.logger.error(err, `enableUser failed for user ${userId} (${identity.provider})`);
       }
     }
   }

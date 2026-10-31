@@ -3,7 +3,7 @@ import { emailDomain, maskEmail } from './mask-email.js';
 
 describe('maskEmail', () => {
   it('keeps the first character of the local part and the whole domain', () => {
-    expect(maskEmail('dragan@intesa.example')).toBe('d***@intesa.example');
+    expect(maskEmail('ivana@acme.example')).toBe('i***@acme.example');
   });
 
   it('hides a one-character local part entirely', () => {
@@ -11,16 +11,16 @@ describe('maskEmail', () => {
   });
 
   it('does not reveal how long the local part is', () => {
-    expect(maskEmail('ab@intesa.example')).toBe('a***@intesa.example');
-    expect(maskEmail('a.very.long.name@intesa.example')).toBe('a***@intesa.example');
+    expect(maskEmail('ab@acme.example')).toBe('a***@acme.example');
+    expect(maskEmail('a.very.long.name@acme.example')).toBe('a***@acme.example');
   });
 
   it('takes the domain after the last @', () => {
-    expect(maskEmail('odd@name@intesa.example')).toBe('o***@intesa.example');
+    expect(maskEmail('odd@name@acme.example')).toBe('o***@acme.example');
   });
 
   it('keeps a whole code point, not half of a surrogate pair', () => {
-    expect(maskEmail('\u{1F600}x@intesa.example')).toBe('\u{1F600}***@intesa.example');
+    expect(maskEmail('\u{1F600}x@acme.example')).toBe('\u{1F600}***@acme.example');
   });
 
   it('never echoes input that is not an address', () => {
@@ -31,8 +31,8 @@ describe('maskEmail', () => {
 
 describe('emailDomain', () => {
   it('returns what follows the last @', () => {
-    expect(emailDomain('dragan@intesa.example')).toBe('intesa.example');
-    expect(emailDomain('odd@name@intesa.example')).toBe('intesa.example');
+    expect(emailDomain('ivana@acme.example')).toBe('acme.example');
+    expect(emailDomain('odd@name@acme.example')).toBe('acme.example');
   });
 
   it('answers "unknown" instead of echoing a string without an @', () => {

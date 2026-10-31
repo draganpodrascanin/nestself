@@ -9,15 +9,15 @@ const CODE_PARAMS = { code: '12345678', minutes: '5' };
 /** Every param a template takes: what its callers pass. */
 const FULL_PARAMS: Record<MailTemplate, Record<string, string>> = {
   invitation: {
-    link: 'https://app.example.test/invitations/tok_123',
-    organizationName: 'Intesa d.o.o.',
+    link: 'https://app.example.test/invite/tok_123',
+    organizationName: 'Acme d.o.o.',
     inviterDisplayName: 'Ivana',
   },
   step_up_code: CODE_PARAMS,
   sso_bind_code: CODE_PARAMS,
   ops_certificate_alert: {
-    organizationName: 'Intesa d.o.o.',
-    providerName: 'org-intesa-saml',
+    organizationName: 'Acme d.o.o.',
+    providerName: 'org-acme-saml',
     expiresAt: '2026-12-01',
     daysLeft: '12',
     adminUrl: 'https://admin.example.test/sso',
@@ -84,13 +84,13 @@ describe('renderMail', () => {
     });
 
     expect(out.text).toContain(
-      'Open this link to activate your access: https://app.example.test/invitations/tok_123',
+      'Open this link to activate your access: https://app.example.test/invite/tok_123',
     );
-    expect(out.html).toContain('https://app.example.test/invitations/tok_123');
+    expect(out.html).toContain('https://app.example.test/invite/tok_123');
   });
 
   it('links a value that starts with https:// in the html and leaves the text as written', () => {
-    const link = 'https://app.example.test/invitations/tok_123';
+    const link = 'https://app.example.test/invite/tok_123';
     const out = renderMail({
       to: 'a@b.c',
       locale: 'en',
@@ -121,10 +121,10 @@ describe('renderMail', () => {
   });
 
   it.each([
-    ['a scheme other than https', 'http://app.example.test/invitations/tok_123'],
+    ['a scheme other than https', 'http://app.example.test/invite/tok_123'],
     ['a javascript: url', 'javascript:alert(1)'],
     ['a value that only contains https://', 'see https://evil.example/login'],
-    ['an upper-case scheme', 'HTTPS://app.example.test/invitations/tok_123'],
+    ['an upper-case scheme', 'HTTPS://app.example.test/invite/tok_123'],
     ['plain words', 'Ivana'],
   ])('does not link %s', (_label, value) => {
     const out = renderMail({
@@ -156,9 +156,9 @@ describe('renderMail', () => {
         locale: 'sr-Latn',
         template: 'invitation',
         params: {
-          link: 'https://app.example.test/invitations/tok_123',
+          link: 'https://app.example.test/invite/tok_123',
           inviterDisplayName: 'Ivana',
-          organisationName: 'Intesa d.o.o.', // sic: the template wants `organizationName`
+          organisationName: 'Acme d.o.o.', // sic: the template wants `organizationName`
         },
       }),
     ).toThrow(/invitation.*organizationName/);
@@ -168,7 +168,7 @@ describe('renderMail', () => {
     let message = '';
     try {
       renderMail({
-        to: 'dragan@intesa.example',
+        to: 'ivana@acme.example',
         locale: 'en',
         template: 'step_up_code',
         params: { code: '87654321' },
@@ -179,7 +179,7 @@ describe('renderMail', () => {
 
     expect(message).not.toBe('');
     expect(message).not.toContain('87654321');
-    expect(message).not.toContain('dragan');
+    expect(message).not.toContain('ivana');
   });
 
   it('accepts an empty string as a value: only an absent param is an error', () => {

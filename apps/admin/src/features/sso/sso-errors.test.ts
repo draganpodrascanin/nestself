@@ -63,4 +63,8 @@ describe('ssoProblem', () => {
   it('treats a cancelled step-up as nothing to show', () => {
     expect(ssoProblem(new StepUpCancelledError(), 'activate')).toBeNull();
   });
+
+  it('names a cancelled step-up of the list read, which leaves the page without a list', () => {
+    expect(ssoProblem(new StepUpCancelledError(), 'load')).toEqual({ key: 'stepUpCancelled', field: null });
+  });
 });

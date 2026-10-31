@@ -742,6 +742,8 @@
       "rateLimited": "Previše pokušaja. Sačekaj malo pa pokušaj ponovo.",
       "unavailable": "Provajder identiteta trenutno nije dostupan. Pokušaj kasnije.",
       "unknown": "Nešto nije u redu. Pokušaj ponovo.",
+      "stepUpCancelledTitle": "Potvrda je otkazana",
+      "stepUpCancelled": "SSO veze se prikazuju tek kada potvrdiš identitet. Ništa nije učitano.",
       "fieldSlug": "Izaberi kraću oznaku: naziv provajdera mora da ostane do 20 znakova.",
       "fieldProtocol": "Protokol ne može da se promeni kada je veza testirana.",
       "fieldSecret": "Tajna klijenta važi samo za OIDC veze i ne može da se pošalje uz vraćanje u nacrt.",

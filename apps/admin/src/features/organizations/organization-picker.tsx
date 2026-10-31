@@ -30,7 +30,9 @@ export interface OrganizationPickerProps {
  * names, and "Load more" appends the next page of the current search.
  *
  * The chosen organization stays in the list when a later search no longer
- * returns it, so the field never falls back to showing a raw id.
+ * returns it, so the field never falls back to showing a raw id, and only the
+ * user's next pick replaces it: the `null` the Select reports when its
+ * options are rebuilt never clears it.
  */
 export function OrganizationPicker({ opsApi, enabled, value, onValueChange, id, label, placeholder, error }: OrganizationPickerProps) {
   const { t } = useTranslation(['admin']);
@@ -52,8 +54,12 @@ export function OrganizationPicker({ opsApi, enabled, value, onValueChange, id, 
       : '';
 
   const choose = (orgId: string | null) => {
+    // Keep: in Chromium (not in jsdom) Base UI's Select reports `null` by itself when its
+    // choices are rebuilt under the selection, e.g. after a refined search. The picker never
+    // clears a choice; passing that `null` on would empty the form's organisation.
+    if (orgId === null) return;
     setChosen(loaded.find((o) => o.id === orgId) ?? (chosen?.id === orgId ? chosen : null));
-    onValueChange(orgId ?? '');
+    onValueChange(orgId);
   };
 
   /** Enter in the search field must not submit the form around the picker: the list already follows the typing. */
@@ -70,7 +76,8 @@ export function OrganizationPicker({ opsApi, enabled, value, onValueChange, id, 
       </div>
 
       <Field id={id} label={label} error={error} required>
-        <Select placeholder={placeholder} options={options} value={value || undefined} onValueChange={choose} />
+        {/* Always controlled: an empty string is "no choice yet" and shows the placeholder. */}
+        <Select placeholder={placeholder} options={options} value={value} onValueChange={choose} />
       </Field>
 
       <p role="status" className="type-metadata text-text-secondary">

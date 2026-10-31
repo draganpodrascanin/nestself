@@ -1,11 +1,11 @@
 /**
  * Address helpers for places that must not show a whole address: a masked
- * address in an API answer ("We sent a code to d***@intesa.example"), the
+ * address in an API answer ("We sent a code to i***@acme.example"), the
  * recipient's domain in a log line.
  */
 
 /**
- * `dragan@intesa.example` becomes `d***@intesa.example`: the first character
+ * `ivana@acme.example` becomes `i***@acme.example`: the first character
  * of the local part, three stars (so its length is not revealed) and the
  * domain. A one-character local part becomes `*@b.c`. Input without an `@`
  * is never echoed.

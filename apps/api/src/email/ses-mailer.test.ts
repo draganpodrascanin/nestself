@@ -12,7 +12,7 @@ const INVITATION: MailMessage = {
   locale: 'sr-Latn',
   template: 'invitation',
   params: {
-    link: 'https://app.example.test/invitations/tok_123',
+    link: 'https://app.example.test/invite/tok_123',
     organizationName: 'Example <d.o.o.>',
     inviterDisplayName: 'Ivana',
   },
@@ -72,7 +72,7 @@ describe('SesMailer', () => {
     await mailer.send({ ...INVITATION, locale: 'en' });
 
     const input = inputOf(send);
-    expect(input.Message.Body.Text.Data).toContain('https://app.example.test/invitations/tok_123');
+    expect(input.Message.Body.Text.Data).toContain('https://app.example.test/invite/tok_123');
     expect(input.Message.Body.Html.Data).toContain('Example &lt;d.o.o.&gt;');
     expect(input.Message.Subject.Data).toContain('Example <d.o.o.>');
   });
@@ -178,7 +178,7 @@ describe('SesMailer', () => {
     await expect(
       mailer.send({
         ...INVITATION,
-        params: { link: 'https://app.example.test/invitations/tok_123' },
+        params: { link: 'https://app.example.test/invite/tok_123' },
       }),
     ).rejects.toThrow(/invitation.*organizationName/);
     expect(send).not.toHaveBeenCalled();
@@ -189,7 +189,7 @@ describe('SesMailer', () => {
     const mailer = new SesMailer({ ...OPTIONS, client: { send } });
 
     await mailer.send({
-      to: 'dragan@intesa.example',
+      to: 'ivana@acme.example',
       locale: 'en',
       template: 'step_up_code',
       params: { code: '12345678', minutes: '5' },
@@ -198,8 +198,8 @@ describe('SesMailer', () => {
     expect(log).toHaveBeenCalledOnce();
     const line = String(log.mock.calls[0]![0]);
     expect(line).toContain('step_up_code');
-    expect(line).toContain('intesa.example');
-    expect(line).not.toContain('dragan');
+    expect(line).toContain('acme.example');
+    expect(line).not.toContain('ivana');
     expect(line).not.toContain('12345678');
   });
 });

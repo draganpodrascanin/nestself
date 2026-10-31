@@ -90,7 +90,16 @@ export function SsoScreen({ opsApi, sampleMode }: SsoScreenProps) {
         </Button>
       </div>
 
-      {listError ? (
+      {listError === 'stepUpCancelled' ? (
+        <div className="space-y-3">
+          <Alert tone="info" title={t('admin:sso.errors.stepUpCancelledTitle')}>
+            {t('admin:sso.errors.stepUpCancelled')}
+          </Alert>
+          <Button variant="secondary" size="sm" onClick={() => void list.refetch()}>
+            {t('common:action.retry')}
+          </Button>
+        </div>
+      ) : listError ? (
         <Alert tone="danger" title={t('admin:sso.errors.loadTitle')}>
           {t(`admin:sso.errors.${listError}`)}
         </Alert>

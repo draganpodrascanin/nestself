@@ -128,6 +128,42 @@ describe('SsoScreen list', () => {
     expect(await screen.findByText(t('admin:sso.empty'))).toBeInTheDocument();
   });
 
+  it('asks for step-up when the list read needs it and shows the list after verification', async () => {
+    const auth = makeAuth();
+    const listSsoConnections = vi
+      .fn()
+      .mockRejectedValueOnce(apiError(403, 'step_up_required'))
+      .mockResolvedValue({ items: ALL });
+    renderScreen({ opsApi: ssoApi({ listSsoConnections }), auth });
+
+    expect(await rowOf(DRAFT.id)).toBeInTheDocument();
+    expect(auth.stepUp).toHaveBeenCalledTimes(1);
+    expect(listSsoConnections).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(t('admin:sso.errors.unknown'))).not.toBeInTheDocument();
+  });
+
+  it('says the list needs verification when step-up is cancelled, and loads it on Try again', async () => {
+    const user = userEvent.setup();
+    const stepUp = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const listSsoConnections = vi
+      .fn()
+      .mockRejectedValueOnce(apiError(403, 'step_up_required'))
+      .mockRejectedValueOnce(apiError(403, 'step_up_required'))
+      .mockResolvedValue({ items: ALL });
+    renderScreen({ opsApi: ssoApi({ listSsoConnections }), auth: makeAuth({ stepUp }) });
+
+    expect(await screen.findByText(t('admin:sso.errors.stepUpCancelled'))).toBeInTheDocument();
+    expect(screen.getByText(t('admin:sso.errors.stepUpCancelledTitle'))).toBeInTheDocument();
+    expect(screen.queryByText(t('admin:sso.errors.unknown'))).not.toBeInTheDocument();
+    expect(screen.queryByTestId(`sso-row-${DRAFT.id}`)).not.toBeInTheDocument();
+    expect(stepUp).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: t('common:action.retry') }));
+    expect(await rowOf(DRAFT.id)).toBeInTheDocument();
+    expect(stepUp).toHaveBeenCalledTimes(2);
+    expect(listSsoConnections).toHaveBeenCalledTimes(3);
+  });
+
   it('renders a failed load as translated copy', async () => {
     renderScreen({ opsApi: ssoApi({ listSsoConnections: vi.fn().mockRejectedValue(apiError(403, 'forbidden')) }) });
     expect(await screen.findByText(t('admin:sso.errors.forbidden'))).toBeInTheDocument();
@@ -528,14 +564,20 @@ describe('SsoScreen lifecycle', () => {
     );
   });
 
-  it('closes quietly when step-up is cancelled', async () => {
+  it('closes quietly when step-up is cancelled, and does not reload the list into another step-up', async () => {
     const user = userEvent.setup();
+    const stepUp = vi.fn().mockResolvedValue(false);
     const activateSsoConnection = vi.fn().mockRejectedValue(apiError(403, 'step_up_required'));
-    renderScreen({ opsApi: ssoApi({ activateSsoConnection }), auth: makeAuth({ stepUp: vi.fn().mockResolvedValue(false) }) });
+    const { opsApi } = renderScreen({ opsApi: ssoApi({ activateSsoConnection }), auth: makeAuth({ stepUp }) });
     const detail = await openDetail(user, TESTING.id);
     await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.activate') }));
     await waitFor(() => expect(activateSsoConnection).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // A cancel changed nothing on the server: a list refresh would only ask for the step-up again.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(opsApi.listSsoConnections).toHaveBeenCalledTimes(1);
+    expect(stepUp).toHaveBeenCalledTimes(1);
   });
 
   it.each([

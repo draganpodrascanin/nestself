@@ -81,7 +81,7 @@ export function StepUpDialog({ open, authApi, onVerified, onCancel }: Props) {
   const [code, setCode] = useState('');
   /** Null until a challenge is started, and again once the server no longer has it. */
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
-  /** Where the code went (`d***@intesa.example`), as the last start or resend said. */
+  /** Where the code went (`i***@acme.example`), as the last start or resend said. */
   const [emailMasked, setEmailMasked] = useState<string | null>(null);
   /** Seconds until "Send a new code" is offered again. */
   const [countdown, setCountdown] = useState(0);

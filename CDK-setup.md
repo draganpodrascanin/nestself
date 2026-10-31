@@ -131,7 +131,7 @@ Open `apps/api/.env` and finish it by hand:
 | `SESSION_COOKIE_INSECURE_DEV` | `true` | The web apps run on plain `http://localhost`; drops the `__Host-` prefix and `Secure` flag |
 | `WORKSPACE_URL`, `ADMIN_URL`, `MARKETING_URL` | the localhost origins (defaults) | CORS, CSRF and WebSocket origin checks |
 | `AWS_PROFILE` | `nestself-dev` (or export it in the shell) | The API calls Cognito admin APIs with the AWS SDK's default credential chain |
-| `SES_FROM_EMAIL` | leave unset for dev | Without SES nothing is sent and no link is logged; outside production a single invitation create returns `devToken`, so the link is `{WORKSPACE_URL}/invitations/{devToken}` |
+| `SES_FROM_EMAIL` | leave unset for dev | Without SES nothing is sent and no link is logged; outside production a single invitation create returns `devToken`, so the link is `{WORKSPACE_URL}/invite/{devToken}` |
 | `JWT_SECRET`, `FAKE_IDP_FIXED_OTP` | can stay | Ignored in cognito mode |
 
 Remove the empty `COGNITO_*=` placeholders that came from `.env.example` so the appended values are the only ones (the last value wins, but a clean file avoids confusion).

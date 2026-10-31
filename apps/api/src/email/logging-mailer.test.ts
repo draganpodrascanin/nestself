@@ -4,7 +4,7 @@ import { keepsSentMail, LoggingMailer } from './logging-mailer.js';
 import { Mailer, type MailMessage } from './mailer.js';
 
 const CODE_MAIL: MailMessage = {
-  to: 'dragan@intesa.example',
+  to: 'ivana@acme.example',
   locale: 'sr-Latn',
   template: 'step_up_code',
   params: { code: '12345678', minutes: '5' },
@@ -61,11 +61,11 @@ describe('LoggingMailer', () => {
     const mailer = new LoggingMailer({ keepSent: true });
 
     await mailer.send(CODE_MAIL);
-    await mailer.send({ ...CODE_MAIL, to: 'other@intesa.example' });
+    await mailer.send({ ...CODE_MAIL, to: 'other@acme.example' });
 
     expect(mailer.sent).toHaveLength(2);
     expect(mailer.sent[0]).toEqual(CODE_MAIL);
-    expect(mailer.sent[1]?.to).toBe('other@intesa.example');
+    expect(mailer.sent[1]?.to).toBe('other@acme.example');
   });
 
   it('keeps nothing when keepSent is off, even under test', async () => {
@@ -113,19 +113,19 @@ describe('LoggingMailer', () => {
     const line = String(debug.mock.calls[0]![0]);
     expect(line).toContain('step_up_code');
     expect(line).toContain('sr-Latn');
-    expect(line).toContain('intesa.example');
+    expect(line).toContain('acme.example');
   });
 
   it('never logs the address, the code or any other param', async () => {
     const mailer = new LoggingMailer({ keepSent: true });
 
     await mailer.send({
-      to: 'dragan@intesa.example',
+      to: 'ivana@acme.example',
       locale: 'en',
       template: 'invitation',
       params: {
-        link: 'https://app.example.test/invitations/tok_secret',
-        organizationName: 'Intesa d.o.o.',
+        link: 'https://app.example.test/invite/tok_secret',
+        organizationName: 'Acme d.o.o.',
         inviterDisplayName: 'Ivana',
       },
     });
@@ -133,7 +133,7 @@ describe('LoggingMailer', () => {
 
     for (const [argument] of debug.mock.calls) {
       const line = String(argument);
-      for (const secret of ['dragan', 'tok_secret', 'Intesa d.o.o.', 'Ivana', '12345678']) {
+      for (const secret of ['ivana', 'tok_secret', 'Acme d.o.o.', 'Ivana', '12345678']) {
         expect(line).not.toContain(secret);
       }
     }

@@ -1,11 +1,13 @@
 /**
  * TanStack Query hooks over the operations SSO connection routes
  * (`/ops/sso-connections`). Every route needs `sso.manage`, an
- * administration step-up action, so every mutation goes through
- * `withStepUp`: a `step_up_required` answer opens the step-up dialog and
- * retries once. Every outcome refreshes the connection list: a failure
- * (`sso_connection_state`, `conflict`, `not_found`) usually means the row on
- * screen was stale, and the error copy says the list was refreshed.
+ * administration step-up action, and the server checks the step-up on reads
+ * too, so the list read and every mutation go through `withStepUp`: a
+ * `step_up_required` answer opens the step-up dialog and retries once.
+ * Every outcome of a mutation but a cancelled step-up refreshes the
+ * connection list: a failure (`sso_connection_state`, `conflict`,
+ * `not_found`) usually means the row on screen was stale, and the error copy
+ * says the list was refreshed.
  *
  * `gcTime: 0` drops a settled mutation, and with it its `variables` (an
  * OIDC client secret) and `data` (a single-use test start URL), from the
@@ -15,17 +17,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OpsAdminApi, SsoConnectionCreateBody } from '@nestself/api-client';
 import type { SsoConnectionUpdateRequest } from '@nestself/contracts';
-import { useAuth, withStepUp } from '../../auth';
+import { StepUpCancelledError, useAuth, withStepUp } from '../../auth';
 
 export const ssoKeys = {
   list: ['ops-admin', 'sso-connections'] as const,
 };
 
+/**
+ * The connection list. Once the user cancelled the step-up of this read, only
+ * the screen's Try again asks again: neither a retry (`shouldRetryQuery`) nor
+ * a refetch on window focus reopens the dialog.
+ */
 export function useSsoConnections(opsApi: OpsAdminApi, enabled: boolean) {
+  const { stepUp } = useAuth();
   return useQuery({
     queryKey: ssoKeys.list,
-    queryFn: async () => (await opsApi.listSsoConnections()).items,
+    queryFn: () => withStepUp(stepUp, async () => (await opsApi.listSsoConnections()).items),
     enabled,
+    refetchOnWindowFocus: (query) => !(query.state.error instanceof StepUpCancelledError),
   });
 }
 
@@ -34,7 +43,9 @@ function useSsoMutation<TVars, TResult>(call: (vars: TVars) => Promise<TResult>)
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: TVars) => withStepUp(stepUp, () => call(vars)),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ssoKeys.list }),
+    // A cancelled step-up changed nothing, and a refresh would ask for the step-up again.
+    onSettled: (_data, error) =>
+      error instanceof StepUpCancelledError ? undefined : queryClient.invalidateQueries({ queryKey: ssoKeys.list }),
     gcTime: 0,
   });
 }

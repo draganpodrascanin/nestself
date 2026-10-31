@@ -30,6 +30,7 @@ import type { DbExecutor } from '../db/db.service.js';
 import type { InvitationRow } from '../db/repositories/invitations.repository.js';
 import { InvitationMembershipActivator, invitableTemplateFor } from './invitation-membership-activator.js';
 import { apiOriginForSurface, buildSsoStartUrl } from '../auth/sso-start-url.js';
+import { emailDomain } from '../email/mask-email.js';
 
 @Injectable()
 export class InvitationActivationService {
@@ -383,9 +384,10 @@ export class InvitationActivationService {
         }
         // Unexpected: tokens returned immediately. Fall through to email OTP.
       } catch {
-        // Password flow failed; fall through to email OTP.
+        // Password flow failed; fall through to email OTP. The log names the
+        // invitee's domain only, never the address.
         this.logger.debug(
-          `Password flow failed for ${invitation.email}; falling back to email OTP`,
+          `Password flow failed during acceptance (recipientDomain=${emailDomain(invitation.email)}); falling back to email OTP`,
         );
       }
     }
@@ -402,7 +404,7 @@ export class InvitationActivationService {
     } catch {
       // If even the OTP start fails (e.g. throttled), return a best-effort
       // response. The user can retry via the normal sign-in page.
-      this.logger.warn(`Email OTP start failed for ${invitation.email} during acceptance`);
+      this.logger.warn(`Email OTP start failed during acceptance (recipientDomain=${emailDomain(invitation.email)})`);
       return {
         method: 'email_otp',
         challengeToken: null,

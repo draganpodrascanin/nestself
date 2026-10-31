@@ -1,11 +1,27 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import type { FormEvent } from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { OpsAdminApi } from '@nestself/api-client';
+import type * as Ui from '@nestself/ui';
+import type { SelectProps } from '@nestself/ui';
 import { OrganizationPicker } from './organization-picker';
 import { apiError, choose, makeOpsApi, organization, renderOps, t } from './ops-test-harness';
+
+// A transparent wrapper around the real `Select` that keeps its latest props, so a
+// test can call `onValueChange` the way Base UI does by itself (see "ignores the null").
+const select = vi.hoisted(() => ({ latest: null as SelectProps | null }));
+vi.mock('@nestself/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof Ui>();
+  return {
+    ...actual,
+    Select: (props: SelectProps) => {
+      select.latest = props;
+      return createElement(actual.Select, props);
+    },
+  };
+});
 
 const ALPHA = organization('org_a', 'Alpha');
 const BETA = organization('org_b', 'Beta');
@@ -122,6 +138,38 @@ describe('OrganizationPicker', () => {
     expect(trigger()).toHaveTextContent('Alpha');
     await user.click(trigger());
     expect(await screen.findByRole('option', { name: 'Alpha' })).toBeInTheDocument();
+  });
+
+  it('shows the placeholder before a choice and keeps the Select controlled', async () => {
+    renderPicker();
+    expect(await screen.findByRole('combobox', { name: ORGANIZATION })).toHaveTextContent(
+      t('admin:sso.create.organizationPlaceholder'),
+    );
+    expect(select.latest?.value).toBe('');
+  });
+
+  it('ignores the null the Select reports by itself, so a refined search never clears the choice', async () => {
+    const user = userEvent.setup();
+    const listOrganizations = listing();
+    const { onValueChange } = renderPicker({ opsApi: makeOpsApi({ listOrganizations }) });
+    await screen.findByRole('combobox', { name: ORGANIZATION });
+    await choose(user, ORGANIZATION, 'Alpha');
+
+    // A refined search rebuilds the options: Beta only, with Alpha kept as the choice.
+    await user.type(searchField(), 'be');
+    await waitFor(() => expect(listOrganizations).toHaveBeenLastCalledWith({ limit: 25, search: 'be' }));
+    await waitFor(() => expect(select.latest?.options.map((o) => o.label)).toEqual(['Alpha', 'Beta']));
+
+    // What Base UI does in Chromium when the choices are rebuilt under the selection
+    // (jsdom does not rebuild them the same way, so the test makes the call itself).
+    act(() => {
+      select.latest?.onValueChange?.(null);
+    });
+
+    expect(select.latest?.value).toBe('org_a');
+    expect(trigger()).toHaveTextContent('Alpha');
+    // The form is never told that the organisation was cleared.
+    expect(onValueChange.mock.calls).toEqual([['org_a']]);
   });
 
   it('says when no organisation matches and when there are none', async () => {

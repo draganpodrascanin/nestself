@@ -738,6 +738,8 @@
       "rateLimited": "Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.",
       "unavailable": "Az identitásszolgáltató jelenleg nem érhető el. Próbáld újra később.",
       "unknown": "Valami hiba történt. Próbáld újra.",
+      "stepUpCancelledTitle": "Az ellenőrzés megszakítva",
+      "stepUpCancelled": "Az SSO-kapcsolatok csak a személyazonosságod megerősítése után jelennek meg. Semmi sem töltődött be.",
       "fieldSlug": "Válassz rövidebb azonosítót: a szolgáltatónév legfeljebb 20 karakter lehet.",
       "fieldProtocol": "A protokoll a kapcsolat tesztelése után nem módosítható.",
       "fieldSecret": "A kliens titkos kulcsa csak OIDC-kapcsolatra vonatkozik, és piszkozatra visszaállítással együtt nem küldhető.",
