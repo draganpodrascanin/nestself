@@ -209,6 +209,8 @@ describe('SsoBindService', () => {
 
   describe('verify', () => {
     it('verify binds through the invitation, creates the session and answers returnPath', async () => {
+      // Time stands still, so the stored tokens come back with their whole lifetime.
+      vi.useFakeTimers({ toFake: ['Date'] });
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       const { handle, tokens } = await openPending(ctx);

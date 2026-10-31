@@ -68,19 +68,25 @@ describe('PendingBindStore', () => {
   });
 
   it('peek reads the record and leaves it; take hands it over once, with the tokens decrypted', async () => {
-    const { pendingBinds } = setup();
-    const { tokens, ...rest } = input();
-    const handle = await pendingBinds.open({ ...rest, tokens });
-    const id = pendingBindId(handle);
+    // Time stands still, so the tokens keep their whole lifetime.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const { pendingBinds } = setup();
+      const { tokens, ...rest } = input();
+      const handle = await pendingBinds.open({ ...rest, tokens });
+      const id = pendingBindId(handle);
 
-    const peeked = await pendingBinds.peek(id);
-    expect(peeked).toMatchObject({ ...rest, createdAt: expect.any(String) });
-    expect(await pendingBinds.peek(id)).not.toBeNull();
+      const peeked = await pendingBinds.peek(id);
+      expect(peeked).toMatchObject({ ...rest, createdAt: expect.any(String) });
+      expect(await pendingBinds.peek(id)).not.toBeNull();
 
-    const taken = await pendingBinds.take(id);
-    expect(taken).toEqual({ ...rest, tokens, createdAt: peeked!.createdAt });
-    expect(await pendingBinds.take(id)).toBeNull();
-    expect(await pendingBinds.peek(id)).toBeNull();
+      const taken = await pendingBinds.take(id);
+      expect(taken).toEqual({ ...rest, tokens, createdAt: peeked!.createdAt });
+      expect(await pendingBinds.take(id)).toBeNull();
+      expect(await pendingBinds.peek(id)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('take hands the tokens over with the lifetime they have left, never less than nothing', async () => {

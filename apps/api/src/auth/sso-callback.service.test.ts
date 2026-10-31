@@ -4,7 +4,7 @@
  * fakes: start, every callback resolution path of D-04, Review Focus 1, 2
  * and 4, the test flag.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { FakeIdentityProvider } from '../identity/fake-identity-provider.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
@@ -666,7 +666,11 @@ describe('SsoCallbackService', () => {
   });
 
   describe('callback: email verification (SSO-R-08)', () => {
+    afterEach(() => vi.useRealTimers());
+
     it('an unverified on-domain OIDC email leaves the pool user in place and redirects with bind=', async () => {
+      // Time stands still, so the stored tokens come back with their whole lifetime.
+      vi.useFakeTimers({ toFake: ['Date'] });
       const ctx = setup();
       ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
