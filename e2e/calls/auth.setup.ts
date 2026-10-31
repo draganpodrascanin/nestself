@@ -55,7 +55,7 @@ setup('the apps are warm', async ({ browser }) => {
     { person: 'employee', urls: ['/appointments', '/appointments/appt_sample_upcoming', '/call/appt_sample_upcoming', '/webinars', '/webinars/webinar_sample_upcoming'] },
     { person: 'hr', urls: ['/follow-up-policy', '/approvals'] },
     { person: 'expert', urls: ['/consultations', '/consultations/appt_sample_upcoming'] },
-    { person: 'operations', urls: ['/webinars', '/webinars/new'] },
+    { person: 'operations', urls: ['/webinars', '/webinars/new', '/consultations', '/consultations/new'] },
   ];
   for (const { person, urls } of routes) {
     const context = await browser.newContext({
