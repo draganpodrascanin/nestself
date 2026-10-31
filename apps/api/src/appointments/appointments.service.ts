@@ -41,6 +41,7 @@
  * Writes run inside `DbService.withOrgScope` (RLS). Audit details carry
  * identifiers only (CW-R-33a).
  */
+import { contextOrgId } from '../webinars/webinar.resolver.js';
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
@@ -494,7 +495,8 @@ export class AppointmentsService {
   private async holdsAction(principal: Principal, action: Action): Promise<boolean> {
     const now = new Date();
     const orgIds = new Set<string>(['platform']);
-    if (principal.context.kind === 'organization') orgIds.add(principal.context.orgId);
+    const activeOrgId = contextOrgId(principal);
+    if (activeOrgId) orgIds.add(activeOrgId);
     for (const membership of principal.memberships) {
       if (membership.status === 'ACTIVE') orgIds.add(membership.orgId);
     }
@@ -511,7 +513,7 @@ export class AppointmentsService {
       action: 'access.denied',
       actorUserId: principal.userId,
       actorKind: 'USER',
-      orgId: principal.context.kind === 'organization' ? principal.context.orgId : null,
+      orgId: contextOrgId(principal) ?? null,
       recordType: 'appointment',
       recordId: 'unknown',
       result: 'DENIED',

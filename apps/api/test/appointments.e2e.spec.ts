@@ -160,7 +160,12 @@ describe.skipIf(!shouldRun)('Appointment spine (e2e)', () => {
       .send({ challengeToken: start.body.challengeToken, code });
     expect(verify.status).toBe(200);
     const who = { agent, csrf: extractCsrf(verify) };
-    await switchContext(who, { kind: 'organization', orgId: ORG });
+    // The member's own context in ORG: organization with an organization-workspace
+    // grant, otherwise personal with the org (CMS EE context rulings).
+    const manages = (verify.body.availableContexts as Array<{ kind: string; orgId?: string }>).some(
+      (c) => c.kind === 'organization' && c.orgId === ORG,
+    );
+    await switchContext(who, manages ? { kind: 'organization', orgId: ORG } : { kind: 'personal', orgId: ORG });
     return who;
   }
 

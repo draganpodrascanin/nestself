@@ -133,7 +133,12 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     const verify = await agent.post('/api/auth/email-otp/verify').send({ challengeToken: start.body.challengeToken, code });
     expect(verify.status).toBe(200);
     const who = { agent, csrf: extractCsrf(verify) };
-    await switchContext(who, { kind: 'organization', orgId: ORG });
+    // The member's own context in ORG: organization with an organization-workspace
+    // grant, otherwise personal with the org (CMS EE context rulings).
+    const manages = (verify.body.availableContexts as Array<{ kind: string; orgId?: string }>).some(
+      (c) => c.kind === 'organization' && c.orgId === ORG,
+    );
+    await switchContext(who, manages ? { kind: 'organization', orgId: ORG } : { kind: 'personal', orgId: ORG });
     return who;
   }
 
@@ -580,6 +585,8 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
   it('self-approval is denied when the organization does not allow it; the alternate decides', async () => {
     await grantApprover('user_jovan');
     await addAuthority({ id: 'aa_jovan', userId: 'user_jovan', orgUnitId: 'team_product', alternateUserId: 'user_stefan' });
+    // The approver grant opens the organization context; Jovan switches to it, as in the app.
+    await switchContext(jovan, { kind: 'organization', orgId: ORG });
     try {
       send.mockClear();
       const first = await awaitingApproval(8);
@@ -612,6 +619,7 @@ describe.skipIf(!shouldRun)('Follow-up approvals (e2e)', () => {
     } finally {
       await setAuthority('aa_jovan', { validUntil: new Date(Date.now() - DAY) });
       await revokeApprover('user_jovan');
+      await switchContext(jovan, { kind: 'personal', orgId: ORG });
     }
   });
 

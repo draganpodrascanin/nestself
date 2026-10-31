@@ -32,7 +32,14 @@ import { routeTree } from '../../../routeTree.gen';
 import { api } from '../../../api';
 import { initialSnapshot } from '../../../auth';
 
-const hr = SAMPLE_PRINCIPALS.hr_admin;
+/** A sample principal switched to the organization context of `orgId`. */
+function withOrgContext<T extends { principal: { context: unknown } }>(sample: T, orgId: string): T {
+  return { ...sample, principal: { ...sample.principal, context: { kind: 'organization', orgId } } };
+}
+
+// The policy is an organization-workspace screen: HR has switched to "Manage"
+// (Ruling E: HR admins start in their personal context).
+const hr = withOrgContext(SAMPLE_PRINCIPALS.hr_admin, 'org_sample');
 const POLICY = '/api/orgs/org_sample/settings/follow-up-approval';
 const policyCopy = en.approval.policy;
 
@@ -52,7 +59,7 @@ function serve(routes: Record<string, () => Response>, who: { principal: unknown
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, who));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { availableContexts: [(who.principal as { context: unknown }).context], ...who }));
     const handler = routes[`${method} ${url.pathname}`];
     return Promise.resolve(handler ? handler() : json(404, { code: 'not_found', message: 'Not found' }));
   });
@@ -63,7 +70,7 @@ function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: null, effectiveActions: [], settled: false, ensure: () => initialSnapshot(api) } },
+    context: { queryClient, auth: { principal: null, effectiveActions: [], availableContexts: [], settled: false, ensure: () => initialSnapshot(api) } },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(

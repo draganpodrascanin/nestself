@@ -121,7 +121,7 @@ function serve(routes: Record<string, () => Response>): Sent[] {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost');
     const method = init?.method ?? 'GET';
     sent.push({ method, path: url.pathname, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: employee.principal, effectiveActions: employee.effectiveActions }));
+    if (url.pathname === '/api/auth/me') return Promise.resolve(json(200, { principal: employee.principal, effectiveActions: employee.effectiveActions, availableContexts: [employee.principal.context] }));
     const handler = routes[`${method} ${url.pathname}`];
     if (handler) return Promise.resolve(handler());
     if (url.pathname.endsWith('/client-events')) return Promise.resolve(new Response(null, { status: 204 }));
@@ -134,7 +134,7 @@ function renderCall(path = '/call/appt_1') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
-    context: { queryClient, auth: { principal: null, effectiveActions: [], settled: false, ensure: () => initialSnapshot(api) } },
+    context: { queryClient, auth: { principal: null, effectiveActions: [], availableContexts: [], settled: false, ensure: () => initialSnapshot(api) } },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(

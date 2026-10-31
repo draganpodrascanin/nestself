@@ -100,9 +100,6 @@ function AuthenticatedLayout() {
   const prototypeItems: NavEntry[] = isSampleDataMode
     ? [
         { to: '/support', icon: Heart, label: t('common:nav.support'), group: t('library:prototype.group') },
-        ...(showAppointments
-          ? [{ to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments'), group: t('library:prototype.group') }]
-          : []),
         { to: '/messages', icon: ChatCircleText, label: t('common:nav.messages'), group: t('library:prototype.group') },
         { to: '/channels', icon: Megaphone, label: t('common:nav.channels'), group: t('library:prototype.group') },
         { to: '/polls', icon: ChartBar, label: t('common:nav.polls'), group: t('library:prototype.group') },
@@ -158,6 +155,11 @@ function AuthenticatedLayout() {
     ? [{ to: '/follow-up-policy', icon: SlidersHorizontal, label: t('nav.followUpPolicy') }]
     : [];
 
+  // Appointments (NS-CALLS-01): a real screen for holders of `consultation.join`.
+  const appointmentsNav: NavEntry[] = showAppointments
+    ? [{ to: '/appointments', icon: CalendarCheck, label: t('common:nav.appointments') }]
+    : [];
+
   // Webinars (T-CW-2.4): discovery and registration for holders of `event.register`.
   const webinarsNav: NavEntry[] = canAttendWebinars(principal, effectiveActions)
     ? [{ to: '/webinars', icon: Presentation, label: t('calls:webinar.nav') }]
@@ -165,6 +167,7 @@ function AuthenticatedLayout() {
 
   const allNavItems = [
     ...coreNavItems,
+    ...appointmentsNav,
     ...prototypeItems,
     ...webinarsNav,
     ...conversationsNav,
