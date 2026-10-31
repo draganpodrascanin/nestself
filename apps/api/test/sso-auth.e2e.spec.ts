@@ -433,6 +433,46 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       }
     });
 
+    it('a federated identity whose binding connection was moved to another row signs in nowhere', async () => {
+      const email = 'moved@acme.example';
+      await invite(email);
+      seedFederated('sub-moved', email);
+      const bound = await federatedSignIn(email);
+      expect(bound.location).toBe(`${WORKSPACE}/`);
+
+      // linkIdentity recorded the connection the identity was bound through.
+      const [user] = await testDb.db.select().from(users).where(eq(users.email, email));
+      const [identity] = await testDb.db.select().from(externalIdentities).where(eq(externalIdentities.userId, user!.id));
+      expect(identity!.ssoConnectionId).toBe(connectionId);
+
+      // The same identity, now bound to the other organization's connection, while the user is
+      // still an ACTIVE member of ORG: the provider name no longer vouches for it.
+      const other = await repo.findConnectionByProviderName(OTHER_PROVIDER);
+      const bindTo = (ssoConnectionId: string) =>
+        testDb.db.update(externalIdentities).set({ ssoConnectionId }).where(eq(externalIdentities.id, identity!.id));
+      await bindTo(other!.id);
+      const deleteUser = vi.spyOn(idp, 'deleteUser');
+      try {
+        const failedBefore = await auditFor('auth.sign_in.failed');
+        const denied = await federatedSignIn(email);
+        expect(denied.location).toBe(`${WORKSPACE}/sign-in?reason=sso_denied`);
+        expect(sessionCookie(denied.callback)).toBeUndefined();
+        const failed = (await auditFor('auth.sign_in.failed')).filter((e) => !failedBefore.some((b) => b.id === e.id));
+        expect(failed).toHaveLength(1);
+        expect(failed[0]).toMatchObject({ orgId: ORG, recordId: PROVIDER, details: { reason: 'sso_provider_mismatch' } });
+        // Not an orphan: the pool user stays.
+        expect(deleteUser).not.toHaveBeenCalled();
+      } finally {
+        deleteUser.mockRestore();
+        await bindTo(connectionId);
+      }
+
+      // Back on its own connection the identity signs in again, with the same pool user.
+      const again = await federatedSignIn(email);
+      expect(again.location).toBe(`${WORKSPACE}/`);
+      expect(sessionCookie(again.callback)).toBeDefined();
+    });
+
     it('a new binding through a SUSPENDED connection is denied', async () => {
       const email = 'late@acme.example';
       await invite(email);

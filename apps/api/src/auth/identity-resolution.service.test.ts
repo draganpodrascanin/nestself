@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { IdentityResolutionService, authMethodFromOutcome, federatedProvider } from './identity-resolution.service.js';
-import { IdentityProviderError } from '../identity/identity-provider.service.js';
+import { IdentityProviderError, decodeJwtClaims } from '../identity/identity-provider.service.js';
 import type { IdentityProviderErrorCode } from '../identity/identity-provider.service.js';
+import { createFakeTokenSet } from '../identity/fake-token-factory.js';
 
 const service = new IdentityResolutionService(
   {} as never,
@@ -96,5 +97,31 @@ describe('federated identities (D-04, 3.4.9)', () => {
     const { svc, throttle } = build({ userId: 'u1' });
     await svc.resolveIdentityAndCreateSession(tokens, 'a@example.com', 'workspace', { ip: null, userAgent: null }, false);
     expect(throttle.reset).toHaveBeenCalledWith('a@example.com');
+  });
+
+  describe('the Cognito username the session keeps', () => {
+    /** `cognitoUsername` of the session created from a federated sign-in whose ID token is `idTokenValue`. */
+    async function storedUsername(idTokenValue: string): Promise<string> {
+      const { svc, sessions } = build({ userId: 'u1' });
+      await svc.resolveIdentityAndCreateSession(
+        { ...tokens, idToken: idTokenValue }, 'a@acme.example', 'workspace', { ip: null, userAgent: null }, false, true, 'org-acme-saml',
+      );
+      return sessions.create.mock.calls[0]![0].cognitoUsername as string;
+    }
+
+    it('stores cognito:username when the token has no username claim', async () => {
+      // The ID token of a real pool: `cognito:username` and no `username` (an access-token claim).
+      const cognito = createFakeTokenSet('sub-1', 'org-acme-saml_ana', undefined, {}, { omitIdTokenUsername: true });
+      expect(decodeJwtClaims(cognito.idToken)).not.toHaveProperty('username');
+      expect(await storedUsername(cognito.idToken)).toBe('org-acme-saml_ana');
+    });
+
+    it.each([
+      ['prefers cognito:username over username', { sub: 'sub-1', username: 'other', 'cognito:username': 'org-acme-saml_ana' }, 'org-acme-saml_ana'],
+      ['falls back to username without cognito:username', { sub: 'sub-1', username: 'org-acme-saml_x' }, 'org-acme-saml_x'],
+      ['falls back to the sub without either claim', { sub: 'sub-1' }, 'sub-1'],
+    ])('%s', async (_label, claims, expected) => {
+      expect(await storedUsername(idToken(claims))).toBe(expected);
+    });
   });
 });

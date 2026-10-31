@@ -149,7 +149,9 @@ export class IdentityResolutionService {
         surface,
         population,
         context,
-        cognitoUsername: claims.username ?? sub,
+        // A real Cognito ID token carries the pool username as `cognito:username`
+        // and has no `username` claim (that one is on the access token).
+        cognitoUsername: claims['cognito:username'] ?? claims.username ?? sub,
         tokens: {
           accessToken: tokens.accessToken,
           idToken: tokens.idToken,

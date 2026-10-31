@@ -55,6 +55,15 @@ function invitation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * What `findExternalIdentity` returns for the known federated user: the
+ * identity was bound through `conn_1` (the connection of `setup()`), as
+ * `linkIdentity` records it.
+ */
+function boundIdentity(overrides: { userId?: string; ssoConnectionId?: string | null } = {}) {
+  return { userId: 'user_known', ssoConnectionId: 'conn_1', ...overrides };
+}
+
 function setup(opts: { conn?: Conn | null; domainVerified?: boolean; domainConnectionId?: string } = {}) {
   const conn = opts.conn === undefined ? connection() : opts.conn;
   const idp = new FakeIdentityProvider({ apiPublicUrl: API });
@@ -197,7 +206,7 @@ describe('SsoCallbackService', () => {
       ['admin', ADMIN_CALLBACK, 'http://admin.test/'],
     ] as const)('exchanges a %s code with the same redirect_uri it sent (Cognito validates it)', async (surface, callback, landing) => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const exchange = vi.spyOn(ctx.idp, 'exchangeAuthorizationCode');
       const { state, code, url, nonce } = await startAndAuthorize(ctx, {}, { surface });
       const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -303,7 +312,7 @@ describe('SsoCallbackService', () => {
 
     it('answers a replayed state the same way: the record was consumed', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, url, nonce } = await startAndAuthorize(ctx);
       const first = await ctx.service.callback({ code, state }, META, nonce);
       expect(first.session).toBeDefined();
@@ -345,7 +354,7 @@ describe('SsoCallbackService', () => {
   describe('callback: existing identity', () => {
     it('signs in with sso + second factor and redirects to the return path', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx, {}, { returnPath: '/people?x=1' });
       const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.location).toBe('http://ws.test/people?x=1');
@@ -359,7 +368,7 @@ describe('SsoCallbackService', () => {
 
     it('still signs in when the connection is SUSPENDED (Review Focus 4)', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx);
       ctx.sso.findConnectionByProviderName.mockResolvedValue(connection({ status: 'SUSPENDED' }));
       const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -369,7 +378,7 @@ describe('SsoCallbackService', () => {
 
     it('signs in through a connection reset to DRAFT (path 1 does not depend on the status)', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx);
       ctx.sso.findConnectionByProviderName.mockResolvedValue(connection({ status: 'DRAFT' }));
       const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -380,7 +389,7 @@ describe('SsoCallbackService', () => {
     it('denies an existing identity whose user has no membership in the connection organization (provider name reused)', async () => {
       const ctx = setup();
       // The pool user and its sub came from org A's provider of the same name.
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_of_org_a' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity({ userId: 'user_of_org_a' }));
       ctx.memberships.findByUserId.mockResolvedValue([{ userId: 'user_of_org_a', orgId: 'org_a', status: 'ACTIVE' }] as never);
       const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
       const { state, code, nonce } = await startAndAuthorize(ctx);
@@ -399,11 +408,39 @@ describe('SsoCallbackService', () => {
       );
     });
 
+    it.each([
+      ['another connection', 'conn_other'],
+      ['no connection (a null binding)', null],
+    ])(
+      'denies an identity bound through %s even with an ACTIVE membership in the connection organization',
+      async (_label, ssoConnectionId) => {
+        const ctx = setup();
+        // user_known is an ACTIVE member of org_sample, which owns conn_1; the binding was made elsewhere.
+        ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity({ ssoConnectionId }));
+        ctx.memberships.findByUserId.mockResolvedValue([{ userId: 'user_known', orgId: 'org_sample', status: 'ACTIVE' }] as never);
+        const deleteUser = vi.spyOn(ctx.idp, 'deleteUser');
+        const { state, code, nonce } = await startAndAuthorize(ctx);
+        const res = await ctx.service.callback({ code, state }, META, nonce);
+        expect(res).toEqual({ location: 'http://ws.test/sign-in?reason=sso_denied' });
+        expect(res.session).toBeUndefined();
+        expect(ctx.identity.resolveIdentityAndCreateSession).not.toHaveBeenCalled();
+        // Not an orphan: the pool user stays.
+        expect(deleteUser).not.toHaveBeenCalled();
+        expect(ctx.audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'auth.sign_in.failed',
+            orgId: 'org_sample',
+            details: { reason: 'sso_provider_mismatch' },
+          }),
+        );
+      },
+    );
+
     it.each(['INVITED', 'ENDED'])(
       'denies an existing identity whose membership in the connection organization is %s (path 1 needs ACTIVE)',
       async (status) => {
         const ctx = setup();
-        ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+        ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
         ctx.memberships.findByUserId.mockResolvedValue([{ userId: 'user_known', orgId: 'org_sample', status }] as never);
         const { state, code, nonce } = await startAndAuthorize(ctx);
         const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -417,7 +454,7 @@ describe('SsoCallbackService', () => {
 
     it('denies an existing identity when no connection owns the provider name any more', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx);
       ctx.sso.findConnectionByProviderName.mockResolvedValue(null);
       const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -427,7 +464,7 @@ describe('SsoCallbackService', () => {
 
     it('redirects neutrally when session creation is refused (suspended user)', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       ctx.identity.resolveIdentityAndCreateSession.mockRejectedValue(new Error('suspended'));
       const { state, code, nonce } = await startAndAuthorize(ctx);
       const res = await ctx.service.callback({ code, state }, META, nonce);
@@ -459,6 +496,17 @@ describe('SsoCallbackService', () => {
         expect.arrayContaining(['user.created', 'identity.linked', 'membership.activated', 'invitation.accepted']),
       );
       expect(ctx.principalLoader.invalidateUser).toHaveBeenCalledWith('user_new', ['org_sample']);
+    });
+
+    it('links the identity to the connection it was bound through', async () => {
+      const ctx = setup();
+      ctx.invitations.findPendingByEmailAndOrg.mockResolvedValue(invitation());
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: `cognito:${PROVIDER}`, ssoConnectionId: 'conn_1' }),
+        ctx.tx,
+      );
     });
 
     it('writes the binding audit rows in the binding transaction and invitation.accepted after it', async () => {
@@ -527,6 +575,16 @@ describe('SsoCallbackService', () => {
       expect(ctx.authz.createGrant).toHaveBeenCalledWith(expect.objectContaining({ templateKey: 'employee', scopeOrgId: 'org_sample' }), ctx.tx);
       expect(auditActions(ctx)).toEqual(expect.arrayContaining(['identity.created', 'identity.linked', 'membership.activated']));
       expect(ctx.invitations.accept).not.toHaveBeenCalled();
+    });
+
+    it('links the JIT identity to the connection that provisioned it', async () => {
+      const ctx = setup({ conn: connection({ jitProvisioning: true }) });
+      const { state, code, nonce } = await startAndAuthorize(ctx);
+      await ctx.service.callback({ code, state }, META, nonce);
+      expect(ctx.identities.createExternalIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: `cognito:${PROVIDER}`, ssoConnectionId: 'conn_1' }),
+        ctx.tx,
+      );
     });
 
     it('writes every JIT audit row in the binding transaction', async () => {
@@ -627,7 +685,7 @@ describe('SsoCallbackService', () => {
 
     it('does not touch lastTestedAt without the test flag', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx);
       await ctx.service.callback({ code, state }, META, nonce);
       expect(ctx.sso.updateConnection).not.toHaveBeenCalled();
@@ -656,7 +714,7 @@ describe('SsoCallbackService review fixes', () => {
       ['with another browser\'s cookie', 'x'.repeat(43)],
     ])('denies a callback %s and never exchanges the code', async (_label, cookie) => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const exchange = vi.spyOn(ctx.idp, 'exchangeAuthorizationCode');
       const { state, code } = await startAndAuthorize(ctx);
       const res = await ctx.service.callback({ code, state }, META, cookie);
@@ -694,7 +752,7 @@ describe('SsoCallbackService review fixes', () => {
 
     it('an existing identity with an off-domain address still signs in', async () => {
       const ctx = setup();
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const { state, code, nonce } = await startAndAuthorize(ctx, { email: 'someone@othermail.com' });
       const res = await ctx.service.callback({ code, state }, META, nonce);
       expect(res.session).toBeDefined();
@@ -724,7 +782,7 @@ describe('SsoCallbackService review fixes', () => {
 
     it('an existing identity on a test flow marks the connection tested', async () => {
       const ctx = setup({ conn: connection({ status: 'TESTING' }) });
-      ctx.identities.findExternalIdentity.mockResolvedValue({ userId: 'user_known' });
+      ctx.identities.findExternalIdentity.mockResolvedValue(boundIdentity());
       const flow = await startAndAuthorize(ctx, {}, { test: await issueTestNonce(ctx) });
       const res = await ctx.service.callback({ code: flow.code, state: flow.state }, META, flow.nonce);
       expect(res.session).toBeDefined();

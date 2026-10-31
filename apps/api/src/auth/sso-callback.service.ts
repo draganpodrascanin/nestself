@@ -15,11 +15,13 @@
  * and the federated identity is resolved:
  *   1. an existing `external_identities(cognito:<providerName>, sub)` signs
  *      in whatever the connection's status (Review Focus 4), provided the
- *      connection owning that provider name still exists and the identity's
- *      user has an ACTIVE membership in that connection's organization:
- *      a provider name reused by another organization would otherwise hand
- *      it the first organization's pool users (Cognito keeps them, with
- *      their `sub`). A mismatch is the neutral `sso_denied`, audited as
+ *      connection owning that provider name still exists, the identity was
+ *      bound through that very connection (`ssoConnectionId`; null matches
+ *      none) and the identity's user has an ACTIVE membership in the
+ *      connection's organization: a provider name reused by another
+ *      organization would otherwise hand it the first organization's pool
+ *      users (Cognito keeps them, with their `sub`). A mismatch is the
+ *      neutral `sso_denied`, audited as
  *      `auth.sign_in.failed { reason: 'sso_provider_mismatch' }`, and the
  *      pool user is not deleted (it is not an orphan);
  *   2. new bindings need the connection ACTIVE, or TESTING on a staff test
@@ -298,9 +300,15 @@ export class SsoCallbackService {
     const existing = await this.identities.findExternalIdentity(provider, claims.sub);
     if (existing) {
       // Defence in depth for the per-organization slug reservation: the
-      // identity must belong to the organization of the connection that now
-      // owns this provider name. Not an orphan, so nothing is deleted.
-      if (!connection || !(await this.isMemberOf(existing.userId, connection.orgId))) {
+      // identity must have been bound through the connection that now owns
+      // this provider name (a null binding matches none), and its user must
+      // be an ACTIVE member of that connection's organization. Not an
+      // orphan, so nothing is deleted.
+      if (
+        !connection ||
+        existing.ssoConnectionId !== connection.id ||
+        !(await this.isMemberOf(existing.userId, connection.orgId))
+      ) {
         await this.auditFailed('sso_provider_mismatch', meta, connection, record.connection);
         return deny();
       }
@@ -479,6 +487,7 @@ export class SsoCallbackService {
         cognitoUsername: claims.username,
         email,
         emailVerified: true,
+        ssoConnectionId: connection.id,
         lastSeenAt: new Date(),
       },
       tx,
@@ -519,9 +528,7 @@ export class SsoCallbackService {
   /**
    * The user has an ACTIVE membership in the organization; system-context
    * read. An invited (not yet bound) or ended membership does not vouch for a
-   * federated sign-in. See 22.14: the binding organization is not recorded on
-   * `external_identities`, so this is the only link between the identity and
-   * the connection's organization.
+   * federated sign-in, whichever connection bound the identity.
    */
   private async isMemberOf(userId: string, orgId: string): Promise<boolean> {
     const rows = await this.memberships.findByUserId(userId);
