@@ -98,7 +98,9 @@ export default defineConfig({
         AUTH_MODE: 'stub',
         FAKE_IDP_FIXED_OTP: '123456',
         MEDIA_STORAGE: 'local',
-        REDIS_URL: '',          // Force synchronous media processing (no worker in e2e)
+        REDIS_URL: '',
+        // No worker runs in this suite: uploads are processed inside the request.
+        MEDIA_PROCESS_INLINE: 'true',
         SESSION_COOKIE_INSECURE_DEV: 'true',
         NODE_ENV: 'development',
         CONTENT_LINK_HOST_ALLOWLIST: 'example.com',

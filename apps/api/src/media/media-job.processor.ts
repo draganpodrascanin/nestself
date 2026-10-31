@@ -79,12 +79,17 @@ export class MediaJobProcessor implements OnModuleDestroy {
   async enqueue(assetId: string): Promise<void> {
     const redisUrl = this.config.get<string>('REDIS_URL');
     if (!redisUrl) {
-      // No Redis available — process synchronously (development / e2e).
-      this.logger.debug(`No Redis; processing asset ${assetId} synchronously`);
+      if (this.config.get<string>('MEDIA_PROCESS_INLINE') !== 'true') {
+        // No Redis available — skip enqueue. The asset stays in 'uploaded'.
+        this.logger.debug(`No Redis; skipping enqueue for asset ${assetId}`);
+        return;
+      }
+      // The content e2e suite runs no worker: process inside the request.
+      this.logger.debug(`No Redis; processing asset ${assetId} inline`);
       try {
         await this.mediaService.processAsset(assetId);
       } catch (err) {
-        this.logger.warn(`Synchronous processing failed for ${assetId}: ${err}`);
+        this.logger.warn(`Inline processing failed for ${assetId}: ${err}`);
       }
       return;
     }

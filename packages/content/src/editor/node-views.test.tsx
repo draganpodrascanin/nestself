@@ -80,12 +80,11 @@ describe('ProfessionalNoteView', () => {
     const props = makeMockProps({ noteKind: 'tip' }, true);
     render(<ProfessionalNoteView {...props} />);
 
-    // Open the custom combobox
-    const combobox = screen.getByRole('combobox');
-    await user.click(combobox);
+    // Open the Select (its popup opens asynchronously)
+    await user.click(screen.getByRole('combobox', { name: 'Note type' }));
 
     // Pick the "warning" option from the listbox
-    const option = screen.getByRole('option', { name: /warning/i });
+    const option = await screen.findByRole('option', { name: /warning/i });
     await user.click(option);
     expect(props.updateAttributes).toHaveBeenCalledWith({ noteKind: 'warning' });
   });

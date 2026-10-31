@@ -154,6 +154,8 @@ export const envSchema = z
     MEDIA_STORAGE: z.enum(['local', 's3']).default('local'),
     MEDIA_LOCAL_DIR: optionalString,
     MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().optional(),
+    // Process uploads inside the request when no Redis worker runs (e2e only).
+    MEDIA_PROCESS_INLINE: z.enum(['true', 'false']).default('false'),
     MEDIA_BUCKET: optionalString,
     MEDIA_KMS_KEY_ARN: optionalString,
 
@@ -227,6 +229,14 @@ export const envSchema = z
           path: ['LIBRARY_CURSOR_KEY'],
         });
       }
+    }
+
+    if (data.MEDIA_PROCESS_INLINE === 'true' && data.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MEDIA_PROCESS_INLINE is a test setting and is not allowed when NODE_ENV=production',
+        path: ['MEDIA_PROCESS_INLINE'],
+      });
     }
 
     // MED-R-01: local driver refused in production
