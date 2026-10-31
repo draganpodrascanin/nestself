@@ -176,7 +176,7 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
       )}
 
       {grants !== undefined ? (
-        <EffectiveAccessPanel adminApi={adminApi} orgId={orgId} members={members} sampleMode={sampleMode} />
+        <EffectiveAccessPanel adminApi={adminApi} orgId={orgId} sampleMembers={sampleMode ? members : []} sampleMode={sampleMode} />
       ) : null}
 
       {canGrant && !sampleMode ? (
@@ -186,7 +186,6 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
           onOpenChange={setAssignOpen}
           adminApi={adminApi}
           orgId={orgId}
-          members={members}
           orgUnits={orgUnits}
         />
       ) : null}
@@ -209,7 +208,7 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
           onOpenChange={setTransferOpen}
           adminApi={adminApi}
           orgId={orgId}
-          members={members.filter((m) => m.userId !== principal.userId)}
+          currentUserId={principal.userId}
         />
       ) : null}
 
@@ -219,7 +218,7 @@ export function AccessScreen({ adminApi, sampleMode }: AccessScreenProps) {
           onClose={() => setDelegateParent(null)}
           adminApi={adminApi}
           orgId={orgId}
-          members={members.filter((m) => m.userId !== principal.userId)}
+          currentUserId={principal.userId}
         />
       ) : null}
     </div>

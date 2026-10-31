@@ -242,6 +242,13 @@
       "empty": "Ennek a tagnak nincs művelete ebben a szervezetben.",
       "loading": "Tényleges hozzáférés betöltése"
     },
+    "memberSearch": {
+      "label": "Tagok keresése",
+      "hint": "Írd be a név vagy az e-mail-cím elejét.",
+      "loading": "Tagok betöltése",
+      "empty": "Nincs választható aktív tag.",
+      "noMatch": "Nincs a keresésnek megfelelő tag."
+    },
     "errors": {
       "loadTitle": "A hozzáférés nem tölthető be",
       "membersLoadTitle": "A tagok nem tölthetők be",

@@ -242,6 +242,13 @@
       "empty": "Ovaj član nema nijednu radnju u ovoj organizaciji.",
       "loading": "Učitavanje stvarnog pristupa"
     },
+    "memberSearch": {
+      "label": "Pretraži članove",
+      "hint": "Upiši početak imena ili imejl adrese.",
+      "loading": "Učitavanje članova",
+      "empty": "Nema aktivnih članova koje možeš da izabereš.",
+      "noMatch": "Nijedan član ne odgovara ovoj pretrazi."
+    },
     "errors": {
       "loadTitle": "Pristup nije moguće učitati",
       "membersLoadTitle": "Članove nije moguće učitati",

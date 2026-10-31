@@ -9,7 +9,9 @@
  * Covered: the grant table, the effective-access preview, delegating part
  * of her own hr_admin grant, and (since the owner model of 2026-10-24 gave
  * employer_owner `access.grant` and `access.revoke`) assigning team_manager
- * to Ana and revoking it again with a reason.
+ * to Ana and revoking it again with a reason. The member fields of the
+ * effective-access panel and the assign dialog search through the API
+ * (`GET /orgs/:orgId/members?search=`, a prefix of the name or the email).
  *
  * The second journey is the employer owner who holds no HR template: Ivana
  * hands the ownership to Stefan, who has `access.preview` (owner template)
@@ -69,9 +71,28 @@ async function pick(page: Page, scope: Locator, label: string, option: string) {
   await expect(combobox).toHaveText(option);
 }
 
-/** Picks a member in the effective-access preview and returns the panel. */
+/**
+ * Types `term` into the "Search members" field inside `scope` and waits for the
+ * API to answer that search (`GET /orgs/:orgId/members?search=<term>`, sent
+ * once the typing pauses).
+ */
+async function searchMembers(page: Page, scope: Locator, term: string) {
+  const answered = page.waitForResponse((res) => {
+    const url = new URL(res.url());
+    return (
+      res.request().method() === 'GET' &&
+      /\/api\/orgs\/[^/]+\/members$/.test(url.pathname) &&
+      url.searchParams.get('search') === term
+    );
+  });
+  await scope.getByRole('searchbox', { name: 'Search members' }).fill(term);
+  expect((await answered).status()).toBe(200);
+}
+
+/** Searches for a member in the effective-access preview, picks them and returns the panel. */
 async function previewFor(page: Page, memberName: string) {
   const panel = page.getByRole('region', { name: 'Effective access' });
+  await searchMembers(page, panel, memberName.split(' ')[0]!);
   await panel.getByRole('combobox', { name: 'Member' }).click();
   await page.getByRole('option', { name: memberName }).click();
   return panel;
@@ -119,8 +140,15 @@ test.describe('Workspace HR grant administration', () => {
       table.getByRole('row').filter({ hasText: 'Employer owner' }).filter({ hasText: 'Ivana Jovanović' }),
     ).toHaveCount(1);
 
-    // Effective access for an employee: the employee template's actions.
-    const anaPanel = await previewFor(page, EMPLOYEE_NAME);
+    // Effective access for an employee: the employee template's actions. The
+    // member is found by searching (the API matches the start of the name or
+    // the email), so only the matches are offered.
+    const anaPanel = page.getByRole('region', { name: 'Effective access' });
+    await searchMembers(page, anaPanel, 'Ana');
+    await anaPanel.getByRole('combobox', { name: 'Member' }).click();
+    await expect(page.getByRole('option', { name: EMPLOYEE_NAME })).toBeVisible();
+    await expect(page.getByRole('option', { name: MANAGER_NAME })).toHaveCount(0);
+    await page.getByRole('option', { name: EMPLOYEE_NAME }).click();
     await expect(
       anaPanel.getByRole('list', { name: 'content' }).getByText('content.read', { exact: true }),
     ).toBeVisible({ timeout: 10_000 });
@@ -162,6 +190,11 @@ test.describe('Workspace HR grant administration', () => {
     await page.getByRole('button', { name: 'Assign template' }).click();
     const assign = page.getByRole('dialog', { name: 'Assign a permission template' });
     await expect(assign).toBeVisible();
+    // The dialog's member field searches too (here by the start of the email,
+    // underscore included: the API takes it literally); the delegation above
+    // picked from the plain list. A repeated search would be answered from the
+    // query cache without a request, hence not "Ana" again.
+    await searchMembers(page, assign, 'user_ana');
     await pick(page, assign, 'Member', EMPLOYEE_NAME);
     await pick(page, assign, 'Template', 'Team manager');
     await pick(page, assign, 'Org unit', ORG_UNIT_NAME);

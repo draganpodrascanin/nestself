@@ -242,6 +242,13 @@
       "empty": "This member has no actions in this organization.",
       "loading": "Loading effective access"
     },
+    "memberSearch": {
+      "label": "Search members",
+      "hint": "Type the start of a name or an email address.",
+      "loading": "Loading members",
+      "empty": "There are no active members to choose from.",
+      "noMatch": "No member matches this search."
+    },
     "errors": {
       "loadTitle": "Access could not be loaded",
       "membersLoadTitle": "Members could not be loaded",

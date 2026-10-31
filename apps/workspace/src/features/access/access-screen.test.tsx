@@ -839,7 +839,152 @@ describe('TransferOwnershipDialog', () => {
   });
 });
 
+/** A member list that answers `search` as the API does: a prefix of the name or the email. */
+function searchableMembers() {
+  return vi.fn(async (_orgId: string, query: { search?: string }) => {
+    const term = query.search?.toLowerCase();
+    return {
+      items: MEMBERS.filter(
+        (m) => !term || m.displayName.toLowerCase().startsWith(term) || m.email.toLowerCase().startsWith(term),
+      ),
+      nextCursor: null,
+    };
+  });
+}
+
+const SEARCH_LABEL = () => new RegExp(`^${t('workspace:access.memberSearch.label')}`);
+
+describe('AccessScreen: member search', () => {
+  it('assigns a template to the member found by searching the dialog', async () => {
+    const user = userEvent.setup();
+    const listMembers = searchableMembers();
+    const { adminApi } = renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    const dialog = await openAssign(user);
+
+    await user.type(within(dialog).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ana');
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith(ORG_ID, { status: 'ACTIVE', limit: 100, search: 'ana' }));
+    await user.click(screen.getByRole('combobox', { name: t('workspace:access.assign.member') }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Ana Nikolić']);
+    await user.click(screen.getByRole('option', { name: 'Ana Nikolić' }));
+    await choose(user, t('workspace:access.assign.template'), t('workspace:access.templates.employer_owner'));
+    await user.click(within(dialog).getByRole('button', { name: t('workspace:access.assign.submit') }));
+
+    await waitFor(() =>
+      expect(adminApi.createGrant).toHaveBeenCalledWith(
+        ORG_ID,
+        expect.objectContaining({ templateKey: 'employer_owner', subjectUserId: 'user_ana' }),
+      ),
+    );
+  });
+
+  it('does not submit the dialog when Enter is pressed in the search field', async () => {
+    const user = userEvent.setup();
+    const { adminApi } = renderScreen({ adminApi: makeAdminApi({ listMembers: searchableMembers() }) });
+    const dialog = await openAssign(user);
+
+    await user.type(within(dialog).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ana{Enter}');
+
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(adminApi.createGrant).not.toHaveBeenCalled();
+  });
+
+  it('shows a failed search in the dialog as translated copy, never the API message', async () => {
+    const user = userEvent.setup();
+    const listMembers = vi
+      .fn()
+      .mockResolvedValueOnce({ items: MEMBERS, nextCursor: null })
+      .mockRejectedValue(apiError(429, 'rate_limited'));
+    renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    const dialog = await openAssign(user);
+
+    await user.type(within(dialog).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ana');
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(t('workspace:access.errors.membersLoadTitle'));
+    expect(alert).toHaveTextContent(t('workspace:access.errors.rateLimited'));
+    expect(screen.queryByText('English rate_limited')).not.toBeInTheDocument();
+  });
+
+  it('offers the delegation to the members found, never to the delegator', async () => {
+    const user = userEvent.setup();
+    const listMembers = searchableMembers();
+    renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    await user.click(
+      await screen.findByRole('button', {
+        name: t('workspace:access.delegate.openFor', { template: t('workspace:access.templates.employer_owner') }),
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: t('workspace:access.delegate.title') });
+
+    // Ivana is the signed-in delegator: she is not among the choices even when the search finds her.
+    await user.type(within(dialog).getByRole('searchbox', { name: SEARCH_LABEL() }), 'iva');
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith(ORG_ID, { status: 'ACTIVE', limit: 100, search: 'iva' }));
+    await user.click(screen.getByRole('combobox', { name: t('workspace:access.delegate.member') }));
+
+    expect(await screen.findByText(t('workspace:access.memberSearch.noMatch'))).toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+
+  it('hands the ownership to the member found by searching the dialog', async () => {
+    const user = userEvent.setup();
+    const listMembers = searchableMembers();
+    const { adminApi } = renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    await user.click(await screen.findByRole('button', { name: t('workspace:access.transfer.open') }));
+    const dialog = await screen.findByRole('dialog', { name: t('workspace:access.transfer.title') });
+
+    await user.type(within(dialog).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ste');
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith(ORG_ID, { status: 'ACTIVE', limit: 100, search: 'ste' }));
+    await user.click(screen.getByRole('combobox', { name: t('workspace:access.transfer.member') }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Stefan Marković']);
+    await user.click(screen.getByRole('option', { name: 'Stefan Marković' }));
+    await user.click(within(dialog).getByRole('button', { name: t('workspace:access.transfer.submit') }));
+
+    await waitFor(() => expect(adminApi.transferOwnership).toHaveBeenCalledWith(ORG_ID, { newOwnerUserId: 'user_stefan' }));
+  });
+
+  it('previews the access of the member found by searching the panel', async () => {
+    const user = userEvent.setup();
+    const listMembers = searchableMembers();
+    const { adminApi } = renderScreen({ adminApi: makeAdminApi({ listMembers }) });
+    await screen.findByText('Stefan Marković');
+    const panel = screen.getByRole('region', { name: t('workspace:access.preview.title') });
+
+    await user.type(within(panel).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ste');
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith(ORG_ID, { status: 'ACTIVE', limit: 100, search: 'ste' }));
+    await user.click(within(panel).getByRole('combobox', { name: t('workspace:access.preview.member') }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Stefan Marković']);
+    await user.click(screen.getByRole('option', { name: 'Stefan Marković' }));
+
+    await waitFor(() => expect(adminApi.previewAccess).toHaveBeenCalledWith(ORG_ID, 'user_stefan'));
+  });
+
+  it('keeps naming people in the grant table from the plain member list while searching', async () => {
+    const user = userEvent.setup();
+    renderScreen({ adminApi: makeAdminApi({ listMembers: searchableMembers() }) });
+    await screen.findByText('Stefan Marković');
+    const panel = screen.getByRole('region', { name: t('workspace:access.preview.title') });
+
+    await user.type(within(panel).getByRole('searchbox', { name: SEARCH_LABEL() }), 'zzz');
+    expect(await within(panel).findByText(t('workspace:access.memberSearch.noMatch'))).toBeInTheDocument();
+
+    const managerRow = screen.getByText(t('workspace:access.templates.team_manager')).closest('tr')!;
+    expect(within(managerRow).getByText('Stefan Marković')).toBeInTheDocument();
+  });
+});
+
 describe('AccessScreen: sample mode', () => {
+  it('searches the sample members in the browser and calls no API', async () => {
+    const user = userEvent.setup();
+    const { adminApi } = renderScreen({ sampleMode: true });
+    const panel = await screen.findByRole('region', { name: t('workspace:access.preview.title') });
+
+    await user.type(within(panel).getByRole('searchbox', { name: SEARCH_LABEL() }), 'ana');
+    await user.click(within(panel).getByRole('combobox', { name: t('workspace:access.preview.member') }));
+
+    await waitFor(() => expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana Nikolić']));
+    expect(adminApi.listMembers).not.toHaveBeenCalled();
+  });
+
   it('derives rows from the sample grants of the organization and calls no API', async () => {
     const { adminApi } = renderScreen({ sampleMode: true });
 
