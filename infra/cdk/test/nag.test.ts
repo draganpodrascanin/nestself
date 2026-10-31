@@ -11,6 +11,7 @@ import { NestSelfEdgeStack } from '../lib/edge-stack.js';
 import { NestSelfObservabilityStack } from '../lib/observability-stack.js';
 import { NestSelfCiStack } from '../lib/ci-stack.js';
 import { getStageConfig } from '../lib/config.js';
+import { AUTH_CONTEXT, PLATFORM_CONTEXT, testApp } from './context.js';
 
 const sharedEnv = { account: '111111111111', region: 'eu-central-1' };
 const synthesizerProps = {
@@ -21,7 +22,7 @@ const synthesizerProps = {
 
 describe('cdk-nag AwsSolutions -- auth stack', () => {
   it('dev auth stack synthesizes with nag plugin without violations', () => {
-    const app = new cdk.App();
+    const app = testApp();
     const config = getStageConfig('dev');
     const _stack = new NestSelfAuthStack(app, 'NagDevAuth', {
       config,
@@ -35,7 +36,7 @@ describe('cdk-nag AwsSolutions -- auth stack', () => {
   });
 
   it('production auth stack synthesizes with nag plugin without violations', () => {
-    const app = new cdk.App();
+    const app = testApp(AUTH_CONTEXT);
     const config = getStageConfig('production');
     const _stack = new NestSelfAuthStack(app, 'NagProdAuth', {
       config,
@@ -50,7 +51,7 @@ describe('cdk-nag AwsSolutions -- auth stack', () => {
 
 describe('cdk-nag AwsSolutions -- staging full synth', () => {
   it('all staging stacks synthesize with nag plugin', () => {
-    const app = new cdk.App();
+    const app = testApp(PLATFORM_CONTEXT);
     const config = getStageConfig('staging');
 
     const securityBaseline = new NestSelfSecurityBaselineStack(

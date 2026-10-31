@@ -1,6 +1,6 @@
 # CDK setup: connecting NestSelf to AWS, step by step
 
-This guide takes you from an empty AWS account to a working local API that signs people in against a real Amazon Cognito user pool. It follows the agreed rollout order: **Cognito first** (this document, everything else stays on your laptop), **web applications later** (section 8), **mobile last** (section 9). Nothing beyond the step you are on is created; the CDK app contains only the auth stack unless you ask for more.
+This guide takes you from an empty AWS account to a working local API that signs people in against a real Amazon Cognito user pool. It follows the agreed rollout order: **Cognito first** (this document, everything else stays on your laptop), **web applications later** (sections 8 and 9), **mobile last** (section 10). Nothing beyond the step you are on is created; the CDK app contains only the auth stack unless you ask for more.
 
 Reference material: `infra/cdk/README.md` (what each stack contains), `docs/environment.md` (every environment variable), `docs/auth/implementation.md` section 17 (how the API uses the pool).
 
@@ -241,22 +241,114 @@ From here on, invite real people as the HR admin (`POST /orgs/:orgId/invitations
 - Rotate the session key: create a new 64-hex value, move the old one to `SESSION_ENCRYPTION_KEY_PREVIOUS`, restart; remove the previous key after the longest session lifetime.
 - Tear down dev: `pnpm --filter @nestself/cdk exec cdk destroy NestSelf-dev-Auth -c stage=dev -c account=<ACCOUNT_ID>` (the dev pool has no deletion protection; users are lost).
 
-## 8. Later: the web applications (staging, then production)
+## 8. Staging and production: the auth custom domain and the CloudFront-only API
+
+Staging and production differ from dev in two ways that need values the stacks cannot create. The Cognito sign-in page answers on `auth.staging.nestself.rs` (`auth.nestself.rs` in production) instead of an `amazoncognito.com` prefix, and the API's load balancer admits CloudFront only. The second one is a security requirement: the API trusts two proxies (`TRUST_PROXY_HOPS=2`: CloudFront, then the load balancer) and reads the client address from `X-Forwarded-For` at that depth, which anyone who reached the load balancer directly could forge.
+
+The values are CDK context (`-c name=value`). A stage that lacks one does not synthesize, and the error names the missing key.
+
+| Context key | Read by | Value | Error without it |
+| --- | --- | --- | --- |
+| `authCertificateArn` | auth stack, staging and production | ARN of the ACM certificate for the auth domain, issued in **us-east-1** (8.2) | `auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md` |
+| `hostedZoneId` | auth stack, staging and production | Id of the Route 53 hosted zone of the stage domain (8.1) | the same |
+| `cloudfrontOriginPrefixListId` | compute stack, with `-c platform=true` | Id of the AWS managed prefix list `com.amazonaws.global.cloudfront.origin-facing` in eu-central-1 (8.4) | `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId; see CDK-setup.md` |
+| `opsAlertEmail` | compute stack, optional | Mailbox for operational alerts such as an expiring SSO certificate (`OPS_ALERT_EMAIL`); a malformed address stops the API from starting | none: the API logs the alert and sends no mail |
+
+Every `cdk` command (synth, diff, deploy of any stack) constructs the auth stack, so the first two values are needed even when you deploy another stack, and `cloudfrontOriginPrefixListId` is needed by every command with `-c platform=true`. Dev needs none of them.
+
+### 8.1 The hosted zone and its id
+
+The security-baseline stack creates the zone (`staging.nestself.rs`, `nestself.rs` in production). If it does not exist yet, deploy that stack first. The auth and compute stacks are only synthesized by this command, so the values you do not have yet can be placeholders:
+
+```bash
+pnpm --filter @nestself/cdk exec cdk deploy NestSelf-staging-SecurityBaseline \
+  -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true \
+  -c authCertificateArn=pending -c hostedZoneId=pending -c cloudfrontOriginPrefixListId=pending
+```
+
+Point the registrar (or the parent zone) at the zone's name servers, then read the zone id:
+
+```bash
+aws route53 list-hosted-zones-by-name --dns-name staging.nestself.rs \
+  --query "HostedZones[?Name=='staging.nestself.rs.'].Id" --output text
+# prints /hostedzone/Z0123456789ABCDEFGHIJ ; hostedZoneId is the part after /hostedzone/
+```
+
+### 8.2 Request the certificate in us-east-1 and validate it in the zone
+
+Cognito serves a custom domain through a CloudFront distribution it manages, and CloudFront reads certificates from **us-east-1** only, whatever the pool's region.
+
+```bash
+aws acm request-certificate --region us-east-1 --domain-name auth.staging.nestself.rs \
+  --validation-method DNS --query CertificateArn --output text      # authCertificateArn
+aws acm describe-certificate --region us-east-1 --certificate-arn <CERT_ARN> \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord'   # the CNAME to create
+```
+
+Create that CNAME in the zone (the ACM console's "Create records in Route 53" button does it in one click), then wait for `aws acm wait certificate-validated --region us-east-1 --certificate-arn <CERT_ARN>`.
+
+### 8.3 An A record at the parent name
+
+Cognito refuses a custom domain whose parent domain does not resolve; an SOA record does not count. The parent of `auth.staging.nestself.rs` is `staging.nestself.rs`, the apex of the staging zone (`nestself.rs` for production). Create an A record there before the auth stack is deployed. Cognito only checks that the name resolves, so any address will do until the real record exists (CDK does not create the apex, `app.` or `admin.` records yet):
+
+```bash
+aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batch \
+  '{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"staging.nestself.rs","Type":"A","TTL":300,"ResourceRecords":[{"Value":"198.51.100.1"}]}}]}'
+```
+
+If the name already resolves (for example the production apex once the public site is live), there is nothing to do.
+
+### 8.4 The CloudFront prefix list id
+
+```bash
+aws ec2 describe-managed-prefix-lists --region eu-central-1 \
+  --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
+  --query 'PrefixLists[0].PrefixListId' --output text
+```
+
+It prints `pl-...`; the id depends on the region, and the stacks are in eu-central-1.
+
+### 8.5 Deploy with the values
+
+```bash
+pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true \
+  -c authCertificateArn=<CERT_ARN> -c hostedZoneId=<ZONE_ID> \
+  -c cloudfrontOriginPrefixListId=<PREFIX_LIST_ID> -c opsAlertEmail=<OPS_MAILBOX> -c edgeWafArn=<WAF_ARN>
+```
+
+Pass the same values to every later `cdk deploy`, `diff` and `synth` of that stage. Creating the domain takes several minutes, because Cognito provisions its CloudFront distribution; the role that runs the deployment needs `cloudfront:UpdateDistribution` (the bootstrap execution role has administrator rights unless you restricted it).
+
+What the stacks do with the values:
+
+- **Auth stack**: the user pool domain `auth.<stage domain>` with the certificate, an A and an AAAA alias with that name in the zone, and the `CognitoDomain` output `https://auth.<stage domain>`, which `env-from-outputs.mjs` and the compute stack read as `COGNITO_DOMAIN`. Dev keeps its prefix domain.
+- **Compute stack**: the api, worker and migrate tasks get `NODE_ENV=production` on every stage (no Swagger, no pretty-printed logs, no `devToken` in invitation responses), `SES_FROM_EMAIL` (`no-reply@<stage domain>`), `OPS_ALERT_EMAIL` (when `opsAlertEmail` is passed) and `TRUST_PROXY_HOPS=2`. The load balancer's security group admits TCP 80 from the CloudFront prefix list and nothing else, and its listener adds no rule of its own. Only port 80 is opened: CloudFront's origin is HTTP-only and the load balancer has no other listener. The managed prefix list counts as 55 rules against the default quota of 60 rules per security group, so a second rule (443, for a future HTTPS listener) needs a quota increase first.
+
+### 8.6 Check after the deploy
+
+1. Open `https://auth.staging.nestself.rs/login?response_type=code&client_id=<WEB_CLIENT_ID>&redirect_uri=<one of the web callback URLs>`: the sign-in page loads with the new certificate. Re-run `node infra/cdk/scripts/env-from-outputs.mjs staging` to get `COGNITO_DOMAIN=https://auth.staging.nestself.rs`.
+2. The load balancer must not answer anyone but CloudFront. `curl -m 10 http://<AlbDnsName>/api/health` (the `AlbDnsName` output of the compute stack) has to time out, while `https://<WorkspaceDistributionDomain>/api/health` (edge stack output) answers.
+3. The prefix list admits the addresses of every CloudFront distribution, not only yours. That is enough for the `X-Forwarded-For` depth the API relies on, because the load balancer is off the open internet. A secret origin header checked by a listener rule would also exclude other accounts' distributions; it is not part of these stacks.
+
+### 8.7 The auth domain is final before the first employer
+
+The SAML ACS URL and the OIDC redirect URI that an employer registers at its identity provider are built from the Cognito domain. Settle `auth.<stage domain>` before the first employer is onboarded; changing it later means every employer reconfigures its provider.
+
+## 9. Later: the web applications (staging, then production)
 
 Do this when the first features are complete. Each item is a manual prerequisite the stacks cannot create for you; the stacks themselves are deployed with one command.
 
 1. Create the staging account; configure a profile; `cdk bootstrap aws://<STAGING_ACCOUNT_ID>/eu-central-1`.
-2. Register or delegate the DNS zone `staging.nestself.rs` in Route 53 (the security-baseline stack creates the hosted zone; point the registrar at its name servers).
+2. Register or delegate the DNS zone `staging.nestself.rs` in Route 53 (the security-baseline stack creates the hosted zone, so deploy it first as in section 8.1; point the registrar at its name servers).
 3. In SES (eu-central-1) verify the sending domain and request production access (out of the sandbox); `no-reply@staging.nestself.rs` is the configured sender.
-4. In ACM **us-east-1** request a certificate for `auth.staging.nestself.rs` (custom Cognito domain) and the CloudFront names; validate by DNS.
+4. In ACM **us-east-1** request the certificate for `auth.staging.nestself.rs` (custom Cognito domain, section 8.2) and, separately, the certificates for the CloudFront names; validate by DNS.
 5. Create a WAF web ACL in us-east-1 for CloudFront and note its ARN.
-6. Deploy everything: `pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true -c edgeWafArn=<ARN>`.
+6. Deploy everything with the values of section 8: `pnpm --filter @nestself/cdk exec cdk deploy --all -c stage=staging -c account=<STAGING_ACCOUNT_ID> -c platform=true -c authCertificateArn=<ARN> -c hostedZoneId=<ZONE_ID> -c cloudfrontOriginPrefixListId=<ID> -c opsAlertEmail=<MAILBOX> -c edgeWafArn=<ARN>`.
 7. Run the migration task once (`aws ecs run-task ... nestself-staging-migrate`, see `infra/cdk/README.md`), then push the first images through the `deploy-staging` workflow.
 8. GitHub: create the `staging` environment and set the variables the workflow reads: `DEPLOY_ROLE_ARN`, `ECR_REPO_URI`, `ECR_REPO_NAME`, `ECR_REPO_MARKETING_URI`, `MIGRATE_NETWORK_CONFIG`, `SPA_WORKSPACE_BUCKET`, `SPA_ADMIN_BUCKET`, `CF_WORKSPACE_DIST_ID`, `CF_ADMIN_DIST_ID` (all are stack outputs). The deploy role trusts `main` and pull requests for staging, `v*` tags for production.
-9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); the compute stack passes `WORKSPACE_URL`, `ADMIN_URL` and `API_PUBLIC_URL` from the stage config (`lib/config.ts`: the SPAs proxy `/api`, so the API origin is the workspace origin). Browser SSO runs on each surface's own origin, so the web client's registered `webCallbackUrls` for both SPA origins are exactly what the API sends as `redirect_uri` and none is unused (`docs/auth/implementation.md` 22.3); set `TRUST_PROXY_HOPS=1` behind the load balancer.
-10. Repeat for production with `-c stage=production`; enable the phase 2 security baseline (Service Control Policies, Security Hub) before real users.
+9. API environment in ECS comes from the compute stack (Secrets Manager for `DATABASE_URL`, `REDIS_URL`, `COGNITO_WEB_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`); the compute stack passes `WORKSPACE_URL`, `ADMIN_URL` and `API_PUBLIC_URL` from the stage config (`lib/config.ts`: the SPAs proxy `/api`, so the API origin is the workspace origin). Browser SSO runs on each surface's own origin, so the web client's registered `webCallbackUrls` for both SPA origins are exactly what the API sends as `redirect_uri` and none is unused (`docs/auth/implementation.md` 22.3). The same stack sets `NODE_ENV=production`, `SES_FROM_EMAIL`, `OPS_ALERT_EMAIL` (from `-c opsAlertEmail`) and `TRUST_PROXY_HOPS=2` (CloudFront, then the load balancer), and the load balancer admits CloudFront only (section 8).
+10. Repeat for production with `-c stage=production` (its own certificate, hosted zone id and prefix list id, looked up in the production account); enable the phase 2 security baseline (Service Control Policies, Security Hub) before real users.
 
-## 9. Last: mobile
+## 10. Last: mobile
 
 The mobile client already exists in the auth stack; nothing new is deployed. For a build that talks to a stage:
 
@@ -268,18 +360,20 @@ echo "EXPO_PUBLIC_API_URL=https://api.<stage domain>" >> apps/mobile/.env.local
 
 This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `EXPO_PUBLIC_COGNITO_CLIENT_ID`, `EXPO_PUBLIC_COGNITO_DOMAIN` and `EXPO_PUBLIC_COGNITO_ISSUER`. They are public values; the mobile client has no secret. In EAS put the same variables in the build profile. The callback scheme `nestself://auth/callback` is already registered on the mobile client.
 
-## 10. Environment variables at a glance
+## 11. Environment variables at a glance
 
 | Where | Variable | Source |
 | --- | --- | --- |
 | Shell | `AWS_PROFILE`, `AWS_REGION`, `AWS_ACCOUNT_DEV` (`AWS_ACCOUNT_STAGING`, `AWS_ACCOUNT_PRODUCTION`) | you, section 2 |
 | `apps/api/.env` | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_WEB_CLIENT_ID`, `COGNITO_WEB_CLIENT_SECRET`, `COGNITO_MOBILE_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_ISSUER`, `SESSION_ENCRYPTION_KEY` | `env-from-outputs.mjs <stage>` |
 | `apps/api/.env` | `AUTH_MODE=cognito`, `REDIS_URL`, `SESSION_COOKIE_INSECURE_DEV=true` (local only), `AWS_PROFILE` or access keys, optional `SES_FROM_EMAIL`, `IP_HASH_SALT`, `JOBS_TIMEZONE`; `API_PUBLIC_URL=http://localhost:4000`, `WORKSPACE_URL`, `ADMIN_URL` (required in cognito mode: the SSO start and callback URLs and where the callback sends the browser) | you, section 5 |
+| ECS tasks (api, worker, migrate) | `NODE_ENV=production`, `SES_FROM_EMAIL`, `OPS_ALERT_EMAIL`, `TRUST_PROXY_HOPS` | compute stack: per stage from `lib/config.ts`, `OPS_ALERT_EMAIL` from `-c opsAlertEmail`, section 8 |
+| CDK context (`-c`) | `authCertificateArn`, `hostedZoneId`, `cloudfrontOriginPrefixListId`, `opsAlertEmail` (besides `stage`, `account`, `platform`, `edgeWafArn`) | you, section 8 |
 | `apps/workspace/.env.local`, `apps/admin/.env.local` | `VITE_DATA_SOURCE=api`, `VITE_API_URL` | you, section 6 |
-| `apps/mobile/.env.local` | `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_DATA_SOURCE=api`, `EXPO_PUBLIC_API_URL` | `env-from-outputs.mjs <stage> --mobile`, section 9 |
-| GitHub environment | `DEPLOY_ROLE_ARN`, `ECR_*`, `MIGRATE_NETWORK_CONFIG`, `SPA_*_BUCKET`, `CF_*_DIST_ID` | stack outputs, section 8 |
+| `apps/mobile/.env.local` | `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_DATA_SOURCE=api`, `EXPO_PUBLIC_API_URL` | `env-from-outputs.mjs <stage> --mobile`, section 10 |
+| GitHub environment | `DEPLOY_ROLE_ARN`, `ECR_*`, `MIGRATE_NETWORK_CONFIG`, `SPA_*_BUCKET`, `CF_*_DIST_ID` | stack outputs, section 9 |
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
@@ -298,3 +392,7 @@ This writes `EXPO_PUBLIC_COGNITO_REGION`, `EXPO_PUBLIC_COGNITO_USER_POOL_ID`, `E
 | `Unable to locate credentials` in the API log | `AWS_PROFILE` not visible to the API process; put it in `apps/api/.env` or export it in the shell that runs `pnpm dev` |
 | No email arrives | Dev has no SES; Cognito's default sender is limited to 50 messages a day and lands in spam easily. Check the Lambda trigger logs and the mailbox's spam folder |
 | `cdk-nag` errors during synth | A stack change violates a rule; add a documented suppression in the stack or fix the resource. CI synthesizes with `-c platform=true` so platform stacks stay reviewed |
+| `auth custom domain needs context authCertificateArn and hostedZoneId` | Staging and production construct the auth stack on every `cdk` command; pass both values (section 8). An empty value counts as missing |
+| `ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId` | Every command with `-c platform=true` on staging or production needs the prefix list id (section 8.4) |
+| Deploying the auth stack fails creating `AWS::Cognito::UserPoolDomain` | The certificate is not in us-east-1 or is not `ISSUED` yet (section 8.2), or the parent domain has no A record (an SOA record does not count; section 8.3) |
+| `curl http://<AlbDnsName>/api/health` times out on staging or production | Expected: the load balancer answers CloudFront only (section 8). Test through the CloudFront distribution domain |

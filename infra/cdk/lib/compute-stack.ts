@@ -69,8 +69,24 @@ export class NestSelfComputeStack extends cdk.Stack {
       vpc, description: `nestself-${stage} ALB security group`,
       allowAllOutbound: true,
     });
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
+    if (config.trustProxyHops > 0) {
+      // The API takes the client address from X-Forwarded-For, that many entries from the right. That is
+      // only trustworthy if every request came through the proxies in front of it, so the ALB admits
+      // CloudFront alone (CDK-setup.md section 8). Port 80 only: CloudFront's origin is HTTP-only and the
+      // single listener is on 80. The managed prefix list counts as 55 rules against the default quota of
+      // 60 per security group, so a second rule (443) would need a quota increase first.
+      const prefixListId = this.node.tryGetContext('cloudfrontOriginPrefixListId') as string | undefined;
+      if (!prefixListId) {
+        throw new Error(
+          'ALB ingress from CloudFront needs context cloudfrontOriginPrefixListId; see CDK-setup.md',
+        );
+      }
+      albSg.addIngressRule(ec2.Peer.prefixList(prefixListId), ec2.Port.tcp(80), 'HTTP from CloudFront');
+    } else {
+      // Nothing in front of the API (the dev setting, never deployed with these stacks): reachable directly.
+      albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP');
+      albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
+    }
 
     const apiSg = new ec2.SecurityGroup(this, 'ApiSg', {
       vpc, description: `nestself-${stage} API service security group`,
@@ -97,6 +113,9 @@ export class NestSelfComputeStack extends cdk.Stack {
 
     this.albListener = this.alb.addListener('HttpListener', {
       port: 80,
+      // The default (open: true) would add 0.0.0.0/0 on port 80 to the ALB security group next to the
+      // ingress rules above, which would undo the CloudFront-only restriction.
+      open: false,
       defaultAction: elbv2.ListenerAction.fixedResponse(404, {
         contentType: 'text/plain', messageBody: 'Not Found',
       }),
@@ -130,8 +149,11 @@ export class NestSelfComputeStack extends cdk.Stack {
       this, 'ValkeySecret', `nestself-${stage}/valkey/auth-token`,
     );
 
+    const opsAlertEmail = this.node.tryGetContext('opsAlertEmail') as string | undefined;
+
     const sharedEnv: Record<string, string> = {
-      NODE_ENV: isProd ? 'production' : 'development',
+      // Every stage runs the production build: no Swagger, JSON logs and no devToken in invitation responses.
+      NODE_ENV: 'production',
       STAGE: stage,
       AUTH_MODE: 'cognito',
       COGNITO_REGION: this.region,
@@ -144,6 +166,12 @@ export class NestSelfComputeStack extends cdk.Stack {
       WORKSPACE_URL: config.workspaceUrl,
       ADMIN_URL: config.adminUrl,
       API_PUBLIC_URL: config.apiPublicUrl,
+      // Proxies in front of the API (CloudFront, then the ALB): which X-Forwarded-For entry is the client.
+      TRUST_PROXY_HOPS: String(config.trustProxyHops),
+      // Mail: the stage's SES sender and, when the deployer passes one, the mailbox for operational alerts
+      // such as an expiring SSO certificate. Without them the API logs the mail instead of sending it.
+      ...(config.sesFromEmail ? { SES_FROM_EMAIL: config.sesFromEmail } : {}),
+      ...(opsAlertEmail ? { OPS_ALERT_EMAIL: opsAlertEmail } : {}),
     };
 
     const sharedSecrets: Record<string, ecs.Secret> = {
@@ -323,7 +351,6 @@ export class NestSelfComputeStack extends cdk.Stack {
       { id: 'AwsSolutions::AwsSolutions-IAM5[Resource::*]', reason: 'D-30: PutMetricData requires * resource; scoped by namespace condition key.' },
       { id: `AwsSolutions::AwsSolutions-IAM5[Resource::arn:<AWS::Partition>:secretsmanager:${this.region}:${this.account}:secret:nestself-${stage}/*]`, reason: 'D-30: Execution role reads secrets scoped to the stage prefix.' },
       { id: `AwsSolutions::AwsSolutions-IAM5[Resource::arn:<AWS::Partition>:ses:${this.region}:${this.account}:identity/*]`, reason: 'D-29: SES send scoped to account identities; individual identity ARN unknown at synth time.' },
-      { id: 'AwsSolutions::AwsSolutions-EC23', reason: 'D-24: ALB security group allows inbound 80/443 from the internet by design; WAF on CloudFront provides L7 filtering.' },
       { id: 'AwsSolutions::AwsSolutions-ELB2', reason: 'D-31: ALB access logs are a phase 2 item; CloudFront access logs cover public traffic.' },
       { id: 'AwsSolutions::AwsSolutions-EC26', reason: 'D-24: EBS encryption is not applicable to Fargate tasks.' },
       { id: 'AwsSolutions::AwsSolutions-ECS2', reason: 'D-24: Environment variables contain non-sensitive configuration; secrets use Secrets Manager references.' },

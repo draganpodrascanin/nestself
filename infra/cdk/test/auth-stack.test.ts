@@ -3,9 +3,13 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { NestSelfAuthStack } from '../lib/auth-stack.js';
 import { getStageConfig } from '../lib/config.js';
+import { AUTH_CERTIFICATE_ARN, AUTH_CONTEXT, HOSTED_ZONE_ID, testApp } from './context.js';
 
-function synthStack(stage: 'dev' | 'staging' | 'production'): Template {
-  const app = new cdk.App();
+function synthStack(
+  stage: 'dev' | 'staging' | 'production',
+  context: Record<string, unknown> = {},
+): Template {
+  const app = testApp(context);
   const config = getStageConfig(stage);
   const stack = new NestSelfAuthStack(app, `Test-${stage}-Auth`, {
     config,
@@ -145,6 +149,17 @@ describe('NestSelfAuthStack -- dev stage', () => {
     });
   });
 
+  it('outputs the prefix domain URL as CognitoDomain', () => {
+    template.hasOutput('CognitoDomain', {
+      Value: 'https://nestself-dev.auth.eu-central-1.amazoncognito.com',
+      Export: { Name: 'nestself-dev-cognito-domain' },
+    });
+  });
+
+  it('needs no certificate or DNS records for dev', () => {
+    expect(template.findResources('AWS::Route53::RecordSet')).toEqual({});
+  });
+
   it('outputs all required values', () => {
     template.hasOutput('UserPoolId', {});
     template.hasOutput('UserPoolArn', {});
@@ -159,7 +174,7 @@ describe('NestSelfAuthStack -- dev stage', () => {
 });
 
 describe('NestSelfAuthStack -- production stage', () => {
-  const template = synthStack('production');
+  const template = synthStack('production', AUTH_CONTEXT);
 
   it('creates a user pool named nestself-production', () => {
     template.hasResourceProperties('AWS::Cognito::UserPool', {
@@ -193,5 +208,69 @@ describe('NestSelfAuthStack -- production stage', () => {
         EmailSendingAccount: 'DEVELOPER',
       }),
     });
+  });
+
+  it('creates the user pool domain auth.nestself.rs with the supplied certificate', () => {
+    template.resourceCountIs('AWS::Cognito::UserPoolDomain', 1);
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'auth.nestself.rs',
+      CustomDomainConfig: { CertificateArn: AUTH_CERTIFICATE_ARN },
+    });
+  });
+
+  it.each(['A', 'AAAA'])('creates an %s alias for auth.nestself.rs to the Cognito distribution', (type) => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: 'auth.nestself.rs.',
+      Type: type,
+      HostedZoneId: HOSTED_ZONE_ID,
+      AliasTarget: {
+        DNSName: { 'Fn::GetAtt': [Match.stringLikeRegexp('CustomDomain'), 'CloudFrontDistribution'] },
+      },
+    });
+  });
+
+  it('creates no DNS record besides the two aliases', () => {
+    template.resourceCountIs('AWS::Route53::RecordSet', 2);
+  });
+
+  it('outputs the custom domain URL as CognitoDomain', () => {
+    template.hasOutput('CognitoDomain', {
+      Value: 'https://auth.nestself.rs',
+      Export: { Name: 'nestself-production-cognito-domain' },
+    });
+  });
+});
+
+describe('NestSelfAuthStack -- staging stage', () => {
+  const template = synthStack('staging', AUTH_CONTEXT);
+
+  it('creates the user pool domain auth.staging.nestself.rs and outputs its URL', () => {
+    template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'auth.staging.nestself.rs',
+      CustomDomainConfig: { CertificateArn: AUTH_CERTIFICATE_ARN },
+    });
+    template.hasOutput('CognitoDomain', { Value: 'https://auth.staging.nestself.rs' });
+  });
+
+  it.each(['A', 'AAAA'])('names the %s alias inside the staging zone once', (type) => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: 'auth.staging.nestself.rs.',
+      Type: type,
+      HostedZoneId: HOSTED_ZONE_ID,
+    });
+  });
+});
+
+describe('NestSelfAuthStack -- custom domain context', () => {
+  const message = 'auth custom domain needs context authCertificateArn and hostedZoneId; see CDK-setup.md';
+
+  it.each([
+    { stage: 'staging', given: 'no context', context: {} },
+    { stage: 'production', given: 'no context', context: {} },
+    { stage: 'production', given: 'only the hosted zone id', context: { hostedZoneId: HOSTED_ZONE_ID } },
+    { stage: 'production', given: 'only the certificate ARN', context: { authCertificateArn: AUTH_CERTIFICATE_ARN } },
+    { stage: 'production', given: 'empty values', context: { authCertificateArn: '', hostedZoneId: '' } },
+  ] as const)('$stage does not synthesize with $given', ({ stage, context }) => {
+    expect(() => synthStack(stage, context)).toThrow(message);
   });
 });
