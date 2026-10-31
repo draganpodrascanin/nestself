@@ -2,45 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
-import type { SsoConnectionResponse, SsoDomainResponse } from '@nestself/contracts';
 import { SAMPLE_SSO_CONNECTIONS } from '@nestself/sample-data';
 import { SsoScreen } from './sso-screen';
-import { ORG_ID, STAFF_ACTIONS, apiError, choose, makeAuth, makeOpsApi, renderOps, t } from '../organizations/ops-test-harness';
+import { ORG_ID, STAFF_ACTIONS, apiError, choose, makeAuth, organization, renderOps, t } from '../organizations/ops-test-harness';
 import type { RenderOpts } from '../organizations/ops-test-harness';
-
-const START_URL = 'http://localhost:4000/api/auth/sso/start?connection=org-draft-saml&surface=workspace&testNonce=abc';
-
-function domain(id: string, name: string, verified: boolean): SsoDomainResponse {
-  return {
-    id,
-    domain: name,
-    verifiedAt: verified ? '2026-10-20T10:00:00.000Z' : null,
-    txtRecordName: `_nestself-verify.${name}`,
-    txtRecordValue: `nestself-domain-verification=token-${id}`,
-  };
-}
-
-function connection(id: string, overrides: Partial<SsoConnectionResponse> = {}): SsoConnectionResponse {
-  return {
-    id,
-    orgId: ORG_ID,
-    protocol: 'SAML',
-    cognitoProviderName: `org-${id}-saml`,
-    status: 'DRAFT',
-    metadataUrl: 'https://idp.example.test/metadata',
-    oidcIssuer: null,
-    oidcClientId: null,
-    idpInitiatedAllowed: false,
-    jitProvisioning: false,
-    oidcEmailVerifiedClaimRequired: true,
-    defaultOrgUnitId: null,
-    certificateExpiresAt: null,
-    lastTestedAt: null,
-    domains: [],
-    spMetadata: { entityId: 'urn:amazon:cognito:sp:eu-central-1_TEST', acsUrl: 'https://auth.example.test/saml2/idpresponse' },
-    ...overrides,
-  };
-}
+import { START_URL, ssoApi as harnessApi, ssoConnection as connection, ssoDomain as domain } from './sso-test-harness';
 
 const DRAFT = connection('draft', { domains: [domain('d_pending', 'pending.example.test', false), domain('d_ok', 'ok.example.test', true)] });
 const TESTING = connection('testing', { status: 'TESTING', domains: [domain('d_t', 'testing.example.test', true)] });
@@ -62,14 +28,11 @@ const SUSPENDED = connection('suspended', {
 });
 const ALL = [DRAFT, TESTING, ACTIVE, SUSPENDED];
 
+/** The screen tests list all four connections and answer activations and edits with the matching row. */
 function ssoApi(overrides: Record<string, unknown> = {}) {
-  return makeOpsApi({
+  return harnessApi({
     listSsoConnections: vi.fn().mockResolvedValue({ items: ALL }),
-    createSsoConnection: vi.fn().mockResolvedValue(connection('new')),
     updateSsoConnection: vi.fn().mockResolvedValue(ACTIVE),
-    addSsoDomain: vi.fn().mockResolvedValue(domain('d_new', 'new.example.test', false)),
-    verifySsoDomain: vi.fn().mockResolvedValue(domain('d_pending', 'pending.example.test', true)),
-    testSsoConnection: vi.fn().mockResolvedValue({ startUrl: START_URL }),
     activateSsoConnection: vi.fn().mockResolvedValue({ ...TESTING, status: 'ACTIVE' }),
     ...overrides,
   });
@@ -120,6 +83,44 @@ describe('SsoScreen list', () => {
       expect(within(await rowOf(row.id)).getByText(t(`admin:sso.statuses.${status}`))).toBeInTheDocument();
     }
     expect(within(await rowOf(ACTIVE.id)).getByText(/2027/)).toBeInTheDocument();
+  });
+
+  it('reads no single organization while the loaded page names them all', async () => {
+    const { opsApi } = renderScreen();
+    expect(await within(await rowOf(DRAFT.id)).findByText('Example d.o.o.')).toBeInTheDocument();
+    expect(opsApi.getOrganization).not.toHaveBeenCalled();
+  });
+
+  it('names an organization beyond the loaded page with one read of it, in the table and in the detail', async () => {
+    const user = userEvent.setup();
+    const far = connection('far', { orgId: 'org_far' });
+    const getOrganization = vi.fn().mockResolvedValue(organization('org_far', 'Far Away d.o.o.'));
+    const listSsoConnections = vi.fn().mockResolvedValue({ items: [DRAFT, far] });
+    renderScreen({ opsApi: ssoApi({ listSsoConnections, getOrganization }) });
+
+    expect(await within(await rowOf('far')).findByText('Far Away d.o.o.')).toBeInTheDocument();
+    expect(within(await rowOf(DRAFT.id)).getByText('Example d.o.o.')).toBeInTheDocument();
+    // One read, for the one organization the loaded page does not have.
+    expect(getOrganization).toHaveBeenCalledTimes(1);
+    expect(getOrganization).toHaveBeenCalledWith('org_far');
+
+    const detail = await openDetail(user, 'far');
+    expect(within(detail).getByText('Far Away d.o.o.')).toBeInTheDocument();
+    expect(getOrganization.mock.calls.every(([id]) => id === 'org_far')).toBe(true);
+  });
+
+  it('keeps showing the id of an organization that cannot be read', async () => {
+    const user = userEvent.setup();
+    const far = connection('far', { orgId: 'org_far' });
+    const getOrganization = vi.fn().mockRejectedValue(apiError(404, 'not_found'));
+    const listSsoConnections = vi.fn().mockResolvedValue({ items: [far] });
+    renderScreen({ opsApi: ssoApi({ listSsoConnections, getOrganization }) });
+
+    const row = await rowOf('far');
+    await waitFor(() => expect(getOrganization).toHaveBeenCalledWith('org_far'));
+    expect(within(row).getByText('org_far')).toBeInTheDocument();
+    const detail = await openDetail(user, 'far');
+    expect(within(detail).getByText('org_far')).toBeInTheDocument();
   });
 
   it('says when there is no connection', async () => {
@@ -239,6 +240,7 @@ describe('SsoScreen create dialog', () => {
         oidcClientId: 'client-9',
         oidcClientSecret: 's3cret',
         jitProvisioning: true,
+        oidcEmailVerifiedClaimRequired: true,
         defaultOrgUnitId: 'unit_1',
       }),
     );
@@ -404,14 +406,15 @@ describe('SsoScreen lifecycle', () => {
     expect(within(detail).queryByRole('button', name('suspend'))).not.toBeInTheDocument();
   });
 
-  it('starts a test sign-in in a new tab without an opener and explains the single-use link', async () => {
+  it('mints a test link and shows it as an anchor, without opening a tab itself', async () => {
     const user = userEvent.setup();
     const { opsApi } = renderScreen();
     const detail = await openDetail(user, DRAFT.id);
     await user.click(within(detail).getByRole('button', { name: t('admin:sso.actions.test') }));
     await waitFor(() => expect(opsApi.testSsoConnection).toHaveBeenCalledWith(DRAFT.id));
-    expect(openSpy).toHaveBeenCalledWith(START_URL, '_blank', 'noopener,noreferrer');
+    expect(openSpy).not.toHaveBeenCalled();
     expect(await within(detail).findByText(t('admin:sso.actions.testNote'))).toBeInTheDocument();
+    expect(within(detail).getByText(t('admin:sso.actions.testLinkNote'))).toBeInTheDocument();
     const link = within(detail).getByRole('link', { name: t('admin:sso.actions.testLink') });
     expect(link).toHaveAttribute('href', START_URL);
     expect(link).toHaveAttribute('target', '_blank');
@@ -666,6 +669,10 @@ describe('SsoScreen lifecycle', () => {
     await user.type(within(dialog).getByLabelText(t('admin:sso.edit.secretReplace'), { exact: false }), 'x');
     await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
     expect(await within(dialog).findAllByText(t('admin:sso.errors.fieldProtocol'))).not.toHaveLength(0);
+    // The write-only secret does not survive a submit, refused or not: type it again.
+    const secret = within(dialog).getByLabelText(t('admin:sso.edit.secretReplace'), { exact: false });
+    await waitFor(() => expect(secret).toHaveValue(''));
+    await user.type(secret, 'x');
     await user.click(within(dialog).getByRole('button', { name: t('admin:sso.edit.submit') }));
     expect(await within(dialog).findAllByText(t('admin:sso.errors.fieldSecret'))).not.toHaveLength(0);
   });
@@ -691,5 +698,6 @@ describe('SsoScreen in sample mode', () => {
     }
     expect(opsApi.listSsoConnections).not.toHaveBeenCalled();
     expect(opsApi.listOrganizations).not.toHaveBeenCalled();
+    expect(opsApi.getOrganization).not.toHaveBeenCalled();
   });
 });

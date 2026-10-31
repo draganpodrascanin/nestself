@@ -10,12 +10,15 @@ import {
   Field,
   FormErrorSummary,
   Input,
+  RadioGroup,
+  RadioItem,
   Switch,
+  Text,
   Textarea,
   useToast,
 } from '@nestself/ui';
 import type { FormError } from '@nestself/ui';
-import type { SsoConnectionResponse, SsoConnectionUpdateRequest } from '@nestself/contracts';
+import type { SsoConnectionResponse, SsoConnectionUpdateRequest, SsoProtocol } from '@nestself/contracts';
 import type { OpsAdminApi } from '@nestself/api-client';
 import { ssoProblem } from './sso-errors';
 import type { SsoErrorKey, SsoField } from './sso-errors';
@@ -24,6 +27,7 @@ import { useUpdateSsoConnection } from './use-sso';
 
 const ID = {
   form: 'sso-edit-form',
+  protocol: 'sso-edit-protocol',
   metadataUrl: 'sso-edit-metadata-url',
   metadataXml: 'sso-edit-metadata-xml',
   oidcIssuer: 'sso-edit-oidc-issuer',
@@ -44,24 +48,33 @@ export interface EditConnectionDialogProps {
 type FormErrorKey = SsoErrorKey | 'nothingChanged';
 
 /**
- * Edits a connection's metadata, JIT provisioning and default org unit
- * (`PATCH /ops/sso-connections/:id`, administration step-up). Only changed
- * fields are sent. The OIDC client secret field always starts empty: the
- * secret is write-only, and an empty field keeps the current one.
+ * Edits a connection's metadata, JIT provisioning, default org unit and, for
+ * OIDC, the verified-email-claim rule (`PATCH /ops/sso-connections/:id`,
+ * administration step-up). Only changed fields are sent. The OIDC client
+ * secret field always starts empty: the secret is write-only, an empty field
+ * keeps the current one, and a typed one is dropped from the form and the
+ * mutation state whatever the outcome.
  *
- * On an ACTIVE connection a change to the provider settings (metadata,
- * issuer, client id or secret) takes it back to TESTING (SSO-R-01): the
- * dialog warns up front and the success toast says so.
+ * The protocol can change only while the connection is a DRAFT (the API
+ * answers 422 `protocol` otherwise); the new protocol's own settings go in
+ * the same request.
+ *
+ * On an ACTIVE or SUSPENDED connection a change to the provider settings
+ * (metadata, issuer, client id or secret) takes it to TESTING (SSO-R-01):
+ * the dialog warns up front and the success toast says so. The claim rule
+ * is NestSelf's own, not a provider setting: changing it needs no re-test.
  */
 export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }: EditConnectionDialogProps) {
   const { t } = useTranslation(['admin', 'common']);
   const { add: addToast } = useToast();
   const update = useUpdateSsoConnection(opsApi);
+  const [protocol, setProtocol] = useState<SsoProtocol>(connection.protocol);
   const [metadataUrl, setMetadataUrl] = useState(connection.metadataUrl ?? '');
   const [metadataXml, setMetadataXml] = useState('');
   const [oidcIssuer, setOidcIssuer] = useState(connection.oidcIssuer ?? '');
   const [oidcClientId, setOidcClientId] = useState(connection.oidcClientId ?? '');
   const [oidcClientSecret, setOidcClientSecret] = useState('');
+  const [claimRequired, setClaimRequired] = useState(connection.oidcEmailVerifiedClaimRequired);
   const [jit, setJit] = useState(connection.jitProvisioning);
   const [defaultOrgUnitId, setDefaultOrgUnitId] = useState(connection.defaultOrgUnitId ?? '');
   const [errors, setErrors] = useState<FormError[]>([]);
@@ -70,6 +83,7 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
   const errorFor = (name: FieldName) => errors.find((e) => e.id === ID[name])?.message;
 
   const labels: Record<FieldName, string> = {
+    protocol: t('admin:sso.create.protocol'),
     metadataUrl: t('admin:sso.create.metadataUrl'),
     metadataXml: t('admin:sso.create.metadataXml'),
     oidcIssuer: t('admin:sso.create.oidcIssuer'),
@@ -89,10 +103,12 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
     if (!update.isPending) finish();
   };
 
-  const saml = connection.protocol === 'SAML';
+  const draft = connection.status === 'DRAFT';
+  const saml = protocol === 'SAML';
 
   const changes = (): SsoConnectionUpdateRequest => {
     const patch: SsoConnectionUpdateRequest = {};
+    if (protocol !== connection.protocol) patch.protocol = protocol;
     if (saml) {
       const url = metadataUrl.trim();
       if (url !== (connection.metadataUrl ?? '')) patch.metadataUrl = url || null;
@@ -101,6 +117,7 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
       if (oidcIssuer.trim() !== (connection.oidcIssuer ?? '')) patch.oidcIssuer = oidcIssuer.trim() || null;
       if (oidcClientId.trim() !== (connection.oidcClientId ?? '')) patch.oidcClientId = oidcClientId.trim() || null;
       if (oidcClientSecret) patch.oidcClientSecret = oidcClientSecret;
+      if (claimRequired !== connection.oidcEmailVerifiedClaimRequired) patch.oidcEmailVerifiedClaimRequired = claimRequired;
     }
     if (jit !== connection.jitProvisioning) patch.jitProvisioning = jit;
     const unit = defaultOrgUnitId.trim();
@@ -110,11 +127,22 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
 
   const validate = (patch: SsoConnectionUpdateRequest): FormError[] => {
     const problems: FormError[] = [];
-    if (patch.metadataUrl && !isHttpsUrl(patch.metadataUrl)) problems.push(problem('metadataUrl', t('admin:sso.errors.urlInvalid')));
+    const add = (name: FieldName, message: string) => {
+      if (!problems.some((p) => p.id === ID[name])) problems.push(problem(name, message));
+    };
+    if (patch.metadataUrl && !isHttpsUrl(patch.metadataUrl)) add('metadataUrl', t('admin:sso.errors.urlInvalid'));
     if (patch.oidcIssuer !== undefined && (patch.oidcIssuer === null || !isHttpsUrl(patch.oidcIssuer))) {
-      problems.push(problem('oidcIssuer', t('admin:sso.errors.urlInvalid')));
+      add('oidcIssuer', t('admin:sso.errors.urlInvalid'));
     }
-    if (patch.oidcClientId === null) problems.push(problem('oidcClientId', t('admin:sso.errors.clientIdRequired')));
+    if (patch.oidcClientId === null) add('oidcClientId', t('admin:sso.errors.clientIdRequired'));
+    // A new protocol brings the settings it cannot do without: the draft is not left half-configured.
+    if (patch.protocol === 'OIDC') {
+      if (!oidcIssuer.trim()) add('oidcIssuer', t('admin:sso.errors.urlInvalid'));
+      if (!oidcClientId.trim()) add('oidcClientId', t('admin:sso.errors.clientIdRequired'));
+    }
+    if (patch.protocol === 'SAML' && !metadataUrl.trim() && !metadataXml.trim()) {
+      add('metadataUrl', t('admin:sso.errors.fieldSamlMetadata'));
+    }
     return problems;
   };
 
@@ -132,9 +160,7 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
     }
     try {
       const saved = await update.mutateAsync({ id: connection.id, body: patch });
-      // Drop the request (and a replaced secret) from the mutation state.
-      update.reset();
-      const backToTesting = connection.status === 'ACTIVE' && saved.status === 'TESTING';
+      const backToTesting = (connection.status === 'ACTIVE' || connection.status === 'SUSPENDED') && saved.status === 'TESTING';
       addToast({
         title: t(backToTesting ? 'admin:sso.edit.backToTesting' : 'admin:sso.edit.success'),
         tone: backToTesting ? 'warning' : 'success',
@@ -149,6 +175,11 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
       const name = fieldName(found.field);
       if (name) setErrors([problem(name, t(`admin:sso.errors.${found.key}`))]);
       else setFormError(found.key);
+    } finally {
+      // The request may have carried a new write-only secret: whatever the
+      // outcome, neither the mutation state nor the form keeps it.
+      update.reset();
+      setOidcClientSecret('');
     }
   };
 
@@ -159,6 +190,24 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
           <FormErrorSummary title={t('common:form.errorSummaryTitle')} errors={errors} />
           {formError ? <Alert tone="danger">{t(`admin:sso.errors.${formError}`)}</Alert> : null}
           {connection.status === 'ACTIVE' ? <Alert tone="warning">{t('admin:sso.edit.activeWarning')}</Alert> : null}
+          {connection.status === 'SUSPENDED' ? <Alert tone="warning">{t('admin:sso.edit.suspendedWarning')}</Alert> : null}
+
+          <div className="space-y-1">
+            <RadioGroup label={labels.protocol} value={protocol} onValueChange={(value) => setProtocol(value as SsoProtocol)} disabled={!draft}>
+              <RadioItem value="SAML">{t('admin:sso.protocols.SAML')}</RadioItem>
+              <RadioItem value="OIDC">{t('admin:sso.protocols.OIDC')}</RadioItem>
+            </RadioGroup>
+            {draft ? null : (
+              <Text tone="secondary" typeRole="metadata">
+                {t('admin:sso.edit.protocolLocked')}
+              </Text>
+            )}
+            {errorFor('protocol') ? (
+              <Text tone="danger" typeRole="metadata">
+                {errorFor('protocol')}
+              </Text>
+            ) : null}
+          </div>
 
           {saml ? (
             <>
@@ -185,6 +234,14 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
               >
                 <Input type="password" value={oidcClientSecret} onChange={(e) => setOidcClientSecret(e.target.value)} autoComplete="new-password" />
               </Field>
+              <div className="space-y-1">
+                <Switch checked={claimRequired} onCheckedChange={setClaimRequired}>
+                  {t('admin:sso.create.oidcClaimRequired')}
+                </Switch>
+                <Text tone="secondary" typeRole="metadata">
+                  {t('admin:sso.create.oidcClaimRequiredHint')}
+                </Text>
+              </div>
             </>
           )}
 
@@ -218,9 +275,10 @@ export function EditConnectionDialog({ open, onOpenChange, connection, opsApi }:
   );
 }
 
-/** Fields this form has; a problem with any other field (slug, protocol) shows above the form. */
+/** Fields this form has; a problem with any other field (the slug) shows above the form. */
 function fieldName(field: SsoField | null): FieldName | null {
   switch (field) {
+    case 'protocol':
     case 'metadataUrl':
     case 'metadataXml':
     case 'oidcIssuer':

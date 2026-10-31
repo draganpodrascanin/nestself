@@ -9,7 +9,7 @@ import type { OpsAdminApi } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { useOperationsContext } from '../access/use-ops-admin';
 import { sampleOrganizations } from '../organizations/sample-organizations';
-import { useOrganizationPages } from '../organizations/use-organizations';
+import { useOrganization, useOrganizationPages } from '../organizations/use-organizations';
 import { ConnectionDetail } from './connection-detail';
 import { CreateConnectionDialog } from './create-connection-dialog';
 import { SAMPLE_SSO_ROWS } from './sample-sso';
@@ -38,24 +38,27 @@ export function SsoScreen({ opsApi, sampleMode }: SsoScreenProps) {
   const canManage = principal ? can(principal, 'sso.manage', undefined, effectiveActions) : false;
   const { ready, error: switchError } = useOperationsContext(sampleMode || !canManage);
   const list = useSsoConnections(opsApi, ready && canManage);
-  // The organization names and the create dialog's choices: the first page of
-  // the client list. A connection of a client beyond it shows its id.
+  // The organization names: the first page of the client list. A connection
+  // of a client beyond it is named by a read of that client (`OrganizationName`).
   const orgPages = useOrganizationPages(opsApi, ready && canManage, '');
   const [createOpen, setCreateOpen] = useState(false);
   const [createKey, setCreateKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  if (!principal || !canManage) {
-    return <StatusBlock state="permission" title={t('common:state.permission.title')} body={t('common:state.permission.body')} />;
-  }
-
   const rows = sampleMode ? SAMPLE_SSO_ROWS : list.data;
   const organizations: OrganizationResponse[] = sampleMode
     ? sampleOrganizations('')
     : (orgPages.data?.pages.flatMap((p) => p.items) ?? []);
-  const orgName = (orgId: string) => organizations.find((o) => o.id === orgId)?.name ?? orgId;
-  const listError = !sampleMode && list.isError ? (ssoProblem(list.error, 'load')?.key ?? 'unknown') : null;
   const selected = rows?.find((r) => r.id === selectedId) ?? null;
+  // Until the first page has settled every client would count as "beyond it".
+  const readNames = !sampleMode && ready && canManage && !orgPages.isPending;
+  const selectedName = useOrganizationName(opsApi, selected?.orgId ?? null, organizations, readNames);
+
+  if (!principal || !canManage) {
+    return <StatusBlock state="permission" title={t('common:state.permission.title')} body={t('common:state.permission.body')} />;
+  }
+
+  const listError = !sampleMode && list.isError ? (ssoProblem(list.error, 'load')?.key ?? 'unknown') : null;
 
   const headerClass = 'bg-tint border-b border-border-subtle';
   const cellClass = 'border-b border-border-subtle align-top';
@@ -114,7 +117,9 @@ export function SsoScreen({ opsApi, sampleMode }: SsoScreenProps) {
               const verified = row.domains.filter((d) => d.verifiedAt !== null).length;
               return (
                 <tr key={row.id} data-testid={`sso-row-${row.id}`}>
-                  <Td className={cellClass}>{orgName(row.orgId)}</Td>
+                  <Td className={cellClass}>
+                    <OrganizationName opsApi={opsApi} orgId={row.orgId} loaded={organizations} enabled={readNames} />
+                  </Td>
                   <Td className={`${cellClass} type-metadata`}>{row.cognitoProviderName}</Td>
                   <Td className={cellClass}>{t(`admin:sso.protocols.${row.protocol}`)}</Td>
                   <Td className={cellClass}>
@@ -150,7 +155,7 @@ export function SsoScreen({ opsApi, sampleMode }: SsoScreenProps) {
         <ConnectionDetail
           key={selected.id}
           connection={selected}
-          organizationName={orgName(selected.orgId)}
+          organizationName={selectedName ?? selected.orgId}
           opsApi={opsApi}
           sampleMode={sampleMode}
           onClose={() => setSelectedId(null)}
@@ -163,9 +168,40 @@ export function SsoScreen({ opsApi, sampleMode }: SsoScreenProps) {
           open={createOpen}
           onOpenChange={setCreateOpen}
           opsApi={opsApi}
-          organizations={organizations}
         />
       ) : null}
     </div>
   );
+}
+
+/**
+ * The name of an organization: from the loaded page of the client list, else
+ * from one read of that client, else its id (also when that read fails).
+ * `enabled` is false in sample mode and until the list's first page settled.
+ */
+function useOrganizationName(
+  opsApi: OpsAdminApi,
+  orgId: string | null,
+  loaded: OrganizationResponse[],
+  enabled: boolean,
+): string | null {
+  const known = orgId === null ? undefined : loaded.find((o) => o.id === orgId);
+  const read = useOrganization(opsApi, enabled && orgId !== null && !known ? orgId : null);
+  if (orgId === null) return null;
+  return known?.name ?? read.data?.name ?? orgId;
+}
+
+function OrganizationName({
+  opsApi,
+  orgId,
+  loaded,
+  enabled,
+}: {
+  opsApi: OpsAdminApi;
+  orgId: string;
+  loaded: OrganizationResponse[];
+  enabled: boolean;
+}) {
+  const name = useOrganizationName(opsApi, orgId, loaded, enabled);
+  return <>{name}</>;
 }

@@ -10,6 +10,7 @@ import {
   Button,
   Heading,
   IconButton,
+  LinkButton,
   Table,
   Td,
   Text,
@@ -50,7 +51,9 @@ function Item({ term, children }: { term: string; children: ReactNode }) {
  * One connection: its settings, the service-provider values the employer's
  * IdP administrator needs, its domains (add, DNS TXT verification) and the
  * lifecycle actions DRAFT → TESTING (test sign-in) → ACTIVE (activate) ⇄
- * SUSPENDED. The server enforces every transition and `sso.manage`; the
+ * SUSPENDED, and TESTING → DRAFT (reset, which deletes the registered
+ * provider). The test sign-in mints a single-use link that staff open or copy
+ * themselves. The server enforces every transition and `sso.manage`; the
  * buttons offered per status are convenience.
  */
 export function ConnectionDetail({ connection, organizationName, opsApi, sampleMode, onClose }: ConnectionDetailProps) {
@@ -68,8 +71,9 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
   const [editOpen, setEditOpen] = useState(false);
   const [editKey, setEditKey] = useState(0);
   const [suspendOpen, setSuspendOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   /**
-   * The confirm button is a `Close` part, so the alert dialog asks to close in
+   * The confirm button is a `Close` part, so an alert dialog asks to close in
    * the same click, before the mutation is pending; this ignores that request
    * so a failure stays visible in the dialog.
    */
@@ -94,11 +98,14 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
     }
   };
 
-  const startTest = () =>
+  /**
+   * Mints a single-use link and shows it. Staff open it (an anchor without an
+   * opener) or copy it themselves: a tab opened from here could be blocked as
+   * a popup, and `noopener` would hide whether it opened at all.
+   */
+  const mintTestLink = () =>
     void run('test', () => test.mutateAsync(connection.id), ({ startUrl: url }) => {
       setStartUrl(url);
-      // A new tab without an opener: the IdP page never gets a handle on this one.
-      window.open(url, '_blank', 'noopener,noreferrer');
       // The single-use URL lives only in the note's state, not in the mutation cache.
       test.reset();
       return t('admin:sso.actions.testStarted');
@@ -125,6 +132,20 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
       t('admin:sso.actions.suspended'),
     ).then((ok) => {
       if (ok) setSuspendOpen(false);
+    });
+  };
+
+  /** The registered provider is deleted, so a test link minted before no longer fits it. */
+  const confirmReset = () => {
+    confirming.current = true;
+    queueMicrotask(() => {
+      confirming.current = false;
+    });
+    void run('update', () => update.mutateAsync({ id: connection.id, body: { status: 'DRAFT' } }), () => {
+      setStartUrl(null);
+      return t('admin:sso.actions.resetDone');
+    }).then((ok) => {
+      if (ok) setResetOpen(false);
     });
   };
 
@@ -175,14 +196,19 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
           {t('admin:sso.edit.open')}
         </Button>
         {canTest ? (
-          <Button size="sm" disabled={disabled} loading={test.isPending} onClick={startTest}>
+          <Button size="sm" disabled={disabled} loading={test.isPending} onClick={mintTestLink}>
             {t('admin:sso.actions.test')}
           </Button>
         ) : null}
         {status === 'TESTING' ? (
-          <Button size="sm" disabled={disabled} loading={activate.isPending} onClick={activateNow}>
-            {t('admin:sso.actions.activate')}
-          </Button>
+          <>
+            <Button size="sm" disabled={disabled} loading={activate.isPending} onClick={activateNow}>
+              {t('admin:sso.actions.activate')}
+            </Button>
+            <Button size="sm" variant="secondary" disabled={disabled} onClick={() => setResetOpen(true)}>
+              {t('admin:sso.actions.reset')}
+            </Button>
+          </>
         ) : null}
         {status === 'ACTIVE' ? (
           <Button size="sm" variant="danger" disabled={disabled} onClick={() => setSuspendOpen(true)}>
@@ -196,25 +222,28 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
         ) : null}
       </div>
 
-      {actionError && !suspendOpen ? (
+      {actionError && !suspendOpen && !resetOpen ? (
         <Alert tone="danger" title={t('admin:sso.errors.actionTitle')}>
           {t(`admin:sso.errors.${actionError}`)}
         </Alert>
       ) : null}
 
       {startUrl && canTest ? (
-        <Alert tone="info" title={t('admin:sso.actions.testStarted')}>
+        <Alert tone="info" title={t('admin:sso.actions.testLinkTitle')}>
           <p>{t('admin:sso.actions.testNote')}</p>
-          {/* TextLink has no target; this keeps its look and opens without an opener. */}
-          <a
-            href={startUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-[0.2em] hover:text-primary-hover focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-focus"
-          >
-            {t('admin:sso.actions.testLink')}
-          </a>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <LinkButton href={startUrl} target="_blank" rel="noopener noreferrer" size="sm">
+              {t('admin:sso.actions.testLink')}
+            </LinkButton>
+            <span className="type-metadata">{t('admin:sso.actions.testLinkNote')}</span>
+          </div>
+          <dl className="mt-3">
+            <CopyValue label={t('admin:sso.actions.testLinkLabel')} value={startUrl} />
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" disabled={disabled} loading={test.isPending} onClick={mintTestLink}>
+              {t('admin:sso.actions.newTestLink')}
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => setStartUrl(null)}>
               {t('admin:sso.actions.testDismiss')}
             </Button>
@@ -354,6 +383,26 @@ export function ConnectionDetail({ connection, organizationName, opsApi, sampleM
               cancelLabel={t('admin:sso.cancel')}
               destructive
               onConfirm={confirmSuspend}
+              confirmPending={update.isPending}
+            >
+              {actionError ? <Alert tone="danger">{t(`admin:sso.errors.${actionError}`)}</Alert> : null}
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog
+            open={resetOpen}
+            onOpenChange={(next) => {
+              if (next || confirming.current || update.isPending) return;
+              setResetOpen(false);
+              setActionError(null);
+            }}
+          >
+            <AlertDialogContent
+              title={t('admin:sso.actions.resetTitle')}
+              description={t('admin:sso.actions.resetConfirm', { provider: connection.cognitoProviderName })}
+              confirmLabel={t('admin:sso.actions.reset')}
+              cancelLabel={t('admin:sso.cancel')}
+              destructive
+              onConfirm={confirmReset}
               confirmPending={update.isPending}
             >
               {actionError ? <Alert tone="danger">{t(`admin:sso.errors.${actionError}`)}</Alert> : null}
