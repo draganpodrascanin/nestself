@@ -443,6 +443,34 @@ export const MANUAL_SHOTS = {
     state: "The declined follow-up with the approver's reason.",
     step: 'follow-up approval > declined',
   },
+  'operations-consultations-list': {
+    n: 90,
+    route: '/consultations',
+    role: OPERATIONS,
+    state: 'The operations consultations list with Expert and Organisation columns and the filters.',
+    step: 'operations consultations > list',
+  },
+  'operations-consultation-new': {
+    n: 91,
+    route: '/consultations/new',
+    role: OPERATIONS,
+    state: 'The "New consultation" form filled in (organisation, employee, category, expert, date, start, end) before submitting.',
+    step: 'operations consultations > new form',
+  },
+  'operations-consultation-cancel': {
+    n: 92,
+    route: '/consultations/:id',
+    role: OPERATIONS,
+    state: 'The created consultation\'s detail page with the "Cancel appointment" confirmation dialog open.',
+    step: 'operations consultations > cancel dialog',
+  },
+  'support-calls-lookup': {
+    n: 93,
+    route: '/support/calls',
+    role: OPERATIONS,
+    state: 'The call diagnostics lookup showing a found session: status, participants, connection data and the technical reports list.',
+    step: 'support calls > diagnostics lookup',
+  },
 } as const satisfies Record<string, ManualShot>;
 
 export type ManualShotKey = keyof typeof MANUAL_SHOTS;
@@ -533,4 +561,7 @@ export const DEFECTS: Defect[] = [
 ];
 
 /** Screens that cannot be captured yet, with the defect or missing feature behind them. */
-export const NOT_CAPTURED: Partial<Record<ManualShotKey, string>> = {};
+export const NOT_CAPTURED: Partial<Record<ManualShotKey, string>> = {
+  'support-calls-lookup':
+    "Nikola's support_operator grant has scope assigned_cases, but the e2e seed creates no SUPPORT_CASE assignment, so diagnostic.read is absent from his effective actions and the /support/calls route gate redirects to the overview.",
+};
