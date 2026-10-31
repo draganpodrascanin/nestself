@@ -128,7 +128,7 @@ export class InvitationsService {
       // Already a member check.
       await this.assertNotAlreadyMember(body.email, orgId, tx);
 
-      return this.invitations.create(
+      const invitation = await this.invitations.create(
         {
           email: body.email,
           orgId,
@@ -140,18 +140,22 @@ export class InvitationsService {
         },
         tx,
       );
-    });
 
-    // Audit (never log token or hash).
-    await this.audit.record({
-      action: 'invitation.created',
-      actorUserId,
-      actorKind: 'USER',
-      orgId,
-      recordType: 'invitation',
-      recordId: row.id,
-      result: 'ALLOWED',
-      details: { emailNormalised: body.email, templateKey: body.templateKey },
+      // Audited in the creating transaction, as the import does (never the token or its hash).
+      await this.audit.record(
+        {
+          action: 'invitation.created',
+          actorUserId,
+          actorKind: 'USER',
+          orgId,
+          recordType: 'invitation',
+          recordId: invitation.id,
+          result: 'ALLOWED',
+          details: { emailNormalised: body.email, templateKey: body.templateKey },
+        },
+        { tx },
+      );
+      return invitation;
     });
 
     // The transaction has committed: the invitation exists, so it may be mailed.

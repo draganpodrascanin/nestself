@@ -187,7 +187,44 @@ describe('InvitationsService', () => {
       expect(invitations.create).toHaveBeenCalledOnce();
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'invitation.created' }),
+        expect.anything(),
       );
+    });
+
+    it('audits the invitation inside the creating transaction, never the token or its hash', async () => {
+      const tx = { kind: 'org-tx' };
+      dbs.withOrgScope.mockImplementation(async (_orgId, fn) => fn(tx));
+
+      const result = await service.create(
+        'org_sample',
+        { email: 'new@example.com', templateKey: 'employee' },
+        'user_ivana',
+        false,
+      );
+
+      expect(audit.record).toHaveBeenCalledOnce();
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'invitation.created',
+          orgId: 'org_sample',
+          recordId: 'inv_1',
+          details: { emailNormalised: 'new@example.com', templateKey: 'employee' },
+        }),
+        { tx },
+      );
+      const event = JSON.stringify(audit.record.mock.calls[0]![0]);
+      expect(event).not.toContain(String(result['devToken']));
+      expect(event).not.toContain(invitations.create.mock.calls[0]![0].tokenHash);
+    });
+
+    it('a refused audit row fails the create and sends no mail', async () => {
+      audit.record.mockRejectedValueOnce(new Error('audit insert failed'));
+
+      await expect(
+        service.create('org_sample', { email: 'new@example.com', templateKey: 'employee' }, 'user_ivana', false),
+      ).rejects.toThrow('audit insert failed');
+
+      expect(mailer.send).not.toHaveBeenCalled();
     });
 
     it('returns devToken in non-production mode', async () => {

@@ -512,6 +512,72 @@ describe('StepUpService', () => {
       });
     });
 
+    it('verify of a NestSelf code minted in another session of the same user is foreign_challenge', async () => {
+      const { token, code } = await startNestself(ctx, SESSION_PRINCIPAL);
+      const otherSession = { ...SESSION_PRINCIPAL, sessionId: 'sess-other' };
+
+      await expect(ctx.service.verify(otherSession, token, code, META)).rejects.toMatchObject({
+        status: 401,
+        code: 'invalid_challenge',
+      });
+
+      expect(ctx.sessions.markStepUp).not.toHaveBeenCalled();
+      expect(ctx.sessions.regenerate).not.toHaveBeenCalled();
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      const event = ctx.audit.record.mock.calls[0]![0];
+      expect(event).toMatchObject({
+        action: 'auth.step_up.failed',
+        actorUserId: 'user-1',
+        result: 'DENIED',
+        details: { method: 'email_otp', reason: 'foreign_challenge' },
+      });
+      expect(JSON.stringify(event)).not.toContain(token);
+      expect(JSON.stringify(event)).not.toContain(code);
+      expect(JSON.stringify(event)).not.toContain(hashSessionId('sess-1'));
+      // The presented token is spent: the session that asked for it cannot use it either.
+      await expect(ctx.service.verify(SESSION_PRINCIPAL, token, code, META)).rejects.toMatchObject({
+        code: 'invalid_challenge',
+      });
+    });
+
+    it('a NestSelf code is bound to its token family: another family of the same user, or a session, is refused', async () => {
+      const otherFamily = { ...BEARER_PRINCIPAL, tokenFamily: 'family-2' };
+      const first = await startNestself(ctx, BEARER_PRINCIPAL);
+      await expect(ctx.service.verify(otherFamily, first.token, first.code, META)).rejects.toMatchObject({
+        status: 401,
+        code: 'invalid_challenge',
+      });
+
+      const second = await startNestself(ctx, BEARER_PRINCIPAL);
+      await expect(ctx.service.verify(SESSION_PRINCIPAL, second.token, second.code, META)).rejects.toMatchObject({
+        status: 401,
+        code: 'invalid_challenge',
+      });
+
+      expect(ctx.audit.record).toHaveBeenCalledTimes(2);
+      for (const [event] of ctx.audit.record.mock.calls) {
+        expect(event).toMatchObject({ action: 'auth.step_up.failed', details: { reason: 'foreign_challenge' } });
+      }
+      expect(await ctx.store.get('stepup:family-2')).toBeNull();
+      expect(await ctx.store.get('stepup:family-1')).toBeNull();
+      expect(ctx.sessions.markStepUp).not.toHaveBeenCalled();
+    });
+
+    it('a bearer NestSelf code verifies from the token family that asked for it', async () => {
+      const { token, code } = await startNestself(ctx, BEARER_PRINCIPAL);
+
+      await expect(ctx.service.verify(BEARER_PRINCIPAL, token, code, META)).resolves.toEqual({});
+
+      expect(JSON.parse((await ctx.store.get('stepup:family-1'))!)).toEqual({ lastStepUpAt: NOW.toISOString() });
+      expect(ctx.sessions.markStepUp).not.toHaveBeenCalled();
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'auth.step_up.completed',
+          details: { method: 'email_otp', issuer: 'nestself' },
+        }),
+      );
+    });
+
     it('a Cognito challenge token is not accepted by the NestSelf path and vice versa', async () => {
       const cognito = await ctx.challenges.create(STEP_UP_CHALLENGE);
       const nestself = await startNestself(ctx);
@@ -811,6 +877,27 @@ describe('StepUpService', () => {
         }),
       );
       await expect(ctx.service.verify(OTHER_PRINCIPAL, token, code, META)).resolves.toHaveProperty('session');
+    });
+
+    it('NestSelf kind: a challenge of another session of the same user is refused, audited and not resent; its session can still verify', async () => {
+      const { token, code } = await startNestself(ctx, SESSION_PRINCIPAL);
+      secondsLater(61);
+
+      await expect(
+        ctx.service.resend({ ...SESSION_PRINCIPAL, sessionId: 'sess-other' }, token, META),
+      ).rejects.toMatchObject({ status: 401, code: 'invalid_challenge' });
+
+      expect(ctx.mailer.sent).toHaveLength(1);
+      expect(ctx.audit.record).toHaveBeenCalledTimes(1);
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'auth.step_up.failed',
+          actorUserId: 'user-1',
+          result: 'DENIED',
+          details: { method: 'email_otp', reason: 'foreign_challenge' },
+        }),
+      );
+      await expect(ctx.service.verify(SESSION_PRINCIPAL, token, code, META)).resolves.toHaveProperty('session');
     });
 
     it('an unknown token answers invalid_challenge and is not recorded as foreign', async () => {

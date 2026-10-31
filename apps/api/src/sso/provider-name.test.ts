@@ -3,6 +3,7 @@ import {
   PROVIDER_NAME_MAX_LENGTH,
   ProviderNameTooLongError,
   buildProviderName,
+  hasProviderNameShape,
   slugProviderNames,
 } from './provider-name.js';
 
@@ -33,5 +34,33 @@ describe('slugProviderNames', () => {
 
   it('returns a name without a protocol suffix unchanged', () => {
     expect(slugProviderNames('legacy')).toEqual(['legacy']);
+  });
+});
+
+describe('hasProviderNameShape', () => {
+  it('accepts every name buildProviderName makes', () => {
+    for (const slug of ['ab', 'acme', 'acme-eu', 'abcdefghijk', '0-9']) {
+      expect(hasProviderNameShape(buildProviderName(slug, 'SAML'))).toBe(true);
+      expect(hasProviderNameShape(buildProviderName(slug, 'OIDC'))).toBe(true);
+    }
+  });
+
+  it('accepts a name beyond the creation rules too, so a row that predates a rule still resolves', () => {
+    expect(hasProviderNameShape('org-other-ssoauth-oidc')).toBe(true);
+    expect(hasProviderNameShape('org-a-saml')).toBe(true);
+  });
+
+  it.each([
+    ['an address local part', 'ana'],
+    ['a first name with a hyphen', 'ana-maria'],
+    ['no protocol suffix', 'org-acme'],
+    ['another protocol', 'org-acme-ldap'],
+    ['no org- prefix', 'acme-saml'],
+    ['no slug', 'org--saml'],
+    ['upper case', 'org-ACME-saml'],
+    ['a dot in the slug', 'org-ac.me-oidc'],
+    ['the empty string', ''],
+  ])('refuses %s', (_label, name) => {
+    expect(hasProviderNameShape(name)).toBe(false);
   });
 });

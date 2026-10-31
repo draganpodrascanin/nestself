@@ -484,33 +484,35 @@ test('platform staff: sign-in cards, users, emergency access and SSO onboarding 
   browser,
 }) => {
   test.setTimeout(180_000);
-  await stagePlatformGrant('grant_user_nikola_platform_owner_screenshots', 'user_nikola', 'platform_owner');
-  await e2eSql([
-    {
-      text: `insert into emergency_access
-               (id, user_id, purpose, scope_kind, scope_id, requested_duration_minutes, granted_at, expires_at)
-             values ($1, 'user_milica', $2, 'USER_RECORDS', 'user_ana', 120, now(), now() + interval '120 minutes')
-             on conflict (id) do nothing`,
-      values: [
-        EMERGENCY_PENDING,
-        'Staged for the guide screenshots: records needed to answer a formal request about the sample employee.',
-      ],
-    },
-    {
-      text: `insert into emergency_access
-               (id, user_id, approved_by_user_id, approved_at, purpose, scope_kind, scope_id,
-                requested_duration_minutes, granted_at, expires_at)
-             values ($1, 'user_nikola', 'user_milica', now() - interval '5 minutes', $2, 'CASE', 'case_sample',
-                     60, now() - interval '5 minutes', now() + interval '55 minutes')
-             on conflict (id) do nothing`,
-      values: [
-        EMERGENCY_ACTIVE,
-        'Staged for the guide screenshots: welfare follow-up on the sample case after an urgent report.',
-      ],
-    },
-  ]);
   let suspended = false;
   try {
+    // Staged inside the try: a staging that fails half-way is cleaned up like the rest.
+    await stagePlatformGrant('grant_user_nikola_platform_owner_screenshots', 'user_nikola', 'platform_owner');
+    await e2eSql([
+      {
+        text: `insert into emergency_access
+                 (id, user_id, purpose, scope_kind, scope_id, requested_duration_minutes, granted_at, expires_at)
+               values ($1, 'user_milica', $2, 'USER_RECORDS', 'user_ana', 120, now(), now() + interval '120 minutes')
+               on conflict (id) do nothing`,
+        values: [
+          EMERGENCY_PENDING,
+          'Staged for the guide screenshots: records needed to answer a formal request about the sample employee.',
+        ],
+      },
+      {
+        text: `insert into emergency_access
+                 (id, user_id, approved_by_user_id, approved_at, purpose, scope_kind, scope_id,
+                  requested_duration_minutes, granted_at, expires_at)
+               values ($1, 'user_nikola', 'user_milica', now() - interval '5 minutes', $2, 'CASE', 'case_sample',
+                       60, now() - interval '5 minutes', now() + interval '55 minutes')
+               on conflict (id) do nothing`,
+        values: [
+          EMERGENCY_ACTIVE,
+          'Staged for the guide screenshots: welfare follow-up on the sample case after an urgent report.',
+        ],
+      },
+    ]);
+
     await signInWithPassword(page, ADMIN_URL, 'user_nikola');
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible({ timeout: 15_000 });
 
@@ -718,19 +720,23 @@ test('platform staff: sign-in cards, users, emergency access and SSO onboarding 
     await expect(suspendConnection).toBeHidden();
     await expect(detail).toContainText('Active');
   } finally {
-    // Nothing staged here reaches the later files' captures.
-    if (suspended) {
-      const reinstated = await pageApi(page, 'POST', '/api/ops/users/user_stefan/reinstate');
-      expect([200, 201, 204], JSON.stringify(reinstated.body)).toContain(reinstated.status);
+    // Nothing staged here reaches the later files' captures. Each clean-up runs even when
+    // the other fails: the rows go first, then the reinstatement and its check.
+    try {
+      await e2eSql([
+        {
+          text: 'delete from sso_domains where connection_id in (select id from sso_connections where cognito_provider_name = $1)',
+          values: [SSO_PROVIDER],
+        },
+        { text: 'delete from sso_connections where cognito_provider_name = $1', values: [SSO_PROVIDER] },
+        { text: 'delete from emergency_access where id = any($1)', values: [[EMERGENCY_PENDING, EMERGENCY_ACTIVE]] },
+      ]);
+    } finally {
+      if (suspended) {
+        const reinstated = await pageApi(page, 'POST', '/api/ops/users/user_stefan/reinstate');
+        expect([200, 201, 204], JSON.stringify(reinstated.body)).toContain(reinstated.status);
+      }
     }
-    await e2eSql([
-      {
-        text: 'delete from sso_domains where connection_id in (select id from sso_connections where cognito_provider_name = $1)',
-        values: [SSO_PROVIDER],
-      },
-      { text: 'delete from sso_connections where cognito_provider_name = $1', values: [SSO_PROVIDER] },
-      { text: 'delete from emergency_access where id = any($1)', values: [[EMERGENCY_PENDING, EMERGENCY_ACTIVE]] },
-    ]);
   }
 });
 

@@ -868,6 +868,30 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
       const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
       expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
     });
+
+    it("the same user's other session presenting the step-up token is refused: a code is bound to the session that asked", async () => {
+      const email = 'vesna@acme.example';
+      const first = await signInFederated(email);
+      const { agent, callback } = await federatedSignIn(email);
+      const second = { agent, csrf: cookieValue(callback, 'nestself_csrf'), sessionId: cookieValue(callback, 'nestself_session') };
+      expect(second.sessionId).not.toBe(first.sessionId);
+
+      const start = await stepUp(first, 'start');
+      expect(start.status).toBe(200);
+      const res = await stepUp(second, 'verify', {
+        challengeToken: start.body.challengeToken as string,
+        response: lastMailTo(email).params.code!,
+      });
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('code', 'invalid_challenge');
+
+      // Neither session carries a step-up, and the refusal is audited for the user.
+      const me = await second.agent.get('/api/auth/me');
+      expect(me.body.principal.auth.lastStepUpAt).toBeNull();
+      expect((await first.agent.get('/api/auth/me')).body.principal.auth.lastStepUpAt).toBeNull();
+      const failed = (await auditFor('auth.step_up.failed')).filter((e) => e.actorUserId === me.body.principal.userId);
+      expect(failed.map((e) => e.details)).toEqual([{ method: 'email_otp', reason: 'foreign_challenge' }]);
+    });
   });
 
   // -------------------------------------------------------------------------

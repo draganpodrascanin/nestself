@@ -56,6 +56,7 @@ import { SsoRepository, type SsoConnectionRow } from '../db/repositories/sso.rep
 import { AuditWriter } from '../audit/audit-writer.js';
 import { ApiHttpException } from '../common/api-error.js';
 import { requestMeta, type RequestMeta } from '../common/request-meta.js';
+import { hasProviderNameShape } from '../sso/provider-name.js';
 import type { SessionRecord } from '../session/session.types.js';
 import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
@@ -83,13 +84,18 @@ interface HttpReq {
 
 /**
  * The provider name a pool username starts with: what precedes the first
- * `_` (provider names hold none). A native username, an email address, may
- * hold a `_` too, so the caller still has to find a connection by that name.
+ * `_` (provider names hold none), when it has the shape of a provider name
+ * (`org-<slug>-saml|oidc`, {@link hasProviderNameShape}). A native username,
+ * an email address, may hold a `_` too: one whose prefix has another shape is
+ * native without a database lookup, and for the rest the caller still has to
+ * find a connection by that name.
  */
 function providerPrefix(username: string | undefined): string | null {
   if (!username) return null;
   const at = username.indexOf('_');
-  return at > 0 ? username.slice(0, at) : null;
+  if (at <= 0) return null;
+  const prefix = username.slice(0, at);
+  return hasProviderNameShape(prefix) ? prefix : null;
 }
 
 function unauthenticated(message: string): ApiHttpException {

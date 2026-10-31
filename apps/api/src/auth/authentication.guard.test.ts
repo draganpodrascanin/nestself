@@ -397,6 +397,41 @@ describe('AuthenticationGuard', () => {
       expect(principal.auth).toMatchObject({ method: 'email_otp', secondFactor: false });
       expect(mocks.memberships.findByUserId).not.toHaveBeenCalled();
       expect(mocks.audit.record).not.toHaveBeenCalled();
+      // A prefix without the provider-name shape costs no connection lookup.
+      expect(mocks.sso.findConnectionByProviderName).not.toHaveBeenCalled();
+    });
+
+    it('a native address whose prefix has the provider-name shape but names no connection is looked up once, then resolves natively', async () => {
+      connectionsByName(ACME, OTHER);
+      mocks.bearer.verify.mockResolvedValue(poolBearer('org-ghost-saml_ana@acme.example'));
+      mocks.identities.findExternalIdentity.mockResolvedValue({ userId: 'user-1', ssoConnectionId: null });
+      mocks.principalLoader.load.mockResolvedValue(FAKE_LOADED_PRINCIPAL);
+
+      const req = bearerRequest();
+      expect(await guard.canActivate(mockContext(req))).toBe(true);
+
+      expect(mocks.sso.findConnectionByProviderName).toHaveBeenCalledTimes(1);
+      expect(mocks.sso.findConnectionByProviderName).toHaveBeenCalledWith('org-ghost-saml');
+      expect(mocks.identities.findExternalIdentity).toHaveBeenCalledWith('cognito', 'pool-sub-1');
+      expect(mocks.audit.record).not.toHaveBeenCalled();
+    });
+
+    it('a native address that starts with a real provider name and _ is still refused: the prefix rule fails safe', async () => {
+      connectionsByName(ACME, OTHER);
+      mocks.bearer.verify.mockResolvedValue(poolBearer('org-acme-oidc_ana@gmail.example'));
+      mocks.identities.findExternalIdentity.mockResolvedValue(null);
+      mocks.principalLoader.load.mockResolvedValue(FAKE_LOADED_PRINCIPAL);
+
+      const req = bearerRequest();
+      const err = await refused(req);
+
+      expect(err.getStatus()).toBe(401);
+      expect(mocks.sso.findConnectionByProviderName).toHaveBeenCalledWith('org-acme-oidc');
+      expect(mocks.identities.findExternalIdentity).toHaveBeenCalledTimes(1);
+      expect(mocks.identities.findExternalIdentity).toHaveBeenCalledWith('cognito:org-acme-oidc', 'pool-sub-1');
+      expect(signInFailedAudits()).toEqual([
+        expect.objectContaining({ orgId: 'org-1', recordId: 'org-acme-oidc', details: { reason: 'sso_provider_mismatch' } }),
+      ]);
     });
 
     describe('the mismatch row: once per connection and pool user for ten minutes', () => {

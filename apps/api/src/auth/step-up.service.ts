@@ -17,12 +17,13 @@
  * `verify` checks the per-user lock first (`StepUpThrottle`, 429
  * `too_many_attempts`), then dispatches on the token: a `ChallengeStore`
  * record is the Cognito kind, any other token goes to the NestSelf store. A
- * challenge minted for another user is refused with 401 `invalid_challenge`,
- * audited as `foreign_challenge` and spent. Wrong codes of both kinds count
- * toward the lock; a success clears it. The third wrong code on a NestSelf
- * challenge ends that challenge with 401 `invalid_challenge`, not the 429 of
- * the lock. The step-up lands on the session
- * (`markStepUp`, then `regenerate`) for web callers, or under
+ * challenge minted for another user, or a NestSelf challenge minted in
+ * another session or token family of the same user, is refused with 401
+ * `invalid_challenge`, audited as `foreign_challenge` and spent. Wrong codes
+ * of both kinds count toward the lock; a success clears it. The third wrong
+ * code on a NestSelf challenge ends that challenge with 401
+ * `invalid_challenge`, not the 429 of the lock. The step-up lands on the
+ * session (`markStepUp`, then `regenerate`) for web callers, or under
  * `stepUpKey(tokenFamily)` for bearer callers, and is audited with its
  * issuer. The token set a Cognito re-authentication returns is discarded; its
  * refresh token is revoked.
@@ -32,8 +33,8 @@
  * with `details.retryAfter`). The Cognito kind starts a new provider
  * challenge under a new token and spends the old one; the NestSelf kind keeps
  * its token. Neither resets the wrong codes counted on the challenge. Another
- * user's challenge of either kind is refused, audited as `foreign_challenge`
- * and not resent.
+ * user's challenge of either kind, and a NestSelf challenge of another session
+ * or token family, is refused, audited as `foreign_challenge` and not resent.
  *
  * Every user steps up with an email code, `password_totp` users included
  * (Cognito cannot issue SOFTWARE_TOKEN_MFA without a password). Federated
@@ -121,6 +122,15 @@ function stepUpTarget(principal: Principal): string {
   return principal.sessionId
     ? `session:${hashSessionId(principal.sessionId)}`
     : `family:${principal.tokenFamily}`;
+}
+
+/**
+ * A NestSelf step-up challenge belongs to the user it was minted for and to
+ * the session or token family that asked (`target`): a code minted in one
+ * session never steps up another, even of the same user.
+ */
+function ownsNestselfChallenge(principal: Principal, data: Record<string, string>): boolean {
+  return data.userId === principal.userId && data.target === stepUpTarget(principal);
 }
 
 @Injectable()
@@ -268,9 +278,9 @@ export class StepUpService {
   }
 
   /**
-   * A NestSelf challenge keeps its token. One minted for another user is not
-   * resent (the record goes back untouched) and is recorded like a foreign
-   * Cognito challenge.
+   * A NestSelf challenge keeps its token. One minted for another user, or for
+   * another session or token family of this user, is not resent (the record
+   * goes back untouched) and is recorded like a foreign Cognito challenge.
    */
   private async resendNestself(
     principal: Principal,
@@ -280,7 +290,7 @@ export class StepUpService {
   ): Promise<StepUpStartResponse> {
     let foreign = false;
     const ownChallenge = (data: Record<string, string>): boolean => {
-      foreign = data.userId !== principal.userId;
+      foreign = !ownsNestselfChallenge(principal, data);
       return !foreign;
     };
     try {
@@ -312,9 +322,10 @@ export class StepUpService {
 
   /**
    * A NestSelf code: three tries per challenge (`NestselfOtpService`), bound to
-   * the user it was minted for. The third wrong code ends that challenge only,
-   * so it answers 401 `invalid_challenge` (ask for a new one) rather than the
-   * 429 of the per-user lock.
+   * the user it was minted for and to the session or token family that asked
+   * for it. The third wrong code ends that challenge only, so it answers 401
+   * `invalid_challenge` (ask for a new one) rather than the 429 of the
+   * per-user lock.
    */
   private async verifyNestself(
     principal: Principal,
@@ -334,8 +345,9 @@ export class StepUpService {
       }
       throw err;
     }
-    if (data.userId !== principal.userId) {
-      // The code matched, so the challenge is spent for its owner too.
+    if (!ownsNestselfChallenge(principal, data)) {
+      // Another user's challenge, or one minted in another session or token
+      // family. The code matched, so the challenge is spent for its owner too.
       await this.recordForeignChallenge(principal, meta);
       throw invalidChallenge();
     }
