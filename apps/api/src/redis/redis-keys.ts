@@ -47,6 +47,13 @@ export const SSO_TEST_TTL = 900;
  */
 export const SSO_PENDING_BIND_TTL = 900;
 
+/**
+ * A refused federated bearer's `auth.sign_in.failed` row: one per connection
+ * and pool user in 10 min (`bearerMismatchAuditedKey`). Later refusals in
+ * the window are refused without a row.
+ */
+export const BEARER_MISMATCH_AUDIT_TTL = 600;
+
 /** WebSocket ticket: 30 s. */
 export const WS_TICKET_TTL = 30;
 
@@ -165,6 +172,16 @@ export function ssoPendingBindKey(hash: string): string {
  */
 export function ssoBindStartKey(hash: string): string {
   return `sso_bind_start:${hash}`;
+}
+
+/**
+ * `bearer_mismatch_audited:{connectionId}:{subHash}`: the bearer of this pool
+ * user (`subHash`: sha256 hex of the access token's `sub`) was refused for
+ * this connection and audited; for `BEARER_MISMATCH_AUDIT_TTL` further
+ * refusals write no row.
+ */
+export function bearerMismatchAuditedKey(connectionId: string, subHash: string): string {
+  return `bearer_mismatch_audited:${connectionId}:${subHash}`;
 }
 
 /** `ws_ticket:{hash}` */

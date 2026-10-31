@@ -5,10 +5,13 @@
  * @see T-1.6
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import type { ExecutionContext } from '@nestjs/common';
 import { AuthenticationGuard } from './authentication.guard.js';
 import { FederatedBindingService } from './federated-binding.service.js';
 import { ApiHttpException } from '../common/api-error.js';
+import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
+import { BEARER_MISMATCH_AUDIT_TTL, bearerMismatchAuditedKey } from '../redis/redis-keys.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -86,7 +89,7 @@ function createMocks() {
     sessions: { get: vi.fn(), ensureFreshAccessToken: vi.fn(async (r: unknown) => r) },
     cookies: { parse: vi.fn().mockReturnValue({ sessionId: null }) },
     identities: { findExternalIdentity: vi.fn() },
-    store: { set: vi.fn(), get: vi.fn(), sAdd: vi.fn(), expire: vi.fn() },
+    store: new MemoryKeyValueStore(),
     sso: { findConnectionByProviderName: vi.fn().mockResolvedValue(null) },
     memberships: { findByUserId: vi.fn().mockResolvedValue([]) },
     audit: { record: vi.fn().mockResolvedValue(undefined) },
@@ -394,6 +397,70 @@ describe('AuthenticationGuard', () => {
       expect(principal.auth).toMatchObject({ method: 'email_otp', secondFactor: false });
       expect(mocks.memberships.findByUserId).not.toHaveBeenCalled();
       expect(mocks.audit.record).not.toHaveBeenCalled();
+    });
+
+    describe('the mismatch row: once per connection and pool user for ten minutes', () => {
+      // This guard runs before the throttler, so a client holding a valid federated access
+      // token without a usable identity would otherwise write a row per request. Every
+      // request is still refused.
+      const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+
+      async function refuse(username: string, sub = 'pool-sub-1'): Promise<void> {
+        mocks.bearer.verify.mockResolvedValueOnce(poolBearer(username, { sub }));
+        const err = await refused(bearerRequest());
+        expect(err.getStatus()).toBe(401);
+        expect(err.code).toBe('unauthenticated');
+      }
+
+      beforeEach(() => {
+        connectionsByName(ACME, OTHER);
+        mocks.identities.findExternalIdentity.mockResolvedValue(null);
+      });
+
+      it('two refusals of the same pool user write one row; both are refused', async () => {
+        await refuse('org-acme-oidc_idp-ana');
+        await refuse('org-acme-oidc_idp-ana');
+
+        expect(signInFailedAudits()).toHaveLength(1);
+      });
+
+      it('another pool user of the same connection writes its own row', async () => {
+        await refuse('org-acme-oidc_idp-ana', 'pool-sub-1');
+        await refuse('org-acme-oidc_idp-bo', 'pool-sub-2');
+        await refuse('org-acme-oidc_idp-bo', 'pool-sub-2');
+
+        expect(signInFailedAudits()).toHaveLength(2);
+      });
+
+      it('the same pool user refused under another connection writes its own row', async () => {
+        await refuse('org-acme-oidc_idp-ana');
+        await refuse('org-other-oidc_idp-ana');
+        await refuse('org-other-oidc_idp-ana');
+
+        expect(signInFailedAudits().map((e) => e['orgId'])).toEqual(['org-1', 'org-2']);
+      });
+
+      it('keys the window by connection and a hash of the sub, for ten minutes', async () => {
+        const set = vi.spyOn(mocks.store, 'set');
+        await refuse('org-acme-oidc_idp-ana');
+
+        const key = bearerMismatchAuditedKey('conn_acme', sha256('pool-sub-1'));
+        expect(key).toBe(`bearer_mismatch_audited:conn_acme:${sha256('pool-sub-1')}`);
+        expect(set).toHaveBeenCalledWith(key, '1', { ttlSeconds: BEARER_MISMATCH_AUDIT_TTL, onlyIfAbsent: true });
+        expect(BEARER_MISMATCH_AUDIT_TTL).toBe(600);
+        // The sub is an identifier from a token: only its hash names the key.
+        expect(set.mock.calls.map((c) => c[0]).join(' ')).not.toContain('pool-sub-1');
+        expect(await mocks.store.ttl(key)).toBeGreaterThan(590);
+      });
+
+      it('writes the row when the store cannot tell (the dedupe fails open, the 401 never does)', async () => {
+        vi.spyOn(mocks.store, 'set').mockRejectedValue(new Error('store unavailable'));
+
+        await refuse('org-acme-oidc_idp-ana');
+        await refuse('org-acme-oidc_idp-ana');
+
+        expect(signInFailedAudits()).toHaveLength(2);
+      });
     });
 
     it('a bearer without a username claim resolves natively without a connection lookup', async () => {

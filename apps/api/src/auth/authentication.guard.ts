@@ -13,9 +13,14 @@
  * (`FederatedBindingService.existingIdentityUsable`: bound through that very
  * connection, an ACTIVE member of its organization), else 401
  * `unauthenticated` with `auth.sign_in.failed { reason:
- * 'sso_provider_mismatch' }`, and no native fallback. The principal records
- * `method: 'sso'` and `secondFactor: true` (MFA delegated to the IdP, as for
- * a federated web session). Any other bearer resolves natively as before.
+ * 'sso_provider_mismatch' }`, and no native fallback. That row is written
+ * once per connection and pool user in `BEARER_MISMATCH_AUDIT_TTL`: this
+ * guard runs before the throttler, so a valid access token of a pool user
+ * without a usable identity (a mobile sign-in still to be confirmed on the
+ * web, an ended membership) would otherwise write one per request; every
+ * request is still refused. The principal records `method: 'sso'` and
+ * `secondFactor: true` (MFA delegated to the IdP, as for a federated web
+ * session). Any other bearer resolves natively as before.
  *
  * @see D-19, D-36, T-1.6, phase 4 design 5.7
  */
@@ -27,6 +32,7 @@ import {
   Logger,
   forwardRef,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
  
 import { Reflector } from '@nestjs/core';
  
@@ -55,6 +61,8 @@ import type { Principal, ActiveContext, AuthInfo } from '@nestself/contracts';
 import {
   userMobileFamiliesKey,
   MOBILE_FAMILY_TTL,
+  BEARER_MISMATCH_AUDIT_TTL,
+  bearerMismatchAuditedKey,
 } from '../redis/redis-keys.js';
 import {
   KEY_VALUE_STORE,
@@ -272,7 +280,7 @@ export class AuthenticationGuard implements CanActivate {
     if (prefix && connection) {
       const identity = await this.identities.findExternalIdentity(federatedProvider(prefix), payload.sub);
       if (!identity || !(await this.binding.existingIdentityUsable(identity, connection))) {
-        await this.auditProviderMismatch(connection, meta);
+        await this.auditProviderMismatch(connection, payload.sub, meta);
         throw unauthenticated('No identity bound through this connection');
       }
       return { userId: identity.userId, federated: true };
@@ -284,8 +292,28 @@ export class AuthenticationGuard implements CanActivate {
     return { userId: identity.userId, federated: false };
   }
 
-  /** Awaited; a failed write is swallowed (logged by the writer), the 401 must still go out. */
-  private async auditProviderMismatch(connection: SsoConnectionRow, meta: RequestMeta | undefined): Promise<void> {
+  /**
+   * `auth.sign_in.failed { reason: 'sso_provider_mismatch' }` for a refused
+   * federated bearer, once per connection and pool user in
+   * `BEARER_MISMATCH_AUDIT_TTL`: no throttle sees a request this guard
+   * refuses, so the row must not cost an insert per request. The key holds a
+   * hash of the `sub`, an identifier from a token. When the store cannot
+   * answer, the row is written (the dedupe fails open; the caller's 401
+   * never does). Awaited; a failed write is swallowed (logged by the writer).
+   */
+  private async auditProviderMismatch(
+    connection: SsoConnectionRow,
+    sub: string,
+    meta: RequestMeta | undefined,
+  ): Promise<void> {
+    const key = bearerMismatchAuditedKey(connection.id, createHash('sha256').update(sub).digest('hex'));
+    let firstInWindow = true;
+    try {
+      firstInWindow = await this.store.set(key, '1', { ttlSeconds: BEARER_MISMATCH_AUDIT_TTL, onlyIfAbsent: true });
+    } catch {
+      // The store is unavailable: keep the signal.
+    }
+    if (!firstInWindow) return;
     await this.audit
       .record({
         action: 'auth.sign_in.failed',

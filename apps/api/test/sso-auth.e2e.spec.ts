@@ -1447,7 +1447,8 @@ describe.skipIf(!shouldRun)('Federated sign-in (e2e)', () => {
         // The identity under OTHER_ORG's provider name, bound through ORG's connection.
         [movedSub, `${OTHER_PROVIDER}_idp-moved`],
       ] as const;
-      for (const [sub, username] of presented) {
+      // Twice each: every request is refused, but each pool user's refusal is audited once per window.
+      for (const [sub, username] of [...presented, ...presented]) {
         const res = await meWith(poolBearer(sub, username));
         expect(res.status).toBe(401);
         expect(res.body.code).toBe('unauthenticated');
