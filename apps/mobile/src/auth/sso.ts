@@ -61,6 +61,38 @@ export interface SsoTokens {
 }
 
 // ---------------------------------------------------------------------------
+// After the exchange: the API binds the identity first (pure, unit-tested)
+// ---------------------------------------------------------------------------
+
+/** What finishing a hosted-UI sign-in needs from the app. */
+export interface SsoSignInSteps<Me> {
+  /** `POST /auth/sso/bind-token`; rejects with 403 `sso_denied` or `sso_email_unverified` when refused. */
+  bindToken: (idToken: string) => Promise<void>;
+  storeTokens: (tokens: SsoTokens) => Promise<void>;
+  clearTokens: () => Promise<void>;
+  loadPrincipal: () => Promise<Me>;
+}
+
+/**
+ * Finishes a hosted-UI sign-in. The hosted UI never ran the API's binding
+ * rules, so the API binds the federated identity from the ID token before
+ * anything else; only a bound sign-in keeps its tokens and loads the
+ * principal. A refused binding (or one that could not reach the API) keeps
+ * no tokens, clears any left over and rethrows, so the app is not signed in
+ * and the sign-in screen shows why.
+ */
+export async function finishSsoSignIn<Me>(tokens: SsoTokens, steps: SsoSignInSteps<Me>): Promise<Me> {
+  try {
+    await steps.bindToken(tokens.idToken);
+  } catch (err) {
+    await steps.clearTokens();
+    throw err;
+  }
+  await steps.storeTokens(tokens);
+  return steps.loadPrincipal();
+}
+
+// ---------------------------------------------------------------------------
 // Placeholder discovery for the hook when no connection is set yet.
 // useAuthRequest requires a non-null discovery; a placeholder means the
 // request object stays null (unusable) until the real connection arrives.

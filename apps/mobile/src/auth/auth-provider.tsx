@@ -38,6 +38,7 @@ import {
 } from './token-store';
 import { authReducer, INITIAL_STATE } from './auth-state';
 import type { AuthState, AuthErrorInfo } from './auth-state';
+import { finishSsoSignIn } from './sso';
 
 // ---------------------------------------------------------------------------
 // Sample-mode detection (mirrors the web rule)
@@ -343,24 +344,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  /** Called by the sign-in screen after SSO tokens are obtained. */
+  /**
+   * Called by the sign-in screen after SSO tokens are obtained. The API binds
+   * the federated identity first (`POST /auth/sso/bind-token`); a refused
+   * binding keeps no tokens and rejects, so the screen shows why.
+   */
   const completeSsoSignIn = useCallback(async (tokens: {
     accessToken: string;
     idToken: string;
     refreshToken: string;
   }) => {
-    const claims = decodeJwtClaims(tokens.accessToken);
-    const family = claims?.origin_jti ?? claims?.jti ?? null;
-    tokenFamilyRef.current = family;
-
-    await storeTokens({
-      accessToken: tokens.accessToken,
-      idToken: tokens.idToken,
-      refreshToken: tokens.refreshToken,
-      tokenFamily: family,
+    const { authApi } = ensureApiClient();
+    const me = await finishSsoSignIn(tokens, {
+      bindToken: (idToken) => authApi.ssoBindToken(idToken),
+      storeTokens: async (bound) => {
+        const claims = decodeJwtClaims(bound.accessToken);
+        const family = claims?.origin_jti ?? claims?.jti ?? null;
+        tokenFamilyRef.current = family;
+        await storeTokens({
+          accessToken: bound.accessToken,
+          idToken: bound.idToken,
+          refreshToken: bound.refreshToken,
+          tokenFamily: family,
+        });
+      },
+      // As a sign-out leaves it: nothing kept, no token family.
+      clearTokens: async () => {
+        tokenFamilyRef.current = null;
+        await clearTokens();
+      },
+      loadPrincipal: () => fetchMe(),
     });
-
-    const me = await fetchMe();
     dispatch({
       type: 'SSO_SUCCESS',
       principal: me.principal,
